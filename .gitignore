@@ -6,6 +6,8 @@ node_modules/
 main.js
 *.log
 tmp/
+docs/superpowers/evals/*-vault/
+docs/superpowers/evals/.jsonl-domain-storage-hld-eval/
 **/.vitest-cache/
 !dist/main.js
 .playwright-mcp

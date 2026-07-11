@@ -1,8 +1,15 @@
-import { requestUrl } from "obsidian";
 import { tokenize, scoreSeed } from "./wiki-seeds";
+import { scoreLexicalChunk } from "./lexical-retrieval";
 import { pageId } from "./wiki-graph";
 import type { VaultTools } from "./vault-tools";
-import { domainEmbeddingsPath } from "./wiki-path";
+import { domainIndexPath, legacyDomainEmbeddingsPath } from "./wiki-path";
+import {
+  embeddingChunkToChunkRecord,
+  isChunkIndexRecord,
+  parseWikiIndexJsonl,
+  stringifyWikiIndexJsonl,
+  type WikiIndexRecord,
+} from "./wiki-index-jsonl";
 import { rrf } from "./rrf";
 import type { SeedDiag } from "./retrieval-diag";
 
@@ -63,6 +70,67 @@ export function decodeVector(b64: string): Float32Array {
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return new Float32Array(bytes.buffer);
+}
+
+function vectorToNumbers(b64: string): number[] {
+  return [...decodeVector(b64)];
+}
+
+function numbersToVector(values: number[]): string {
+  return encodeVector(new Float32Array(values));
+}
+
+function fallbackChunkPath(domainRoot: string, pid: string): string {
+  return `${domainRoot}/${pid}.md`;
+}
+
+function cacheFromIndexRecords(
+  records: WikiIndexRecord[],
+  model: string,
+  dimensions: number,
+): EmbeddingCacheFile {
+  const entries: Record<string, EmbeddingCacheEntry> = {};
+  for (const record of records) {
+    if (!isChunkIndexRecord(record)) continue;
+    if (record.vectorModel !== model || record.dimensions !== dimensions) continue;
+    const chunk: EmbeddingChunk = {
+      vector: numbersToVector(record.vector),
+      hash: record.embedTextHash,
+      kind: "section",
+      heading: record.heading,
+      ordinal: record.ordinal,
+    };
+    (entries[record.articleId] ??= { chunks: [] }).chunks.push(chunk);
+  }
+  return { version: 3, model, dimensions, entries };
+}
+
+function chunkRecordsFromCache(
+  cacheFile: EmbeddingCacheFile,
+  domainRoot: string,
+  existingRecords: WikiIndexRecord[],
+): WikiIndexRecord[] {
+  const preserved = existingRecords.filter((record) => !isChunkIndexRecord(record));
+  const now = new Date().toISOString();
+  const chunkRecords: WikiIndexRecord[] = [];
+  for (const [pid, entry] of Object.entries(cacheFile.entries)) {
+    for (const chunk of entry.chunks) {
+      if (!chunk.vector) continue;
+      chunkRecords.push(embeddingChunkToChunkRecord({
+        articleId: pid,
+        path: fallbackChunkPath(domainRoot, pid),
+        heading: chunk.heading ?? "",
+        ordinal: chunk.ordinal ?? 0,
+        bodyHash: chunk.hash,
+        embedTextHash: chunk.hash,
+        vector: vectorToNumbers(chunk.vector),
+        vectorModel: cacheFile.model,
+        dimensions: cacheFile.dimensions,
+        updatedAt: now,
+      }));
+    }
+  }
+  return [...preserved, ...chunkRecords];
 }
 
 function summaryVectors(entry: EmbeddingCacheEntry | undefined): Float32Array[] | undefined {
@@ -272,7 +340,14 @@ function sortSelectedChunks(items: SelectedChunk[]): SelectedChunk[] {
 function rankChunksJaccard(queryTokens: Set<string>, sections: CandidateSection[], limit: number): SelectedChunk[] {
   const scored: SelectedChunk[] = [];
   for (const section of sections) {
-    const score = jaccardCoeff(queryTokens, tokenize(section.embedText));
+    const score = scoreLexicalChunk(queryTokens, {
+      articleId: section.articleId,
+      path: section.path,
+      heading: section.heading,
+      body: section.body,
+      embedText: section.embedText,
+      ordinal: section.ordinal,
+    }).score;
     if (score <= 0) continue;
     scored.push({
       articleId: section.articleId,
@@ -341,6 +416,7 @@ async function fetchEmbeddings(
   inputs: string[],
   dimensions?: number,
 ): Promise<Float32Array[]> {
+  const { requestUrl } = await import("obsidian");
   const url = `${baseUrl.replace(/\/$/, "")}/embeddings`;
   // Send `dimensions` (OpenAI-standard MRL truncation) when configured, so the whole
   // pipeline and the probe agree on the requested size. Models that don't support it
@@ -977,11 +1053,8 @@ export class PageSimilarityService {
     const { model, dimensions } = this.config;
     if (!model || !dimensions) return;
     try {
-      const raw = await vaultTools.read(domainEmbeddingsPath(domainRoot));
-      const parsed = JSON.parse(raw) as EmbeddingCacheFile;
-      if (parsed.version === 3 && parsed.model === model && parsed.dimensions === dimensions) {
-        this.cache = parsed;
-      }
+      const raw = await vaultTools.read(domainIndexPath(domainRoot));
+      this.cache = cacheFromIndexRecords(parseWikiIndexJsonl(raw, domainIndexPath(domainRoot)), model, dimensions);
     } catch { /* cache missing or unreadable — stay null */ }
   }
 
@@ -999,19 +1072,22 @@ export class PageSimilarityService {
     if (!baseUrl || !model || !dimensions) return { updated: 0 };
     const chunking = this.config.chunking ?? DEFAULT_CHUNKING;
 
-    const cachePath = domainEmbeddingsPath(domainRoot);
+    const cachePath = domainIndexPath(domainRoot);
     let cacheFile: EmbeddingCacheFile;
+    let indexRecords: WikiIndexRecord[] = [];
     try {
-      const parsed = JSON.parse(await vaultTools.read(cachePath)) as EmbeddingCacheFile;
-      if (parsed.version !== 3 && opts.fullCorpus !== true) {
-        return { updated: 0 };
-      }
-      cacheFile =
-        parsed.version === 3 && parsed.model === model && parsed.dimensions === dimensions
-          ? parsed
-          : { version: 3, model, dimensions, entries: {} };
+      indexRecords = parseWikiIndexJsonl(await vaultTools.read(cachePath), cachePath);
+      cacheFile = cacheFromIndexRecords(indexRecords, model, dimensions);
     } catch {
-      cacheFile = { version: 3, model, dimensions, entries: {} };
+      try {
+        const parsed = JSON.parse(await vaultTools.read(legacyDomainEmbeddingsPath(domainRoot))) as EmbeddingCacheFile;
+        cacheFile =
+          parsed.version === 3 && parsed.model === model && parsed.dimensions === dimensions
+            ? parsed
+            : { version: 3, model, dimensions, entries: {} };
+      } catch {
+        cacheFile = { version: 3, model, dimensions, entries: {} };
+      }
     }
 
     // Build the desired chunk set per pid, reusing cached vectors whose hash matches.
@@ -1074,7 +1150,7 @@ export class PageSimilarityService {
       if (filled.length > 0) cacheFile.entries[pid] = { chunks: filled };
     }
 
-    await vaultTools.write(cachePath, JSON.stringify(cacheFile, null, 2));
+    await vaultTools.write(cachePath, stringifyWikiIndexJsonl(chunkRecordsFromCache(cacheFile, domainRoot, indexRecords)));
     this.cache = cacheFile;
     return { updated: pending.length };
   }

@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Итоговый отчёт — jsonl-domain-storage — 2026-07-11</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #64748b;
+      --line: #d7dde7;
+      --accent: #2563eb;
+      --ok: #166534;
+      --warn: #a16207;
+      --bad: #b91c1c;
+      --chip: #eef2ff;
+    }
+    #theme-toggle:checked ~ .page {
+      color-scheme: dark;
+      --bg: #111827;
+      --panel: #182235;
+      --text: #e5e7eb;
+      --muted: #a7b0c0;
+      --line: #334155;
+      --accent: #60a5fa;
+      --ok: #86efac;
+      --warn: #facc15;
+      --bad: #fca5a5;
+      --chip: #22304a;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+    .page { min-height: 100vh; background: var(--bg); color: var(--text); }
+    header { border-bottom: 1px solid var(--line); background: var(--panel); }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 24px; }
+    h1 { margin: 0 0 8px; font-size: 28px; line-height: 1.2; }
+    h2 { margin: 32px 0 12px; font-size: 20px; }
+    h3 { margin: 20px 0 8px; font-size: 16px; }
+    p { line-height: 1.55; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--chip); padding: 2px 5px; border-radius: 4px; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; background: var(--panel); border: 1px solid var(--line); }
+    th, td { padding: 9px 10px; border: 1px solid var(--line); text-align: left; vertical-align: top; font-size: 14px; }
+    th { background: var(--chip); }
+    .lead { max-width: 900px; color: var(--muted); }
+    .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .theme-btn { border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; cursor: pointer; color: var(--text); background: var(--chip); }
+    .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    .bad { color: var(--bad); }
+    .badge.ok { background: rgba(22, 101, 52, .12); }
+    .badge.warn { background: rgba(161, 98, 7, .14); }
+    .badge.bad { background: rgba(185, 28, 28, .14); }
+    .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); margin: 12px 0 20px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+    .card strong { display: block; margin-bottom: 6px; }
+    .flow { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin: 12px 0 20px; }
+    .step { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 6px; padding: 12px; min-height: 86px; }
+    .note { border-left: 4px solid var(--warn); background: var(--panel); padding: 12px 14px; margin: 12px 0 20px; }
+    details { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 10px 0; }
+    summary { cursor: pointer; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <input type="checkbox" id="theme-toggle" hidden>
+  <div class="page">
+    <header>
+      <div class="wrap toolbar">
+        <div>
+          <h1>Итоговый отчёт — jsonl-domain-storage — 2026-07-11</h1>
+          <p class="lead">Цель: заменить legacy service files на self-contained `metadata.jsonl`, `index.jsonl`, `log.jsonl`, сохранив migration safety, query behavior и eval evidence.</p>
+        </div>
+        <label class="theme-btn" for="theme-toggle" title="Переключить тему">Тема</label>
+      </div>
+    </header>
+    <main class="wrap">
+      <section id="summary">
+        <h2>Итог</h2>
+        <div class="grid">
+          <div class="card"><strong>Вердикт result</strong><span class="badge ok">OK</span><p>Storage, migration, query path, docs, wiki и HLD effectiveness eval закрыты.</p></div>
+          <div class="card"><strong>Проверки</strong><span class="badge ok">pass</span><p>Focused tests pass, build pass, lint 0 errors и 4 pre-existing warnings.</p></div>
+          <div class="card"><strong>Eval</strong><span class="badge ok">accepted</span><p>HLD source прочитан: 61 markdown files. Eval domain built with 61 page records and 442 chunk records; 5 live retrieval queries accepted.</p></div>
+          <div class="card"><strong>Wiki</strong><span class="badge ok">clean</span><p>`wiki_lint` для `obsidian-ai-wiki`: broken, orphans, stale, missing_source, legacy_wikilink пустые; остались advisory long leads старых страниц.</p></div>
+        </div>
+      </section>
+
+      <section id="chain">
+        <h2>Цепочка результатов</h2>
+        <div class="flow">
+          <div class="step"><strong>intent</strong>Approved. Требует JSONL storage, migration backup, no source mutation, HLD eval.</div>
+          <div class="step"><strong>spec</strong>Approved. Выбраны self-contained domains и managed `entity_types`.</div>
+          <div class="step"><strong>plan</strong>Validated. 8 task groups: helpers, metadata, index, log, migration, UI/query, eval, docs.</div>
+          <div class="step"><strong>result</strong>`OK`: implementation evidence есть, effectiveness decision `accepted`.</div>
+        </div>
+      </section>
+
+      <section id="requirements">
+        <h2>Покрытие требований</h2>
+        <table>
+          <thead><tr><th>Требование</th><th>Статус</th><th>Свидетельство</th></tr></thead>
+          <tbody>
+            <tr><td>Новые домены без `_config`</td><td class="ok">закрыто</td><td>`DomainStore` пишет/читает `metadata.jsonl`; path tests покрывают runtime paths.</td></tr>
+            <tr><td>`index.jsonl` вместо `_index.md` и `_embeddings.json`</td><td class="ok">закрыто</td><td>`wiki-index-jsonl.ts`, `page-similarity.ts`, tests for page/chunk records and vector cache.</td></tr>
+            <tr><td>`log.jsonl` вместо `_log.md`</td><td class="ok">закрыто</td><td>`wiki-log.ts` writes operation records and preserves legacy blocks.</td></tr>
+            <tr><td>Verified backup before destructive migration</td><td class="ok">закрыто</td><td>`migrate-jsonl-domain-storage.ts` creates backup manifest, validates, then deletes legacy service files.</td></tr>
+            <tr><td>Settings/sidebar/query use new storage</td><td class="ok">закрыто</td><td>`controller.ts`, `view.ts`, query tests and UI path smoke tests.</td></tr>
+            <tr><td>5 HLD queries and effectiveness verdict</td><td class="ok">закрыто</td><td>Report contains 5 live retrieval query sections; all statuses accepted; aggregate verdict `accepted`.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="inventory">
+        <h2>Карта изменений</h2>
+        <table>
+          <thead><tr><th>Файл</th><th>Изменение</th><th>Причина</th><th>Свидетельство</th></tr></thead>
+          <tbody>
+            <tr><td>`src/jsonl.ts`</td><td>Добавлены JSONL parser/stringifier и path-aware parse errors.</td><td>Единый codec для metadata/index/log records.</td><td>`tests/jsonl.test.ts` pass.</td></tr>
+            <tr><td>`src/wiki-path.ts`</td><td>Runtime paths переведены на `metadata.jsonl`, `index.jsonl`, `log.jsonl`; legacy helpers оставлены explicit.</td><td>Разделить target storage и migration fallback.</td><td>`tests/wiki-path-jsonl.test.ts` pass.</td></tr>
+            <tr><td>`src/domain-metadata.ts`</td><td>Добавлены records for domain, entity type, source state и conversion helpers.</td><td>Self-contained domain metadata без root registry.</td><td>`tests/domain-metadata.test.ts` pass.</td></tr>
+            <tr><td>`src/domain-store.ts`</td><td>Load/save читают per-domain `metadata.jsonl`, legacy `_domain.json` fallback только transitional.</td><td>Settings/sidebar получают домены из domain-local metadata.</td><td>`tests/domain-store-jsonl.test.ts` pass.</td></tr>
+            <tr><td>`src/wiki-index-jsonl.ts`</td><td>Добавлены page/chunk records, ids, conversions, description collection.</td><td>`index.jsonl` стал retrieval source of truth.</td><td>`tests/wiki-index-jsonl.test.ts` pass.</td></tr>
+            <tr><td>`src/page-similarity.ts`</td><td>Vectors moved into chunk records; legacy embeddings read only fallback.</td><td>Упразднить `_embeddings.json` в runtime target.</td><td>`tests/page-similarity-jsonl.test.ts` pass.</td></tr>
+            <tr><td>`src/wiki-log.ts`</td><td>Structured operation JSONL append and legacy log block parser.</td><td>Replace markdown `_log.md` with streamable records.</td><td>`tests/wiki-log-jsonl.test.ts` pass.</td></tr>
+            <tr><td>`src/migrate-jsonl-domain-storage.ts`</td><td>Backup, conversion, validation, deletion pipeline.</td><td>Trust priority before destructive migration.</td><td>`tests/migrate-jsonl-domain-storage.test.ts` pass.</td></tr>
+            <tr><td>`src/main.ts`</td><td>JSONL migration wired into startup before domain load.</td><td>Existing installs migrate automatically.</td><td>Build pass.</td></tr>
+            <tr><td>`src/controller.ts`</td><td>OKF export reads descriptions from JSONL page records.</td><td>Prevent stale `_index.md` dependence.</td><td>`tests/query-jsonl-index.test.ts` pass.</td></tr>
+            <tr><td>`src/view.ts`</td><td>UI labels/open targets changed to `index.jsonl` and `log.jsonl`.</td><td>Sidebar must expose new service files.</td><td>`tests/ui-jsonl-paths.test.ts` pass.</td></tr>
+            <tr><td>`src/source-paths.ts`</td><td>Adjusted `path-browserify` import shape for TSX tests.</td><td>Node test runtime compatibility.</td><td>Full test command pass.</td></tr>
+            <tr><td>`src/migrate-okf-frontmatter.ts`</td><td>OKF migration now reads descriptions from JSONL index, fallback legacy markdown.</td><td>Preserve descriptions after JSONL migration.</td><td>Wiki `okf-migration` updated; `wiki_lint` stale empty.</td></tr>
+            <tr><td>`scripts/eval-jsonl-domain-storage.ts`</td><td>HLD live retrieval harness builds isolated JSONL eval domain, runs 5 fixed queries, compares against lexical baseline, and writes verdict report.</td><td>Capture effectiveness evidence without mutating source vault.</td><td>`tests/eval-jsonl-domain-storage.test.ts` pass; report verdict `accepted`.</td></tr>
+            <tr><td>`tests/*.test.ts`</td><td>Focused coverage added for all new storage seams.</td><td>Regression checks for format, migration, query and UI paths.</td><td>19/19 tests pass.</td></tr>
+            <tr><td>`docs/README.ru.md`</td><td>Service file docs mention JSONL target files.</td><td>User-facing storage docs changed.</td><td>Repository docs updated.</td></tr>
+            <tr><td>`docs/rag-quality-recommendations.md`</td><td>RAG docs mention JSONL page/chunk index and HLD eval evidence.</td><td>Architecture docs must match storage behavior.</td><td>Repository docs updated.</td></tr>
+            <tr><td>`docs/superpowers/evals/jsonl-domain-storage-hld-2026-07-11.md`</td><td>Generated HLD eval report.</td><td>Result evidence for eval harness.</td><td>61 markdown files, 61 page records, 442 chunk records, 5 accepted query sections, `accepted`.</td></tr>
+            <tr><td>`docs/superpowers/intents/*`</td><td>Intent captured and approved.</td><td>IDD gate.</td><td>`review.intent_hash` present, phases passed.</td></tr>
+            <tr><td>`docs/superpowers/specs/*`</td><td>Design captured and approved.</td><td>Storage decisions and acceptance criteria.</td><td>`review.spec_hash` present, phases passed.</td></tr>
+            <tr><td>`docs/superpowers/plans/*`</td><td>Plan captured and result_check added.</td><td>Execution recipe and final gate state.</td><td>`result_check.verdict: OK`.</td></tr>
+            <tr><td>`docs/TODO.md`</td><td>Task row closed with `OK`.</td><td>Chain tracking.</td><td>Status `done`, closed `2026-07-11`.</td></tr>
+            <tr><td>`dist/main.js`</td><td>Built plugin bundle regenerated.</td><td>Ship runtime code after TypeScript changes.</td><td>`npm run build` pass.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="verification">
+        <h2>Проверки</h2>
+        <table>
+          <thead><tr><th>Команда</th><th>Результат</th><th>Наблюдение</th></tr></thead>
+          <tbody>
+            <tr><td>`node --import tsx --test ...`</td><td class="ok">pass</td><td>19 tests, 19 pass, 0 fail.</td></tr>
+            <tr><td>`npm run lint`</td><td class="ok">pass</td><td>0 errors, 4 warnings in pre-existing Node builtin imports.</td></tr>
+            <tr><td>`npm run build`</td><td class="ok">pass</td><td>`dist/` updated and manifest synced.</td></tr>
+            <tr><td>`npx tsx scripts/eval-jsonl-domain-storage.ts ...`</td><td class="ok">accepted</td><td>Report written; 5 live retrieval queries accepted against lexical baseline.</td></tr>
+            <tr><td>`wiki_lint(domain=obsidian-ai-wiki)`</td><td class="ok">pass</td><td>No broken refs, orphans, stale pages, missing sources, or legacy wikilinks.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="docs">
+        <h2>Документация и wiki</h2>
+        <table>
+          <thead><tr><th>Источник</th><th>Состояние</th><th>Примечание</th></tr></thead>
+          <tbody>
+            <tr><td>`docs/README.ru.md`</td><td class="ok">обновлено</td><td>Описаны `metadata.jsonl`, `index.jsonl`, `log.jsonl`.</td></tr>
+            <tr><td>`docs/rag-quality-recommendations.md`</td><td class="ok">обновлено</td><td>Добавлена связь JSONL retrieval и HLD eval evidence.</td></tr>
+            <tr><td>`jsonl-domain-storage` wiki page</td><td class="ok">обновлено</td><td>Storage, migration, retrieval and eval documented.</td></tr>
+            <tr><td>`okf-migration` wiki page</td><td class="ok">обновлено</td><td>Pipeline now documents JSONL description source and legacy fallback.</td></tr>
+            <tr><td>`wiki_lint`</td><td class="ok">clean blockers</td><td>Remaining long-lead advisories are pre-existing content style issues.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="review">
+        <h2>Замечания result review</h2>
+        <table>
+          <thead><tr><th>Замечание</th><th>Решение</th><th>Статус</th></tr></thead>
+          <tbody>
+            <tr><td>OKF migration could lose descriptions after JSONL migration if it only reads `_index.md`.</td><td>`src/migrate-okf-frontmatter.ts` now reads JSONL page records first and falls back to legacy annotations.</td><td class="ok">fixed</td></tr>
+            <tr><td>HLD eval did not run live retrieval or compare baseline.</td><td>Fixed by wiring isolated JSONL eval domain, fixed-query lexical baseline, and live retrieval over `index.jsonl` records.</td><td class="ok">fixed</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="decision">
+        <h2>Распространение решений</h2>
+        <div class="note">
+          Self-contained domain metadata and managed `entity_types` were propagated into metadata codec, domain store, migration, UI/query paths, repository docs and wiki. Root `!Wiki/domain` was not added. Legacy paths remain only for migration/fallback code.
+        </div>
+        <div class="note">
+          Eval decision upgraded to `accepted` only after source-safe live retrieval executed five fixed HLD queries against `index.jsonl` and no regressions were detected against the lexical baseline.
+        </div>
+      </section>
+
+      <section id="verdict">
+        <h2>Финальный verdict</h2>
+        <p><span class="badge ok">OK</span> Implementation, migration, query path, documentation, wiki, and five-query HLD retrieval eval are complete. The accepted report proves an isolated JSONL eval domain was built, `index.jsonl` was queried live, and all five fixed queries passed against the lexical baseline.</p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

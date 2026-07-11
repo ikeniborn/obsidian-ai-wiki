@@ -107,17 +107,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path3) {
-      const ctrl = callVisitor(key, node, visitor, path3);
+    function visit_(key, node, visitor, path5) {
+      const ctrl = callVisitor(key, node, visitor, path5);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path3, ctrl);
-        return visit_(key, ctrl, visitor, path3);
+        replaceNode(key, path5, ctrl);
+        return visit_(key, ctrl, visitor, path5);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path3 = Object.freeze(path3.concat(node));
+          path5 = Object.freeze(path5.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path3);
+            const ci = visit_(i, node.items[i], visitor, path5);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -128,13 +128,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path3 = Object.freeze(path3.concat(node));
-          const ck = visit_("key", node.key, visitor, path3);
+          path5 = Object.freeze(path5.concat(node));
+          const ck = visit_("key", node.key, visitor, path5);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path3);
+          const cv = visit_("value", node.value, visitor, path5);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -155,17 +155,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path3) {
-      const ctrl = await callVisitor(key, node, visitor, path3);
+    async function visitAsync_(key, node, visitor, path5) {
+      const ctrl = await callVisitor(key, node, visitor, path5);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path3, ctrl);
-        return visitAsync_(key, ctrl, visitor, path3);
+        replaceNode(key, path5, ctrl);
+        return visitAsync_(key, ctrl, visitor, path5);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path3 = Object.freeze(path3.concat(node));
+          path5 = Object.freeze(path5.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path3);
+            const ci = await visitAsync_(i, node.items[i], visitor, path5);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -176,13 +176,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path3 = Object.freeze(path3.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path3);
+          path5 = Object.freeze(path5.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path5);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path3);
+          const cv = await visitAsync_("value", node.value, visitor, path5);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -209,23 +209,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path3) {
+    function callVisitor(key, node, visitor, path5) {
       if (typeof visitor === "function")
-        return visitor(key, node, path3);
+        return visitor(key, node, path5);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path3);
+        return visitor.Map?.(key, node, path5);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path3);
+        return visitor.Seq?.(key, node, path5);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path3);
+        return visitor.Pair?.(key, node, path5);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path3);
+        return visitor.Scalar?.(key, node, path5);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path3);
+        return visitor.Alias?.(key, node, path5);
       return void 0;
     }
-    function replaceNode(key, path3, node) {
-      const parent = path3[path3.length - 1];
+    function replaceNode(key, path5, node) {
+      const parent = path5[path5.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -835,10 +835,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path3, value) {
+    function collectionFromPath(schema, path5, value) {
       let v = value;
-      for (let i = path3.length - 1; i >= 0; --i) {
-        const k = path3[i];
+      for (let i = path5.length - 1; i >= 0; --i) {
+        const k = path5[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -857,7 +857,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path3) => path3 == null || typeof path3 === "object" && !!path3[Symbol.iterator]().next().done;
+    var isEmptyPath = (path5) => path5 == null || typeof path5 === "object" && !!path5[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -887,11 +887,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path3, value) {
-        if (isEmptyPath(path3))
+      addIn(path5, value) {
+        if (isEmptyPath(path5))
           this.add(value);
         else {
-          const [key, ...rest] = path3;
+          const [key, ...rest] = path5;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -905,8 +905,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path3) {
-        const [key, ...rest] = path3;
+      deleteIn(path5) {
+        const [key, ...rest] = path5;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -920,8 +920,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path3, keepScalar) {
-        const [key, ...rest] = path3;
+      getIn(path5, keepScalar) {
+        const [key, ...rest] = path5;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -939,8 +939,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path3) {
-        const [key, ...rest] = path3;
+      hasIn(path5) {
+        const [key, ...rest] = path5;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -950,8 +950,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path3, value) {
-        const [key, ...rest] = path3;
+      setIn(path5, value) {
+        const [key, ...rest] = path5;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -3466,9 +3466,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path3, value) {
+      addIn(path5, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path3, value);
+          this.contents.addIn(path5, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -3543,14 +3543,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path3) {
-        if (Collection.isEmptyPath(path3)) {
+      deleteIn(path5) {
+        if (Collection.isEmptyPath(path5)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path3) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path5) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -3565,10 +3565,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path3, keepScalar) {
-        if (Collection.isEmptyPath(path3))
+      getIn(path5, keepScalar) {
+        if (Collection.isEmptyPath(path5))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path3, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path5, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -3579,10 +3579,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path3) {
-        if (Collection.isEmptyPath(path3))
+      hasIn(path5) {
+        if (Collection.isEmptyPath(path5))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path3) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path5) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -3599,13 +3599,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path3, value) {
-        if (Collection.isEmptyPath(path3)) {
+      setIn(path5, value) {
+        if (Collection.isEmptyPath(path5)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path3), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path5), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path3, value);
+          this.contents.setIn(path5, value);
         }
       }
       /**
@@ -4594,9 +4594,9 @@ var require_resolve_block_scalar = __commonJS({
           default: {
             const message = `Unexpected token in block scalar header: ${token.type}`;
             onError(token, "UNEXPECTED_TOKEN", message);
-            const ts2 = token.source;
-            if (ts2 && typeof ts2 === "string")
-              length += ts2.length;
+            const ts = token.source;
+            if (ts && typeof ts === "string")
+              length += ts.length;
           }
         }
       }
@@ -4905,9 +4905,9 @@ var require_compose_scalar = __commonJS({
       if (schema.compat) {
         const compat = schema.compat.find((tag2) => tag2.default && tag2.test?.test(value)) ?? schema[identity.SCALAR];
         if (tag.tag !== compat.tag) {
-          const ts2 = directives.tagString(tag.tag);
+          const ts = directives.tagString(tag.tag);
           const cs = directives.tagString(compat.tag);
-          const msg = `Value may be parsed as either ${ts2} or ${cs}`;
+          const msg = `Value may be parsed as either ${ts} or ${cs}`;
           onError(token, "TAG_RESOLVE_FAILED", msg, true);
         }
       }
@@ -5565,9 +5565,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path3) => {
+    visit.itemAtPath = (cst, path5) => {
       let item = cst;
-      for (const [field, index] of path3) {
+      for (const [field, index] of path5) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -5576,23 +5576,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path3) => {
-      const parent = visit.itemAtPath(cst, path3.slice(0, -1));
-      const field = path3[path3.length - 1][0];
+    visit.parentCollection = (cst, path5) => {
+      const parent = visit.itemAtPath(cst, path5.slice(0, -1));
+      const field = path5[path5.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path3, item, visitor) {
-      let ctrl = visitor(item, path3);
+    function _visit(path5, item, visitor) {
+      let ctrl = visitor(item, path5);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path3.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path5.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -5603,10 +5603,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path3);
+            ctrl = ctrl(item, path5);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path3) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path5) : ctrl;
     }
     exports2.visit = visit;
   }
@@ -7361,20 +7361,20 @@ var require_dist = __commonJS({
 var require_path_browserify = __commonJS({
   "node_modules/path-browserify/index.js"(exports2, module2) {
     "use strict";
-    function assertPath(path3) {
-      if (typeof path3 !== "string") {
-        throw new TypeError("Path must be a string. Received " + JSON.stringify(path3));
+    function assertPath(path5) {
+      if (typeof path5 !== "string") {
+        throw new TypeError("Path must be a string. Received " + JSON.stringify(path5));
       }
     }
-    function normalizeStringPosix(path3, allowAboveRoot) {
+    function normalizeStringPosix(path5, allowAboveRoot) {
       var res = "";
       var lastSegmentLength = 0;
       var lastSlash = -1;
       var dots = 0;
       var code;
-      for (var i = 0; i <= path3.length; ++i) {
-        if (i < path3.length)
-          code = path3.charCodeAt(i);
+      for (var i = 0; i <= path5.length; ++i) {
+        if (i < path5.length)
+          code = path5.charCodeAt(i);
         else if (code === 47)
           break;
         else
@@ -7414,9 +7414,9 @@ var require_path_browserify = __commonJS({
             }
           } else {
             if (res.length > 0)
-              res += "/" + path3.slice(lastSlash + 1, i);
+              res += "/" + path5.slice(lastSlash + 1, i);
             else
-              res = path3.slice(lastSlash + 1, i);
+              res = path5.slice(lastSlash + 1, i);
             lastSegmentLength = i - lastSlash - 1;
           }
           lastSlash = i;
@@ -7447,20 +7447,20 @@ var require_path_browserify = __commonJS({
         var resolvedAbsolute = false;
         var cwd;
         for (var i = arguments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
-          var path3;
+          var path5;
           if (i >= 0)
-            path3 = arguments[i];
+            path5 = arguments[i];
           else {
             if (cwd === void 0)
               cwd = process.cwd();
-            path3 = cwd;
+            path5 = cwd;
           }
-          assertPath(path3);
-          if (path3.length === 0) {
+          assertPath(path5);
+          if (path5.length === 0) {
             continue;
           }
-          resolvedPath = path3 + "/" + resolvedPath;
-          resolvedAbsolute = path3.charCodeAt(0) === 47;
+          resolvedPath = path5 + "/" + resolvedPath;
+          resolvedAbsolute = path5.charCodeAt(0) === 47;
         }
         resolvedPath = normalizeStringPosix(resolvedPath, !resolvedAbsolute);
         if (resolvedAbsolute) {
@@ -7474,22 +7474,22 @@ var require_path_browserify = __commonJS({
           return ".";
         }
       },
-      normalize: function normalize(path3) {
-        assertPath(path3);
-        if (path3.length === 0) return ".";
-        var isAbsolute5 = path3.charCodeAt(0) === 47;
-        var trailingSeparator = path3.charCodeAt(path3.length - 1) === 47;
-        path3 = normalizeStringPosix(path3, !isAbsolute5);
-        if (path3.length === 0 && !isAbsolute5) path3 = ".";
-        if (path3.length > 0 && trailingSeparator) path3 += "/";
-        if (isAbsolute5) return "/" + path3;
-        return path3;
+      normalize: function normalize(path5) {
+        assertPath(path5);
+        if (path5.length === 0) return ".";
+        var isAbsolute4 = path5.charCodeAt(0) === 47;
+        var trailingSeparator = path5.charCodeAt(path5.length - 1) === 47;
+        path5 = normalizeStringPosix(path5, !isAbsolute4);
+        if (path5.length === 0 && !isAbsolute4) path5 = ".";
+        if (path5.length > 0 && trailingSeparator) path5 += "/";
+        if (isAbsolute4) return "/" + path5;
+        return path5;
       },
-      isAbsolute: function isAbsolute5(path3) {
-        assertPath(path3);
-        return path3.length > 0 && path3.charCodeAt(0) === 47;
+      isAbsolute: function isAbsolute4(path5) {
+        assertPath(path5);
+        return path5.length > 0 && path5.charCodeAt(0) === 47;
       },
-      join: function join7() {
+      join: function join6() {
         if (arguments.length === 0)
           return ".";
         var joined;
@@ -7573,18 +7573,18 @@ var require_path_browserify = __commonJS({
           return to.slice(toStart);
         }
       },
-      _makeLong: function _makeLong(path3) {
-        return path3;
+      _makeLong: function _makeLong(path5) {
+        return path5;
       },
-      dirname: function dirname2(path3) {
-        assertPath(path3);
-        if (path3.length === 0) return ".";
-        var code = path3.charCodeAt(0);
+      dirname: function dirname2(path5) {
+        assertPath(path5);
+        if (path5.length === 0) return ".";
+        var code = path5.charCodeAt(0);
         var hasRoot = code === 47;
         var end = -1;
         var matchedSlash = true;
-        for (var i = path3.length - 1; i >= 1; --i) {
-          code = path3.charCodeAt(i);
+        for (var i = path5.length - 1; i >= 1; --i) {
+          code = path5.charCodeAt(i);
           if (code === 47) {
             if (!matchedSlash) {
               end = i;
@@ -7596,21 +7596,21 @@ var require_path_browserify = __commonJS({
         }
         if (end === -1) return hasRoot ? "/" : ".";
         if (hasRoot && end === 1) return "//";
-        return path3.slice(0, end);
+        return path5.slice(0, end);
       },
-      basename: function basename2(path3, ext) {
+      basename: function basename(path5, ext) {
         if (ext !== void 0 && typeof ext !== "string") throw new TypeError('"ext" argument must be a string');
-        assertPath(path3);
+        assertPath(path5);
         var start = 0;
         var end = -1;
         var matchedSlash = true;
         var i;
-        if (ext !== void 0 && ext.length > 0 && ext.length <= path3.length) {
-          if (ext.length === path3.length && ext === path3) return "";
+        if (ext !== void 0 && ext.length > 0 && ext.length <= path5.length) {
+          if (ext.length === path5.length && ext === path5) return "";
           var extIdx = ext.length - 1;
           var firstNonSlashEnd = -1;
-          for (i = path3.length - 1; i >= 0; --i) {
-            var code = path3.charCodeAt(i);
+          for (i = path5.length - 1; i >= 0; --i) {
+            var code = path5.charCodeAt(i);
             if (code === 47) {
               if (!matchedSlash) {
                 start = i + 1;
@@ -7634,11 +7634,11 @@ var require_path_browserify = __commonJS({
             }
           }
           if (start === end) end = firstNonSlashEnd;
-          else if (end === -1) end = path3.length;
-          return path3.slice(start, end);
+          else if (end === -1) end = path5.length;
+          return path5.slice(start, end);
         } else {
-          for (i = path3.length - 1; i >= 0; --i) {
-            if (path3.charCodeAt(i) === 47) {
+          for (i = path5.length - 1; i >= 0; --i) {
+            if (path5.charCodeAt(i) === 47) {
               if (!matchedSlash) {
                 start = i + 1;
                 break;
@@ -7649,18 +7649,18 @@ var require_path_browserify = __commonJS({
             }
           }
           if (end === -1) return "";
-          return path3.slice(start, end);
+          return path5.slice(start, end);
         }
       },
-      extname: function extname(path3) {
-        assertPath(path3);
+      extname: function extname(path5) {
+        assertPath(path5);
         var startDot = -1;
         var startPart = 0;
         var end = -1;
         var matchedSlash = true;
         var preDotState = 0;
-        for (var i = path3.length - 1; i >= 0; --i) {
-          var code = path3.charCodeAt(i);
+        for (var i = path5.length - 1; i >= 0; --i) {
+          var code = path5.charCodeAt(i);
           if (code === 47) {
             if (!matchedSlash) {
               startPart = i + 1;
@@ -7686,7 +7686,7 @@ var require_path_browserify = __commonJS({
         preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
           return "";
         }
-        return path3.slice(startDot, end);
+        return path5.slice(startDot, end);
       },
       format: function format(pathObject) {
         if (pathObject === null || typeof pathObject !== "object") {
@@ -7694,14 +7694,14 @@ var require_path_browserify = __commonJS({
         }
         return _format("/", pathObject);
       },
-      parse: function parse(path3) {
-        assertPath(path3);
+      parse: function parse(path5) {
+        assertPath(path5);
         var ret = { root: "", dir: "", base: "", ext: "", name: "" };
-        if (path3.length === 0) return ret;
-        var code = path3.charCodeAt(0);
-        var isAbsolute5 = code === 47;
+        if (path5.length === 0) return ret;
+        var code = path5.charCodeAt(0);
+        var isAbsolute4 = code === 47;
         var start;
-        if (isAbsolute5) {
+        if (isAbsolute4) {
           ret.root = "/";
           start = 1;
         } else {
@@ -7711,10 +7711,10 @@ var require_path_browserify = __commonJS({
         var startPart = 0;
         var end = -1;
         var matchedSlash = true;
-        var i = path3.length - 1;
+        var i = path5.length - 1;
         var preDotState = 0;
         for (; i >= start; --i) {
-          code = path3.charCodeAt(i);
+          code = path5.charCodeAt(i);
           if (code === 47) {
             if (!matchedSlash) {
               startPart = i + 1;
@@ -7737,21 +7737,21 @@ var require_path_browserify = __commonJS({
         preDotState === 0 || // The (right-most) trimmed path component is exactly '..'
         preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
           if (end !== -1) {
-            if (startPart === 0 && isAbsolute5) ret.base = ret.name = path3.slice(1, end);
-            else ret.base = ret.name = path3.slice(startPart, end);
+            if (startPart === 0 && isAbsolute4) ret.base = ret.name = path5.slice(1, end);
+            else ret.base = ret.name = path5.slice(startPart, end);
           }
         } else {
-          if (startPart === 0 && isAbsolute5) {
-            ret.name = path3.slice(1, startDot);
-            ret.base = path3.slice(1, end);
+          if (startPart === 0 && isAbsolute4) {
+            ret.name = path5.slice(1, startDot);
+            ret.base = path5.slice(1, end);
           } else {
-            ret.name = path3.slice(startPart, startDot);
-            ret.base = path3.slice(startPart, end);
+            ret.name = path5.slice(startPart, startDot);
+            ret.base = path5.slice(startPart, end);
           }
-          ret.ext = path3.slice(startDot, end);
+          ret.ext = path5.slice(startDot, end);
         }
-        if (startPart > 0) ret.dir = path3.slice(0, startPart - 1);
-        else if (isAbsolute5) ret.dir = "/";
+        if (startPart > 0) ret.dir = path5.slice(0, startPart - 1);
+        else if (isAbsolute4) ret.dir = "/";
         return ret;
       },
       sep: "/",
@@ -8566,14 +8566,14 @@ var require_util = __commonJS({
         }
         const port = url.port != null ? url.port : url.protocol === "https:" ? 443 : 80;
         let origin = url.origin != null ? url.origin : `${url.protocol || ""}//${url.hostname || ""}:${port}`;
-        let path3 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
+        let path5 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
         if (origin[origin.length - 1] === "/") {
           origin = origin.slice(0, origin.length - 1);
         }
-        if (path3 && path3[0] !== "/") {
-          path3 = `/${path3}`;
+        if (path5 && path5[0] !== "/") {
+          path5 = `/${path5}`;
         }
-        return new URL(`${origin}${path3}`);
+        return new URL(`${origin}${path5}`);
       }
       if (!isHttpOrHttpsPrefixed(url.origin || url.protocol)) {
         throw new InvalidArgumentError("Invalid URL protocol: the URL must start with `http:` or `https:`.");
@@ -9024,39 +9024,39 @@ var require_diagnostics = __commonJS({
       });
       diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
         const {
-          request: { method, path: path3, origin }
+          request: { method, path: path5, origin }
         } = evt;
-        debuglog("sending request to %s %s/%s", method, origin, path3);
+        debuglog("sending request to %s %s/%s", method, origin, path5);
       });
       diagnosticsChannel.channel("undici:request:headers").subscribe((evt) => {
         const {
-          request: { method, path: path3, origin },
+          request: { method, path: path5, origin },
           response: { statusCode }
         } = evt;
         debuglog(
           "received response to %s %s/%s - HTTP %d",
           method,
           origin,
-          path3,
+          path5,
           statusCode
         );
       });
       diagnosticsChannel.channel("undici:request:trailers").subscribe((evt) => {
         const {
-          request: { method, path: path3, origin }
+          request: { method, path: path5, origin }
         } = evt;
-        debuglog("trailers received from %s %s/%s", method, origin, path3);
+        debuglog("trailers received from %s %s/%s", method, origin, path5);
       });
       diagnosticsChannel.channel("undici:request:error").subscribe((evt) => {
         const {
-          request: { method, path: path3, origin },
+          request: { method, path: path5, origin },
           error
         } = evt;
         debuglog(
           "request to %s %s/%s errored - %s",
           method,
           origin,
-          path3,
+          path5,
           error.message
         );
       });
@@ -9105,9 +9105,9 @@ var require_diagnostics = __commonJS({
         });
         diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
           const {
-            request: { method, path: path3, origin }
+            request: { method, path: path5, origin }
           } = evt;
-          debuglog("sending request to %s %s/%s", method, origin, path3);
+          debuglog("sending request to %s %s/%s", method, origin, path5);
         });
       }
       diagnosticsChannel.channel("undici:websocket:open").subscribe((evt) => {
@@ -9170,7 +9170,7 @@ var require_request = __commonJS({
     var kHandler = /* @__PURE__ */ Symbol("handler");
     var Request = class {
       constructor(origin, {
-        path: path3,
+        path: path5,
         method,
         body,
         headers,
@@ -9185,11 +9185,11 @@ var require_request = __commonJS({
         expectContinue,
         servername
       }, handler) {
-        if (typeof path3 !== "string") {
+        if (typeof path5 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path3[0] !== "/" && !(path3.startsWith("http://") || path3.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path5[0] !== "/" && !(path5.startsWith("http://") || path5.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.test(path3)) {
+        } else if (invalidPathRegex.test(path5)) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -9255,7 +9255,7 @@ var require_request = __commonJS({
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? buildURL(path3, query) : path3;
+        this.path = query ? buildURL(path5, query) : path5;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -13877,7 +13877,7 @@ var require_client_h1 = __commonJS({
       return method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && method !== "TRACE" && method !== "CONNECT";
     }
     function writeH1(client, request) {
-      const { method, path: path3, host, upgrade, blocking, reset } = request;
+      const { method, path: path5, host, upgrade, blocking, reset } = request;
       let { body, headers, contentLength } = request;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH" || method === "QUERY" || method === "PROPFIND" || method === "PROPPATCH";
       if (util2.isFormDataLike(body)) {
@@ -13944,7 +13944,7 @@ var require_client_h1 = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path3} HTTP/1.1\r
+      let header = `${method} ${path5} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -14470,7 +14470,7 @@ var require_client_h2 = __commonJS({
     }
     function writeH2(client, request) {
       const session = client[kHTTP2Session];
-      const { method, path: path3, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
+      const { method, path: path5, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
       let { body } = request;
       if (upgrade) {
         util2.errorRequest(client, request, new Error("Upgrade not supported for H2"));
@@ -14537,7 +14537,7 @@ var require_client_h2 = __commonJS({
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path3;
+      headers[HTTP2_HEADER_PATH] = path5;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body && typeof body.read === "function") {
@@ -14890,9 +14890,9 @@ var require_redirect_handler = __commonJS({
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
         const { origin, pathname, search } = util2.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path3 = search ? `${pathname}${search}` : pathname;
+        const path5 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path3;
+        this.opts.path = path5;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -16127,10 +16127,10 @@ var require_proxy_agent = __commonJS({
         };
         const {
           origin,
-          path: path3 = "/",
+          path: path5 = "/",
           headers = {}
         } = opts;
-        opts.path = origin + path3;
+        opts.path = origin + path5;
         if (!("host" in headers) && !("Host" in headers)) {
           const { host } = new URL2(origin);
           headers.host = host;
@@ -18051,20 +18051,20 @@ var require_mock_utils = __commonJS({
       }
       return true;
     }
-    function safeUrl(path3) {
-      if (typeof path3 !== "string") {
-        return path3;
+    function safeUrl(path5) {
+      if (typeof path5 !== "string") {
+        return path5;
       }
-      const pathSegments = path3.split("?");
+      const pathSegments = path5.split("?");
       if (pathSegments.length !== 2) {
-        return path3;
+        return path5;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path: path3, method, body, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path3);
+    function matchKey(mockDispatch2, { path: path5, method, body, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path5);
       const methodMatch = matchValue(mockDispatch2.method, method);
       const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
@@ -18086,7 +18086,7 @@ var require_mock_utils = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path3 }) => matchValue(safeUrl(path3), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path5 }) => matchValue(safeUrl(path5), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -18124,9 +18124,9 @@ var require_mock_utils = __commonJS({
       }
     }
     function buildKey(opts) {
-      const { path: path3, method, body, headers, query } = opts;
+      const { path: path5, method, body, headers, query } = opts;
       return {
-        path: path3,
+        path: path5,
         method,
         body,
         headers,
@@ -18589,10 +18589,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path: path3, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path5, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path3,
+            Path: path5,
             "Status code": statusCode,
             Persistent: persist ? PERSISTENT : NOT_PERSISTENT,
             Invocations: timesInvoked,
@@ -23473,9 +23473,9 @@ var require_util6 = __commonJS({
         }
       }
     }
-    function validateCookiePath(path3) {
-      for (let i = 0; i < path3.length; ++i) {
-        const code = path3.charCodeAt(i);
+    function validateCookiePath(path5) {
+      for (let i = 0; i < path5.length; ++i) {
+        const code = path5.charCodeAt(i);
         if (code < 32 || // exclude CTLs (0-31)
         code === 127 || // DEL
         code === 59) {
@@ -26168,11 +26168,11 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path3 = opts.path;
+          let path5 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path3 = `/${path3}`;
+            path5 = `/${path5}`;
           }
-          url = new URL(util2.parseOrigin(url).origin + path3);
+          url = new URL(util2.parseOrigin(url).origin + path5);
         } else {
           if (!opts) {
             opts = typeof url === "object" ? url : {};
@@ -26253,7 +26253,7 @@ __export(main_exports, {
   migrateToLocalV2: () => migrateToLocalV2
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian15 = require("obsidian");
+var import_obsidian14 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_SETTINGS = {
@@ -26325,7 +26325,7 @@ var DEFAULT_SETTINGS = {
 };
 
 // src/settings.ts
-var import_obsidian5 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 
 // src/modals.ts
 var import_obsidian2 = require("obsidian");
@@ -26481,7 +26481,7 @@ var en = {
     formatInWikiBody: (id) => `This file is a wiki article (domain \xAB${id}\xBB). Formatting wiki articles is not available.`,
     formatInWikiClose: "Close",
     formatNoPending: "No format preview available",
-    formatApplied: (path3) => `Formatted: ${path3}`,
+    formatApplied: (path5) => `Formatted: ${path5}`,
     formatCancelled: "Format cancelled",
     formatPreviewHeader: "Format preview",
     formatApply: "Apply",
@@ -26540,7 +26540,7 @@ var en = {
     ratingRebuild: "Rate rebuild:"
   },
   formatProgress: {
-    analysing: (path3) => `Analysing file ${path3}...
+    analysing: (path5) => `Analysing file ${path5}...
 `,
     truncatedSalvageSummary: "Format: response truncated \u2014 salvage",
     truncatedSalvageRetrySummary: "Format: retry response truncated \u2014 salvage",
@@ -26826,7 +26826,7 @@ var ru = {
     formatInWikiBody: (id) => `\u0424\u0430\u0439\u043B \u044F\u0432\u043B\u044F\u0435\u0442\u0441\u044F wiki-\u0441\u0442\u0430\u0442\u044C\u0451\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB${id}\xBB. \u0424\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 wiki-\u0441\u0442\u0430\u0442\u0435\u0439 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E.`,
     formatInWikiClose: "\u0417\u0430\u043A\u0440\u044B\u0442\u044C",
     formatNoPending: "\u041D\u0435\u0442 \u043E\u0436\u0438\u0434\u0430\u044E\u0449\u0435\u0433\u043E \u043F\u0440\u0435\u0434\u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440\u0430 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F",
-    formatApplied: (path3) => `\u041E\u0442\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u043E: ${path3}`,
+    formatApplied: (path5) => `\u041E\u0442\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u043E: ${path5}`,
     formatCancelled: "\u0424\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E",
     formatPreviewHeader: "\u041F\u0440\u0435\u0434\u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F",
     formatApply: "\u041F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u044C",
@@ -26885,7 +26885,7 @@ var ru = {
     ratingRebuild: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u043F\u0435\u0440\u0435\u0441\u0442\u0440\u043E\u0439\u043A\u0443:"
   },
   formatProgress: {
-    analysing: (path3) => `\u0410\u043D\u0430\u043B\u0438\u0437 \u0444\u0430\u0439\u043B\u0430 ${path3}...
+    analysing: (path5) => `\u0410\u043D\u0430\u043B\u0438\u0437 \u0444\u0430\u0439\u043B\u0430 ${path5}...
 `,
     truncatedSalvageSummary: "Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u2014 salvage",
     truncatedSalvageRetrySummary: "Format: retry \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u2014 salvage",
@@ -27170,7 +27170,7 @@ var es = {
     formatInWikiBody: (id) => `Este archivo es un art\xEDculo wiki (dominio \xAB${id}\xBB). No se puede formatear art\xEDculos wiki.`,
     formatInWikiClose: "Cerrar",
     formatNoPending: "No hay previsualizaci\xF3n de formato",
-    formatApplied: (path3) => `Formateado: ${path3}`,
+    formatApplied: (path5) => `Formateado: ${path5}`,
     formatCancelled: "Formateo cancelado",
     formatPreviewHeader: "Previsualizaci\xF3n del formateo",
     formatApply: "Aplicar",
@@ -27229,7 +27229,7 @@ var es = {
     ratingRebuild: "Evaluar reconstrucci\xF3n:"
   },
   formatProgress: {
-    analysing: (path3) => `Analizando archivo ${path3}...
+    analysing: (path5) => `Analizando archivo ${path5}...
 `,
     truncatedSalvageSummary: "Format: respuesta truncada \u2014 recuperaci\xF3n",
     truncatedSalvageRetrySummary: "Format: reintento truncado \u2014 recuperaci\xF3n",
@@ -27981,15 +27981,17 @@ var import_path_browserify = __toESM(require_path_browserify(), 1);
 
 // src/wiki-path.ts
 var WIKI_ROOT = "!Wiki";
-var GLOBAL_CONFIG_DIR = `${WIKI_ROOT}/_config`;
-var GLOBAL_DOMAIN_PATH = `${GLOBAL_CONFIG_DIR}/_domain.json`;
-var GLOBAL_AGENT_LOG_PATH = `${GLOBAL_CONFIG_DIR}/_agent.jsonl`;
-var GLOBAL_DEV_LOG_PATH = `${GLOBAL_CONFIG_DIR}/_dev.jsonl`;
+var LEGACY_GLOBAL_CONFIG_DIR = `${WIKI_ROOT}/_config`;
+var LEGACY_GLOBAL_DOMAIN_PATH = `${LEGACY_GLOBAL_CONFIG_DIR}/_domain.json`;
+var GLOBAL_CONFIG_DIR = LEGACY_GLOBAL_CONFIG_DIR;
+var GLOBAL_DOMAIN_PATH = LEGACY_GLOBAL_DOMAIN_PATH;
+var GLOBAL_AGENT_LOG_PATH = `${LEGACY_GLOBAL_CONFIG_DIR}/_agent.jsonl`;
+var GLOBAL_DEV_LOG_PATH = `${LEGACY_GLOBAL_CONFIG_DIR}/_dev.jsonl`;
 function domainWikiFolder(subfolder) {
   return `${WIKI_ROOT}/${subfolder}`;
 }
-function isWikiArticlePath(path3) {
-  return path3 === WIKI_ROOT || path3.startsWith(`${WIKI_ROOT}/`);
+function isWikiArticlePath(path5) {
+  return path5 === WIKI_ROOT || path5.startsWith(`${WIKI_ROOT}/`);
 }
 function sanitizeWikiFolder(raw) {
   let s = raw;
@@ -28003,34 +28005,44 @@ function sanitizeWikiSubfolder(raw) {
   if (!raw.includes("/")) return raw;
   return raw.split("/").pop();
 }
-function validateArticlePath(path3, wikiVaultPath) {
-  if (path3 === `${wikiVaultPath}/_config/_index.md` || path3 === `${wikiVaultPath}/_config/_log.md`) return true;
+function validateArticlePath(path5, wikiVaultPath) {
+  if (path5 === `${wikiVaultPath}/_config/_index.md` || path5 === `${wikiVaultPath}/_config/_log.md`) return true;
   const prefix = `${wikiVaultPath}/`;
-  if (!path3.startsWith(prefix)) return false;
-  const remainder = path3.slice(prefix.length);
+  if (!path5.startsWith(prefix)) return false;
+  const remainder = path5.slice(prefix.length);
   if (remainder.includes(".config")) return false;
   const segments = remainder.split("/");
   return segments.length === 2 && segments[1].endsWith(".md");
 }
-function domainConfigDir(domainFolder) {
-  return `${domainFolder}/_config`;
+function domainMetadataPath(domainFolder) {
+  return `${domainFolder}/metadata.jsonl`;
 }
 function domainIndexPath(domainFolder) {
-  return `${domainConfigDir(domainFolder)}/_index.md`;
+  return `${domainFolder}/index.jsonl`;
 }
 function domainLogPath(domainFolder) {
-  return `${domainConfigDir(domainFolder)}/_log.md`;
+  return `${domainFolder}/log.jsonl`;
 }
-function domainEmbeddingsPath(domainFolder) {
-  return `${domainConfigDir(domainFolder)}/_embeddings.json`;
+function legacyDomainConfigDir(domainFolder) {
+  return `${domainFolder}/_config`;
 }
+function legacyDomainIndexPath(domainFolder) {
+  return `${legacyDomainConfigDir(domainFolder)}/_index.md`;
+}
+function legacyDomainLogPath(domainFolder) {
+  return `${legacyDomainConfigDir(domainFolder)}/_log.md`;
+}
+function legacyDomainEmbeddingsPath(domainFolder) {
+  return `${legacyDomainConfigDir(domainFolder)}/_embeddings.json`;
+}
+var domainConfigDir = legacyDomainConfigDir;
 
 // src/source-paths.ts
-function isSelectableSourceFolder(path3) {
-  return path3 !== WIKI_ROOT && !path3.startsWith(`${WIKI_ROOT}/`);
+function isSelectableSourceFolder(path5) {
+  return path5 !== WIKI_ROOT && !path5.startsWith(`${WIKI_ROOT}/`);
 }
 function consolidateSourcePaths(existing, newPath, vaultRoot) {
-  const toAbs = (p) => (0, import_path_browserify.isAbsolute)(p) ? p : (0, import_path_browserify.join)(vaultRoot, p);
+  const toAbs = (p) => import_path_browserify.default.isAbsolute(p) ? p : import_path_browserify.default.join(vaultRoot, p);
   const normed = (p) => {
     const a = toAbs(p);
     return a.endsWith("/") ? a : a + "/";
@@ -29222,13 +29234,10 @@ function resolveEffective(s, l) {
   };
 }
 
-// src/page-similarity.ts
-var import_obsidian4 = require("obsidian");
-
 // src/wiki-graph.ts
 var import_path_browserify3 = __toESM(require_path_browserify(), 1);
 function pageId(vaultPath) {
-  return (0, import_path_browserify3.basename)(vaultPath, ".md");
+  return import_path_browserify3.default.basename(vaultPath, ".md");
 }
 function buildWikiGraph(pages) {
   const graph = /* @__PURE__ */ new Map();
@@ -29333,7 +29342,7 @@ async function bfsExpandRanked(seeds, graph, depth, pages, query, bfsTopK, annot
       );
       const top2 = scored2.slice(0, bfsTopK);
       const expandedScores2 = {};
-      for (const { path: path3, score } of top2) expandedScores2[pageId(path3)] = score;
+      for (const { path: path5, score } of top2) expandedScores2[pageId(path5)] = score;
       return { selectedIds: /* @__PURE__ */ new Set([...seedSet, ...Object.keys(expandedScores2)]), expandedScores: expandedScores2 };
     } catch (err) {
       console.warn("[bfsExpandRanked] similarity threw, returning full BFS:", err);
@@ -29342,8 +29351,8 @@ async function bfsExpandRanked(seeds, graph, depth, pages, query, bfsTopK, annot
   }
   const questionTokens = tokenize(query);
   const scored = nonSeeds.map((pid) => {
-    const path3 = pidToPath.get(pid);
-    const content = path3 ? pages.get(path3) ?? "" : "";
+    const path5 = pidToPath.get(pid);
+    const content = path5 ? pages.get(path5) ?? "" : "";
     return { pid, score: scoreSeed(questionTokens, pid, content) };
   });
   scored.sort((a, b) => b.score - a.score);
@@ -29380,7 +29389,22 @@ function checkGraphStructure(graph) {
   return issues.join("\n");
 }
 
-// src/wiki-seeds.ts
+// src/rrf.ts
+function rrf(rankedLists, k = 60) {
+  const score = /* @__PURE__ */ new Map();
+  const firstSeen = /* @__PURE__ */ new Map();
+  let order = 0;
+  for (const list of rankedLists) {
+    for (let rank = 0; rank < list.length; rank++) {
+      const id = list[rank];
+      score.set(id, (score.get(id) ?? 0) + 1 / (k + rank + 1));
+      if (!firstSeen.has(id)) firstSeen.set(id, order++);
+    }
+  }
+  return [...score.entries()].map(([id, s]) => ({ id, score: s })).sort((a, b) => b.score - a.score || firstSeen.get(a.id) - firstSeen.get(b.id));
+}
+
+// src/lexical-retrieval.ts
 var STOP_WORDS = /* @__PURE__ */ new Set([
   // EN
   "the",
@@ -29440,18 +29464,119 @@ var STOP_WORDS = /* @__PURE__ */ new Set([
   "\u043D\u0435\u0442",
   "\u0443\u0436\u0435",
   "\u0435\u0449\u0451",
-  "\u0435\u0449\u0435"
+  "\u0435\u0449\u0435",
+  "\u043A\u0430\u043A\u0438\u0435",
+  "\u043A\u0430\u043A\u043E\u0439",
+  "\u043A\u0430\u043A\u0430\u044F",
+  "\u043A\u0430\u043A\u043E\u0435",
+  "\u0433\u0434\u0435",
+  "\u0447\u0435\u0440\u0435\u0437"
 ]);
-var BODY_CAP = 500;
-function tokenize(s) {
+var PAGE_LEAD_CAP = 500;
+var PAGE_LONG_TEXT = 1500;
+var CHUNK_LONG_TEXT = 1200;
+var MAX_PAGE_SCORE = 6.45;
+function tokenizeLexical(s) {
   const out = /* @__PURE__ */ new Set();
   if (!s) return out;
   for (const raw of s.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
-    if (raw.length <= 2) continue;
+    if (raw.length <= 2 && !/[a-zа-я]\d|\d[a-zа-я]/iu.test(raw)) continue;
     if (STOP_WORDS.has(raw)) continue;
     out.add(raw);
   }
   return out;
+}
+function emptyEvidence(lengthPenalty = 1) {
+  return {
+    path: 0,
+    title: 0,
+    heading: 0,
+    description: 0,
+    body: 0,
+    exact: 0,
+    phrase: 0,
+    lengthPenalty
+  };
+}
+function stripFrontmatterAndTitle(content) {
+  const noFm = content.replace(/^---\n[\s\S]*?\n---\n?/, "").trimStart();
+  return noFm.replace(/^#\s+[^\n]*\n?/, "");
+}
+function coverage(queryTokens, text) {
+  if (queryTokens.size === 0) return 0;
+  const tokens = tokenizeLexical(text);
+  if (tokens.size === 0) return 0;
+  let hits = 0;
+  for (const token of queryTokens) if (tokens.has(token)) hits++;
+  return hits / queryTokens.size;
+}
+function exactHitRatio(queryTokens, text) {
+  if (queryTokens.size === 0 || !text) return 0;
+  const tokens = tokenizeLexical(text);
+  let hits = 0;
+  for (const token of queryTokens) {
+    if (tokens.has(token)) hits++;
+  }
+  return Math.min(hits, queryTokens.size) / queryTokens.size;
+}
+function orderedTokens(queryTokens, text) {
+  const textTokens = tokenizeLexical(text);
+  return [...queryTokens].filter((token) => textTokens.has(token));
+}
+function phraseAdjacentBonus(queryTokens, text) {
+  const matched = orderedTokens(queryTokens, text);
+  if (matched.length < 2) return 0;
+  const lowered = text.toLowerCase();
+  for (let i = 0; i < matched.length - 1; i++) {
+    const a = matched[i].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const b = matched[i + 1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`${a}[^\\p{L}\\p{N}]+${b}`, "u").test(lowered)) return 1;
+  }
+  return Math.min(0.75, matched.length / queryTokens.size);
+}
+function longTextPenalty(text, threshold, floor) {
+  if (text.length <= threshold) return 1;
+  return Math.max(floor, threshold / text.length);
+}
+function scoreLexicalPage(queryTokens, input) {
+  const description = [input.description, input.annotation].filter(Boolean).join("\n");
+  const body = input.content ? stripFrontmatterAndTitle(input.content).slice(0, PAGE_LEAD_CAP) : "";
+  const title = input.title ?? input.id;
+  const path5 = input.path ?? input.id;
+  const fullText = [path5, title, description, body].join("\n");
+  const evidence = emptyEvidence(longTextPenalty(description, PAGE_LONG_TEXT, 0.55));
+  if (queryTokens.size === 0) return { score: 0, evidence };
+  evidence.path = coverage(queryTokens, path5) * 2.2;
+  evidence.title = coverage(queryTokens, title) * 2;
+  evidence.description = coverage(queryTokens, description) * 1;
+  evidence.body = coverage(queryTokens, body) * 0.6;
+  evidence.exact = exactHitRatio(queryTokens, fullText) * 0.4;
+  evidence.phrase = phraseAdjacentBonus(queryTokens, fullText) * 0.25;
+  const raw = evidence.path + evidence.title + evidence.description + evidence.body + evidence.exact + evidence.phrase;
+  return { score: raw * evidence.lengthPenalty, evidence };
+}
+function scoreLexicalChunk(queryTokens, input) {
+  const heading = input.heading ?? "";
+  const body = input.body ?? input.embedText ?? "";
+  const fullText = [input.path, heading, body].join("\n");
+  const evidence = emptyEvidence(longTextPenalty(body, CHUNK_LONG_TEXT, 0.5));
+  if (queryTokens.size === 0 || body.trim().length === 0) return { score: 0, evidence };
+  evidence.path = coverage(queryTokens, input.path) * 1.5;
+  evidence.heading = coverage(queryTokens, heading) * 2.3;
+  evidence.body = coverage(queryTokens, body) * 1;
+  evidence.exact = exactHitRatio(queryTokens, fullText) * 0.35;
+  evidence.phrase = phraseAdjacentBonus(queryTokens, fullText) * 0.25;
+  const raw = evidence.path + evidence.heading + evidence.body + evidence.exact + evidence.phrase;
+  return { score: raw * evidence.lengthPenalty, evidence };
+}
+function normalizeLexicalPageScore(score) {
+  return Math.max(0, Math.min(1, score / MAX_PAGE_SCORE));
+}
+
+// src/wiki-seeds.ts
+var BODY_CAP = 500;
+function tokenize(s) {
+  return tokenizeLexical(s);
 }
 function bodyContent(content) {
   const m = content.match(/^---\n[\s\S]*?\n---\n?([\s\S]*)/);
@@ -29465,43 +29590,90 @@ function parseFmKeywords(content) {
   return new Set(kw[1].split(",").map((s) => s.trim().replace(/['"]/g, "").toLowerCase()));
 }
 function scoreSeed(questionTokens, pageIdValue, content, annotation) {
-  if (questionTokens.size === 0) return 0;
-  const p = tokenize(pageIdValue);
-  for (const t of parseFmKeywords(content)) p.add(t);
-  for (const t of tokenize(bodyContent(content))) p.add(t);
-  if (annotation) for (const t of tokenize(annotation)) p.add(t);
-  if (p.size === 0) return 0;
-  let inter = 0;
-  for (const t of questionTokens) if (p.has(t)) inter++;
-  return inter / questionTokens.size;
+  const keywords = [...parseFmKeywords(content)].join(" ");
+  return normalizeLexicalPageScore(scoreLexicalPage(questionTokens, {
+    id: pageIdValue,
+    path: pageIdValue,
+    title: pageIdValue,
+    description: [annotation, keywords].filter(Boolean).join("\n"),
+    content: bodyContent(content)
+  }).score);
 }
 function selectSeeds(question, pages, topK, minScore, indexAnnotations) {
   const q = tokenize(question);
   if (q.size === 0) return [];
   const scored = [];
-  for (const [path3, content] of pages) {
-    const id = pageId(path3);
+  for (const [path5, content] of pages) {
+    const id = pageId(path5);
     const annotation = indexAnnotations?.get(id);
     const score = scoreSeed(q, id, content, annotation);
     if (score >= minScore && score > 0) scored.push({ id, score });
   }
-  scored.sort((a, b) => b.score - a.score);
+  scored.sort((a, b) => b.score - a.score || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   return scored.slice(0, topK);
 }
 
-// src/rrf.ts
-function rrf(rankedLists, k = 60) {
-  const score = /* @__PURE__ */ new Map();
-  const firstSeen = /* @__PURE__ */ new Map();
-  let order = 0;
-  for (const list of rankedLists) {
-    for (let rank = 0; rank < list.length; rank++) {
-      const id = list[rank];
-      score.set(id, (score.get(id) ?? 0) + 1 / (k + rank + 1));
-      if (!firstSeen.has(id)) firstSeen.set(id, order++);
+// src/jsonl.ts
+var JsonlParseError = class extends Error {
+  constructor(path5, line, cause) {
+    const msg = cause instanceof Error ? cause.message : String(cause);
+    super(`${path5}:${line}: ${msg}`);
+    this.name = "JsonlParseError";
+  }
+};
+function parseJsonl(text, path5) {
+  const out = [];
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i].trim();
+    if (!raw) continue;
+    try {
+      out.push(JSON.parse(raw));
+    } catch (e) {
+      throw new JsonlParseError(path5, i + 1, e);
     }
   }
-  return [...score.entries()].map(([id, s]) => ({ id, score: s })).sort((a, b) => b.score - a.score || firstSeen.get(a.id) - firstSeen.get(b.id));
+  return out;
+}
+function stringifyJsonl(records) {
+  return records.map((record) => JSON.stringify(record)).join("\n") + (records.length ? "\n" : "");
+}
+
+// src/wiki-index-jsonl.ts
+function isPageIndexRecord(record) {
+  return record.kind === "page";
+}
+function isChunkIndexRecord(record) {
+  return record.kind === "chunk";
+}
+function parseWikiIndexJsonl(text, path5) {
+  return parseJsonl(text, path5);
+}
+function stringifyWikiIndexJsonl(records) {
+  return stringifyJsonl(records);
+}
+function embeddingChunkToChunkRecord(input) {
+  return {
+    kind: "chunk",
+    schemaVersion: 1,
+    articleId: input.articleId,
+    path: input.path,
+    heading: input.heading,
+    ordinal: input.ordinal,
+    bodyHash: input.bodyHash,
+    embedTextHash: input.embedTextHash,
+    vector: input.vector,
+    vectorModel: input.vectorModel,
+    dimensions: input.dimensions,
+    updatedAt: input.updatedAt
+  };
+}
+function collectPageDescriptions(records) {
+  const descriptions = /* @__PURE__ */ new Map();
+  for (const record of records) {
+    if (isPageIndexRecord(record)) descriptions.set(record.articleId, record.description);
+  }
+  return descriptions;
 }
 
 // src/page-similarity.ts
@@ -29524,6 +29696,54 @@ function decodeVector(b64) {
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return new Float32Array(bytes.buffer);
 }
+function vectorToNumbers(b64) {
+  return [...decodeVector(b64)];
+}
+function numbersToVector(values) {
+  return encodeVector(new Float32Array(values));
+}
+function fallbackChunkPath(domainRoot, pid) {
+  return `${domainRoot}/${pid}.md`;
+}
+function cacheFromIndexRecords(records, model, dimensions) {
+  const entries = {};
+  for (const record of records) {
+    if (!isChunkIndexRecord(record)) continue;
+    if (record.vectorModel !== model || record.dimensions !== dimensions) continue;
+    const chunk = {
+      vector: numbersToVector(record.vector),
+      hash: record.embedTextHash,
+      kind: "section",
+      heading: record.heading,
+      ordinal: record.ordinal
+    };
+    (entries[record.articleId] ??= { chunks: [] }).chunks.push(chunk);
+  }
+  return { version: 3, model, dimensions, entries };
+}
+function chunkRecordsFromCache(cacheFile, domainRoot, existingRecords) {
+  const preserved = existingRecords.filter((record) => !isChunkIndexRecord(record));
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const chunkRecords = [];
+  for (const [pid, entry] of Object.entries(cacheFile.entries)) {
+    for (const chunk of entry.chunks) {
+      if (!chunk.vector) continue;
+      chunkRecords.push(embeddingChunkToChunkRecord({
+        articleId: pid,
+        path: fallbackChunkPath(domainRoot, pid),
+        heading: chunk.heading ?? "",
+        ordinal: chunk.ordinal ?? 0,
+        bodyHash: chunk.hash,
+        embedTextHash: chunk.hash,
+        vector: vectorToNumbers(chunk.vector),
+        vectorModel: cacheFile.model,
+        dimensions: cacheFile.dimensions,
+        updatedAt: now
+      }));
+    }
+  }
+  return [...preserved, ...chunkRecords];
+}
 function summaryVectors(entry) {
   if (!entry) return void 0;
   return entry.chunks.filter((chunk) => chunk.kind === "summary" && chunk.vector !== "").map((chunk) => decodeVector(chunk.vector));
@@ -29535,7 +29755,7 @@ function annotationHash(s) {
   }
   return (h >>> 0).toString(36);
 }
-function stripFrontmatterAndTitle(body) {
+function stripFrontmatterAndTitle2(body) {
   const noFm = body.replace(/^---\n[\s\S]*?\n---\n?/, "").trimStart();
   return noFm.replace(/^#\s+[^\n]*\n?/, "");
 }
@@ -29586,7 +29806,7 @@ function windowUnit(u, maxChars, overlapChars) {
 }
 var EXCLUDED_SECTION_HEADINGS = /* @__PURE__ */ new Set(["## related", "## external links"]);
 function splitSections(body, chunking) {
-  const stripped = stripFrontmatterAndTitle(body).trim();
+  const stripped = stripFrontmatterAndTitle2(body).trim();
   if (!stripped) return [];
   const units = toUnits(stripped).filter((u) => !EXCLUDED_SECTION_HEADINGS.has(u.heading.toLowerCase()));
   const merged = mergeShort(units, chunking.minChars);
@@ -29627,8 +29847,8 @@ ${embedText}`),
 }
 function collectCandidateSections(pages, candidateIds, seedIds, articleScores, chunking) {
   const sections = [];
-  for (const [path3, content] of pages) {
-    const articleId = pageId(path3);
+  for (const [path5, content] of pages) {
+    const articleId = pageId(path5);
     if (!candidateIds.has(articleId)) continue;
     splitSections(content, chunking).forEach(({ heading, window: window2 }, ordinal) => {
       const embedText = `${heading}
@@ -29636,7 +29856,7 @@ ${window2}`.trim();
       if (!embedText) return;
       sections.push({
         articleId,
-        path: path3,
+        path: path5,
         heading,
         body: window2,
         embedText,
@@ -29659,7 +29879,14 @@ function sortSelectedChunks(items) {
 function rankChunksJaccard(queryTokens, sections, limit2) {
   const scored = [];
   for (const section of sections) {
-    const score = jaccardCoeff(queryTokens, tokenize(section.embedText));
+    const score = scoreLexicalChunk(queryTokens, {
+      articleId: section.articleId,
+      path: section.path,
+      heading: section.heading,
+      body: section.body,
+      embedText: section.embedText,
+      ordinal: section.ordinal
+    }).score;
     if (score <= 0) continue;
     scored.push({
       articleId: section.articleId,
@@ -29710,10 +29937,11 @@ function maxCosine(query, vecs) {
 var EMBEDDING_BATCH_SIZE = 100;
 var RRF_CANDIDATE_POOL = 50;
 async function fetchEmbeddings(baseUrl, apiKey, model, inputs, dimensions) {
+  const { requestUrl: requestUrl3 } = await import("obsidian");
   const url = `${baseUrl.replace(/\/$/, "")}/embeddings`;
   const body = { model, input: inputs };
   if (dimensions && dimensions > 0) body.dimensions = dimensions;
-  const resp = await (0, import_obsidian4.requestUrl)({
+  const resp = await requestUrl3({
     url,
     method: "POST",
     headers: {
@@ -29917,12 +30145,12 @@ var PageSimilarityService = class {
   scoreJaccardOnce(queryTokens, indexAnnotations, allPaths) {
     if (queryTokens.size === 0) return [];
     const scored = [];
-    for (const path3 of allPaths) {
-      const pid = pageId(path3);
+    for (const path5 of allPaths) {
+      const pid = pageId(path5);
       const annotation = indexAnnotations.get(pid);
       if (!annotation) continue;
       const score = scoreSeed(queryTokens, pid, "", annotation);
-      if (score > 0) scored.push({ path: path3, score });
+      if (score > 0) scored.push({ path: path5, score });
     }
     scored.sort((a, b) => b.score - a.score);
     return scored.slice(0, this.config.topK).map((x) => x.path);
@@ -30001,12 +30229,12 @@ var PageSimilarityService = class {
   }
   selectJaccard(queryTokens, indexAnnotations, allPaths) {
     const scored = [];
-    for (const path3 of allPaths) {
-      const pid = pageId(path3);
+    for (const path5 of allPaths) {
+      const pid = pageId(path5);
       const annotation = indexAnnotations.get(pid);
       if (!annotation) continue;
       const score = scoreSeed(queryTokens, pid, "", annotation);
-      if (score > 0) scored.push({ path: path3, score });
+      if (score > 0) scored.push({ path: path5, score });
     }
     scored.sort((a, b) => b.score - a.score);
     return scored.slice(0, this.config.topK).map((x) => x.path);
@@ -30074,12 +30302,12 @@ var PageSimilarityService = class {
   }
   selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit2 = this.config.topK) {
     const scored = [];
-    for (const path3 of allPaths) {
-      const pid = pageId(path3);
+    for (const path5 of allPaths) {
+      const pid = pageId(path5);
       const annotation = indexAnnotations.get(pid);
       if (!annotation) continue;
       const score = scoreSeed(queryTokens, pid, "", annotation);
-      if (score > 0) scored.push({ path: path3, score });
+      if (score > 0) scored.push({ path: path5, score });
     }
     scored.sort((a, b) => b.score - a.score);
     return scored.slice(0, limit2);
@@ -30179,11 +30407,8 @@ var PageSimilarityService = class {
     const { model, dimensions } = this.config;
     if (!model || !dimensions) return;
     try {
-      const raw = await vaultTools.read(domainEmbeddingsPath(domainRoot));
-      const parsed = JSON.parse(raw);
-      if (parsed.version === 3 && parsed.model === model && parsed.dimensions === dimensions) {
-        this.cache = parsed;
-      }
+      const raw = await vaultTools.read(domainIndexPath(domainRoot));
+      this.cache = cacheFromIndexRecords(parseWikiIndexJsonl(raw, domainIndexPath(domainRoot)), model, dimensions);
     } catch {
     }
   }
@@ -30192,16 +30417,19 @@ var PageSimilarityService = class {
     const { baseUrl, apiKey, model, dimensions } = this.config;
     if (!baseUrl || !model || !dimensions) return { updated: 0 };
     const chunking = this.config.chunking ?? DEFAULT_CHUNKING;
-    const cachePath = domainEmbeddingsPath(domainRoot);
+    const cachePath = domainIndexPath(domainRoot);
     let cacheFile;
+    let indexRecords = [];
     try {
-      const parsed = JSON.parse(await vaultTools.read(cachePath));
-      if (parsed.version !== 3 && opts.fullCorpus !== true) {
-        return { updated: 0 };
-      }
-      cacheFile = parsed.version === 3 && parsed.model === model && parsed.dimensions === dimensions ? parsed : { version: 3, model, dimensions, entries: {} };
+      indexRecords = parseWikiIndexJsonl(await vaultTools.read(cachePath), cachePath);
+      cacheFile = cacheFromIndexRecords(indexRecords, model, dimensions);
     } catch {
-      cacheFile = { version: 3, model, dimensions, entries: {} };
+      try {
+        const parsed = JSON.parse(await vaultTools.read(legacyDomainEmbeddingsPath(domainRoot)));
+        cacheFile = parsed.version === 3 && parsed.model === model && parsed.dimensions === dimensions ? parsed : { version: 3, model, dimensions, entries: {} };
+      } catch {
+        cacheFile = { version: 3, model, dimensions, entries: {} };
+      }
     }
     const desired = /* @__PURE__ */ new Map();
     const pending = [];
@@ -30249,7 +30477,7 @@ var PageSimilarityService = class {
       const filled = chunks.filter((c) => c.vector !== "");
       if (filled.length > 0) cacheFile.entries[pid] = { chunks: filled };
     }
-    await vaultTools.write(cachePath, JSON.stringify(cacheFile, null, 2));
+    await vaultTools.write(cachePath, stringifyWikiIndexJsonl(chunkRecordsFromCache(cacheFile, domainRoot, indexRecords)));
     this.cache = cacheFile;
     return { updated: pending.length };
   }
@@ -30269,7 +30497,7 @@ async function checkNativeAvailability(baseUrl, apiKey, model) {
   });
   try {
     const resp = await Promise.race([
-      (0, import_obsidian5.requestUrl)({
+      (0, import_obsidian4.requestUrl)({
         url: `${baseUrl.replace(/\/$/, "")}/chat/completions`,
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
@@ -30290,7 +30518,7 @@ function parseTimeoutString(v) {
   }
   return null;
 }
-var ModelInputSuggest = class extends import_obsidian5.AbstractInputSuggest {
+var ModelInputSuggest = class extends import_obsidian4.AbstractInputSuggest {
   constructor(app, input, getModels, onPick) {
     super(app, input);
     this.getModels = getModels;
@@ -30311,7 +30539,7 @@ var ModelInputSuggest = class extends import_obsidian5.AbstractInputSuggest {
     el.setText(model);
   }
 };
-var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
+var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -30328,7 +30556,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
       this.cachedDomains = await this.plugin.domainStore.load();
     } catch (e) {
       this.cachedDomains = [];
-      new import_obsidian5.Notice(`Domain map load failed: ${e.message}`);
+      new import_obsidian4.Notice(`Domain map load failed: ${e.message}`);
     }
     this.localCache = await this.plugin.localConfigStore.load();
     this.render();
@@ -30351,12 +30579,12 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
   async fetchModels() {
     const na = this.plugin.settings.nativeAgent;
     if (!na.baseUrl) {
-      new import_obsidian5.Notice("Set Base URL first");
+      new import_obsidian4.Notice("Set Base URL first");
       return;
     }
     const url = `${na.baseUrl.replace(/\/$/, "")}/models`;
     try {
-      const resp = await (0, import_obsidian5.requestUrl)({
+      const resp = await (0, import_obsidian4.requestUrl)({
         url,
         headers: { Authorization: `Bearer ${this.localCache.nativeAgent?.apiKey ?? ""}` },
         throw: false
@@ -30366,7 +30594,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
       this._availableModels = json.data.map((m) => m.id).sort();
       this.display();
     } catch (e) {
-      new import_obsidian5.Notice(`Failed to fetch models: ${e.message}`);
+      new import_obsidian4.Notice(`Failed to fetch models: ${e.message}`);
     }
   }
   // CHECK: verify the entered dimension against the model. Probes twice — the model's
@@ -30378,31 +30606,31 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
   async checkDimensions() {
     const na = this.plugin.settings.nativeAgent;
     if (!na.baseUrl || !na.embeddingModel) {
-      new import_obsidian5.Notice("Set Base URL and embedding model first");
+      new import_obsidian4.Notice("Set Base URL and embedding model first");
       return;
     }
     if (!na.embeddingDimensions) {
-      new import_obsidian5.Notice("Enter a dimension value to check, or use Default");
+      new import_obsidian4.Notice("Enter a dimension value to check, or use Default");
       return;
     }
     const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
     const requested = na.embeddingDimensions;
     const probe = await probeEmbeddingDimensions(na.baseUrl, apiKey, na.embeddingModel, requested);
     if (probe == null) {
-      new import_obsidian5.Notice("Dimension check failed: API error");
+      new import_obsidian4.Notice("Dimension check failed: API error");
       return;
     }
     const nativeProbe = await probeEmbeddingDimensions(na.baseUrl, apiKey, na.embeddingModel);
     const native = nativeProbe?.actual;
     const nativeStr = native != null ? String(native) : "?";
     if (!probe.honored) {
-      new import_obsidian5.Notice(`Not supported \u2014 model returns ${probe.actual} (native ${nativeStr}), not ${requested}. Use Default.`);
+      new import_obsidian4.Notice(`Not supported \u2014 model returns ${probe.actual} (native ${nativeStr}), not ${requested}. Use Default.`);
     } else if (native != null && requested === native) {
-      new import_obsidian5.Notice(`OK \u2014 native dimension ${native}`);
+      new import_obsidian4.Notice(`OK \u2014 native dimension ${native}`);
     } else if (native != null && requested < native) {
-      new import_obsidian5.Notice(`Truncated \u2014 ${requested} of ${native} native. Smaller dimensions reduce retrieval quality.`);
+      new import_obsidian4.Notice(`Truncated \u2014 ${requested} of ${native} native. Smaller dimensions reduce retrieval quality.`);
     } else {
-      new import_obsidian5.Notice(`OK \u2014 model returns ${probe.actual} (native ${nativeStr}).`);
+      new import_obsidian4.Notice(`OK \u2014 model returns ${probe.actual} (native ${nativeStr}).`);
     }
   }
   // Default: fetch the model's native output dimension (no `dimensions` sent) and store it.
@@ -30410,7 +30638,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
   async setDefaultDimensions(silent = false) {
     const na = this.plugin.settings.nativeAgent;
     if (!na.baseUrl || !na.embeddingModel) {
-      if (!silent) new import_obsidian5.Notice("Set Base URL and embedding model first");
+      if (!silent) new import_obsidian4.Notice("Set Base URL and embedding model first");
       return;
     }
     const probe = await probeEmbeddingDimensions(
@@ -30419,12 +30647,12 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
       na.embeddingModel
     );
     if (probe == null) {
-      if (!silent) new import_obsidian5.Notice("Failed to detect dimensions from API");
+      if (!silent) new import_obsidian4.Notice("Failed to detect dimensions from API");
       return;
     }
     na.embeddingDimensions = probe.actual;
     await this.plugin.saveSettings();
-    if (!silent) new import_obsidian5.Notice(`Default dimensions for model: ${probe.actual}`);
+    if (!silent) new import_obsidian4.Notice(`Default dimensions for model: ${probe.actual}`);
     this.display();
   }
   addModelControl(s, currentValue, onChange) {
@@ -30452,8 +30680,8 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
     const eff = resolveEffective(s, this.localCache);
     const T = i18n();
     const busy = this.plugin.controller.running;
-    new import_obsidian5.Setting(containerEl).setName(T.settings.h3_general).setHeading();
-    new import_obsidian5.Setting(containerEl).setName(T.settings.systemPrompt_name).setDesc(T.settings.systemPrompt_desc).addTextArea((t) => {
+    new import_obsidian4.Setting(containerEl).setName(T.settings.h3_general).setHeading();
+    new import_obsidian4.Setting(containerEl).setName(T.settings.systemPrompt_name).setDesc(T.settings.systemPrompt_desc).addTextArea((t) => {
       t.inputEl.addClass("ai-wiki-settings-textarea");
       t.setValue(s.systemPrompt).onChange(async (v) => {
         s.systemPrompt = v;
@@ -30461,19 +30689,19 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
       });
       return t;
     });
-    new import_obsidian5.Setting(containerEl).setName(T.settings.outputLanguage_name).setDesc(T.settings.outputLanguage_desc).addDropdown(
+    new import_obsidian4.Setting(containerEl).setName(T.settings.outputLanguage_name).setDesc(T.settings.outputLanguage_desc).addDropdown(
       (d) => d.addOptions({ auto: "Auto (match UI language)", ru: "Russian", en: "English", es: "Spanish" }).setValue(s.outputLanguage ?? "auto").onChange(async (v) => {
         s.outputLanguage = v;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian5.Setting(containerEl).setName(T.settings.reasoningLanguage_name).setDesc(T.settings.reasoningLanguage_desc).addDropdown(
+    new import_obsidian4.Setting(containerEl).setName(T.settings.reasoningLanguage_name).setDesc(T.settings.reasoningLanguage_desc).addDropdown(
       (d) => d.addOptions({ auto: "Auto (match response)", en: "English", ru: "Russian", es: "Spanish" }).setValue(s.reasoningLanguage ?? "en").onChange(async (v) => {
         s.reasoningLanguage = v;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian5.Setting(containerEl).setName(T.settings.timeouts_name).setDesc(T.settings.timeouts_desc).addText(
+    new import_obsidian4.Setting(containerEl).setName(T.settings.timeouts_name).setDesc(T.settings.timeouts_desc).addText(
       (t) => t.setValue(`${s.timeouts.ingest}/${s.timeouts.query}/${s.timeouts.lint}/${s.timeouts.init}/${s.timeouts.format}`).onChange(async (v) => {
         const parsed = parseTimeoutString(v);
         if (parsed) {
@@ -30482,7 +30710,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         }
       })
     );
-    new import_obsidian5.Setting(containerEl).setName(T.settings.llmIdleTimeout_name).setDesc(T.settings.llmIdleTimeout_desc).addText(
+    new import_obsidian4.Setting(containerEl).setName(T.settings.llmIdleTimeout_name).setDesc(T.settings.llmIdleTimeout_desc).addText(
       (t) => t.setPlaceholder("300").setValue(String(s.llmIdleTimeoutSec)).onChange(async (v) => {
         const n = Number(v);
         if (Number.isFinite(n) && n >= 0) {
@@ -30491,7 +30719,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         }
       })
     );
-    new import_obsidian5.Setting(containerEl).setName(T.settings.llmIdleRetries_name).setDesc(T.settings.llmIdleRetries_desc).addText(
+    new import_obsidian4.Setting(containerEl).setName(T.settings.llmIdleRetries_name).setDesc(T.settings.llmIdleRetries_desc).addText(
       (t) => t.setPlaceholder("3").setValue(String(s.llmIdleRetries)).onChange(async (v) => {
         const n = Number(v);
         if (Number.isInteger(n) && n >= 0) {
@@ -30500,7 +30728,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         }
       })
     );
-    new import_obsidian5.Setting(containerEl).setName(T.settings.historyLimit_name).setDesc(T.settings.historyLimit_desc).addText(
+    new import_obsidian4.Setting(containerEl).setName(T.settings.historyLimit_name).setDesc(T.settings.historyLimit_desc).addText(
       (t) => t.setValue(String(s.historyLimit)).onChange(async (v) => {
         const n = Number(v);
         if (Number.isFinite(n) && n > 0) {
@@ -30509,12 +30737,12 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         }
       })
     );
-    new import_obsidian5.Setting(containerEl).setName(T.settings.agentLog_name).setDesc(T.settings.agentLog_desc).addToggle(
+    new import_obsidian4.Setting(containerEl).setName(T.settings.agentLog_name).setDesc(T.settings.agentLog_desc).addToggle(
       (t) => t.setValue(eff.agentLogEnabled).onChange(async (v) => {
         await this.patchLocal({ agentLogEnabled: v });
       })
     );
-    new import_obsidian5.Setting(containerEl).setName(T.settings.domains_heading).setHeading();
+    new import_obsidian4.Setting(containerEl).setName(T.settings.domains_heading).setHeading();
     if (busy) {
       containerEl.createEl("div", {
         cls: "ai-wiki-settings-busy-banner"
@@ -30529,7 +30757,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
     } else {
       for (let i = 0; i < domains.length; i++) {
         const d = domains[i];
-        new import_obsidian5.Setting(containerEl).setName(d.name || d.id).setDesc(d.id).addButton((b) => {
+        new import_obsidian4.Setting(containerEl).setName(d.name || d.id).setDesc(d.id).addButton((b) => {
           b.setButtonText(T.settings.editDomain).setDisabled(busy).onClick(() => {
             new EditDomainModal(this.plugin.app, d, (updated) => {
               void (async () => {
@@ -30545,7 +30773,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
           b.setButtonText(T.settings.deleteDomain).setWarning().setDisabled(busy).onClick(() => {
             new ConfirmModal(this.plugin.app, T.settings.confirmDeleteDomain(d.id), [], () => {
               void (async () => {
-                new import_obsidian5.Notice(T.settings.domainDeleted(d.id));
+                new import_obsidian4.Notice(T.settings.domainDeleted(d.id));
                 const cur = await this.plugin.domainStore.load();
                 await this.plugin.domainStore.save(cur.filter((x) => x.id !== d.id));
                 await this.refresh();
@@ -30555,9 +30783,9 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         });
       }
     }
-    new import_obsidian5.Setting(containerEl).setName(T.settings.h3_backend).setHeading();
-    if (!import_obsidian5.Platform.isMobile) {
-      new import_obsidian5.Setting(containerEl).setName(T.settings.backend_name).setDesc(T.settings.backend_desc).addDropdown((d) => {
+    new import_obsidian4.Setting(containerEl).setName(T.settings.h3_backend).setHeading();
+    if (!import_obsidian4.Platform.isMobile) {
+      new import_obsidian4.Setting(containerEl).setName(T.settings.backend_name).setDesc(T.settings.backend_desc).addDropdown((d) => {
         let backendDd;
         backendDd = d.addOption("claude-agent", T.settings.claudeCodeAgent).addOption("native-agent", T.settings.nativeAgent).setValue(eff.backend).onChange(async (v) => {
           if (v === "claude-agent") {
@@ -30583,8 +30811,8 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         href: "https://github.com/ikeniborn/obsidian-llm-wiki/blob/master/docs/mobile-cloud-ollama.md"
       });
     }
-    if (eff.backend === "claude-agent" && !import_obsidian5.Platform.isMobile) {
-      new import_obsidian5.Setting(containerEl).setName(T.settings.iclaudePath_name).setDesc(T.settings.iclaudePath_desc).addText(
+    if (eff.backend === "claude-agent" && !import_obsidian4.Platform.isMobile) {
+      new import_obsidian4.Setting(containerEl).setName(T.settings.iclaudePath_name).setDesc(T.settings.iclaudePath_desc).addText(
         (t) => t.setPlaceholder("/home/user/Documents/Project/iclaude/iclaude.sh").setValue(this.localCache.iclaudePath).onChange(async (v) => {
           await this.patchLocal({ iclaudePath: v.trim() });
         })
@@ -30593,9 +30821,9 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
           b.setButtonText(T.settings.testConnection_btnBusy).setDisabled(true);
           try {
             await probeClaudeBinary(this.localCache.iclaudePath);
-            new import_obsidian5.Notice(T.settings.claudeAvailable_ok);
+            new import_obsidian4.Notice(T.settings.claudeAvailable_ok);
           } catch (e) {
-            new import_obsidian5.Notice(`\u274C ${e.message}`);
+            new import_obsidian4.Notice(`\u274C ${e.message}`);
           } finally {
             b.setButtonText(T.settings.testConnection_btn).setDisabled(false);
           }
@@ -30603,20 +30831,20 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         return b;
       });
       if (!s.claudeAgent.perOperation) {
-        new import_obsidian5.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_claude).addText(
+        new import_obsidian4.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_claude).addText(
           (t) => t.setPlaceholder("").setValue(eff.claudeAgent.model).onChange(async (v) => {
             s.claudeAgent.model = v.trim();
             await this.plugin.saveSettings();
           })
         );
       }
-      new import_obsidian5.Setting(containerEl).setName(T.settings.allowedTools_name).setDesc(T.settings.allowedTools_desc).addText(
+      new import_obsidian4.Setting(containerEl).setName(T.settings.allowedTools_name).setDesc(T.settings.allowedTools_desc).addText(
         (t) => t.setPlaceholder("Bash,read,write").setValue(eff.claudeAgent.allowedTools).onChange(async (v) => {
           s.claudeAgent.allowedTools = v.trim();
           await this.plugin.saveSettings();
         })
       );
-      new import_obsidian5.Setting(containerEl).setName("Effort level").setDesc(T.settings.effort_desc).addDropdown((d) => {
+      new import_obsidian4.Setting(containerEl).setName("Effort level").setDesc(T.settings.effort_desc).addDropdown((d) => {
         d.addOption("", T.settings.effort_off);
         for (const lv of ["low", "medium", "high", "xhigh", "max"]) d.addOption(lv, lv);
         d.setValue(eff.claudeAgent.effort ?? "");
@@ -30626,7 +30854,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         });
         return d;
       });
-      new import_obsidian5.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
+      new import_obsidian4.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
         (t) => t.setValue(s.claudeAgent.perOperation).onChange(async (v) => {
           s.claudeAgent.perOperation = v;
           await this.plugin.saveSettings();
@@ -30642,14 +30870,14 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
           { key: "format", label: T.settings.op_format }
         ];
         for (const { key, label } of ops) {
-          new import_obsidian5.Setting(containerEl).setName(label).setHeading();
-          new import_obsidian5.Setting(containerEl).setName(T.settings.opModel_name).setDesc(T.settings.opModel_desc).addText(
+          new import_obsidian4.Setting(containerEl).setName(label).setHeading();
+          new import_obsidian4.Setting(containerEl).setName(T.settings.opModel_name).setDesc(T.settings.opModel_desc).addText(
             (t) => t.setValue(s.claudeAgent.operations[key].model).onChange(async (v) => {
               s.claudeAgent.operations[key].model = v.trim();
               await this.plugin.saveSettings();
             })
           );
-          new import_obsidian5.Setting(containerEl).setName("Effort level").addDropdown((d) => {
+          new import_obsidian4.Setting(containerEl).setName("Effort level").addDropdown((d) => {
             d.addOption("", T.settings.effort_inherit);
             for (const lv of ["low", "medium", "high", "xhigh", "max"]) d.addOption(lv, lv);
             d.setValue(s.claudeAgent.operations[key].effort ?? "");
@@ -30662,26 +30890,26 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         }
       }
     } else {
-      new import_obsidian5.Setting(containerEl).setName(T.settings.baseUrl_name).setDesc(T.settings.baseUrl_desc).addText(
+      new import_obsidian4.Setting(containerEl).setName(T.settings.baseUrl_name).setDesc(T.settings.baseUrl_desc).addText(
         (t) => t.setPlaceholder("").setValue(eff.nativeAgent.baseUrl).onChange(async (v) => {
           s.nativeAgent.baseUrl = v.trim();
           await this.plugin.saveSettings();
         })
       );
-      new import_obsidian5.Setting(containerEl).setName(T.settings.apiKey_name).setDesc(T.settings.apiKey_desc).addText(
+      new import_obsidian4.Setting(containerEl).setName(T.settings.apiKey_name).setDesc(T.settings.apiKey_desc).addText(
         (t) => t.setPlaceholder("Ollama").setValue(eff.nativeAgent.apiKey).onChange(async (v) => {
           await this.patchLocalNativeApiKey(v.trim());
         })
       );
-      new import_obsidian5.Setting(containerEl).setName(T.settings.testConnection_name).setDesc(T.settings.testConnection_desc).addButton((b) => {
+      new import_obsidian4.Setting(containerEl).setName(T.settings.testConnection_name).setDesc(T.settings.testConnection_desc).addButton((b) => {
         b.setButtonText(T.settings.testConnection_btn).onClick(async () => {
           b.setButtonText(T.settings.testConnection_btnBusy).setDisabled(true);
           const na = eff.nativeAgent;
           try {
             await checkNativeAvailability(na.baseUrl, na.apiKey, na.model);
-            new import_obsidian5.Notice(T.settings.testConnection_ok);
+            new import_obsidian4.Notice(T.settings.testConnection_ok);
           } catch (e) {
-            new import_obsidian5.Notice(`\u274C ${e.message}`);
+            new import_obsidian4.Notice(`\u274C ${e.message}`);
           } finally {
             b.setButtonText(T.settings.testConnection_btn).setDisabled(false);
           }
@@ -30690,14 +30918,14 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
       });
       if (!s.nativeAgent.perOperation) {
         this.addModelControl(
-          new import_obsidian5.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native),
+          new import_obsidian4.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native),
           eff.nativeAgent.model,
           async (v) => {
             s.nativeAgent.model = v;
             await this.plugin.saveSettings();
           }
         );
-        new import_obsidian5.Setting(containerEl).setName(T.settings.maxTokens_name).setDesc(T.settings.maxTokens_desc).addText(
+        new import_obsidian4.Setting(containerEl).setName(T.settings.maxTokens_name).setDesc(T.settings.maxTokens_desc).addText(
           (t) => t.setPlaceholder("4096").setValue(String(s.nativeAgent.maxTokens)).onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n > 0) {
@@ -30706,14 +30934,14 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
             }
           })
         );
-        new import_obsidian5.Setting(containerEl).setName("Thinking budget tokens").setDesc(T.settings.thinkingBudget_desc).addText(
+        new import_obsidian4.Setting(containerEl).setName("Thinking budget tokens").setDesc(T.settings.thinkingBudget_desc).addText(
           (t) => t.setPlaceholder("0").setValue(String(s.nativeAgent.thinkingBudgetTokens ?? 0)).onChange(async (v) => {
             const n = Number(v);
             s.nativeAgent.thinkingBudgetTokens = Number.isFinite(n) && n > 0 ? Math.floor(n) : void 0;
             await this.plugin.saveSettings();
           })
         );
-        new import_obsidian5.Setting(containerEl).setName(T.settings.temperature_name).setDesc(T.settings.temperature_desc).addText(
+        new import_obsidian4.Setting(containerEl).setName(T.settings.temperature_name).setDesc(T.settings.temperature_desc).addText(
           (t) => t.setPlaceholder("0.2").setValue(String(eff.nativeAgent.temperature)).onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n >= 0 && n <= 2) {
@@ -30723,7 +30951,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
           })
         );
       }
-      new import_obsidian5.Setting(containerEl).setName(T.settings.structuredRetries_name).setDesc(T.settings.structuredRetries_desc).addText(
+      new import_obsidian4.Setting(containerEl).setName(T.settings.structuredRetries_name).setDesc(T.settings.structuredRetries_desc).addText(
         (t) => t.setPlaceholder("1").setValue(String(s.nativeAgent.structuredRetries)).onChange(async (v) => {
           const n = Number(v);
           if (!Number.isFinite(n) || n < 0 || n > 3) return;
@@ -30731,7 +30959,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
           await this.plugin.saveSettings();
         })
       );
-      new import_obsidian5.Setting(containerEl).setName(T.settings.wikiLinkValidationRetries_name).setDesc(T.settings.wikiLinkValidationRetries_desc).addText(
+      new import_obsidian4.Setting(containerEl).setName(T.settings.wikiLinkValidationRetries_name).setDesc(T.settings.wikiLinkValidationRetries_desc).addText(
         (t) => t.setPlaceholder("3").setValue(String(s.wikiLinkValidationRetries)).onChange(async (v) => {
           const n = Number(v);
           if (Number.isInteger(n) && n >= 0) {
@@ -30740,9 +30968,9 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
           }
         })
       );
-      if (!import_obsidian5.Platform.isMobile) {
-        new import_obsidian5.Setting(containerEl).setName("Per-operation models").setHeading();
-        new import_obsidian5.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
+      if (!import_obsidian4.Platform.isMobile) {
+        new import_obsidian4.Setting(containerEl).setName("Per-operation models").setHeading();
+        new import_obsidian4.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
           (t) => t.setValue(s.nativeAgent.perOperation).onChange(async (v) => {
             s.nativeAgent.perOperation = v;
             await this.plugin.saveSettings();
@@ -30759,16 +30987,16 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
           { key: "format", label: T.settings.op_format }
         ];
         for (const { key, label } of ops) {
-          new import_obsidian5.Setting(containerEl).setName(label).setHeading();
+          new import_obsidian4.Setting(containerEl).setName(label).setHeading();
           this.addModelControl(
-            new import_obsidian5.Setting(containerEl).setName(T.settings.opModel_name).setDesc(T.settings.opModel_desc),
+            new import_obsidian4.Setting(containerEl).setName(T.settings.opModel_name).setDesc(T.settings.opModel_desc),
             s.nativeAgent.operations[key].model,
             async (v) => {
               s.nativeAgent.operations[key].model = v;
               await this.plugin.saveSettings();
             }
           );
-          new import_obsidian5.Setting(containerEl).setName(T.settings.opMaxTokens_name).setDesc(T.settings.opMaxTokens_desc).addText(
+          new import_obsidian4.Setting(containerEl).setName(T.settings.opMaxTokens_name).setDesc(T.settings.opMaxTokens_desc).addText(
             (t) => t.setValue(String(s.nativeAgent.operations[key].maxTokens)).onChange(async (v) => {
               const n = Number(v);
               if (Number.isFinite(n) && n > 0) {
@@ -30777,14 +31005,14 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
               }
             })
           );
-          new import_obsidian5.Setting(containerEl).setName("Thinking budget tokens").addText(
+          new import_obsidian4.Setting(containerEl).setName("Thinking budget tokens").addText(
             (t) => t.setPlaceholder("0").setValue(String(s.nativeAgent.operations[key].thinkingBudgetTokens ?? 0)).onChange(async (v) => {
               const n = Number(v);
               s.nativeAgent.operations[key].thinkingBudgetTokens = Number.isFinite(n) && n > 0 ? Math.floor(n) : void 0;
               await this.plugin.saveSettings();
             })
           );
-          new import_obsidian5.Setting(containerEl).setName(T.settings.opTemperature_name).setDesc(T.settings.opTemperature_desc).addText(
+          new import_obsidian4.Setting(containerEl).setName(T.settings.opTemperature_name).setDesc(T.settings.opTemperature_desc).addText(
             (t) => t.setValue(String(s.nativeAgent.operations[key].temperature)).onChange(async (v) => {
               const n = Number(v);
               if (Number.isFinite(n) && n >= 0 && n <= 2) {
@@ -30795,8 +31023,8 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
           );
         }
       }
-      new import_obsidian5.Setting(containerEl).setName("Semantic Search").setHeading();
-      new import_obsidian5.Setting(containerEl).setName("Enable semantic similarity (embeddings)").setDesc(T.settings.semanticEnable_desc).addToggle(
+      new import_obsidian4.Setting(containerEl).setName("Semantic Search").setHeading();
+      new import_obsidian4.Setting(containerEl).setName("Enable semantic similarity (embeddings)").setDesc(T.settings.semanticEnable_desc).addToggle(
         (t) => t.setValue(s.nativeAgent.embeddingModel !== void 0).onChange(async (v) => {
           if (!v) {
             s.nativeAgent.embeddingModel = void 0;
@@ -30811,7 +31039,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         })
       );
       if (s.nativeAgent.embeddingModel !== void 0) {
-        new import_obsidian5.Setting(containerEl).setName("Relevant pages (top-K)").setDesc(T.settings.relevantTopK_desc).addText(
+        new import_obsidian4.Setting(containerEl).setName("Relevant pages (top-K)").setDesc(T.settings.relevantTopK_desc).addText(
           (t) => t.setPlaceholder("15").setValue(String(s.nativeAgent.relevantPagesTopK ?? 15)).onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n > 0) {
@@ -30821,7 +31049,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
           })
         );
         this.addModelControl(
-          new import_obsidian5.Setting(containerEl).setName("Embedding model").setDesc(T.settings.embeddingModel_desc),
+          new import_obsidian4.Setting(containerEl).setName("Embedding model").setDesc(T.settings.embeddingModel_desc),
           s.nativeAgent.embeddingModel ?? "",
           async (v) => {
             s.nativeAgent.embeddingModel = v || void 0;
@@ -30829,7 +31057,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
             if (v) await this.setDefaultDimensions(true);
           }
         );
-        new import_obsidian5.Setting(containerEl).setName("Embedding dimensions").setDesc(T.settings.embeddingDimensions_desc).addButton(
+        new import_obsidian4.Setting(containerEl).setName("Embedding dimensions").setDesc(T.settings.embeddingDimensions_desc).addButton(
           (b) => b.setButtonText("Check").setTooltip("Verify the entered dimension is supported by the model").onClick(() => {
             void this.checkDimensions();
           })
@@ -30844,7 +31072,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
             await this.plugin.saveSettings();
           })
         );
-        const chunkField = (name, desc, placeholder, get, set) => new import_obsidian5.Setting(containerEl).setName(name).setDesc(desc).addText(
+        const chunkField = (name, desc, placeholder, get, set) => new import_obsidian4.Setting(containerEl).setName(name).setDesc(desc).addText(
           (t) => t.setPlaceholder(placeholder).setValue(String(get())).onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n > 0) {
@@ -30853,7 +31081,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
             }
           })
         );
-        if (!import_obsidian5.Platform.isMobile) {
+        if (!import_obsidian4.Platform.isMobile) {
           chunkField(
             "Chunk size (chars)",
             T.settings.chunkSize_desc(DEFAULT_CHUNKING.maxChars),
@@ -30891,14 +31119,14 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
             }
           );
         }
-        new import_obsidian5.Setting(containerEl).setName("Retrieval").setHeading();
-        new import_obsidian5.Setting(containerEl).setName("Hybrid retrieval (dense \u2295 sparse)").setDesc(T.settings.hybridRetrieval_desc).addToggle(
+        new import_obsidian4.Setting(containerEl).setName("Retrieval").setHeading();
+        new import_obsidian4.Setting(containerEl).setName("Hybrid retrieval (dense \u2295 sparse)").setDesc(T.settings.hybridRetrieval_desc).addToggle(
           (t) => t.setValue(s.nativeAgent.hybridRetrieval ?? false).onChange(async (v) => {
             s.nativeAgent.hybridRetrieval = v;
             await this.plugin.saveSettings();
           })
         );
-        new import_obsidian5.Setting(containerEl).setName("RRF k").setDesc(T.settings.rrfK_desc).addText(
+        new import_obsidian4.Setting(containerEl).setName("RRF k").setDesc(T.settings.rrfK_desc).addText(
           (t) => t.setValue(String(s.nativeAgent.rrfK ?? 60)).onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n > 0) {
@@ -30907,19 +31135,19 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
             }
           })
         );
-        new import_obsidian5.Setting(containerEl).setName("BFS fusion (vector \u2295 graph)").setDesc(T.settings.bfsFusion_desc).addToggle(
+        new import_obsidian4.Setting(containerEl).setName("BFS fusion (vector \u2295 graph)").setDesc(T.settings.bfsFusion_desc).addToggle(
           (t) => t.setValue(s.nativeAgent.bfsFusion ?? false).onChange(async (v) => {
             s.nativeAgent.bfsFusion = v;
             await this.plugin.saveSettings();
           })
         );
-        new import_obsidian5.Setting(containerEl).setName("Graph relevance floor (ratio)").setDesc(T.settings.bfsMinScoreRatio_desc).addSlider(
+        new import_obsidian4.Setting(containerEl).setName("Graph relevance floor (ratio)").setDesc(T.settings.bfsMinScoreRatio_desc).addSlider(
           (sl) => sl.setLimits(0, 1, 0.05).setDynamicTooltip().setValue(s.nativeAgent.bfsMinScoreRatio ?? 0.6).onChange(async (v) => {
             s.nativeAgent.bfsMinScoreRatio = v;
             await this.plugin.saveSettings();
           })
         );
-        new import_obsidian5.Setting(containerEl).setName("Seed similarity threshold").setDesc(T.settings.seedSimilarityThreshold_desc).addText(
+        new import_obsidian4.Setting(containerEl).setName("Seed similarity threshold").setDesc(T.settings.seedSimilarityThreshold_desc).addText(
           (t) => t.setValue(String(s.nativeAgent.seedSimilarityThreshold ?? 0)).onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n >= 0) {
@@ -30928,15 +31156,15 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
             }
           })
         );
-        if (!import_obsidian5.Platform.isMobile) {
-          new import_obsidian5.Setting(containerEl).setName("Graph health").setHeading();
-          new import_obsidian5.Setting(containerEl).setName("Dedup on ingest").setDesc(T.settings.dedupOnIngest_desc).addToggle(
+        if (!import_obsidian4.Platform.isMobile) {
+          new import_obsidian4.Setting(containerEl).setName("Graph health").setHeading();
+          new import_obsidian4.Setting(containerEl).setName("Dedup on ingest").setDesc(T.settings.dedupOnIngest_desc).addToggle(
             (t) => t.setValue(s.nativeAgent.dedupOnIngest ?? false).onChange(async (v) => {
               s.nativeAgent.dedupOnIngest = v;
               await this.plugin.saveSettings();
             })
           );
-          new import_obsidian5.Setting(containerEl).setName("Dedup threshold").setDesc(T.settings.dedupThreshold_desc).addText(
+          new import_obsidian4.Setting(containerEl).setName("Dedup threshold").setDesc(T.settings.dedupThreshold_desc).addText(
             (t) => t.setValue(String(s.nativeAgent.dedupThreshold ?? 0.85)).onChange(async (v) => {
               const n = Number(v);
               if (Number.isFinite(n) && n > 0 && n <= 1) {
@@ -30945,13 +31173,13 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
               }
             })
           );
-          new import_obsidian5.Setting(containerEl).setName("Lint near-duplicate report").setDesc(T.settings.lintNearDuplicate_desc).addToggle(
+          new import_obsidian4.Setting(containerEl).setName("Lint near-duplicate report").setDesc(T.settings.lintNearDuplicate_desc).addToggle(
             (t) => t.setValue(s.nativeAgent.lintNearDuplicate ?? false).onChange(async (v) => {
               s.nativeAgent.lintNearDuplicate = v;
               await this.plugin.saveSettings();
             })
           );
-          new import_obsidian5.Setting(containerEl).setName("Near-duplicate threshold").setDesc(T.settings.nearDupThreshold_desc).addText(
+          new import_obsidian4.Setting(containerEl).setName("Near-duplicate threshold").setDesc(T.settings.nearDupThreshold_desc).addText(
             (t) => t.setValue(String(s.nativeAgent.nearDupThreshold ?? 0.8)).onChange(async (v) => {
               const n = Number(v);
               if (Number.isFinite(n) && n > 0 && n <= 1) {
@@ -30960,7 +31188,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
               }
             })
           );
-          new import_obsidian5.Setting(containerEl).setName(T.settings.mergeDeleteWarnThreshold_name).setDesc(T.settings.mergeDeleteWarnThreshold_desc).addSlider(
+          new import_obsidian4.Setting(containerEl).setName(T.settings.mergeDeleteWarnThreshold_name).setDesc(T.settings.mergeDeleteWarnThreshold_desc).addSlider(
             (sl) => sl.setLimits(1, 20, 1).setDynamicTooltip().setValue(s.nativeAgent.mergeDeleteWarnThreshold ?? 5).onChange(async (v) => {
               s.nativeAgent.mergeDeleteWarnThreshold = v;
               await this.plugin.saveSettings();
@@ -30969,8 +31197,8 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         }
       }
     }
-    new import_obsidian5.Setting(containerEl).setName("Vision").setHeading();
-    new import_obsidian5.Setting(containerEl).setName("Enable vision analysis").setDesc("Analyse embedded images, PDFs, and Excalidraw files before formatting. Uses the same baseUrl and API key as the main backend.").addToggle(
+    new import_obsidian4.Setting(containerEl).setName("Vision").setHeading();
+    new import_obsidian4.Setting(containerEl).setName("Enable vision analysis").setDesc("Analyse embedded images, PDFs, and Excalidraw files before formatting. Uses the same baseUrl and API key as the main backend.").addToggle(
       (t) => t.setValue(s.vision.enabled).onChange(async (v) => {
         s.vision.enabled = v;
         await this.plugin.saveSettings();
@@ -30979,7 +31207,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
     );
     if (s.vision.enabled) {
       this.addModelControl(
-        new import_obsidian5.Setting(containerEl).setName("Vision model").setDesc("Model name for vision calls, e.g. gpt-4o-mini or claude-3-haiku-20240307"),
+        new import_obsidian4.Setting(containerEl).setName("Vision model").setDesc("Model name for vision calls, e.g. gpt-4o-mini or claude-3-haiku-20240307"),
         s.vision.model,
         async (v) => {
           s.vision.model = v;
@@ -30987,8 +31215,8 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         }
       );
     }
-    new import_obsidian5.Setting(containerEl).setName(T.settings.h3_graph).setHeading();
-    new import_obsidian5.Setting(containerEl).setName(T.settings.graphDepth_name).setDesc(T.settings.graphDepth_desc).addText(
+    new import_obsidian4.Setting(containerEl).setName(T.settings.h3_graph).setHeading();
+    new import_obsidian4.Setting(containerEl).setName(T.settings.graphDepth_name).setDesc(T.settings.graphDepth_desc).addText(
       (t) => t.setPlaceholder("1").setValue(String(s.graphDepth)).onChange(async (v) => {
         const n = Number(v);
         if (Number.isInteger(n) && n >= 0 && n <= 3) {
@@ -30997,7 +31225,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         }
       })
     );
-    new import_obsidian5.Setting(containerEl).setName(T.settings.bfsTopK_name).setDesc(T.settings.bfsTopK_desc).addText(
+    new import_obsidian4.Setting(containerEl).setName(T.settings.bfsTopK_name).setDesc(T.settings.bfsTopK_desc).addText(
       (t) => t.setPlaceholder("10").setValue(String(s.bfsTopK)).onChange(async (v) => {
         const n = Number(v);
         if (Number.isInteger(n) && n >= 0) {
@@ -31006,8 +31234,8 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         }
       })
     );
-    new import_obsidian5.Setting(containerEl).setName(T.settings.h3_jaccard).setHeading();
-    new import_obsidian5.Setting(containerEl).setName(T.settings.seedTopK_name).setDesc(T.settings.seedTopK_desc).addText(
+    new import_obsidian4.Setting(containerEl).setName(T.settings.h3_jaccard).setHeading();
+    new import_obsidian4.Setting(containerEl).setName(T.settings.seedTopK_name).setDesc(T.settings.seedTopK_desc).addText(
       (t) => t.setPlaceholder("5").setValue(String(s.seedTopK)).onChange(async (v) => {
         const n = Number(v);
         if (Number.isInteger(n) && n >= 1 && n <= 50) {
@@ -31016,7 +31244,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         }
       })
     );
-    new import_obsidian5.Setting(containerEl).setName(T.settings.seedMinScore_name).setDesc(T.settings.seedMinScore_desc).addText(
+    new import_obsidian4.Setting(containerEl).setName(T.settings.seedMinScore_name).setDesc(T.settings.seedMinScore_desc).addText(
       (t) => t.setPlaceholder("0.1").setValue(String(s.seedMinScore)).onChange(async (v) => {
         const n = Number(v);
         if (Number.isFinite(n) && n >= 0 && n <= 1) {
@@ -31025,33 +31253,33 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         }
       })
     );
-    if (eff.backend !== "claude-agent" && !import_obsidian5.Platform.isMobile) {
+    if (eff.backend !== "claude-agent" && !import_obsidian4.Platform.isMobile) {
       const proxy = eff.proxy;
-      new import_obsidian5.Setting(containerEl).setName(T.settings.proxy_h3).setHeading();
-      new import_obsidian5.Setting(containerEl).setName(T.settings.proxy_enabled_name).setDesc(T.settings.proxy_enabled_desc).addToggle(
+      new import_obsidian4.Setting(containerEl).setName(T.settings.proxy_h3).setHeading();
+      new import_obsidian4.Setting(containerEl).setName(T.settings.proxy_enabled_name).setDesc(T.settings.proxy_enabled_desc).addToggle(
         (t) => t.setValue(proxy.enabled).onChange(async (v) => {
           await this.patchProxy({ enabled: v });
           this.display();
         })
       );
       if (proxy.enabled) {
-        new import_obsidian5.Setting(containerEl).setName(T.settings.proxy_url_name).setDesc(T.settings.proxy_url_desc).addText(
+        new import_obsidian4.Setting(containerEl).setName(T.settings.proxy_url_name).setDesc(T.settings.proxy_url_desc).addText(
           (t) => t.setPlaceholder("http://proxy.example.com:8080").setValue(proxy.url).onChange(async (v) => {
             await this.patchProxy({ url: v.trim() });
           })
         );
-        new import_obsidian5.Setting(containerEl).setName(T.settings.proxy_username_name).setDesc(T.settings.proxy_username_desc).addText(
+        new import_obsidian4.Setting(containerEl).setName(T.settings.proxy_username_name).setDesc(T.settings.proxy_username_desc).addText(
           (t) => t.setValue(proxy.username ?? "").onChange(async (v) => {
             await this.patchProxy({ username: v });
           })
         );
-        new import_obsidian5.Setting(containerEl).setName(T.settings.proxy_password_name).setDesc(T.settings.proxy_password_desc).addText((t) => {
+        new import_obsidian4.Setting(containerEl).setName(T.settings.proxy_password_name).setDesc(T.settings.proxy_password_desc).addText((t) => {
           t.setValue(proxy.password ?? "").onChange(async (v) => {
             await this.patchLocalProxyPassword(v);
           });
           t.inputEl.type = "password";
         });
-        new import_obsidian5.Setting(containerEl).setName(T.settings.proxy_noProxy_name).setDesc(T.settings.proxy_noProxy_desc).addText(
+        new import_obsidian4.Setting(containerEl).setName(T.settings.proxy_noProxy_name).setDesc(T.settings.proxy_noProxy_desc).addText(
           (t) => t.setPlaceholder("localhost,127.0.0.1").setValue(proxy.noProxy ?? "").onChange(async (v) => {
             await this.patchProxy({ noProxy: v.trim() });
           })
@@ -31059,9 +31287,9 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         containerEl.createEl("p", { text: T.settings.proxy_hint, cls: "setting-item-description" });
       }
     }
-    if (!import_obsidian5.Platform.isMobile) {
-      new import_obsidian5.Setting(containerEl).setName(T.settings.h3_devmode).setHeading();
-      new import_obsidian5.Setting(containerEl).setName(T.settings.devMode_enabled_name).setDesc(T.settings.devMode_enabled_desc).addToggle(
+    if (!import_obsidian4.Platform.isMobile) {
+      new import_obsidian4.Setting(containerEl).setName(T.settings.h3_devmode).setHeading();
+      new import_obsidian4.Setting(containerEl).setName(T.settings.devMode_enabled_name).setDesc(T.settings.devMode_enabled_desc).addToggle(
         (t) => t.setValue(s.devMode.enabled).onChange(async (v) => {
           s.devMode.enabled = v;
           await this.plugin.saveSettings();
@@ -31075,11 +31303,11 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
 };
 
 // src/view.ts
-var import_obsidian7 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 
 // src/source-deletion.ts
-function sourceStem(path3) {
-  const base = path3.split("/").pop() ?? path3;
+function sourceStem(path5) {
+  const base = path5.split("/").pop() ?? path5;
   return base.replace(/\.md$/i, "");
 }
 function wikiSourceTokens(content) {
@@ -31107,12 +31335,12 @@ function computeDeletionPlan(sourcePath, pages, sourceStemToPath) {
   }
   return { toDelete, toRebuild, remainingSources };
 }
-function isSourceFile(path3, domain) {
-  if (isWikiArticlePath(path3)) return false;
-  if (!path3.endsWith(".md")) return false;
+function isSourceFile(path5, domain) {
+  if (isWikiArticlePath(path5)) return false;
+  if (!path5.endsWith(".md")) return false;
   for (const sp of domain.source_paths ?? []) {
     const norm = sp.replace(/\/+$/, "");
-    if (path3 === norm || path3.startsWith(`${norm}/`)) return true;
+    if (path5 === norm || path5.startsWith(`${norm}/`)) return true;
   }
   return false;
 }
@@ -32154,19 +32382,19 @@ function evalLogPath(pluginDir) {
   return `${pluginDir}/eval.jsonl`;
 }
 async function writeEvalRecord(adapter, pluginDir, record) {
-  const path3 = evalLogPath(pluginDir);
+  const path5 = evalLogPath(pluginDir);
   try {
     const line = JSON.stringify(record) + "\n";
-    if (await adapter.exists(path3)) await adapter.append(path3, line);
-    else await adapter.write(path3, line);
+    if (await adapter.exists(path5)) await adapter.append(path5, line);
+    else await adapter.write(path5, line);
   } catch {
   }
 }
 async function updateEvalRating(adapter, pluginDir, runId, axis, rating) {
-  const path3 = evalLogPath(pluginDir);
+  const path5 = evalLogPath(pluginDir);
   try {
-    if (!await adapter.exists(path3)) return void 0;
-    const content = await adapter.read(path3);
+    if (!await adapter.exists(path5)) return void 0;
+    const content = await adapter.read(path5);
     const lines = content.split("\n");
     for (let i = lines.length - 1; i >= 0; i--) {
       const raw = lines[i].trim();
@@ -32182,7 +32410,7 @@ async function updateEvalRating(adapter, pluginDir, runId, axis, rating) {
       const next = rec.ratings[axis] === rating ? null : rating;
       rec.ratings[axis] = next;
       lines[i] = JSON.stringify(rec);
-      await adapter.write(path3, lines.join("\n"));
+      await adapter.write(path5, lines.join("\n"));
       return next;
     }
     return void 0;
@@ -32191,10 +32419,10 @@ async function updateEvalRating(adapter, pluginDir, runId, axis, rating) {
   }
 }
 async function readEvalRecord(adapter, pluginDir, runId) {
-  const path3 = evalLogPath(pluginDir);
+  const path5 = evalLogPath(pluginDir);
   try {
-    if (!await adapter.exists(path3)) return void 0;
-    const content = await adapter.read(path3);
+    if (!await adapter.exists(path5)) return void 0;
+    const content = await adapter.read(path5);
     const lines = content.split("\n");
     for (let i = lines.length - 1; i >= 0; i--) {
       const raw = lines[i].trim();
@@ -32214,10 +32442,10 @@ async function readEvalRecord(adapter, pluginDir, runId) {
   }
 }
 async function updateEvalComment(adapter, pluginDir, runId, comment) {
-  const path3 = evalLogPath(pluginDir);
+  const path5 = evalLogPath(pluginDir);
   try {
-    if (!await adapter.exists(path3)) return void 0;
-    const content = await adapter.read(path3);
+    if (!await adapter.exists(path5)) return void 0;
+    const content = await adapter.read(path5);
     const lines = content.split("\n");
     for (let i = lines.length - 1; i >= 0; i--) {
       const raw = lines[i].trim();
@@ -32231,7 +32459,7 @@ async function updateEvalComment(adapter, pluginDir, runId, comment) {
       if (rec.runId !== runId) continue;
       rec.comment = comment;
       lines[i] = JSON.stringify(rec);
-      await adapter.write(path3, lines.join("\n"));
+      await adapter.write(path5, lines.join("\n"));
       return comment;
     }
     return void 0;
@@ -32241,11 +32469,11 @@ async function updateEvalComment(adapter, pluginDir, runId, comment) {
 }
 
 // src/utils/vault-walk.ts
-var import_obsidian6 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 function walkFolder(folder, out) {
   for (const child of folder.children) {
-    if (child instanceof import_obsidian6.TFolder) walkFolder(child, out);
-    else if (child instanceof import_obsidian6.TFile && child.extension === "md") out.push(child);
+    if (child instanceof import_obsidian5.TFolder) walkFolder(child, out);
+    else if (child instanceof import_obsidian5.TFile && child.extension === "md") out.push(child);
   }
 }
 function collectMdInPaths(vault, sourcePaths) {
@@ -32308,7 +32536,7 @@ function registerLinkHandler(el, app) {
   });
 }
 var PREVIEW_INLINE = 140;
-var LlmWikiView = class extends import_obsidian7.ItemView {
+var LlmWikiView = class extends import_obsidian6.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.plugin = plugin;
@@ -32404,7 +32632,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     root.empty();
     root.addClass("ai-wiki-view");
     const T = i18n();
-    const isMobile = import_obsidian7.Platform.isMobile;
+    const isMobile = import_obsidian6.Platform.isMobile;
     const header = root.createDiv("ai-wiki-header");
     header.createEl("h3", { text: "AI wiki" });
     this.statusEl = header.createDiv("ai-wiki-status");
@@ -32443,7 +32671,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     this.askDomainBtn.addEventListener("click", () => {
       const d = this.domainSelect?.value;
       if (!d) {
-        new import_obsidian7.Notice(i18n().view.enterQuestion);
+        new import_obsidian6.Notice(i18n().view.enterQuestion);
         return;
       }
       this.submitQuery(d);
@@ -32515,23 +32743,23 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     });
     if (opts.withActions) {
       this.addSourceBtn = domainRow.createEl("button", { attr: { title: T.view.addSourceTitle } });
-      (0, import_obsidian7.setIcon)(this.addSourceBtn, "folder-plus");
+      (0, import_obsidian6.setIcon)(this.addSourceBtn, "folder-plus");
       this.addSourceBtn.disabled = true;
       this.addSourceBtn.addEventListener("click", () => void this.openManageSources());
       this.reinitBtn = domainRow.createEl("button", { attr: { title: T.view.reinitTitle } });
-      (0, import_obsidian7.setIcon)(this.reinitBtn, "recycle");
+      (0, import_obsidian6.setIcon)(this.reinitBtn, "recycle");
       this.reinitBtn.disabled = true;
       this.reinitBtn.addEventListener("click", () => void this.runReinit());
       this.openLogLink = domainRow.createEl("a", {
         cls: "internal-link ai-wiki-domain-file-link",
         attr: { title: "Open _log.md", "data-href": "" }
       });
-      (0, import_obsidian7.setIcon)(this.openLogLink, "scroll-text");
+      (0, import_obsidian6.setIcon)(this.openLogLink, "scroll-text");
       this.openIndexLink = domainRow.createEl("a", {
         cls: "internal-link ai-wiki-domain-file-link",
         attr: { title: "Open _index.md", "data-href": "" }
       });
-      (0, import_obsidian7.setIcon)(this.openIndexLink, "list");
+      (0, import_obsidian6.setIcon)(this.openIndexLink, "list");
       domainRow.addEventListener("click", (e) => {
         const a = e.target.closest("a.ai-wiki-domain-file-link");
         if (!a) return;
@@ -32565,8 +32793,8 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
             const domainFolder = href.substring(0, href.lastIndexOf("/"));
             void this.app.workspace.openLinkText(filename, domainFolder, false);
           } else {
-            const isLog = href.endsWith("_log.md");
-            new import_obsidian7.Notice(isLog ? "_log.md not found \u2014 run ingest or lint first." : "_index.md not found \u2014 run init first.");
+            const isLog = href.endsWith("log.jsonl");
+            new import_obsidian6.Notice(isLog ? "log.jsonl not found \u2014 run ingest or lint first." : "index.jsonl not found \u2014 run init first.");
           }
         })();
       });
@@ -32602,18 +32830,18 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
       exportOkfBtn.addEventListener("click", () => {
         const domainEntry = this.domains.find((d) => d.id === this.domainSelect.value);
         if (!domainEntry) {
-          new import_obsidian7.Notice(i18n().view.selectDomainFirst);
+          new import_obsidian6.Notice(i18n().view.selectDomainFirst);
           return;
         }
         const defaultDest = `${this.plugin.controller.cwdOrEmpty()}/okf-export/${domainEntry.wiki_folder}`;
         new ExportOkfModal(this.plugin.app, defaultDest, (dest) => {
-          void this.plugin.controller.exportOkf(domainEntry, dest).then((r) => new import_obsidian7.Notice(`OKF: ${r.pages} pages \u2192 ${dest}${r.warnings.length ? ` (${r.warnings.length} warnings)` : ""}`)).catch((e) => new import_obsidian7.Notice(`OKF export failed: ${e.message}`, 0));
+          void this.plugin.controller.exportOkf(domainEntry, dest).then((r) => new import_obsidian6.Notice(`OKF: ${r.pages} pages \u2192 ${dest}${r.warnings.length ? ` (${r.warnings.length} warnings)` : ""}`)).catch((e) => new import_obsidian6.Notice(`OKF export failed: ${e.message}`, 0));
         }).open();
       });
       this.ingestBtn.addEventListener("click", () => {
         const file = this.plugin.app.workspace.getActiveFile();
         if (!file) {
-          new import_obsidian7.Notice(i18n().view.noActiveFile);
+          new import_obsidian6.Notice(i18n().view.noActiveFile);
           return;
         }
         const domainId = this.domainSelect.value || void 0;
@@ -32693,7 +32921,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
   openAddDomain() {
     const cwd = this.plugin.controller.cwdOrEmpty();
     if (!cwd) {
-      new import_obsidian7.Notice(i18n().view.cwdNotSet);
+      new import_obsidian6.Notice(i18n().view.cwdNotSet);
       return;
     }
     new AddDomainModal(this.app, (input) => {
@@ -32735,7 +32963,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     const resolved = entry;
     const sourcePaths = resolved.source_paths ?? [];
     if (sourcePaths.length === 0) {
-      new import_obsidian7.Notice(i18n().view.reinitNoSources);
+      new import_obsidian6.Notice(i18n().view.reinitNoSources);
       return;
     }
     const plan = await this.plugin.controller.computeIncrementalPlan(resolved.id);
@@ -32780,7 +33008,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
         async () => {
           await this.plugin.controller.updateDomainSources(original.id, newPaths);
           const deleted = await this.plugin.controller.cleanupRemovedSources(original.id, removed);
-          if (deleted > 0) new import_obsidian7.Notice(`\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u0442\u0430\u0442\u0435\u0439: ${deleted}`);
+          if (deleted > 0) new import_obsidian6.Notice(`\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u0442\u0430\u0442\u0435\u0439: ${deleted}`);
           void this.plugin.controller.init(original.id, false, newPaths, true);
         }
       ).open();
@@ -32789,7 +33017,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     if (removed.length > 0) {
       await this.plugin.controller.updateDomainSources(original.id, newPaths);
       const deleted = await this.plugin.controller.cleanupRemovedSources(original.id, removed);
-      if (deleted > 0) new import_obsidian7.Notice(`\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u0442\u0430\u0442\u0435\u0439: ${deleted}`);
+      if (deleted > 0) new import_obsidian6.Notice(`\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u0442\u0430\u0442\u0435\u0439: ${deleted}`);
       return;
     }
     if (added.length > 0) {
@@ -32804,11 +33032,11 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
   submitQuery(domainArg) {
     const q = this.queryInput.value.trim();
     if (!q) {
-      new import_obsidian7.Notice(i18n().view.enterQuestion);
+      new import_obsidian6.Notice(i18n().view.enterQuestion);
       return;
     }
     if (this.state === "running") {
-      new import_obsidian7.Notice(i18n().view.operationInProgress);
+      new import_obsidian6.Notice(i18n().view.operationInProgress);
       return;
     }
     void this.plugin.controller.query(q, domainArg);
@@ -32873,7 +33101,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     this.liveStatusIconEl?.setText("");
     this.liveStatusTextEl?.setText("");
     this.scheduleMetricsTick();
-    if (import_obsidian7.Platform.isMobile) {
+    if (import_obsidian6.Platform.isMobile) {
       const placeholder = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step-pending");
       placeholder.setText(i18n().view.mobileWaiting);
       this.mobileWaitingEl = placeholder;
@@ -33107,9 +33335,9 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
       }
     }
     this.finalEl.empty();
-    const comp = new import_obsidian7.Component();
+    const comp = new import_obsidian6.Component();
     comp.load();
-    await import_obsidian7.MarkdownRenderer.render(this.app, entry.finalText || "(empty)", this.finalEl, "", comp);
+    await import_obsidian6.MarkdownRenderer.render(this.app, entry.finalText || "(empty)", this.finalEl, "", comp);
     sanitizeLinks(this.finalEl);
     if (opts?.preserveQueryStats && this.currentQueryStats && !this.queryStatsEl) {
       const inputTokens = this.currentQueryStatsInputTokens;
@@ -33227,9 +33455,9 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     void link;
     registerLinkHandler(this.formatPreviewSection, this.app);
     const reportEl = this.formatPreviewSection.createDiv("ai-wiki-format-report");
-    const comp = new import_obsidian7.Component();
+    const comp = new import_obsidian6.Component();
     comp.load();
-    void import_obsidian7.MarkdownRenderer.render(this.app, report, reportEl, "", comp).then(() => sanitizeLinks(reportEl));
+    void import_obsidian6.MarkdownRenderer.render(this.app, report, reportEl, "", comp).then(() => sanitizeLinks(reportEl));
     if (missing.length > 0) {
       const warn = this.formatPreviewSection.createEl("details", { cls: "ai-wiki-format-warn" });
       const summary = warn.createEl("summary");
@@ -33345,7 +33573,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
       if (ctx.operation === "lint" || ctx.operation === "lint-chat") {
         const domainId = (ctx.domainId ?? this.domainSelect?.value) || void 0;
         if (!domainId) {
-          new import_obsidian7.Notice(i18n().view.selectDomainFirst ?? "Select a domain first");
+          new import_obsidian6.Notice(i18n().view.selectDomainFirst ?? "Select a domain first");
           return;
         }
         void this.plugin.controller.lintApplyFromChat(
@@ -33371,17 +33599,17 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     if (role === "user") {
       el.setText(text);
     } else {
-      const comp = new import_obsidian7.Component();
+      const comp = new import_obsidian6.Component();
       comp.load();
-      void import_obsidian7.MarkdownRenderer.render(this.app, text, el, "", comp).then(() => sanitizeLinks(el));
+      void import_obsidian6.MarkdownRenderer.render(this.app, text, el, "", comp).then(() => sanitizeLinks(el));
       registerLinkHandler(el, this.app);
     }
     const copyBtn = el.createEl("button", { cls: "ai-wiki-copy-btn", attr: { "aria-label": "Copy" } });
-    (0, import_obsidian7.setIcon)(copyBtn, "copy");
+    (0, import_obsidian6.setIcon)(copyBtn, "copy");
     copyBtn.addEventListener("click", () => {
       void navigator.clipboard.writeText(text).then(() => {
-        (0, import_obsidian7.setIcon)(copyBtn, "check");
-        window.setTimeout(() => (0, import_obsidian7.setIcon)(copyBtn, "copy"), 1500);
+        (0, import_obsidian6.setIcon)(copyBtn, "check");
+        window.setTimeout(() => (0, import_obsidian6.setIcon)(copyBtn, "copy"), 1500);
       });
     });
     el.scrollIntoView({ block: "end" });
@@ -33448,10 +33676,10 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
         this.currentChatBubble.addClass("ai-wiki-chat-msg--error");
         this.currentChatBubble.setText(msg.content);
       } else {
-        const comp = new import_obsidian7.Component();
+        const comp = new import_obsidian6.Component();
         comp.load();
         const bubble = this.currentChatBubble;
-        void import_obsidian7.MarkdownRenderer.render(this.app, msg.content, bubble, "", comp).then(() => sanitizeLinks(bubble));
+        void import_obsidian6.MarkdownRenderer.render(this.app, msg.content, bubble, "", comp).then(() => sanitizeLinks(bubble));
         registerLinkHandler(bubble, this.app);
       }
       this.currentChatBubble = null;
@@ -33573,7 +33801,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
             const domains = await this.plugin.controller.loadDomains();
             const r = resolveRerunDomain(it, domains);
             if (!r.ok) {
-              new import_obsidian7.Notice(i18n().view.rerunDomainMissing);
+              new import_obsidian6.Notice(i18n().view.rerunDomainMissing);
               return;
             }
             if (this.domainSelect) {
@@ -33594,7 +33822,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     });
   }
 };
-var FileContentModal = class extends import_obsidian7.Modal {
+var FileContentModal = class extends import_obsidian6.Modal {
   constructor(app, filePath, content) {
     super(app);
     this.filePath = filePath;
@@ -33612,15 +33840,15 @@ var FileContentModal = class extends import_obsidian7.Modal {
       require("electron").shell.openPath(absPath);
     });
     this.contentEl.addClass("ai-wiki-busy-modal-content");
-    const comp = new import_obsidian7.Component();
+    const comp = new import_obsidian6.Component();
     comp.load();
-    void import_obsidian7.MarkdownRenderer.render(this.app, this.content, this.contentEl, this.filePath, comp);
+    void import_obsidian6.MarkdownRenderer.render(this.app, this.content, this.contentEl, this.filePath, comp);
   }
   onClose() {
     this.contentEl.empty();
   }
 };
-var WikiQuestionModal = class extends import_obsidian7.Modal {
+var WikiQuestionModal = class extends import_obsidian6.Modal {
   constructor(app, question, options, resolve, reject) {
     super(app);
     this.question = question;
@@ -33731,7 +33959,7 @@ function translateSystemEvent(message) {
 }
 
 // src/controller.ts
-var import_obsidian11 = require("obsidian");
+var import_obsidian10 = require("obsidian");
 var import_path_browserify9 = __toESM(require_path_browserify(), 1);
 
 // src/domain.ts
@@ -34366,8 +34594,8 @@ function getErrorMap() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path3, errorMaps, issueData } = params;
-  const fullPath = [...path3, ...issueData.path || []];
+  const { data, path: path5, errorMaps, issueData } = params;
+  const fullPath = [...path5, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -34483,11 +34711,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path3, key) {
+  constructor(parent, value, path5, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path3;
+    this._path = path5;
     this._key = key;
   }
   get path() {
@@ -39186,8 +39414,8 @@ function formatZodFeedback(err, raw) {
     return render(repair_json_default, { detail: detail2 });
   }
   const bullets = err.issues.slice(0, 20).map((i) => {
-    const path3 = i.path.length ? i.path.join(".") : "(root)";
-    return `- ${path3}: ${i.message}`;
+    const path5 = i.path.length ? i.path.join(".") : "(root)";
+    return `- ${path5}: ${i.message}`;
   }).join("\n");
   const detail = ["Previous response failed validation:", bullets].join("\n");
   return render(repair_json_default, { detail });
@@ -39418,12 +39646,12 @@ var FormatWithVisionSchema = FormatBaseSchema.extend({
   if (val.report.trim().length === 0) {
     ctx.addIssue({ code: external_exports.ZodIssueCode.custom, path: ["report"], message: "report \u043F\u0443\u0441\u0442" });
   }
-  for (const path3 of val.embeds_preserved) {
-    if (!val.formatted.includes(`![[${path3}]]`)) {
+  for (const path5 of val.embeds_preserved) {
+    if (!val.formatted.includes(`![[${path5}]]`)) {
       ctx.addIssue({
         code: external_exports.ZodIssueCode.custom,
         path: ["formatted"],
-        message: `embed ![[${path3}]] \u043F\u043E\u0442\u0435\u0440\u044F\u043D`
+        message: `embed ![[${path5}]] \u043F\u043E\u0442\u0435\u0440\u044F\u043D`
       });
     }
   }
@@ -39617,8 +39845,8 @@ function parseDescriptionFromFm(content) {
 }
 function collectDescriptions(pages) {
   const map = /* @__PURE__ */ new Map();
-  for (const { path: path3, content } of pages) {
-    const stem = path3.split("/").pop().replace(/\.md$/, "");
+  for (const { path: path5, content } of pages) {
+    const stem = path5.split("/").pop().replace(/\.md$/, "");
     if (stem.startsWith("_") || !GENERIC_WIKI_STEM_REGEX.test(stem)) continue;
     const desc = parseDescriptionFromFm(content);
     map.set(stem, desc || deriveFallbackDescription(content));
@@ -39753,41 +39981,49 @@ function reconcileIndex(indexContent, wikiFolder, pages) {
 }
 
 // src/wiki-log.ts
-function ts() {
-  return (/* @__PURE__ */ new Date()).toISOString().slice(0, 19);
-}
-function buildEntry(domainId, event) {
-  const header = `## ${ts()} \u2014 ${event.op} \u2014 ${domainId}`;
-  const lines = [header];
+function buildLogRecord(domainId, event, timestamp = (/* @__PURE__ */ new Date()).toISOString()) {
   if (event.op === "ingest") {
-    lines.push(`**Source:** ${event.sourcePath}`);
-    lines.push(`**Tokens:** ${event.outputTokens}`);
-    lines.push("");
-    for (const e of event.entries) {
-      if (e.action === "CREATED") {
-        lines.push(`- CREATED: ${e.path} (${e.statusTo ?? "unknown"})`);
-      } else if (e.action === "UPDATED") {
-        const status = e.statusFrom ? `${e.statusFrom}\u2192${e.statusTo}` : e.statusTo ?? "unknown";
-        lines.push(`- UPDATED: ${e.path} (${status})`);
-      } else if (e.action === "MERGED") {
-        lines.push(`- MERGED: ${e.path}`);
-      } else {
-        lines.push(`- DELETED: ${e.path}`);
-      }
-    }
-  } else if (event.op === "lint") {
-    lines.push(`**Tokens:** ${event.outputTokens}`);
-    lines.push(`**Checked:** ${event.checkedCount} | **Fixed:** ${event.fixed.length}`);
-    lines.push("");
-    for (const p of event.fixed) lines.push(`- FIXED: ${p}`);
-  } else {
-    lines.push(`**File:** ${event.filePath}`);
-    lines.push(`**Tokens:** ${event.outputTokens}`);
-    lines.push("");
-    for (const p of event.fixed) lines.push(`- FIXED: ${p}`);
+    return {
+      kind: "operation",
+      ts: timestamp,
+      domainId,
+      op: event.op,
+      sourcePath: event.sourcePath,
+      entries: event.entries,
+      outputTokens: event.outputTokens
+    };
   }
-  lines.push("", "---");
-  return "\n" + lines.join("\n") + "\n";
+  if (event.op === "lint") {
+    return {
+      kind: "operation",
+      ts: timestamp,
+      domainId,
+      op: event.op,
+      fixed: event.fixed,
+      checkedCount: event.checkedCount,
+      outputTokens: event.outputTokens
+    };
+  }
+  return {
+    kind: "operation",
+    ts: timestamp,
+    domainId,
+    op: event.op,
+    filePath: event.filePath,
+    fixed: event.fixed,
+    outputTokens: event.outputTokens
+  };
+}
+function parseLegacyLogBlocks(markdown, domainId) {
+  return markdown.split(/\n---\n?/g).map((text) => text.trim()).filter(Boolean).map((text) => {
+    const tsMatch = text.match(/^##\s+([0-9T:-]+)/);
+    return {
+      kind: "legacy_log_block",
+      ts: tsMatch?.[1],
+      domainId,
+      text
+    };
+  });
 }
 async function appendWikiLog(vaultTools, domainFolder, domainId, event) {
   const logPath = domainLogPath(domainFolder);
@@ -39796,7 +40032,7 @@ async function appendWikiLog(vaultTools, domainFolder, domainId, event) {
     existing = await vaultTools.read(logPath);
   } catch {
   }
-  await vaultTools.write(logPath, existing + buildEntry(domainId, event));
+  await vaultTools.write(logPath, existing + stringifyJsonl([buildLogRecord(domainId, event)]));
 }
 
 // src/wiki-link-validator.ts
@@ -39858,13 +40094,13 @@ function fixWikiLinks(pages, maxPasses, knownPageStems) {
       warnings.push(`${v.page}: ${v.kind} \u2014 ${v.detail}`);
     }
     if (knownPageStems) {
-      for (const [path3, content] of pages) {
+      for (const [path5, content] of pages) {
         const parts = splitFrontmatter(content);
         const body = parts ? parts[1] : content;
         for (const link of extractLinks(body)) {
           const stem = link.split("/").pop();
           if (!knownPageStems.has(stem)) {
-            warnings.push(`${path3}: dead link [[${stem}]]`);
+            warnings.push(`${path5}: dead link [[${stem}]]`);
           }
         }
       }
@@ -39876,12 +40112,12 @@ function fixWikiLinks(pages, maxPasses, knownPageStems) {
     const violations = validateWikiLinks(current);
     if (violations.length === 0) break;
     const next = /* @__PURE__ */ new Map();
-    for (const [path3, content] of current) {
+    for (const [path5, content] of current) {
       try {
-        next.set(path3, fixOnePass(content));
+        next.set(path5, fixOnePass(content));
       } catch (e) {
-        next.set(path3, content);
-        warnings.push(`${path3}: fix error \u2014 ${e.message}`);
+        next.set(path5, content);
+        warnings.push(`${path5}: fix error \u2014 ${e.message}`);
       }
     }
     current = next;
@@ -39891,13 +40127,13 @@ function fixWikiLinks(pages, maxPasses, knownPageStems) {
     warnings.push(`${v.page}: ${v.kind} \u2014 ${v.detail}`);
   }
   if (knownPageStems) {
-    for (const [path3, content] of current) {
+    for (const [path5, content] of current) {
       const parts = splitFrontmatter(content);
       const body = parts ? parts[1] : content;
       for (const link of extractLinks(body)) {
         const stem = link.split("/").pop();
         if (!knownPageStems.has(stem)) {
-          warnings.push(`${path3}: dead link [[${stem}]]`);
+          warnings.push(`${path5}: dead link [[${stem}]]`);
         }
       }
     }
@@ -40082,7 +40318,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   } else {
     existingPages = await vaultTools.readAll(nonMetaPaths);
   }
-  const noSources = [...existingPages.entries()].filter(([, content]) => !/resource:/m.test(content)).map(([path3]) => path3);
+  const noSources = [...existingPages.entries()].filter(([, content]) => !/resource:/m.test(content)).map(([path5]) => path5);
   for (const p of noSources) {
     try {
       await vaultTools.remove(p);
@@ -40441,7 +40677,7 @@ ${page.content}`;
     const recon = reconcileIndex(
       currentIndex,
       wikiVaultPath,
-      [...finalPages].map(([path3, content]) => ({ path: path3, content }))
+      [...finalPages].map(([path5, content]) => ({ path: path5, content }))
     );
     for (const a of recon.adds) {
       await upsertIndexAnnotation(vaultTools, wikiVaultPath, a.pid, a.annotation, a.fullPath);
@@ -40478,9 +40714,9 @@ ${page.content}`;
   if (similarity && written.length > 0) {
     try {
       const writtenPages = await vaultTools.readAll(written);
-      const descriptions = collectDescriptions([...writtenPages].map(([path3, content]) => ({ path: path3, content })));
+      const descriptions = collectDescriptions([...writtenPages].map(([path5, content]) => ({ path: path5, content })));
       const pageBodies = /* @__PURE__ */ new Map();
-      for (const [path3, content] of writtenPages) pageBodies.set(pageId(path3), content);
+      for (const [path5, content] of writtenPages) pageBodies.set(pageId(path5), content);
       await similarity.refreshCache(domainRoot, vaultTools, descriptions, pageBodies);
     } catch {
     }
@@ -40545,9 +40781,9 @@ function parseJsonPages(text) {
     return [];
   }
 }
-async function tryRead(vaultTools, path3) {
+async function tryRead(vaultTools, path5) {
   try {
-    return await vaultTools.read(path3);
+    return await vaultTools.read(path5);
   } catch {
     return "";
   }
@@ -40966,7 +41202,7 @@ async function* retrieveDomainCandidates(domain, question, vaultTools, similarit
   const pages = await vaultTools.readAll(files);
   yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
   if (signal.aborted) return null;
-  const indexAnnotations = collectDescriptions([...pages].map(([path3, content]) => ({ path: path3, content })));
+  const indexAnnotations = collectDescriptions([...pages].map(([path5, content]) => ({ path: path5, content })));
   const topK = Math.max(1, Math.min(50, Math.floor(cfg.seedTopK)));
   const minScore = Math.max(0, Math.min(1, cfg.seedMinScore));
   let seedOutputTokens = 0;
@@ -41069,8 +41305,8 @@ async function* retrieveDomainCandidates(domain, question, vaultTools, similarit
   }
   yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, expandedDense, seedFallback, retrievalMode, denseMax, seedFallbackReason, floorApplied, floorRef: floorApplied ? denseMax : void 0, floorLoRef, floorBar, prunedCount, floorSkippedReason };
   const candidatePages = /* @__PURE__ */ new Map();
-  for (const [path3, content] of pages) {
-    if (selectedIds.has(pageId(path3))) candidatePages.set(path3, content);
+  for (const [path5, content] of pages) {
+    if (selectedIds.has(pageId(path5))) candidatePages.set(path5, content);
   }
   const annotations = /* @__PURE__ */ new Map();
   for (const id of selectedIds) {
@@ -41264,9 +41500,9 @@ ${answer}`, outputTokens: outputTokens || void 0 };
     yield { kind: "result", durationMs: Date.now() - start, text: answer, outputTokens: outputTokens || void 0 };
   }
 }
-async function tryRead2(vaultTools, path3) {
+async function tryRead2(vaultTools, path5) {
   try {
-    return await vaultTools.read(path3);
+    return await vaultTools.read(path5);
   } catch {
     return "";
   }
@@ -41548,10 +41784,10 @@ async function cleanupInvalidPages(vaultTools, wikiVaultPath, _domainId) {
 }
 async function buildTitleMap(paths, vaultTools) {
   const result = /* @__PURE__ */ new Map();
-  for (const path3 of paths) {
+  for (const path5 of paths) {
     try {
-      const content = await vaultTools.read(path3);
-      const stem = path3.split("/").pop().replace(/\.md$/, "");
+      const content = await vaultTools.read(path5);
+      const stem = path5.split("/").pop().replace(/\.md$/, "");
       const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
       if (fmMatch) {
         const titleMatch = fmMatch[1].match(/^title:\s*(.+)$/m);
@@ -41844,8 +42080,8 @@ ${lintResult.value.report}`);
         ({ graph } = graphCache.get(domain.id, pages));
         if (similarity) {
           const pageBodies = /* @__PURE__ */ new Map();
-          for (const [path3, content] of pages) pageBodies.set(pageId(path3), content);
-          const descriptions = collectDescriptions([...pages].map(([path3, content]) => ({ path: path3, content })));
+          for (const [path5, content] of pages) pageBodies.set(pageId(path5), content);
+          const descriptions = collectDescriptions([...pages].map(([path5, content]) => ({ path: path5, content })));
           const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, descriptions, pageBodies, { fullCorpus: true });
           if (similarity.config.mode === "embedding" && updated > 0) {
             yield { kind: "info_text", icon: "\u{1F4E4}", summary: `\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u043E \u0432\u0435\u043A\u0442\u043E\u0440\u043E\u0432: ${updated}` };
@@ -41928,11 +42164,11 @@ ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
         repairWarnings.push({ path: wikiPath, warnings });
       }
     }
-    for (const { path: path3, warnings } of repairWarnings) {
+    for (const { path: path5, warnings } of repairWarnings) {
       yield {
         kind: "info_text",
         icon: "\u26A0\uFE0F",
-        summary: `Frontmatter repaired: ${path3}`,
+        summary: `Frontmatter repaired: ${path5}`,
         details: warnings
       };
     }
@@ -41990,10 +42226,10 @@ ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
       reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
     }
     try {
-      const reconPages = [...pages.entries()].map(([path3, content]) => {
-        const pid = pageId(path3);
+      const reconPages = [...pages.entries()].map(([path5, content]) => {
+        const pid = pageId(path5);
         const ann = annotations.get(pid);
-        return ann ? { path: path3, content, annotation: ann } : { path: path3, content };
+        return ann ? { path: path5, content, annotation: ann } : { path: path5, content };
       });
       const currentIndex = await tryRead3(vaultTools, domainIndexPath(wikiVaultPath));
       const recon = reconcileIndex(currentIndex, wikiVaultPath, reconPages);
@@ -42030,14 +42266,14 @@ ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
 }
 function checkStructure(pages) {
   const issues = [];
-  for (const [path3, content] of pages) {
+  for (const [path5, content] of pages) {
     if (!content.startsWith("---")) {
-      issues.push(`- ${path3}: missing frontmatter`);
+      issues.push(`- ${path5}: missing frontmatter`);
     }
     const links = [...new Set([...content.matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1]))];
     for (const link of links) {
       const linked = [...pages.keys()].some((p) => p.endsWith(`${link}.md`));
-      if (!linked) issues.push(`- ${path3}: dead link [[${link}]]`);
+      if (!linked) issues.push(`- ${path5}: dead link [[${link}]]`);
     }
   }
   return issues.join("\n");
@@ -42062,9 +42298,9 @@ function computeEntityDiff(oldTypes, newTypes) {
   modified.forEach((et) => lines.push(`- \u270E \u043E\u0431\u043D\u043E\u0432\u043B\u0451\u043D: **${et.type}**`));
   return lines.join("\n");
 }
-async function tryRead3(vaultTools, path3) {
+async function tryRead3(vaultTools, path5) {
   try {
-    return await vaultTools.read(path3);
+    return await vaultTools.read(path5);
   } catch {
     return "";
   }
@@ -42756,9 +42992,9 @@ async function wipeDomainFolder(vaultTools, wikiFolder) {
   await vaultTools.removeSubfolders(root);
   return files;
 }
-async function tryRead4(vaultTools, path3) {
+async function tryRead4(vaultTools, path5) {
   try {
-    return await vaultTools.read(path3);
+    return await vaultTools.read(path5);
   } catch {
     return "";
   }
@@ -42979,8 +43215,8 @@ function arrayBufferToBase64(buffer) {
 function stripImageDataUriPrefix(s) {
   return s.replace(/^data:image\/[a-zA-Z.+-]+;base64,/, "");
 }
-function getMimeType(path3) {
-  const ext = path3.split(".").pop()?.toLowerCase();
+function getMimeType(path5) {
+  const ext = path5.split(".").pop()?.toLowerCase();
   switch (ext) {
     case "png":
       return "image/png";
@@ -42993,8 +43229,8 @@ function getMimeType(path3) {
       return null;
   }
 }
-function isVisionSupportedOnMobile(path3) {
-  return getMimeType(path3) !== null;
+function isVisionSupportedOnMobile(path5) {
+  return getMimeType(path5) !== null;
 }
 async function callVisionLlm(llm, model, systemPrompt, contentParts, signal) {
   const resp = await llm.chat.completions.create({
@@ -43054,8 +43290,8 @@ async function analyzeExcalidraw(b64, llm, model, signal, language = "auto", rea
     { type: "image_url", image_url: { url: `data:image/png;base64,${b64}` } }
   ], signal);
 }
-async function analyzeSingleAttachment(path3, vaultTools, llm, model, signal, sourcePath = "", language = "auto", reasoningLanguage = "auto", visionTempStore, imageOnly = false, usedTemplates) {
-  const resolved = vaultTools.resolveLink(path3, sourcePath);
+async function analyzeSingleAttachment(path5, vaultTools, llm, model, signal, sourcePath = "", language = "auto", reasoningLanguage = "auto", visionTempStore, imageOnly = false, usedTemplates) {
+  const resolved = vaultTools.resolveLink(path5, sourcePath);
   if (resolved === null) return null;
   if (imageOnly && !isVisionSupportedOnMobile(resolved)) return null;
   const ext = resolved.split(".").pop()?.toLowerCase() ?? "";
@@ -43063,7 +43299,7 @@ async function analyzeSingleAttachment(path3, vaultTools, llm, model, signal, so
   if (isExcalidraw) {
     const b64 = await vaultTools.renderExcalidrawPng(resolved);
     if (!b64) return null;
-    await visionTempStore?.putPng(path3, b64);
+    await visionTempStore?.putPng(path5, b64);
     usedTemplates?.add(vision_excalidraw_default);
     return analyzeExcalidraw(b64, llm, model, signal, language, reasoningLanguage);
   }
@@ -43118,7 +43354,7 @@ function truncationHint(backend, p) {
   return backend === "claude-agent" ? p.truncationHintEnv : p.truncationHintSettings;
 }
 var enFormatProgressFallback = {
-  analysing: (path3) => `Analysing file ${path3}...
+  analysing: (path5) => `Analysing file ${path5}...
 `,
   truncatedSalvageSummary: "Format: response truncated \u2014 salvage",
   truncatedSalvageRetrySummary: "Format: retry response truncated \u2014 salvage",
@@ -43161,30 +43397,30 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
     const embedPaths = [...new Set(extractObsidianEmbedPaths(original))];
     if (embedPaths.length > 0) {
       const lang = visionSettings.language ?? "auto";
-      for (const path3 of embedPaths) {
+      for (const path5 of embedPaths) {
         if (signal.aborted) break;
-        const filename = path3.split("/").pop() ?? path3;
+        const filename = path5.split("/").pop() ?? path5;
         yield { kind: "tool_use", name: "Vision", input: { file_path: filename, model: visionSettings.model } };
-        const cached = await visionTempStore?.getDescription(path3);
+        const cached = await visionTempStore?.getDescription(path5);
         if (cached != null) {
-          visionDescriptions.set(path3, cached);
+          visionDescriptions.set(path5, cached);
           yield { kind: "tool_result", ok: true, preview: cached };
           continue;
         }
         try {
-          const description = await analyzeSingleAttachment(path3, vaultTools, llm, visionSettings.model, signal, filePath, lang, opts.reasoningLanguage, visionTempStore, visionSettings.imageOnly ?? false, usedVisionTemplates);
+          const description = await analyzeSingleAttachment(path5, vaultTools, llm, visionSettings.model, signal, filePath, lang, opts.reasoningLanguage, visionTempStore, visionSettings.imageOnly ?? false, usedVisionTemplates);
           if (description !== null) {
-            visionDescriptions.set(path3, description);
-            await visionTempStore?.putDescription(path3, description);
+            visionDescriptions.set(path5, description);
+            await visionTempStore?.putDescription(path5, description);
             yield { kind: "tool_result", ok: true, preview: description };
           } else {
             const why = visionSettings.imageOnly ?? false ? "unsupported on mobile" : "unknown extension";
             yield { kind: "tool_result", ok: false, preview: why };
-            yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "Vision skipped", details: [`${path3} \u2014 ${why}`] };
+            yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "Vision skipped", details: [`${path5} \u2014 ${why}`] };
           }
         } catch (e) {
           yield { kind: "tool_result", ok: false, preview: e?.message ?? "failed" };
-          yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "Vision skipped", details: [path3] };
+          yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "Vision skipped", details: [path5] };
         }
       }
     }
@@ -43206,8 +43442,8 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
   let visionBlock = "";
   if (visionDescriptions.size > 0) {
     const items = [];
-    for (const [path3, desc] of visionDescriptions) {
-      items.push(`### ![[${path3}]]
+    for (const [path5, desc] of visionDescriptions) {
+      items.push(`### ![[${path5}]]
 ${desc}`);
     }
     visionBlock = `
@@ -43586,8 +43822,8 @@ function base64ToArrayBuffer(b64) {
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return bytes.buffer;
 }
-function keyFor(path3) {
-  return path3.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "x";
+function keyFor(path5) {
+  return path5.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "x";
 }
 var VisionTempStore = class {
   constructor(vaultTools, dir) {
@@ -43596,26 +43832,26 @@ var VisionTempStore = class {
   }
   vaultTools;
   dir;
-  async getDescription(path3) {
+  async getDescription(path5) {
     try {
-      const p = `${this.dir}/${keyFor(path3)}.json`;
+      const p = `${this.dir}/${keyFor(path5)}.json`;
       if (!await this.vaultTools.exists(p)) return null;
       const obj = JSON.parse(await this.vaultTools.read(p));
-      return typeof obj.desc === "string" && obj.path === path3 ? obj.desc : null;
+      return typeof obj.desc === "string" && obj.path === path5 ? obj.desc : null;
     } catch {
       return null;
     }
   }
-  async putDescription(path3, desc) {
+  async putDescription(path5, desc) {
     try {
-      const p = `${this.dir}/${keyFor(path3)}.json`;
-      await this.vaultTools.write(p, JSON.stringify({ path: path3, desc }));
+      const p = `${this.dir}/${keyFor(path5)}.json`;
+      await this.vaultTools.write(p, JSON.stringify({ path: path5, desc }));
     } catch {
     }
   }
-  async putPng(path3, b64) {
+  async putPng(path5, b64) {
     try {
-      const p = `${this.dir}/${keyFor(path3)}.png`;
+      const p = `${this.dir}/${keyFor(path5)}.png`;
       await this.vaultTools.writeBinary(p, base64ToArrayBuffer(b64));
     } catch {
     }
@@ -45846,12 +46082,12 @@ function encodeURIPath(str2) {
   return str2.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
 }
 var EMPTY = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.create(null));
-var createPathTagFunction = (pathEncoder = encodeURIPath) => function path3(statics, ...params) {
+var createPathTagFunction = (pathEncoder = encodeURIPath) => function path5(statics, ...params) {
   if (statics.length === 1)
     return statics[0];
   let postPath = false;
   const invalidSegments = [];
-  const path4 = statics.reduce((previousValue, currentValue, index) => {
+  const path6 = statics.reduce((previousValue, currentValue, index) => {
     if (/[?#]/.test(currentValue)) {
       postPath = true;
     }
@@ -45868,7 +46104,7 @@ var createPathTagFunction = (pathEncoder = encodeURIPath) => function path3(stat
     }
     return previousValue + currentValue + (index === params.length ? "" : encoded);
   }, "");
-  const pathOnly = path4.split(/[?#]/, 1)[0];
+  const pathOnly = path6.split(/[?#]/, 1)[0];
   const invalidSegmentPattern = /(?<=^|\/)(?:\.|%2e){1,2}(?=\/|$)/gi;
   let match;
   while ((match = invalidSegmentPattern.exec(pathOnly)) !== null) {
@@ -45889,12 +46125,12 @@ var createPathTagFunction = (pathEncoder = encodeURIPath) => function path3(stat
     }, "");
     throw new OpenAIError(`Path parameters result in path with invalid segments:
 ${invalidSegments.map((e) => e.error).join("\n")}
-${path4}
+${path6}
 ${underline}`);
   }
-  return path4;
+  return path6;
 };
-var path2 = /* @__PURE__ */ createPathTagFunction(encodeURIPath);
+var path4 = /* @__PURE__ */ createPathTagFunction(encodeURIPath);
 
 // node_modules/openai/resources/chat/completions/messages.mjs
 var Messages = class extends APIResource {
@@ -45913,7 +46149,7 @@ var Messages = class extends APIResource {
    * ```
    */
   list(completionID, query = {}, options) {
-    return this._client.getAPIList(path2`/chat/completions/${completionID}/messages`, CursorPage, { query, ...options });
+    return this._client.getAPIList(path4`/chat/completions/${completionID}/messages`, CursorPage, { query, ...options });
   }
 };
 
@@ -47248,7 +47484,7 @@ var Completions = class extends APIResource {
    * ```
    */
   retrieve(completionID, options) {
-    return this._client.get(path2`/chat/completions/${completionID}`, options);
+    return this._client.get(path4`/chat/completions/${completionID}`, options);
   }
   /**
    * Modify a stored chat completion. Only Chat Completions that have been created
@@ -47264,7 +47500,7 @@ var Completions = class extends APIResource {
    * ```
    */
   update(completionID, body, options) {
-    return this._client.post(path2`/chat/completions/${completionID}`, { body, ...options });
+    return this._client.post(path4`/chat/completions/${completionID}`, { body, ...options });
   }
   /**
    * List stored Chat Completions. Only Chat Completions that have been stored with
@@ -47292,7 +47528,7 @@ var Completions = class extends APIResource {
    * ```
    */
   delete(completionID, options) {
-    return this._client.delete(path2`/chat/completions/${completionID}`, options);
+    return this._client.delete(path4`/chat/completions/${completionID}`, options);
   }
   parse(body, options) {
     validateInputTools(body.tools);
@@ -47464,7 +47700,7 @@ var Batches = class extends APIResource {
    * Retrieves a batch.
    */
   retrieve(batchID, options) {
-    return this._client.get(path2`/batches/${batchID}`, options);
+    return this._client.get(path4`/batches/${batchID}`, options);
   }
   /**
    * List your organization's batches.
@@ -47478,7 +47714,7 @@ var Batches = class extends APIResource {
    * (if any) available in the output file.
    */
   cancel(batchID, options) {
-    return this._client.post(path2`/batches/${batchID}/cancel`, options);
+    return this._client.post(path4`/batches/${batchID}/cancel`, options);
   }
 };
 
@@ -47502,7 +47738,7 @@ var Assistants = class extends APIResource {
    * @deprecated
    */
   retrieve(assistantID, options) {
-    return this._client.get(path2`/assistants/${assistantID}`, {
+    return this._client.get(path4`/assistants/${assistantID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -47513,7 +47749,7 @@ var Assistants = class extends APIResource {
    * @deprecated
    */
   update(assistantID, body, options) {
-    return this._client.post(path2`/assistants/${assistantID}`, {
+    return this._client.post(path4`/assistants/${assistantID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -47537,7 +47773,7 @@ var Assistants = class extends APIResource {
    * @deprecated
    */
   delete(assistantID, options) {
-    return this._client.delete(path2`/assistants/${assistantID}`, {
+    return this._client.delete(path4`/assistants/${assistantID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -47640,7 +47876,7 @@ var Sessions2 = class extends APIResource {
    * ```
    */
   cancel(sessionID, options) {
-    return this._client.post(path2`/chatkit/sessions/${sessionID}/cancel`, {
+    return this._client.post(path4`/chatkit/sessions/${sessionID}/cancel`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers])
     });
@@ -47659,7 +47895,7 @@ var Threads = class extends APIResource {
    * ```
    */
   retrieve(threadID, options) {
-    return this._client.get(path2`/chatkit/threads/${threadID}`, {
+    return this._client.get(path4`/chatkit/threads/${threadID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers])
     });
@@ -47693,7 +47929,7 @@ var Threads = class extends APIResource {
    * ```
    */
   delete(threadID, options) {
-    return this._client.delete(path2`/chatkit/threads/${threadID}`, {
+    return this._client.delete(path4`/chatkit/threads/${threadID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers])
     });
@@ -47712,7 +47948,7 @@ var Threads = class extends APIResource {
    * ```
    */
   listItems(threadID, query = {}, options) {
-    return this._client.getAPIList(path2`/chatkit/threads/${threadID}/items`, ConversationCursorPage, { query, ...options, headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers]) });
+    return this._client.getAPIList(path4`/chatkit/threads/${threadID}/items`, ConversationCursorPage, { query, ...options, headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers]) });
   }
 };
 
@@ -47735,7 +47971,7 @@ var Messages2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   create(threadID, body, options) {
-    return this._client.post(path2`/threads/${threadID}/messages`, {
+    return this._client.post(path4`/threads/${threadID}/messages`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -47748,7 +47984,7 @@ var Messages2 = class extends APIResource {
    */
   retrieve(messageID, params, options) {
     const { thread_id } = params;
-    return this._client.get(path2`/threads/${thread_id}/messages/${messageID}`, {
+    return this._client.get(path4`/threads/${thread_id}/messages/${messageID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -47760,7 +47996,7 @@ var Messages2 = class extends APIResource {
    */
   update(messageID, params, options) {
     const { thread_id, ...body } = params;
-    return this._client.post(path2`/threads/${thread_id}/messages/${messageID}`, {
+    return this._client.post(path4`/threads/${thread_id}/messages/${messageID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -47772,7 +48008,7 @@ var Messages2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   list(threadID, query = {}, options) {
-    return this._client.getAPIList(path2`/threads/${threadID}/messages`, CursorPage, {
+    return this._client.getAPIList(path4`/threads/${threadID}/messages`, CursorPage, {
       query,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -47785,7 +48021,7 @@ var Messages2 = class extends APIResource {
    */
   delete(messageID, params, options) {
     const { thread_id } = params;
-    return this._client.delete(path2`/threads/${thread_id}/messages/${messageID}`, {
+    return this._client.delete(path4`/threads/${thread_id}/messages/${messageID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -47801,7 +48037,7 @@ var Steps = class extends APIResource {
    */
   retrieve(stepID, params, options) {
     const { thread_id, run_id, ...query } = params;
-    return this._client.get(path2`/threads/${thread_id}/runs/${run_id}/steps/${stepID}`, {
+    return this._client.get(path4`/threads/${thread_id}/runs/${run_id}/steps/${stepID}`, {
       query,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -47814,7 +48050,7 @@ var Steps = class extends APIResource {
    */
   list(runID, params, options) {
     const { thread_id, ...query } = params;
-    return this._client.getAPIList(path2`/threads/${thread_id}/runs/${runID}/steps`, CursorPage, {
+    return this._client.getAPIList(path4`/threads/${thread_id}/runs/${runID}/steps`, CursorPage, {
       query,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -48396,7 +48632,7 @@ var Runs = class extends APIResource {
   }
   create(threadID, params, options) {
     const { include, ...body } = params;
-    return this._client.post(path2`/threads/${threadID}/runs`, {
+    return this._client.post(path4`/threads/${threadID}/runs`, {
       query: { include },
       body,
       ...options,
@@ -48412,7 +48648,7 @@ var Runs = class extends APIResource {
    */
   retrieve(runID, params, options) {
     const { thread_id } = params;
-    return this._client.get(path2`/threads/${thread_id}/runs/${runID}`, {
+    return this._client.get(path4`/threads/${thread_id}/runs/${runID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -48424,7 +48660,7 @@ var Runs = class extends APIResource {
    */
   update(runID, params, options) {
     const { thread_id, ...body } = params;
-    return this._client.post(path2`/threads/${thread_id}/runs/${runID}`, {
+    return this._client.post(path4`/threads/${thread_id}/runs/${runID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -48436,7 +48672,7 @@ var Runs = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   list(threadID, query = {}, options) {
-    return this._client.getAPIList(path2`/threads/${threadID}/runs`, CursorPage, {
+    return this._client.getAPIList(path4`/threads/${threadID}/runs`, CursorPage, {
       query,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -48449,7 +48685,7 @@ var Runs = class extends APIResource {
    */
   cancel(runID, params, options) {
     const { thread_id } = params;
-    return this._client.post(path2`/threads/${thread_id}/runs/${runID}/cancel`, {
+    return this._client.post(path4`/threads/${thread_id}/runs/${runID}/cancel`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -48527,7 +48763,7 @@ var Runs = class extends APIResource {
   }
   submitToolOutputs(runID, params, options) {
     const { thread_id, ...body } = params;
-    return this._client.post(path2`/threads/${thread_id}/runs/${runID}/submit_tool_outputs`, {
+    return this._client.post(path4`/threads/${thread_id}/runs/${runID}/submit_tool_outputs`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
@@ -48580,7 +48816,7 @@ var Threads2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   retrieve(threadID, options) {
-    return this._client.get(path2`/threads/${threadID}`, {
+    return this._client.get(path4`/threads/${threadID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -48591,7 +48827,7 @@ var Threads2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   update(threadID, body, options) {
-    return this._client.post(path2`/threads/${threadID}`, {
+    return this._client.post(path4`/threads/${threadID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -48603,7 +48839,7 @@ var Threads2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   delete(threadID, options) {
-    return this._client.delete(path2`/threads/${threadID}`, {
+    return this._client.delete(path4`/threads/${threadID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -48665,7 +48901,7 @@ var Content = class extends APIResource {
    */
   retrieve(fileID, params, options) {
     const { container_id } = params;
-    return this._client.get(path2`/containers/${container_id}/files/${fileID}/content`, {
+    return this._client.get(path4`/containers/${container_id}/files/${fileID}/content`, {
       ...options,
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
@@ -48686,20 +48922,20 @@ var Files = class extends APIResource {
    * a JSON request with a file ID.
    */
   create(containerID, body, options) {
-    return this._client.post(path2`/containers/${containerID}/files`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post(path4`/containers/${containerID}/files`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
    * Retrieve Container File
    */
   retrieve(fileID, params, options) {
     const { container_id } = params;
-    return this._client.get(path2`/containers/${container_id}/files/${fileID}`, options);
+    return this._client.get(path4`/containers/${container_id}/files/${fileID}`, options);
   }
   /**
    * List Container files
    */
   list(containerID, query = {}, options) {
-    return this._client.getAPIList(path2`/containers/${containerID}/files`, CursorPage, {
+    return this._client.getAPIList(path4`/containers/${containerID}/files`, CursorPage, {
       query,
       ...options
     });
@@ -48709,7 +48945,7 @@ var Files = class extends APIResource {
    */
   delete(fileID, params, options) {
     const { container_id } = params;
-    return this._client.delete(path2`/containers/${container_id}/files/${fileID}`, {
+    return this._client.delete(path4`/containers/${container_id}/files/${fileID}`, {
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
     });
@@ -48733,7 +48969,7 @@ var Containers = class extends APIResource {
    * Retrieve Container
    */
   retrieve(containerID, options) {
-    return this._client.get(path2`/containers/${containerID}`, options);
+    return this._client.get(path4`/containers/${containerID}`, options);
   }
   /**
    * List Containers
@@ -48745,7 +48981,7 @@ var Containers = class extends APIResource {
    * Delete Container
    */
   delete(containerID, options) {
-    return this._client.delete(path2`/containers/${containerID}`, {
+    return this._client.delete(path4`/containers/${containerID}`, {
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
     });
@@ -48760,7 +48996,7 @@ var Items = class extends APIResource {
    */
   create(conversationID, params, options) {
     const { include, ...body } = params;
-    return this._client.post(path2`/conversations/${conversationID}/items`, {
+    return this._client.post(path4`/conversations/${conversationID}/items`, {
       query: { include },
       body,
       ...options
@@ -48771,20 +49007,20 @@ var Items = class extends APIResource {
    */
   retrieve(itemID, params, options) {
     const { conversation_id, ...query } = params;
-    return this._client.get(path2`/conversations/${conversation_id}/items/${itemID}`, { query, ...options });
+    return this._client.get(path4`/conversations/${conversation_id}/items/${itemID}`, { query, ...options });
   }
   /**
    * List all items for a conversation with the given ID.
    */
   list(conversationID, query = {}, options) {
-    return this._client.getAPIList(path2`/conversations/${conversationID}/items`, ConversationCursorPage, { query, ...options });
+    return this._client.getAPIList(path4`/conversations/${conversationID}/items`, ConversationCursorPage, { query, ...options });
   }
   /**
    * Delete an item from a conversation with the given IDs.
    */
   delete(itemID, params, options) {
     const { conversation_id } = params;
-    return this._client.delete(path2`/conversations/${conversation_id}/items/${itemID}`, options);
+    return this._client.delete(path4`/conversations/${conversation_id}/items/${itemID}`, options);
   }
 };
 
@@ -48804,19 +49040,19 @@ var Conversations = class extends APIResource {
    * Get a conversation
    */
   retrieve(conversationID, options) {
-    return this._client.get(path2`/conversations/${conversationID}`, options);
+    return this._client.get(path4`/conversations/${conversationID}`, options);
   }
   /**
    * Update a conversation
    */
   update(conversationID, body, options) {
-    return this._client.post(path2`/conversations/${conversationID}`, { body, ...options });
+    return this._client.post(path4`/conversations/${conversationID}`, { body, ...options });
   }
   /**
    * Delete a conversation. Items in the conversation will not be deleted.
    */
   delete(conversationID, options) {
-    return this._client.delete(path2`/conversations/${conversationID}`, options);
+    return this._client.delete(path4`/conversations/${conversationID}`, options);
   }
 };
 Conversations.Items = Items;
@@ -48871,14 +49107,14 @@ var OutputItems = class extends APIResource {
    */
   retrieve(outputItemID, params, options) {
     const { eval_id, run_id } = params;
-    return this._client.get(path2`/evals/${eval_id}/runs/${run_id}/output_items/${outputItemID}`, options);
+    return this._client.get(path4`/evals/${eval_id}/runs/${run_id}/output_items/${outputItemID}`, options);
   }
   /**
    * Get a list of output items for an evaluation run.
    */
   list(runID, params, options) {
     const { eval_id, ...query } = params;
-    return this._client.getAPIList(path2`/evals/${eval_id}/runs/${runID}/output_items`, CursorPage, { query, ...options });
+    return this._client.getAPIList(path4`/evals/${eval_id}/runs/${runID}/output_items`, CursorPage, { query, ...options });
   }
 };
 
@@ -48894,20 +49130,20 @@ var Runs2 = class extends APIResource {
    * schema specified in the config of the evaluation.
    */
   create(evalID, body, options) {
-    return this._client.post(path2`/evals/${evalID}/runs`, { body, ...options });
+    return this._client.post(path4`/evals/${evalID}/runs`, { body, ...options });
   }
   /**
    * Get an evaluation run by ID.
    */
   retrieve(runID, params, options) {
     const { eval_id } = params;
-    return this._client.get(path2`/evals/${eval_id}/runs/${runID}`, options);
+    return this._client.get(path4`/evals/${eval_id}/runs/${runID}`, options);
   }
   /**
    * Get a list of runs for an evaluation.
    */
   list(evalID, query = {}, options) {
-    return this._client.getAPIList(path2`/evals/${evalID}/runs`, CursorPage, {
+    return this._client.getAPIList(path4`/evals/${evalID}/runs`, CursorPage, {
       query,
       ...options
     });
@@ -48917,14 +49153,14 @@ var Runs2 = class extends APIResource {
    */
   delete(runID, params, options) {
     const { eval_id } = params;
-    return this._client.delete(path2`/evals/${eval_id}/runs/${runID}`, options);
+    return this._client.delete(path4`/evals/${eval_id}/runs/${runID}`, options);
   }
   /**
    * Cancel an ongoing evaluation run.
    */
   cancel(runID, params, options) {
     const { eval_id } = params;
-    return this._client.post(path2`/evals/${eval_id}/runs/${runID}`, options);
+    return this._client.post(path4`/evals/${eval_id}/runs/${runID}`, options);
   }
 };
 Runs2.OutputItems = OutputItems;
@@ -48950,13 +49186,13 @@ var Evals = class extends APIResource {
    * Get an evaluation by ID.
    */
   retrieve(evalID, options) {
-    return this._client.get(path2`/evals/${evalID}`, options);
+    return this._client.get(path4`/evals/${evalID}`, options);
   }
   /**
    * Update certain properties of an evaluation.
    */
   update(evalID, body, options) {
-    return this._client.post(path2`/evals/${evalID}`, { body, ...options });
+    return this._client.post(path4`/evals/${evalID}`, { body, ...options });
   }
   /**
    * List evaluations for a project.
@@ -48968,7 +49204,7 @@ var Evals = class extends APIResource {
    * Delete an evaluation.
    */
   delete(evalID, options) {
-    return this._client.delete(path2`/evals/${evalID}`, options);
+    return this._client.delete(path4`/evals/${evalID}`, options);
   }
 };
 Evals.Runs = Runs2;
@@ -49004,7 +49240,7 @@ var Files2 = class extends APIResource {
    * Returns information about a specific file.
    */
   retrieve(fileID, options) {
-    return this._client.get(path2`/files/${fileID}`, options);
+    return this._client.get(path4`/files/${fileID}`, options);
   }
   /**
    * Returns a list of files.
@@ -49016,13 +49252,13 @@ var Files2 = class extends APIResource {
    * Delete a file and remove it from all vector stores.
    */
   delete(fileID, options) {
-    return this._client.delete(path2`/files/${fileID}`, options);
+    return this._client.delete(path4`/files/${fileID}`, options);
   }
   /**
    * Returns the contents of the specified file.
    */
   content(fileID, options) {
-    return this._client.get(path2`/files/${fileID}/content`, {
+    return this._client.get(path4`/files/${fileID}/content`, {
       ...options,
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
@@ -49125,7 +49361,7 @@ var Permissions = class extends APIResource {
    * ```
    */
   create(fineTunedModelCheckpoint, body, options) {
-    return this._client.getAPIList(path2`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, Page, { body, method: "post", ...options });
+    return this._client.getAPIList(path4`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, Page, { body, method: "post", ...options });
   }
   /**
    * **NOTE:** This endpoint requires an [admin API key](../admin-api-keys).
@@ -49136,7 +49372,7 @@ var Permissions = class extends APIResource {
    * @deprecated Retrieve is deprecated. Please swap to the paginated list method instead.
    */
   retrieve(fineTunedModelCheckpoint, query = {}, options) {
-    return this._client.get(path2`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, {
+    return this._client.get(path4`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, {
       query,
       ...options
     });
@@ -49158,7 +49394,7 @@ var Permissions = class extends APIResource {
    * ```
    */
   list(fineTunedModelCheckpoint, query = {}, options) {
-    return this._client.getAPIList(path2`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, ConversationCursorPage, { query, ...options });
+    return this._client.getAPIList(path4`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, ConversationCursorPage, { query, ...options });
   }
   /**
    * **NOTE:** This endpoint requires an [admin API key](../admin-api-keys).
@@ -49180,7 +49416,7 @@ var Permissions = class extends APIResource {
    */
   delete(permissionID, params, options) {
     const { fine_tuned_model_checkpoint } = params;
-    return this._client.delete(path2`/fine_tuning/checkpoints/${fine_tuned_model_checkpoint}/permissions/${permissionID}`, options);
+    return this._client.delete(path4`/fine_tuning/checkpoints/${fine_tuned_model_checkpoint}/permissions/${permissionID}`, options);
   }
 };
 
@@ -49209,7 +49445,7 @@ var Checkpoints2 = class extends APIResource {
    * ```
    */
   list(fineTuningJobID, query = {}, options) {
-    return this._client.getAPIList(path2`/fine_tuning/jobs/${fineTuningJobID}/checkpoints`, CursorPage, { query, ...options });
+    return this._client.getAPIList(path4`/fine_tuning/jobs/${fineTuningJobID}/checkpoints`, CursorPage, { query, ...options });
   }
 };
 
@@ -49252,7 +49488,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   retrieve(fineTuningJobID, options) {
-    return this._client.get(path2`/fine_tuning/jobs/${fineTuningJobID}`, options);
+    return this._client.get(path4`/fine_tuning/jobs/${fineTuningJobID}`, options);
   }
   /**
    * List your organization's fine-tuning jobs
@@ -49279,7 +49515,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   cancel(fineTuningJobID, options) {
-    return this._client.post(path2`/fine_tuning/jobs/${fineTuningJobID}/cancel`, options);
+    return this._client.post(path4`/fine_tuning/jobs/${fineTuningJobID}/cancel`, options);
   }
   /**
    * Get status updates for a fine-tuning job.
@@ -49295,7 +49531,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   listEvents(fineTuningJobID, query = {}, options) {
-    return this._client.getAPIList(path2`/fine_tuning/jobs/${fineTuningJobID}/events`, CursorPage, { query, ...options });
+    return this._client.getAPIList(path4`/fine_tuning/jobs/${fineTuningJobID}/events`, CursorPage, { query, ...options });
   }
   /**
    * Pause a fine-tune job.
@@ -49308,7 +49544,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   pause(fineTuningJobID, options) {
-    return this._client.post(path2`/fine_tuning/jobs/${fineTuningJobID}/pause`, options);
+    return this._client.post(path4`/fine_tuning/jobs/${fineTuningJobID}/pause`, options);
   }
   /**
    * Resume a fine-tune job.
@@ -49321,7 +49557,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   resume(fineTuningJobID, options) {
-    return this._client.post(path2`/fine_tuning/jobs/${fineTuningJobID}/resume`, options);
+    return this._client.post(path4`/fine_tuning/jobs/${fineTuningJobID}/resume`, options);
   }
 };
 Jobs.Checkpoints = Checkpoints2;
@@ -49384,7 +49620,7 @@ var Models = class extends APIResource {
    * the owner and permissioning.
    */
   retrieve(model, options) {
-    return this._client.get(path2`/models/${model}`, options);
+    return this._client.get(path4`/models/${model}`, options);
   }
   /**
    * Lists the currently available models, and provides basic information about each
@@ -49398,7 +49634,7 @@ var Models = class extends APIResource {
    * delete a model.
    */
   delete(model, options) {
-    return this._client.delete(path2`/models/${model}`, options);
+    return this._client.delete(path4`/models/${model}`, options);
   }
 };
 
@@ -49427,7 +49663,7 @@ var Calls = class extends APIResource {
    * ```
    */
   accept(callID, body, options) {
-    return this._client.post(path2`/realtime/calls/${callID}/accept`, {
+    return this._client.post(path4`/realtime/calls/${callID}/accept`, {
       body,
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
@@ -49442,7 +49678,7 @@ var Calls = class extends APIResource {
    * ```
    */
   hangup(callID, options) {
-    return this._client.post(path2`/realtime/calls/${callID}/hangup`, {
+    return this._client.post(path4`/realtime/calls/${callID}/hangup`, {
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
     });
@@ -49458,7 +49694,7 @@ var Calls = class extends APIResource {
    * ```
    */
   refer(callID, body, options) {
-    return this._client.post(path2`/realtime/calls/${callID}/refer`, {
+    return this._client.post(path4`/realtime/calls/${callID}/refer`, {
       body,
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
@@ -49473,7 +49709,7 @@ var Calls = class extends APIResource {
    * ```
    */
   reject(callID, body = {}, options) {
-    return this._client.post(path2`/realtime/calls/${callID}/reject`, {
+    return this._client.post(path4`/realtime/calls/${callID}/reject`, {
       body,
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
@@ -49921,7 +50157,7 @@ var InputItems = class extends APIResource {
    * ```
    */
   list(responseID, query = {}, options) {
-    return this._client.getAPIList(path2`/responses/${responseID}/input_items`, CursorPage, { query, ...options });
+    return this._client.getAPIList(path4`/responses/${responseID}/input_items`, CursorPage, { query, ...options });
   }
 };
 
@@ -49959,7 +50195,7 @@ var Responses = class extends APIResource {
     });
   }
   retrieve(responseID, query = {}, options) {
-    return this._client.get(path2`/responses/${responseID}`, {
+    return this._client.get(path4`/responses/${responseID}`, {
       query,
       ...options,
       stream: query?.stream ?? false
@@ -49981,7 +50217,7 @@ var Responses = class extends APIResource {
    * ```
    */
   delete(responseID, options) {
-    return this._client.delete(path2`/responses/${responseID}`, {
+    return this._client.delete(path4`/responses/${responseID}`, {
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
     });
@@ -50008,7 +50244,7 @@ var Responses = class extends APIResource {
    * ```
    */
   cancel(responseID, options) {
-    return this._client.post(path2`/responses/${responseID}/cancel`, options);
+    return this._client.post(path4`/responses/${responseID}/cancel`, options);
   }
   /**
    * Compact a conversation. Returns a compacted response object.
@@ -50038,7 +50274,7 @@ var Content2 = class extends APIResource {
    * Download a skill zip bundle by its ID.
    */
   retrieve(skillID, options) {
-    return this._client.get(path2`/skills/${skillID}/content`, {
+    return this._client.get(path4`/skills/${skillID}/content`, {
       ...options,
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
@@ -50053,7 +50289,7 @@ var Content3 = class extends APIResource {
    */
   retrieve(version, params, options) {
     const { skill_id } = params;
-    return this._client.get(path2`/skills/${skill_id}/versions/${version}/content`, {
+    return this._client.get(path4`/skills/${skill_id}/versions/${version}/content`, {
       ...options,
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
@@ -50071,20 +50307,20 @@ var Versions = class extends APIResource {
    * Create a new immutable skill version.
    */
   create(skillID, body = {}, options) {
-    return this._client.post(path2`/skills/${skillID}/versions`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post(path4`/skills/${skillID}/versions`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
    * Get a specific skill version.
    */
   retrieve(version, params, options) {
     const { skill_id } = params;
-    return this._client.get(path2`/skills/${skill_id}/versions/${version}`, options);
+    return this._client.get(path4`/skills/${skill_id}/versions/${version}`, options);
   }
   /**
    * List skill versions for a skill.
    */
   list(skillID, query = {}, options) {
-    return this._client.getAPIList(path2`/skills/${skillID}/versions`, CursorPage, {
+    return this._client.getAPIList(path4`/skills/${skillID}/versions`, CursorPage, {
       query,
       ...options
     });
@@ -50094,7 +50330,7 @@ var Versions = class extends APIResource {
    */
   delete(version, params, options) {
     const { skill_id } = params;
-    return this._client.delete(path2`/skills/${skill_id}/versions/${version}`, options);
+    return this._client.delete(path4`/skills/${skill_id}/versions/${version}`, options);
   }
 };
 Versions.Content = Content3;
@@ -50116,13 +50352,13 @@ var Skills = class extends APIResource {
    * Get a skill by its ID.
    */
   retrieve(skillID, options) {
-    return this._client.get(path2`/skills/${skillID}`, options);
+    return this._client.get(path4`/skills/${skillID}`, options);
   }
   /**
    * Update the default version pointer for a skill.
    */
   update(skillID, body, options) {
-    return this._client.post(path2`/skills/${skillID}`, { body, ...options });
+    return this._client.post(path4`/skills/${skillID}`, { body, ...options });
   }
   /**
    * List all skills for the current project.
@@ -50134,7 +50370,7 @@ var Skills = class extends APIResource {
    * Delete a skill by its ID.
    */
   delete(skillID, options) {
-    return this._client.delete(path2`/skills/${skillID}`, options);
+    return this._client.delete(path4`/skills/${skillID}`, options);
   }
 };
 Skills.Content = Content2;
@@ -50156,7 +50392,7 @@ var Parts = class extends APIResource {
    * [complete the Upload](https://platform.openai.com/docs/api-reference/uploads/complete).
    */
   create(uploadID, body, options) {
-    return this._client.post(path2`/uploads/${uploadID}/parts`, multipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post(path4`/uploads/${uploadID}/parts`, multipartFormRequestOptions({ body, ...options }, this._client));
   }
 };
 
@@ -50198,7 +50434,7 @@ var Uploads = class extends APIResource {
    * Returns the Upload object with status `cancelled`.
    */
   cancel(uploadID, options) {
-    return this._client.post(path2`/uploads/${uploadID}/cancel`, options);
+    return this._client.post(path4`/uploads/${uploadID}/cancel`, options);
   }
   /**
    * Completes the
@@ -50218,7 +50454,7 @@ var Uploads = class extends APIResource {
    * object.
    */
   complete(uploadID, body, options) {
-    return this._client.post(path2`/uploads/${uploadID}/complete`, { body, ...options });
+    return this._client.post(path4`/uploads/${uploadID}/complete`, { body, ...options });
   }
 };
 Uploads.Parts = Parts;
@@ -50248,7 +50484,7 @@ var FileBatches = class extends APIResource {
    * Create a vector store file batch.
    */
   create(vectorStoreID, body, options) {
-    return this._client.post(path2`/vector_stores/${vectorStoreID}/file_batches`, {
+    return this._client.post(path4`/vector_stores/${vectorStoreID}/file_batches`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -50259,7 +50495,7 @@ var FileBatches = class extends APIResource {
    */
   retrieve(batchID, params, options) {
     const { vector_store_id } = params;
-    return this._client.get(path2`/vector_stores/${vector_store_id}/file_batches/${batchID}`, {
+    return this._client.get(path4`/vector_stores/${vector_store_id}/file_batches/${batchID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -50270,7 +50506,7 @@ var FileBatches = class extends APIResource {
    */
   cancel(batchID, params, options) {
     const { vector_store_id } = params;
-    return this._client.post(path2`/vector_stores/${vector_store_id}/file_batches/${batchID}/cancel`, {
+    return this._client.post(path4`/vector_stores/${vector_store_id}/file_batches/${batchID}/cancel`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -50287,7 +50523,7 @@ var FileBatches = class extends APIResource {
    */
   listFiles(batchID, params, options) {
     const { vector_store_id, ...query } = params;
-    return this._client.getAPIList(path2`/vector_stores/${vector_store_id}/file_batches/${batchID}/files`, CursorPage, { query, ...options, headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]) });
+    return this._client.getAPIList(path4`/vector_stores/${vector_store_id}/file_batches/${batchID}/files`, CursorPage, { query, ...options, headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]) });
   }
   /**
    * Wait for the given file batch to be processed.
@@ -50367,7 +50603,7 @@ var Files3 = class extends APIResource {
    * [vector store](https://platform.openai.com/docs/api-reference/vector-stores/object).
    */
   create(vectorStoreID, body, options) {
-    return this._client.post(path2`/vector_stores/${vectorStoreID}/files`, {
+    return this._client.post(path4`/vector_stores/${vectorStoreID}/files`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -50378,7 +50614,7 @@ var Files3 = class extends APIResource {
    */
   retrieve(fileID, params, options) {
     const { vector_store_id } = params;
-    return this._client.get(path2`/vector_stores/${vector_store_id}/files/${fileID}`, {
+    return this._client.get(path4`/vector_stores/${vector_store_id}/files/${fileID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -50388,7 +50624,7 @@ var Files3 = class extends APIResource {
    */
   update(fileID, params, options) {
     const { vector_store_id, ...body } = params;
-    return this._client.post(path2`/vector_stores/${vector_store_id}/files/${fileID}`, {
+    return this._client.post(path4`/vector_stores/${vector_store_id}/files/${fileID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -50398,7 +50634,7 @@ var Files3 = class extends APIResource {
    * Returns a list of vector store files.
    */
   list(vectorStoreID, query = {}, options) {
-    return this._client.getAPIList(path2`/vector_stores/${vectorStoreID}/files`, CursorPage, {
+    return this._client.getAPIList(path4`/vector_stores/${vectorStoreID}/files`, CursorPage, {
       query,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -50412,7 +50648,7 @@ var Files3 = class extends APIResource {
    */
   delete(fileID, params, options) {
     const { vector_store_id } = params;
-    return this._client.delete(path2`/vector_stores/${vector_store_id}/files/${fileID}`, {
+    return this._client.delete(path4`/vector_stores/${vector_store_id}/files/${fileID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -50487,7 +50723,7 @@ var Files3 = class extends APIResource {
    */
   content(fileID, params, options) {
     const { vector_store_id } = params;
-    return this._client.getAPIList(path2`/vector_stores/${vector_store_id}/files/${fileID}/content`, Page, { ...options, headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]) });
+    return this._client.getAPIList(path4`/vector_stores/${vector_store_id}/files/${fileID}/content`, Page, { ...options, headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]) });
   }
 };
 
@@ -50512,7 +50748,7 @@ var VectorStores = class extends APIResource {
    * Retrieves a vector store.
    */
   retrieve(vectorStoreID, options) {
-    return this._client.get(path2`/vector_stores/${vectorStoreID}`, {
+    return this._client.get(path4`/vector_stores/${vectorStoreID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -50521,7 +50757,7 @@ var VectorStores = class extends APIResource {
    * Modifies a vector store.
    */
   update(vectorStoreID, body, options) {
-    return this._client.post(path2`/vector_stores/${vectorStoreID}`, {
+    return this._client.post(path4`/vector_stores/${vectorStoreID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -50541,7 +50777,7 @@ var VectorStores = class extends APIResource {
    * Delete a vector store.
    */
   delete(vectorStoreID, options) {
-    return this._client.delete(path2`/vector_stores/${vectorStoreID}`, {
+    return this._client.delete(path4`/vector_stores/${vectorStoreID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -50551,7 +50787,7 @@ var VectorStores = class extends APIResource {
    * filter.
    */
   search(vectorStoreID, body, options) {
-    return this._client.getAPIList(path2`/vector_stores/${vectorStoreID}/search`, Page, {
+    return this._client.getAPIList(path4`/vector_stores/${vectorStoreID}/search`, Page, {
       body,
       method: "post",
       ...options,
@@ -50574,7 +50810,7 @@ var Videos = class extends APIResource {
    * Fetch the latest metadata for a generated video.
    */
   retrieve(videoID, options) {
-    return this._client.get(path2`/videos/${videoID}`, options);
+    return this._client.get(path4`/videos/${videoID}`, options);
   }
   /**
    * List recently generated videos for the current project.
@@ -50586,7 +50822,7 @@ var Videos = class extends APIResource {
    * Permanently delete a completed or failed video and its stored assets.
    */
   delete(videoID, options) {
-    return this._client.delete(path2`/videos/${videoID}`, options);
+    return this._client.delete(path4`/videos/${videoID}`, options);
   }
   /**
    * Create a character from an uploaded video.
@@ -50600,7 +50836,7 @@ var Videos = class extends APIResource {
    * Streams the rendered video content for the specified video job.
    */
   downloadContent(videoID, query = {}, options) {
-    return this._client.get(path2`/videos/${videoID}/content`, {
+    return this._client.get(path4`/videos/${videoID}/content`, {
       query,
       ...options,
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
@@ -50624,13 +50860,13 @@ var Videos = class extends APIResource {
    * Fetch a character.
    */
   getCharacter(characterID, options) {
-    return this._client.get(path2`/videos/characters/${characterID}`, options);
+    return this._client.get(path4`/videos/characters/${characterID}`, options);
   }
   /**
    * Create a remix of a completed video using a refreshed prompt.
    */
   remix(videoID, body, options) {
-    return this._client.post(path2`/videos/${videoID}/remix`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post(path4`/videos/${videoID}/remix`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
 };
 
@@ -50865,9 +51101,9 @@ var OpenAI = class {
     this.apiKey = token;
     return true;
   }
-  buildURL(path3, query, defaultBaseURL) {
+  buildURL(path5, query, defaultBaseURL) {
     const baseURL = !__classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_baseURLOverridden).call(this) && defaultBaseURL || this.baseURL;
-    const url = isAbsoluteURL(path3) ? new URL(path3) : new URL(baseURL + (baseURL.endsWith("/") && path3.startsWith("/") ? path3.slice(1) : path3));
+    const url = isAbsoluteURL(path5) ? new URL(path5) : new URL(baseURL + (baseURL.endsWith("/") && path5.startsWith("/") ? path5.slice(1) : path5));
     const defaultQuery = this.defaultQuery();
     const pathQuery = Object.fromEntries(url.searchParams);
     if (!isEmptyObj(defaultQuery) || !isEmptyObj(pathQuery)) {
@@ -50892,24 +51128,24 @@ var OpenAI = class {
    */
   async prepareRequest(request, { url, options }) {
   }
-  get(path3, opts) {
-    return this.methodRequest("get", path3, opts);
+  get(path5, opts) {
+    return this.methodRequest("get", path5, opts);
   }
-  post(path3, opts) {
-    return this.methodRequest("post", path3, opts);
+  post(path5, opts) {
+    return this.methodRequest("post", path5, opts);
   }
-  patch(path3, opts) {
-    return this.methodRequest("patch", path3, opts);
+  patch(path5, opts) {
+    return this.methodRequest("patch", path5, opts);
   }
-  put(path3, opts) {
-    return this.methodRequest("put", path3, opts);
+  put(path5, opts) {
+    return this.methodRequest("put", path5, opts);
   }
-  delete(path3, opts) {
-    return this.methodRequest("delete", path3, opts);
+  delete(path5, opts) {
+    return this.methodRequest("delete", path5, opts);
   }
-  methodRequest(method, path3, opts) {
+  methodRequest(method, path5, opts) {
     return this.request(Promise.resolve(opts).then((opts2) => {
-      return { method, path: path3, ...opts2 };
+      return { method, path: path5, ...opts2 };
     }));
   }
   request(options, remainingRetries = null) {
@@ -51027,8 +51263,8 @@ var OpenAI = class {
     }));
     return { response, options, controller, requestLogID, retryOfRequestLogID, startTime };
   }
-  getAPIList(path3, Page2, opts) {
-    return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path3, ...opts2 })) : { method: "get", path: path3, ...opts });
+  getAPIList(path5, Page2, opts) {
+    return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path5, ...opts2 })) : { method: "get", path: path5, ...opts });
   }
   requestAPIList(Page2, options) {
     const request = this.makeRequest(options, null, void 0);
@@ -51119,8 +51355,8 @@ var OpenAI = class {
   }
   async buildRequest(inputOptions, { retryCount = 0 } = {}) {
     const options = { ...inputOptions };
-    const { method, path: path3, query, defaultBaseURL } = options;
-    const url = this.buildURL(path3, query, defaultBaseURL);
+    const { method, path: path5, query, defaultBaseURL } = options;
+    const url = this.buildURL(path5, query, defaultBaseURL);
     if ("timeout" in options)
       validatePositiveInteger("timeout", options.timeout);
     options.timeout = options.timeout ?? this.timeout;
@@ -51250,10 +51486,10 @@ OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
 // src/proxy.ts
-var import_obsidian8 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 function createProxyDispatcher(cfg) {
   if (!cfg.enabled) return null;
-  if (import_obsidian8.Platform.isMobile) return null;
+  if (import_obsidian7.Platform.isMobile) return null;
   const undici = require_undici();
   return new undici.ProxyAgent(buildProxyUrl(cfg));
 }
@@ -51304,7 +51540,7 @@ function maskProxyUrl(url) {
 }
 
 // src/mobile-fetch.ts
-var import_obsidian9 = require("obsidian");
+var import_obsidian8 = require("obsidian");
 var mobileFetch = async (input, init) => {
   if (init?.signal?.aborted) throw new DOMException("Aborted", "AbortError");
   let url;
@@ -51324,7 +51560,7 @@ var mobileFetch = async (input, init) => {
   } else if (init?.headers) {
     headers = init.headers;
   }
-  const requestPromise = (0, import_obsidian9.requestUrl)({
+  const requestPromise = (0, import_obsidian8.requestUrl)({
     url,
     method: init?.method ?? "GET",
     headers,
@@ -51389,11 +51625,62 @@ function mkChunk(base, delta, finish_reason = null, usage = null) {
   };
 }
 
+// src/domain-metadata.ts
+function setIfDefined(target, key, value) {
+  if (value !== void 0) {
+    target[key] = value;
+  }
+}
+function domainEntryToMetadataRecords(entry) {
+  const domain = {
+    kind: "domain",
+    schemaVersion: 1,
+    id: entry.id,
+    name: entry.name,
+    wiki_folder: entry.wiki_folder,
+    source_paths: entry.source_paths ?? []
+  };
+  setIfDefined(domain, "language_notes", entry.language_notes);
+  setIfDefined(domain, "max_tag_categories", entry.max_tag_categories);
+  setIfDefined(domain, "pageNameVersion", entry.pageNameVersion);
+  const types = (entry.entity_types ?? []).map((type) => ({ kind: "entity_type", ...type }));
+  const sources = Object.entries(entry.analyzed_sources ?? {}).map(([path5, hash]) => ({ kind: "source_state", path: path5, hash }));
+  return [domain, ...types, ...sources];
+}
+function metadataRecordsToDomainEntry(records, fallbackFolder) {
+  const domain = records.find((r) => r.kind === "domain");
+  if (!domain) throw new Error(`${fallbackFolder}: missing domain record`);
+  const entityTypes = records.filter((r) => r.kind === "entity_type").map(({ kind: _kind, ...type }) => type);
+  const analyzedSources = {};
+  for (const record of records) {
+    if (record.kind === "source_state" && typeof record.path === "string" && typeof record.hash === "string") {
+      analyzedSources[record.path] = record.hash;
+    }
+  }
+  const entry = {
+    id: domain.id,
+    name: domain.name,
+    wiki_folder: domain.wiki_folder || fallbackFolder,
+    source_paths: domain.source_paths ?? [],
+    entity_types: entityTypes,
+    analyzed_sources: analyzedSources,
+    analyzed_sources_v2: true,
+    analyzed_sources_v3: true
+  };
+  setIfDefined(entry, "language_notes", domain.language_notes);
+  setIfDefined(entry, "pageNameVersion", domain.pageNameVersion);
+  setIfDefined(entry, "max_tag_categories", domain.max_tag_categories);
+  return entry;
+}
+function parseDomainMetadata(text, path5, fallbackFolder) {
+  return metadataRecordsToDomainEntry(parseJsonl(text, path5), fallbackFolder);
+}
+function stringifyDomainMetadata(records) {
+  return stringifyJsonl(records);
+}
+
 // src/domain-store.ts
-var FILE_PATH = GLOBAL_DOMAIN_PATH;
-var TMP_PATH = `${FILE_PATH}.tmp`;
 var WIKI_DIR = WIKI_ROOT;
-var CONFIG_DIR = GLOBAL_CONFIG_DIR;
 var DomainCorruptError = class extends Error {
   constructor(message) {
     super(message);
@@ -51407,16 +51694,32 @@ var DomainStore = class {
   vault;
   async load() {
     const adapter = this.vault.adapter;
-    if (!await adapter.exists(FILE_PATH)) return [];
-    const raw = await adapter.read(FILE_PATH);
-    let parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (e) {
-      throw new DomainCorruptError(`${FILE_PATH}: ${e.message}`);
+    const domains = [];
+    if (await adapter.exists(WIKI_DIR)) {
+      const listed = await adapter.list(WIKI_DIR);
+      for (const folder of [...listed.folders].sort()) {
+        const name = folder.split("/").pop() ?? folder;
+        if (name.startsWith(".") || name.startsWith("_")) continue;
+        const path5 = domainMetadataPath(folder);
+        if (!await adapter.exists(path5)) continue;
+        try {
+          domains.push(parseDomainMetadata(await adapter.read(path5), path5, name));
+        } catch (e) {
+          throw new DomainCorruptError(`${path5}: ${e.message}`);
+        }
+      }
     }
-    if (!Array.isArray(parsed)) throw new DomainCorruptError(`${FILE_PATH}: expected JSON array`);
-    const domains = parsed;
+    if (domains.length === 0 && await adapter.exists(LEGACY_GLOBAL_DOMAIN_PATH)) {
+      const raw = await adapter.read(LEGACY_GLOBAL_DOMAIN_PATH);
+      let parsed;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (e) {
+        throw new DomainCorruptError(`${LEGACY_GLOBAL_DOMAIN_PATH}: ${e.message}`);
+      }
+      if (!Array.isArray(parsed)) throw new DomainCorruptError(`${LEGACY_GLOBAL_DOMAIN_PATH}: expected JSON array`);
+      domains.push(...parsed);
+    }
     for (const d of domains) {
       if (d.wiki_folder?.startsWith("!Wiki/")) {
         d.wiki_folder = d.wiki_folder.slice("!Wiki/".length);
@@ -51431,12 +51734,16 @@ var DomainStore = class {
     const adapter = this.vault.adapter;
     if (!await adapter.exists(WIKI_DIR)) await this.vault.createFolder(WIKI_DIR).catch(() => {
     });
-    if (!await adapter.exists(CONFIG_DIR)) await this.vault.createFolder(CONFIG_DIR).catch(() => {
-    });
-    const body = JSON.stringify(domains, null, 2);
-    await adapter.write(TMP_PATH, body);
-    if (await adapter.exists(FILE_PATH)) await adapter.remove(FILE_PATH);
-    await adapter.rename(TMP_PATH, FILE_PATH);
+    for (const domain of domains) {
+      const folder = domainWikiFolder(domain.wiki_folder);
+      if (!await adapter.exists(folder)) await this.vault.createFolder(folder).catch(() => {
+      });
+      const path5 = domainMetadataPath(folder);
+      const tmpPath = `${path5}.tmp`;
+      await adapter.write(tmpPath, stringifyDomainMetadata(domainEntryToMetadataRecords(domain)));
+      if (await adapter.exists(path5)) await adapter.remove(path5);
+      await adapter.rename(tmpPath, path5);
+    }
   }
 };
 
@@ -51538,14 +51845,14 @@ function buildIndex(pages, descriptions) {
 }
 
 // src/okf-export-fs.ts
-var import_obsidian10 = require("obsidian");
+var import_obsidian9 = require("obsidian");
 async function writeOkfBundle(destAbs, bundle) {
-  if (!import_obsidian10.Platform.isDesktopApp) throw new Error("OKF export is desktop-only");
+  if (!import_obsidian9.Platform.isDesktopApp) throw new Error("OKF export is desktop-only");
   const fs = await import("node:fs/promises");
-  const path3 = await import("node:path");
+  const path5 = await import("node:path");
   for (const file of bundle.files) {
-    const abs = path3.join(destAbs, file.relpath);
-    await fs.mkdir(path3.dirname(abs), { recursive: true });
+    const abs = path5.join(destAbs, file.relpath);
+    await fs.mkdir(path5.dirname(abs), { recursive: true });
     await fs.writeFile(abs, file.content, "utf8");
   }
 }
@@ -51580,17 +51887,17 @@ var WikiController = class {
   cancelCurrent() {
     if (this.current) {
       this.current.abort();
-      new import_obsidian11.Notice(i18n().ctrl.cancelling);
+      new import_obsidian10.Notice(i18n().ctrl.cancelling);
     }
   }
   async format() {
     const file = this.app.workspace.getActiveFile();
     if (!file) {
-      new import_obsidian11.Notice(i18n().ctrl.noActiveFile);
+      new import_obsidian10.Notice(i18n().ctrl.noActiveFile);
       return;
     }
     if (file.extension !== "md") {
-      new import_obsidian11.Notice(i18n().view.formatOnlyMarkdown ?? "Format only works on markdown files");
+      new import_obsidian10.Notice(i18n().view.formatOnlyMarkdown ?? "Format only works on markdown files");
       return;
     }
     const domains = await this.loadDomains();
@@ -51621,11 +51928,11 @@ var WikiController = class {
   async formatApply(keepOld) {
     const p = this._pendingFormat;
     if (!p || !p.tempPath) {
-      new import_obsidian11.Notice(i18n().view.formatNoPending ?? "No format preview to apply");
+      new import_obsidian10.Notice(i18n().view.formatNoPending ?? "No format preview to apply");
       return;
     }
     if (this.isBusy()) {
-      new import_obsidian11.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian10.Notice(i18n().ctrl.operationRunning);
       return;
     }
     const adapter = this.app.vault.adapter;
@@ -51652,17 +51959,17 @@ var WikiController = class {
         const content = await adapter.read(p.tempPath);
         const patched = restoreSourceFrontmatter(originalContent, content);
         const origFile = this.app.vault.getAbstractFileByPath(p.originalPath);
-        if (origFile instanceof import_obsidian11.TFile) {
+        if (origFile instanceof import_obsidian10.TFile) {
           await this.app.vault.modify(origFile, patched);
         } else {
           await adapter.write(p.originalPath, patched);
         }
         await this.app.vault.adapter.remove(p.tempPath);
       }
-      new import_obsidian11.Notice(i18n().view.formatApplied(p.originalPath));
+      new import_obsidian10.Notice(i18n().view.formatApplied(p.originalPath));
       this.activeView()?.appendEvent({ kind: "format_applied", path: p.originalPath });
     } catch (e) {
-      new import_obsidian11.Notice(i18n().ctrl.errorPrefix(e.message));
+      new import_obsidian10.Notice(i18n().ctrl.errorPrefix(e.message));
     } finally {
       this._pendingFormat = null;
       this.onBusyChange?.();
@@ -51679,18 +51986,18 @@ var WikiController = class {
     } catch {
     }
     this._pendingFormat = null;
-    new import_obsidian11.Notice(i18n().view.formatCancelled);
+    new import_obsidian10.Notice(i18n().view.formatCancelled);
     this.activeView()?.appendEvent({ kind: "format_cancelled" });
     this.onBusyChange?.();
   }
   async formatRefine(message) {
     const p = this._pendingFormat;
     if (!p) {
-      new import_obsidian11.Notice(i18n().view.formatNoPending ?? "No format preview to refine");
+      new import_obsidian10.Notice(i18n().view.formatNoPending ?? "No format preview to refine");
       return;
     }
     if (this.isBusy()) {
-      new import_obsidian11.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian10.Notice(i18n().ctrl.operationRunning);
       return;
     }
     p.chat.push({ role: "user", content: message });
@@ -51699,7 +52006,7 @@ var WikiController = class {
   async ingestActive(domainId) {
     const file = this.app.workspace.getActiveFile();
     if (!file) {
-      new import_obsidian11.Notice(i18n().ctrl.noActiveFile);
+      new import_obsidian10.Notice(i18n().ctrl.noActiveFile);
       return;
     }
     await this.dispatch("ingest", [file.path], domainId);
@@ -51741,11 +52048,11 @@ var WikiController = class {
   }
   async dispatchChat(operation, domainId, context, chatMessages) {
     if (this.isBusy()) {
-      new import_obsidian11.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian10.Notice(i18n().ctrl.operationRunning);
       return;
     }
-    if (import_obsidian11.Platform.isMobile && operation !== "query") {
-      new import_obsidian11.Notice(i18n().ctrl.mobileNotAvailable);
+    if (import_obsidian10.Platform.isMobile && operation !== "query") {
+      new import_obsidian10.Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
     {
@@ -51768,7 +52075,7 @@ var WikiController = class {
     try {
       agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId, "chat", this.plugin.settings.timeouts.lint);
     } catch (e) {
-      new import_obsidian11.Notice(i18n().ctrl.errorPrefix(e.message));
+      new import_obsidian10.Notice(i18n().ctrl.errorPrefix(e.message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
       return;
     }
@@ -51855,7 +52162,7 @@ var WikiController = class {
     const adapter = this.app.vault.adapter;
     const base = adapter.getBasePath?.();
     if (base == null) {
-      if (!import_obsidian11.Platform.isMobile) {
+      if (!import_obsidian10.Platform.isMobile) {
         console.warn("[ai-wiki] vault.adapter.getBasePath is undefined on desktop");
       }
       return "";
@@ -51864,8 +52171,8 @@ var WikiController = class {
   }
   /**
    * Serializes a domain's wiki pages into an OKF bundle at an absolute filesystem
-   * path (desktop-only). Reads pages + the domain's `_index.md` descriptions and
-   * `_log.md`, builds the bundle in memory, writes it out.
+   * path (desktop-only). Reads pages + the domain's `index.jsonl` descriptions and
+   * `log.jsonl`, builds the bundle in memory, writes it out.
    */
   async exportOkf(domain, destAbs) {
     const wikiFolder = domainWikiFolder(domain.wiki_folder);
@@ -51880,7 +52187,9 @@ var WikiController = class {
     let descriptions = /* @__PURE__ */ new Map();
     let log = "";
     try {
-      descriptions = parseIndexAnnotations(await this.app.vault.adapter.read(domainIndexPath(wikiFolder)));
+      const indexRaw = await this.app.vault.adapter.read(domainIndexPath(wikiFolder));
+      descriptions = collectPageDescriptions(parseWikiIndexJsonl(indexRaw, domainIndexPath(wikiFolder)));
+      if (descriptions.size === 0) descriptions = parseIndexAnnotations(indexRaw);
     } catch {
     }
     try {
@@ -51896,7 +52205,7 @@ var WikiController = class {
       return await this.domainStore.load();
     } catch (e) {
       if (e instanceof DomainCorruptError) {
-        new import_obsidian11.Notice(`Domain map corrupt: ${e.message}`);
+        new import_obsidian10.Notice(`Domain map corrupt: ${e.message}`);
       }
       throw e;
     }
@@ -51948,13 +52257,13 @@ var WikiController = class {
     const id = input.id.trim();
     const err = validateDomainId(id);
     if (err) {
-      new import_obsidian11.Notice(i18n().ctrl.domainAddFailed(err));
+      new import_obsidian10.Notice(i18n().ctrl.domainAddFailed(err));
       return { ok: false, error: err };
     }
     const cur = await this.domainStore.load();
     if (cur.some((d) => d.id === id)) {
       const msg = `\u0414\u043E\u043C\u0435\u043D \xAB${id}\xBB \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442`;
-      new import_obsidian11.Notice(i18n().ctrl.domainAddFailed(msg));
+      new import_obsidian10.Notice(i18n().ctrl.domainAddFailed(msg));
       return { ok: false, error: msg };
     }
     const wikiSubfolder = input.wikiFolder.trim() || id;
@@ -51967,7 +52276,7 @@ var WikiController = class {
       language_notes: ""
     }];
     await this.domainStore.save(next);
-    new import_obsidian11.Notice(i18n().ctrl.domainAdded(id));
+    new import_obsidian10.Notice(i18n().ctrl.domainAdded(id));
     return { ok: true };
   }
   async updateDomainSources(domainId, sourcePaths) {
@@ -51997,11 +52306,11 @@ var WikiController = class {
     if (deleted > 0) graphCache.invalidate(domainId);
     return deleted;
   }
-  async deleteSource(domainId, path3) {
+  async deleteSource(domainId, path5) {
     const domains = await this.loadDomains();
     const entry = domains.find((d) => d.id === domainId);
     if (!entry) {
-      new import_obsidian11.Notice(i18n().ctrl.noActiveFile);
+      new import_obsidian10.Notice(i18n().ctrl.noActiveFile);
       return;
     }
     const wikiFolder = domainWikiFolder(entry.wiki_folder);
@@ -52015,16 +52324,16 @@ var WikiController = class {
     }
     const sourceStemToPath = /* @__PURE__ */ new Map();
     for (const f of collectMdInPaths(this.app.vault, entry.source_paths ?? [])) {
-      if (f.path !== path3) sourceStemToPath.set(sourceStem(f.path), f.path);
+      if (f.path !== path5) sourceStemToPath.set(sourceStem(f.path), f.path);
     }
     for (const sp of entry.source_paths ?? []) {
-      if (sp.endsWith(".md") && sp !== path3 && this.app.vault.getFileByPath(sp)) {
+      if (sp.endsWith(".md") && sp !== path5 && this.app.vault.getFileByPath(sp)) {
         sourceStemToPath.set(sourceStem(sp), sp);
       }
     }
-    const plan = computeDeletionPlan(path3, pages, sourceStemToPath);
-    new DeleteSourceModal(this.app, entry.id, path3, plan, () => {
-      void this.dispatch("delete", [path3, domainId], domainId).then(() => {
+    const plan = computeDeletionPlan(path5, pages, sourceStemToPath);
+    new DeleteSourceModal(this.app, entry.id, path5, plan, () => {
+      void this.dispatch("delete", [path5, domainId], domainId).then(() => {
         graphCache.invalidate(domainId);
       });
     }).open();
@@ -52032,7 +52341,7 @@ var WikiController = class {
   requireClaudeAgent(local) {
     const { iclaudePath } = local;
     if (!iclaudePath) {
-      new import_obsidian11.Notice(i18n().ctrl.setClaudeCodePath);
+      new import_obsidian10.Notice(i18n().ctrl.setClaudeCodePath);
       return null;
     }
     return iclaudePath;
@@ -52040,7 +52349,7 @@ var WikiController = class {
   requireNativeAgent(eff) {
     const na = eff.nativeAgent;
     if (!na?.baseUrl?.trim() || !na?.apiKey?.trim()) {
-      new import_obsidian11.Notice(i18n().ctrl.configureCloudLlm);
+      new import_obsidian10.Notice(i18n().ctrl.configureCloudLlm);
       return false;
     }
     return true;
@@ -52049,9 +52358,9 @@ var WikiController = class {
     const rawAdapter = this.app.vault.adapter;
     const vault = this.app.vault;
     const adapter = Object.create(rawAdapter);
-    adapter.mkdir = async (path3) => {
+    adapter.mkdir = async (path5) => {
       try {
-        await vault.createFolder(path3);
+        await vault.createFolder(path5);
       } catch {
       }
     };
@@ -52059,7 +52368,7 @@ var WikiController = class {
       return this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath)?.path ?? null;
     };
     adapter.renderExcalidrawPng = async (resolvedPath) => {
-      if (import_obsidian11.Platform.isMobile) return null;
+      if (import_obsidian10.Platform.isMobile) return null;
       try {
         const host = this.app.plugins?.plugins?.["obsidian-excalidraw-plugin"];
         const ea = host?.ea;
@@ -52131,8 +52440,8 @@ var WikiController = class {
       this._currentClaudeClient = null;
       const proxyCfg = s.proxy;
       let proxyFetch = null;
-      if (proxyCfg.enabled && import_obsidian11.Platform.isMobile) {
-        new import_obsidian11.Notice(i18n().settings.proxy_mobile_warning);
+      if (proxyCfg.enabled && import_obsidian10.Platform.isMobile) {
+        new import_obsidian10.Notice(i18n().settings.proxy_mobile_warning);
       } else if (proxyCfg.enabled) {
         try {
           const baseHost = new URL(s.nativeAgent.baseUrl).hostname;
@@ -52142,7 +52451,7 @@ var WikiController = class {
             if (proxyFetch) console.debug(`[ai-wiki] using proxy ${maskProxyUrl(proxyCfg.url)}`);
           }
         } catch (e) {
-          new import_obsidian11.Notice(i18n().settings.proxy_invalid(e.message));
+          new import_obsidian10.Notice(i18n().settings.proxy_invalid(e.message));
         }
       }
       const openaiClient = new OpenAI({
@@ -52150,11 +52459,11 @@ var WikiController = class {
         apiKey: s.nativeAgent.apiKey,
         timeout: timeoutSec > 0 ? timeoutSec * 1e3 : void 0,
         dangerouslyAllowBrowser: true,
-        fetch: import_obsidian11.Platform.isMobile ? mobileFetch : proxyFetch ?? void 0
+        fetch: import_obsidian10.Platform.isMobile ? mobileFetch : proxyFetch ?? void 0
       });
-      llm = import_obsidian11.Platform.isMobile ? wrapMobileNoStream(openaiClient) : openaiClient;
+      llm = import_obsidian10.Platform.isMobile ? wrapMobileNoStream(openaiClient) : openaiClient;
     }
-    return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`, import_obsidian11.Platform.isMobile);
+    return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`, import_obsidian10.Platform.isMobile);
   }
   async logEvent(_vaultRoot, sessionId, op, domainId, ev) {
     if (!(this._currentLogMeta?.agentLogEnabled ?? this.plugin.settings.agentLogEnabled)) return;
@@ -52163,12 +52472,12 @@ var WikiController = class {
       return;
     }
     const adapter = this.app.vault.adapter;
-    const path3 = `${this.pluginDir()}/agent.jsonl`;
+    const path5 = `${this.pluginDir()}/agent.jsonl`;
     try {
       const appendLine = async (record) => {
         const line = JSON.stringify(record) + "\n";
-        if (await adapter.exists(path3)) await adapter.append(path3, line);
-        else await adapter.write(path3, line);
+        if (await adapter.exists(path5)) await adapter.append(path5, line);
+        else await adapter.write(path5, line);
       };
       const envelope = {
         session: sessionId,
@@ -52198,12 +52507,12 @@ var WikiController = class {
   }
   async dispatch(op, args, domainId, context, instruction, onFileError, chatMessages, lintOpts) {
     if (this.isBusy()) {
-      new import_obsidian11.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian10.Notice(i18n().ctrl.operationRunning);
       return;
     }
     this._chatSessionId = void 0;
-    if (import_obsidian11.Platform.isMobile && op !== "query" && op !== "format" && op !== "delete") {
-      new import_obsidian11.Notice(i18n().ctrl.mobileNotAvailable);
+    if (import_obsidian10.Platform.isMobile && op !== "query" && op !== "format" && op !== "delete") {
+      new import_obsidian10.Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
     {
@@ -52234,7 +52543,7 @@ var WikiController = class {
     try {
       agentRunner = await this.buildAgentRunner(vaultRoot, void 0, opKey, opTimeoutSec);
     } catch (e) {
-      new import_obsidian11.Notice(i18n().ctrl.errorPrefix(e.message));
+      new import_obsidian10.Notice(i18n().ctrl.errorPrefix(e.message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
       return;
     }
@@ -52270,7 +52579,7 @@ var WikiController = class {
             if (next !== cur) await this.domainStore.save(next);
           } catch (e) {
             if (e instanceof DomainCorruptError) {
-              new import_obsidian11.Notice(`Domain map corrupt: ${e.message}`);
+              new import_obsidian10.Notice(`Domain map corrupt: ${e.message}`);
             }
             status = "error";
             ctrl.abort();
@@ -52521,7 +52830,7 @@ async function cleanDir(adapter, dir, knownFiles) {
 }
 
 // src/migrate-index-format.ts
-var import_obsidian12 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 var OLD_ENTRY = /^- \[\[([^\]]+)\]\] \S+ — (.+)$/;
 var NEW_ENTRY = /^- \S+ — .+$/;
 function migrateLine(line) {
@@ -52570,12 +52879,12 @@ async function migrateIndexFormat(vault, domains) {
     linesChanged += changed;
   }
   if (filesChanged > 0) {
-    new import_obsidian12.Notice(`AI Wiki: index format migrated \u2014 ${filesChanged} files, ${linesChanged} lines`);
+    new import_obsidian11.Notice(`AI Wiki: index format migrated \u2014 ${filesChanged} files, ${linesChanged} lines`);
   }
 }
 
 // src/migrate-drop-sections.ts
-var import_obsidian13 = require("obsidian");
+var import_obsidian12 = require("obsidian");
 
 // src/strip-legacy-sections.ts
 var LEGACY_HEADINGS = /* @__PURE__ */ new Set([
@@ -52690,13 +52999,13 @@ async function migrateDropSections(vault, domains, localConfigStore) {
   }
   await localConfigStore.save({ migrated_drop_sections: true });
   if (filesChanged > 0) {
-    new import_obsidian13.Notice(`AI Wiki: legacy wiki sections removed \u2014 ${filesChanged} pages`);
+    new import_obsidian12.Notice(`AI Wiki: legacy wiki sections removed \u2014 ${filesChanged} pages`);
   }
 }
 
 // src/migrate-okf-frontmatter.ts
 var import_yaml5 = __toESM(require_dist(), 1);
-var import_obsidian14 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 var FM_RE6 = /^---\n([\s\S]*?)\n---\n?/;
 function isH22(line) {
   return /^##\s+/.test(line);
@@ -52805,7 +53114,9 @@ async function migrateOkfFrontmatter(vault, domains, localConfigStore) {
     let annotations = /* @__PURE__ */ new Map();
     if (await adapter.exists(indexPath)) {
       try {
-        annotations = parseIndexAnnotations(await adapter.read(indexPath));
+        const indexRaw = await adapter.read(indexPath);
+        annotations = collectPageDescriptions(parseWikiIndexJsonl(indexRaw, indexPath));
+        if (annotations.size === 0) annotations = parseIndexAnnotations(indexRaw);
       } catch (e) {
         console.error(`[AI Wiki] OKF migration: error reading ${indexPath}`, e);
       }
@@ -52831,12 +53142,164 @@ async function migrateOkfFrontmatter(vault, domains, localConfigStore) {
   }
   await localConfigStore.save({ migrated_okf_frontmatter: true });
   if (filesChanged > 0) {
-    new import_obsidian14.Notice(`AI Wiki: OKF frontmatter migrated \u2014 ${filesChanged} pages`);
+    new import_obsidian13.Notice(`AI Wiki: OKF frontmatter migrated \u2014 ${filesChanged} pages`);
   }
 }
 
+// src/migrate-jsonl-domain-storage.ts
+var import_yaml6 = __toESM(require_dist(), 1);
+var FM_RE7 = /^---\n([\s\S]*?)\n---\n?/;
+function hashString(text) {
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = Math.imul(31, h) + text.charCodeAt(i) | 0;
+  return (h >>> 0).toString(36);
+}
+function stamp() {
+  return (/* @__PURE__ */ new Date()).toISOString().replace(/[-:]/g, "").replace(/\..+$/, "").replace("T", "-");
+}
+async function ensureFolder(vault, path5) {
+  const parts = path5.split("/");
+  for (let i = 1; i <= parts.length; i++) {
+    const partial = parts.slice(0, i).join("/");
+    if (!partial) continue;
+    if (!await vault.adapter.exists(partial)) await vault.createFolder(partial).catch(() => {
+    });
+  }
+}
+async function readIfExists(adapter, path5) {
+  return await adapter.exists(path5) ? adapter.read(path5) : null;
+}
+async function collectMarkdownPages(adapter, root) {
+  const out = [];
+  async function walk(folder) {
+    const listed = await adapter.list(folder);
+    for (const file of listed.files) {
+      if (file.endsWith(".md") && !file.includes("/_config/")) out.push({ path: file, content: await adapter.read(file) });
+    }
+    for (const child of listed.folders) {
+      if (child.endsWith("/_config")) continue;
+      await walk(child);
+    }
+  }
+  if (await adapter.exists(root)) await walk(root);
+  return out;
+}
+function parseFrontmatter(content) {
+  const match = FM_RE7.exec(content);
+  if (!match) return {};
+  try {
+    return (0, import_yaml6.parse)(match[1]) ?? {};
+  } catch {
+    return {};
+  }
+}
+function asStringArray(value) {
+  if (Array.isArray(value)) return value.filter((v) => typeof v === "string");
+  return typeof value === "string" ? [value] : [];
+}
+function pageRecordFromPage(page, descriptions) {
+  const articleId = page.path.split("/").pop().replace(/\.md$/, "");
+  const fm = parseFrontmatter(page.content);
+  const description = parseDescriptionFromFm(page.content) || descriptions.get(articleId) || deriveFallbackDescription(page.content, String(fm.type ?? "concept"));
+  return {
+    kind: "page",
+    schemaVersion: 1,
+    articleId,
+    path: page.path,
+    type: typeof fm.type === "string" ? fm.type : "concept",
+    description,
+    resource: asStringArray(fm.resource),
+    timestamp: typeof fm.timestamp === "string" ? fm.timestamp : void 0,
+    tags: asStringArray(fm.tags),
+    bodyHash: hashString(page.content),
+    descriptionHash: hashString(description)
+  };
+}
+async function copyBackup(vault, sourcePaths, backupPath) {
+  const adapter = vault.adapter;
+  await ensureFolder(vault, backupPath);
+  const entries = [];
+  for (const source of sourcePaths) {
+    const content = await readIfExists(adapter, source);
+    if (content === null) continue;
+    const backup = `${backupPath}/${source.replace(/[/:]/g, "__")}`;
+    await adapter.write(backup, content);
+    entries.push({ source, backup, size: content.length, hash: hashString(content) });
+  }
+  await adapter.write(`${backupPath}/manifest.json`, JSON.stringify({ version: 1, entries }, null, 2));
+  return entries;
+}
+async function detectLegacyJsonlStorageState(vault) {
+  const adapter = vault.adapter;
+  if (await adapter.exists(LEGACY_GLOBAL_DOMAIN_PATH)) return true;
+  if (!await adapter.exists(WIKI_ROOT)) return false;
+  const listed = await adapter.list(WIKI_ROOT);
+  for (const folder of listed.folders) {
+    if (await adapter.exists(legacyDomainIndexPath(folder))) return true;
+    if (await adapter.exists(legacyDomainLogPath(folder))) return true;
+    if (await adapter.exists(legacyDomainEmbeddingsPath(folder))) return true;
+  }
+  return false;
+}
+async function migrateJsonlDomainStorage(vault, opts = {}) {
+  const adapter = vault.adapter;
+  if (!await detectLegacyJsonlStorageState(vault)) {
+    return { ok: true, migrated: false, domains: [], errors: [] };
+  }
+  const errors = [];
+  const rawDomains = await readIfExists(adapter, LEGACY_GLOBAL_DOMAIN_PATH);
+  if (rawDomains === null) {
+    return { ok: false, migrated: false, domains: [], errors: [`Missing ${LEGACY_GLOBAL_DOMAIN_PATH}`] };
+  }
+  let domains;
+  try {
+    const parsed = JSON.parse(rawDomains);
+    if (!Array.isArray(parsed)) throw new Error("expected JSON array");
+    domains = parsed;
+  } catch (e) {
+    return { ok: false, migrated: false, domains: [], errors: [`${LEGACY_GLOBAL_DOMAIN_PATH}: ${e.message}`] };
+  }
+  const backupPath = `${WIKI_ROOT}/.backup/jsonl-domain-storage-${opts.now ?? stamp()}`;
+  const legacyPaths = [LEGACY_GLOBAL_DOMAIN_PATH];
+  for (const domain of domains) {
+    const folder = domainWikiFolder(domain.wiki_folder);
+    legacyPaths.push(legacyDomainIndexPath(folder), legacyDomainLogPath(folder), legacyDomainEmbeddingsPath(folder));
+  }
+  const backupEntries = await copyBackup(vault, legacyPaths, backupPath);
+  if (backupEntries.length === 0 || !await adapter.exists(`${backupPath}/manifest.json`)) {
+    return { ok: false, migrated: false, backupPath, domains: [], errors: ["Backup manifest was not written"] };
+  }
+  for (const domain of domains) {
+    const folder = domainWikiFolder(domain.wiki_folder);
+    await ensureFolder(vault, folder);
+    await adapter.write(domainMetadataPath(folder), stringifyDomainMetadata(domainEntryToMetadataRecords(domain)));
+    const indexMarkdown = await readIfExists(adapter, legacyDomainIndexPath(folder));
+    const descriptions = indexMarkdown ? parseIndexAnnotations(indexMarkdown) : /* @__PURE__ */ new Map();
+    const pages = await collectMarkdownPages(adapter, folder);
+    const records = pages.map((page) => pageRecordFromPage(page, descriptions));
+    await adapter.write(domainIndexPath(folder), stringifyJsonl(records));
+    const legacyLog = await readIfExists(adapter, legacyDomainLogPath(folder));
+    if (legacyLog !== null) {
+      await adapter.write(domainLogPath(folder), stringifyJsonl(parseLegacyLogBlocks(legacyLog, domain.id)));
+    } else {
+      await adapter.write(domainLogPath(folder), "");
+    }
+  }
+  for (const domain of domains) {
+    const folder = domainWikiFolder(domain.wiki_folder);
+    if (!await adapter.exists(domainMetadataPath(folder))) errors.push(`Missing ${domainMetadataPath(folder)}`);
+    if (!await adapter.exists(domainIndexPath(folder))) errors.push(`Missing ${domainIndexPath(folder)}`);
+    if (!await adapter.exists(domainLogPath(folder))) errors.push(`Missing ${domainLogPath(folder)}`);
+  }
+  if (errors.length > 0) return { ok: false, migrated: false, backupPath, domains: domains.map((d) => d.id), errors };
+  for (const path5 of legacyPaths) {
+    if (await adapter.exists(path5)) await adapter.remove(path5);
+  }
+  return { ok: true, migrated: true, backupPath, domains: domains.map((d) => d.id), errors: [] };
+}
+
 // src/main.ts
-var LlmWikiPlugin = class extends import_obsidian15.Plugin {
+var LlmWikiPlugin = class extends import_obsidian14.Plugin {
   settings;
   controller;
   settingTab;
@@ -52847,9 +53310,13 @@ var LlmWikiPlugin = class extends import_obsidian15.Plugin {
     this.localConfigStore = new LocalConfigStore(this);
     try {
       await runStorageMigration(this.app.vault);
+      const report = await migrateJsonlDomainStorage(this.app.vault);
+      if (!report.ok) {
+        new import_obsidian14.Notice(`AI Wiki: JSONL domain migration failed \u2014 ${report.errors.join("; ")}`, 0);
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian15.Notice(`AI Wiki: storage migration failed \u2014 ${msg}`, 0);
+      new import_obsidian14.Notice(`AI Wiki: storage migration failed \u2014 ${msg}`, 0);
       console.error("[AI Wiki] storage migration error:", e);
     }
     await cleanupBundledSchemaCopies(this.app.vault);
@@ -52863,7 +53330,7 @@ var LlmWikiPlugin = class extends import_obsidian15.Plugin {
       await migrateIndexFormat(this.app.vault, domains);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian15.Notice(`AI Wiki: index format migration failed \u2014 ${msg}`, 0);
+      new import_obsidian14.Notice(`AI Wiki: index format migration failed \u2014 ${msg}`, 0);
       console.error("[AI Wiki] index format migration error:", e);
     }
     try {
@@ -52871,7 +53338,7 @@ var LlmWikiPlugin = class extends import_obsidian15.Plugin {
       await migrateDropSections(this.app.vault, domains, this.localConfigStore);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian15.Notice(`AI Wiki: drop-sections migration failed \u2014 ${msg}`, 0);
+      new import_obsidian14.Notice(`AI Wiki: drop-sections migration failed \u2014 ${msg}`, 0);
       console.error("[AI Wiki] drop-sections migration error:", e);
     }
     try {
@@ -52879,7 +53346,7 @@ var LlmWikiPlugin = class extends import_obsidian15.Plugin {
       await migrateOkfFrontmatter(this.app.vault, domains, this.localConfigStore);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian15.Notice(`AI Wiki: OKF frontmatter migration failed \u2014 ${msg}`, 0);
+      new import_obsidian14.Notice(`AI Wiki: OKF frontmatter migration failed \u2014 ${msg}`, 0);
       console.error("[AI Wiki] OKF frontmatter migration error:", e);
     }
     this.controller = new WikiController(this.app, this, this.domainStore, this.localConfigStore);
@@ -52894,7 +53361,7 @@ var LlmWikiPlugin = class extends import_obsidian15.Plugin {
         if (right) void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
-    if (!import_obsidian15.Platform.isMobile) {
+    if (!import_obsidian14.Platform.isMobile) {
       const statusBar = this.addStatusBarItem();
       statusBar.setText("schema: 0/0");
       statusBar.setAttribute("aria-label", "validation: 0 ok, 0 retried, 0 failed");
@@ -52917,7 +53384,7 @@ var LlmWikiPlugin = class extends import_obsidian15.Plugin {
         if (right) void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
-    if (!import_obsidian15.Platform.isMobile) {
+    if (!import_obsidian14.Platform.isMobile) {
       this.addCommand({
         id: "ingest-current",
         name: T.cmd.ingestActive,
@@ -52929,7 +53396,7 @@ var LlmWikiPlugin = class extends import_obsidian15.Plugin {
       name: T.cmd.query,
       callback: () => new QueryModal(this.app, (q) => void this.controller.query(q)).open()
     });
-    if (!import_obsidian15.Platform.isMobile) {
+    if (!import_obsidian14.Platform.isMobile) {
       this.addCommand({
         id: "lint",
         name: T.cmd.lint,
@@ -52999,12 +53466,12 @@ var LlmWikiPlugin = class extends import_obsidian15.Plugin {
             const last = (await this.localConfigStore.load()).lastDomain;
             const domain = domains.find((d) => d.id === last) ?? domains[0];
             if (!domain) {
-              new import_obsidian15.Notice(i18n().view.selectDomainFirst);
+              new import_obsidian14.Notice(i18n().view.selectDomainFirst);
               return;
             }
             const defaultDest = `${this.controller.cwdOrEmpty()}/okf-export/${domain.wiki_folder}`;
             new ExportOkfModal(this.app, defaultDest, (dest) => {
-              void this.controller.exportOkf(domain, dest).then((r) => new import_obsidian15.Notice(`OKF: ${r.pages} pages \u2192 ${dest}${r.warnings.length ? ` (${r.warnings.length} warnings)` : ""}`)).catch((e) => new import_obsidian15.Notice(`OKF export failed: ${e.message}`, 0));
+              void this.controller.exportOkf(domain, dest).then((r) => new import_obsidian14.Notice(`OKF: ${r.pages} pages \u2192 ${dest}${r.warnings.length ? ` (${r.warnings.length} warnings)` : ""}`)).catch((e) => new import_obsidian14.Notice(`OKF export failed: ${e.message}`, 0));
             }).open();
           })();
         }
@@ -53096,11 +53563,11 @@ var LlmWikiPlugin = class extends import_obsidian15.Plugin {
       if (data && data.model && !this.settings.claudeAgent.model)
         this.settings.claudeAgent.model = data.model;
     }
-    if (import_obsidian15.Platform.isMobile && this.settings.backend === "claude-agent") {
+    if (import_obsidian14.Platform.isMobile && this.settings.backend === "claude-agent") {
       this.settings.backend = "native-agent";
       await this.saveData(this.settings);
     }
-    if (import_obsidian15.Platform.isMobile) {
+    if (import_obsidian14.Platform.isMobile) {
       let dirty = false;
       if (this.settings.nativeAgent.perOperation) {
         this.settings.nativeAgent.perOperation = false;

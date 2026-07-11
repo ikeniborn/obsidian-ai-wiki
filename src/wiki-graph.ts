@@ -1,11 +1,11 @@
-import { basename } from "path-browserify";
+import path from "path-browserify";
 import { tokenize, scoreSeed } from "./wiki-seeds";
 import type { PageSimilarityService } from "./page-similarity";
 
 export type WikiGraph = Map<string, Set<string>>;
 
 export function pageId(vaultPath: string): string {
-  return basename(vaultPath, ".md");
+  return path.basename(vaultPath, ".md");
 }
 
 export function buildWikiGraph(pages: Map<string, string>): WikiGraph {

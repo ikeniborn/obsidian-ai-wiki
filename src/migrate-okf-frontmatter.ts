@@ -5,6 +5,7 @@ import type { LocalConfigStore } from "./local-config";
 import { collectMdInPaths } from "./utils/vault-walk";
 import { domainWikiFolder, domainIndexPath } from "./wiki-path";
 import { parseIndexAnnotations, deriveFallbackDescription } from "./wiki-index";
+import { collectPageDescriptions, parseWikiIndexJsonl } from "./wiki-index-jsonl";
 import {
   renameWikiPageFields,
   ensureType,
@@ -188,7 +189,9 @@ export async function migrateOkfFrontmatter(
     let annotations = new Map<string, string>();
     if (await adapter.exists(indexPath)) {
       try {
-        annotations = parseIndexAnnotations(await adapter.read(indexPath));
+        const indexRaw = await adapter.read(indexPath);
+        annotations = collectPageDescriptions(parseWikiIndexJsonl(indexRaw, indexPath));
+        if (annotations.size === 0) annotations = parseIndexAnnotations(indexRaw);
       } catch (e) {
         console.error(`[AI Wiki] OKF migration: error reading ${indexPath}`, e);
       }

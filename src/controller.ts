@@ -24,6 +24,7 @@ import { DeleteSourceModal, FileErrorModal, FormatVisionModal, InfoModal, ShellC
 import { computeDeletionPlan, sourceStem } from "./source-deletion";
 import { domainWikiFolder, domainIndexPath, domainLogPath } from "./wiki-path";
 import { parseIndexAnnotations } from "./wiki-index";
+import { collectPageDescriptions, parseWikiIndexJsonl } from "./wiki-index-jsonl";
 import { buildOkfBundle } from "./okf-export";
 import { writeOkfBundle } from "./okf-export-fs";
 import { restoreSourceFrontmatter } from "./utils/raw-frontmatter";
@@ -369,8 +370,8 @@ export class WikiController {
 
   /**
    * Serializes a domain's wiki pages into an OKF bundle at an absolute filesystem
-   * path (desktop-only). Reads pages + the domain's `_index.md` descriptions and
-   * `_log.md`, builds the bundle in memory, writes it out.
+   * path (desktop-only). Reads pages + the domain's `index.jsonl` descriptions and
+   * `log.jsonl`, builds the bundle in memory, writes it out.
    */
   async exportOkf(domain: DomainEntry, destAbs: string): Promise<{ pages: number; warnings: string[] }> {
     const wikiFolder = domainWikiFolder(domain.wiki_folder);
@@ -384,7 +385,11 @@ export class WikiController {
     }
     let descriptions = new Map<string, string>();
     let log = "";
-    try { descriptions = parseIndexAnnotations(await this.app.vault.adapter.read(domainIndexPath(wikiFolder))); } catch { /* no index */ }
+    try {
+      const indexRaw = await this.app.vault.adapter.read(domainIndexPath(wikiFolder));
+      descriptions = collectPageDescriptions(parseWikiIndexJsonl(indexRaw, domainIndexPath(wikiFolder)));
+      if (descriptions.size === 0) descriptions = parseIndexAnnotations(indexRaw);
+    } catch { /* no index */ }
     try { log = await this.app.vault.adapter.read(domainLogPath(wikiFolder)); } catch { /* no log */ }
     const bundle = buildOkfBundle(pages, descriptions, log);
     await writeOkfBundle(destAbs, bundle);

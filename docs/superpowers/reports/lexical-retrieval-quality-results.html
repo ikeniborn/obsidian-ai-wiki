@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Итоговый отчёт — lexical-retrieval-quality — 2026-07-11</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f7f7f4; --fg:#202124; --muted:#666; --card:#fff; --line:#d9d6cc; --ok:#157347; --warn:#9a6700; --code:#f0eee7; }
+    body.dark { --bg:#151716; --fg:#eceee9; --muted:#a8aaa5; --card:#202321; --line:#3a3d39; --ok:#6ee7a8; --warn:#ffd166; --code:#2b2e2b; }
+    body { margin:0; font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif; background:var(--bg); color:var(--fg); }
+    main { max-width:1120px; margin:0 auto; padding:28px; }
+    h1 { margin:0 0 6px; font-size:28px; }
+    h2 { margin:28px 0 10px; font-size:18px; }
+    p { margin:8px 0; }
+    code { background:var(--code); padding:2px 5px; border-radius:4px; }
+    table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); }
+    th, td { text-align:left; vertical-align:top; padding:9px 10px; border-bottom:1px solid var(--line); }
+    th { color:var(--muted); font-weight:600; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px; }
+    .ok { color:var(--ok); font-weight:700; }
+    .warn { color:var(--warn); font-weight:700; }
+    .muted { color:var(--muted); }
+    button { float:right; border:1px solid var(--line); background:var(--card); color:var(--fg); border-radius:6px; padding:6px 10px; cursor:pointer; }
+  </style>
+</head>
+<body>
+<main>
+  <button onclick="document.body.classList.toggle('dark')">Тема</button>
+  <h1>Итоговый отчёт — lexical-retrieval-quality</h1>
+  <p class="muted">Дата: 2026-07-11 · result verdict: <span class="ok">OK</span> · plan hash: <code>5c39df899796df85</code></p>
+
+  <section class="grid">
+    <div class="card"><strong>Цель</strong><p>Улучшить offline lexical retrieval в runtime Query и HLD eval без LLM, embeddings, network или schema changes.</p></div>
+    <div class="card"><strong>Результат</strong><p>HLD eval: 61 pages, 442 chunks, 5/5 accepted, average improved <code>Overlap@5 = 0.68</code>.</p></div>
+    <div class="card"><strong>Статус</strong><p>Все floors сохранены: <code>0.40 / 1.00 / 0.40 / 0.60 / 0.20</code> не ухудшены.</p></div>
+  </section>
+
+  <h2>Chain</h2>
+  <table>
+    <tr><th>Stage</th><th>Artifact</th><th>Статус</th></tr>
+    <tr><td>intent</td><td><code>docs/superpowers/intents/2026-07-11-lexical-retrieval-quality-intent.md</code></td><td class="ok">approved, checked</td></tr>
+    <tr><td>spec</td><td><code>docs/superpowers/specs/2026-07-11-lexical-retrieval-quality-design.md</code></td><td class="ok">approved, checked</td></tr>
+    <tr><td>plan</td><td><code>docs/superpowers/plans/2026-07-11-lexical-retrieval-quality.md</code></td><td class="ok">checked, executed</td></tr>
+    <tr><td>result</td><td><code>docs/superpowers/reports/lexical-retrieval-quality-results.html</code></td><td class="ok">OK</td></tr>
+  </table>
+
+  <h2>Изменения</h2>
+  <table>
+    <tr><th>Файл</th><th>Что изменилось</th><th>Зачем</th></tr>
+    <tr><td><code>src/lexical-retrieval.ts</code></td><td>Pure weighted scorer, tokenization, page/chunk rank, RRF fusion, score normalization.</td><td>Заменить plain Jaccard offline path на deterministic weighted lexical scoring.</td></tr>
+    <tr><td><code>src/wiki-seeds.ts</code></td><td><code>scoreSeed</code> делегирует scorer и сохраняет диапазон <code>0..1</code>.</td><td>Сохранить threshold compatibility для runtime Query.</td></tr>
+    <tr><td><code>src/page-similarity.ts</code></td><td>Jaccard chunk fallback использует <code>scoreLexicalChunk</code>; <code>requestUrl</code> lazy-import.</td><td>Улучшить chunk ranking и оставить offline fallback testable.</td></tr>
+    <tr><td><code>scripts/eval-jsonl-domain-storage.ts</code></td><td>Old vs improved metrics, legacy broad rank, weighted page/chunk rank, RRF + top-5 rebalance, avg gate.</td><td>Сравнить качество и остановить результат ниже <code>0.65</code>.</td></tr>
+    <tr><td><code>tests/*</code></td><td>Scorer, runtime fallback, eval report/gate assertions.</td><td>Зафиксировать behavior и regression floors.</td></tr>
+    <tr><td><code>docs/rag-quality-recommendations.md</code>, iwiki</td><td>Документирован weighted lexical retrieval и HLD result.</td><td>Синхронизировать repo docs и wiki.</td></tr>
+  </table>
+
+  <h2>Eval</h2>
+  <table>
+    <tr><th>Query</th><th>Baseline</th><th>Improved</th><th>Delta</th><th>Status</th></tr>
+    <tr><td><code>data-export-s3-clickhouse</code></td><td>0.40</td><td>0.40</td><td>+0.00</td><td class="ok">accepted</td></tr>
+    <tr><td><code>airflow-ha-balancing</code></td><td>1.00</td><td>1.00</td><td>+0.00</td><td class="ok">accepted</td></tr>
+    <tr><td><code>integrations-consumers-marts</code></td><td>0.40</td><td>0.40</td><td>+0.00</td><td class="ok">accepted</td></tr>
+    <tr><td><code>migration-gitflame</code></td><td>0.60</td><td>0.80</td><td>+0.20</td><td class="ok">accepted</td></tr>
+    <tr><td><code>ownership-components</code></td><td>0.20</td><td>0.80</td><td>+0.60</td><td class="ok">accepted</td></tr>
+  </table>
+
+  <h2>Verification</h2>
+  <table>
+    <tr><th>Проверка</th><th>Результат</th></tr>
+    <tr><td><code>node --import tsx --test tests/lexical-retrieval.test.ts tests/page-similarity-jsonl.test.ts tests/query-jsonl-index.test.ts tests/eval-jsonl-domain-storage.test.ts tests/wiki-index-jsonl.test.ts</code></td><td class="ok">17/17 pass</td></tr>
+    <tr><td><code>npx tsx scripts/eval-jsonl-domain-storage.ts ...</code></td><td class="ok">accepted, avg improved Overlap@5 0.68</td></tr>
+    <tr><td><code>npm run lint</code></td><td class="ok">0 errors</td></tr>
+    <tr><td><code>npm run build</code></td><td class="ok">pass, <code>dist/main.js</code> regenerated</td></tr>
+    <tr><td><code>wiki_lint(obsidian-ai-wiki)</code></td><td class="ok">no broken/orphan/stale/missing_source blockers; existing long-lead advisories only</td></tr>
+  </table>
+
+  <h2>Ограничения</h2>
+  <p>Dense embedding computation, retrieval settings UI, default mode, and <code>index.jsonl</code> schema не изменялись. Runtime synonym expansion не добавлялся.</p>
+</main>
+</body>
+</html>

@@ -1,27 +1,10 @@
 import { pageId } from "./wiki-graph";
-
-const STOP_WORDS = new Set([
-  // EN
-  "the", "and", "for", "are", "was", "were", "with", "that", "this", "from",
-  "have", "has", "had", "but", "not", "you", "your", "our", "their", "his",
-  "her", "its", "into", "about", "what", "which", "when", "where", "how", "here",
-  // RU
-  "что", "как", "для", "или", "это", "при", "без", "тот", "его", "она",
-  "они", "был", "была", "быть", "тоже", "также", "если", "тогда", "потом",
-  "когда", "очень", "более", "менее", "нет", "уже", "ещё", "еще",
-]);
+import { normalizeLexicalPageScore, scoreLexicalPage, tokenizeLexical } from "./lexical-retrieval";
 
 const BODY_CAP = 500;
 
 export function tokenize(s: string): Set<string> {
-  const out = new Set<string>();
-  if (!s) return out;
-  for (const raw of s.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
-    if (raw.length <= 2) continue;
-    if (STOP_WORDS.has(raw)) continue;
-    out.add(raw);
-  }
-  return out;
+  return tokenizeLexical(s);
 }
 
 function bodyContent(content: string): string {
@@ -43,15 +26,14 @@ export function scoreSeed(
   content: string,
   annotation?: string,
 ): number {
-  if (questionTokens.size === 0) return 0;
-  const p = tokenize(pageIdValue);
-  for (const t of parseFmKeywords(content)) p.add(t);
-  for (const t of tokenize(bodyContent(content))) p.add(t);
-  if (annotation) for (const t of tokenize(annotation)) p.add(t);
-  if (p.size === 0) return 0;
-  let inter = 0;
-  for (const t of questionTokens) if (p.has(t)) inter++;
-  return inter / questionTokens.size;
+  const keywords = [...parseFmKeywords(content)].join(" ");
+  return normalizeLexicalPageScore(scoreLexicalPage(questionTokens, {
+    id: pageIdValue,
+    path: pageIdValue,
+    title: pageIdValue,
+    description: [annotation, keywords].filter(Boolean).join("\n"),
+    content: bodyContent(content),
+  }).score);
 }
 
 export function selectSeeds(
@@ -70,6 +52,6 @@ export function selectSeeds(
     const score = scoreSeed(q, id, content, annotation);
     if (score >= minScore && score > 0) scored.push({ id, score });
   }
-  scored.sort((a, b) => b.score - a.score);
+  scored.sort((a, b) => (b.score - a.score) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   return scored.slice(0, topK);
 }

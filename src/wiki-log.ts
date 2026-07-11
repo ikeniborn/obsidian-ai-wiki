@@ -1,5 +1,6 @@
 import { domainLogPath } from "./wiki-path";
 import type { VaultTools } from "./vault-tools";
+import { stringifyJsonl } from "./jsonl";
 
 export interface IngestLogEntry {
   path: string;
@@ -13,44 +14,78 @@ export type LogOperation =
   | { op: "lint";   domainId: string;  fixed: string[]; checkedCount: number; outputTokens: number }
   | { op: "fix";    filePath: string;  fixed: string[]; outputTokens: number };
 
-function ts(): string {
-  return new Date().toISOString().slice(0, 19);
+export interface OperationLogRecord {
+  kind: "operation";
+  ts: string;
+  domainId: string;
+  op: string;
+  sourcePath?: string;
+  filePath?: string;
+  entries?: IngestLogEntry[];
+  fixed?: string[];
+  checkedCount?: number;
+  outputTokens?: number;
 }
 
-function buildEntry(domainId: string, event: LogOperation): string {
-  const header = `## ${ts()} — ${event.op} — ${domainId}`;
-  const lines: string[] = [header];
+export interface LegacyLogBlockRecord {
+  kind: "legacy_log_block";
+  ts?: string;
+  domainId: string;
+  text: string;
+}
 
+export function buildLogRecord(
+  domainId: string,
+  event: LogOperation,
+  timestamp = new Date().toISOString(),
+): OperationLogRecord {
   if (event.op === "ingest") {
-    lines.push(`**Source:** ${event.sourcePath}`);
-    lines.push(`**Tokens:** ${event.outputTokens}`);
-    lines.push("");
-    for (const e of event.entries) {
-      if (e.action === "CREATED") {
-        lines.push(`- CREATED: ${e.path} (${e.statusTo ?? "unknown"})`);
-      } else if (e.action === "UPDATED") {
-        const status = e.statusFrom ? `${e.statusFrom}→${e.statusTo}` : (e.statusTo ?? "unknown");
-        lines.push(`- UPDATED: ${e.path} (${status})`);
-      } else if (e.action === "MERGED") {
-        lines.push(`- MERGED: ${e.path}`);
-      } else {
-        lines.push(`- DELETED: ${e.path}`);
-      }
-    }
-  } else if (event.op === "lint") {
-    lines.push(`**Tokens:** ${event.outputTokens}`);
-    lines.push(`**Checked:** ${event.checkedCount} | **Fixed:** ${event.fixed.length}`);
-    lines.push("");
-    for (const p of event.fixed) lines.push(`- FIXED: ${p}`);
-  } else {
-    lines.push(`**File:** ${event.filePath}`);
-    lines.push(`**Tokens:** ${event.outputTokens}`);
-    lines.push("");
-    for (const p of event.fixed) lines.push(`- FIXED: ${p}`);
+    return {
+      kind: "operation",
+      ts: timestamp,
+      domainId,
+      op: event.op,
+      sourcePath: event.sourcePath,
+      entries: event.entries,
+      outputTokens: event.outputTokens,
+    };
   }
+  if (event.op === "lint") {
+    return {
+      kind: "operation",
+      ts: timestamp,
+      domainId,
+      op: event.op,
+      fixed: event.fixed,
+      checkedCount: event.checkedCount,
+      outputTokens: event.outputTokens,
+    };
+  }
+  return {
+    kind: "operation",
+    ts: timestamp,
+    domainId,
+    op: event.op,
+    filePath: event.filePath,
+    fixed: event.fixed,
+    outputTokens: event.outputTokens,
+  };
+}
 
-  lines.push("", "---");
-  return "\n" + lines.join("\n") + "\n";
+export function parseLegacyLogBlocks(markdown: string, domainId: string): LegacyLogBlockRecord[] {
+  return markdown
+    .split(/\n---\n?/g)
+    .map((text) => text.trim())
+    .filter(Boolean)
+    .map((text) => {
+      const tsMatch = text.match(/^##\s+([0-9T:-]+)/);
+      return {
+        kind: "legacy_log_block" as const,
+        ts: tsMatch?.[1],
+        domainId,
+        text,
+      };
+    });
 }
 
 export async function appendWikiLog(
@@ -62,5 +97,5 @@ export async function appendWikiLog(
   const logPath = domainLogPath(domainFolder);
   let existing = "";
   try { existing = await vaultTools.read(logPath); } catch { /* new file */ }
-  await vaultTools.write(logPath, existing + buildEntry(domainId, event));
+  await vaultTools.write(logPath, existing + stringifyJsonl([buildLogRecord(domainId, event)]));
 }

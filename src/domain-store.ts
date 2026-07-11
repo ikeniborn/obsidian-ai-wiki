@@ -1,12 +1,10 @@
 import type { Vault } from "obsidian";
 import type { DomainEntry } from "./domain";
 import { migrateDomainsV2, migrateDomainsV3 } from "./domain";
-import { WIKI_ROOT, GLOBAL_DOMAIN_PATH, GLOBAL_CONFIG_DIR } from "./wiki-path";
+import { domainEntryToMetadataRecords, parseDomainMetadata, stringifyDomainMetadata } from "./domain-metadata";
+import { WIKI_ROOT, LEGACY_GLOBAL_DOMAIN_PATH, domainMetadataPath, domainWikiFolder } from "./wiki-path";
 
-const FILE_PATH = GLOBAL_DOMAIN_PATH;
-const TMP_PATH = `${FILE_PATH}.tmp`;
 const WIKI_DIR = WIKI_ROOT;
-const CONFIG_DIR = GLOBAL_CONFIG_DIR;
 
 export class DomainCorruptError extends Error {
   constructor(message: string) {
@@ -20,13 +18,30 @@ export class DomainStore {
 
   async load(): Promise<DomainEntry[]> {
     const adapter = this.vault.adapter;
-    if (!(await adapter.exists(FILE_PATH))) return [];
-    const raw = await adapter.read(FILE_PATH);
-    let parsed: unknown;
-    try { parsed = JSON.parse(raw); }
-    catch (e) { throw new DomainCorruptError(`${FILE_PATH}: ${(e as Error).message}`); }
-    if (!Array.isArray(parsed)) throw new DomainCorruptError(`${FILE_PATH}: expected JSON array`);
-    const domains = parsed as DomainEntry[];
+    const domains: DomainEntry[] = [];
+    if (await adapter.exists(WIKI_DIR)) {
+      const listed = await adapter.list(WIKI_DIR);
+      for (const folder of [...listed.folders].sort()) {
+        const name = folder.split("/").pop() ?? folder;
+        if (name.startsWith(".") || name.startsWith("_")) continue;
+        const path = domainMetadataPath(folder);
+        if (!(await adapter.exists(path))) continue;
+        try {
+          domains.push(parseDomainMetadata(await adapter.read(path), path, name));
+        } catch (e) {
+          throw new DomainCorruptError(`${path}: ${(e as Error).message}`);
+        }
+      }
+    }
+    if (domains.length === 0 && await adapter.exists(LEGACY_GLOBAL_DOMAIN_PATH)) {
+      const raw = await adapter.read(LEGACY_GLOBAL_DOMAIN_PATH);
+      let parsed: unknown;
+      try { parsed = JSON.parse(raw); } catch (e) {
+        throw new DomainCorruptError(`${LEGACY_GLOBAL_DOMAIN_PATH}: ${(e as Error).message}`);
+      }
+      if (!Array.isArray(parsed)) throw new DomainCorruptError(`${LEGACY_GLOBAL_DOMAIN_PATH}: expected JSON array`);
+      domains.push(...parsed as DomainEntry[]);
+    }
     for (const d of domains) {
       if (d.wiki_folder?.startsWith("!Wiki/")) {
         d.wiki_folder = d.wiki_folder.slice("!Wiki/".length);
@@ -41,10 +56,14 @@ export class DomainStore {
   async save(domains: DomainEntry[]): Promise<void> {
     const adapter = this.vault.adapter;
     if (!(await adapter.exists(WIKI_DIR))) await this.vault.createFolder(WIKI_DIR).catch(() => {});
-    if (!(await adapter.exists(CONFIG_DIR))) await this.vault.createFolder(CONFIG_DIR).catch(() => {});
-    const body = JSON.stringify(domains, null, 2);
-    await adapter.write(TMP_PATH, body);
-    if (await adapter.exists(FILE_PATH)) await adapter.remove(FILE_PATH);
-    await adapter.rename(TMP_PATH, FILE_PATH);
+    for (const domain of domains) {
+      const folder = domainWikiFolder(domain.wiki_folder);
+      if (!(await adapter.exists(folder))) await this.vault.createFolder(folder).catch(() => {});
+      const path = domainMetadataPath(folder);
+      const tmpPath = `${path}.tmp`;
+      await adapter.write(tmpPath, stringifyDomainMetadata(domainEntryToMetadataRecords(domain)));
+      if (await adapter.exists(path)) await adapter.remove(path);
+      await adapter.rename(tmpPath, path);
+    }
   }
 }

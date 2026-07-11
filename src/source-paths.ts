@@ -1,4 +1,4 @@
-import { isAbsolute, join } from "path-browserify";
+import path from "path-browserify";
 import { WIKI_ROOT } from "./wiki-path";
 
 /** A vault folder is a valid domain source iff it is not the wiki output tree. */
@@ -17,7 +17,7 @@ export function consolidateSourcePaths(
   newPath: string,
   vaultRoot: string,
 ): string[] {
-  const toAbs = (p: string): string => (isAbsolute(p) ? p : join(vaultRoot, p));
+  const toAbs = (p: string): string => (path.isAbsolute(p) ? p : path.join(vaultRoot, p));
   const normed = (p: string): string => {
     const a = toAbs(p);
     return a.endsWith("/") ? a : a + "/";
