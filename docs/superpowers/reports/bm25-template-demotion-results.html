@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Итоговый отчёт — bm25-template-demotion — 2026-07-11</title>
+  <style>
+    :root {
+      --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+      --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+      --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+      --shadow:rgba(40,40,80,.18);
+    }
+    body:has(#theme-toggle:checked) {
+      --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+      --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+      --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+      --shadow:rgba(0,0,0,.45);
+    }
+    body {
+      margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1180px;
+      font:16px/1.55 system-ui, -apple-system, Segoe UI, sans-serif;
+      background:radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent), var(--bg);
+      color:var(--fg); transition:background .3s, color .3s;
+    }
+    .theme-btn { position:sticky; top:.5rem; float:right; cursor:pointer; user-select:none; padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface); }
+    header, section { background:var(--surface); border:1px solid var(--border); border-radius:8px; box-shadow:0 8px 24px var(--shadow); margin:0 0 1rem; padding:1rem 1.25rem; }
+    h1, h2, h3 { line-height:1.2; margin:.2rem 0 .75rem; }
+    h1 { font-size:1.8rem; }
+    h2 { color:var(--accent-2); font-size:1.25rem; }
+    h3 { font-size:1rem; }
+    p { margin:.45rem 0; }
+    code { background:color-mix(in srgb,var(--accent) 10%, var(--surface)); border:1px solid var(--border); border-radius:4px; padding:.05rem .25rem; }
+    table { width:100%; border-collapse:collapse; margin:.75rem 0; font-size:.94rem; }
+    th, td { border:1px solid var(--border); padding:.45rem .55rem; text-align:left; vertical-align:top; }
+    th { background:color-mix(in srgb,var(--accent) 14%, var(--surface)); }
+    tr:nth-child(even) td { background:var(--zebra); }
+    details { border:1px solid var(--border); border-radius:6px; padding:.55rem .7rem; margin:.7rem 0; background:color-mix(in srgb,var(--accent) 6%, var(--surface)); }
+    summary { cursor:pointer; font-weight:700; }
+    .badge { display:inline-block; border-radius:999px; padding:.1rem .5rem; font-weight:700; border:1px solid currentColor; }
+    .ok { color:var(--ok-2); }
+    .warn { color:var(--warn-2); }
+    .muted { color:var(--muted); }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:.75rem; }
+    .card { border:1px solid var(--border); border-radius:8px; padding:.75rem; background:color-mix(in srgb,var(--accent) 5%, var(--surface)); }
+  </style>
+</head>
+<body>
+  <input type="checkbox" id="theme-toggle" hidden>
+  <label for="theme-toggle" class="theme-btn" title="Переключить тему">Тема</label>
+  <header>
+    <h1>Итоговый отчёт — bm25-template-demotion — 2026-07-11</h1>
+    <p><span class="badge ok">OK</span> Eval-only controlled boilerplate demotion реализован, проверен на HLD corpus и зафиксирован в repo docs + iwiki.</p>
+    <p class="muted">Источник проверки: `origin/master...HEAD`, план `docs/superpowers/plans/2026-07-11-bm25-template-demotion.md`, plan_hash `df6d57f4d24b4049`.</p>
+  </header>
+
+  <main>
+    <section id="summary">
+      <h2>Краткий итог</h2>
+      <p>Цель была проверить BM25 глубже и добавить controlled demotion для boilerplate/template pages без изменения runtime Query. Реализация осталась eval-only: добавлены helper-функции, demoted variants, guard reasons, report sections и live HLD comparison.</p>
+      <p>Live HLD eval: 61 markdown files, 61 page records, 442 chunk records. Лучший вариант — `weighted-lexical-demoted` с factor `0.15`: `Recall@5 = 0.76`, `nDCG@5 = 0.92`, `MRR = 1.00`, average `Overlap@5 = 0.68`. Цель `avg Overlap@5 >= 0.65` выполнена.</p>
+      <p>Raw BM25/RRF не обогнали weighted lexical. Controlled demotion factor `0.15` дал небольшой nDCG gain без Recall/MRR regression; stronger factors начали валить legacy-overlap guards.</p>
+    </section>
+
+    <section id="anchors">
+      <h2>Source anchors</h2>
+      <table>
+        <tr><th>Тип</th><th>Артефакт</th><th>Смысл</th></tr>
+        <tr><td>intent</td><td>`docs/superpowers/intents/2026-07-11-bm25-template-demotion-intent.md`</td><td>Outcome thresholds: `nDCG@5 > 0.91` или `Recall@5 > 0.76`, `Overlap@5 >= 0.65`, `MRR >= 0.90`, no top-1 boilerplate.</td></tr>
+        <tr><td>spec</td><td>`docs/superpowers/specs/2026-07-11-bm25-template-demotion-design.md`</td><td>Выбран Option A: eval-only demotion variants, runtime unchanged.</td></tr>
+        <tr><td>plan</td><td>`docs/superpowers/plans/2026-07-11-bm25-template-demotion.md`</td><td>4 задачи: helpers, variants/report, live eval/docs/wiki, verification/push.</td></tr>
+        <tr><td>result</td><td>`docs/superpowers/evals/jsonl-domain-storage-hld-eval.md`</td><td>Accepted report with best variant `weighted-lexical-demoted`, factor `0.15`.</td></tr>
+      </table>
+    </section>
+
+    <section id="intent">
+      <h2>Цепочка результатов</h2>
+      <div class="grid">
+        <div class="card"><h3>Проблема</h3><p>Legacy overlap иногда удерживает `template-*` страницы, не релевантные gold set.</p></div>
+        <div class="card"><h3>Решение</h3><p>Eval-only controlled demotion + BM25/RRF A/B comparison.</p></div>
+        <div class="card"><h3>Критерии</h3><p>`Overlap@5 >= 0.65`, `MRR >= 0.90`, no top-1 boilerplate, no floor regression.</p></div>
+        <div class="card"><h3>Факт</h3><p>`weighted-lexical-demoted` factor `0.15` принят, runtime Query не изменён.</p></div>
+      </div>
+      <h3>Матрица ограничений</h3>
+      <table>
+        <tr><th>Ограничение</th><th>Статус</th><th>Доказательство</th></tr>
+        <tr><td>Не менять runtime Query</td><td class="ok">Выполнено</td><td>Diff только в eval harness, tests, docs, chain artifacts.</td></tr>
+        <tr><td>`Overlap@5 >= 0.65`</td><td class="ok">Выполнено</td><td>Live report: average improved `Overlap@5 = 0.68`.</td></tr>
+        <tr><td>`MRR >= 0.90`</td><td class="ok">Выполнено</td><td>Best variant `MRR = 1.00`.</td></tr>
+        <tr><td>No top-1 boilerplate</td><td class="ok">Выполнено</td><td>Aggregate table: best variant top-1 boilerplate `no`.</td></tr>
+      </table>
+    </section>
+
+    <section id="spec">
+      <h2>Карта покрытия требований</h2>
+      <table>
+        <tr><th>Требование spec</th><th>Реализация</th><th>Проверка</th></tr>
+        <tr><td>Boilerplate detection for `template-readme` / `template-hld-*`</td><td>`isBoilerplatePathForEval`</td><td>Focused helper test passed.</td></tr>
+        <tr><td>Rank-level demotion factors `0.15`, `0.25`, `0.35`, `0.50`</td><td>`demoteBoilerplateTopForEval`, demoted variant sweep</td><td>Report includes factor rows and guard reasons.</td></tr>
+        <tr><td>Top-1 boilerplate guard + MRR floor</td><td>`toVariantMetrics`, aggregate acceptance, best-variant selection</td><td>Best variant accepted; BM25 page rejected for top-1 boilerplate.</td></tr>
+        <tr><td>Explain BM25 and demotion contribution</td><td>Report sections `BM25 contribution` and `Demotion contribution`</td><td>Synthetic and live reports contain sections.</td></tr>
+      </table>
+      <h3>Граф компонентов</h3>
+      <p>В источнике достаточно структуры для компактной матрицы; кодовые границы не меняли runtime modules.</p>
+      <table>
+        <tr><th>Компонент</th><th>Роль</th><th>Граница</th></tr>
+        <tr><td>`scripts/eval-jsonl-domain-storage.ts`</td><td>Eval orchestration, variants, report</td><td>Изменён</td></tr>
+        <tr><td>`src/bm25.ts`</td><td>Existing BM25 scorer</td><td>Не изменён</td></tr>
+        <tr><td>`src/lexical-retrieval.ts`</td><td>Existing weighted lexical baseline</td><td>Не изменён</td></tr>
+        <tr><td>Runtime Query</td><td>User-facing retrieval</td><td>Не изменён</td></tr>
+      </table>
+    </section>
+
+    <section id="plan">
+      <h2>Граф шагов</h2>
+      <table>
+        <tr><th>Шаг</th><th>Зависимость</th><th>Статус</th><th>Evidence</th></tr>
+        <tr><td>Task 1: helpers + unit tests</td><td>Начало</td><td class="ok">DONE</td><td>Commit `7320d21`, focused test passed.</td></tr>
+        <tr><td>Task 2: variants, guards, report fields</td><td>Task 1</td><td class="ok">DONE</td><td>Commit `07598a8`, focused test passed.</td></tr>
+        <tr><td>Task 3: live eval, docs, wiki</td><td>Task 2</td><td class="ok">DONE</td><td>Commit `2fbccc1`, iwiki `jsonl-domain-storage` updated, `wiki_lint` clean for broken/orphan/stale.</td></tr>
+        <tr><td>Task 4: verification, result gate, push</td><td>Task 3</td><td class="ok">DONE</td><td>Focused suite 25/25, `npm run lint`, `npm run build` passed; result report generated.</td></tr>
+      </table>
+    </section>
+
+    <section id="result">
+      <h2>Граф сверки diff</h2>
+      <table>
+        <tr><th>Path</th><th>Изменение</th><th>Причина</th><th>Результат</th><th>Evidence</th></tr>
+        <tr><td>`scripts/eval-jsonl-domain-storage.ts`</td><td>Добавлены demotion helpers, demoted variants, factor sweep, guard reasons, report fields, relaxed MRR policy `>= 0.90`.</td><td>Проверить BM25/demotion без runtime change.</td><td>Accepted best variant factor `0.15`.</td><td>Focused suite 25/25; live report accepted.</td></tr>
+        <tr><td>`tests/eval-jsonl-domain-storage.test.ts`</td><td>Добавлены helper tests и report assertions.</td><td>TDD guard for new eval behavior.</td><td>Tests catch missing demotion/report output.</td><td>`node --import tsx --test ...` passed.</td></tr>
+        <tr><td>`docs/superpowers/evals/jsonl-domain-storage-hld-eval.md`</td><td>Regenerated live report with demotion factors and contribution sections.</td><td>Зафиксировать сравнение на HLD corpus.</td><td>Verdict `accepted`, recommendation `candidate: 0.15`.</td><td>Report header and variants table.</td></tr>
+        <tr><td>`docs/rag-quality-recommendations.md`</td><td>Обновлён вывод по BM25/demotion.</td><td>Убрать stale `needs_tuning` рекомендацию.</td><td>Docs match accepted eval result.</td><td>Repo diff + iwiki update.</td></tr>
+        <tr><td>`docs/superpowers/intents/...`</td><td>Добавлен approved intent.</td><td>IDD gate.</td><td>Intent passed.</td><td>Review frontmatter all phases passed.</td></tr>
+        <tr><td>`docs/superpowers/specs/...`</td><td>Добавлен approved design.</td><td>SDD gate.</td><td>Spec passed.</td><td>Review frontmatter all phases passed.</td></tr>
+        <tr><td>`docs/superpowers/plans/...`</td><td>Добавлен plan and result_check.</td><td>Execution + merge gate.</td><td>Plan/result OK.</td><td>`result_check.verdict: OK`.</td></tr>
+        <tr><td>`docs/TODO.md`</td><td>Закрыта строка `bm25-template-demotion`.</td><td>Task log convention.</td><td>Status `done`.</td><td>TODO row updated.</td></tr>
+        <tr><td>`docs/superpowers/reports/bm25-template-demotion-results.html`</td><td>Создан финальный result report.</td><td>check-chain result artifact.</td><td>Self-contained closeout.</td><td>Этот файл.</td></tr>
+      </table>
+    </section>
+
+    <section id="verification">
+      <h2>Карта проверок</h2>
+      <table>
+        <tr><th>Команда</th><th>Результат</th><th>Замечания</th></tr>
+        <tr><td>`node --import tsx --test tests/eval-jsonl-domain-storage.test.ts`</td><td class="ok">5/5 pass</td><td>Focused eval harness test after Task 2.</td></tr>
+        <tr><td>`node --import tsx scripts/eval-jsonl-domain-storage.ts --source ... --out docs/superpowers/evals/jsonl-domain-storage-hld-eval.md --eval-root .jsonl-domain-storage-hld-eval`</td><td class="ok">pass</td><td>Live HLD report generated, temporary eval root removed.</td></tr>
+        <tr><td>`node --import tsx --test tests/bm25.test.ts tests/retrieval-eval-metrics.test.ts tests/eval-jsonl-domain-storage.test.ts tests/lexical-retrieval.test.ts tests/wiki-index-jsonl.test.ts`</td><td class="ok">25/25 pass</td><td>Focused regression suite.</td></tr>
+        <tr><td>`npm run lint`</td><td class="ok">pass</td><td>4 existing warnings in unrelated files, 0 errors.</td></tr>
+        <tr><td>`npm run build`</td><td class="ok">pass</td><td>`dist/` updated by build, no git diff remained.</td></tr>
+        <tr><td>`wiki_lint(domain=obsidian-ai-wiki)`</td><td class="ok">pass for broken/orphan/stale</td><td>Only pre-existing advisory `long_lead` findings on other pages.</td></tr>
+      </table>
+    </section>
+
+    <section id="review">
+      <h2>Карта замечаний code review</h2>
+      <table>
+        <tr><th>Область</th><th>Проверенный риск</th><th>Вывод</th></tr>
+        <tr><td>Acceptance policy</td><td>Старое правило `MRR` no-regression могло блокировать допустимое `MRR >= 0.90`.</td><td class="ok">Исправлено: best variant требует `MRR >= 0.90` и improvement по `Recall@5`/`nDCG@5`.</td></tr>
+        <tr><td>Runtime boundary</td><td>Случайное изменение Query/runtime settings.</td><td class="ok">Не изменялись runtime files; демotion только eval-only.</td></tr>
+        <tr><td>Boilerplate detection</td><td>Overmatch обычных страниц со словом template.</td><td class="ok">Helper matches only basename `template-readme` and prefix `template-hld-`.</td></tr>
+        <tr><td>Docs consistency</td><td>Старые docs/wiki могли остаться с `needs_tuning`.</td><td class="ok">Repo docs и iwiki updated.</td></tr>
+      </table>
+    </section>
+
+    <section id="documentation">
+      <h2>Карта документационных свидетельств</h2>
+      <table>
+        <tr><th>Изменение поведения/архитектуры</th><th>Документация</th><th>Статус</th></tr>
+        <tr><td>Eval harness now compares demoted variants and reports recommendation.</td><td>`docs/rag-quality-recommendations.md`, `docs/superpowers/evals/jsonl-domain-storage-hld-eval.md`</td><td class="ok">Обновлено.</td></tr>
+        <tr><td>iwiki project knowledge for JSONL storage eval.</td><td>`obsidian-ai-wiki/jsonl-domain-storage`, heading `Eval`</td><td class="ok">Обновлено через `wiki_update_page`.</td></tr>
+        <tr><td>Task log state.</td><td>`docs/TODO.md`</td><td class="ok">Закрыто как `done`.</td></tr>
+      </table>
+      <p class="muted">`wiki_lint`: broken `[]`, orphans `[]`, stale `[]`; advisory `long_lead` остались на ранее существующих страницах и не блокируют результат.</p>
+    </section>
+
+    <section id="decisions">
+      <h2>Карта распространения решений</h2>
+      <table>
+        <tr><th>Решение</th><th>Куда перенесено</th><th>Результат</th></tr>
+        <tr><td>Eval-only scope, runtime Query unchanged.</td><td>Intent, spec, plan, implementation diff.</td><td class="ok">Соблюдено.</td></tr>
+        <tr><td>`MRR = 1.00` не держим как жесткий no-regression; floor `MRR >= 0.90`.</td><td>Intent metric, spec acceptance gate, implementation best-variant logic, wiki Eval section.</td><td class="ok">Соблюдено.</td></tr>
+        <tr><td>Candidate setting value only after eval.</td><td>Report recommendation and docs: factor `0.15` candidate for later runtime/plugin setting.</td><td class="ok">Runtime setting пока не добавлен.</td></tr>
+      </table>
+    </section>
+
+    <section id="verdict">
+      <h2>Финальный verdict</h2>
+      <p><span class="badge ok">OK</span> План выполнен полностью, открытых CRITICAL/WARNING findings по текущему diff нет. Реализация соответствует intent/spec/plan: BM25 проверен, controlled demotion добавлен в harness, live eval принят, docs/wiki обновлены, проверки прошли.</p>
+      <details>
+        <summary>Краткие метрики live eval</summary>
+        <table>
+          <tr><th>Метрика</th><th>До</th><th>После</th></tr>
+          <tr><td>Best variant</td><td>`weighted-lexical`</td><td>`weighted-lexical-demoted`</td></tr>
+          <tr><td>Factor</td><td>`-`</td><td>`0.15`</td></tr>
+          <tr><td>`Recall@5`</td><td>`0.76`</td><td>`0.76`</td></tr>
+          <tr><td>`nDCG@5`</td><td>`0.91`</td><td>`0.92`</td></tr>
+          <tr><td>`MRR`</td><td>`1.00`</td><td>`1.00`</td></tr>
+          <tr><td>`Overlap@5`</td><td>`0.68`</td><td>`0.68`</td></tr>
+        </table>
+      </details>
+    </section>
+  </main>
+</body>
+</html>

@@ -12,6 +12,12 @@ review:
 chain:
   intent: docs/superpowers/intents/2026-07-11-bm25-template-demotion-intent.md
   spec: docs/superpowers/specs/2026-07-11-bm25-template-demotion-design.md
+result_check:
+  verdict: OK
+  plan_hash: df6d57f4d24b4049
+  last_run: 2026-07-11
+  reviewed: true
+  docs_checked: true
 ---
 # BM25 Template Demotion Implementation Plan
 

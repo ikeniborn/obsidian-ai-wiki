@@ -9,4 +9,4 @@
 | jsonl-domain-storage | done | ✓ | ✓ | ✓ | OK | 2026-07-10 | 2026-07-11 | JSONL storage/migration/query implemented; HLD eval live retrieval accepted |
 | lexical-retrieval-quality | done | ✓ | ✓ | ✓ | OK | 2026-07-11 | 2026-07-11 | Weighted lexical scorer for eval harness and runtime Query fallback; HLD avg Overlap@5 0.68 |
 | gold-bm25-eval-harness | done | ✓ | ✓ | ✓ | OK | 2026-07-11 | 2026-07-11 | Curated HLD gold set plus offline BM25/RRF A/B harness; live verdict needs_tuning for BM25/RRF variants |
-| bm25-template-demotion | in-progress | ✓ | ✓ | ✓ | – | 2026-07-11 |  | BM25 retest plus controlled boilerplate/template demotion |
+| bm25-template-demotion | done | ✓ | ✓ | ✓ | OK | 2026-07-11 | 2026-07-11 | BM25 retest plus controlled boilerplate/template demotion |
