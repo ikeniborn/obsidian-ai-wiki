@@ -439,6 +439,19 @@ function variantGoldMetrics(metrics: VariantMetrics): GoldMetrics {
   return { recallAtK: metrics.recallAt5, ndcgAtK: metrics.ndcgAt5, mrr: metrics.mrr };
 }
 
+function goldGradeByPath(query: QueryEvalResult): Map<string, number> {
+  return new Map(query.goldLabels.map((label) => [label.path, label.grade]));
+}
+
+function formatPathWithGold(pathValue: string, grades: Map<string, number>): string {
+  const grade = grades.get(pathValue);
+  return grade === undefined ? `\`${pathValue}\` (gold grade 0)` : `\`${pathValue}\` (gold grade ${grade})`;
+}
+
+function signed(value: number): string {
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}`;
+}
+
 function rebalanceFusedTop(
   fusedPaths: string[],
   pagePaths: string[],
@@ -783,6 +796,8 @@ function renderReport(result: HldEvalResult): string {
   lines.push("");
   lines.push("## Queries");
   for (const query of result.queries) {
+    const grades = goldGradeByPath(query);
+    const weighted = query.variants.find((variant) => variant.id === "weighted-lexical");
     lines.push(`### ${query.id}`);
     lines.push(`Theme: ${query.theme}`);
     lines.push(`Question: ${query.question}`);
@@ -791,19 +806,30 @@ function renderReport(result: HldEvalResult): string {
     lines.push(`Baseline Overlap@5: ${query.baselineOverlapAt5.toFixed(2)}`);
     lines.push(`Improved Overlap@5: ${query.improvedOverlapAt5.toFixed(2)}`);
     lines.push(`Delta: ${query.overlapDelta >= 0 ? "+" : ""}${query.overlapDelta.toFixed(2)}`);
+    lines.push("Gold labels:");
+    for (const label of query.goldLabels) {
+      lines.push(`- ${formatPathWithGold(label.path, grades)}`);
+    }
     lines.push("Baseline top:");
-    for (const item of query.baselineTop) lines.push(`- \`${item}\``);
+    for (const item of query.baselineTop) lines.push(`- ${formatPathWithGold(item, grades)}`);
     lines.push("Legacy JSONL retrieval top:");
-    for (const item of query.legacyJsonlTop) lines.push(`- \`${item}\``);
+    for (const item of query.legacyJsonlTop) lines.push(`- ${formatPathWithGold(item, grades)}`);
     lines.push("Improved page top:");
-    for (const item of query.improvedPageTop) lines.push(`- \`${item}\``);
+    for (const item of query.improvedPageTop) lines.push(`- ${formatPathWithGold(item, grades)}`);
     lines.push("Improved chunk top:");
-    for (const item of query.improvedChunkTop) lines.push(`- \`${item}\``);
+    for (const item of query.improvedChunkTop) lines.push(`- ${formatPathWithGold(item, grades)}`);
     lines.push("JSONL retrieval top:");
-    for (const item of query.jsonlTop) lines.push(`- \`${item}\``);
+    for (const item of query.jsonlTop) lines.push(`- ${formatPathWithGold(item, grades)}`);
     lines.push("Variants:");
     for (const variant of query.variants) {
       lines.push(`- \`${variant.id}\`: Recall@5 ${variant.metrics.recallAt5.toFixed(2)}, nDCG@5 ${variant.metrics.ndcgAt5.toFixed(2)}, MRR ${variant.metrics.mrr.toFixed(2)}, LegacyOverlap@5 ${variant.metrics.legacyOverlapAt5.toFixed(2)}, accepted ${variant.metrics.accepted ? "yes" : "no"}`);
+      for (const item of variant.top) lines.push(`  - ${formatPathWithGold(item, grades)}`);
+    }
+    if (weighted) {
+      lines.push("Variants vs weighted-lexical:");
+      for (const variant of query.variants.filter((item) => item.id !== "weighted-lexical")) {
+        lines.push(`- \`${variant.id}\`: ΔRecall@5 ${signed(variant.metrics.recallAt5 - weighted.metrics.recallAt5)}, ΔnDCG@5 ${signed(variant.metrics.ndcgAt5 - weighted.metrics.ndcgAt5)}, ΔMRR ${signed(variant.metrics.mrr - weighted.metrics.mrr)}, ΔLegacyOverlap@5 ${signed(variant.metrics.legacyOverlapAt5 - weighted.metrics.legacyOverlapAt5)}`);
+      }
     }
     lines.push("Top chunks:");
     for (const chunk of query.chunkTop) {

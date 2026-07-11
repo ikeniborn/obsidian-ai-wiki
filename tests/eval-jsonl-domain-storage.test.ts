@@ -64,6 +64,10 @@ test("HLD eval builds isolated JSONL domain and runs five live retrieval queries
     assert.match(report, /## Retrieval variants/);
     assert.match(report, /Average improved Overlap@5:/);
     assert.match(report, /Aggregate gold nDCG@5:/);
+    assert.match(report, /Gold labels:/);
+    assert.match(report, /gold grade 3/);
+    assert.match(report, /Variants vs weighted-lexical:/);
+    assert.match(report, /ΔnDCG@5/);
     assert.match(report, /Baseline Overlap@5:/);
     assert.match(report, /Improved Overlap@5:/);
     assert.match(report, /Delta:/);
