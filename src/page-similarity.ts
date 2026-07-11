@@ -1,5 +1,5 @@
-import { requestUrl } from "obsidian";
 import { tokenize, scoreSeed } from "./wiki-seeds";
+import { scoreLexicalChunk } from "./lexical-retrieval";
 import { pageId } from "./wiki-graph";
 import type { VaultTools } from "./vault-tools";
 import { domainIndexPath, legacyDomainEmbeddingsPath } from "./wiki-path";
@@ -340,7 +340,14 @@ function sortSelectedChunks(items: SelectedChunk[]): SelectedChunk[] {
 function rankChunksJaccard(queryTokens: Set<string>, sections: CandidateSection[], limit: number): SelectedChunk[] {
   const scored: SelectedChunk[] = [];
   for (const section of sections) {
-    const score = jaccardCoeff(queryTokens, tokenize(section.embedText));
+    const score = scoreLexicalChunk(queryTokens, {
+      articleId: section.articleId,
+      path: section.path,
+      heading: section.heading,
+      body: section.body,
+      embedText: section.embedText,
+      ordinal: section.ordinal,
+    }).score;
     if (score <= 0) continue;
     scored.push({
       articleId: section.articleId,
@@ -409,6 +416,7 @@ async function fetchEmbeddings(
   inputs: string[],
   dimensions?: number,
 ): Promise<Float32Array[]> {
+  const { requestUrl } = await import("obsidian");
   const url = `${baseUrl.replace(/\/$/, "")}/embeddings`;
   // Send `dimensions` (OpenAI-standard MRL truncation) when configured, so the whole
   // pipeline and the probe agree on the requested size. Models that don't support it
