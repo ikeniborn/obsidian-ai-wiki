@@ -345,6 +345,30 @@ function uniqueTop(paths: string[], limit: number): string[] {
   return out;
 }
 
+export function isBoilerplatePathForEval(vaultPath: string): boolean {
+  const name = path.basename(vaultPath, ".md").toLowerCase();
+  return name === "template-readme" || name.startsWith("template-hld-");
+}
+
+export function demoteBoilerplateTopForEval(
+  rankedPaths: string[],
+  factor: number,
+  limit: number,
+): string[] {
+  if (limit <= 0) return [];
+  const strength = Math.max(0, Math.min(1, factor));
+  const penalty = Math.max(1, Math.ceil(strength * limit * 2));
+  return uniqueTop(rankedPaths, rankedPaths.length)
+    .map((pathValue, index) => ({
+      path: pathValue,
+      index,
+      adjusted: index + (isBoilerplatePathForEval(pathValue) ? penalty : 0),
+    }))
+    .sort((a, b) => (a.adjusted - b.adjusted) || (a.index - b.index))
+    .map((item) => item.path)
+    .slice(0, limit);
+}
+
 function overlapRatio(a: string[], b: string[], limit: number): number {
   const left = new Set(a.slice(0, limit));
   const right = b.slice(0, limit);
