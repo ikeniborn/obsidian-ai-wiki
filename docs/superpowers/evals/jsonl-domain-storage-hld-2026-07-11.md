@@ -16,7 +16,7 @@ Aggregate verdict: `accepted`
 Theme: data export / S3 / ClickHouse
 Question: Какие HLD описывают экспорт данных через S3 или ClickHouse и какие компоненты участвуют?
 Status: accepted
-Latency: 56 ms
+Latency: 54 ms
 Overlap@5: 0.40
 Baseline top:
 - `!Wiki/hld-jsonl-eval/pages/сип-саммари-siplr-564-datadev-803.md`
@@ -41,7 +41,7 @@ Top chunks:
 Theme: Airflow HA / balancing
 Question: Где описана отказоустойчивая архитектура Airflow и какие решения по балансировке указаны?
 Status: accepted
-Latency: 48 ms
+Latency: 42 ms
 Overlap@5: 1.00
 Baseline top:
 - `!Wiki/hld-jsonl-eval/pages/rt-dataexporter-airflow-ha-architecture-v1.md`
@@ -66,7 +66,7 @@ Top chunks:
 Theme: integrations / consumers / data marts
 Question: Какие документы описывают интеграции потребителей с витринными БД или дата-мартами?
 Status: accepted
-Latency: 41 ms
+Latency: 47 ms
 Overlap@5: 0.40
 Baseline top:
 - `!Wiki/hld-jsonl-eval/pages/template-hld-v2-standard.md`
@@ -91,7 +91,7 @@ Top chunks:
 Theme: source-system migration / GitFlame
 Question: Что известно о миграции на GitFlame и связанных архитектурных ограничениях?
 Status: accepted
-Latency: 46 ms
+Latency: 43 ms
 Overlap@5: 0.60
 Baseline top:
 - `!Wiki/hld-jsonl-eval/pages/rt-widestore-технический-план-миграции-кластера-clickhouse-через-бэкап.md`
@@ -116,7 +116,7 @@ Top chunks:
 Theme: architecture ownership / components
 Question: Какие HLD фиксируют состав архитектурных компонентов и зоны ответственности проектов?
 Status: accepted
-Latency: 42 ms
+Latency: 55 ms
 Overlap@5: 0.20
 Baseline top:
 - `!Wiki/hld-jsonl-eval/pages/template-readme.md`
