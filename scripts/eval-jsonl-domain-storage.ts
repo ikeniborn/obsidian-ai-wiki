@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { access, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { buildBm25Index, rankBm25, tokenizeBm25 } from "../src/bm25";
 import { domainEntryToMetadataRecords, stringifyDomainMetadata } from "../src/domain-metadata";
 import { stringifyJsonl } from "../src/jsonl";
 import {
@@ -10,6 +11,8 @@ import {
   rankLexicalChunks,
   rankLexicalPages,
 } from "../src/lexical-retrieval";
+import { scoreGoldRanking, validateGoldSet, type GoldLabel, type GoldMetrics, type GoldSet } from "../src/retrieval-eval-metrics";
+import { rrf } from "../src/rrf";
 import { tokenize } from "../src/wiki-seeds";
 import { pageId } from "../src/wiki-graph";
 import {
@@ -24,6 +27,12 @@ import {
 
 export type EvalVerdict = "accepted" | "needs_tuning" | "rejected";
 export type QueryEvalStatus = "accepted" | "needs_tuning" | "rejected";
+export type RetrievalVariantId =
+  | "weighted-lexical"
+  | "bm25-page"
+  | "bm25-chunk"
+  | "rrf-weighted-bm25"
+  | "rrf-weighted-bm25-legacy";
 
 export interface HldQuery {
   id: string;
@@ -41,6 +50,22 @@ export interface RunHldEvalOptions {
   source: string;
   outPath: string;
   evalRoot?: string;
+  goldPath?: string;
+}
+
+export interface VariantMetrics {
+  id: RetrievalVariantId;
+  recallAt5: number;
+  ndcgAt5: number;
+  mrr: number;
+  legacyOverlapAt5: number;
+  accepted: boolean;
+}
+
+export interface QueryVariantResult {
+  id: RetrievalVariantId;
+  top: string[];
+  metrics: VariantMetrics;
 }
 
 export interface QueryEvalResult extends HldQuery {
@@ -55,6 +80,8 @@ export interface QueryEvalResult extends HldQuery {
   improvedOverlapAt5: number;
   overlapDelta: number;
   overlapAt5: number;
+  goldLabels: Array<{ path: string; grade: number }>;
+  variants: QueryVariantResult[];
   latencyMs: number;
 }
 
@@ -71,6 +98,10 @@ export interface HldEvalResult {
   verdict: EvalVerdict;
   queries: QueryEvalResult[];
   averageImprovedOverlapAt5: number;
+  bestVariant: RetrievalVariantId;
+  variantMetrics: VariantMetrics[];
+  aggregateGoldMetrics: GoldMetrics;
+  weightedLexicalGoldMetrics: GoldMetrics;
   regressions: string[];
   reportPath: string;
 }
@@ -323,6 +354,91 @@ function overlapRatio(a: string[], b: string[], limit: number): number {
   return overlap / Math.min(limit, left.size);
 }
 
+function toVariantMetrics(
+  id: RetrievalVariantId,
+  labels: GoldLabel[],
+  top: string[],
+  baselineTop: string[],
+  currentFloor: number,
+): VariantMetrics {
+  const gold = scoreGoldRanking(labels, top, 5);
+  const legacyOverlapAt5 = overlapRatio(baselineTop, top, 5);
+  return {
+    id,
+    recallAt5: gold.recallAtK,
+    ndcgAt5: gold.ndcgAtK,
+    mrr: gold.mrr,
+    legacyOverlapAt5,
+    accepted: legacyOverlapAt5 >= currentFloor,
+  };
+}
+
+function averageGoldMetrics(metrics: GoldMetrics[]): GoldMetrics {
+  if (metrics.length === 0) return { recallAtK: 0, ndcgAtK: 0, mrr: 0 };
+  return {
+    recallAtK: metrics.reduce((sum, item) => sum + item.recallAtK, 0) / metrics.length,
+    ndcgAtK: metrics.reduce((sum, item) => sum + item.ndcgAtK, 0) / metrics.length,
+    mrr: metrics.reduce((sum, item) => sum + item.mrr, 0) / metrics.length,
+  };
+}
+
+function aggregateVariantMetrics(queries: QueryEvalResult[]): VariantMetrics[] {
+  const ids: RetrievalVariantId[] = [
+    "weighted-lexical",
+    "bm25-page",
+    "bm25-chunk",
+    "rrf-weighted-bm25",
+    "rrf-weighted-bm25-legacy",
+  ];
+  return ids.map((id) => {
+    const variants = queries.map((query) => query.variants.find((variant) => variant.id === id)).filter((variant): variant is QueryVariantResult => Boolean(variant));
+    if (variants.length === 0) {
+      return { id, recallAt5: 0, ndcgAt5: 0, mrr: 0, legacyOverlapAt5: 0, accepted: false };
+    }
+    return {
+      id,
+      recallAt5: variants.reduce((sum, item) => sum + item.metrics.recallAt5, 0) / variants.length,
+      ndcgAt5: variants.reduce((sum, item) => sum + item.metrics.ndcgAt5, 0) / variants.length,
+      mrr: variants.reduce((sum, item) => sum + item.metrics.mrr, 0) / variants.length,
+      legacyOverlapAt5: variants.reduce((sum, item) => sum + item.metrics.legacyOverlapAt5, 0) / variants.length,
+      accepted: variants.length === queries.length && variants.every((variant) => variant.metrics.accepted),
+    };
+  });
+}
+
+function isNoWorse(candidate: VariantMetrics, baseline: VariantMetrics): boolean {
+  const epsilon = 1e-9;
+  return candidate.recallAt5 + epsilon >= baseline.recallAt5 &&
+    candidate.ndcgAt5 + epsilon >= baseline.ndcgAt5 &&
+    candidate.mrr + epsilon >= baseline.mrr;
+}
+
+function improvesAny(candidate: VariantMetrics, baseline: VariantMetrics): boolean {
+  const epsilon = 1e-9;
+  return candidate.recallAt5 > baseline.recallAt5 + epsilon ||
+    candidate.ndcgAt5 > baseline.ndcgAt5 + epsilon ||
+    candidate.mrr > baseline.mrr + epsilon;
+}
+
+function chooseBestVariant(variants: VariantMetrics[]): VariantMetrics {
+  const weighted = variants.find((variant) => variant.id === "weighted-lexical") ?? variants[0];
+  const weightedPerfect = weighted.recallAt5 === 1 && weighted.ndcgAt5 === 1 && weighted.mrr === 1;
+  const candidates = variants.filter((variant) =>
+    variant.accepted && isNoWorse(variant, weighted) && (weightedPerfect || variant.id === "weighted-lexical" || improvesAny(variant, weighted))
+  );
+  const pool = candidates.length > 0 ? candidates : [weighted];
+  return [...pool].sort((a, b) =>
+    (b.ndcgAt5 - a.ndcgAt5) ||
+    (b.recallAt5 - a.recallAt5) ||
+    (b.mrr - a.mrr) ||
+    a.id.localeCompare(b.id)
+  )[0];
+}
+
+function variantGoldMetrics(metrics: VariantMetrics): GoldMetrics {
+  return { recallAtK: metrics.recallAt5, ndcgAtK: metrics.ndcgAt5, mrr: metrics.mrr };
+}
+
 function rebalanceFusedTop(
   fusedPaths: string[],
   pagePaths: string[],
@@ -483,19 +599,44 @@ function argValue(args: string[], flag: string): string | undefined {
   return i === -1 ? undefined : args[i + 1];
 }
 
-async function runQueries(files: SourceMarkdownFile[], indexPath: string): Promise<QueryEvalResult[]> {
+async function runQueries(files: SourceMarkdownFile[], indexPath: string, gold: GoldSet): Promise<QueryEvalResult[]> {
   const indexText = await readFile(indexPath, "utf8");
   const index = parseWikiIndexJsonl(indexText, indexPath);
   const pageRecords = index.filter(isPageIndexRecord);
   const annotations = new Map(pageRecords.map((record) => [record.articleId, record.description]));
   const allPaths = pageRecords.map((record) => record.path);
+  const pathByArticleId = new Map(pageRecords.map((record) => [record.articleId, record.path]));
   const chunkRecordKeys = new Set(index
     .filter(isChunkIndexRecord)
     .map((record) => `${record.articleId}:${record.ordinal}`));
+  const chunkInputs = files
+    .flatMap((file) => splitEvalSections(file.content).map((section) => {
+      const articleId = pageId(file.vaultPath);
+      if (!chunkRecordKeys.has(`${articleId}:${section.ordinal}`)) return null;
+      return {
+        articleId,
+        path: file.vaultPath,
+        heading: section.heading,
+        body: section.window,
+        embedText: `${section.heading}\n${section.window}`.trim(),
+        ordinal: section.ordinal,
+      };
+    }).filter((item): item is NonNullable<typeof item> => item !== null));
+  const chunkDocId = (articleId: string, ordinal: number): string => `${articleId}\u0000${ordinal}`;
+  const bm25PageIndex = buildBm25Index(pageRecords.map((record) => ({
+    id: record.articleId,
+    text: `${record.path}\n${path.basename(record.path, ".md")}\n${record.description}`,
+  })));
+  const bm25ChunkById = new Map(chunkInputs.map((chunk) => [chunkDocId(chunk.articleId, chunk.ordinal ?? 0), chunk]));
+  const bm25ChunkIndex = buildBm25Index(chunkInputs.map((chunk) => ({
+    id: chunkDocId(chunk.articleId, chunk.ordinal ?? 0),
+    text: `${chunk.path}\n${chunk.heading}\n${chunk.embedText}`,
+  })));
 
   const results: QueryEvalResult[] = [];
   for (const query of buildHldQueries()) {
     const started = Date.now();
+    const labels = gold.queries[query.id].relevant;
     const questionTokens = evalQueryTokens(query);
     const baselineTop = scoreBaseline(query, files);
     const legacySeedScores = allPaths
@@ -535,20 +676,7 @@ async function runQueries(files: SourceMarkdownFile[], indexPath: string): Promi
       title: path.basename(record.path, ".md"),
       description: record.description,
     })), 10);
-    const chunkRank = rankLexicalChunks(questionTokens, files
-      .flatMap((file) => splitEvalSections(file.content).map((section) => {
-        const articleId = pageId(file.vaultPath);
-        if (!chunkRecordKeys.has(`${articleId}:${section.ordinal}`)) return null;
-        return {
-          articleId,
-          path: file.vaultPath,
-          heading: section.heading,
-          body: section.window,
-          embedText: `${section.heading}\n${section.window}`.trim(),
-          ordinal: section.ordinal,
-        };
-      }).filter((item): item is NonNullable<typeof item> => item !== null)), 10);
-    const pathByArticleId = new Map(pageRecords.map((record) => [record.articleId, record.path]));
+    const chunkRank = rankLexicalChunks(questionTokens, chunkInputs, 10);
     const fused = fuseLexicalRanks(pageRank, chunkRank, 10, 10, [legacyJsonlTop.map((item) => pageId(item))]);
     const improvedPageTop = pageRank.map((item) => pathByArticleId.get(item.id) ?? item.id);
     const improvedChunkTop = uniqueTop(chunkRank.map((chunk) => chunk.path), 10);
@@ -565,6 +693,42 @@ async function runQueries(files: SourceMarkdownFile[], indexPath: string): Promi
     const improvedOverlapAt5 = overlapRatio(baselineTop, jsonlTop, 5);
     const overlapDelta = improvedOverlapAt5 - baselineOverlapAt5;
     const currentFloor = CURRENT_OVERLAP_AT_5[query.id] ?? 0;
+    const bm25QueryTokens = tokenizeBm25([query.question, ...(QUERY_EXPANSIONS[query.id] ?? [])].join(" "));
+    const bm25PageIds = rankBm25(bm25QueryTokens, bm25PageIndex, 10).map((item) => item.id);
+    const bm25PageTop = bm25PageIds.map((id) => pathByArticleId.get(id) ?? id);
+    const bm25ChunkIds = rankBm25(bm25QueryTokens, bm25ChunkIndex, 20).map((item) => item.id);
+    const bm25ChunkArticleIds = bm25ChunkIds
+      .map((id) => bm25ChunkById.get(id)?.articleId)
+      .filter((id): id is string => Boolean(id));
+    const bm25ChunkTop = uniqueTop(bm25ChunkIds
+      .map((id) => bm25ChunkById.get(id)?.path)
+      .filter((item): item is string => Boolean(item)), 10);
+    const rrfWeightedBm25Top = uniqueTop(rrf([
+      jsonlTop.map((item) => pageId(item)),
+      bm25PageIds,
+      bm25ChunkArticleIds,
+    ], 10)
+      .map((item) => pathByArticleId.get(item.id))
+      .filter((item): item is string => Boolean(item)), 10);
+    const rrfWeightedBm25LegacyTop = uniqueTop(rrf([
+      jsonlTop.map((item) => pageId(item)),
+      bm25PageIds,
+      bm25ChunkArticleIds,
+      legacyJsonlTop.map((item) => pageId(item)),
+    ], 10)
+      .map((item) => pathByArticleId.get(item.id))
+      .filter((item): item is string => Boolean(item)), 10);
+    const variants: QueryVariantResult[] = [
+      ["weighted-lexical", jsonlTop],
+      ["bm25-page", bm25PageTop],
+      ["bm25-chunk", bm25ChunkTop],
+      ["rrf-weighted-bm25", rrfWeightedBm25Top],
+      ["rrf-weighted-bm25-legacy", rrfWeightedBm25LegacyTop],
+    ].map(([id, top]) => ({
+      id: id as RetrievalVariantId,
+      top: (top as string[]).slice(0, 5),
+      metrics: toVariantMetrics(id as RetrievalVariantId, labels, top as string[], baselineTop, currentFloor),
+    }));
     const status: QueryEvalStatus =
       baselineTop.length === 0 || jsonlTop.length === 0 ? "rejected"
         : chunkRank.length === 0 || improvedOverlapAt5 < currentFloor ? "needs_tuning"
@@ -582,6 +746,8 @@ async function runQueries(files: SourceMarkdownFile[], indexPath: string): Promi
       improvedOverlapAt5,
       overlapDelta,
       overlapAt5: improvedOverlapAt5,
+      goldLabels: labels.map((label) => ({ path: label.path, grade: label.grade })),
+      variants,
       latencyMs: Date.now() - started,
     });
   }
@@ -603,6 +769,17 @@ function renderReport(result: HldEvalResult): string {
   lines.push(`Chunk records: ${result.chunkRecords}`);
   lines.push(`Aggregate verdict: \`${result.verdict}\``);
   lines.push(`Average improved Overlap@5: ${result.averageImprovedOverlapAt5.toFixed(2)}`);
+  lines.push(`Best retrieval variant: \`${result.bestVariant}\``);
+  lines.push(`Aggregate gold Recall@5: ${result.aggregateGoldMetrics.recallAtK.toFixed(2)}`);
+  lines.push(`Aggregate gold nDCG@5: ${result.aggregateGoldMetrics.ndcgAtK.toFixed(2)}`);
+  lines.push(`Aggregate gold MRR: ${result.aggregateGoldMetrics.mrr.toFixed(2)}`);
+  lines.push("");
+  lines.push("## Retrieval variants");
+  lines.push("| Variant | Recall@5 | nDCG@5 | MRR | LegacyOverlap@5 | Accepted |");
+  lines.push("| --- | ---: | ---: | ---: | ---: | --- |");
+  for (const variant of result.variantMetrics) {
+    lines.push(`| ${variant.id} | ${variant.recallAt5.toFixed(2)} | ${variant.ndcgAt5.toFixed(2)} | ${variant.mrr.toFixed(2)} | ${variant.legacyOverlapAt5.toFixed(2)} | ${variant.accepted ? "yes" : "no"} |`);
+  }
   lines.push("");
   lines.push("## Queries");
   for (const query of result.queries) {
@@ -624,6 +801,10 @@ function renderReport(result: HldEvalResult): string {
     for (const item of query.improvedChunkTop) lines.push(`- \`${item}\``);
     lines.push("JSONL retrieval top:");
     for (const item of query.jsonlTop) lines.push(`- \`${item}\``);
+    lines.push("Variants:");
+    for (const variant of query.variants) {
+      lines.push(`- \`${variant.id}\`: Recall@5 ${variant.metrics.recallAt5.toFixed(2)}, nDCG@5 ${variant.metrics.ndcgAt5.toFixed(2)}, MRR ${variant.metrics.mrr.toFixed(2)}, LegacyOverlap@5 ${variant.metrics.legacyOverlapAt5.toFixed(2)}, accepted ${variant.metrics.accepted ? "yes" : "no"}`);
+    }
     lines.push("Top chunks:");
     for (const chunk of query.chunkTop) {
       lines.push(`- \`${chunk.path}\` ${chunk.heading || "(lead)"} — ${chunk.score.toFixed(3)}`);
@@ -654,7 +835,22 @@ export async function runHldEval(options: RunHldEvalOptions): Promise<HldEvalRes
   const index = parseWikiIndexJsonl(await readFile(built.indexPath, "utf8"), built.indexPath);
   const pageRecords = index.filter(isPageIndexRecord);
   const chunkRecords = index.filter((record) => record.kind === "chunk");
-  const queryResults = await runQueries(built.files, built.indexPath);
+  const goldPath = options.goldPath ?? path.join(process.cwd(), "docs/superpowers/evals/hld-gold-set.json");
+  const gold = JSON.parse(await readFile(goldPath, "utf8")) as GoldSet;
+  validateGoldSet(
+    gold,
+    buildHldQueries().map((query) => query.id),
+    new Set(pageRecords.map((record) => record.path)),
+    new Set(built.files.map((file) => file.relPath)),
+  );
+  const queryResults = await runQueries(built.files, built.indexPath, gold);
+  const variantMetrics = aggregateVariantMetrics(queryResults);
+  const weightedVariant = variantMetrics.find((variant) => variant.id === "weighted-lexical") ?? variantMetrics[0];
+  const bestVariantMetrics = chooseBestVariant(variantMetrics);
+  const bestVariant = bestVariantMetrics.id;
+  const weightedLexicalGoldMetrics = variantGoldMetrics(weightedVariant);
+  const aggregateGoldMetrics = variantGoldMetrics(bestVariantMetrics);
+  const weightedPerfect = weightedVariant.recallAt5 === 1 && weightedVariant.ndcgAt5 === 1 && weightedVariant.mrr === 1;
   const averageImprovedOverlapAt5 = queryResults.length === 0
     ? 0
     : queryResults.reduce((sum, query) => sum + query.improvedOverlapAt5, 0) / queryResults.length;
@@ -664,10 +860,22 @@ export async function runHldEval(options: RunHldEvalOptions): Promise<HldEvalRes
   if (averageImprovedOverlapAt5 < MIN_AVERAGE_OVERLAP_AT_5) {
     regressions.push(`average Overlap@5 ${averageImprovedOverlapAt5.toFixed(2)} < ${MIN_AVERAGE_OVERLAP_AT_5.toFixed(2)}`);
   }
+  if (!bestVariantMetrics.accepted) {
+    regressions.push(`best variant ${bestVariant} failed per-query legacy overlap floors`);
+  }
+  if (!isNoWorse(bestVariantMetrics, weightedVariant)) {
+    regressions.push(`best variant ${bestVariant} regressed aggregate gold metrics versus weighted-lexical`);
+  }
+  if (!weightedPerfect && bestVariant !== "weighted-lexical" && !improvesAny(bestVariantMetrics, weightedVariant)) {
+    regressions.push(`best variant ${bestVariant} did not improve any aggregate gold metric`);
+  }
+  if (!weightedPerfect && bestVariant === "weighted-lexical") {
+    regressions.push("no accepted variant improved aggregate gold metrics versus weighted-lexical");
+  }
   const verdict = classifyAggregateVerdict({
     baselineAvailable: built.files.length > 0 && queryResults.every((query) => query.baselineTop.length > 0),
     regressions,
-    formatWorked: pageRecords.length > 0 && chunkRecords.length > 0 && queryResults.every((query) => query.jsonlTop.length > 0),
+    formatWorked: pageRecords.length > 0 && chunkRecords.length > 0 && queryResults.every((query) => query.jsonlTop.length > 0 && query.variants.length > 0),
   });
   const result: HldEvalResult = {
     source: options.source,
@@ -682,6 +890,10 @@ export async function runHldEval(options: RunHldEvalOptions): Promise<HldEvalRes
     verdict,
     queries: queryResults,
     averageImprovedOverlapAt5,
+    bestVariant,
+    variantMetrics,
+    aggregateGoldMetrics,
+    weightedLexicalGoldMetrics,
     regressions,
     reportPath: options.outPath,
   };
@@ -690,18 +902,19 @@ export async function runHldEval(options: RunHldEvalOptions): Promise<HldEvalRes
   return result;
 }
 
-async function writeReport(source: string, outPath: string, evalRoot?: string): Promise<void> {
-  await runHldEval({ source, outPath, evalRoot });
+async function writeReport(source: string, outPath: string, evalRoot?: string, goldPath?: string): Promise<void> {
+  await runHldEval({ source, outPath, evalRoot, goldPath });
 }
 
 async function main(args: string[]): Promise<void> {
   const source = argValue(args, "--source");
   const out = argValue(args, "--out");
   const evalRoot = argValue(args, "--eval-root");
+  const goldPath = argValue(args, "--gold");
   if (!source || !out) {
-    throw new Error("Usage: tsx scripts/eval-jsonl-domain-storage.ts --source <HLD path> --out <report.md> [--eval-root <path>]");
+    throw new Error("Usage: tsx scripts/eval-jsonl-domain-storage.ts --source <HLD path> --out <report.md> [--eval-root <path>] [--gold <gold.json>]");
   }
-  await writeReport(source, out, evalRoot);
+  await writeReport(source, out, evalRoot, goldPath);
   console.log(`wrote ${out}`);
 }
 

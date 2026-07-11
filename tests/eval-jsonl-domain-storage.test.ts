@@ -20,25 +20,50 @@ test("HLD eval builds isolated JSONL domain and runs five live retrieval queries
     const source = path.join(root, "source");
     const evalRoot = path.join(root, "eval-vault");
     const out = path.join(root, "report.md");
+    const goldPath = path.join(root, "gold.json");
     await mkdir(source, { recursive: true });
     await writeFile(path.join(source, "export.md"), "# Export\n\n## Scope\nЭкспорт данных через S3 и ClickHouse. Компоненты участвуют в обработке.", "utf8");
     await writeFile(path.join(source, "airflow.md"), "# Airflow\n\n## HA\nОтказоустойчивая архитектура Airflow и решения по балансировке.", "utf8");
     await writeFile(path.join(source, "integrations.md"), "# Integrations\n\n## Consumers\nИнтеграции потребителей с витринными БД и дата-мартами.", "utf8");
     await writeFile(path.join(source, "gitflame.md"), "# GitFlame\n\n## Migration\nМиграция на GitFlame и связанные архитектурные ограничения.", "utf8");
     await writeFile(path.join(source, "ownership.md"), "# Ownership\n\n## Components\nСостав архитектурных компонентов и зоны ответственности проектов.", "utf8");
+    await writeFile(goldPath, JSON.stringify({
+      version: 1,
+      source: "fixture",
+      queries: Object.fromEntries([
+        ["data-export-s3-clickhouse", { path: "export.md", grade: 3 }],
+        ["airflow-ha-balancing", { path: "airflow.md", grade: 3 }],
+        ["integrations-consumers-marts", { path: "integrations.md", grade: 3 }],
+        ["migration-gitflame", { path: "gitflame.md", grade: 3 }],
+        ["ownership-components", { path: "ownership.md", grade: 3 }],
+      ].map(([id, label]) => [id, { relevant: [{
+        path: `!Wiki/hld-jsonl-eval/pages/${label.path}`,
+        sourceRelPath: label.path,
+        grade: label.grade,
+        rationale: "Primary fixture document for this query.",
+      }] }])),
+    }, null, 2), "utf8");
 
-    const result = await runHldEval({ source, outPath: out, evalRoot });
+    const result = await runHldEval({ source, outPath: out, evalRoot, goldPath });
 
     assert.equal(result.verdict, "accepted");
     assert.equal(result.queries.length, 5);
     assert.equal(result.queries.every((query) => query.status === "accepted"), true);
     assert.ok(result.averageImprovedOverlapAt5 >= 0.65);
+    assert.ok(result.aggregateGoldMetrics.recallAtK >= 1);
+    assert.ok(result.aggregateGoldMetrics.ndcgAtK >= result.weightedLexicalGoldMetrics.ndcgAtK);
+    assert.equal(result.variantMetrics.some((variant) => variant.id === "bm25-page"), true);
+    assert.equal(result.variantMetrics.some((variant) => variant.id === result.bestVariant), true);
+    assert.equal(result.queries.every((query) => query.variants.length >= 4), true);
     assert.equal(result.queries.every((query) => query.improvedOverlapAt5 >= query.baselineOverlapAt5), true);
     assert.equal(result.markdownFiles, 5);
 
     const report = await readFile(out, "utf8");
     assert.match(report, /Aggregate verdict: `accepted`/);
+    assert.match(report, /Best retrieval variant:/);
+    assert.match(report, /## Retrieval variants/);
     assert.match(report, /Average improved Overlap@5:/);
+    assert.match(report, /Aggregate gold nDCG@5:/);
     assert.match(report, /Baseline Overlap@5:/);
     assert.match(report, /Improved Overlap@5:/);
     assert.match(report, /Delta:/);

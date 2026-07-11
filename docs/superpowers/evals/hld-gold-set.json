@@ -120,7 +120,7 @@
         },
         {
           "path": "!Wiki/hld-jsonl-eval/pages/rt-widestore-join-clickhouse-etl-join-analysis.md",
-          "sourceRelPath": "RT.WideStore/join/clickhouse_etl_join_analysis.md",
+          "sourceRelPath": "RT.WideStore/join/ClickHouse_ETL_JOIN_Analysis.md",
           "grade": 2,
           "rationale": "Direct ClickHouse/ETL analysis linked to migration constraints."
         },
