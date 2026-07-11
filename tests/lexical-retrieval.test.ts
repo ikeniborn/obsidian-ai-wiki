@@ -67,6 +67,43 @@ test("length normalization prevents large template text from dominating", () => 
   assert.ok(compact.score > template.score);
 });
 
+test("boilerplate demotion lowers page and chunk lexical scores", () => {
+  const query = tokenizeLexical("компоненты ответственность");
+  const boilerplateDemotion = { enabled: true, factor: 0.15 };
+  const ownerPage = scoreLexicalPage(query, {
+    id: "owner",
+    path: "!Wiki/hld/pages/owner.md",
+    title: "Owner",
+    description: "компоненты ответственность",
+    boilerplateDemotion,
+  });
+  const templatePage = scoreLexicalPage(query, {
+    id: "template-readme",
+    path: "!Wiki/hld/pages/template-readme.md",
+    title: "Template README",
+    description: "компоненты ответственность",
+    boilerplateDemotion,
+  });
+
+  assert.ok(ownerPage.score > templatePage.score);
+
+  const rawTemplateChunk = scoreLexicalChunk(query, {
+    articleId: "template-hld-v2-standard",
+    path: "!Wiki/hld/pages/template-hld-v2-standard.md",
+    heading: "## Компоненты",
+    body: "ответственность",
+  });
+  const demotedTemplateChunk = scoreLexicalChunk(query, {
+    articleId: "template-hld-v2-standard",
+    path: "!Wiki/hld/pages/template-hld-v2-standard.md",
+    heading: "## Компоненты",
+    body: "ответственность",
+    boilerplateDemotion,
+  });
+
+  assert.ok(rawTemplateChunk.score > demotedTemplateChunk.score);
+});
+
 test("rankLexicalPages and rankLexicalChunks are deterministic", () => {
   const query = tokenizeLexical("миграция gitflame");
   const pages = rankLexicalPages(query, [

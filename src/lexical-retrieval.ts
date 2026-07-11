@@ -1,3 +1,5 @@
+import { applyBoilerplateScoreDemotion } from "./boilerplate-demotion";
+import type { BoilerplateDemotionConfig } from "./boilerplate-demotion";
 import { rrf } from "./rrf";
 
 const STOP_WORDS = new Set([
@@ -40,6 +42,7 @@ export interface LexicalPageInput {
   description?: string;
   content?: string;
   annotation?: string;
+  boilerplateDemotion?: BoilerplateDemotionConfig;
 }
 
 export interface LexicalChunkInput {
@@ -49,6 +52,7 @@ export interface LexicalChunkInput {
   body?: string;
   embedText?: string;
   ordinal?: number;
+  boilerplateDemotion?: BoilerplateDemotionConfig;
 }
 
 export interface RankedLexicalPage {
@@ -175,7 +179,8 @@ export function scoreLexicalPage(queryTokens: Set<string>, input: LexicalPageInp
   evidence.phrase = phraseAdjacentBonus(queryTokens, fullText) * 0.25;
 
   const raw = evidence.path + evidence.title + evidence.description + evidence.body + evidence.exact + evidence.phrase;
-  return { score: raw * evidence.lengthPenalty, evidence };
+  const score = raw * evidence.lengthPenalty;
+  return { score: input.boilerplateDemotion ? applyBoilerplateScoreDemotion(score, path, input.boilerplateDemotion) : score, evidence };
 }
 
 export function scoreLexicalChunk(queryTokens: Set<string>, input: LexicalChunkInput): LexicalScore {
@@ -192,7 +197,11 @@ export function scoreLexicalChunk(queryTokens: Set<string>, input: LexicalChunkI
   evidence.phrase = phraseAdjacentBonus(queryTokens, fullText) * 0.25;
 
   const raw = evidence.path + evidence.heading + evidence.body + evidence.exact + evidence.phrase;
-  return { score: raw * evidence.lengthPenalty, evidence };
+  const score = raw * evidence.lengthPenalty;
+  return {
+    score: input.boilerplateDemotion ? applyBoilerplateScoreDemotion(score, input.path, input.boilerplateDemotion) : score,
+    evidence,
+  };
 }
 
 export function rankLexicalPages(
