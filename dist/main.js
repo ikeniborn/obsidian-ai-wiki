@@ -4594,9 +4594,9 @@ var require_resolve_block_scalar = __commonJS({
           default: {
             const message = `Unexpected token in block scalar header: ${token.type}`;
             onError(token, "UNEXPECTED_TOKEN", message);
-            const ts2 = token.source;
-            if (ts2 && typeof ts2 === "string")
-              length += ts2.length;
+            const ts = token.source;
+            if (ts && typeof ts === "string")
+              length += ts.length;
           }
         }
       }
@@ -4905,9 +4905,9 @@ var require_compose_scalar = __commonJS({
       if (schema.compat) {
         const compat = schema.compat.find((tag2) => tag2.default && tag2.test?.test(value)) ?? schema[identity.SCALAR];
         if (tag.tag !== compat.tag) {
-          const ts2 = directives.tagString(tag.tag);
+          const ts = directives.tagString(tag.tag);
           const cs = directives.tagString(compat.tag);
-          const msg = `Value may be parsed as either ${ts2} or ${cs}`;
+          const msg = `Value may be parsed as either ${ts} or ${cs}`;
           onError(token, "TAG_RESOLVE_FAILED", msg, true);
         }
       }
@@ -39860,41 +39860,38 @@ function reconcileIndex(indexContent, wikiFolder, pages) {
 }
 
 // src/wiki-log.ts
-function ts() {
-  return (/* @__PURE__ */ new Date()).toISOString().slice(0, 19);
-}
-function buildEntry(domainId, event) {
-  const header = `## ${ts()} \u2014 ${event.op} \u2014 ${domainId}`;
-  const lines = [header];
+function buildLogRecord(domainId, event, timestamp = (/* @__PURE__ */ new Date()).toISOString()) {
   if (event.op === "ingest") {
-    lines.push(`**Source:** ${event.sourcePath}`);
-    lines.push(`**Tokens:** ${event.outputTokens}`);
-    lines.push("");
-    for (const e of event.entries) {
-      if (e.action === "CREATED") {
-        lines.push(`- CREATED: ${e.path} (${e.statusTo ?? "unknown"})`);
-      } else if (e.action === "UPDATED") {
-        const status = e.statusFrom ? `${e.statusFrom}\u2192${e.statusTo}` : e.statusTo ?? "unknown";
-        lines.push(`- UPDATED: ${e.path} (${status})`);
-      } else if (e.action === "MERGED") {
-        lines.push(`- MERGED: ${e.path}`);
-      } else {
-        lines.push(`- DELETED: ${e.path}`);
-      }
-    }
-  } else if (event.op === "lint") {
-    lines.push(`**Tokens:** ${event.outputTokens}`);
-    lines.push(`**Checked:** ${event.checkedCount} | **Fixed:** ${event.fixed.length}`);
-    lines.push("");
-    for (const p of event.fixed) lines.push(`- FIXED: ${p}`);
-  } else {
-    lines.push(`**File:** ${event.filePath}`);
-    lines.push(`**Tokens:** ${event.outputTokens}`);
-    lines.push("");
-    for (const p of event.fixed) lines.push(`- FIXED: ${p}`);
+    return {
+      kind: "operation",
+      ts: timestamp,
+      domainId,
+      op: event.op,
+      sourcePath: event.sourcePath,
+      entries: event.entries,
+      outputTokens: event.outputTokens
+    };
   }
-  lines.push("", "---");
-  return "\n" + lines.join("\n") + "\n";
+  if (event.op === "lint") {
+    return {
+      kind: "operation",
+      ts: timestamp,
+      domainId,
+      op: event.op,
+      fixed: event.fixed,
+      checkedCount: event.checkedCount,
+      outputTokens: event.outputTokens
+    };
+  }
+  return {
+    kind: "operation",
+    ts: timestamp,
+    domainId,
+    op: event.op,
+    filePath: event.filePath,
+    fixed: event.fixed,
+    outputTokens: event.outputTokens
+  };
 }
 async function appendWikiLog(vaultTools, domainFolder, domainId, event) {
   const logPath = domainLogPath(domainFolder);
@@ -39903,7 +39900,7 @@ async function appendWikiLog(vaultTools, domainFolder, domainId, event) {
     existing = await vaultTools.read(logPath);
   } catch {
   }
-  await vaultTools.write(logPath, existing + buildEntry(domainId, event));
+  await vaultTools.write(logPath, existing + stringifyJsonl([buildLogRecord(domainId, event)]));
 }
 
 // src/wiki-link-validator.ts
