@@ -1,11 +1,11 @@
 # JSONL Domain Storage HLD Eval
 
 Source: `/home/ikeniborn/Documents/Project/notes/vaults/Work/Ростелеком/Системная архитектура/HLD`
-Eval root: `.jsonl-domain-storage-hld-eval`
-Domain root: `.jsonl-domain-storage-hld-eval/!Wiki/hld-jsonl-eval`
-Metadata: `.jsonl-domain-storage-hld-eval/!Wiki/hld-jsonl-eval/metadata.jsonl`
-Index: `.jsonl-domain-storage-hld-eval/!Wiki/hld-jsonl-eval/index.jsonl`
-Log: `.jsonl-domain-storage-hld-eval/!Wiki/hld-jsonl-eval/log.jsonl`
+Eval root: `docs/superpowers/evals/.jsonl-domain-storage-hld-eval`
+Domain root: `docs/superpowers/evals/.jsonl-domain-storage-hld-eval/!Wiki/hld-jsonl-eval`
+Metadata: `docs/superpowers/evals/.jsonl-domain-storage-hld-eval/!Wiki/hld-jsonl-eval/metadata.jsonl`
+Index: `docs/superpowers/evals/.jsonl-domain-storage-hld-eval/!Wiki/hld-jsonl-eval/index.jsonl`
+Log: `docs/superpowers/evals/.jsonl-domain-storage-hld-eval/!Wiki/hld-jsonl-eval/log.jsonl`
 Markdown files: 61
 Page records: 61
 Chunk records: 442
@@ -44,7 +44,7 @@ Setting recommendation: `candidate: 0.15`
 Theme: data export / S3 / ClickHouse
 Question: Какие HLD описывают экспорт данных через S3 или ClickHouse и какие компоненты участвуют?
 Status: accepted
-Latency: 156 ms
+Latency: 133 ms
 Baseline Overlap@5: 0.40
 Improved Overlap@5: 0.40
 Delta: +0.00
@@ -231,7 +231,7 @@ Top chunks:
 Theme: Airflow HA / balancing
 Question: Где описана отказоустойчивая архитектура Airflow и какие решения по балансировке указаны?
 Status: accepted
-Latency: 144 ms
+Latency: 120 ms
 Baseline Overlap@5: 1.00
 Improved Overlap@5: 1.00
 Delta: +0.00
@@ -418,7 +418,7 @@ Top chunks:
 Theme: integrations / consumers / data marts
 Question: Какие документы описывают интеграции потребителей с витринными БД или дата-мартами?
 Status: accepted
-Latency: 129 ms
+Latency: 110 ms
 Baseline Overlap@5: 0.40
 Improved Overlap@5: 0.40
 Delta: +0.00
@@ -605,7 +605,7 @@ Top chunks:
 Theme: source-system migration / GitFlame
 Question: Что известно о миграции на GitFlame и связанных архитектурных ограничениях?
 Status: accepted
-Latency: 128 ms
+Latency: 108 ms
 Baseline Overlap@5: 0.60
 Improved Overlap@5: 0.80
 Delta: +0.20
@@ -789,7 +789,7 @@ Top chunks:
 Theme: architecture ownership / components
 Question: Какие HLD фиксируют состав архитектурных компонентов и зоны ответственности проектов?
 Status: accepted
-Latency: 123 ms
+Latency: 110 ms
 Baseline Overlap@5: 0.20
 Improved Overlap@5: 0.80
 Delta: +0.60

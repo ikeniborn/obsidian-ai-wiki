@@ -1,5 +1,7 @@
 import { tokenize, scoreSeed } from "./wiki-seeds";
 import { scoreLexicalChunk } from "./lexical-retrieval";
+import { demoteBoilerplateRankedItems } from "./boilerplate-demotion";
+import type { BoilerplateDemotionConfig } from "./boilerplate-demotion";
 import { pageId } from "./wiki-graph";
 import type { VaultTools } from "./vault-tools";
 import { domainIndexPath, legacyDomainEmbeddingsPath } from "./wiki-path";
@@ -36,6 +38,7 @@ export interface SimilarityConfig {
   apiKey?: string;
   chunking?: ChunkingConfig;
   rrfK?: number;
+  boilerplateDemotion?: BoilerplateDemotionConfig;
 }
 
 export interface EmbeddingChunk {
@@ -337,7 +340,24 @@ function sortSelectedChunks(items: SelectedChunk[]): SelectedChunk[] {
   );
 }
 
-function rankChunksJaccard(queryTokens: Set<string>, sections: CandidateSection[], limit: number): SelectedChunk[] {
+function demoteScoredPaths<T extends { path: string; score: number }>(
+  scored: T[],
+  boilerplateDemotion: BoilerplateDemotionConfig | undefined,
+  limit: number,
+): T[] {
+  return demoteBoilerplateRankedItems(
+    scored,
+    boilerplateDemotion ?? { enabled: false, factor: 0 },
+    limit,
+  );
+}
+
+function rankChunksJaccard(
+  queryTokens: Set<string>,
+  sections: CandidateSection[],
+  limit: number,
+  boilerplateDemotion?: BoilerplateDemotionConfig,
+): SelectedChunk[] {
   const scored: SelectedChunk[] = [];
   for (const section of sections) {
     const score = scoreLexicalChunk(queryTokens, {
@@ -360,7 +380,11 @@ function rankChunksJaccard(queryTokens: Set<string>, sections: CandidateSection[
       ordinal: section.ordinal,
     });
   }
-  return sortSelectedChunks(scored).slice(0, limit);
+  return demoteBoilerplateRankedItems(
+    sortSelectedChunks(scored),
+    boilerplateDemotion ?? { enabled: false, factor: 0 },
+    limit,
+  );
 }
 
 function isUsableVector(vec: Float32Array | undefined, dimensions?: number): vec is Float32Array {
@@ -506,6 +530,13 @@ export class PageSimilarityService {
 
   setCacheForTest(cache: EmbeddingCacheFile): void { this.cache = cache; }
 
+  withBoilerplateDemotion(boilerplateDemotion?: BoilerplateDemotionConfig): PageSimilarityService {
+    const service = new PageSimilarityService({ ...this.config, boilerplateDemotion });
+    service.cache = this.cache;
+    service.jaccardCorpus = new Map(this.jaccardCorpus);
+    return service;
+  }
+
   async selectRelevantChunks(
     query: string,
     pages: Map<string, string>,
@@ -519,18 +550,18 @@ export class PageSimilarityService {
     const chunking = this.config.chunking ?? DEFAULT_CHUNKING;
     const sections = collectCandidateSections(pages, candidateIds, seedIds, articleScores, chunking);
     if (sections.length === 0) return [];
-    if (this.config.mode === "jaccard") return rankChunksJaccard(queryTokens, sections, limit);
+    if (this.config.mode === "jaccard") return rankChunksJaccard(queryTokens, sections, limit, this.config.boilerplateDemotion);
 
     const { baseUrl, apiKey, model } = this.config;
-    if (!baseUrl || !model) return rankChunksJaccard(queryTokens, sections, limit);
+    if (!baseUrl || !model) return rankChunksJaccard(queryTokens, sections, limit, this.config.boilerplateDemotion);
 
     let queryVec: Float32Array;
     try {
       const vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [query.slice(0, 2000)], this.config.dimensions);
-      if (!isUsableVector(vecs[0], this.config.dimensions)) return rankChunksJaccard(queryTokens, sections, limit);
+      if (!isUsableVector(vecs[0], this.config.dimensions)) return rankChunksJaccard(queryTokens, sections, limit, this.config.boilerplateDemotion);
       queryVec = vecs[0];
     } catch {
-      return rankChunksJaccard(queryTokens, sections, limit);
+      return rankChunksJaccard(queryTokens, sections, limit, this.config.boilerplateDemotion);
     }
 
     const vectors = new Map<string, Float32Array>();
@@ -554,13 +585,13 @@ export class PageSimilarityService {
       try {
         const vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, batch.map((section) => section.embedText), this.config.dimensions);
         if (vecs.length !== batch.length || vecs.some((vec) => !isUsableVector(vec, this.config.dimensions))) {
-          return rankChunksJaccard(queryTokens, sections, limit);
+          return rankChunksJaccard(queryTokens, sections, limit, this.config.boilerplateDemotion);
         }
         for (let j = 0; j < batch.length; j++) {
           vectors.set(batch[j].hash, vecs[j]);
         }
       } catch {
-        return rankChunksJaccard(queryTokens, sections, limit);
+        return rankChunksJaccard(queryTokens, sections, limit, this.config.boilerplateDemotion);
       }
     }
 
@@ -581,7 +612,7 @@ export class PageSimilarityService {
         ordinal: section.ordinal,
       });
     }
-    return sortSelectedChunks(scored).slice(0, limit);
+    return demoteScoredPaths(sortSelectedChunks(scored), this.config.boilerplateDemotion, limit);
   }
 
   /**
@@ -714,7 +745,7 @@ export class PageSimilarityService {
       if (score > 0) scored.push({ path, score });
     }
     scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, this.config.topK).map((x) => x.path);
+    return demoteScoredPaths(scored, this.config.boilerplateDemotion, this.config.topK).map((x) => x.path);
   }
 
   private jaccardFallbackAll(
@@ -823,7 +854,7 @@ export class PageSimilarityService {
       if (score > 0) scored.push({ path, score });
     }
     scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, this.config.topK).map((x) => x.path);
+    return demoteScoredPaths(scored, this.config.boilerplateDemotion, this.config.topK).map((x) => x.path);
   }
 
   private async selectEmbedding(
@@ -891,7 +922,7 @@ export class PageSimilarityService {
       }
     }
 
-    // Score and rank
+    // Score by raw similarity. Dense ranking is not boilerplate-demoted.
     const scored: { path: string; score: number }[] = [];
     for (let i = 0; i < allPaths.length; i++) {
       const pid = pids[i];
@@ -911,6 +942,7 @@ export class PageSimilarityService {
     indexAnnotations: Map<string, string>,
     allPaths: string[],
     limit: number = this.config.topK,
+    applyDemotion: boolean = true,
   ): { path: string; score: number }[] {
     const scored: { path: string; score: number }[] = [];
     for (const path of allPaths) {
@@ -921,7 +953,9 @@ export class PageSimilarityService {
       if (score > 0) scored.push({ path, score });
     }
     scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, limit);
+    return applyDemotion
+      ? demoteScoredPaths(scored, this.config.boilerplateDemotion, limit)
+      : scored.slice(0, limit);
   }
 
   /** Embedding-scored selection that also reports dense-cosine confidence and failure. */
@@ -931,10 +965,11 @@ export class PageSimilarityService {
     allPaths: string[],
     queryTokens: Set<string>,
     limit: number = this.config.topK,
+    applyDemotion: boolean = false,
   ): Promise<SeedDiag> {
     const { baseUrl, apiKey, model } = this.config;
     if (!baseUrl || !model) {
-      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit), denseMax: 0, embedFailed: false, denseByPid: {} };
+      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit, applyDemotion), denseMax: 0, embedFailed: false, denseByPid: {} };
     }
 
     let queryVec: Float32Array;
@@ -942,7 +977,7 @@ export class PageSimilarityService {
       const truncated = sourceContent.slice(0, 2000);
       [queryVec] = await fetchEmbeddings(baseUrl, apiKey!, model, [truncated], this.config.dimensions);
     } catch {
-      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit), denseMax: 0, embedFailed: true, denseByPid: {} };
+      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit, applyDemotion), denseMax: 0, embedFailed: true, denseByPid: {} };
     }
 
     const pids = allPaths.map((p) => pageId(p));
@@ -993,7 +1028,14 @@ export class PageSimilarityService {
       }
     }
     scored.sort((a, b) => b.score - a.score);
-    return { results: scored.slice(0, limit), denseMax, embedFailed: false, denseByPid };
+    return {
+      results: applyDemotion
+        ? demoteScoredPaths(scored, this.config.boilerplateDemotion, limit)
+        : scored.slice(0, limit),
+      denseMax,
+      embedFailed: false,
+      denseByPid,
+    };
   }
 
   private async selectEmbeddingScored(
@@ -1003,7 +1045,7 @@ export class PageSimilarityService {
     queryTokens: Set<string>,
     limit: number = this.config.topK,
   ): Promise<{ path: string; score: number }[]> {
-    return (await this.selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens, limit)).results;
+    return (await this.selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens, limit, false)).results;
   }
 
   /** Hybrid (dense ⊕ sparse) selection that also reports dense-cosine confidence. */
@@ -1014,10 +1056,14 @@ export class PageSimilarityService {
     queryTokens: Set<string>,
   ): Promise<SeedDiag> {
     const pool = Math.max(this.config.topK, RRF_CANDIDATE_POOL);
-    const dense = await this.selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens, pool);
-    const sparse = this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, pool);
+    const dense = await this.selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens, pool, false);
+    const sparse = this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, pool, false);
     const fused = rrf([dense.results.map((x) => x.path), sparse.map((x) => x.path)], this.config.rrfK ?? 60);
-    const results = fused.slice(0, this.config.topK).map((f) => ({ path: f.id, score: f.score }));
+    const results = demoteScoredPaths(
+      fused.map((f) => ({ path: f.id, score: f.score })),
+      this.config.boilerplateDemotion,
+      this.config.topK,
+    );
     return { results, denseMax: dense.denseMax, embedFailed: dense.embedFailed, denseByPid: dense.denseByPid };
   }
 

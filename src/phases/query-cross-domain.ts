@@ -9,6 +9,7 @@ import { answerFromContext } from "./query-answer";
 import { render } from "./template";
 import queryTemplate from "../../prompts/query.md";
 import { promptVersionOf } from "../prompt-version";
+import { demoteBoilerplateRankedIds, type BoilerplateDemotionConfig } from "../boilerplate-demotion";
 
 export interface MergedPool {
   mergedPages: Map<string, string>;
@@ -33,6 +34,7 @@ export function mergeCandidates(
   seedTopK: number,
   graphDepth: number,
   rrfK: number,
+  boilerplateDemotion?: BoilerplateDemotionConfig,
 ): MergedPool {
   const mergedPages = new Map<string, string>();
   const mergedSeeds: string[] = [];
@@ -61,7 +63,11 @@ export function mergeCandidates(
     mergedSeeds, allCandidates, mergedSeedScores, mergedExpandedScores, mergedGraph, graphDepth, rrfK,
   );
   const cap = Math.max(1, Math.min(50, Math.floor(seedTopK)));
-  const finalIds = fusedOrder.slice(0, cap);
+  const finalIds = demoteBoilerplateRankedIds(
+    fusedOrder,
+    boilerplateDemotion ?? { enabled: false, factor: 0 },
+    cap,
+  );
 
   return {
     mergedPages, mergedSeeds, mergedSeedSet, mergedSeedScores, mergedExpandedScores,
@@ -88,13 +94,14 @@ export async function* runCrossDomainQuery(
 
   const start = Date.now();
   let outputTokens = 0;
+  const querySimilarity = similarity ? similarity.withBoilerplateDemotion(cfg.boilerplateDemotion) : undefined;
 
   // Stage 1 — gather candidates per domain, sequentially.
   const poolList: DomainCandidates[] = [];
   for (const domain of domains) {
     if (signal.aborted) return;
     yield { kind: "tool_use", name: `Domain: ${domain.name}`, input: {} };
-    const cand = yield* retrieveDomainCandidates(domain, q, vaultTools, similarity, signal, cfg);
+    const cand = yield* retrieveDomainCandidates(domain, q, vaultTools, querySimilarity, signal, cfg);
     yield { kind: "tool_result", ok: !!cand, preview: cand ? `${cand.candidateIds.size} candidates` : "skipped" };
     if (cand) poolList.push(cand);
   }
@@ -102,11 +109,15 @@ export async function* runCrossDomainQuery(
   if (poolList.length === 0) { yield { kind: "error", message: "No relevant pages found across domains." }; return; }
 
   // Stage 2 — merge + fuse + cap.
-  const merged = mergeCandidates(poolList, cfg.seedTopK, cfg.graphDepth, rrfK);
+  const merged = mergeCandidates(poolList, cfg.seedTopK, cfg.graphDepth, rrfK, cfg.boilerplateDemotion);
   const finalSet = new Set(merged.finalIds);
 
-  const fallbackSimilarity = new PageSimilarityService({ mode: "jaccard", topK: cfg.seedTopK * 3 });
-  const chunkSimilarity = similarity ?? fallbackSimilarity;
+  const fallbackSimilarity = new PageSimilarityService({
+    mode: "jaccard",
+    topK: cfg.seedTopK * 3,
+    boilerplateDemotion: cfg.boilerplateDemotion,
+  });
+  const chunkSimilarity = querySimilarity ?? fallbackSimilarity;
   const articleScores = { ...merged.mergedExpandedScores, ...merged.mergedSeedScores };
   const selectedChunks: SelectedChunk[] = await chunkSimilarity.selectRelevantChunks(
     q,

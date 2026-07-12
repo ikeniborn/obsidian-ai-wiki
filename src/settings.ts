@@ -760,8 +760,27 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             () => s.nativeAgent.chunkMaxCount ?? DEFAULT_CHUNKING.maxCount,
             (n) => { s.nativeAgent.chunkMaxCount = n; });
         }
+      }
 
-        new Setting(containerEl).setName("Retrieval").setHeading();
+      new Setting(containerEl).setName("Retrieval").setHeading();
+      new Setting(containerEl)
+        .setName(T.settings.boilerplateDemotion_name)
+        .setDesc(T.settings.boilerplateDemotion_desc)
+        .addToggle((t) =>
+          t.setValue(s.nativeAgent.boilerplateDemotionEnabled ?? true)
+            .onChange(async (v) => { s.nativeAgent.boilerplateDemotionEnabled = v; await this.plugin.saveSettings(); }),
+        );
+      new Setting(containerEl)
+        .setName(T.settings.boilerplateDemotionFactor_name)
+        .setDesc(T.settings.boilerplateDemotionFactor_desc)
+        .addSlider((sl) =>
+          sl.setLimits(0, 1, 0.05)
+            .setDynamicTooltip()
+            .setValue(s.nativeAgent.boilerplateDemotionFactor ?? 0.15)
+            .onChange(async (v) => { s.nativeAgent.boilerplateDemotionFactor = v; await this.plugin.saveSettings(); }),
+        );
+
+      if (s.nativeAgent.embeddingModel !== undefined) {
         new Setting(containerEl)
           .setName("Hybrid retrieval (dense ⊕ sparse)")
           .setDesc(T.settings.hybridRetrieval_desc)

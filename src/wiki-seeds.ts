@@ -1,5 +1,7 @@
 import { pageId } from "./wiki-graph";
 import { normalizeLexicalPageScore, scoreLexicalPage, tokenizeLexical } from "./lexical-retrieval";
+import { demoteBoilerplateRankedItems } from "./boilerplate-demotion";
+import type { BoilerplateDemotionConfig } from "./boilerplate-demotion";
 
 const BODY_CAP = 500;
 
@@ -42,16 +44,21 @@ export function selectSeeds(
   topK: number,
   minScore: number,
   indexAnnotations?: Map<string, string>,
+  boilerplateDemotion?: BoilerplateDemotionConfig,
 ): { id: string; score: number }[] {
   const q = tokenize(question);
   if (q.size === 0) return [];
-  const scored: { id: string; score: number }[] = [];
+  const scored: { id: string; path: string; score: number }[] = [];
   for (const [path, content] of pages) {
     const id = pageId(path);
     const annotation = indexAnnotations?.get(id);
     const score = scoreSeed(q, id, content, annotation);
-    if (score >= minScore && score > 0) scored.push({ id, score });
+    if (score >= minScore && score > 0) scored.push({ id, path, score });
   }
   scored.sort((a, b) => (b.score - a.score) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  return scored.slice(0, topK);
+  return demoteBoilerplateRankedItems(
+    scored,
+    boilerplateDemotion ?? { enabled: false, factor: 0 },
+    topK,
+  ).map(({ id, score }) => ({ id, score }));
 }
