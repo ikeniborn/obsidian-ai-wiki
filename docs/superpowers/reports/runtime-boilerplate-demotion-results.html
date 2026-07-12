@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Итоговый отчёт — runtime-boilerplate-demotion — 2026-07-12</title>
+  <style>
+    :root{
+      --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+      --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+      --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+      --shadow:rgba(40,40,80,.18);
+    }
+    body:has(#theme-toggle:checked){
+      --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+      --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+      --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+      --shadow:rgba(0,0,0,.45);
+    }
+    body{
+      margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1180px;
+      font:16px/1.55 system-ui, sans-serif;
+      background:radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent), var(--bg);
+      color:var(--fg);
+    }
+    .theme-btn{position:sticky;top:.5rem;float:right;cursor:pointer;user-select:none;padding:.25rem .6rem;border:1px solid var(--border);border-radius:6px;background:var(--surface)}
+    header{margin-bottom:1.5rem}.lead{font-size:1.08rem}.sub{color:var(--muted);font-size:.95rem}
+    section{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin:1rem 0;padding:1rem 1.1rem;box-shadow:0 2px 12px var(--shadow)}
+    h1,h2,h3{color:var(--accent);line-height:1.2} code{background:color-mix(in srgb,var(--accent) 10%,var(--surface));padding:.08rem .25rem;border-radius:4px}
+    .badge{display:inline-block;border-radius:999px;padding:.1rem .5rem;font-size:.82rem;font-weight:700}.ok{color:var(--ok-2);background:color-mix(in srgb,var(--ok) 20%,var(--surface))}.warn{color:var(--warn-2);background:color-mix(in srgb,var(--warn) 18%,var(--surface))}
+    .rpt-table{border-collapse:separate;border-spacing:0;width:100%;background:var(--surface);margin:1rem 0;font-size:.92rem;border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:0 2px 12px var(--shadow)}
+    .rpt-table th,.rpt-table td{border-bottom:1px solid var(--border);padding:.5rem .75rem;text-align:left;vertical-align:top}.rpt-table tbody tr:last-child td{border-bottom:none}.rpt-table thead th{background:var(--accent);color:var(--bg)}.rpt-table tbody tr:nth-child(even){background:var(--zebra)}
+    .flow{display:flex;align-items:center;gap:0;flex-wrap:wrap;margin:1rem 0}.node{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.55rem .8rem;min-width:8rem;text-align:center}.arrow{flex:0 0 2.5rem;height:2px;background:var(--line);position:relative}.arrow:after{content:"";position:absolute;right:0;top:-4px;border:5px solid transparent;border-left-color:var(--line)}
+    .matrix{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:.75rem}.card{border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:8px;padding:.65rem;background:var(--surface);box-shadow:0 1px 6px var(--shadow)}
+    details{margin:.6rem 0} summary{cursor:pointer;color:var(--accent);font-weight:700}
+  </style>
+</head>
+<body>
+  <input type="checkbox" id="theme-toggle" hidden>
+  <label for="theme-toggle" class="theme-btn" title="Переключить тему">Тема</label>
+  <header>
+    <h1>Итоговый отчёт — runtime-boilerplate-demotion — 2026-07-12</h1>
+    <p class="lead">Вердикт result: <span class="badge ok">OK</span>. Runtime Query получил default-enabled rank-only boilerplate demotion factor <code>0.15</code>; BM25/RRF остались eval-only.</p>
+    <p class="sub">Branch: <code>dev-runtime-boilerplate-demotion</code> · plan_hash: <code>603ac693f9e7f6f7</code> · report: <code>docs/superpowers/reports/runtime-boilerplate-demotion-results.html</code></p>
+  </header>
+
+  <main>
+    <section id="summary">
+      <h2>Краткий итог</h2>
+      <p>Реализация переносит accepted HLD eval winner <code>weighted-lexical-demoted</code> factor <code>0.15</code> в runtime Query как настройку, включённую по умолчанию. Поведение ограничено rank-level pass перед top-K: weighted lexical scores, dense cosine scores и JSONL schema не меняются.</p>
+      <p>Score-plus-rank вариант был проверен и отклонён: он улучшал семантический результат на одном запросе, но нарушал legacy overlap floor. Это решение отражено в spec, plan, repo docs и iwiki.</p>
+      <div class="flow"><div class="node">Eval winner<br><code>0.15</code></div><div class="arrow"></div><div class="node">Runtime setting<br>default on</div><div class="arrow"></div><div class="node">Rank-only pass<br>before top-K</div><div class="arrow"></div><div class="node">No-regression<br>accepted</div></div>
+    </section>
+
+    <section id="artifacts">
+      <h2>Артефакты цепочки</h2>
+      <table class="rpt-table">
+        <thead><tr><th>Stage</th><th>Источник</th><th>Статус</th><th>Смысл</th></tr></thead>
+        <tbody>
+          <tr><td><code>intent</code></td><td><code>docs/superpowers/intents/2026-07-11-bm25-template-demotion-intent.md</code></td><td><span class="badge ok">passed</span></td><td>Eval-first цель: улучшить gold quality без legacy regression и не продвигать runtime до безопасного значения.</td></tr>
+          <tr><td><code>spec</code></td><td><code>docs/superpowers/specs/2026-07-11-runtime-boilerplate-demotion-design.md</code></td><td><span class="badge ok">passed</span></td><td>Runtime promotion разрешён как rank-only factor <code>0.15</code>; BM25 остаётся eval-only.</td></tr>
+          <tr><td><code>plan</code></td><td><code>docs/superpowers/plans/2026-07-11-runtime-boilerplate-demotion.md</code></td><td><span class="badge ok">passed</span></td><td>План пересмотрен после live eval debug: score-level demotion удаляется, score не меняется.</td></tr>
+          <tr><td><code>result</code></td><td><code>git diff HEAD</code></td><td><span class="badge ok">OK</span></td><td>Diff покрывает implementation, tests, eval report, docs, wiki и generated bundle.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="intent">
+      <h2>Intent evidence</h2>
+      <div class="matrix">
+        <div class="card"><b>Цель</b><br>Повысить semantic gold quality и не скрыть legacy-overlap regressions.</div>
+        <div class="card"><b>Guard</b><br><code>Overlap@5 >= 0.65</code>, no per-query floor regression, <code>MRR >= 0.90</code>, no top-1 boilerplate.</div>
+        <div class="card"><b>Promotion rule</b><br>Runtime меняется только после safe effective value и human approval.</div>
+        <div class="card"><b>Result</b><br>Safe value: <code>0.15</code>; runtime rank-only, not BM25.</div>
+      </div>
+    </section>
+
+    <section id="spec">
+      <h2>Spec coverage</h2>
+      <table class="rpt-table">
+        <thead><tr><th>Requirement</th><th>Evidence</th><th>Verdict</th></tr></thead>
+        <tbody>
+          <tr><td>Pure helper and narrow detector</td><td><code>src/boilerplate-demotion.ts</code>, <code>tests/boilerplate-demotion.test.ts</code></td><td><span class="badge ok">DONE</span></td></tr>
+          <tr><td>Default-enabled settings factor <code>0.15</code></td><td><code>src/types.ts</code>, <code>src/settings.ts</code>, <code>src/i18n.ts</code> from earlier task plus rank-only text update in this diff</td><td><span class="badge ok">DONE</span></td></tr>
+          <tr><td>Rank-level demotion after weighted lexical and fusion</td><td><code>src/wiki-seeds.ts</code>, <code>src/page-similarity.ts</code>, <code>src/phases/query.ts</code>, <code>src/phases/query-cross-domain.ts</code></td><td><span class="badge ok">DONE</span></td></tr>
+          <tr><td>Config threading single/cross-domain</td><td><code>runQuery</code> and <code>runCrossDomainQuery</code> use the same <code>boilerplateDemotion</code> config</td><td><span class="badge ok">DONE</span></td></tr>
+          <tr><td>Eval gate remains <code>weighted-lexical-demoted</code></td><td><code>docs/superpowers/evals/jsonl-domain-storage-hld-eval.md</code>: accepted, factor <code>0.15</code></td><td><span class="badge ok">DONE</span></td></tr>
+          <tr><td>Docs and iwiki current</td><td><code>docs/rag-quality-recommendations.md</code>; iwiki <code>jsonl-domain-storage</code> and <code>hierarchical-retrieval-eval</code>; <code>wiki_lint</code> no stale/broken</td><td><span class="badge ok">DONE</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="plan">
+      <h2>Plan reconciliation</h2>
+      <table class="rpt-table">
+        <thead><tr><th>Plan task</th><th>Diff evidence</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Task 1: helper and lexical score invariant</td><td><code>src/boilerplate-demotion.ts</code>, <code>src/lexical-retrieval.ts</code>, helper/lexical tests</td><td><span class="badge ok">DONE</span></td></tr>
+          <tr><td>Task 2: runtime settings and query threading</td><td><code>src/wiki-seeds.ts</code>, <code>src/page-similarity.ts</code>, <code>src/phases/query.ts</code>, <code>src/phases/query-cross-domain.ts</code>, <code>dist/main.js</code></td><td><span class="badge ok">DONE</span></td></tr>
+          <tr><td>Task 3: eval gate</td><td><code>scripts/eval-jsonl-domain-storage.ts</code>, eval tests, live report</td><td><span class="badge ok">DONE</span></td></tr>
+          <tr><td>Task 4: docs, build, result</td><td><code>docs/rag-quality-recommendations.md</code>, iwiki updates, <code>npm run build</code>, this report</td><td><span class="badge ok">DONE</span></td></tr>
+        </tbody>
+      </table>
+      <p>EXCESS/GAP: нет функционального excess вне plan scope. <code>dist/main.js</code> — expected generated bundle after build. Plan body updated to remove stale candidate-setting wording and keep hash current.</p>
+    </section>
+
+    <section id="changes">
+      <h2>Карта изменений</h2>
+      <table class="rpt-table">
+        <thead><tr><th>Файл</th><th>Изменение</th><th>Причина</th><th>Evidence</th></tr></thead>
+        <tbody>
+          <tr><td><code>src/boilerplate-demotion.ts</code></td><td>Удалён score helper; добавлен rank-id helper for fusion caps.</td><td>Score-level demotion rejected; fusion cap needs rank-only demotion before top-K.</td><td>Helper tests 5/5 pass.</td></tr>
+          <tr><td><code>src/lexical-retrieval.ts</code></td><td>Убраны <code>boilerplateDemotion</code> inputs and score mutation.</td><td>Lexical scores must stay raw.</td><td><code>lexical page and chunk scores ignore boilerplate paths</code>.</td></tr>
+          <tr><td><code>src/wiki-seeds.ts</code></td><td>Seed scoring raw; demotion after sorted list before top-K.</td><td>Rank-only runtime behavior.</td><td>Focused retrieval tests pass.</td></tr>
+          <tr><td><code>src/page-similarity.ts</code></td><td>Chunk/sparse/fused rank demotion after scoring; dense cosine remains raw; hybrid demotes fused output only.</td><td>Fix review findings and preserve dense behavior.</td><td>Re-review PASS; focused tests pass.</td></tr>
+          <tr><td><code>src/phases/query.ts</code></td><td>Final fused article cap now demotes ids before cap.</td><td>Prevent boilerplate occupying limited final candidate slots.</td><td>Re-review PASS.</td></tr>
+          <tr><td><code>src/phases/query-cross-domain.ts</code></td><td>Cross-domain merge cap accepts config and demotes before cap.</td><td>Single/cross-domain parity.</td><td>Re-review PASS.</td></tr>
+          <tr><td><code>src/i18n.ts</code></td><td>Setting descriptions say rank demotion, not score and rank.</td><td>User-facing accuracy.</td><td><code>rg</code> no stale score-rank strings in runtime code.</td></tr>
+          <tr><td><code>scripts/eval-jsonl-domain-storage.ts</code></td><td>Removed rejected <code>weighted-lexical-score-rank-demoted</code> variant.</td><td>Gate is existing accepted rank-only variant.</td><td>Live report lacks old variant.</td></tr>
+          <tr><td><code>tests/*.test.ts</code></td><td>Tests updated for rank-only behavior and fusion cap helper.</td><td>Protect score invariant and rank pass.</td><td>23/23 focused tests pass.</td></tr>
+          <tr><td><code>docs/rag-quality-recommendations.md</code></td><td>Runtime promotion documented as default rank-only factor <code>0.15</code>.</td><td>Docs must match behavior.</td><td>Doc diff and wiki_lint.</td></tr>
+          <tr><td><code>docs/superpowers/evals/jsonl-domain-storage-hld-eval.md</code></td><td>Regenerated live HLD eval report.</td><td>No-regression gate evidence.</td><td>Aggregate verdict accepted.</td></tr>
+          <tr><td><code>dist/main.js</code></td><td>Production bundle regenerated.</td><td>Build artifact sync.</td><td><code>npm run build</code> pass.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="review">
+      <h2>Code review findings</h2>
+      <table class="rpt-table">
+        <thead><tr><th>Finding</th><th>Fix</th><th>Evidence</th></tr></thead>
+        <tbody>
+          <tr><td>Fusion-stage top-K caps skipped demotion.</td><td><code>demoteBoilerplateRankedIds</code> added and used in single/cross-domain caps.</td><td>Re-review PASS; helper test covers cap.</td></tr>
+          <tr><td>Dense rankings were demoted too early and hybrid double-demoted inputs.</td><td>Pure dense stays raw; hybrid uses raw dense/raw sparse pools, demotes fused output only.</td><td>Re-review PASS with refs to <code>src/page-similarity.ts</code>.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="verification">
+      <h2>Verification evidence</h2>
+      <table class="rpt-table">
+        <thead><tr><th>Команда</th><th>Результат</th></tr></thead>
+        <tbody>
+          <tr><td><code>node --import tsx --test tests/boilerplate-demotion.test.ts tests/lexical-retrieval.test.ts tests/page-similarity-jsonl.test.ts tests/eval-jsonl-domain-storage.test.ts</code></td><td><span class="badge ok">PASS</span> 23/23 tests.</td></tr>
+          <tr><td><code>npm run lint</code></td><td><span class="badge ok">PASS</span> 0 errors, 4 existing warnings in <code>src/claude-cli-client.ts</code> and <code>src/okf-export-fs.ts</code>.</td></tr>
+          <tr><td><code>npm run build</code></td><td><span class="badge ok">PASS</span> <code>dist/</code> updated.</td></tr>
+          <tr><td><code>npx tsx scripts/eval-jsonl-domain-storage.ts --source .../HLD --out docs/superpowers/evals/jsonl-domain-storage-hld-eval.md</code></td><td><span class="badge ok">PASS</span> accepted; <code>weighted-lexical-demoted</code> factor <code>0.15</code>, Recall@5 <code>0.76</code>, nDCG@5 <code>0.92</code>, MRR <code>1.00</code>.</td></tr>
+          <tr><td><code>wiki_lint(domain="obsidian-ai-wiki")</code></td><td><span class="badge ok">PASS</span> no broken, stale, orphan, missing source; unrelated advisory <code>long_lead</code> remains.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="documentation">
+      <h2>Documentation evidence</h2>
+      <div class="matrix">
+        <div class="card"><b>Repo docs</b><br><code>docs/rag-quality-recommendations.md</code> now says runtime rank-only demotion default <code>0.15</code>.</div>
+        <div class="card"><b>iwiki</b><br><code>jsonl-domain-storage</code> Retrieval documents runtime default, BM25 eval-only, dense boundary.</div>
+        <div class="card"><b>iwiki</b><br><code>hierarchical-retrieval-eval</code> Current State documents sparse/fusion/chunk rank pass and raw dense cosine.</div>
+        <div class="card"><b>Plan</b><br><code>result_check</code> OK and TODO row closed for <code>runtime-boilerplate-demotion</code>.</div>
+      </div>
+    </section>
+
+    <section id="decision">
+      <h2>Decision propagation</h2>
+      <table class="rpt-table">
+        <thead><tr><th>Decision drift</th><th>Propagation</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Initial score-plus-rank plan failed live no-regression floor.</td><td>Spec and plan revised to rank-only; old score-level code removed.</td><td><span class="badge ok">closed</span></td></tr>
+          <tr><td>Reviewer found dense demotion risk.</td><td>Dense cosine kept raw; hybrid demotes only fused output.</td><td><span class="badge ok">closed</span></td></tr>
+          <tr><td>Reviewer found fusion cap gap.</td><td>Single/cross-domain fusion caps now demote before top-K.</td><td><span class="badge ok">closed</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="verdict">
+      <h2>Final verdict</h2>
+      <p><span class="badge ok">OK</span> Implementation matches the approved rank-only spec and revised plan. Required verification passed, live HLD eval is accepted, repository docs and iwiki are current, and review findings are fixed.</p>
+      <details><summary>Source anchors</summary>
+        <ul>
+          <li><code>docs/superpowers/specs/2026-07-11-runtime-boilerplate-demotion-design.md</code> — Requirements, Runtime Data Flow, Eval Gate.</li>
+          <li><code>docs/superpowers/plans/2026-07-11-runtime-boilerplate-demotion.md</code> — Revision After Eval Debug, Task 1-4, <code>result_check</code>.</li>
+          <li><code>docs/superpowers/evals/jsonl-domain-storage-hld-eval.md</code> — Aggregate verdict accepted.</li>
+          <li><code>docs/TODO.md</code> — row <code>runtime-boilerplate-demotion</code> closed.</li>
+        </ul>
+      </details>
+    </section>
+  </main>
+</body>
+</html>

@@ -26,7 +26,6 @@ Setting recommendation: `candidate: 0.15`
 | bm25-chunk | - | 0.60 | 0.77 | 1.00 | 0.64 | no | yes | - |
 | rrf-weighted-bm25 | - | 0.64 | 0.77 | 1.00 | 0.64 | no | yes | - |
 | rrf-weighted-bm25-legacy | - | 0.64 | 0.78 | 1.00 | 0.64 | no | yes | - |
-| weighted-lexical-score-rank-demoted | 0.15 | 0.76 | 0.91 | 1.00 | 0.56 | no | no | legacy overlap 0.20 < floor 0.40 |
 | weighted-lexical-demoted | 0.15 | 0.76 | 0.92 | 1.00 | 0.60 | no | yes | - |
 | rrf-weighted-bm25-demoted | 0.15 | 0.64 | 0.78 | 1.00 | 0.56 | no | no | legacy overlap 0.20 < floor 0.40 |
 | rrf-weighted-bm25-legacy-demoted | 0.15 | 0.64 | 0.80 | 1.00 | 0.60 | no | yes | - |
@@ -45,7 +44,7 @@ Setting recommendation: `candidate: 0.15`
 Theme: data export / S3 / ClickHouse
 Question: Какие HLD описывают экспорт данных через S3 или ClickHouse и какие компоненты участвуют?
 Status: accepted
-Latency: 194 ms
+Latency: 133 ms
 Baseline Overlap@5: 0.40
 Improved Overlap@5: 0.40
 Delta: +0.00
@@ -116,12 +115,6 @@ Variants:
   - `!Wiki/hld-jsonl-eval/pages/сип-сип-hld.md` (gold grade 0)
   - `!Wiki/hld-jsonl-eval/pages/экспорт-витрин-из-гп-в-кх-через-s3.md` (gold grade 3)
   - `!Wiki/hld-jsonl-eval/pages/1лтп-1лтп-hld.md` (gold grade 0)
-  - `!Wiki/hld-jsonl-eval/pages/экспорт-в-слой-распространения-s3.md` (gold grade 3)
-- `weighted-lexical-score-rank-demoted`: factor 0.15, Recall@5 0.80, nDCG@5 0.88, MRR 1.00, LegacyOverlap@5 0.40, Top-1 boilerplate no, accepted yes
-  - `!Wiki/hld-jsonl-eval/pages/экспорт-витрин-из-гп-в-кх-через-s3.md` (gold grade 3)
-  - `!Wiki/hld-jsonl-eval/pages/ппа-clickstream-ппа-clickstream-hld.md` (gold grade 2)
-  - `!Wiki/hld-jsonl-eval/pages/1лтп-1лтп-hld.md` (gold grade 0)
-  - `!Wiki/hld-jsonl-eval/pages/rt-widestore-clickhouse-s3-storage-optimize-fix.md` (gold grade 2)
   - `!Wiki/hld-jsonl-eval/pages/экспорт-в-слой-распространения-s3.md` (gold grade 3)
 - `weighted-lexical-demoted`: factor 0.15, Recall@5 0.80, nDCG@5 0.88, MRR 1.00, LegacyOverlap@5 0.40, Top-1 boilerplate no, accepted yes
   - `!Wiki/hld-jsonl-eval/pages/экспорт-витрин-из-гп-в-кх-через-s3.md` (gold grade 3)
@@ -200,7 +193,6 @@ Variants vs weighted-lexical:
 - `bm25-chunk`: ΔRecall@5 -0.40, ΔnDCG@5 -0.32, ΔMRR +0.00, ΔLegacyOverlap@5 +0.20
 - `rrf-weighted-bm25`: ΔRecall@5 -0.20, ΔnDCG@5 -0.23, ΔMRR +0.00, ΔLegacyOverlap@5 +0.00
 - `rrf-weighted-bm25-legacy`: ΔRecall@5 -0.20, ΔnDCG@5 -0.25, ΔMRR +0.00, ΔLegacyOverlap@5 +0.00
-- `weighted-lexical-score-rank-demoted`: ΔRecall@5 +0.00, ΔnDCG@5 +0.00, ΔMRR +0.00, ΔLegacyOverlap@5 +0.00
 - `weighted-lexical-demoted`: ΔRecall@5 +0.00, ΔnDCG@5 +0.00, ΔMRR +0.00, ΔLegacyOverlap@5 +0.00
 - `rrf-weighted-bm25-demoted`: ΔRecall@5 -0.20, ΔnDCG@5 -0.23, ΔMRR +0.00, ΔLegacyOverlap@5 +0.00
 - `rrf-weighted-bm25-legacy-demoted`: ΔRecall@5 -0.20, ΔnDCG@5 -0.25, ΔMRR +0.00, ΔLegacyOverlap@5 +0.00
@@ -216,7 +208,6 @@ Variants vs weighted-lexical:
 BM25 contribution:
 - best BM25-family variant `rrf-weighted-bm25`: ΔnDCG@5 -0.23, ΔRecall@5 -0.20
 Demotion contribution:
-- `weighted-lexical-score-rank-demoted` factor 0.15: no top-5 movement
 - `weighted-lexical-demoted` factor 0.15: no top-5 movement
 - `rrf-weighted-bm25-demoted` factor 0.15: no top-5 movement
 - `rrf-weighted-bm25-legacy-demoted` factor 0.15: no top-5 movement
@@ -240,7 +231,7 @@ Top chunks:
 Theme: Airflow HA / balancing
 Question: Где описана отказоустойчивая архитектура Airflow и какие решения по балансировке указаны?
 Status: accepted
-Latency: 175 ms
+Latency: 120 ms
 Baseline Overlap@5: 1.00
 Improved Overlap@5: 1.00
 Delta: +0.00
@@ -307,12 +298,6 @@ Variants:
   - `!Wiki/hld-jsonl-eval/pages/rt-dataexporter-airflow-ha-architecture-v4.md` (gold grade 3)
   - `!Wiki/hld-jsonl-eval/pages/rt-dataexporter-airflow-balancing-analysis.md` (gold grade 2)
 - `rrf-weighted-bm25-legacy`: factor -, Recall@5 1.00, nDCG@5 1.00, MRR 1.00, LegacyOverlap@5 1.00, Top-1 boilerplate no, accepted yes
-  - `!Wiki/hld-jsonl-eval/pages/rt-dataexporter-airflow-ha-architecture-v1.md` (gold grade 3)
-  - `!Wiki/hld-jsonl-eval/pages/rt-dataexporter-airflow-ha-architecture-v2.md` (gold grade 3)
-  - `!Wiki/hld-jsonl-eval/pages/rt-dataexporter-airflow-ha-architecture-v3.md` (gold grade 3)
-  - `!Wiki/hld-jsonl-eval/pages/rt-dataexporter-airflow-ha-architecture-v4.md` (gold grade 3)
-  - `!Wiki/hld-jsonl-eval/pages/rt-dataexporter-airflow-balancing-analysis.md` (gold grade 2)
-- `weighted-lexical-score-rank-demoted`: factor 0.15, Recall@5 1.00, nDCG@5 1.00, MRR 1.00, LegacyOverlap@5 1.00, Top-1 boilerplate no, accepted yes
   - `!Wiki/hld-jsonl-eval/pages/rt-dataexporter-airflow-ha-architecture-v1.md` (gold grade 3)
   - `!Wiki/hld-jsonl-eval/pages/rt-dataexporter-airflow-ha-architecture-v2.md` (gold grade 3)
   - `!Wiki/hld-jsonl-eval/pages/rt-dataexporter-airflow-ha-architecture-v3.md` (gold grade 3)
@@ -395,7 +380,6 @@ Variants vs weighted-lexical:
 - `bm25-chunk`: ΔRecall@5 +0.00, ΔnDCG@5 +0.00, ΔMRR +0.00, ΔLegacyOverlap@5 +0.00
 - `rrf-weighted-bm25`: ΔRecall@5 +0.00, ΔnDCG@5 +0.00, ΔMRR +0.00, ΔLegacyOverlap@5 +0.00
 - `rrf-weighted-bm25-legacy`: ΔRecall@5 +0.00, ΔnDCG@5 +0.00, ΔMRR +0.00, ΔLegacyOverlap@5 +0.00
-- `weighted-lexical-score-rank-demoted`: ΔRecall@5 +0.00, ΔnDCG@5 +0.00, ΔMRR +0.00, ΔLegacyOverlap@5 +0.00
 - `weighted-lexical-demoted`: ΔRecall@5 +0.00, ΔnDCG@5 +0.00, ΔMRR +0.00, ΔLegacyOverlap@5 +0.00
 - `rrf-weighted-bm25-demoted`: ΔRecall@5 +0.00, ΔnDCG@5 +0.00, ΔMRR +0.00, ΔLegacyOverlap@5 +0.00
 - `rrf-weighted-bm25-legacy-demoted`: ΔRecall@5 +0.00, ΔnDCG@5 +0.00, ΔMRR +0.00, ΔLegacyOverlap@5 +0.00
@@ -411,7 +395,6 @@ Variants vs weighted-lexical:
 BM25 contribution:
 - best BM25-family variant `bm25-page`: ΔnDCG@5 +0.00, ΔRecall@5 +0.00
 Demotion contribution:
-- `weighted-lexical-score-rank-demoted` factor 0.15: no top-5 movement
 - `weighted-lexical-demoted` factor 0.15: no top-5 movement
 - `rrf-weighted-bm25-demoted` factor 0.15: no top-5 movement
 - `rrf-weighted-bm25-legacy-demoted` factor 0.15: no top-5 movement
@@ -435,7 +418,7 @@ Top chunks:
 Theme: integrations / consumers / data marts
 Question: Какие документы описывают интеграции потребителей с витринными БД или дата-мартами?
 Status: accepted
-Latency: 169 ms
+Latency: 110 ms
 Baseline Overlap@5: 0.40
 Improved Overlap@5: 0.40
 Delta: +0.00
@@ -507,12 +490,6 @@ Variants:
   - `!Wiki/hld-jsonl-eval/pages/интеграция-дзо-с-витринными-бд.md` (gold grade 3)
   - `!Wiki/hld-jsonl-eval/pages/template-hld-v2-standard.md` (gold grade 0)
   - `!Wiki/hld-jsonl-eval/pages/сип-сип-hld.md` (gold grade 0)
-- `weighted-lexical-score-rank-demoted`: factor 0.15, Recall@5 0.80, nDCG@5 0.96, MRR 1.00, LegacyOverlap@5 0.20, Top-1 boilerplate no, accepted no, guards legacy overlap 0.20 < floor 0.40
-  - `!Wiki/hld-jsonl-eval/pages/интеграция-систем-потребителей-с-етп-дата.md` (gold grade 3)
-  - `!Wiki/hld-jsonl-eval/pages/интеграция-дзо-с-витринными-бд.md` (gold grade 3)
-  - `!Wiki/hld-jsonl-eval/pages/интеграция-с-gus.md` (gold grade 2)
-  - `!Wiki/hld-jsonl-eval/pages/ппа-ппа-hld.md` (gold grade 0)
-  - `!Wiki/hld-jsonl-eval/pages/интеграция-rt-dv.md` (gold grade 2)
 - `weighted-lexical-demoted`: factor 0.15, Recall@5 0.80, nDCG@5 0.97, MRR 1.00, LegacyOverlap@5 0.40, Top-1 boilerplate no, accepted yes
   - `!Wiki/hld-jsonl-eval/pages/интеграция-систем-потребителей-с-етп-дата.md` (gold grade 3)
   - `!Wiki/hld-jsonl-eval/pages/интеграция-дзо-с-витринными-бд.md` (gold grade 3)
@@ -590,7 +567,6 @@ Variants vs weighted-lexical:
 - `bm25-chunk`: ΔRecall@5 -0.20, ΔnDCG@5 -0.09, ΔMRR +0.00, ΔLegacyOverlap@5 +0.00
 - `rrf-weighted-bm25`: ΔRecall@5 -0.20, ΔnDCG@5 -0.20, ΔMRR +0.00, ΔLegacyOverlap@5 +0.00
 - `rrf-weighted-bm25-legacy`: ΔRecall@5 -0.20, ΔnDCG@5 -0.10, ΔMRR +0.00, ΔLegacyOverlap@5 +0.00
-- `weighted-lexical-score-rank-demoted`: ΔRecall@5 +0.00, ΔnDCG@5 +0.01, ΔMRR +0.00, ΔLegacyOverlap@5 -0.20
 - `weighted-lexical-demoted`: ΔRecall@5 +0.00, ΔnDCG@5 +0.02, ΔMRR +0.00, ΔLegacyOverlap@5 +0.00
 - `rrf-weighted-bm25-demoted`: ΔRecall@5 -0.20, ΔnDCG@5 -0.20, ΔMRR +0.00, ΔLegacyOverlap@5 -0.20
 - `rrf-weighted-bm25-legacy-demoted`: ΔRecall@5 -0.20, ΔnDCG@5 -0.10, ΔMRR +0.00, ΔLegacyOverlap@5 +0.00
@@ -606,7 +582,6 @@ Variants vs weighted-lexical:
 BM25 contribution:
 - best BM25-family variant `bm25-chunk`: ΔnDCG@5 -0.09, ΔRecall@5 -0.20
 Demotion contribution:
-- `weighted-lexical-score-rank-demoted` factor 0.15: no top-5 movement
 - `weighted-lexical-demoted` factor 0.15: `!Wiki/hld-jsonl-eval/pages/template-hld-v2-standard.md` -> `!Wiki/hld-jsonl-eval/pages/интеграция-с-gus.md`; `!Wiki/hld-jsonl-eval/pages/интеграция-с-gus.md` -> `!Wiki/hld-jsonl-eval/pages/интеграция-rt-dv.md`; `!Wiki/hld-jsonl-eval/pages/интеграция-rt-dv.md` -> `!Wiki/hld-jsonl-eval/pages/template-hld-v2-standard.md`
 - `rrf-weighted-bm25-demoted` factor 0.15: `!Wiki/hld-jsonl-eval/pages/template-hld-v2-standard.md` -> `!Wiki/hld-jsonl-eval/pages/саоb2o.md`; `!Wiki/hld-jsonl-eval/pages/саоb2o.md` -> `!Wiki/hld-jsonl-eval/pages/сип-сип-hld.md`
 - `rrf-weighted-bm25-legacy-demoted` factor 0.15: `!Wiki/hld-jsonl-eval/pages/template-hld-v2-standard.md` -> `!Wiki/hld-jsonl-eval/pages/сип-сип-hld.md`; `!Wiki/hld-jsonl-eval/pages/сип-сип-hld.md` -> `!Wiki/hld-jsonl-eval/pages/1лтп-1лтп-hld.md`
@@ -630,7 +605,7 @@ Top chunks:
 Theme: source-system migration / GitFlame
 Question: Что известно о миграции на GitFlame и связанных архитектурных ограничениях?
 Status: accepted
-Latency: 165 ms
+Latency: 108 ms
 Baseline Overlap@5: 0.60
 Improved Overlap@5: 0.80
 Delta: +0.20
@@ -699,12 +674,6 @@ Variants:
   - `!Wiki/hld-jsonl-eval/pages/rt-widestore-join-clickhouse-etl-join-analysis.md` (gold grade 2)
   - `!Wiki/hld-jsonl-eval/pages/template-readme.md` (gold grade 0)
   - `!Wiki/hld-jsonl-eval/pages/template-hld-v2-standard.md` (gold grade 0)
-- `weighted-lexical-score-rank-demoted`: factor 0.15, Recall@5 0.60, nDCG@5 0.93, MRR 1.00, LegacyOverlap@5 0.60, Top-1 boilerplate no, accepted yes
-  - `!Wiki/hld-jsonl-eval/pages/миграция-на-gitflame.md` (gold grade 3)
-  - `!Wiki/hld-jsonl-eval/pages/rt-widestore-join-clickhouse-etl-join-analysis.md` (gold grade 2)
-  - `!Wiki/hld-jsonl-eval/pages/rt-widestore-технический-план-миграции-кластера-clickhouse-через-бэкап.md` (gold grade 2)
-  - `!Wiki/hld-jsonl-eval/pages/ппа-clickstream-ппа-clickstream-hld.md` (gold grade 0)
-  - `!Wiki/hld-jsonl-eval/pages/template-readme.md` (gold grade 0)
 - `weighted-lexical-demoted`: factor 0.15, Recall@5 0.60, nDCG@5 0.93, MRR 1.00, LegacyOverlap@5 0.60, Top-1 boilerplate no, accepted yes
   - `!Wiki/hld-jsonl-eval/pages/миграция-на-gitflame.md` (gold grade 3)
   - `!Wiki/hld-jsonl-eval/pages/rt-widestore-join-clickhouse-etl-join-analysis.md` (gold grade 2)
@@ -782,7 +751,6 @@ Variants vs weighted-lexical:
 - `bm25-chunk`: ΔRecall@5 +0.00, ΔnDCG@5 +0.00, ΔMRR +0.00, ΔLegacyOverlap@5 -0.20
 - `rrf-weighted-bm25`: ΔRecall@5 +0.00, ΔnDCG@5 +0.00, ΔMRR +0.00, ΔLegacyOverlap@5 +0.00
 - `rrf-weighted-bm25-legacy`: ΔRecall@5 +0.00, ΔnDCG@5 +0.00, ΔMRR +0.00, ΔLegacyOverlap@5 +0.00
-- `weighted-lexical-score-rank-demoted`: ΔRecall@5 +0.00, ΔnDCG@5 +0.00, ΔMRR +0.00, ΔLegacyOverlap@5 -0.20
 - `weighted-lexical-demoted`: ΔRecall@5 +0.00, ΔnDCG@5 +0.00, ΔMRR +0.00, ΔLegacyOverlap@5 -0.20
 - `rrf-weighted-bm25-demoted`: ΔRecall@5 +0.00, ΔnDCG@5 +0.00, ΔMRR +0.00, ΔLegacyOverlap@5 -0.20
 - `rrf-weighted-bm25-legacy-demoted`: ΔRecall@5 +0.00, ΔnDCG@5 +0.00, ΔMRR +0.00, ΔLegacyOverlap@5 -0.20
@@ -798,7 +766,6 @@ Variants vs weighted-lexical:
 BM25 contribution:
 - best BM25-family variant `bm25-chunk`: ΔnDCG@5 +0.00, ΔRecall@5 +0.00
 Demotion contribution:
-- `weighted-lexical-score-rank-demoted` factor 0.15: `!Wiki/hld-jsonl-eval/pages/template-readme.md` -> `!Wiki/hld-jsonl-eval/pages/ппа-clickstream-ппа-clickstream-hld.md`; `!Wiki/hld-jsonl-eval/pages/template-hld-v2-standard.md` -> `!Wiki/hld-jsonl-eval/pages/template-readme.md`
 - `weighted-lexical-demoted` factor 0.15: `!Wiki/hld-jsonl-eval/pages/template-readme.md` -> `!Wiki/hld-jsonl-eval/pages/ппа-clickstream-ппа-clickstream-hld.md`
 - `rrf-weighted-bm25-demoted` factor 0.15: `!Wiki/hld-jsonl-eval/pages/template-hld-v2-standard.md` -> `!Wiki/hld-jsonl-eval/pages/ппа-clickstream-ппа-clickstream-hld.md`
 - `rrf-weighted-bm25-legacy-demoted` factor 0.15: `!Wiki/hld-jsonl-eval/pages/template-hld-v2-standard.md` -> `!Wiki/hld-jsonl-eval/pages/ппа-clickstream-ппа-clickstream-hld.md`
@@ -822,7 +789,7 @@ Top chunks:
 Theme: architecture ownership / components
 Question: Какие HLD фиксируют состав архитектурных компонентов и зоны ответственности проектов?
 Status: accepted
-Latency: 168 ms
+Latency: 110 ms
 Baseline Overlap@5: 0.20
 Improved Overlap@5: 0.80
 Delta: +0.60
@@ -894,12 +861,6 @@ Variants:
   - `!Wiki/hld-jsonl-eval/pages/су-ноп.md` (gold grade 3)
   - `!Wiki/hld-jsonl-eval/pages/etl-hive.md` (gold grade 0)
   - `!Wiki/hld-jsonl-eval/pages/сип-саммари-siplr-564-datadev-803.md` (gold grade 0)
-- `weighted-lexical-score-rank-demoted`: factor 0.15, Recall@5 0.60, nDCG@5 0.78, MRR 1.00, LegacyOverlap@5 0.60, Top-1 boilerplate no, accepted yes
-  - `!Wiki/hld-jsonl-eval/pages/су-ноп.md` (gold grade 3)
-  - `!Wiki/hld-jsonl-eval/pages/ппа-clickstream-ппа-clickstream-draft.md` (gold grade 2)
-  - `!Wiki/hld-jsonl-eval/pages/etl-hive.md` (gold grade 0)
-  - `!Wiki/hld-jsonl-eval/pages/rt-dataexporter-airflow-calculator-methodology.md` (gold grade 0)
-  - `!Wiki/hld-jsonl-eval/pages/1лтп-1лтп-draft.md` (gold grade 2)
 - `weighted-lexical-demoted`: factor 0.15, Recall@5 0.60, nDCG@5 0.79, MRR 1.00, LegacyOverlap@5 0.60, Top-1 boilerplate no, accepted yes
   - `!Wiki/hld-jsonl-eval/pages/су-ноп.md` (gold grade 3)
   - `!Wiki/hld-jsonl-eval/pages/ппа-clickstream-ппа-clickstream-draft.md` (gold grade 2)
@@ -977,7 +938,6 @@ Variants vs weighted-lexical:
 - `bm25-chunk`: ΔRecall@5 -0.20, ΔnDCG@5 -0.28, ΔMRR +0.00, ΔLegacyOverlap@5 -0.20
 - `rrf-weighted-bm25`: ΔRecall@5 -0.20, ΔnDCG@5 -0.28, ΔMRR +0.00, ΔLegacyOverlap@5 -0.20
 - `rrf-weighted-bm25-legacy`: ΔRecall@5 -0.20, ΔnDCG@5 -0.28, ΔMRR +0.00, ΔLegacyOverlap@5 -0.20
-- `weighted-lexical-score-rank-demoted`: ΔRecall@5 +0.00, ΔnDCG@5 +0.00, ΔMRR +0.00, ΔLegacyOverlap@5 -0.20
 - `weighted-lexical-demoted`: ΔRecall@5 +0.00, ΔnDCG@5 +0.01, ΔMRR +0.00, ΔLegacyOverlap@5 -0.20
 - `rrf-weighted-bm25-demoted`: ΔRecall@5 -0.20, ΔnDCG@5 -0.21, ΔMRR +0.00, ΔLegacyOverlap@5 -0.20
 - `rrf-weighted-bm25-legacy-demoted`: ΔRecall@5 -0.20, ΔnDCG@5 -0.21, ΔMRR +0.00, ΔLegacyOverlap@5 -0.20
@@ -993,7 +953,6 @@ Variants vs weighted-lexical:
 BM25 contribution:
 - best BM25-family variant `rrf-weighted-bm25-demoted`: ΔnDCG@5 -0.21, ΔRecall@5 -0.20
 Demotion contribution:
-- `weighted-lexical-score-rank-demoted` factor 0.15: no top-5 movement
 - `weighted-lexical-demoted` factor 0.15: `!Wiki/hld-jsonl-eval/pages/template-readme.md` -> `!Wiki/hld-jsonl-eval/pages/1лтп-1лтп-draft.md`; `!Wiki/hld-jsonl-eval/pages/1лтп-1лтп-draft.md` -> `!Wiki/hld-jsonl-eval/pages/rt-dataexporter-airflow-calculator-methodology.md`
 - `rrf-weighted-bm25-demoted` factor 0.15: `!Wiki/hld-jsonl-eval/pages/template-readme.md` -> `!Wiki/hld-jsonl-eval/pages/су-ноп.md`; `!Wiki/hld-jsonl-eval/pages/су-ноп.md` -> `!Wiki/hld-jsonl-eval/pages/сип-сип-draft.md`; `!Wiki/hld-jsonl-eval/pages/сип-сип-draft.md` -> `!Wiki/hld-jsonl-eval/pages/template-readme.md`
 - `rrf-weighted-bm25-legacy-demoted` factor 0.15: `!Wiki/hld-jsonl-eval/pages/template-readme.md` -> `!Wiki/hld-jsonl-eval/pages/су-ноп.md`; `!Wiki/hld-jsonl-eval/pages/су-ноп.md` -> `!Wiki/hld-jsonl-eval/pages/etl-hive.md`; `!Wiki/hld-jsonl-eval/pages/etl-hive.md` -> `!Wiki/hld-jsonl-eval/pages/template-readme.md`

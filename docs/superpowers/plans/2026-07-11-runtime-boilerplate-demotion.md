@@ -1,6 +1,6 @@
 ---
 review:
-  plan_hash: f41b711b2a968fa9
+  plan_hash: 603ac693f9e7f6f7
   last_run: 2026-07-11
   phases:
     structure: { status: passed }
@@ -9,6 +9,10 @@ review:
     verifiability: { status: passed }
     consistency: { status: passed }
   findings: []
+result_check:
+  verdict: OK
+  plan_hash: 603ac693f9e7f6f7
+  last_run: 2026-07-12
 chain:
   intent: docs/superpowers/intents/2026-07-11-bm25-template-demotion-intent.md
   spec: docs/superpowers/specs/2026-07-11-runtime-boilerplate-demotion-design.md
@@ -741,16 +745,10 @@ Expected: commit succeeds.
 
 - [ ] **Step 4.1: Update repository docs**
 
-In `docs/rag-quality-recommendations.md`, replace the current candidate setting sentence:
+In `docs/rag-quality-recommendations.md`, document the runtime promotion:
 
 ```md
-Candidate runtime setting, if implemented later: boilerplate demotion factor `0.15`; stronger factors reduce legacy overlap and fail guards.
-```
-
-with:
-
-```md
-Runtime Query now enables boilerplate demotion by default with factor `0.15`, the accepted HLD eval value. The runtime applies the factor as a final rank-level demotion pass for the narrow generated-page set: `template-readme` and `template-hld-*`. Raw BM25 and BM25/RRF variants remain eval-only because they did not beat weighted lexical in the accepted harness.
+Runtime Query now enables rank-only boilerplate demotion by default with factor `0.15` for generated `template-readme` and `template-hld-*` pages. Raw BM25/RRF remain eval-only because they did not beat weighted lexical; stronger demotion factors reduce legacy overlap and fail guards.
 ```
 
 - [ ] **Step 4.2: Update iwiki**

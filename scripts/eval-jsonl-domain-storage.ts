@@ -5,7 +5,6 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { buildBm25Index, rankBm25, tokenizeBm25 } from "../src/bm25";
 import {
-  DEFAULT_BOILERPLATE_DEMOTION_FACTOR,
   demoteBoilerplateRankedItems,
   isBoilerplatePath,
   normalizeBoilerplateDemotionConfig,
@@ -40,7 +39,6 @@ export type RetrievalVariantId =
   | "rrf-weighted-bm25"
   | "rrf-weighted-bm25-legacy"
   | "weighted-lexical-demoted"
-  | "weighted-lexical-score-rank-demoted"
   | "rrf-weighted-bm25-demoted"
   | "rrf-weighted-bm25-legacy-demoted";
 
@@ -706,10 +704,6 @@ async function runQueries(files: SourceMarkdownFile[], indexPath: string, gold: 
     const started = Date.now();
     const labels = gold.queries[query.id].relevant;
     const questionTokens = evalQueryTokens(query);
-    const runtimeDemotion = normalizeBoilerplateDemotionConfig({
-      enabled: true,
-      factor: DEFAULT_BOILERPLATE_DEMOTION_FACTOR,
-    });
     const baselineTop = scoreBaseline(query, files);
     const legacySeedScores = allPaths
       .map((vaultPath) => {
@@ -761,45 +755,6 @@ async function runQueries(files: SourceMarkdownFile[], indexPath: string, gold: 
       5,
     );
     const jsonlTop = uniqueTop([...rebalancedTop5, ...fusedPaths, ...improvedPageTop, ...improvedChunkTop], 10);
-    const runtimePageRank = rankLexicalPages(questionTokens, pageRecords.map((record) => ({
-      id: record.articleId,
-      path: record.path,
-      title: path.basename(record.path, ".md"),
-      description: record.description,
-      boilerplateDemotion: runtimeDemotion,
-    })), 10);
-    const runtimeChunkRank = rankLexicalChunks(questionTokens, chunkInputs.map((chunk) => ({
-      ...chunk,
-      boilerplateDemotion: runtimeDemotion,
-    })), 10);
-    const runtimeFused = fuseLexicalRanks(
-      runtimePageRank,
-      runtimeChunkRank,
-      10,
-      10,
-      [legacyJsonlTop.map((item) => pageId(item))],
-    );
-    const runtimeImprovedPageTop = runtimePageRank.map((item) => pathByArticleId.get(item.id) ?? item.id);
-    const runtimeImprovedChunkTop = uniqueTop(runtimeChunkRank.map((chunk) => chunk.path), 10);
-    const runtimeFusedPaths = runtimeFused.map((item) => pathByArticleId.get(item.id) ?? item.id);
-    const runtimeRebalancedTop5 = rebalanceFusedTop(
-      runtimeFusedPaths,
-      runtimeImprovedPageTop,
-      runtimeImprovedChunkTop,
-      legacyJsonlTop,
-      5,
-    );
-    const runtimeWeightedTop = uniqueTop([
-      ...runtimeRebalancedTop5,
-      ...runtimeFusedPaths,
-      ...runtimeImprovedPageTop,
-      ...runtimeImprovedChunkTop,
-    ], 10);
-    const runtimeEquivalentTop = demoteBoilerplateTopForEval(
-      runtimeWeightedTop,
-      DEFAULT_BOILERPLATE_DEMOTION_FACTOR,
-      10,
-    );
     const baselineOverlapAt5 = overlapRatio(baselineTop, legacyJsonlTop, 5);
     const improvedOverlapAt5 = overlapRatio(baselineTop, jsonlTop, 5);
     const overlapDelta = improvedOverlapAt5 - baselineOverlapAt5;
@@ -841,12 +796,6 @@ async function runQueries(files: SourceMarkdownFile[], indexPath: string, gold: 
       { id: "rrf-weighted-bm25", top: rrfWeightedBm25Top, demotionMoved: [] },
       { id: "rrf-weighted-bm25-legacy", top: rrfWeightedBm25LegacyTop, demotionMoved: [] },
     ];
-    variantInputs.push({
-      id: "weighted-lexical-score-rank-demoted",
-      top: runtimeEquivalentTop,
-      demotionFactor: DEFAULT_BOILERPLATE_DEMOTION_FACTOR,
-      demotionMoved: demotionMoved(runtimeWeightedTop, runtimeEquivalentTop),
-    });
     for (const factor of DEMOTION_FACTORS) {
       const weightedDemoted = demoteBoilerplateTopForEval(jsonlTop, factor, 10);
       variantInputs.push({

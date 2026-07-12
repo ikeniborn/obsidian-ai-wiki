@@ -1,5 +1,6 @@
 import { pageId } from "./wiki-graph";
 import { normalizeLexicalPageScore, scoreLexicalPage, tokenizeLexical } from "./lexical-retrieval";
+import { demoteBoilerplateRankedItems } from "./boilerplate-demotion";
 import type { BoilerplateDemotionConfig } from "./boilerplate-demotion";
 
 const BODY_CAP = 500;
@@ -26,7 +27,6 @@ export function scoreSeed(
   pageIdValue: string,
   content: string,
   annotation?: string,
-  boilerplateDemotion?: BoilerplateDemotionConfig,
 ): number {
   const keywords = [...parseFmKeywords(content)].join(" ");
   return normalizeLexicalPageScore(scoreLexicalPage(questionTokens, {
@@ -35,7 +35,6 @@ export function scoreSeed(
     title: pageIdValue,
     description: [annotation, keywords].filter(Boolean).join("\n"),
     content: bodyContent(content),
-    boilerplateDemotion,
   }).score);
 }
 
@@ -49,13 +48,17 @@ export function selectSeeds(
 ): { id: string; score: number }[] {
   const q = tokenize(question);
   if (q.size === 0) return [];
-  const scored: { id: string; score: number }[] = [];
+  const scored: { id: string; path: string; score: number }[] = [];
   for (const [path, content] of pages) {
     const id = pageId(path);
     const annotation = indexAnnotations?.get(id);
-    const score = scoreSeed(q, id, content, annotation, boilerplateDemotion);
-    if (score >= minScore && score > 0) scored.push({ id, score });
+    const score = scoreSeed(q, id, content, annotation);
+    if (score >= minScore && score > 0) scored.push({ id, path, score });
   }
   scored.sort((a, b) => (b.score - a.score) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  return scored.slice(0, topK);
+  return demoteBoilerplateRankedItems(
+    scored,
+    boilerplateDemotion ?? { enabled: false, factor: 0 },
+    topK,
+  ).map(({ id, score }) => ({ id, score }));
 }

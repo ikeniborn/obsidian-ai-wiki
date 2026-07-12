@@ -67,41 +67,37 @@ test("length normalization prevents large template text from dominating", () => 
   assert.ok(compact.score > template.score);
 });
 
-test("boilerplate demotion lowers page and chunk lexical scores", () => {
+test("lexical page and chunk scores ignore boilerplate paths", () => {
   const query = tokenizeLexical("компоненты ответственность");
-  const boilerplateDemotion = { enabled: true, factor: 0.15 };
   const ownerPage = scoreLexicalPage(query, {
     id: "owner",
     path: "!Wiki/hld/pages/owner.md",
     title: "Owner",
     description: "компоненты ответственность",
-    boilerplateDemotion,
   });
   const templatePage = scoreLexicalPage(query, {
     id: "template-readme",
     path: "!Wiki/hld/pages/template-readme.md",
     title: "Template README",
     description: "компоненты ответственность",
-    boilerplateDemotion,
   });
 
-  assert.ok(ownerPage.score > templatePage.score);
+  assert.equal(ownerPage.score, templatePage.score);
 
-  const rawTemplateChunk = scoreLexicalChunk(query, {
+  const ownerChunk = scoreLexicalChunk(query, {
+    articleId: "owner",
+    path: "!Wiki/hld/pages/owner.md",
+    heading: "## Компоненты",
+    body: "ответственность",
+  });
+  const templateChunk = scoreLexicalChunk(query, {
     articleId: "template-hld-v2-standard",
     path: "!Wiki/hld/pages/template-hld-v2-standard.md",
     heading: "## Компоненты",
     body: "ответственность",
   });
-  const demotedTemplateChunk = scoreLexicalChunk(query, {
-    articleId: "template-hld-v2-standard",
-    path: "!Wiki/hld/pages/template-hld-v2-standard.md",
-    heading: "## Компоненты",
-    body: "ответственность",
-    boilerplateDemotion,
-  });
 
-  assert.ok(rawTemplateChunk.score > demotedTemplateChunk.score);
+  assert.equal(ownerChunk.score, templateChunk.score);
 });
 
 test("rankLexicalPages and rankLexicalChunks are deterministic", () => {

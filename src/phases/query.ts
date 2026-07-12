@@ -18,7 +18,11 @@ import { PageSimilarityService, renderContextChunks, type SelectedChunk } from "
 import { seedPassesGate } from "../retrieval-diag";
 import type { RetrievalMode, SeedFallbackReason } from "../retrieval-diag";
 import { promptVersionOf } from "../prompt-version";
-import { DEFAULT_BOILERPLATE_DEMOTION_FACTOR, type BoilerplateDemotionConfig } from "../boilerplate-demotion";
+import {
+  DEFAULT_BOILERPLATE_DEMOTION_FACTOR,
+  demoteBoilerplateRankedIds,
+  type BoilerplateDemotionConfig,
+} from "../boilerplate-demotion";
 
 import { pruneByRelevance, robustLow, FLOOR_LO_PCT } from "../retrieval-prune";
 import { answerFromContext } from "./query-answer";
@@ -297,7 +301,11 @@ export async function* runQuery(
     ? fuseVectorGraph(seeds, selectedIds, seedScores, expandedScores, cand.graph, graphDepth, rrfK)
     : undefined;
   const finalArticleIds = bfsFusion && fusedOrder
-    ? new Set(fusedOrder.filter((id) => selectedIds.has(id)).slice(0, topK * 3))
+    ? new Set(demoteBoilerplateRankedIds(
+      fusedOrder.filter((id) => selectedIds.has(id)),
+      boilerplateDemotion,
+      topK * 3,
+    ))
     : selectedIds;
   const articleScores = { ...expandedScores, ...seedScores };
   const chunkLimit = topK * 3;

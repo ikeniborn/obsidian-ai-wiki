@@ -30,15 +30,6 @@ export function normalizeBoilerplateDemotionConfig(input?: BoilerplateDemotionIn
   return { enabled, factor: Math.max(0, Math.min(1, factor)) };
 }
 
-export function applyBoilerplateScoreDemotion(
-  score: number,
-  vaultPath: string | undefined,
-  config: BoilerplateDemotionConfig,
-): number {
-  if (!config.enabled || config.factor <= 0 || !isBoilerplatePath(vaultPath)) return score;
-  return score * (1 - config.factor);
-}
-
 export function demoteBoilerplateRankedItems<T extends RankedBoilerplateItem>(
   rankedItems: T[],
   config: BoilerplateDemotionConfig,
@@ -52,4 +43,16 @@ export function demoteBoilerplateRankedItems<T extends RankedBoilerplateItem>(
     .sort((a, b) => (a.rank - b.rank) || (a.index - b.index))
     .slice(0, limit)
     .map(({ item }) => item);
+}
+
+export function demoteBoilerplateRankedIds(
+  rankedIds: string[],
+  config: BoilerplateDemotionConfig,
+  limit: number,
+): string[] {
+  return demoteBoilerplateRankedItems(
+    rankedIds.map((id, index) => ({ id, path: id, score: rankedIds.length - index })),
+    config,
+    limit,
+  ).map((item) => item.id);
 }

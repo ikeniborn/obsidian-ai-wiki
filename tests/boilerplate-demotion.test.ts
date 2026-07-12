@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  applyBoilerplateScoreDemotion,
+  demoteBoilerplateRankedIds,
   demoteBoilerplateRankedItems,
   isBoilerplatePath,
   normalizeBoilerplateDemotionConfig,
@@ -26,16 +26,6 @@ test("normalizeBoilerplateDemotionConfig applies defaults and clamps factor", ()
   assert.deepEqual(normalizeBoilerplateDemotionConfig({ factor: Number.NaN }), { enabled: true, factor: 0.15 });
   assert.deepEqual(normalizeBoilerplateDemotionConfig({ factor: Infinity }), { enabled: true, factor: 0.15 });
   assert.deepEqual(normalizeBoilerplateDemotionConfig({ factor: -Infinity }), { enabled: true, factor: 0.15 });
-});
-
-test("applyBoilerplateScoreDemotion lowers only enabled boilerplate scores", () => {
-  const config = { enabled: true, factor: 0.15 };
-  assert.equal(applyBoilerplateScoreDemotion(10, "!Wiki/hld/pages/template-readme.md", config), 8.5);
-  assert.equal(applyBoilerplateScoreDemotion(10, "!Wiki/hld/pages/owner.md", config), 10);
-  assert.equal(
-    applyBoilerplateScoreDemotion(10, "!Wiki/hld/pages/template-readme.md", { enabled: false, factor: 0.15 }),
-    10,
-  );
 });
 
 test("demoteBoilerplateRankedItems moves boilerplate behind stable candidates", () => {
@@ -69,4 +59,21 @@ test("demoteBoilerplateRankedItems returns empty results for non-positive limits
 
   assert.deepEqual(demoteBoilerplateRankedItems(ranked, { enabled: true, factor: 0.25 }, -1), []);
   assert.deepEqual(demoteBoilerplateRankedItems(ranked, { enabled: false, factor: 0.25 }, -1), []);
+});
+
+test("demoteBoilerplateRankedIds supports fusion caps before top-k", () => {
+  const ranked = [
+    "template-readme",
+    "owner",
+    "support-a",
+    "support-b",
+    "support-c",
+    "support-d",
+    "support-e",
+  ];
+
+  assert.deepEqual(
+    demoteBoilerplateRankedIds(ranked, { enabled: true, factor: 0.15 }, 2),
+    ["owner", "support-a"],
+  );
 });
