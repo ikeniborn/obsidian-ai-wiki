@@ -1,6 +1,6 @@
 ---
 review:
-  plan_hash: 4f41046ebf353e5a
+  plan_hash: f41b711b2a968fa9
   last_run: 2026-07-11
   phases:
     structure: { status: passed }
@@ -19,22 +19,28 @@ chain:
 
 **Goal:** Promote the eval-winning boilerplate demotion factor `0.15` into runtime Query as a default-enabled advanced retrieval setting.
 
-**Architecture:** Add one pure demotion helper module shared by runtime and eval. Apply demotion at two runtime points: weighted lexical score penalty and rank-level pass before top-K truncation. Keep BM25/RRF as eval-only comparison variants, and require a runtime-equivalent HLD eval no-regression gate.
+**Architecture:** Add one pure demotion helper module shared by runtime and eval. Apply demotion as a rank-level pass before top-K truncation; keep weighted lexical scores unchanged. Keep BM25/RRF as eval-only comparison variants, and require the rank-only HLD eval no-regression gate.
 
 **Tech Stack:** TypeScript, Obsidian plugin settings API, Node test runner via `node --import tsx --test`, existing HLD eval harness, iwiki MCP for documentation.
 
 ---
 
+## Revision After Eval Debug
+
+The original plan explored score-plus-rank demotion, but live HLD eval showed a no-regression conflict: for `integrations-consumers-marts`, score-level demotion removed the gold-0 `template-hld-v2-standard` page from top-5 and improved semantic quality, but dropped legacy `Overlap@5` below the approved floor. The user chose the safe promotion path: **rank-only runtime demotion with factor `0.15`**.
+
+This revision supersedes any older step text below that mentions score-level demotion, `weighted-lexical-score-rank-demoted`, or combined score-plus-rank runtime behavior. The final implementation must keep weighted lexical scores unchanged, apply only rank-level demotion in runtime, and use `weighted-lexical-demoted` factor `0.15` as the runtime-equivalent eval gate.
+
 ## File Structure
 
 - Create `src/boilerplate-demotion.ts`
-  - Owns narrow boilerplate path detection, config normalization, score demotion, and rank demotion.
+  - Owns narrow boilerplate path detection, config normalization, and rank demotion.
 - Modify `src/lexical-retrieval.ts`
-  - Accepts optional demotion config in page/chunk scoring and rank helpers.
+  - Keeps weighted lexical scoring unchanged; any score-level demotion from earlier commits must be removed.
 - Modify `src/wiki-seeds.ts`
-  - Threads demotion config into seed/page scoring.
+  - Keeps seed/page scoring unchanged and applies rank-level demotion after scoring.
 - Modify `src/page-similarity.ts`
-  - Stores demotion config in `PageSimilarityService` config and applies it to chunk ranking and sparse-side scoring.
+  - Stores demotion config in `PageSimilarityService` config and applies it to rank-level chunk ordering and sparse-side ordering.
 - Modify `src/types.ts`
   - Adds `nativeAgent.boilerplateDemotionEnabled` and `nativeAgent.boilerplateDemotionFactor` with defaults.
 - Modify `src/settings.ts`
@@ -48,7 +54,7 @@ chain:
 - Modify `src/phases/query-cross-domain.ts`
   - Uses `RetrieveCfg.boilerplateDemotion` for candidate merge and chunk similarity.
 - Modify `scripts/eval-jsonl-domain-storage.ts`
-  - Reuses runtime demotion helper and adds `weighted-lexical-score-rank-demoted`.
+  - Reuses runtime demotion helper and keeps `weighted-lexical-demoted` factor `0.15` as the runtime-equivalent gate.
 - Modify tests:
   - `tests/lexical-retrieval.test.ts`
   - `tests/page-similarity-jsonl.test.ts`
@@ -59,7 +65,7 @@ chain:
   - `docs/superpowers/evals/jsonl-domain-storage-hld-eval.md`
   - iwiki page `jsonl-domain-storage`, heading `Retrieval` or `Eval`
 
-## Task 1: Pure Demotion Helper and Lexical Score Penalty
+## Task 1: Pure Demotion Helper and Rank Demotion
 
 **Files:**
 - Create: `src/boilerplate-demotion.ts`
@@ -76,7 +82,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DEFAULT_BOILERPLATE_DEMOTION_FACTOR,
-  applyBoilerplateScoreDemotion,
   demoteBoilerplateRankedItems,
   isBoilerplatePath,
   normalizeBoilerplateDemotionConfig,
@@ -111,13 +116,6 @@ test("normalizeBoilerplateDemotionConfig defaults and clamps values", () => {
     enabled: true,
     factor: DEFAULT_BOILERPLATE_DEMOTION_FACTOR,
   });
-});
-
-test("applyBoilerplateScoreDemotion reduces boilerplate scores only", () => {
-  const config = normalizeBoilerplateDemotionConfig({ enabled: true, factor: 0.15 });
-  assert.equal(applyBoilerplateScoreDemotion(10, "!Wiki/hld/pages/template-readme.md", config), 8.5);
-  assert.equal(applyBoilerplateScoreDemotion(10, "!Wiki/hld/pages/real.md", config), 10);
-  assert.equal(applyBoilerplateScoreDemotion(10, "!Wiki/hld/pages/template-readme.md", { enabled: false, factor: 0.15 }), 10);
 });
 
 test("demoteBoilerplateRankedItems preserves non-boilerplate order", () => {
@@ -190,15 +188,6 @@ export function normalizeBoilerplateDemotionConfig(
   return { enabled, factor };
 }
 
-export function applyBoilerplateScoreDemotion(
-  score: number,
-  vaultPath: string | undefined,
-  config: BoilerplateDemotionConfig,
-): number {
-  if (!config.enabled || config.factor <= 0 || !isBoilerplatePath(vaultPath)) return score;
-  return score * (1 - config.factor);
-}
-
 export function demoteBoilerplateRankedItems<T extends RankedBoilerplateItem>(
   rankedItems: T[],
   config: BoilerplateDemotionConfig,
@@ -227,128 +216,28 @@ node --import tsx --test tests/boilerplate-demotion.test.ts
 
 Expected: PASS for all helper tests.
 
-- [ ] **Step 1.5: Add failing lexical score tests**
+- [ ] **Step 1.5: Verify lexical scoring remains unchanged**
 
-Append to `tests/lexical-retrieval.test.ts`:
+Do not add `boilerplateDemotion` to `LexicalPageInput` or `LexicalChunkInput`. The weighted lexical scorer must stay a pure score calculator; rank demotion is tested through `demoteBoilerplateRankedItems` and runtime/eval ordering tests.
 
-```ts
-test("boilerplate demotion lowers page and chunk lexical scores", () => {
-  const query = tokenizeLexical("компоненты ответственность");
-  const config = { enabled: true, factor: 0.15 };
-  const normalPage = scoreLexicalPage(query, {
-    id: "owner",
-    path: "!Wiki/hld/pages/owner.md",
-    title: "Компоненты",
-    description: "зоны ответственности",
-  });
-  const boilerplatePage = scoreLexicalPage(query, {
-    id: "template-readme",
-    path: "!Wiki/hld/pages/template-readme.md",
-    title: "Компоненты",
-    description: "зоны ответственности",
-    boilerplateDemotion: config,
-  });
-  const rawBoilerplatePage = scoreLexicalPage(query, {
-    id: "template-readme",
-    path: "!Wiki/hld/pages/template-readme.md",
-    title: "Компоненты",
-    description: "зоны ответственности",
-    boilerplateDemotion: { enabled: false, factor: 0.15 },
-  });
-
-  assert.ok(boilerplatePage.score < rawBoilerplatePage.score);
-  assert.ok(normalPage.score > boilerplatePage.score);
-
-  const rawChunk = scoreLexicalChunk(query, {
-    articleId: "template-hld-v2-standard",
-    path: "!Wiki/hld/pages/template-hld-v2-standard.md",
-    heading: "## Компоненты",
-    body: "зоны ответственности",
-    boilerplateDemotion: { enabled: false, factor: 0.15 },
-  });
-  const demotedChunk = scoreLexicalChunk(query, {
-    articleId: "template-hld-v2-standard",
-    path: "!Wiki/hld/pages/template-hld-v2-standard.md",
-    heading: "## Компоненты",
-    body: "зоны ответственности",
-    boilerplateDemotion: config,
-  });
-
-  assert.ok(demotedChunk.score < rawChunk.score);
-});
-```
-
-- [ ] **Step 1.6: Run lexical tests and confirm RED**
+- [ ] **Step 1.6: Run lexical tests**
 
 ```bash
 node --import tsx --test tests/lexical-retrieval.test.ts
 ```
 
-Expected: FAIL because lexical inputs do not accept or apply `boilerplateDemotion`.
+Expected: PASS; no lexical score penalty is introduced.
 
-- [ ] **Step 1.7: Apply score-level demotion in lexical scorer**
+- [ ] **Step 1.7: Keep lexical scoring unchanged**
 
-Modify `src/lexical-retrieval.ts`:
-
-```ts
-import type { BoilerplateDemotionConfig } from "./boilerplate-demotion";
-import { applyBoilerplateScoreDemotion } from "./boilerplate-demotion";
-```
-
-Extend inputs:
-
-```ts
-export interface LexicalPageInput {
-  id: string;
-  path?: string;
-  title?: string;
-  description?: string;
-  content?: string;
-  annotation?: string;
-  boilerplateDemotion?: BoilerplateDemotionConfig;
-}
-
-export interface LexicalChunkInput {
-  articleId: string;
-  path: string;
-  heading?: string;
-  body?: string;
-  embedText?: string;
-  ordinal?: number;
-  boilerplateDemotion?: BoilerplateDemotionConfig;
-}
-```
-
-Change final score returns:
-
-```ts
-const raw = evidence.path + evidence.title + evidence.description + evidence.body + evidence.exact + evidence.phrase;
-const score = raw * evidence.lengthPenalty;
-return {
-  score: input.boilerplateDemotion
-    ? applyBoilerplateScoreDemotion(score, path, input.boilerplateDemotion)
-    : score,
-  evidence,
-};
-```
-
-```ts
-const raw = evidence.path + evidence.heading + evidence.body + evidence.exact + evidence.phrase;
-const score = raw * evidence.lengthPenalty;
-return {
-  score: input.boilerplateDemotion
-    ? applyBoilerplateScoreDemotion(score, input.path, input.boilerplateDemotion)
-    : score,
-  evidence,
-};
-```
+Verify `src/lexical-retrieval.ts` has no boilerplate-demotion inputs and no score penalty. Boilerplate handling belongs only to ranked-list helpers that run after score computation.
 
 - [ ] **Step 1.8: Run focused tests and commit**
 
 ```bash
 node --import tsx --test tests/boilerplate-demotion.test.ts tests/lexical-retrieval.test.ts
 git add src/boilerplate-demotion.ts src/lexical-retrieval.ts tests/boilerplate-demotion.test.ts tests/lexical-retrieval.test.ts
-git commit -m "feat(retrieval): add boilerplate demotion scoring"
+git commit -m "feat(retrieval): add boilerplate rank demotion"
 ```
 
 Expected: tests pass and commit succeeds.
@@ -460,7 +349,7 @@ English:
 boilerplateDemotion_name: "Boilerplate demotion",
 boilerplateDemotion_desc: "Demote generated template/readme pages in lexical retrieval. Default on; only template-readme and template-hld-* are affected.",
 boilerplateDemotionFactor_name: "Boilerplate demotion factor",
-boilerplateDemotionFactor_desc: "Score and rank demotion factor, 0..1. Default 0.15 from the accepted HLD eval. BM25 remains eval-only.",
+boilerplateDemotionFactor_desc: "Rank demotion factor, 0..1. Default 0.15 from the accepted HLD eval. BM25 remains eval-only.",
 ```
 
 Russian:
@@ -469,7 +358,7 @@ Russian:
 boilerplateDemotion_name: "Демот boilerplate",
 boilerplateDemotion_desc: "Понижает generated template/readme pages в lexical retrieval. По умолчанию включено; затрагивает только template-readme и template-hld-*.",
 boilerplateDemotionFactor_name: "Фактор demotion boilerplate",
-boilerplateDemotionFactor_desc: "Фактор понижения score и rank, 0..1. По умолчанию 0.15 из accepted HLD eval. BM25 остаётся только в eval.",
+boilerplateDemotionFactor_desc: "Фактор понижения rank, 0..1. По умолчанию 0.15 из accepted HLD eval. BM25 остаётся только в eval.",
 ```
 
 Spanish:
@@ -478,7 +367,7 @@ Spanish:
 boilerplateDemotion_name: "Democión de boilerplate",
 boilerplateDemotion_desc: "Baja páginas generadas template/readme en lexical retrieval. Activado por defecto; solo afecta template-readme y template-hld-*.",
 boilerplateDemotionFactor_name: "Factor de democión boilerplate",
-boilerplateDemotionFactor_desc: "Factor de democión de score y rank, 0..1. Por defecto 0.15 desde el HLD eval aceptado. BM25 sigue solo en eval.",
+boilerplateDemotionFactor_desc: "Factor de democión de rank, 0..1. Por defecto 0.15 desde el HLD eval aceptado. BM25 sigue solo en eval.",
 ```
 
 - [ ] **Step 2.5: Add settings UI controls**
@@ -739,8 +628,8 @@ Expected: focused tests and lint pass; commit succeeds.
 In `tests/eval-jsonl-domain-storage.test.ts`, add one assertion inside the synthetic HLD test:
 
 ```ts
-assert.equal(result.variantMetrics.some((variant) => variant.id === "weighted-lexical-score-rank-demoted"), true);
-assert.match(report, /weighted-lexical-score-rank-demoted/);
+assert.equal(result.variantMetrics.some((variant) => variant.id === "weighted-lexical-demoted" && variant.demotionFactor === 0.15), true);
+assert.match(report, /weighted-lexical-demoted/);
 ```
 
 - [ ] **Step 3.2: Run eval test and confirm RED**
@@ -789,7 +678,7 @@ export function demoteBoilerplateTopForEval(
 Extend `RetrievalVariantId`:
 
 ```ts
-| "weighted-lexical-score-rank-demoted"
+| "weighted-lexical-demoted"
 ```
 
 When scoring improved page/chunk ranks for the eval query, build demotion config:
@@ -801,7 +690,7 @@ const runtimeDemotion = normalizeBoilerplateDemotionConfig({
 });
 ```
 
-Use the same config when calling weighted lexical page/chunk scorers for runtime-equivalent ranks. Then add:
+Use the same config for rank-level demotion after weighted lexical ranking. Then add:
 
 ```ts
 const runtimeEquivalentTop = demoteBoilerplateTopForEval(
@@ -810,14 +699,14 @@ const runtimeEquivalentTop = demoteBoilerplateTopForEval(
   10,
 );
 variantInputs.push({
-  id: "weighted-lexical-score-rank-demoted",
+  id: "weighted-lexical-demoted",
   top: runtimeEquivalentTop,
   demotionFactor: DEFAULT_BOILERPLATE_DEMOTION_FACTOR,
   demotionMoved: demotionMoved(runtimeWeightedTop, runtimeEquivalentTop),
 });
 ```
 
-The runtime-equivalent top must come from score-demoted weighted lexical ranks, not from raw `jsonlTop` alone.
+The runtime-equivalent top must come from rank-demoted weighted lexical ranks and must keep lexical scores unchanged.
 
 - [ ] **Step 3.5: Run eval test and live HLD eval**
 
@@ -830,7 +719,7 @@ Expected:
 - test passes;
 - command prints `wrote docs/superpowers/evals/jsonl-domain-storage-hld-eval.md`;
 - report includes `Aggregate verdict: \`accepted\``;
-- report includes `weighted-lexical-score-rank-demoted`;
+- report includes `weighted-lexical-demoted`;
 - runtime-equivalent variant with factor `0.15` passes all no-regression guards.
 
 - [ ] **Step 3.6: Commit eval variant**
@@ -861,7 +750,7 @@ Candidate runtime setting, if implemented later: boilerplate demotion factor `0.
 with:
 
 ```md
-Runtime Query now enables boilerplate demotion by default with factor `0.15`, the accepted HLD eval value. The runtime applies the factor both as a weighted lexical score penalty and as a final rank-level demotion pass for the narrow generated-page set: `template-readme` and `template-hld-*`. Raw BM25 and BM25/RRF variants remain eval-only because they did not beat weighted lexical in the accepted harness.
+Runtime Query now enables boilerplate demotion by default with factor `0.15`, the accepted HLD eval value. The runtime applies the factor as a final rank-level demotion pass for the narrow generated-page set: `template-readme` and `template-hld-*`. Raw BM25 and BM25/RRF variants remain eval-only because they did not beat weighted lexical in the accepted harness.
 ```
 
 - [ ] **Step 4.2: Update iwiki**
@@ -876,7 +765,7 @@ wiki_lint(domain="obsidian-ai-wiki")
 The new body must mention:
 - runtime demotion default enabled;
 - factor `0.15`;
-- score plus rank application;
+- rank-only application;
 - BM25/RRF remain eval-only;
 - no-regression gate from the live HLD eval.
 
@@ -919,7 +808,7 @@ Expected:
 ## Final Acceptance
 
 - Runtime Query has default-enabled boilerplate demotion with factor `0.15`.
-- Demotion applies as score penalty and rank-level pass.
+- Demotion applies as rank-level pass only.
 - Single-domain and cross-domain Query use the same config.
 - BM25/RRF stay out of runtime Query.
 - Live HLD eval passes no-regression gate for the runtime-equivalent variant.
