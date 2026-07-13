@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.197 — 2026-07-13
+
+### New
+- feat(settings): move OKF export into per-domain settings and clarify backend endpoint configuration
+
+---
+
 ## 0.1.196 — 2026-07-13
 
 ### New
