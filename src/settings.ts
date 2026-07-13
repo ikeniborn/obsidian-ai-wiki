@@ -168,6 +168,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     s: Setting,
     currentValue: string,
     onChange: (v: string) => Promise<void>,
+    saveOnTyping = false,
   ): void {
     s.addButton((b) =>
       b.setIcon("refresh-cw").setTooltip("Fetch available models from base URL")
@@ -178,6 +179,9 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       t.inputEl.addEventListener("focus", () => {
         if (this._availableModels.length === 0) void this.fetchModels();
       });
+      if (saveOnTyping) {
+        t.onChange((v) => { void onChange(v); });
+      }
       new ModelInputSuggest(this.app, t.inputEl, () => this._availableModels, (v) => { void onChange(v); });
     });
   }
@@ -778,6 +782,80 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             .setDynamicTooltip()
             .setValue(s.nativeAgent.boilerplateDemotionFactor ?? 0.15)
             .onChange(async (v) => { s.nativeAgent.boilerplateDemotionFactor = v; await this.plugin.saveSettings(); }),
+        );
+
+      new Setting(containerEl).setName(T.settings.reranker_heading).setHeading();
+      new Setting(containerEl).setDesc(T.settings.rerankerFlow_desc);
+      new Setting(containerEl)
+        .setName(T.settings.rerankerEnabled_name)
+        .setDesc(T.settings.rerankerEnabled_desc)
+        .addToggle((t) =>
+          t.setValue(s.nativeAgent.rerankerEnabled ?? false)
+            .onChange(async (v) => { s.nativeAgent.rerankerEnabled = v; await this.plugin.saveSettings(); }),
+        );
+      this.addModelControl(
+        new Setting(containerEl).setName(T.settings.rerankerModel_name).setDesc(T.settings.rerankerModel_desc),
+        s.nativeAgent.rerankerModel ?? "",
+        async (v) => { s.nativeAgent.rerankerModel = v.trim(); await this.plugin.saveSettings(); },
+        true,
+      );
+      new Setting(containerEl)
+        .setName(T.settings.rerankerTopN_name)
+        .setDesc(T.settings.rerankerTopN_desc)
+        .addText((t) =>
+          t.setPlaceholder("30")
+            .setValue(String(s.nativeAgent.rerankerTopN ?? 30))
+            .onChange(async (v) => {
+              const n = Number(v);
+              if (!Number.isFinite(n)) return;
+              const requested = Math.floor(n);
+              const bounded = Math.max(1, Math.min(100, requested));
+              const contextTopN = Math.max(1, Math.min(50, Math.floor(s.nativeAgent.contextTopN ?? 8)));
+              const next = Math.max(bounded, contextTopN);
+              if (next !== bounded) new Notice(T.settings.rerankerInvalidTopN);
+              s.nativeAgent.rerankerTopN = next;
+              await this.plugin.saveSettings();
+              if (next !== requested) this.display();
+            }),
+        );
+      new Setting(containerEl)
+        .setName(T.settings.contextTopN_name)
+        .setDesc(T.settings.contextTopN_desc)
+        .addText((t) =>
+          t.setPlaceholder("8")
+            .setValue(String(s.nativeAgent.contextTopN ?? 8))
+            .onChange(async (v) => {
+              const n = Number(v);
+              if (!Number.isFinite(n)) return;
+              const requested = Math.floor(n);
+              const next = Math.max(1, Math.min(50, requested));
+              s.nativeAgent.contextTopN = next;
+              if ((s.nativeAgent.rerankerTopN ?? 30) < next) {
+                s.nativeAgent.rerankerTopN = next;
+                new Notice(T.settings.rerankerInvalidTopN);
+                await this.plugin.saveSettings();
+                this.display();
+                return;
+              }
+              await this.plugin.saveSettings();
+              if (next !== requested) this.display();
+            }),
+        );
+      new Setting(containerEl)
+        .setName(T.settings.rerankerTimeoutMs_name)
+        .setDesc(T.settings.rerankerTimeoutMs_desc)
+        .addText((t) =>
+          t.setPlaceholder("800")
+            .setValue(String(s.nativeAgent.rerankerTimeoutMs ?? 800))
+            .onChange(async (v) => {
+              const n = Number(v);
+              if (!Number.isFinite(n)) return;
+              const requested = Math.floor(n);
+              const next = Math.max(100, Math.min(5000, requested));
+              s.nativeAgent.rerankerTimeoutMs = next;
+              await this.plugin.saveSettings();
+              if (next !== requested) this.display();
+            }),
         );
 
       if (s.nativeAgent.embeddingModel !== undefined) {

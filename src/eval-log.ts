@@ -26,6 +26,16 @@ export interface RetrievalConfigSnapshot {
   hierarchicalChunkRetrieval?: boolean;
   crossDomain?: boolean;      // cross-domain query marker
   domainsSearched?: number;   // domains iterated in stage 1
+  rerankerEnabled?: boolean;
+  rerankerTopN?: number;
+  contextTopN?: number;
+  reranker?: {
+    enabled: boolean;
+    candidates: number;
+    selected: number;
+    durationMs: number;
+    fallbackReason?: import("./reranker").RerankerFallbackReason;
+  };
 }
 
 /** Provenance the phases attach via the `eval_meta` event. All optional. */

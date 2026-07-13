@@ -23,11 +23,21 @@ import {
   demoteBoilerplateRankedIds,
   type BoilerplateDemotionConfig,
 } from "../boilerplate-demotion";
+import {
+  normalizeRerankerConfig,
+  rerankChunks,
+  type RerankerRuntime,
+} from "../reranker";
 
 import { pruneByRelevance, robustLow, FLOOR_LO_PCT } from "../retrieval-prune";
 import { answerFromContext } from "./query-answer";
 
 const META_FILES = ["_index.md", "_log.md"];
+const DEFAULT_RERANKER_RUNTIME: RerankerRuntime = {
+  config: normalizeRerankerConfig(undefined),
+  baseUrl: "",
+  apiKey: "",
+};
 
 export interface RetrieveCfg {
   graphDepth: number;
@@ -259,6 +269,7 @@ export async function* runQuery(
   rrfK: number = 60,
   bfsMinScoreRatio: number = 0,
   boilerplateDemotion: BoilerplateDemotionConfig = { enabled: true, factor: DEFAULT_BOILERPLATE_DEMOTION_FACTOR },
+  rerankerRuntime: RerankerRuntime = DEFAULT_RERANKER_RUNTIME,
 ): AsyncGenerator<RunEvent> {
   const question = args[0]?.trim();
   if (!question) {
@@ -274,8 +285,9 @@ export async function* runQuery(
   const start = Date.now();
   let outputTokens = 0;
 
+  const seedLimit = Math.max(1, Math.min(50, Math.floor(seedTopK)));
   const cfg = {
-    graphDepth, seedTopK, seedMinScore, bfsTopK, seedSimilarityThreshold, bfsMinScoreRatio, boilerplateDemotion,
+    graphDepth, seedTopK: seedLimit, seedMinScore, bfsTopK, seedSimilarityThreshold, bfsMinScoreRatio, boilerplateDemotion,
   };
   const querySimilarity = similarity ? similarity.withBoilerplateDemotion(boilerplateDemotion) : undefined;
   const cand = yield* retrieveDomainCandidates(
@@ -296,7 +308,8 @@ export async function* runQuery(
   const selectedIds = cand.candidateIds;
   const pages = cand.pages;
   const seedSet = new Set(seeds);
-  const topK = Math.max(1, Math.min(50, Math.floor(seedTopK)));
+  const candidateLimit = rerankerRuntime.config.rerankerTopN;
+  const contextLimit = rerankerRuntime.config.contextTopN;
   const fusedOrder = bfsFusion
     ? fuseVectorGraph(seeds, selectedIds, seedScores, expandedScores, cand.graph, graphDepth, rrfK)
     : undefined;
@@ -304,23 +317,31 @@ export async function* runQuery(
     ? new Set(demoteBoilerplateRankedIds(
       fusedOrder.filter((id) => selectedIds.has(id)),
       boilerplateDemotion,
-      topK * 3,
+      candidateLimit,
     ))
     : selectedIds;
   const articleScores = { ...expandedScores, ...seedScores };
-  const chunkLimit = topK * 3;
-  const fallbackSimilarity = new PageSimilarityService({ mode: "jaccard", topK: chunkLimit, boilerplateDemotion });
+  const fallbackSimilarity = new PageSimilarityService({ mode: "jaccard", topK: candidateLimit, boilerplateDemotion });
   const chunkSimilarity = querySimilarity ?? fallbackSimilarity;
   const selectedChunks: SelectedChunk[] = await chunkSimilarity.selectRelevantChunks(
-    question, pages, finalArticleIds, seedSet, articleScores, chunkLimit,
+    question, pages, finalArticleIds, seedSet, articleScores, candidateLimit,
   );
   if (signal.aborted) return;
   if (selectedChunks.length === 0) {
     yield { kind: "error", message: "No relevant pages found for this query." };
     return;
   }
-  const contextBlock = renderContextChunks(selectedChunks);
-  const finalSelectedIds = new Set(selectedChunks.map((chunk) => chunk.articleId));
+  const reranked = await rerankChunks(question, selectedChunks, {
+    config: rerankerRuntime.config,
+    baseUrl: rerankerRuntime.baseUrl,
+    apiKey: rerankerRuntime.apiKey,
+    signal,
+  });
+  if (signal.aborted) return;
+
+  const contextChunks = reranked.chunks.slice(0, contextLimit);
+  const contextBlock = renderContextChunks(contextChunks);
+  const finalSelectedIds = new Set(contextChunks.map((chunk) => chunk.articleId));
   const selectedIndexLines = [...finalSelectedIds]
     .map((id) => {
       const annotation = cand.annotations.get(id);
@@ -350,6 +371,13 @@ export async function* runQuery(
 
   const seedCount = [...finalSelectedIds].filter((id) => seedSet.has(id)).length;
   const graphCount = finalSelectedIds.size - seedCount;
+  const rerankerDiagnostics = {
+    enabled: rerankerRuntime.config.enabled,
+    candidates: reranked.candidates,
+    selected: contextChunks.length,
+    durationMs: reranked.durationMs,
+    fallbackReason: reranked.fallbackReason,
+  };
 
   yield {
     kind: "query_stats",
@@ -358,9 +386,13 @@ export async function* runQuery(
     pagesScanned: cand.pagesScanned,
     pagesSelected: finalSelectedIds.size,
     candidatePages: selectedIds.size,
-    chunksSelected: selectedChunks.length,
+    chunksSelected: contextChunks.length,
     seedCount,
     graphCount,
+    rerankerEnabled: rerankerRuntime.config.enabled,
+    rerankerTopN: rerankerRuntime.config.rerankerTopN,
+    contextTopN: rerankerRuntime.config.contextTopN,
+    reranker: rerankerDiagnostics,
   };
   if (signal.aborted) return;
 
@@ -379,7 +411,7 @@ export async function* runQuery(
       question,
       answer,
       found_pages: [...finalSelectedIds],
-      found_chunks: selectedChunks.map((chunk) => ({
+      found_chunks: contextChunks.map((chunk) => ({
         articleId: chunk.articleId,
         heading: chunk.heading,
         score: chunk.score,
@@ -387,13 +419,17 @@ export async function* runQuery(
       promptVersion: promptVersionOf(queryTemplate),
       retrievalConfig: {
         mode: similarity?.config.mode === "hybrid" ? "hybrid" : similarity?.config.mode === "embedding" ? "embedding" : "jaccard",
-        seedTopK,
+        seedTopK: seedLimit,
         bfsTopK,
         bfsMinScoreRatio,
         bfsFusion,
         seedSimilarityThreshold,
         hybridRetrieval: similarity?.config.mode === "hybrid",
         hierarchicalChunkRetrieval: true,
+        rerankerEnabled: rerankerRuntime.config.enabled,
+        rerankerTopN: rerankerRuntime.config.rerankerTopN,
+        contextTopN: rerankerRuntime.config.contextTopN,
+        reranker: rerankerDiagnostics,
       },
     },
   };

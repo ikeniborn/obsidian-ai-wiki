@@ -71,6 +71,16 @@ export type RunEvent =
       domainsStudied?: number;     // Ask Wiki only -- domains that yielded candidates
       domainsTotal?: number;       // Ask Wiki only -- domains configured
       fromDomains?: string[];      // Ask Wiki only -- domain names in the final set
+      rerankerEnabled?: boolean;
+      rerankerTopN?: number;
+      contextTopN?: number;
+      reranker?: {
+        enabled: boolean;
+        candidates: number;
+        selected: number;
+        durationMs: number;
+        fallbackReason?: import("./reranker").RerankerFallbackReason;
+      };
     }
   | { kind: "error"; message: string }
   | { kind: "exit"; code: number }
@@ -221,6 +231,11 @@ export interface LlmWikiPluginSettings {
     embeddingModel?: string;
     embeddingDimensions?: number;
     relevantPagesTopK?: number;
+    rerankerEnabled?: boolean;
+    rerankerModel?: string;
+    rerankerTopN?: number;
+    contextTopN?: number;
+    rerankerTimeoutMs?: number;
     mergeDeleteWarnThreshold?: number;
     chunkMaxChars?: number;
     chunkOverlapChars?: number;
@@ -300,6 +315,11 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
       format: { model: "llama3.2", maxTokens: 32768, temperature: 0.2 },
     },
     structuredRetries: 1,
+    rerankerEnabled: false,
+    rerankerModel: "",
+    rerankerTopN: 30,
+    contextTopN: 8,
+    rerankerTimeoutMs: 800,
     hybridRetrieval: false,
     rrfK: 60,
     bfsFusion: false,

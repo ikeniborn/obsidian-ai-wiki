@@ -120,7 +120,7 @@ export interface HldEvalResult {
   reportPath: string;
 }
 
-interface EvalChunkingConfig {
+export interface EvalChunkingConfig {
   maxChars: number;
   overlapChars: number;
   minChars: number;
@@ -134,7 +134,7 @@ const EVAL_CHUNKING: EvalChunkingConfig = {
   maxCount: 12,
 };
 
-interface EvalSection {
+export interface EvalSection {
   heading: string;
   window: string;
   ordinal: number;
@@ -163,7 +163,7 @@ const QUERY_EXPANSIONS: Record<string, string[]> = {
   "ownership-components": ["состав", "архитектурных", "компонентов", "компоненты", "зоны", "ответственности", "проектов"],
 };
 
-const CURRENT_OVERLAP_AT_5: Record<string, number> = {
+export const CURRENT_OVERLAP_AT_5: Record<string, number> = {
   "data-export-s3-clickhouse": 0.40,
   "airflow-ha-balancing": 1.00,
   "integrations-consumers-marts": 0.40,
@@ -251,7 +251,7 @@ function deriveDescription(relPath: string, content: string): string {
   return `${title}. ${body}`.slice(0, 5000);
 }
 
-function evalQueryTokens(query: HldQuery): Set<string> {
+export function evalQueryTokens(query: HldQuery): Set<string> {
   const tokens = tokenize(query.question);
   for (const token of EVAL_STOP_WORDS) tokens.delete(token);
   for (const token of QUERY_EXPANSIONS[query.id] ?? []) {
@@ -308,7 +308,7 @@ function stripFrontmatterAndTitle(body: string): string {
   return noFm.replace(/^#\s+[^\n]*\n?/, "");
 }
 
-function splitEvalSections(body: string, chunking: EvalChunkingConfig = EVAL_CHUNKING): EvalSection[] {
+export function splitEvalSections(body: string, chunking: EvalChunkingConfig = EVAL_CHUNKING): EvalSection[] {
   const stripped = stripFrontmatterAndTitle(body).trim();
   if (!stripped) return [];
   const units: Array<{ heading: string; body: string }> = [];
@@ -348,7 +348,7 @@ function splitEvalSections(body: string, chunking: EvalChunkingConfig = EVAL_CHU
   return windows.slice(0, chunking.maxCount).filter((section) => `${section.heading}\n${section.window}`.trim().length > 0);
 }
 
-function uniqueTop(paths: string[], limit: number): string[] {
+export function uniqueTop(paths: string[], limit: number): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
   for (const item of paths) {
@@ -378,7 +378,7 @@ export function demoteBoilerplateTopForEval(
   ).map((item) => item.path);
 }
 
-function overlapRatio(a: string[], b: string[], limit: number): number {
+export function overlapRatio(a: string[], b: string[], limit: number): number {
   const left = new Set(a.slice(0, limit));
   const right = b.slice(0, limit);
   if (left.size === 0 || right.length === 0) return 0;
@@ -544,7 +544,7 @@ function rebalanceFusedTop(
   return uniqueTop(top, limit);
 }
 
-interface SourceMarkdownFile {
+export interface SourceMarkdownFile {
   sourcePath: string;
   relPath: string;
   vaultPath: string;
@@ -568,7 +568,7 @@ async function collectMarkdownFiles(root: string): Promise<string[]> {
   return out.sort();
 }
 
-async function buildEvalDomain(source: string, evalRoot: string): Promise<{
+export async function buildEvalDomain(source: string, evalRoot: string): Promise<{
   domainRoot: string;
   metadataPath: string;
   indexPath: string;

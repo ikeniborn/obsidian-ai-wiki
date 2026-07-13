@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Итоговый отчёт — reranker-quality-pipeline — 2026-07-12</title>
+  <style>
+    :root{
+      --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+      --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+      --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+      --shadow:rgba(40,40,80,.18);
+    }
+    body:has(#theme-toggle:checked){
+      --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+      --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+      --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+      --shadow:rgba(0,0,0,.45);
+    }
+    body{
+      margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1180px;
+      font:16px/1.55 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent), var(--bg);
+      color:var(--fg); transition:background .3s, color .3s;
+    }
+    .theme-btn{position:sticky; top:.5rem; float:right; cursor:pointer; user-select:none; padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface)}
+    header{margin:1rem 0 2rem}
+    h1{font-size:2rem; margin:.2rem 0}
+    h2{margin-top:2rem; border-bottom:1px solid var(--border); padding-bottom:.35rem}
+    h3{margin-top:1.2rem}
+    code{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:color-mix(in srgb,var(--accent) 9%, var(--surface)); padding:.08rem .25rem; border-radius:4px}
+    table{width:100%; border-collapse:collapse; margin:1rem 0; background:var(--surface); box-shadow:0 1px 10px var(--shadow)}
+    th,td{border:1px solid var(--border); padding:.55rem .65rem; vertical-align:top}
+    th{background:color-mix(in srgb,var(--accent) 16%, var(--surface)); text-align:left}
+    tr:nth-child(even) td{background:var(--zebra)}
+    .badge{display:inline-block; border-radius:999px; padding:.1rem .55rem; font-weight:700; font-size:.9rem}
+    .ok{color:var(--ok-2); background:color-mix(in srgb,var(--ok) 18%, var(--surface))}
+    .warn{color:var(--warn-2); background:color-mix(in srgb,var(--warn) 18%, var(--surface))}
+    .note{background:var(--surface); border-left:4px solid var(--accent); padding:.8rem 1rem; box-shadow:0 1px 10px var(--shadow); margin:1rem 0}
+    .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:1rem}
+    .card{background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:1rem; box-shadow:0 1px 10px var(--shadow)}
+    .flow{display:flex; flex-wrap:wrap; gap:.55rem; align-items:center; margin:1rem 0}
+    .node{border:1px solid var(--border); background:var(--surface); border-radius:8px; padding:.55rem .75rem}
+    .arrow{color:var(--line); font-weight:700}
+    details{background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.7rem 1rem; margin:1rem 0}
+    summary{cursor:pointer; font-weight:700}
+    .muted{color:var(--muted)}
+  </style>
+</head>
+<body>
+  <input type="checkbox" id="theme-toggle" hidden>
+  <label for="theme-toggle" class="theme-btn" title="Переключить тёмную/светлую тему">тема</label>
+  <header>
+    <p class="muted">result stage · plan_hash <code>a34638eef578bdd8</code></p>
+    <h1>Итоговый отчёт — reranker-quality-pipeline — 2026-07-12</h1>
+    <p><span class="badge ok">OK</span> Реализация соответствует intent, spec и plan. Блокирующих замечаний нет.</p>
+  </header>
+
+  <main>
+    <section id="summary">
+      <h2>Краткий итог</h2>
+      <p>Добавлен runtime reranker slice: отдельные настройки, выбор модели пользователем, явные лимиты <code>rerankerTopN</code> и <code>contextTopN</code>, адаптер <code>/rerank</code>, fallback без падения Query и диагностика в <code>query_stats</code>/<code>eval_meta</code>.</p>
+      <p>По умолчанию reranker выключен. HLD no-regression gate подтвердил, что базовая retrieval-платформа остаётся accepted: <code>Recall@5 = 0.76</code>, <code>nDCG@5 = 0.92</code>, <code>MRR = 1.00</code>, лучший вариант <code>weighted-lexical-demoted</code> factor <code>0.15</code>.</p>
+      <div class="flow" aria-label="Поток результата">
+        <span class="node">seedTopK</span><span class="arrow">→</span>
+        <span class="node">graphDepth / bfsTopK</span><span class="arrow">→</span>
+        <span class="node">rerankerTopN</span><span class="arrow">→</span>
+        <span class="node">contextTopN</span><span class="arrow">→</span>
+        <span class="node">ответ</span>
+      </div>
+    </section>
+
+    <section id="artifacts">
+      <h2>Артефакты цепочки</h2>
+      <table>
+        <tr><th>Этап</th><th>Артефакт</th><th>Состояние</th></tr>
+        <tr><td>intent</td><td><code>docs/superpowers/intents/2026-07-12-reranker-quality-pipeline-intent.md</code></td><td><span class="badge ok">passed</span></td></tr>
+        <tr><td>spec</td><td><code>docs/superpowers/specs/2026-07-12-reranker-quality-pipeline-design.md</code></td><td><span class="badge ok">passed</span></td></tr>
+        <tr><td>plan</td><td><code>docs/superpowers/plans/2026-07-12-reranker-quality-pipeline.md</code></td><td><span class="badge ok">passed</span></td></tr>
+        <tr><td>result</td><td><code>docs/superpowers/reports/reranker-quality-pipeline-results.html</code></td><td><span class="badge ok">OK</span></td></tr>
+      </table>
+    </section>
+
+    <section id="coverage">
+      <h2>Покрытие требований</h2>
+      <div class="grid">
+        <div class="card"><h3>Настройки</h3><p>Добавлен блок <code>Reranker</code> с toggle, model picker/text input, <code>rerankerTopN</code>, <code>contextTopN</code>, timeout и подсказкой потока.</p></div>
+        <div class="card"><h3>Runtime</h3><p><code>AgentRunner</code> передаёт нормализованный <code>RerankerRuntime</code> в single-domain и cross-domain Query.</p></div>
+        <div class="card"><h3>Fallback</h3><p><code>rerankChunks</code> возвращает typed fallback reason и сохраняет pre-rerank порядок при disabled, missing model, timeout, malformed response и errors.</p></div>
+        <div class="card"><h3>Eval</h3><p>HLD gate пересоздан и остался accepted; model-on reranker eval явно зафиксирован как отдельный следующий gate.</p></div>
+      </div>
+      <table>
+        <tr><th>Acceptance criterion</th><th>Доказательство</th><th>Статус</th></tr>
+        <tr><td>Отдельный блок настроек</td><td><code>src/settings.ts</code>, <code>src/i18n.ts</code>, <code>src/types.ts</code></td><td><span class="badge ok">DONE</span></td></tr>
+        <tr><td>Нет конкретной рекомендации модели</td><td>UI text не содержит <code>BAAI/bge-reranker-v2-m3</code> как recommendation</td><td><span class="badge ok">DONE</span></td></tr>
+        <tr><td>Явные top-K вместо <code>* 3</code></td><td><code>rg</code> по старым паттернам вернул no matches</td><td><span class="badge ok">DONE</span></td></tr>
+        <tr><td>Bounded optional reranker</td><td><code>tests/reranker.test.ts</code> проверяет <code>rerankerTopN=4</code> и <code>contextTopN=2</code></td><td><span class="badge ok">DONE</span></td></tr>
+        <tr><td>Документация и iwiki</td><td><code>jsonl-domain-storage</code> headings <code>Retrieval</code> и <code>Eval</code>; <code>wiki_lint</code> без stale</td><td><span class="badge ok">DONE</span></td></tr>
+      </table>
+    </section>
+
+    <section id="plan">
+      <h2>Сверка плана и diff</h2>
+      <table>
+        <tr><th>План</th><th>Изменённые пути</th><th>Результат</th></tr>
+        <tr><td>Task 1: config/helpers</td><td><code>src/reranker.ts</code>, <code>tests/reranker.test.ts</code></td><td><span class="badge ok">DONE</span></td></tr>
+        <tr><td>Task 2: HTTP adapter/fallback</td><td><code>src/reranker.ts</code>, <code>tests/reranker.test.ts</code></td><td><span class="badge ok">DONE</span></td></tr>
+        <tr><td>Task 3: settings/i18n/types</td><td><code>src/settings.ts</code>, <code>src/i18n.ts</code>, <code>src/types.ts</code></td><td><span class="badge ok">DONE</span></td></tr>
+        <tr><td>Task 4: runtime wiring</td><td><code>src/agent-runner.ts</code>, <code>src/phases/query.ts</code>, <code>src/phases/query-cross-domain.ts</code>, <code>src/eval-log.ts</code></td><td><span class="badge ok">DONE</span></td></tr>
+        <tr><td>Task 5: tests</td><td><code>tests/reranker.test.ts</code></td><td><span class="badge ok">DONE</span></td></tr>
+        <tr><td>Task 6: eval/docs/wiki</td><td><code>docs/superpowers/evals/jsonl-domain-storage-hld-eval.md</code>, iwiki <code>jsonl-domain-storage</code></td><td><span class="badge ok">DONE</span></td></tr>
+      </table>
+      <p class="note">Лишних runtime changes вне плана не найдено. Generated bundle <code>dist/main.js</code> изменён ожидаемо после <code>npm run build</code>.</p>
+    </section>
+
+    <section id="changes">
+      <h2>Карта изменений</h2>
+      <table>
+        <tr><th>Файл</th><th>Что изменено</th><th>Причина</th><th>Доказательство</th></tr>
+        <tr><td><code>src/reranker.ts</code></td><td>Новый модуль config, ordering helpers, adapter, timeout и fallback reasons.</td><td>Изолировать reranker boundary и сделать поведение тестируемым.</td><td>18/18 <code>tests/reranker.test.ts</code>.</td></tr>
+        <tr><td><code>src/settings.ts</code></td><td>Добавлен блок <code>Reranker</code>, validation top-N, сохранение ручной модели.</td><td>Дать пользователю toggle и выбор модели.</td><td><code>npm run lint</code>, <code>npm run build</code>.</td></tr>
+        <tr><td><code>src/i18n.ts</code></td><td>Добавлены EN/RU/ES строки настроек и notice.</td><td>Сохранить локализацию UI.</td><td><code>npm run build</code>.</td></tr>
+        <tr><td><code>src/types.ts</code></td><td>Добавлены persisted settings и query diagnostics fields.</td><td>Настройки и telemetry должны быть typed.</td><td><code>npm run lint</code>.</td></tr>
+        <tr><td><code>src/agent-runner.ts</code></td><td>Нормализует reranker settings и передаёт runtime config.</td><td>Подключить runtime pipeline к Query.</td><td>Spec review pass.</td></tr>
+        <tr><td><code>src/phases/query.ts</code></td><td>Убраны скрытые <code>*3</code>, добавлен rerank перед context rendering.</td><td>Явный порядок top-K и bounded reranker.</td><td><code>rg</code> no matches по старым лимитам.</td></tr>
+        <tr><td><code>src/phases/query-cross-domain.ts</code></td><td>Та же схема для Ask Wiki: merge pool, select chunks, rerank, final IDs.</td><td>Одинаковое поведение single/cross-domain.</td><td>Spec review pass.</td></tr>
+        <tr><td><code>src/eval-log.ts</code></td><td>Расширен retrieval snapshot.</td><td>Eval rows должны видеть reranker config и fallback.</td><td>Typecheck через build.</td></tr>
+        <tr><td><code>tests/reranker.test.ts</code></td><td>18 тестов config, ordering, timeout, malformed response, fallback и bounds.</td><td>Защитить критичные runtime semantics.</td><td><code>18/18</code> pass.</td></tr>
+        <tr><td><code>docs/superpowers/evals/jsonl-domain-storage-hld-eval.md</code></td><td>Пересоздан HLD report с accepted verdict.</td><td>No-regression evidence.</td><td>Aggregate verdict <code>accepted</code>.</td></tr>
+        <tr><td><code>dist/main.js</code></td><td>Собранный bundle содержит runtime changes.</td><td>Obsidian plugin поставляет compiled artifact.</td><td><code>npm run build</code>.</td></tr>
+      </table>
+    </section>
+
+    <section id="reviews">
+      <h2>Code review и исправления</h2>
+      <table>
+        <tr><th>Проверка</th><th>Найдено</th><th>Исправление</th><th>Статус</th></tr>
+        <tr><td>Spec review Task 4</td><td><code>query_stats</code> не содержал config snapshot.</td><td>Добавлены <code>rerankerEnabled</code>, <code>rerankerTopN</code>, <code>contextTopN</code> в events и type.</td><td><span class="badge ok">fixed</span></td></tr>
+        <tr><td>Quality review Task 4</td><td><code>src/reranker.ts</code> и <code>tests/reranker.test.ts</code> были untracked.</td><td>Файлы добавлены в change set через <code>git add -N</code>.</td><td><span class="badge ok">fixed</span></td></tr>
+        <tr><td>Final review</td><td>Blocking issues не обнаружены.</td><td>Minor duplication diagnostics оставлена как non-blocking.</td><td><span class="badge ok">pass</span></td></tr>
+      </table>
+    </section>
+
+    <section id="verification">
+      <h2>Проверки</h2>
+      <table>
+        <tr><th>Команда</th><th>Наблюдение</th><th>Статус</th></tr>
+        <tr><td><code>node --import tsx --test tests/reranker.test.ts</code></td><td><code>18/18</code> tests pass.</td><td><span class="badge ok">pass</span></td></tr>
+        <tr><td><code>npm run lint</code></td><td>0 errors, 4 existing warnings in unrelated Node builtin imports.</td><td><span class="badge ok">pass</span></td></tr>
+        <tr><td><code>npm run build</code></td><td><code>dist/</code> updated successfully.</td><td><span class="badge ok">pass</span></td></tr>
+        <tr><td><code>rg old top-K patterns</code></td><td>No matches for <code>seedTopK * 3</code>, <code>topK * 3</code>, <code>chunkLimit</code> in Query paths.</td><td><span class="badge ok">pass</span></td></tr>
+        <tr><td><code>npx tsx scripts/eval-jsonl-domain-storage.ts ...</code></td><td>Report written; aggregate verdict <code>accepted</code>.</td><td><span class="badge ok">pass</span></td></tr>
+        <tr><td><code>wiki_lint</code></td><td>No broken refs, no orphans, no stale pages; only pre-existing long_lead advisories.</td><td><span class="badge ok">pass</span></td></tr>
+      </table>
+    </section>
+
+    <section id="docs">
+      <h2>Документация</h2>
+      <table>
+        <tr><th>Источник</th><th>Обновление</th><th>Доказательство</th></tr>
+        <tr><td><code>docs/superpowers/specs/...reranker-quality-pipeline-design.md</code></td><td>Зафиксированы top-K flow, no concrete model recommendation, deferred <code>graphChunkTopN</code>.</td><td>Spec hash <code>f49b096990722f33</code>.</td></tr>
+        <tr><td><code>docs/superpowers/plans/...reranker-quality-pipeline.md</code></td><td>План validated и получил <code>result_check: OK</code>.</td><td>Plan hash <code>a34638eef578bdd8</code>.</td></tr>
+        <tr><td>iwiki <code>jsonl-domain-storage</code> / <code>Retrieval</code></td><td>Описан runtime pipeline, settings, adapter, diagnostics, fallback и запрет скрытых multipliers.</td><td><code>wiki_lint</code> без stale.</td></tr>
+        <tr><td>iwiki <code>jsonl-domain-storage</code> / <code>Eval</code></td><td>Уточнено, что HLD gate проверяет default-off slice; model-on reranker требует отдельный integration eval.</td><td><code>wiki_update_page</code> committed/pushed.</td></tr>
+      </table>
+    </section>
+
+    <section id="decisions">
+      <h2>Решения и ограничения</h2>
+      <table>
+        <tr><th>Решение</th><th>Статус</th><th>Причина</th></tr>
+        <tr><td>Reranker выключен по умолчанию.</td><td><span class="badge ok">сохранено</span></td><td>Spec требует eval evidence перед default-on.</td></tr>
+        <tr><td>Модель не фиксируется и не рекомендуется.</td><td><span class="badge ok">сохранено</span></td><td>Пользователь выбирает модель в настройках.</td></tr>
+        <tr><td><code>graphChunkTopN</code> не добавлен.</td><td><span class="badge ok">сохранено</span></td><td>Добавлять только если eval покажет шум или узость graph chunks.</td></tr>
+        <tr><td>BM25/RRF не перенесены в runtime.</td><td><span class="badge ok">сохранено</span></td><td>HLD eval слабее weighted lexical.</td></tr>
+      </table>
+    </section>
+
+    <section id="verdict">
+      <h2>Финальный вердикт</h2>
+      <p><span class="badge ok">OK</span> Все plan tasks выполнены, confirmed bugs исправлены, verification пройдена, документация и iwiki обновлены. Остаточный риск: model-on reranker quality/latency ещё требует отдельного integration eval с реальным endpoint и выбранной пользователем моделью.</p>
+      <details>
+        <summary>Source anchors</summary>
+        <ul>
+          <li><code>docs/superpowers/intents/2026-07-12-reranker-quality-pipeline-intent.md</code></li>
+          <li><code>docs/superpowers/specs/2026-07-12-reranker-quality-pipeline-design.md</code></li>
+          <li><code>docs/superpowers/plans/2026-07-12-reranker-quality-pipeline.md</code></li>
+          <li><code>docs/superpowers/evals/jsonl-domain-storage-hld-eval.md</code></li>
+          <li><code>src/reranker.ts</code>, <code>src/phases/query.ts</code>, <code>src/phases/query-cross-domain.ts</code></li>
+        </ul>
+      </details>
+    </section>
+  </main>
+</body>
+</html>

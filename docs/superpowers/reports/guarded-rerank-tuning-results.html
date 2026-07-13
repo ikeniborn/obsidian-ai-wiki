@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Итоговый отчёт — guarded-rerank-tuning — 2026-07-13</title>
+  <style>
+    :root{--bg:#f6f7fb;--surface:#fff;--fg:#2b2b3a;--muted:#6b6b80;--accent:#5c6bc0;--accent-2:#3949ab;--border:#d6d8e6;--line:#9aa0b4;--zebra:#eef0f8;--ok:#43a047;--ok-2:#2e7d32;--warn:#fb8c00;--warn-2:#ef6c00;--danger:#e53935;--danger-2:#c62828;--shadow:rgba(40,40,80,.18)}
+    body:has(#theme-toggle:checked){--bg:#181825;--surface:#262637;--fg:#cdd6f4;--muted:#a6adc8;--accent:#89b4fa;--accent-2:#5e95f0;--border:#3a3b52;--line:#6c7086;--zebra:#21222f;--ok:#a6e3a1;--ok-2:#74c46e;--warn:#f9e2af;--warn-2:#f5c95b;--danger:#f38ba8;--danger-2:#e8638a;--shadow:rgba(0,0,0,.45)}
+    body{margin:0 auto;padding:1.5rem 2rem 4rem;max-width:1120px;font:16px/1.55 system-ui,sans-serif;background:radial-gradient(1200px 500px at 100% -10%,color-mix(in srgb,var(--accent) 10%,transparent),transparent),var(--bg);color:var(--fg)}
+    .theme-btn{position:sticky;top:.5rem;float:right;cursor:pointer;user-select:none;padding:.25rem .6rem;border:1px solid var(--border);border-radius:6px;background:var(--surface)}
+    header,.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px var(--shadow)}
+    header{padding:1.5rem;margin:1rem 0 1.25rem}
+    section{margin:1rem 0}
+    .card{padding:1rem}
+    h1,h2,h3{line-height:1.2;margin:.2rem 0 .8rem}
+    h2{color:var(--accent-2)}
+    code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    table{width:100%;border-collapse:collapse;margin:.6rem 0;background:var(--surface)}
+    th,td{border:1px solid var(--border);padding:.55rem;vertical-align:top}
+    th{background:color-mix(in srgb,var(--accent) 12%,var(--surface));text-align:left}
+    tr:nth-child(even) td{background:var(--zebra)}
+    .badge{display:inline-block;border-radius:999px;padding:.15rem .55rem;font-weight:700}
+    .ok{color:var(--ok-2);background:color-mix(in srgb,var(--ok) 14%,var(--surface))}
+    .warn{color:var(--warn-2);background:color-mix(in srgb,var(--warn) 14%,var(--surface))}
+    .muted{color:var(--muted)}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:.75rem}
+    .flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.75rem;align-items:stretch}
+    .step{border:1px solid var(--border);border-radius:8px;padding:.75rem;background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+  </style>
+</head>
+<body>
+  <input type="checkbox" id="theme-toggle" hidden>
+  <label for="theme-toggle" class="theme-btn" title="Переключить тёмную/светлую тему">тема</label>
+  <header>
+    <h1>Итоговый отчёт — guarded-rerank-tuning</h1>
+    <p><span class="badge ok">OK</span> Runtime reranker получил page-aware confidence gate, прошёл no-regression eval и включён как default для включённого пользователем reranker.</p>
+    <p class="muted">Дата: 2026-07-13 · plan_hash: <code>1a0a2a9fd62e7f3f</code> · spec_hash: <code>8bbde6da1954a757</code></p>
+  </header>
+  <main>
+    <section class="card" id="summary">
+      <h2>Краткий итог</h2>
+      <div class="grid">
+        <div><strong>Baseline</strong><br>Recall@5 <code>0.80</code>, nDCG@5 <code>0.9254</code>, MRR <code>1.00</code></div>
+        <div><strong>Reranked</strong><br>Recall@5 <code>0.80</code>, nDCG@5 <code>0.9321</code>, MRR <code>1.00</code></div>
+        <div><strong>Latency</strong><br>p95 regression <code>601 ms</code>, 5 успешных вызовов</div>
+        <div><strong>Best variant</strong><br><code>page-aware-alpha-0.60-cap-1-gap-0.20-base-0.95-top3</code></div>
+      </div>
+    </section>
+    <section class="card" id="flow">
+      <h2>Поток процесса</h2>
+      <div class="flow">
+        <div class="step"><strong>Candidate union</strong><br>Lexical seeds, graph BFS, descriptions, chunks.</div>
+        <div class="step"><strong>Reranker call</strong><br>Top 30 кандидатов, structured candidate text, timeout 800 ms.</div>
+        <div class="step"><strong>Page-aware gate</strong><br>Группировка по <code>articleId</code>, cap1, gap 0.20, base ratio 0.95, target top3.</div>
+        <div class="step"><strong>Context</strong><br>Top 8 chunks после page-order round-robin.</div>
+      </div>
+    </section>
+    <section class="card" id="changes">
+      <h2>Карта изменений</h2>
+      <table>
+        <thead><tr><th>Артефакт</th><th>Что изменено</th><th>Зачем</th><th>Проверка</th></tr></thead>
+        <tbody>
+          <tr><td><code>src/reranker.ts</code></td><td>Добавлены page-aware defaults, confidence gap, baseline ratio, top3 target, round-robin chunk output.</td><td>Разрешить только безопасное продвижение кандидатов.</td><td>Reranker unit tests; real eval accepted.</td></tr>
+          <tr><td><code>scripts/eval-reranker-integration.ts</code></td><td>Добавлены page-aware variants, явный scope для chunk controls, columns для gates.</td><td>Не смешивать runtime defaults с eval controls и видеть no-regression gate.</td><td>Mock eval tests; real LiteLLM eval.</td></tr>
+          <tr><td><code>tests/reranker.test.ts</code></td><td>Покрыты page promotion, weak confidence, weak baseline, top3 window, runtime default promotion.</td><td>Зафиксировать candidate hygiene/confidence gate.</td><td><code>node --import tsx --test ...</code></td></tr>
+          <tr><td><code>docs/superpowers/evals/reranker-integration-hld-eval.md</code></td><td>Сохранён финальный model-on report.</td><td>Evidence для no-regression decision.</td><td>Verdict <code>accepted</code>.</td></tr>
+          <tr><td>iWiki <code>jsonl-domain-storage</code></td><td>Обновлены sections Retrieval и Eval.</td><td>Wiki отражает runtime поведение и eval evidence.</td><td><code>wiki_lint</code>: broken/orphan/stale пустые.</td></tr>
+        </tbody>
+      </table>
+    </section>
+    <section class="card" id="reconciliation">
+      <h2>Сверка intent/spec/plan/result</h2>
+      <table>
+        <thead><tr><th>Требование</th><th>Результат</th><th>Статус</th></tr></thead>
+        <tbody>
+          <tr><td>Reranker поверх candidate union</td><td>Runtime reranker применяется после baseline retrieval и перед context selection.</td><td><span class="badge ok">OK</span></td></tr>
+          <tr><td>No-regression gate</td><td>Full rerank и unsafe controls rejected/needs_tuning; page-aware gate accepted.</td><td><span class="badge ok">OK</span></td></tr>
+          <tr><td>Не ломать текущий pipeline</td><td>Reranker остаётся opt-in; fallback сохраняет baseline order.</td><td><span class="badge ok">OK</span></td></tr>
+          <tr><td>Runtime default</td><td>Enabled reranker использует accepted page-aware gate.</td><td><span class="badge ok">OK</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+    <section class="card" id="verification">
+      <h2>Карта проверок</h2>
+      <table>
+        <thead><tr><th>Команда</th><th>Результат</th></tr></thead>
+        <tbody>
+          <tr><td><code>node --import tsx --test tests/reranker.test.ts tests/eval-reranker-integration.test.ts tests/eval-jsonl-domain-storage.test.ts</code></td><td>39 tests passed.</td></tr>
+          <tr><td>Real LiteLLM eval через <code>tests/.env.reranker</code></td><td>Verdict accepted; nDCG@5 <code>0.9254 -> 0.9321</code>; p95 <code>601 ms</code>.</td></tr>
+          <tr><td><code>npm run lint</code></td><td>0 errors, 4 existing warnings.</td></tr>
+          <tr><td><code>npm run build</code></td><td>Production build completed; <code>dist/</code> updated.</td></tr>
+          <tr><td><code>wiki_lint(obsidian-ai-wiki)</code></td><td>broken, orphans, stale, missing_source пустые; advisory long_lead only.</td></tr>
+        </tbody>
+      </table>
+    </section>
+    <section class="card" id="decisions">
+      <h2>Решения и ограничения</h2>
+      <ul>
+        <li>Model name не фиксируется в коде; пользователь выбирает модель в settings.</li>
+        <li>Accepted gate не делает reranker обязательным: disabled/missing/error/timeout/malformed сохраняют baseline.</li>
+        <li>Query expansion, answer-grounding и dedup hygiene остаются вне этого PR.</li>
+        <li>iWiki sync push не выполнялся из-за dirty worktree; локальные wiki commits созданы MCP tool.</li>
+      </ul>
+    </section>
+    <section class="card" id="verdict">
+      <h2>Финальный вердикт</h2>
+      <p><span class="badge ok">OK</span> План выполнен, no-regression eval принят, runtime behavior и документация синхронизированы.</p>
+    </section>
+  </main>
+</body>
+</html>

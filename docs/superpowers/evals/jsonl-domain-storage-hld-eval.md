@@ -44,7 +44,7 @@ Setting recommendation: `candidate: 0.15`
 Theme: data export / S3 / ClickHouse
 Question: Какие HLD описывают экспорт данных через S3 или ClickHouse и какие компоненты участвуют?
 Status: accepted
-Latency: 133 ms
+Latency: 143 ms
 Baseline Overlap@5: 0.40
 Improved Overlap@5: 0.40
 Delta: +0.00
@@ -231,7 +231,7 @@ Top chunks:
 Theme: Airflow HA / balancing
 Question: Где описана отказоустойчивая архитектура Airflow и какие решения по балансировке указаны?
 Status: accepted
-Latency: 120 ms
+Latency: 122 ms
 Baseline Overlap@5: 1.00
 Improved Overlap@5: 1.00
 Delta: +0.00
@@ -418,7 +418,7 @@ Top chunks:
 Theme: integrations / consumers / data marts
 Question: Какие документы описывают интеграции потребителей с витринными БД или дата-мартами?
 Status: accepted
-Latency: 110 ms
+Latency: 114 ms
 Baseline Overlap@5: 0.40
 Improved Overlap@5: 0.40
 Delta: +0.00
@@ -789,7 +789,7 @@ Top chunks:
 Theme: architecture ownership / components
 Question: Какие HLD фиксируют состав архитектурных компонентов и зоны ответственности проектов?
 Status: accepted
-Latency: 110 ms
+Latency: 109 ms
 Baseline Overlap@5: 0.20
 Improved Overlap@5: 0.80
 Delta: +0.60
