@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.1.196 — 2026-07-13
+
+### New
+- feat: add guarded runtime reranker
+- feat(query): enable rank-only boilerplate demotion
+- feat(eval): add runtime-equivalent demotion gate
+- feat(query): enable runtime boilerplate demotion
+- feat(retrieval): add boilerplate demotion scoring
+- feat(eval): compare demoted retrieval variants
+- feat(eval): add boilerplate demotion helpers
+- feat(eval): add BM25 RRF A/B harness
+- feat(eval): add pure BM25 ranking helper
+- feat(retrieval): use lexical scorer in runtime fallback
+- feat(retrieval): add weighted lexical scorer
+- feat(storage): connect UI and query to JSONL domain files
+- feat(storage): migrate legacy wiki service files to JSONL
+- feat(storage): write wiki logs as JSONL
+- feat(retrieval): store page and chunk records in index JSONL
+- feat(storage): store domains in metadata JSONL
+- feat(storage): add JSONL helpers and service paths
+
+### Fixes
+- fix(settings): show boilerplate demotion controls
+- fix(retrieval): handle demotion edge cases
+- fix(types): make domain metadata helper type-safe
+- fix(eval): show gold grades and variant deltas
+- fix(eval): dedupe BM25 query terms
+- fix(storage): preserve JSONL descriptions during OKF migration
+
+---
+
 ## 0.1.195 — 2026-07-10
 
 ### New
