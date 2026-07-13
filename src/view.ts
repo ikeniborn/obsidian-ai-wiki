@@ -1,5 +1,5 @@
 import { App, ItemView, Modal, WorkspaceLeaf, MarkdownRenderer, Component, Notice, Platform, setIcon } from "obsidian";
-import { AddDomainModal, BusyCloseModal, ConfirmModal, ManageSourcesModal, IngestScopeModal, LintOptionsModal, ReinitModeModal, ExportOkfModal } from "./modals";
+import { AddDomainModal, BusyCloseModal, ConfirmModal, ManageSourcesModal, IngestScopeModal, LintOptionsModal, ReinitModeModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./types";
 import type { DomainEntry } from "./domain";
@@ -388,17 +388,6 @@ export class LlmWikiView extends ItemView {
         const file = this.plugin.app.workspace.getActiveFile();
         const domainId = this.domainSelect?.value;
         if (file && domainId) void this.plugin.controller.deleteSource(domainId, file.path);
-      });
-      const exportOkfBtn = actionRow.createEl("button", { text: T.view.exportOkf });
-      exportOkfBtn.addEventListener("click", () => {
-        const domainEntry = this.domains.find((d) => d.id === this.domainSelect!.value);
-        if (!domainEntry) { new Notice(i18n().view.selectDomainFirst); return; }
-        const defaultDest = `${this.plugin.controller.cwdOrEmpty()}/okf-export/${domainEntry.wiki_folder}`;
-        new ExportOkfModal(this.plugin.app, defaultDest, (dest) => {
-          void this.plugin.controller.exportOkf(domainEntry, dest)
-            .then((r) => new Notice(`OKF: ${r.pages} pages → ${dest}${r.warnings.length ? ` (${r.warnings.length} warnings)` : ""}`))
-            .catch((e) => new Notice(`OKF export failed: ${(e as Error).message}`, 0));
-        }).open();
       });
       this.ingestBtn.addEventListener("click", () => {
         const file = this.plugin.app.workspace.getActiveFile();

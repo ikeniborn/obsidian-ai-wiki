@@ -1,5 +1,5 @@
 import { AbstractInputSuggest, App, DropdownComponent, Notice, Platform, PluginSettingTab, requestUrl, Setting } from "obsidian";
-import { ConfirmModal, EditDomainModal, ShellConsentModal } from "./modals";
+import { ConfirmModal, EditDomainModal, ExportOkfModal, ShellConsentModal } from "./modals";
 import { probeClaudeBinary } from "./claude-cli-client";
 import type LlmWikiPlugin from "./main";
 import type { LlmWikiPluginSettings, OpKey } from "./types";
@@ -147,6 +147,15 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     } else {
       new Notice(`OK — model returns ${probe.actual} (native ${nativeStr}).`);
     }
+  }
+
+  private openExportOkfModal(domainEntry: DomainEntry): void {
+    const defaultDest = `${this.plugin.controller.cwdOrEmpty()}/okf-export/${domainEntry.wiki_folder}`;
+    new ExportOkfModal(this.plugin.app, defaultDest, (dest) => {
+      void this.plugin.controller.exportOkf(domainEntry, dest)
+        .then((r) => new Notice(`OKF: ${r.pages} pages → ${dest}${r.warnings.length ? ` (${r.warnings.length} warnings)` : ""}`))
+        .catch((e) => new Notice(`OKF export failed: ${(e as Error).message}`, 0));
+    }).open();
   }
 
   // Default: fetch the model's native output dimension (no `dimensions` sent) and store it.
@@ -324,6 +333,11 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           .setName(d.name || d.id)
           .setDesc(d.id)
           .addButton((b) => {
+            b.setButtonText(T.view.exportOkf).setDisabled(busy).onClick(() => {
+              this.openExportOkfModal(d);
+            });
+          })
+          .addButton((b) => {
             b.setButtonText(T.settings.editDomain).setDisabled(busy).onClick(() => {
               new EditDomainModal(this.plugin.app, d, (updated) => {
                 void (async () => {
@@ -489,6 +503,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         }
       }
     } else {
+      new Setting(containerEl).setName(T.settings.h3_backendConnection).setHeading();
+
       new Setting(containerEl)
         .setName(T.settings.baseUrl_name)
         .setDesc(T.settings.baseUrl_desc)
@@ -524,9 +540,11 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             }
           });
           return b;
-        });
+      });
 
       if (!s.nativeAgent.perOperation) {
+        new Setting(containerEl).setName(T.settings.h3_defaultChatModel).setHeading();
+
         this.addModelControl(
           new Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native),
           eff.nativeAgent.model,
@@ -604,7 +622,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         );
 
       if (!Platform.isMobile) {
-        new Setting(containerEl).setName("Per-operation models").setHeading();
+        new Setting(containerEl).setName(T.settings.perOperation_name).setHeading();
         new Setting(containerEl)
           .setName(T.settings.perOperation_name)
           .setDesc(T.settings.perOperation_desc)
@@ -663,7 +681,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         }
       }
 
-      new Setting(containerEl).setName("Semantic Search").setHeading();
+      new Setting(containerEl).setName(T.settings.h3_semanticSearch).setHeading();
 
       new Setting(containerEl)
         .setName("Enable semantic similarity (embeddings)")
@@ -945,11 +963,11 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     }
 
     // ── Vision settings ─────────────────────────────────────────────────────
-    new Setting(containerEl).setName("Vision").setHeading();
+    new Setting(containerEl).setName(T.settings.h3_vision).setHeading();
 
     new Setting(containerEl)
-      .setName("Enable vision analysis")
-      .setDesc("Analyse embedded images, PDFs, and Excalidraw files before formatting. Uses the same baseUrl and API key as the main backend.")
+      .setName(T.settings.visionEnable_name)
+      .setDesc(T.settings.visionEnable_desc)
       .addToggle((t) =>
         t.setValue(s.vision.enabled)
           .onChange(async (v) => {
@@ -962,8 +980,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     if (s.vision.enabled) {
       this.addModelControl(
         new Setting(containerEl)
-          .setName("Vision model")
-          .setDesc("Model name for vision calls, e.g. gpt-4o-mini or claude-3-haiku-20240307"),
+          .setName(T.settings.visionModel_name)
+          .setDesc(T.settings.visionModel_desc),
         s.vision.model,
         async (v) => { s.vision.model = v; await this.plugin.saveSettings(); },
       );
