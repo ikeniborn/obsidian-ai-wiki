@@ -11,3 +11,6 @@
 | gold-bm25-eval-harness | done | ✓ | ✓ | ✓ | OK | 2026-07-11 | 2026-07-11 | Curated HLD gold set plus offline BM25/RRF A/B harness; live verdict needs_tuning for BM25/RRF variants |
 | bm25-template-demotion | done | ✓ | ✓ | ✓ | OK | 2026-07-11 | 2026-07-11 | BM25 retest plus controlled boilerplate/template demotion |
 | runtime-boilerplate-demotion | done | ✓ | ✓ | ✓ | OK | 2026-07-11 | 2026-07-12 | Default-enabled runtime rank-only boilerplate demotion factor 0.15 |
+| reranker-quality-pipeline | done | ✓ | ✓ | ✓ | OK | 2026-07-12 | 2026-07-12 | Runtime reranker settings and staged quality pipeline |
+| reranker-integration-eval | in-progress | ✓ | ✓ | ✓ | needs_work | 2026-07-12 |  | LiteLLM rerank eval blocked: lemonade-reranker-bge-reranker-v2-m3 returns provider error |
+| guarded-rerank-tuning | done | ✓ | ✓ | ✓ | OK | 2026-07-13 | 2026-07-13 | Accepted page-aware rerank gate; nDCG@5 0.9254→0.9321, p95 +601 ms |

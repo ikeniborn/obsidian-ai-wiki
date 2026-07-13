@@ -8,11 +8,13 @@ main.js
 tmp/
 docs/superpowers/evals/*-vault/
 docs/superpowers/evals/.jsonl-domain-storage-hld-eval/
+docs/superpowers/evals/.reranker-integration-hld-eval/
 **/.vitest-cache/
 !dist/main.js
 .playwright-mcp
 **/.venv/
 **/.env
+tests/.env.reranker
 **/.pytest_cache
 **/*.egg-info/
 **/__pycache__/**

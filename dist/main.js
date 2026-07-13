@@ -26298,6 +26298,11 @@ var DEFAULT_SETTINGS = {
       format: { model: "llama3.2", maxTokens: 32768, temperature: 0.2 }
     },
     structuredRetries: 1,
+    rerankerEnabled: false,
+    rerankerModel: "",
+    rerankerTopN: 30,
+    contextTopN: 8,
+    rerankerTimeoutMs: 800,
     hybridRetrieval: false,
     rrfK: 60,
     bfsFusion: false,
@@ -26458,6 +26463,19 @@ var en = {
     boilerplateDemotion_desc: "Demote generated template/readme pages in lexical retrieval. Default on; only template-readme and template-hld-* are affected.",
     boilerplateDemotionFactor_name: "Boilerplate demotion factor",
     boilerplateDemotionFactor_desc: "Rank demotion factor, 0..1. Default 0.15 from the accepted HLD eval. BM25 remains eval-only.",
+    reranker_heading: "Reranker",
+    rerankerEnabled_name: "Enable reranker",
+    rerankerEnabled_desc: "Rerank bounded Query candidates before final context selection. Disabled by default until eval approves default-on behavior.",
+    rerankerModel_name: "Reranker model",
+    rerankerModel_desc: "Model name for rerank calls. No default model is recommended; use a model supported by your native endpoint.",
+    rerankerTopN_name: "Reranker input top-N",
+    rerankerTopN_desc: "Candidate chunks/pages sent to the reranker. Default 30. Must be greater than or equal to final context top-N.",
+    contextTopN_name: "Final context top-N",
+    contextTopN_desc: "Chunks sent to the answer LLM after rerank or fallback. Default 8.",
+    rerankerTimeoutMs_name: "Reranker timeout (ms)",
+    rerankerTimeoutMs_desc: "Timeout for rerank calls. Default 800 ms. On timeout Query falls back to pre-rerank order.",
+    rerankerFlow_desc: "Flow: seedTopK -> graphDepth/bfsTopK -> rerankerTopN -> contextTopN.",
+    rerankerInvalidTopN: "Reranker input top-N must be greater than or equal to final context top-N.",
     dedupOnIngest_desc: "On creating a near-duplicate page \u2014 merge into the existing one via LLM-merge.",
     dedupThreshold_desc: "Cosine threshold for dedup on ingest (0..1). Default 0.85. \u2191 merges only near-duplicates (safer) \xB7 \u2193 more aggressive, risk of false merges. Recommended 0.83\u20130.90.",
     lintNearDuplicate_desc: "In Lint, report pairs of close pages by embedding cosine.",
@@ -26807,6 +26825,19 @@ var ru = {
     boilerplateDemotion_desc: "\u041F\u043E\u043D\u0438\u0436\u0430\u0435\u0442 generated template/readme pages \u0432 lexical retrieval. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E \u0432\u043A\u043B\u044E\u0447\u0435\u043D\u043E; \u0437\u0430\u0442\u0440\u0430\u0433\u0438\u0432\u0430\u0435\u0442 \u0442\u043E\u043B\u044C\u043A\u043E template-readme \u0438 template-hld-*.",
     boilerplateDemotionFactor_name: "\u0424\u0430\u043A\u0442\u043E\u0440 demotion boilerplate",
     boilerplateDemotionFactor_desc: "\u0424\u0430\u043A\u0442\u043E\u0440 \u043F\u043E\u043D\u0438\u0436\u0435\u043D\u0438\u044F rank, 0..1. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E 0.15 \u0438\u0437 accepted HLD eval. BM25 \u043E\u0441\u0442\u0430\u0451\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u0432 eval.",
+    reranker_heading: "Reranker",
+    rerankerEnabled_name: "\u0412\u043A\u043B\u044E\u0447\u0438\u0442\u044C reranker",
+    rerankerEnabled_desc: "\u041F\u0435\u0440\u0435\u0443\u043F\u043E\u0440\u044F\u0434\u043E\u0447\u0438\u0432\u0430\u0435\u0442 \u043E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u043D\u044B\u0439 \u043D\u0430\u0431\u043E\u0440 \u043A\u0430\u043D\u0434\u0438\u0434\u0430\u0442\u043E\u0432 Query \u043F\u0435\u0440\u0435\u0434 \u0444\u0438\u043D\u0430\u043B\u044C\u043D\u044B\u043C \u0432\u044B\u0431\u043E\u0440\u043E\u043C \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E \u0432\u044B\u043A\u043B\u044E\u0447\u0435\u043D\u043E, \u043F\u043E\u043A\u0430 eval \u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442 \u043F\u043E\u0432\u0435\u0434\u0435\u043D\u0438\u0435 default-on.",
+    rerankerModel_name: "\u041C\u043E\u0434\u0435\u043B\u044C reranker",
+    rerankerModel_desc: "\u0418\u043C\u044F \u043C\u043E\u0434\u0435\u043B\u0438 \u0434\u043B\u044F rerank-\u0432\u044B\u0437\u043E\u0432\u043E\u0432. \u041C\u043E\u0434\u0435\u043B\u044C \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E \u043D\u0435 \u0440\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u0435\u0442\u0441\u044F; \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 \u043C\u043E\u0434\u0435\u043B\u044C, \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u043C\u0443\u044E \u0432\u0430\u0448\u0438\u043C native endpoint.",
+    rerankerTopN_name: "Reranker input top-N",
+    rerankerTopN_desc: "\u0427\u0430\u043D\u043A\u0438/\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B-\u043A\u0430\u043D\u0434\u0438\u0434\u0430\u0442\u044B, \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u044F\u0435\u043C\u044B\u0435 \u0432 reranker. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E 30. \u0414\u043E\u043B\u0436\u043D\u043E \u0431\u044B\u0442\u044C \u0431\u043E\u043B\u044C\u0448\u0435 \u0438\u043B\u0438 \u0440\u0430\u0432\u043D\u043E final context top-N.",
+    contextTopN_name: "Final context top-N",
+    contextTopN_desc: "\u0427\u0430\u043D\u043A\u0438, \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u044F\u0435\u043C\u044B\u0435 \u0432 answer LLM \u043F\u043E\u0441\u043B\u0435 rerank \u0438\u043B\u0438 fallback. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E 8.",
+    rerankerTimeoutMs_name: "\u0422\u0430\u0439\u043C\u0430\u0443\u0442 reranker (ms)",
+    rerankerTimeoutMs_desc: "\u0422\u0430\u0439\u043C\u0430\u0443\u0442 rerank-\u0432\u044B\u0437\u043E\u0432\u043E\u0432. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E 800 ms. \u041F\u0440\u0438 timeout Query \u043E\u0442\u043A\u0430\u0442\u044B\u0432\u0430\u0435\u0442\u0441\u044F \u043A pre-rerank \u043F\u043E\u0440\u044F\u0434\u043A\u0443.",
+    rerankerFlow_desc: "Flow: seedTopK -> graphDepth/bfsTopK -> rerankerTopN -> contextTopN.",
+    rerankerInvalidTopN: "Reranker input top-N \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u0431\u043E\u043B\u044C\u0448\u0435 \u0438\u043B\u0438 \u0440\u0430\u0432\u0435\u043D final context top-N.",
     dedupOnIngest_desc: "\u041D\u0430 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u0438 near-duplicate \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u2014 \u0441\u043B\u0438\u0442\u044C \u0432 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0443\u044E \u0447\u0435\u0440\u0435\u0437 LLM-merge.",
     dedupThreshold_desc: "\u041F\u043E\u0440\u043E\u0433 \u043A\u043E\u0441\u0438\u043D\u0443\u0441\u0430 \u0434\u043B\u044F \u0434\u0435\u0434\u0443\u043F\u0430 \u043F\u0440\u0438 ingest (0..1). \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 0.85. \u2191 \u0441\u043B\u0438\u0432\u0430\u0435\u0442 \u0442\u043E\u043B\u044C\u043A\u043E near-duplicate (\u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u0435\u0435) \xB7 \u2193 \u0430\u0433\u0440\u0435\u0441\u0441\u0438\u0432\u043D\u0435\u0435, \u0440\u0438\u0441\u043A \u043B\u043E\u0436\u043D\u044B\u0445 merge. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u044E 0.83\u20130.90.",
     lintNearDuplicate_desc: "\u0412 Lint \u043F\u043E\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u043F\u0430\u0440\u044B \u0431\u043B\u0438\u0437\u043A\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043F\u043E embedding-\u043A\u043E\u0441\u0438\u043D\u0443\u0441\u0443.",
@@ -27155,6 +27186,19 @@ var es = {
     boilerplateDemotion_desc: "Baja p\xE1ginas generadas template/readme en lexical retrieval. Activado por defecto; solo afecta template-readme y template-hld-*.",
     boilerplateDemotionFactor_name: "Factor de democi\xF3n boilerplate",
     boilerplateDemotionFactor_desc: "Factor de democi\xF3n de rank, 0..1. Por defecto 0.15 desde el HLD eval aceptado. BM25 sigue solo en eval.",
+    reranker_heading: "Reranker",
+    rerankerEnabled_name: "Activar reranker",
+    rerankerEnabled_desc: "Reordena candidatos acotados de Query antes de la selecci\xF3n final de contexto. Desactivado por defecto hasta que eval apruebe el comportamiento default-on.",
+    rerankerModel_name: "Modelo de reranker",
+    rerankerModel_desc: "Nombre del modelo para llamadas rerank. No se recomienda ning\xFAn modelo por defecto; usa un modelo compatible con tu native endpoint.",
+    rerankerTopN_name: "Reranker input top-N",
+    rerankerTopN_desc: "Fragmentos/p\xE1ginas candidatas enviados al reranker. Por defecto 30. Debe ser mayor o igual que final context top-N.",
+    contextTopN_name: "Final context top-N",
+    contextTopN_desc: "Fragmentos enviados al answer LLM despu\xE9s de rerank o fallback. Por defecto 8.",
+    rerankerTimeoutMs_name: "Timeout del reranker (ms)",
+    rerankerTimeoutMs_desc: "Timeout para llamadas rerank. Por defecto 800 ms. En timeout, Query vuelve al orden pre-rerank.",
+    rerankerFlow_desc: "Flow: seedTopK -> graphDepth/bfsTopK -> rerankerTopN -> contextTopN.",
+    rerankerInvalidTopN: "Reranker input top-N debe ser mayor o igual que final context top-N.",
     dedupOnIngest_desc: "Al crear una p\xE1gina casi duplicada \u2014 fusionar con la existente mediante LLM-merge.",
     dedupThreshold_desc: "Umbral de coseno para dedup en ingest (0..1). Por defecto 0.85. \u2191 fusiona solo casi duplicados (m\xE1s seguro) \xB7 \u2193 m\xE1s agresivo, riesgo de fusiones falsas. Recomendado 0.83\u20130.90.",
     lintNearDuplicate_desc: "En Lint, mostrar pares de p\xE1ginas cercanas por coseno de embedding.",
@@ -29516,29 +29560,29 @@ function stripFrontmatterAndTitle(content) {
   const noFm = content.replace(/^---\n[\s\S]*?\n---\n?/, "").trimStart();
   return noFm.replace(/^#\s+[^\n]*\n?/, "");
 }
-function coverage(queryTokens, text) {
-  if (queryTokens.size === 0) return 0;
+function coverage(queryTokens2, text) {
+  if (queryTokens2.size === 0) return 0;
   const tokens = tokenizeLexical(text);
   if (tokens.size === 0) return 0;
   let hits = 0;
-  for (const token of queryTokens) if (tokens.has(token)) hits++;
-  return hits / queryTokens.size;
+  for (const token of queryTokens2) if (tokens.has(token)) hits++;
+  return hits / queryTokens2.size;
 }
-function exactHitRatio(queryTokens, text) {
-  if (queryTokens.size === 0 || !text) return 0;
+function exactHitRatio(queryTokens2, text) {
+  if (queryTokens2.size === 0 || !text) return 0;
   const tokens = tokenizeLexical(text);
   let hits = 0;
-  for (const token of queryTokens) {
+  for (const token of queryTokens2) {
     if (tokens.has(token)) hits++;
   }
-  return Math.min(hits, queryTokens.size) / queryTokens.size;
+  return Math.min(hits, queryTokens2.size) / queryTokens2.size;
 }
-function orderedTokens(queryTokens, text) {
+function orderedTokens(queryTokens2, text) {
   const textTokens = tokenizeLexical(text);
-  return [...queryTokens].filter((token) => textTokens.has(token));
+  return [...queryTokens2].filter((token) => textTokens.has(token));
 }
-function phraseAdjacentBonus(queryTokens, text) {
-  const matched = orderedTokens(queryTokens, text);
+function phraseAdjacentBonus(queryTokens2, text) {
+  const matched = orderedTokens(queryTokens2, text);
   if (matched.length < 2) return 0;
   const lowered = text.toLowerCase();
   for (let i = 0; i < matched.length - 1; i++) {
@@ -29546,41 +29590,41 @@ function phraseAdjacentBonus(queryTokens, text) {
     const b = matched[i + 1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     if (new RegExp(`${a}[^\\p{L}\\p{N}]+${b}`, "u").test(lowered)) return 1;
   }
-  return Math.min(0.75, matched.length / queryTokens.size);
+  return Math.min(0.75, matched.length / queryTokens2.size);
 }
 function longTextPenalty(text, threshold, floor) {
   if (text.length <= threshold) return 1;
   return Math.max(floor, threshold / text.length);
 }
-function scoreLexicalPage(queryTokens, input) {
+function scoreLexicalPage(queryTokens2, input) {
   const description = [input.description, input.annotation].filter(Boolean).join("\n");
   const body = input.content ? stripFrontmatterAndTitle(input.content).slice(0, PAGE_LEAD_CAP) : "";
   const title = input.title ?? input.id;
   const path6 = input.path ?? input.id;
   const fullText = [path6, title, description, body].join("\n");
   const evidence = emptyEvidence(longTextPenalty(description, PAGE_LONG_TEXT, 0.55));
-  if (queryTokens.size === 0) return { score: 0, evidence };
-  evidence.path = coverage(queryTokens, path6) * 2.2;
-  evidence.title = coverage(queryTokens, title) * 2;
-  evidence.description = coverage(queryTokens, description) * 1;
-  evidence.body = coverage(queryTokens, body) * 0.6;
-  evidence.exact = exactHitRatio(queryTokens, fullText) * 0.4;
-  evidence.phrase = phraseAdjacentBonus(queryTokens, fullText) * 0.25;
+  if (queryTokens2.size === 0) return { score: 0, evidence };
+  evidence.path = coverage(queryTokens2, path6) * 2.2;
+  evidence.title = coverage(queryTokens2, title) * 2;
+  evidence.description = coverage(queryTokens2, description) * 1;
+  evidence.body = coverage(queryTokens2, body) * 0.6;
+  evidence.exact = exactHitRatio(queryTokens2, fullText) * 0.4;
+  evidence.phrase = phraseAdjacentBonus(queryTokens2, fullText) * 0.25;
   const raw = evidence.path + evidence.title + evidence.description + evidence.body + evidence.exact + evidence.phrase;
   const score = raw * evidence.lengthPenalty;
   return { score, evidence };
 }
-function scoreLexicalChunk(queryTokens, input) {
+function scoreLexicalChunk(queryTokens2, input) {
   const heading = input.heading ?? "";
   const body = input.body ?? input.embedText ?? "";
   const fullText = [input.path, heading, body].join("\n");
   const evidence = emptyEvidence(longTextPenalty(body, CHUNK_LONG_TEXT, 0.5));
-  if (queryTokens.size === 0 || body.trim().length === 0) return { score: 0, evidence };
-  evidence.path = coverage(queryTokens, input.path) * 1.5;
-  evidence.heading = coverage(queryTokens, heading) * 2.3;
-  evidence.body = coverage(queryTokens, body) * 1;
-  evidence.exact = exactHitRatio(queryTokens, fullText) * 0.35;
-  evidence.phrase = phraseAdjacentBonus(queryTokens, fullText) * 0.25;
+  if (queryTokens2.size === 0 || body.trim().length === 0) return { score: 0, evidence };
+  evidence.path = coverage(queryTokens2, input.path) * 1.5;
+  evidence.heading = coverage(queryTokens2, heading) * 2.3;
+  evidence.body = coverage(queryTokens2, body) * 1;
+  evidence.exact = exactHitRatio(queryTokens2, fullText) * 0.35;
+  evidence.phrase = phraseAdjacentBonus(queryTokens2, fullText) * 0.25;
   const raw = evidence.path + evidence.heading + evidence.body + evidence.exact + evidence.phrase;
   const score = raw * evidence.lengthPenalty;
   return { score, evidence };
@@ -29931,10 +29975,10 @@ function demoteScoredPaths(scored, boilerplateDemotion, limit2) {
     limit2
   );
 }
-function rankChunksJaccard(queryTokens, sections, limit2, boilerplateDemotion) {
+function rankChunksJaccard(queryTokens2, sections, limit2, boilerplateDemotion) {
   const scored = [];
   for (const section of sections) {
-    const score = scoreLexicalChunk(queryTokens, {
+    const score = scoreLexicalChunk(queryTokens2, {
       articleId: section.articleId,
       path: section.path,
       heading: section.heading,
@@ -30055,21 +30099,21 @@ var PageSimilarityService = class _PageSimilarityService {
     return service;
   }
   async selectRelevantChunks(query, pages, candidateIds, seedIds, articleScores, limit2) {
-    const queryTokens = tokenize(query);
-    if (queryTokens.size === 0 || candidateIds.size === 0 || limit2 <= 0) return [];
+    const queryTokens2 = tokenize(query);
+    if (queryTokens2.size === 0 || candidateIds.size === 0 || limit2 <= 0) return [];
     const chunking = this.config.chunking ?? DEFAULT_CHUNKING;
     const sections = collectCandidateSections(pages, candidateIds, seedIds, articleScores, chunking);
     if (sections.length === 0) return [];
-    if (this.config.mode === "jaccard") return rankChunksJaccard(queryTokens, sections, limit2, this.config.boilerplateDemotion);
+    if (this.config.mode === "jaccard") return rankChunksJaccard(queryTokens2, sections, limit2, this.config.boilerplateDemotion);
     const { baseUrl, apiKey, model } = this.config;
-    if (!baseUrl || !model) return rankChunksJaccard(queryTokens, sections, limit2, this.config.boilerplateDemotion);
+    if (!baseUrl || !model) return rankChunksJaccard(queryTokens2, sections, limit2, this.config.boilerplateDemotion);
     let queryVec;
     try {
       const vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [query.slice(0, 2e3)], this.config.dimensions);
-      if (!isUsableVector(vecs[0], this.config.dimensions)) return rankChunksJaccard(queryTokens, sections, limit2, this.config.boilerplateDemotion);
+      if (!isUsableVector(vecs[0], this.config.dimensions)) return rankChunksJaccard(queryTokens2, sections, limit2, this.config.boilerplateDemotion);
       queryVec = vecs[0];
     } catch {
-      return rankChunksJaccard(queryTokens, sections, limit2, this.config.boilerplateDemotion);
+      return rankChunksJaccard(queryTokens2, sections, limit2, this.config.boilerplateDemotion);
     }
     const vectors = /* @__PURE__ */ new Map();
     if (this.cache && this.cache.model === model && this.cache.dimensions === this.config.dimensions) {
@@ -30090,13 +30134,13 @@ var PageSimilarityService = class _PageSimilarityService {
       try {
         const vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, batch.map((section) => section.embedText), this.config.dimensions);
         if (vecs.length !== batch.length || vecs.some((vec) => !isUsableVector(vec, this.config.dimensions))) {
-          return rankChunksJaccard(queryTokens, sections, limit2, this.config.boilerplateDemotion);
+          return rankChunksJaccard(queryTokens2, sections, limit2, this.config.boilerplateDemotion);
         }
         for (let j = 0; j < batch.length; j++) {
           vectors.set(batch[j].hash, vecs[j]);
         }
       } catch {
-        return rankChunksJaccard(queryTokens, sections, limit2, this.config.boilerplateDemotion);
+        return rankChunksJaccard(queryTokens2, sections, limit2, this.config.boilerplateDemotion);
       }
     }
     const scored = [];
@@ -30179,26 +30223,26 @@ var PageSimilarityService = class _PageSimilarityService {
     return best;
   }
   async selectRelevant(sourceContent, indexAnnotations, allPaths) {
-    const queryTokens = tokenize(sourceContent);
-    if (queryTokens.size === 0) return [];
+    const queryTokens2 = tokenize(sourceContent);
+    if (queryTokens2.size === 0) return [];
     if (this.config.mode === "jaccard") {
-      return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
+      return this.selectJaccard(queryTokens2, indexAnnotations, allPaths);
     }
     if (this.config.mode === "hybrid") {
-      return (await this.selectHybridScored(sourceContent, indexAnnotations, allPaths, queryTokens)).map((x) => x.path);
+      return (await this.selectHybridScored(sourceContent, indexAnnotations, allPaths, queryTokens2)).map((x) => x.path);
     }
-    return this.selectEmbedding(sourceContent, indexAnnotations, allPaths, queryTokens);
+    return this.selectEmbedding(sourceContent, indexAnnotations, allPaths, queryTokens2);
   }
   async selectRelevantScored(sourceContent, indexAnnotations, allPaths) {
-    const queryTokens = tokenize(sourceContent);
-    if (queryTokens.size === 0) return [];
+    const queryTokens2 = tokenize(sourceContent);
+    if (queryTokens2.size === 0) return [];
     if (this.config.mode === "jaccard") {
-      return this.selectJaccardScored(queryTokens, indexAnnotations, allPaths);
+      return this.selectJaccardScored(queryTokens2, indexAnnotations, allPaths);
     }
     if (this.config.mode === "hybrid") {
-      return this.selectHybridScored(sourceContent, indexAnnotations, allPaths, queryTokens);
+      return this.selectHybridScored(sourceContent, indexAnnotations, allPaths, queryTokens2);
     }
-    return this.selectEmbeddingScored(sourceContent, indexAnnotations, allPaths, queryTokens);
+    return this.selectEmbeddingScored(sourceContent, indexAnnotations, allPaths, queryTokens2);
   }
   async selectByEntities(entities, indexAnnotations, allPaths) {
     if (entities.length === 0) return { results: /* @__PURE__ */ new Map(), allFailed: false };
@@ -30207,14 +30251,14 @@ var PageSimilarityService = class _PageSimilarityService {
     }
     return this.selectByEntitiesEmbedding(entities, indexAnnotations, allPaths);
   }
-  scoreJaccardOnce(queryTokens, indexAnnotations, allPaths) {
-    if (queryTokens.size === 0) return [];
+  scoreJaccardOnce(queryTokens2, indexAnnotations, allPaths) {
+    if (queryTokens2.size === 0) return [];
     const scored = [];
     for (const path6 of allPaths) {
       const pid = pageId(path6);
       const annotation = indexAnnotations.get(pid);
       if (!annotation) continue;
-      const score = scoreSeed(queryTokens, pid, "", annotation);
+      const score = scoreSeed(queryTokens2, pid, "", annotation);
       if (score > 0) scored.push({ path: path6, score });
     }
     scored.sort((a, b) => b.score - a.score);
@@ -30276,13 +30320,13 @@ var PageSimilarityService = class _PageSimilarityService {
     for (let ei = 0; ei < entities.length; ei++) {
       const e = entities[ei];
       const queryVec = entityVecs[ei];
-      const queryTokens = tokenize(entityQuery(e));
+      const queryTokens2 = tokenize(entityQuery(e));
       const scored = [];
       for (let pi = 0; pi < allPaths.length; pi++) {
         const pid = pids[pi];
         const vecs = pageVecs.get(pid);
         if (!vecs) continue;
-        const score = vecs.length === 0 ? scoreSeed(queryTokens, pid, "", annotations[pi]) : maxCosine(queryVec, vecs);
+        const score = vecs.length === 0 ? scoreSeed(queryTokens2, pid, "", annotations[pi]) : maxCosine(queryVec, vecs);
         if (score > 0) scored.push({ path: allPaths[pi], score });
       }
       scored.sort((a, b) => b.score - a.score);
@@ -30292,29 +30336,29 @@ var PageSimilarityService = class _PageSimilarityService {
     }
     return { results, allFailed: allPaths.length > 0 && !anySuccess };
   }
-  selectJaccard(queryTokens, indexAnnotations, allPaths) {
+  selectJaccard(queryTokens2, indexAnnotations, allPaths) {
     const scored = [];
     for (const path6 of allPaths) {
       const pid = pageId(path6);
       const annotation = indexAnnotations.get(pid);
       if (!annotation) continue;
-      const score = scoreSeed(queryTokens, pid, "", annotation);
+      const score = scoreSeed(queryTokens2, pid, "", annotation);
       if (score > 0) scored.push({ path: path6, score });
     }
     scored.sort((a, b) => b.score - a.score);
     return demoteScoredPaths(scored, this.config.boilerplateDemotion, this.config.topK).map((x) => x.path);
   }
-  async selectEmbedding(sourceContent, indexAnnotations, allPaths, queryTokens) {
+  async selectEmbedding(sourceContent, indexAnnotations, allPaths, queryTokens2) {
     const { baseUrl, apiKey, model, topK } = this.config;
     if (!baseUrl || !model) {
-      return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
+      return this.selectJaccard(queryTokens2, indexAnnotations, allPaths);
     }
     let queryVec;
     try {
       const truncated = sourceContent.slice(0, 2e3);
       [queryVec] = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [truncated], this.config.dimensions);
     } catch {
-      return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
+      return this.selectJaccard(queryTokens2, indexAnnotations, allPaths);
     }
     const pids = allPaths.map((p) => pageId(p));
     const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
@@ -30345,7 +30389,7 @@ var PageSimilarityService = class _PageSimilarityService {
       } catch {
         for (const pid of batch.pids) {
           const annotation = indexAnnotations.get(pid) ?? "";
-          const score = scoreSeed(queryTokens, pid, "", annotation);
+          const score = scoreSeed(queryTokens2, pid, "", annotation);
           if (score > 0) pageVecs.set(pid, []);
         }
         continue;
@@ -30359,36 +30403,36 @@ var PageSimilarityService = class _PageSimilarityService {
       const pid = pids[i];
       const vecs = pageVecs.get(pid);
       if (!vecs) continue;
-      const score = vecs.length === 0 ? scoreSeed(queryTokens, pid, "", annotations[i]) : maxCosine(queryVec, vecs);
+      const score = vecs.length === 0 ? scoreSeed(queryTokens2, pid, "", annotations[i]) : maxCosine(queryVec, vecs);
       if (score > 0) scored.push({ path: allPaths[i], score });
     }
     scored.sort((a, b) => b.score - a.score);
     return scored.slice(0, topK).map((x) => x.path);
   }
-  selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit2 = this.config.topK, applyDemotion = true) {
+  selectJaccardScored(queryTokens2, indexAnnotations, allPaths, limit2 = this.config.topK, applyDemotion = true) {
     const scored = [];
     for (const path6 of allPaths) {
       const pid = pageId(path6);
       const annotation = indexAnnotations.get(pid);
       if (!annotation) continue;
-      const score = scoreSeed(queryTokens, pid, "", annotation);
+      const score = scoreSeed(queryTokens2, pid, "", annotation);
       if (score > 0) scored.push({ path: path6, score });
     }
     scored.sort((a, b) => b.score - a.score);
     return applyDemotion ? demoteScoredPaths(scored, this.config.boilerplateDemotion, limit2) : scored.slice(0, limit2);
   }
   /** Embedding-scored selection that also reports dense-cosine confidence and failure. */
-  async selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens, limit2 = this.config.topK, applyDemotion = false) {
+  async selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens2, limit2 = this.config.topK, applyDemotion = false) {
     const { baseUrl, apiKey, model } = this.config;
     if (!baseUrl || !model) {
-      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit2, applyDemotion), denseMax: 0, embedFailed: false, denseByPid: {} };
+      return { results: this.selectJaccardScored(queryTokens2, indexAnnotations, allPaths, limit2, applyDemotion), denseMax: 0, embedFailed: false, denseByPid: {} };
     }
     let queryVec;
     try {
       const truncated = sourceContent.slice(0, 2e3);
       [queryVec] = await fetchEmbeddings(baseUrl, apiKey, model, [truncated], this.config.dimensions);
     } catch {
-      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit2, applyDemotion), denseMax: 0, embedFailed: true, denseByPid: {} };
+      return { results: this.selectJaccardScored(queryTokens2, indexAnnotations, allPaths, limit2, applyDemotion), denseMax: 0, embedFailed: true, denseByPid: {} };
     }
     const pids = allPaths.map((p) => pageId(p));
     const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
@@ -30427,7 +30471,7 @@ var PageSimilarityService = class _PageSimilarityService {
       const vecs = pageVecs.get(pid);
       if (!vecs) continue;
       if (vecs.length === 0) {
-        const s = scoreSeed(queryTokens, pid, "", annotations[i]);
+        const s = scoreSeed(queryTokens2, pid, "", annotations[i]);
         if (s > 0) scored.push({ path: allPaths[i], score: s });
       } else {
         const c = maxCosine(queryVec, vecs);
@@ -30444,14 +30488,14 @@ var PageSimilarityService = class _PageSimilarityService {
       denseByPid
     };
   }
-  async selectEmbeddingScored(sourceContent, indexAnnotations, allPaths, queryTokens, limit2 = this.config.topK) {
-    return (await this.selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens, limit2, false)).results;
+  async selectEmbeddingScored(sourceContent, indexAnnotations, allPaths, queryTokens2, limit2 = this.config.topK) {
+    return (await this.selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens2, limit2, false)).results;
   }
   /** Hybrid (dense ⊕ sparse) selection that also reports dense-cosine confidence. */
-  async selectHybridScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens) {
+  async selectHybridScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens2) {
     const pool = Math.max(this.config.topK, RRF_CANDIDATE_POOL);
-    const dense = await this.selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens, pool, false);
-    const sparse = this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, pool, false);
+    const dense = await this.selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens2, pool, false);
+    const sparse = this.selectJaccardScored(queryTokens2, indexAnnotations, allPaths, pool, false);
     const fused = rrf([dense.results.map((x) => x.path), sparse.map((x) => x.path)], this.config.rrfK ?? 60);
     const results = demoteScoredPaths(
       fused.map((f) => ({ path: f.id, score: f.score })),
@@ -30460,20 +30504,20 @@ var PageSimilarityService = class _PageSimilarityService {
     );
     return { results, denseMax: dense.denseMax, embedFailed: dense.embedFailed, denseByPid: dense.denseByPid };
   }
-  async selectHybridScored(sourceContent, indexAnnotations, allPaths, queryTokens) {
-    return (await this.selectHybridScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens)).results;
+  async selectHybridScored(sourceContent, indexAnnotations, allPaths, queryTokens2) {
+    return (await this.selectHybridScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens2)).results;
   }
   /** Diagnostics-bearing seed selection used by the query gate. */
   async selectRelevantScoredDiag(sourceContent, indexAnnotations, allPaths) {
-    const queryTokens = tokenize(sourceContent);
-    if (queryTokens.size === 0) return { results: [], denseMax: 0, embedFailed: false, denseByPid: {} };
+    const queryTokens2 = tokenize(sourceContent);
+    if (queryTokens2.size === 0) return { results: [], denseMax: 0, embedFailed: false, denseByPid: {} };
     if (this.config.mode === "jaccard") {
-      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths), denseMax: 0, embedFailed: false, denseByPid: {} };
+      return { results: this.selectJaccardScored(queryTokens2, indexAnnotations, allPaths), denseMax: 0, embedFailed: false, denseByPid: {} };
     }
     if (this.config.mode === "hybrid") {
-      return this.selectHybridScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens);
+      return this.selectHybridScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens2);
     }
-    return this.selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens);
+    return this.selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens2);
   }
   async loadCache(domainRoot, vaultTools) {
     if (this.config.mode === "jaccard") return;
@@ -30729,7 +30773,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
     if (!silent) new import_obsidian4.Notice(`Default dimensions for model: ${probe.actual}`);
     this.display();
   }
-  addModelControl(s, currentValue, onChange) {
+  addModelControl(s, currentValue, onChange, saveOnTyping = false) {
     s.addButton(
       (b) => b.setIcon("refresh-cw").setTooltip("Fetch available models from base URL").onClick(() => {
         void this.fetchModels();
@@ -30740,6 +30784,11 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
       t.inputEl.addEventListener("focus", () => {
         if (this._availableModels.length === 0) void this.fetchModels();
       });
+      if (saveOnTyping) {
+        t.onChange((v) => {
+          void onChange(v);
+        });
+      }
       new ModelInputSuggest(this.app, t.inputEl, () => this._availableModels, (v) => {
         void onChange(v);
       });
@@ -31205,6 +31254,66 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         (sl) => sl.setLimits(0, 1, 0.05).setDynamicTooltip().setValue(s.nativeAgent.boilerplateDemotionFactor ?? 0.15).onChange(async (v) => {
           s.nativeAgent.boilerplateDemotionFactor = v;
           await this.plugin.saveSettings();
+        })
+      );
+      new import_obsidian4.Setting(containerEl).setName(T.settings.reranker_heading).setHeading();
+      new import_obsidian4.Setting(containerEl).setDesc(T.settings.rerankerFlow_desc);
+      new import_obsidian4.Setting(containerEl).setName(T.settings.rerankerEnabled_name).setDesc(T.settings.rerankerEnabled_desc).addToggle(
+        (t) => t.setValue(s.nativeAgent.rerankerEnabled ?? false).onChange(async (v) => {
+          s.nativeAgent.rerankerEnabled = v;
+          await this.plugin.saveSettings();
+        })
+      );
+      this.addModelControl(
+        new import_obsidian4.Setting(containerEl).setName(T.settings.rerankerModel_name).setDesc(T.settings.rerankerModel_desc),
+        s.nativeAgent.rerankerModel ?? "",
+        async (v) => {
+          s.nativeAgent.rerankerModel = v.trim();
+          await this.plugin.saveSettings();
+        },
+        true
+      );
+      new import_obsidian4.Setting(containerEl).setName(T.settings.rerankerTopN_name).setDesc(T.settings.rerankerTopN_desc).addText(
+        (t) => t.setPlaceholder("30").setValue(String(s.nativeAgent.rerankerTopN ?? 30)).onChange(async (v) => {
+          const n = Number(v);
+          if (!Number.isFinite(n)) return;
+          const requested = Math.floor(n);
+          const bounded = Math.max(1, Math.min(100, requested));
+          const contextTopN = Math.max(1, Math.min(50, Math.floor(s.nativeAgent.contextTopN ?? 8)));
+          const next = Math.max(bounded, contextTopN);
+          if (next !== bounded) new import_obsidian4.Notice(T.settings.rerankerInvalidTopN);
+          s.nativeAgent.rerankerTopN = next;
+          await this.plugin.saveSettings();
+          if (next !== requested) this.display();
+        })
+      );
+      new import_obsidian4.Setting(containerEl).setName(T.settings.contextTopN_name).setDesc(T.settings.contextTopN_desc).addText(
+        (t) => t.setPlaceholder("8").setValue(String(s.nativeAgent.contextTopN ?? 8)).onChange(async (v) => {
+          const n = Number(v);
+          if (!Number.isFinite(n)) return;
+          const requested = Math.floor(n);
+          const next = Math.max(1, Math.min(50, requested));
+          s.nativeAgent.contextTopN = next;
+          if ((s.nativeAgent.rerankerTopN ?? 30) < next) {
+            s.nativeAgent.rerankerTopN = next;
+            new import_obsidian4.Notice(T.settings.rerankerInvalidTopN);
+            await this.plugin.saveSettings();
+            this.display();
+            return;
+          }
+          await this.plugin.saveSettings();
+          if (next !== requested) this.display();
+        })
+      );
+      new import_obsidian4.Setting(containerEl).setName(T.settings.rerankerTimeoutMs_name).setDesc(T.settings.rerankerTimeoutMs_desc).addText(
+        (t) => t.setPlaceholder("800").setValue(String(s.nativeAgent.rerankerTimeoutMs ?? 800)).onChange(async (v) => {
+          const n = Number(v);
+          if (!Number.isFinite(n)) return;
+          const requested = Math.floor(n);
+          const next = Math.max(100, Math.min(5e3, requested));
+          s.nativeAgent.rerankerTimeoutMs = next;
+          await this.plugin.saveSettings();
+          if (next !== requested) this.display();
         })
       );
       if (s.nativeAgent.embeddingModel !== void 0) {
@@ -41070,6 +41179,335 @@ var GraphCache = class {
 };
 var graphCache = new GraphCache();
 
+// src/reranker.ts
+var DEFAULT_RERANKER_SETTINGS = {
+  enabled: false,
+  model: "",
+  rerankerTopN: 30,
+  contextTopN: 8,
+  timeoutMs: 800
+};
+var DEFAULT_RERANKER_BLEND_ALPHA = 0.6;
+var DEFAULT_RERANKER_MAX_PROMOTION = 1;
+var DEFAULT_RERANKER_PROMOTION_SCOPE = "page";
+var DEFAULT_RERANKER_MIN_PROMOTION_SCORE_GAP = 0.2;
+var DEFAULT_RERANKER_MIN_PROMOTION_BASELINE_RATIO = 0.95;
+var DEFAULT_RERANKER_MAX_PROMOTION_TARGET_INDEX = 2;
+var DEFAULT_RERANKER_CANDIDATE_TEXT_CHARS = 120;
+function clampInt(value, fallback, min, max) {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(min, Math.min(max, Math.floor(numeric)));
+}
+function normalizeRerankerConfig(input) {
+  const contextTopN = clampInt(input?.contextTopN, DEFAULT_RERANKER_SETTINGS.contextTopN, 1, 50);
+  const requestedRerankerTopN = clampInt(
+    input?.rerankerTopN,
+    DEFAULT_RERANKER_SETTINGS.rerankerTopN,
+    1,
+    100
+  );
+  const model = typeof input?.model === "string" ? input.model.trim() : DEFAULT_RERANKER_SETTINGS.model;
+  return {
+    enabled: input?.enabled ?? DEFAULT_RERANKER_SETTINGS.enabled,
+    model,
+    rerankerTopN: Math.max(requestedRerankerTopN, contextTopN),
+    contextTopN,
+    timeoutMs: clampInt(input?.timeoutMs, DEFAULT_RERANKER_SETTINGS.timeoutMs, 100, 5e3),
+    candidateTextChars: clampInt(input?.candidateTextChars, DEFAULT_RERANKER_CANDIDATE_TEXT_CHARS, 80, 1e3)
+  };
+}
+function rerankerChunkId(chunk) {
+  return `${chunk.articleId}::${chunk.ordinal}`;
+}
+function normalizeWhitespace(text) {
+  return text.replace(/\s+/g, " ").trim();
+}
+function titleFromPath(pathValue) {
+  const fileName = pathValue.split("/").pop() ?? pathValue;
+  return fileName.replace(/\.md$/i, "");
+}
+function queryTokens(query) {
+  return [...new Set(query.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? [])];
+}
+function queryAwareExcerpt(query, body, maxChars) {
+  const normalizedBody = normalizeWhitespace(body);
+  if (normalizedBody.length <= maxChars) return normalizedBody;
+  const lower = normalizedBody.toLowerCase();
+  const matchIndex = queryTokens(query).map((token) => lower.indexOf(token)).filter((index) => index >= 0).sort((a, b) => a - b)[0];
+  if (matchIndex === void 0) return normalizedBody.slice(0, maxChars).trim();
+  const start = Math.max(0, matchIndex - Math.floor(maxChars / 3));
+  return normalizedBody.slice(start, start + maxChars).trim();
+}
+function buildCandidateText(query, chunk, maxChars) {
+  const prefix = [
+    `Title: ${titleFromPath(chunk.path)}`,
+    `Path: ${chunk.path}`,
+    `Heading: ${normalizeWhitespace(chunk.heading)}`,
+    "Text:"
+  ].join("\n");
+  const excerptBudget = Math.max(0, maxChars - prefix.length - 1);
+  const excerpt = queryAwareExcerpt(query, chunk.body, excerptBudget);
+  return `${prefix} ${excerpt}`.trim().slice(0, maxChars);
+}
+function buildRerankerCandidates(query, chunks, config) {
+  const candidateTextChars = Number.isFinite(config.candidateTextChars) ? config.candidateTextChars : DEFAULT_RERANKER_CANDIDATE_TEXT_CHARS;
+  return chunks.slice(0, config.rerankerTopN).map((chunk) => ({
+    id: rerankerChunkId(chunk),
+    text: buildCandidateText(query, chunk, candidateTextChars),
+    chunk
+  }));
+}
+function applyRerankerScores(original, scores, limit2, options = {}) {
+  const mode = options.mode ?? "guarded";
+  const alpha = Number.isFinite(options.alpha) ? Math.max(0, options.alpha ?? DEFAULT_RERANKER_BLEND_ALPHA) : DEFAULT_RERANKER_BLEND_ALPHA;
+  const maxPromotion = Number.isFinite(options.maxPromotion) ? Math.max(0, Math.floor(options.maxPromotion ?? DEFAULT_RERANKER_MAX_PROMOTION)) : DEFAULT_RERANKER_MAX_PROMOTION;
+  const promotionScope = options.promotionScope ?? DEFAULT_RERANKER_PROMOTION_SCOPE;
+  const minPromotionScoreGap = Number.isFinite(options.minPromotionScoreGap) ? Math.max(0, options.minPromotionScoreGap ?? DEFAULT_RERANKER_MIN_PROMOTION_SCORE_GAP) : DEFAULT_RERANKER_MIN_PROMOTION_SCORE_GAP;
+  const minPromotionBaselineRatio = Number.isFinite(options.minPromotionBaselineRatio) ? Math.max(0, options.minPromotionBaselineRatio ?? DEFAULT_RERANKER_MIN_PROMOTION_BASELINE_RATIO) : DEFAULT_RERANKER_MIN_PROMOTION_BASELINE_RATIO;
+  const maxPromotionTargetIndex = Number.isFinite(options.maxPromotionTargetIndex) ? Math.max(0, Math.floor(options.maxPromotionTargetIndex ?? DEFAULT_RERANKER_MAX_PROMOTION_TARGET_INDEX)) : DEFAULT_RERANKER_MAX_PROMOTION_TARGET_INDEX;
+  const scoreById = new Map(
+    scores.filter((score) => Number.isFinite(score.score)).map((score) => [score.id, score.score])
+  );
+  const finiteScores = [...scoreById.values()];
+  const minScore = finiteScores.length > 0 ? Math.min(...finiteScores) : 0;
+  const maxScore = finiteScores.length > 0 ? Math.max(...finiteScores) : 0;
+  const spread = maxScore - minScore;
+  function normalizedScore(score) {
+    if (score === void 0) return 0;
+    if (spread <= 0) return 1;
+    return (score - minScore) / spread;
+  }
+  if (mode === "guarded" && promotionScope === "page") {
+    const pageItems = [];
+    const pageByArticleId = /* @__PURE__ */ new Map();
+    for (const chunk of original) {
+      const existing = pageByArticleId.get(chunk.articleId);
+      const score = scoreById.get(rerankerChunkId(chunk));
+      if (existing) {
+        existing.chunks.push(chunk);
+        existing.baselineScore = Math.max(existing.baselineScore, chunk.score);
+        if (score !== void 0 && (existing.score === void 0 || score > existing.score)) {
+          existing.score = score;
+        }
+        continue;
+      }
+      const item = {
+        articleId: chunk.articleId,
+        index: pageItems.length,
+        score,
+        baselineScore: chunk.score,
+        chunks: [chunk]
+      };
+      pageItems.push(item);
+      pageByArticleId.set(chunk.articleId, item);
+    }
+    const rankedPages = [...pageItems].sort((a, b) => {
+      const aFinal = 1 / (a.index + 1) + alpha * normalizedScore(a.score);
+      const bFinal = 1 / (b.index + 1) + alpha * normalizedScore(b.score);
+      if (aFinal !== bFinal) return bFinal - aFinal;
+      return a.index - b.index;
+    });
+    const cappedPages = Array.from({ length: rankedPages.length }, () => void 0);
+    for (const item of rankedPages) {
+      let target = Math.max(0, item.index - maxPromotion);
+      const baselineTarget = pageItems[target];
+      const promotes = target < item.index;
+      if (promotes && target > maxPromotionTargetIndex) {
+        target = item.index;
+      }
+      if (promotes && normalizedScore(item.score) - normalizedScore(baselineTarget?.score) < minPromotionScoreGap) {
+        target = item.index;
+      }
+      if (promotes && target < item.index && minPromotionBaselineRatio > 0 && item.baselineScore < (baselineTarget?.baselineScore ?? 0) * minPromotionBaselineRatio) {
+        target = item.index;
+      }
+      while (target < cappedPages.length && cappedPages[target] !== void 0) target += 1;
+      if (target < cappedPages.length) cappedPages[target] = item;
+    }
+    const orderedPages = cappedPages.filter((item) => item !== void 0);
+    const out = [];
+    const maxChunksPerPage = Math.max(0, ...orderedPages.map((page) => page.chunks.length));
+    for (let chunkIndex = 0; chunkIndex < maxChunksPerPage; chunkIndex++) {
+      for (const page of orderedPages) {
+        const chunk = page.chunks[chunkIndex];
+        if (chunk) out.push(chunk);
+      }
+    }
+    return out.slice(0, Math.max(0, limit2));
+  }
+  const ranked = original.map((chunk, index) => ({ chunk, index, score: scoreById.get(rerankerChunkId(chunk)), finalScore: 0 })).sort((a, b) => {
+    const aScored = a.score !== void 0;
+    const bScored = b.score !== void 0;
+    if (mode === "full") {
+      if (aScored && bScored) return b.score - a.score || a.index - b.index;
+      if (aScored) return -1;
+      if (bScored) return 1;
+      return a.index - b.index;
+    }
+    const aFinal = 1 / (a.index + 1) + alpha * normalizedScore(a.score);
+    const bFinal = 1 / (b.index + 1) + alpha * normalizedScore(b.score);
+    a.finalScore = aFinal;
+    b.finalScore = bFinal;
+    if (aFinal !== bFinal) return bFinal - aFinal;
+    return a.index - b.index;
+  });
+  if (mode === "full") {
+    return ranked.map((item) => item.chunk).slice(0, Math.max(0, limit2));
+  }
+  const capped = Array.from({ length: ranked.length }, () => void 0);
+  for (const item of ranked) {
+    let target = Math.max(0, item.index - maxPromotion);
+    while (target < capped.length && capped[target] !== void 0) target += 1;
+    if (target < capped.length) capped[target] = item;
+  }
+  return capped.filter((item) => item !== void 0).map((item) => item.chunk).slice(0, Math.max(0, limit2));
+}
+function fallbackResult(chunks, started, contextLimit, candidates, fallbackReason) {
+  return {
+    chunks: chunks.slice(0, contextLimit),
+    durationMs: Date.now() - started,
+    candidates,
+    fallbackReason
+  };
+}
+function hasMalformedScores(scores) {
+  return scores.length === 0 || scores.some((score) => !score.id || !Number.isFinite(score.score));
+}
+var RerankerMalformedResponseError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "RerankerMalformedResponseError";
+  }
+};
+function isTimeoutError(err) {
+  if (!(err instanceof Error)) return false;
+  return err.name === "RerankerTimeoutError" || err.name === "TimeoutError" || err.name === "AbortError" && err.message.toLowerCase().includes("timeout");
+}
+function isMalformedResponseError(err) {
+  return err instanceof Error && err.name === "RerankerMalformedResponseError";
+}
+async function rerankChunks(query, chunks, options) {
+  const started = Date.now();
+  const contextLimit = options.config.contextTopN;
+  if (!options.config.enabled) {
+    return fallbackResult(chunks, started, contextLimit, 0, "disabled");
+  }
+  if (!options.config.model) {
+    return fallbackResult(chunks, started, contextLimit, 0, "missing-model");
+  }
+  const candidates = buildRerankerCandidates(query, chunks, options.config);
+  if (candidates.length === 0) {
+    return {
+      chunks: [],
+      durationMs: Date.now() - started,
+      candidates: 0,
+      fallbackReason: "empty-candidates"
+    };
+  }
+  try {
+    const transport = options.transport ?? fetchRerankerScores;
+    const scores = await transport({
+      query,
+      candidates,
+      config: options.config,
+      baseUrl: options.baseUrl,
+      apiKey: options.apiKey,
+      signal: options.signal
+    });
+    if (hasMalformedScores(scores)) {
+      return fallbackResult(chunks, started, contextLimit, candidates.length, "malformed-response");
+    }
+    return {
+      chunks: applyRerankerScores(chunks, scores, contextLimit),
+      durationMs: Date.now() - started,
+      candidates: candidates.length,
+      scores
+    };
+  } catch (err) {
+    return fallbackResult(
+      chunks,
+      started,
+      contextLimit,
+      candidates.length,
+      isTimeoutError(err) ? "timeout" : isMalformedResponseError(err) ? "malformed-response" : "error"
+    );
+  }
+}
+function malformed(message) {
+  return new RerankerMalformedResponseError(message);
+}
+function isRecord2(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function parseRerankerResponseText(text, candidates) {
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
+    throw malformed(err instanceof Error ? err.message : "Invalid JSON");
+  }
+  if (!isRecord2(parsed) || !Array.isArray(parsed.results)) {
+    throw malformed("Reranker response must contain a results array");
+  }
+  return parsed.results.map((item) => {
+    if (!isRecord2(item)) {
+      throw malformed("Reranker result item must be an object");
+    }
+    const index = item.index;
+    const score = typeof item.relevance_score === "number" ? item.relevance_score : item.score;
+    if (typeof index !== "number" || !Number.isInteger(index) || index < 0 || index >= candidates.length || typeof score !== "number" || !Number.isFinite(score)) {
+      throw malformed("Reranker result item has invalid index or score");
+    }
+    return { id: candidates[index].id, score };
+  });
+}
+async function raceRerankerRequest(request, signal, timeoutMs) {
+  if (signal.aborted) {
+    throw new DOMException("Reranker aborted", "AbortError");
+  }
+  let timeoutId;
+  let abortHandler;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      reject(new DOMException("Reranker timeout", "AbortError"));
+    }, timeoutMs);
+  });
+  const abort = new Promise((_, reject) => {
+    abortHandler = () => reject(new DOMException("Reranker aborted", "AbortError"));
+    signal.addEventListener("abort", abortHandler, { once: true });
+    if (signal.aborted) abortHandler();
+  });
+  try {
+    return await Promise.race([request, timeout, abort]);
+  } finally {
+    if (timeoutId !== void 0) window.clearTimeout(timeoutId);
+    if (abortHandler) signal.removeEventListener("abort", abortHandler);
+  }
+}
+var fetchRerankerScores = async (input) => {
+  const { requestUrl: requestUrl3 } = await import("obsidian");
+  const response = await raceRerankerRequest(
+    requestUrl3({
+      url: `${input.baseUrl.replace(/\/$/, "")}/rerank`,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${input.apiKey}`
+      },
+      body: JSON.stringify({
+        model: input.config.model,
+        query: input.query,
+        documents: input.candidates.map((candidate) => candidate.text)
+      }),
+      throw: true
+    }),
+    input.signal,
+    input.config.timeoutMs
+  );
+  return parseRerankerResponseText(response.text, input.candidates);
+};
+
 // src/retrieval-prune.ts
 var FLOOR_LO_PCT = 0.05;
 var FLOOR_EPS = 1e-6;
@@ -41268,6 +41706,11 @@ ${answer}` }
 
 // src/phases/query.ts
 var META_FILES = ["_index.md", "_log.md"];
+var DEFAULT_RERANKER_RUNTIME = {
+  config: normalizeRerankerConfig(void 0),
+  baseUrl: "",
+  apiKey: ""
+};
 async function* retrieveDomainCandidates(domain, question, vaultTools, similarity, signal, cfg, llmSeedFallback) {
   if (!domain.wiki_folder || domain.wiki_folder.includes("..")) {
     yield { kind: "error", message: `Wiki folder ${domain.wiki_folder} is outside the vault.` };
@@ -41419,7 +41862,7 @@ async function* retrieveDomainCandidates(domain, question, vaultTools, similarit
     pagesScanned: files.length
   };
 }
-async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}, seedTopK = 5, seedMinScore = 0.1, bfsTopK = 10, similarity, wikiLinkValidationRetries = 3, seedSimilarityThreshold = 0, bfsFusion = false, rrfK = 60, bfsMinScoreRatio = 0, boilerplateDemotion = { enabled: true, factor: DEFAULT_BOILERPLATE_DEMOTION_FACTOR }) {
+async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}, seedTopK = 5, seedMinScore = 0.1, bfsTopK = 10, similarity, wikiLinkValidationRetries = 3, seedSimilarityThreshold = 0, bfsFusion = false, rrfK = 60, bfsMinScoreRatio = 0, boilerplateDemotion = { enabled: true, factor: DEFAULT_BOILERPLATE_DEMOTION_FACTOR }, rerankerRuntime = DEFAULT_RERANKER_RUNTIME) {
   const question = args[0]?.trim();
   if (!question) {
     yield { kind: "error", message: "query: question required" };
@@ -41432,9 +41875,10 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   }
   const start = Date.now();
   let outputTokens = 0;
+  const seedLimit = Math.max(1, Math.min(50, Math.floor(seedTopK)));
   const cfg = {
     graphDepth,
-    seedTopK,
+    seedTopK: seedLimit,
     seedMinScore,
     bfsTopK,
     seedSimilarityThreshold,
@@ -41464,16 +41908,16 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   const selectedIds = cand.candidateIds;
   const pages = cand.pages;
   const seedSet = new Set(seeds);
-  const topK = Math.max(1, Math.min(50, Math.floor(seedTopK)));
+  const candidateLimit = rerankerRuntime.config.rerankerTopN;
+  const contextLimit = rerankerRuntime.config.contextTopN;
   const fusedOrder = bfsFusion ? fuseVectorGraph(seeds, selectedIds, seedScores, expandedScores, cand.graph, graphDepth, rrfK) : void 0;
   const finalArticleIds = bfsFusion && fusedOrder ? new Set(demoteBoilerplateRankedIds(
     fusedOrder.filter((id) => selectedIds.has(id)),
     boilerplateDemotion,
-    topK * 3
+    candidateLimit
   )) : selectedIds;
   const articleScores = { ...expandedScores, ...seedScores };
-  const chunkLimit = topK * 3;
-  const fallbackSimilarity = new PageSimilarityService({ mode: "jaccard", topK: chunkLimit, boilerplateDemotion });
+  const fallbackSimilarity = new PageSimilarityService({ mode: "jaccard", topK: candidateLimit, boilerplateDemotion });
   const chunkSimilarity = querySimilarity ?? fallbackSimilarity;
   const selectedChunks = await chunkSimilarity.selectRelevantChunks(
     question,
@@ -41481,15 +41925,23 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
     finalArticleIds,
     seedSet,
     articleScores,
-    chunkLimit
+    candidateLimit
   );
   if (signal.aborted) return;
   if (selectedChunks.length === 0) {
     yield { kind: "error", message: "No relevant pages found for this query." };
     return;
   }
-  const contextBlock = renderContextChunks(selectedChunks);
-  const finalSelectedIds = new Set(selectedChunks.map((chunk) => chunk.articleId));
+  const reranked = await rerankChunks(question, selectedChunks, {
+    config: rerankerRuntime.config,
+    baseUrl: rerankerRuntime.baseUrl,
+    apiKey: rerankerRuntime.apiKey,
+    signal
+  });
+  if (signal.aborted) return;
+  const contextChunks = reranked.chunks.slice(0, contextLimit);
+  const contextBlock = renderContextChunks(contextChunks);
+  const finalSelectedIds = new Set(contextChunks.map((chunk) => chunk.articleId));
   const selectedIndexLines = [...finalSelectedIds].map((id) => {
     const annotation = cand.annotations.get(id);
     return annotation ? `${id}: ${annotation}` : void 0;
@@ -41512,6 +41964,13 @@ ${selectedIndexLines.join("\n")}` : "";
   });
   const seedCount = [...finalSelectedIds].filter((id) => seedSet.has(id)).length;
   const graphCount = finalSelectedIds.size - seedCount;
+  const rerankerDiagnostics = {
+    enabled: rerankerRuntime.config.enabled,
+    candidates: reranked.candidates,
+    selected: contextChunks.length,
+    durationMs: reranked.durationMs,
+    fallbackReason: reranked.fallbackReason
+  };
   yield {
     kind: "query_stats",
     crossDomain: false,
@@ -41519,9 +41978,13 @@ ${selectedIndexLines.join("\n")}` : "";
     pagesScanned: cand.pagesScanned,
     pagesSelected: finalSelectedIds.size,
     candidatePages: selectedIds.size,
-    chunksSelected: selectedChunks.length,
+    chunksSelected: contextChunks.length,
     seedCount,
-    graphCount
+    graphCount,
+    rerankerEnabled: rerankerRuntime.config.enabled,
+    rerankerTopN: rerankerRuntime.config.rerankerTopN,
+    contextTopN: rerankerRuntime.config.contextTopN,
+    reranker: rerankerDiagnostics
   };
   if (signal.aborted) return;
   const ans = yield* answerFromContext({
@@ -41544,7 +42007,7 @@ ${selectedIndexLines.join("\n")}` : "";
       question,
       answer,
       found_pages: [...finalSelectedIds],
-      found_chunks: selectedChunks.map((chunk) => ({
+      found_chunks: contextChunks.map((chunk) => ({
         articleId: chunk.articleId,
         heading: chunk.heading,
         score: chunk.score
@@ -41552,13 +42015,17 @@ ${selectedIndexLines.join("\n")}` : "";
       promptVersion: promptVersionOf(query_default),
       retrievalConfig: {
         mode: similarity?.config.mode === "hybrid" ? "hybrid" : similarity?.config.mode === "embedding" ? "embedding" : "jaccard",
-        seedTopK,
+        seedTopK: seedLimit,
         bfsTopK,
         bfsMinScoreRatio,
         bfsFusion,
         seedSimilarityThreshold,
         hybridRetrieval: similarity?.config.mode === "hybrid",
-        hierarchicalChunkRetrieval: true
+        hierarchicalChunkRetrieval: true,
+        rerankerEnabled: rerankerRuntime.config.enabled,
+        rerankerTopN: rerankerRuntime.config.rerankerTopN,
+        contextTopN: rerankerRuntime.config.contextTopN,
+        reranker: rerankerDiagnostics
       }
     }
   };
@@ -41651,7 +42118,12 @@ ${types}${notes}`;
 }
 
 // src/phases/query-cross-domain.ts
-function mergeCandidates(pool, seedTopK, graphDepth, rrfK, boilerplateDemotion) {
+var DEFAULT_RERANKER_RUNTIME2 = {
+  config: normalizeRerankerConfig(void 0),
+  baseUrl: "",
+  apiKey: ""
+};
+function mergeCandidates(pool, candidateTopN, graphDepth, rrfK, boilerplateDemotion) {
   const mergedPages = /* @__PURE__ */ new Map();
   const mergedSeeds = [];
   const mergedSeedScores = {};
@@ -41683,7 +42155,7 @@ function mergeCandidates(pool, seedTopK, graphDepth, rrfK, boilerplateDemotion) 
     graphDepth,
     rrfK
   );
-  const cap = Math.max(1, Math.min(50, Math.floor(seedTopK)));
+  const cap = Math.max(1, Math.min(100, Math.floor(candidateTopN)));
   const finalIds = demoteBoilerplateRankedIds(
     fusedOrder,
     boilerplateDemotion ?? { enabled: false, factor: 0 },
@@ -41715,6 +42187,9 @@ async function* runCrossDomainQuery(question, vaultTools, llm, model, domains, s
   const start = Date.now();
   let outputTokens = 0;
   const querySimilarity = similarity ? similarity.withBoilerplateDemotion(cfg.boilerplateDemotion) : void 0;
+  const rerankerRuntime = cfg.rerankerRuntime ?? DEFAULT_RERANKER_RUNTIME2;
+  const candidateLimit = rerankerRuntime.config.rerankerTopN;
+  const contextLimit = rerankerRuntime.config.contextTopN;
   const poolList = [];
   for (const domain of domains) {
     if (signal.aborted) return;
@@ -41728,11 +42203,11 @@ async function* runCrossDomainQuery(question, vaultTools, llm, model, domains, s
     yield { kind: "error", message: "No relevant pages found across domains." };
     return;
   }
-  const merged = mergeCandidates(poolList, cfg.seedTopK, cfg.graphDepth, rrfK, cfg.boilerplateDemotion);
+  const merged = mergeCandidates(poolList, candidateLimit, cfg.graphDepth, rrfK, cfg.boilerplateDemotion);
   const finalSet = new Set(merged.finalIds);
   const fallbackSimilarity = new PageSimilarityService({
     mode: "jaccard",
-    topK: cfg.seedTopK * 3,
+    topK: candidateLimit,
     boilerplateDemotion: cfg.boilerplateDemotion
   });
   const chunkSimilarity = querySimilarity ?? fallbackSimilarity;
@@ -41743,15 +42218,23 @@ async function* runCrossDomainQuery(question, vaultTools, llm, model, domains, s
     finalSet,
     merged.mergedSeedSet,
     articleScores,
-    Math.max(1, Math.min(50, Math.floor(cfg.seedTopK))) * 3
+    candidateLimit
   );
   if (signal.aborted) return;
   if (selectedChunks.length === 0) {
     yield { kind: "error", message: "No relevant pages found across domains." };
     return;
   }
-  const contextBlock = renderContextChunks(selectedChunks);
-  const finalChunkIds = new Set(selectedChunks.map((chunk) => chunk.articleId));
+  const reranked = await rerankChunks(q, selectedChunks, {
+    config: rerankerRuntime.config,
+    baseUrl: rerankerRuntime.baseUrl,
+    apiKey: rerankerRuntime.apiKey,
+    signal
+  });
+  if (signal.aborted) return;
+  const contextChunks = reranked.chunks.slice(0, contextLimit);
+  const contextBlock = renderContextChunks(contextChunks);
+  const finalChunkIds = new Set(contextChunks.map((chunk) => chunk.articleId));
   const finalDomains = [...new Set(
     poolList.filter((candidate) => [...candidate.candidateIds].some((id) => finalChunkIds.has(id))).map((candidate) => candidate.domainId)
   )];
@@ -41765,6 +42248,13 @@ async function* runCrossDomainQuery(question, vaultTools, llm, model, domains, s
   ].join("\n");
   const entityTypesBlock = buildCrossDomainEntityTypes(domains, finalDomains);
   const indexBlock = buildCrossDomainIndexBlock(merged.mergedAnnotations, [...finalChunkIds]);
+  const rerankerDiagnostics = {
+    enabled: rerankerRuntime.config.enabled,
+    candidates: reranked.candidates,
+    selected: contextChunks.length,
+    durationMs: reranked.durationMs,
+    fallbackReason: reranked.fallbackReason
+  };
   const systemPrompt = render(query_default, {
     domain_name: domainName,
     available_links_block: availableLinksBlock,
@@ -41782,7 +42272,11 @@ ${indexBlock}` : ""
     pagesScanned: poolList.reduce((sum, candidate) => sum + candidate.pagesScanned, 0),
     pagesSelected: finalChunkIds.size,
     candidatePages: finalSet.size,
-    chunksSelected: selectedChunks.length
+    chunksSelected: contextChunks.length,
+    rerankerEnabled: rerankerRuntime.config.enabled,
+    rerankerTopN: rerankerRuntime.config.rerankerTopN,
+    contextTopN: rerankerRuntime.config.contextTopN,
+    reranker: rerankerDiagnostics
   };
   if (signal.aborted) return;
   const ans = yield* answerFromContext({
@@ -41804,7 +42298,7 @@ ${indexBlock}` : ""
       question: q,
       answer: ans.answer,
       found_pages: [...finalChunkIds],
-      found_chunks: selectedChunks.map((chunk) => ({
+      found_chunks: contextChunks.map((chunk) => ({
         articleId: chunk.articleId,
         heading: chunk.heading,
         score: chunk.score
@@ -41820,7 +42314,11 @@ ${indexBlock}` : ""
         hybridRetrieval: similarity?.config.mode === "hybrid",
         hierarchicalChunkRetrieval: true,
         crossDomain: true,
-        domainsSearched: domains.length
+        domainsSearched: domains.length,
+        rerankerEnabled: rerankerRuntime.config.enabled,
+        rerankerTopN: rerankerRuntime.config.rerankerTopN,
+        contextTopN: rerankerRuntime.config.contextTopN,
+        reranker: rerankerDiagnostics
       }
     }
   };
@@ -44055,6 +44553,18 @@ var AgentRunner = class {
       enabled: this.settings.nativeAgent.boilerplateDemotionEnabled,
       factor: this.settings.nativeAgent.boilerplateDemotionFactor
     });
+    const reranker = normalizeRerankerConfig({
+      enabled: this.settings.nativeAgent.rerankerEnabled,
+      model: this.settings.nativeAgent.rerankerModel,
+      rerankerTopN: this.settings.nativeAgent.rerankerTopN,
+      contextTopN: this.settings.nativeAgent.contextTopN,
+      timeoutMs: this.settings.nativeAgent.rerankerTimeoutMs
+    });
+    const rerankerRuntime = {
+      config: reranker,
+      baseUrl: this.settings.nativeAgent.baseUrl ?? "",
+      apiKey: this.settings.nativeAgent.apiKey ?? ""
+    };
     switch (req.operation) {
       case "ingest":
         yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts, similarity, void 0, this.settings.graphDepth, this.settings.wikiLinkValidationRetries);
@@ -44075,7 +44585,8 @@ var AgentRunner = class {
               bfsTopK: this.settings.bfsTopK,
               seedSimilarityThreshold: this.settings.nativeAgent.seedSimilarityThreshold ?? 0,
               bfsMinScoreRatio: this.settings.nativeAgent.bfsMinScoreRatio ?? 0.6,
-              boilerplateDemotion
+              boilerplateDemotion,
+              rerankerRuntime
             },
             this.settings.nativeAgent.rrfK ?? 60,
             this.settings.wikiLinkValidationRetries ?? 3,
@@ -44083,7 +44594,7 @@ var AgentRunner = class {
             similarity
           );
         } else {
-          yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, this.settings.bfsTopK, similarity, this.settings.wikiLinkValidationRetries ?? 3, this.settings.nativeAgent.seedSimilarityThreshold ?? 0, this.settings.nativeAgent.bfsFusion ?? false, this.settings.nativeAgent.rrfK ?? 60, this.settings.nativeAgent.bfsMinScoreRatio ?? 0.6, boilerplateDemotion);
+          yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, this.settings.bfsTopK, similarity, this.settings.wikiLinkValidationRetries ?? 3, this.settings.nativeAgent.seedSimilarityThreshold ?? 0, this.settings.nativeAgent.bfsFusion ?? false, this.settings.nativeAgent.rrfK ?? 60, this.settings.nativeAgent.bfsMinScoreRatio ?? 0.6, boilerplateDemotion, rerankerRuntime);
         }
         break;
       case "lint":

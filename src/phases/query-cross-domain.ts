@@ -10,6 +10,11 @@ import { render } from "./template";
 import queryTemplate from "../../prompts/query.md";
 import { promptVersionOf } from "../prompt-version";
 import { demoteBoilerplateRankedIds, type BoilerplateDemotionConfig } from "../boilerplate-demotion";
+import {
+  normalizeRerankerConfig,
+  rerankChunks,
+  type RerankerRuntime,
+} from "../reranker";
 
 export interface MergedPool {
   mergedPages: Map<string, string>;
@@ -24,14 +29,24 @@ export interface MergedPool {
   finalIds: string[];
 }
 
+interface CrossDomainQueryCfg extends RetrieveCfg {
+  rerankerRuntime?: RerankerRuntime;
+}
+
+const DEFAULT_RERANKER_RUNTIME: RerankerRuntime = {
+  config: normalizeRerankerConfig(undefined),
+  baseUrl: "",
+  apiKey: "",
+};
+
 /**
  * Stage 2: union the per-domain candidate sets (stems are globally unique, so the
  * merge is collision-free), RRF-fuse vector + graph over the union, and take the
- * top-`seedTopK`. No new pages are introduced — only the stage-1 pool is re-ranked.
+ * top-`candidateTopN`. No new pages are introduced — only the stage-1 pool is re-ranked.
  */
 export function mergeCandidates(
   pool: DomainCandidates[],
-  seedTopK: number,
+  candidateTopN: number,
   graphDepth: number,
   rrfK: number,
   boilerplateDemotion?: BoilerplateDemotionConfig,
@@ -62,7 +77,7 @@ export function mergeCandidates(
   const fusedOrder = fuseVectorGraph(
     mergedSeeds, allCandidates, mergedSeedScores, mergedExpandedScores, mergedGraph, graphDepth, rrfK,
   );
-  const cap = Math.max(1, Math.min(50, Math.floor(seedTopK)));
+  const cap = Math.max(1, Math.min(100, Math.floor(candidateTopN)));
   const finalIds = demoteBoilerplateRankedIds(
     fusedOrder,
     boilerplateDemotion ?? { enabled: false, factor: 0 },
@@ -82,7 +97,7 @@ export async function* runCrossDomainQuery(
   model: string,
   domains: DomainEntry[],
   signal: AbortSignal,
-  cfg: RetrieveCfg,
+  cfg: CrossDomainQueryCfg,
   rrfK: number,
   wikiLinkValidationRetries: number,
   opts: LlmCallOptions,
@@ -95,6 +110,9 @@ export async function* runCrossDomainQuery(
   const start = Date.now();
   let outputTokens = 0;
   const querySimilarity = similarity ? similarity.withBoilerplateDemotion(cfg.boilerplateDemotion) : undefined;
+  const rerankerRuntime = cfg.rerankerRuntime ?? DEFAULT_RERANKER_RUNTIME;
+  const candidateLimit = rerankerRuntime.config.rerankerTopN;
+  const contextLimit = rerankerRuntime.config.contextTopN;
 
   // Stage 1 — gather candidates per domain, sequentially.
   const poolList: DomainCandidates[] = [];
@@ -109,12 +127,12 @@ export async function* runCrossDomainQuery(
   if (poolList.length === 0) { yield { kind: "error", message: "No relevant pages found across domains." }; return; }
 
   // Stage 2 — merge + fuse + cap.
-  const merged = mergeCandidates(poolList, cfg.seedTopK, cfg.graphDepth, rrfK, cfg.boilerplateDemotion);
+  const merged = mergeCandidates(poolList, candidateLimit, cfg.graphDepth, rrfK, cfg.boilerplateDemotion);
   const finalSet = new Set(merged.finalIds);
 
   const fallbackSimilarity = new PageSimilarityService({
     mode: "jaccard",
-    topK: cfg.seedTopK * 3,
+    topK: candidateLimit,
     boilerplateDemotion: cfg.boilerplateDemotion,
   });
   const chunkSimilarity = querySimilarity ?? fallbackSimilarity;
@@ -125,15 +143,24 @@ export async function* runCrossDomainQuery(
     finalSet,
     merged.mergedSeedSet,
     articleScores,
-    Math.max(1, Math.min(50, Math.floor(cfg.seedTopK))) * 3,
+    candidateLimit,
   );
   if (signal.aborted) return;
   if (selectedChunks.length === 0) {
     yield { kind: "error", message: "No relevant pages found across domains." };
     return;
   }
-  const contextBlock = renderContextChunks(selectedChunks);
-  const finalChunkIds = new Set(selectedChunks.map((chunk) => chunk.articleId));
+  const reranked = await rerankChunks(q, selectedChunks, {
+    config: rerankerRuntime.config,
+    baseUrl: rerankerRuntime.baseUrl,
+    apiKey: rerankerRuntime.apiKey,
+    signal,
+  });
+  if (signal.aborted) return;
+
+  const contextChunks = reranked.chunks.slice(0, contextLimit);
+  const contextBlock = renderContextChunks(contextChunks);
+  const finalChunkIds = new Set(contextChunks.map((chunk) => chunk.articleId));
 
   // Domains whose candidates survive into the final capped set (robust to underscores in domain ids).
   const finalDomains = [...new Set(
@@ -153,6 +180,13 @@ export async function* runCrossDomainQuery(
 
   const entityTypesBlock = buildCrossDomainEntityTypes(domains, finalDomains);
   const indexBlock = buildCrossDomainIndexBlock(merged.mergedAnnotations, [...finalChunkIds]);
+  const rerankerDiagnostics = {
+    enabled: rerankerRuntime.config.enabled,
+    candidates: reranked.candidates,
+    selected: contextChunks.length,
+    durationMs: reranked.durationMs,
+    fallbackReason: reranked.fallbackReason,
+  };
 
   const systemPrompt = render(queryTemplate, {
     domain_name: domainName,
@@ -170,7 +204,11 @@ export async function* runCrossDomainQuery(
     pagesScanned: poolList.reduce((sum, candidate) => sum + candidate.pagesScanned, 0),
     pagesSelected: finalChunkIds.size,
     candidatePages: finalSet.size,
-    chunksSelected: selectedChunks.length,
+    chunksSelected: contextChunks.length,
+    rerankerEnabled: rerankerRuntime.config.enabled,
+    rerankerTopN: rerankerRuntime.config.rerankerTopN,
+    contextTopN: rerankerRuntime.config.contextTopN,
+    reranker: rerankerDiagnostics,
   };
   if (signal.aborted) return;
 
@@ -187,7 +225,7 @@ export async function* runCrossDomainQuery(
       question: q,
       answer: ans.answer,
       found_pages: [...finalChunkIds],
-      found_chunks: selectedChunks.map((chunk) => ({
+      found_chunks: contextChunks.map((chunk) => ({
         articleId: chunk.articleId,
         heading: chunk.heading,
         score: chunk.score,
@@ -204,6 +242,10 @@ export async function* runCrossDomainQuery(
         hierarchicalChunkRetrieval: true,
         crossDomain: true,
         domainsSearched: domains.length,
+        rerankerEnabled: rerankerRuntime.config.enabled,
+        rerankerTopN: rerankerRuntime.config.rerankerTopN,
+        contextTopN: rerankerRuntime.config.contextTopN,
+        reranker: rerankerDiagnostics,
       },
     },
   };
