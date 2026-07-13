@@ -26342,7 +26342,11 @@ var import_obsidian = require("obsidian");
 var en = {
   settings: {
     h3_general: "General settings",
-    h3_backend: "Backend settings",
+    h3_backend: "Backend",
+    h3_backendConnection: "Backend connection",
+    h3_defaultChatModel: "Default chat model",
+    h3_semanticSearch: "Semantic Search",
+    h3_vision: "Vision",
     systemPrompt_name: "User prompt",
     systemPrompt_desc: "Appended to the system prompt of every operation. Empty by default.",
     outputLanguage_name: "Response language",
@@ -26373,7 +26377,7 @@ var en = {
     model_name: "Model",
     model_desc_claude: "Model name: sonnet, opus, claude-sonnet-4-6, etc.",
     baseUrl_name: "Base URL",
-    baseUrl_desc: "OpenAI-compatible endpoint. Ollama: http://localhost:11434/v1",
+    baseUrl_desc: "OpenAI-compatible base URL, including the API version prefix. Example: https://host/v1. The plugin appends OpenAI-standard /chat/completions, /embeddings, and /models paths. Reranker uses provider-compatible /rerank when enabled.",
     apiKey_name: "API key",
     apiKey_desc: 'For Ollama enter "ollama". For OpenAI \u2014 key sk-...',
     model_desc_native: "Model name: llama3.2, mistral, gpt-4o, etc.",
@@ -26479,7 +26483,11 @@ var en = {
     dedupOnIngest_desc: "On creating a near-duplicate page \u2014 merge into the existing one via LLM-merge.",
     dedupThreshold_desc: "Cosine threshold for dedup on ingest (0..1). Default 0.85. \u2191 merges only near-duplicates (safer) \xB7 \u2193 more aggressive, risk of false merges. Recommended 0.83\u20130.90.",
     lintNearDuplicate_desc: "In Lint, report pairs of close pages by embedding cosine.",
-    nearDupThreshold_desc: "Cosine threshold for the near-duplicate report in Lint (0..1). Default 0.80. \u2191 fewer pairs, only clear duplicates \xB7 \u2193 more pairs, noisier. Recommended 0.78\u20130.85."
+    nearDupThreshold_desc: "Cosine threshold for the near-duplicate report in Lint (0..1). Default 0.80. \u2191 fewer pairs, only clear duplicates \xB7 \u2193 more pairs, noisier. Recommended 0.78\u20130.85.",
+    visionEnable_name: "Enable vision analysis",
+    visionEnable_desc: "Analyze embedded images, PDFs, and Excalidraw files before formatting. Uses the same backend base URL and API key; calls the chat completions endpoint.",
+    visionModel_name: "Vision model",
+    visionModel_desc: "Model name for vision chat calls, e.g. gpt-4o-mini."
   },
   view: {
     refreshTitle: "Refresh domains",
@@ -26704,7 +26712,11 @@ var _formatProgressShapeCheck = en.formatProgress;
 var ru = {
   settings: {
     h3_general: "\u041E\u0431\u0449\u0438\u0435 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438",
-    h3_backend: "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u0431\u044D\u043A\u0435\u043D\u0434\u0430",
+    h3_backend: "\u0411\u044D\u043A\u0435\u043D\u0434",
+    h3_backendConnection: "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u043A \u0431\u044D\u043A\u0435\u043D\u0434\u0443",
+    h3_defaultChatModel: "\u041C\u043E\u0434\u0435\u043B\u044C \u0447\u0430\u0442\u0430 \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E",
+    h3_semanticSearch: "Semantic Search",
+    h3_vision: "Vision",
     systemPrompt_name: "User prompt",
     systemPrompt_desc: "\u0414\u043E\u0431\u0430\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u0432 \u043A\u043E\u043D\u0435\u0446 \u0441\u0438\u0441\u0442\u0435\u043C\u043D\u043E\u0433\u043E \u043F\u0440\u043E\u043C\u0442\u0430 \u043A\u0430\u0436\u0434\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E \u043F\u0443\u0441\u0442.",
     outputLanguage_name: "Response language",
@@ -26735,7 +26747,7 @@ var ru = {
     model_name: "\u041C\u043E\u0434\u0435\u043B\u044C",
     model_desc_claude: "\u0418\u043C\u044F \u043C\u043E\u0434\u0435\u043B\u0438: sonnet, opus, claude-sonnet-4-6 \u0438 \u0442.\u043F.",
     baseUrl_name: "Base URL",
-    baseUrl_desc: "OpenAI-compatible endpoint. Ollama: http://localhost:11434/v1",
+    baseUrl_desc: "OpenAI-compatible base URL \u0432\u043C\u0435\u0441\u0442\u0435 \u0441 \u043F\u0440\u0435\u0444\u0438\u043A\u0441\u043E\u043C \u0432\u0435\u0440\u0441\u0438\u0438 API. \u041F\u0440\u0438\u043C\u0435\u0440: https://host/v1. \u041F\u043B\u0430\u0433\u0438\u043D \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0435\u0442 OpenAI-standard \u043F\u0443\u0442\u0438 /chat/completions, /embeddings \u0438 /models. Reranker \u043F\u0440\u0438 \u0432\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0438 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442 provider-compatible /rerank.",
     apiKey_name: "API key",
     apiKey_desc: '\u0414\u043B\u044F Ollama \u0432\u0432\u0435\u0434\u0438\u0442\u0435 "ollama". \u0414\u043B\u044F OpenAI \u2014 \u043A\u043B\u044E\u0447 sk-...',
     model_desc_native: "\u0418\u043C\u044F \u043C\u043E\u0434\u0435\u043B\u0438: llama3.2, mistral, gpt-4o \u0438 \u0442.\u043F.",
@@ -26841,7 +26853,11 @@ var ru = {
     dedupOnIngest_desc: "\u041D\u0430 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u0438 near-duplicate \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u2014 \u0441\u043B\u0438\u0442\u044C \u0432 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0443\u044E \u0447\u0435\u0440\u0435\u0437 LLM-merge.",
     dedupThreshold_desc: "\u041F\u043E\u0440\u043E\u0433 \u043A\u043E\u0441\u0438\u043D\u0443\u0441\u0430 \u0434\u043B\u044F \u0434\u0435\u0434\u0443\u043F\u0430 \u043F\u0440\u0438 ingest (0..1). \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 0.85. \u2191 \u0441\u043B\u0438\u0432\u0430\u0435\u0442 \u0442\u043E\u043B\u044C\u043A\u043E near-duplicate (\u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u0435\u0435) \xB7 \u2193 \u0430\u0433\u0440\u0435\u0441\u0441\u0438\u0432\u043D\u0435\u0435, \u0440\u0438\u0441\u043A \u043B\u043E\u0436\u043D\u044B\u0445 merge. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u044E 0.83\u20130.90.",
     lintNearDuplicate_desc: "\u0412 Lint \u043F\u043E\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u043F\u0430\u0440\u044B \u0431\u043B\u0438\u0437\u043A\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043F\u043E embedding-\u043A\u043E\u0441\u0438\u043D\u0443\u0441\u0443.",
-    nearDupThreshold_desc: "\u041F\u043E\u0440\u043E\u0433 \u043A\u043E\u0441\u0438\u043D\u0443\u0441\u0430 \u0434\u043B\u044F near-duplicate \u043E\u0442\u0447\u0451\u0442\u0430 \u0432 Lint (0..1). \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 0.80. \u2191 \u043C\u0435\u043D\u044C\u0448\u0435 \u043F\u0430\u0440, \u0442\u043E\u043B\u044C\u043A\u043E \u044F\u0432\u043D\u044B\u0435 \u0434\u0443\u0431\u043B\u0438 \xB7 \u2193 \u0431\u043E\u043B\u044C\u0448\u0435 \u043F\u0430\u0440, \u0448\u0443\u043C\u043D\u0435\u0435. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u044E 0.78\u20130.85."
+    nearDupThreshold_desc: "\u041F\u043E\u0440\u043E\u0433 \u043A\u043E\u0441\u0438\u043D\u0443\u0441\u0430 \u0434\u043B\u044F near-duplicate \u043E\u0442\u0447\u0451\u0442\u0430 \u0432 Lint (0..1). \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 0.80. \u2191 \u043C\u0435\u043D\u044C\u0448\u0435 \u043F\u0430\u0440, \u0442\u043E\u043B\u044C\u043A\u043E \u044F\u0432\u043D\u044B\u0435 \u0434\u0443\u0431\u043B\u0438 \xB7 \u2193 \u0431\u043E\u043B\u044C\u0448\u0435 \u043F\u0430\u0440, \u0448\u0443\u043C\u043D\u0435\u0435. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u044E 0.78\u20130.85.",
+    visionEnable_name: "\u0412\u043A\u043B\u044E\u0447\u0438\u0442\u044C vision-\u0430\u043D\u0430\u043B\u0438\u0437",
+    visionEnable_desc: "\u0410\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u0443\u0435\u0442 \u0432\u0441\u0442\u0440\u043E\u0435\u043D\u043D\u044B\u0435 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u044F, PDF \u0438 Excalidraw \u043F\u0435\u0440\u0435\u0434 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435\u043C. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442 \u0442\u043E\u0442 \u0436\u0435 backend base URL \u0438 API key; \u0432\u044B\u0437\u044B\u0432\u0430\u0435\u0442 chat completions endpoint.",
+    visionModel_name: "Vision model",
+    visionModel_desc: "\u0418\u043C\u044F \u043C\u043E\u0434\u0435\u043B\u0438 \u0434\u043B\u044F vision chat-\u0432\u044B\u0437\u043E\u0432\u043E\u0432, \u043D\u0430\u043F\u0440\u0438\u043C\u0435\u0440 gpt-4o-mini."
   },
   view: {
     refreshTitle: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D\u044B",
@@ -27065,7 +27081,11 @@ var ru = {
 var es = {
   settings: {
     h3_general: "Configuraci\xF3n general",
-    h3_backend: "Configuraci\xF3n del backend",
+    h3_backend: "Backend",
+    h3_backendConnection: "Conexi\xF3n del backend",
+    h3_defaultChatModel: "Modelo de chat por defecto",
+    h3_semanticSearch: "Semantic Search",
+    h3_vision: "Vision",
     systemPrompt_name: "User prompt",
     systemPrompt_desc: "Se a\xF1ade al final del prompt del sistema de cada operaci\xF3n. Vac\xEDo por defecto.",
     outputLanguage_name: "Response language",
@@ -27096,7 +27116,7 @@ var es = {
     model_name: "Modelo",
     model_desc_claude: "Nombre del modelo: sonnet, opus, claude-sonnet-4-6, etc.",
     baseUrl_name: "Base URL",
-    baseUrl_desc: "Endpoint compatible con OpenAI. Ollama: http://localhost:11434/v1",
+    baseUrl_desc: "Base URL compatible con OpenAI, incluido el prefijo de versi\xF3n de API. Ejemplo: https://host/v1. El plugin a\xF1ade rutas OpenAI-standard /chat/completions, /embeddings y /models. Reranker usa /rerank compatible con el proveedor cuando est\xE1 activado.",
     apiKey_name: "API key",
     apiKey_desc: 'Para Ollama introduce "ollama". Para OpenAI \u2014 clave sk-...',
     model_desc_native: "Nombre del modelo: llama3.2, mistral, gpt-4o, etc.",
@@ -27202,7 +27222,11 @@ var es = {
     dedupOnIngest_desc: "Al crear una p\xE1gina casi duplicada \u2014 fusionar con la existente mediante LLM-merge.",
     dedupThreshold_desc: "Umbral de coseno para dedup en ingest (0..1). Por defecto 0.85. \u2191 fusiona solo casi duplicados (m\xE1s seguro) \xB7 \u2193 m\xE1s agresivo, riesgo de fusiones falsas. Recomendado 0.83\u20130.90.",
     lintNearDuplicate_desc: "En Lint, mostrar pares de p\xE1ginas cercanas por coseno de embedding.",
-    nearDupThreshold_desc: "Umbral de coseno para el informe de casi duplicados en Lint (0..1). Por defecto 0.80. \u2191 menos pares, solo duplicados claros \xB7 \u2193 m\xE1s pares, m\xE1s ruido. Recomendado 0.78\u20130.85."
+    nearDupThreshold_desc: "Umbral de coseno para el informe de casi duplicados en Lint (0..1). Por defecto 0.80. \u2191 menos pares, solo duplicados claros \xB7 \u2193 m\xE1s pares, m\xE1s ruido. Recomendado 0.78\u20130.85.",
+    visionEnable_name: "Activar an\xE1lisis vision",
+    visionEnable_desc: "Analiza im\xE1genes, PDFs y archivos Excalidraw embebidos antes de formatear. Usa la misma base URL y API key del backend; llama al endpoint chat completions.",
+    visionModel_name: "Modelo vision",
+    visionModel_desc: "Nombre del modelo para llamadas vision chat, p. ej. gpt-4o-mini."
   },
   view: {
     refreshTitle: "Actualizar dominios",
@@ -30751,6 +30775,12 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
       new import_obsidian4.Notice(`OK \u2014 model returns ${probe.actual} (native ${nativeStr}).`);
     }
   }
+  openExportOkfModal(domainEntry) {
+    const defaultDest = `${this.plugin.controller.cwdOrEmpty()}/okf-export/${domainEntry.wiki_folder}`;
+    new ExportOkfModal(this.plugin.app, defaultDest, (dest) => {
+      void this.plugin.controller.exportOkf(domainEntry, dest).then((r) => new import_obsidian4.Notice(`OKF: ${r.pages} pages \u2192 ${dest}${r.warnings.length ? ` (${r.warnings.length} warnings)` : ""}`)).catch((e) => new import_obsidian4.Notice(`OKF export failed: ${e.message}`, 0));
+    }).open();
+  }
   // Default: fetch the model's native output dimension (no `dimensions` sent) and store it.
   // silent=true skips notices when auto-triggered on model change.
   async setDefaultDimensions(silent = false) {
@@ -30881,6 +30911,10 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
       for (let i = 0; i < domains.length; i++) {
         const d = domains[i];
         new import_obsidian4.Setting(containerEl).setName(d.name || d.id).setDesc(d.id).addButton((b) => {
+          b.setButtonText(T.view.exportOkf).setDisabled(busy).onClick(() => {
+            this.openExportOkfModal(d);
+          });
+        }).addButton((b) => {
           b.setButtonText(T.settings.editDomain).setDisabled(busy).onClick(() => {
             new EditDomainModal(this.plugin.app, d, (updated) => {
               void (async () => {
@@ -31013,6 +31047,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         }
       }
     } else {
+      new import_obsidian4.Setting(containerEl).setName(T.settings.h3_backendConnection).setHeading();
       new import_obsidian4.Setting(containerEl).setName(T.settings.baseUrl_name).setDesc(T.settings.baseUrl_desc).addText(
         (t) => t.setPlaceholder("").setValue(eff.nativeAgent.baseUrl).onChange(async (v) => {
           s.nativeAgent.baseUrl = v.trim();
@@ -31040,6 +31075,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         return b;
       });
       if (!s.nativeAgent.perOperation) {
+        new import_obsidian4.Setting(containerEl).setName(T.settings.h3_defaultChatModel).setHeading();
         this.addModelControl(
           new import_obsidian4.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native),
           eff.nativeAgent.model,
@@ -31092,7 +31128,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         })
       );
       if (!import_obsidian4.Platform.isMobile) {
-        new import_obsidian4.Setting(containerEl).setName("Per-operation models").setHeading();
+        new import_obsidian4.Setting(containerEl).setName(T.settings.perOperation_name).setHeading();
         new import_obsidian4.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
           (t) => t.setValue(s.nativeAgent.perOperation).onChange(async (v) => {
             s.nativeAgent.perOperation = v;
@@ -31146,7 +31182,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
           );
         }
       }
-      new import_obsidian4.Setting(containerEl).setName("Semantic Search").setHeading();
+      new import_obsidian4.Setting(containerEl).setName(T.settings.h3_semanticSearch).setHeading();
       new import_obsidian4.Setting(containerEl).setName("Enable semantic similarity (embeddings)").setDesc(T.settings.semanticEnable_desc).addToggle(
         (t) => t.setValue(s.nativeAgent.embeddingModel !== void 0).onChange(async (v) => {
           if (!v) {
@@ -31394,8 +31430,8 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         }
       }
     }
-    new import_obsidian4.Setting(containerEl).setName("Vision").setHeading();
-    new import_obsidian4.Setting(containerEl).setName("Enable vision analysis").setDesc("Analyse embedded images, PDFs, and Excalidraw files before formatting. Uses the same baseUrl and API key as the main backend.").addToggle(
+    new import_obsidian4.Setting(containerEl).setName(T.settings.h3_vision).setHeading();
+    new import_obsidian4.Setting(containerEl).setName(T.settings.visionEnable_name).setDesc(T.settings.visionEnable_desc).addToggle(
       (t) => t.setValue(s.vision.enabled).onChange(async (v) => {
         s.vision.enabled = v;
         await this.plugin.saveSettings();
@@ -31404,7 +31440,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
     );
     if (s.vision.enabled) {
       this.addModelControl(
-        new import_obsidian4.Setting(containerEl).setName("Vision model").setDesc("Model name for vision calls, e.g. gpt-4o-mini or claude-3-haiku-20240307"),
+        new import_obsidian4.Setting(containerEl).setName(T.settings.visionModel_name).setDesc(T.settings.visionModel_desc),
         s.vision.model,
         async (v) => {
           s.vision.model = v;
@@ -33022,18 +33058,6 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
         const file = this.plugin.app.workspace.getActiveFile();
         const domainId = this.domainSelect?.value;
         if (file && domainId) void this.plugin.controller.deleteSource(domainId, file.path);
-      });
-      const exportOkfBtn = actionRow.createEl("button", { text: T.view.exportOkf });
-      exportOkfBtn.addEventListener("click", () => {
-        const domainEntry = this.domains.find((d) => d.id === this.domainSelect.value);
-        if (!domainEntry) {
-          new import_obsidian6.Notice(i18n().view.selectDomainFirst);
-          return;
-        }
-        const defaultDest = `${this.plugin.controller.cwdOrEmpty()}/okf-export/${domainEntry.wiki_folder}`;
-        new ExportOkfModal(this.plugin.app, defaultDest, (dest) => {
-          void this.plugin.controller.exportOkf(domainEntry, dest).then((r) => new import_obsidian6.Notice(`OKF: ${r.pages} pages \u2192 ${dest}${r.warnings.length ? ` (${r.warnings.length} warnings)` : ""}`)).catch((e) => new import_obsidian6.Notice(`OKF export failed: ${e.message}`, 0));
-        }).open();
       });
       this.ingestBtn.addEventListener("click", () => {
         const file = this.plugin.app.workspace.getActiveFile();
