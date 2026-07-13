@@ -246,8 +246,6 @@ export interface LlmWikiPluginSettings {
     bfsFusion?: boolean;
     bfsMinScoreRatio?: number;
     seedSimilarityThreshold?: number;
-    boilerplateDemotionEnabled?: boolean;
-    boilerplateDemotionFactor?: number;
     dedupOnIngest?: boolean;
     dedupThreshold?: number;
     lintNearDuplicate?: boolean;
@@ -325,8 +323,6 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
     bfsFusion: false,
     bfsMinScoreRatio: 0.6, // position of the floor bar within the domain's cosine range [loRef..denseMax]; 0 = floor off
     seedSimilarityThreshold: 0,
-    boilerplateDemotionEnabled: true,
-    boilerplateDemotionFactor: 0.15,
     dedupOnIngest: false,
     dedupThreshold: 0.85,
     lintNearDuplicate: false,

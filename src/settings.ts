@@ -785,23 +785,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       }
 
       new Setting(containerEl).setName("Retrieval").setHeading();
-      new Setting(containerEl)
-        .setName(T.settings.boilerplateDemotion_name)
-        .setDesc(T.settings.boilerplateDemotion_desc)
-        .addToggle((t) =>
-          t.setValue(s.nativeAgent.boilerplateDemotionEnabled ?? true)
-            .onChange(async (v) => { s.nativeAgent.boilerplateDemotionEnabled = v; await this.plugin.saveSettings(); }),
-        );
-      new Setting(containerEl)
-        .setName(T.settings.boilerplateDemotionFactor_name)
-        .setDesc(T.settings.boilerplateDemotionFactor_desc)
-        .addSlider((sl) =>
-          sl.setLimits(0, 1, 0.05)
-            .setDynamicTooltip()
-            .setValue(s.nativeAgent.boilerplateDemotionFactor ?? 0.15)
-            .onChange(async (v) => { s.nativeAgent.boilerplateDemotionFactor = v; await this.plugin.saveSettings(); }),
-        );
-
       new Setting(containerEl).setName(T.settings.reranker_heading).setHeading();
       new Setting(containerEl).setDesc(T.settings.rerankerFlow_desc);
       new Setting(containerEl)

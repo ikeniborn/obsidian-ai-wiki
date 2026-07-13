@@ -40,7 +40,7 @@ test("jaccard chunk fallback prefers heading and path evidence", async () => {
   assert.equal(chunks[0].heading, "## Балансировка Airflow");
 });
 
-test("jaccard chunk fallback applies boilerplate rank demotion config without changing scores", async () => {
+test("jaccard chunk fallback does not demote HLD or README template names", async () => {
   const pages = new Map([
     ["!Wiki/hld/pages/template-readme.md", "# Template\n\n## Компоненты ответственность\nкомпоненты ответственность проектов"],
     ["!Wiki/hld/pages/owner.md", "# Owner\n\n## Компоненты\nответственность проектов"],
@@ -64,7 +64,7 @@ test("jaccard chunk fallback applies boilerplate rank demotion config without ch
     4,
   );
 
-  assert.equal(chunks[0].articleId, "owner");
+  assert.equal(chunks[0].articleId, "template-readme");
   const owner = chunks.find((chunk) => chunk.articleId === "owner");
   const template = chunks.find((chunk) => chunk.articleId === "template-readme");
   assert.ok(owner && template);

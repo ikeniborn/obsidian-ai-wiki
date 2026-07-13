@@ -17,8 +17,10 @@ import { domainWikiFolder } from "./wiki-path";
 import { writeEvalRecord, type EvalRecord, type EvalMetaFields, type LlmError } from "./eval-log";
 import { PageSimilarityService, DEFAULT_CHUNKING } from "./page-similarity";
 import { resolveLang, i18nFor } from "./i18n";
-import { normalizeBoilerplateDemotionConfig } from "./boilerplate-demotion";
+import type { BoilerplateDemotionConfig } from "./boilerplate-demotion";
 import { normalizeRerankerConfig } from "./reranker";
+
+const DISABLED_BOILERPLATE_DEMOTION: BoilerplateDemotionConfig = { enabled: false, factor: 0 };
 
 export class AgentRunner {
   private llm: LlmClient;
@@ -94,10 +96,7 @@ export class AgentRunner {
     similarity: PageSimilarityService | undefined,
     visionTempStore?: VisionTempStore,
   ): AsyncGenerator<RunEvent, void, void> {
-    const boilerplateDemotion = normalizeBoilerplateDemotionConfig({
-      enabled: this.settings.nativeAgent.boilerplateDemotionEnabled,
-      factor: this.settings.nativeAgent.boilerplateDemotionFactor,
-    });
+    const boilerplateDemotion = DISABLED_BOILERPLATE_DEMOTION;
     const reranker = normalizeRerankerConfig({
       enabled: this.settings.nativeAgent.rerankerEnabled,
       model: this.settings.nativeAgent.rerankerModel,

@@ -1,5 +1,3 @@
-import path from "path-browserify";
-
 export const DEFAULT_BOILERPLATE_DEMOTION_FACTOR = 0.15;
 
 export interface BoilerplateDemotionConfig {
@@ -18,13 +16,12 @@ export interface RankedBoilerplateItem {
 }
 
 export function isBoilerplatePath(vaultPath: string | undefined): boolean {
-  if (!vaultPath) return false;
-  const name = path.basename(vaultPath).replace(/\.md$/i, "").toLowerCase();
-  return name === "template-readme" || name.startsWith("template-hld-");
+  void vaultPath;
+  return false;
 }
 
 export function normalizeBoilerplateDemotionConfig(input?: BoilerplateDemotionInput): BoilerplateDemotionConfig {
-  const enabled = input?.enabled ?? true;
+  const enabled = input?.enabled ?? false;
   const factor = input?.factor ?? DEFAULT_BOILERPLATE_DEMOTION_FACTOR;
   if (!Number.isFinite(factor)) return { enabled, factor: DEFAULT_BOILERPLATE_DEMOTION_FACTOR };
   return { enabled, factor: Math.max(0, Math.min(1, factor)) };
