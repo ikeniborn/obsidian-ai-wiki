@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.198 — 2026-07-14
+
+### Fixes
+- fix(retrieval): remove runtime boilerplate demotion controls
+
+---
+
 ## 0.1.197 — 2026-07-13
 
 ### New
