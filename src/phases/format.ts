@@ -8,10 +8,11 @@ import { promptVersionOf, visionPromptVersionOf } from "../prompt-version";
 import restoreTokensTemplate from "../../prompts/format-restore-tokens.md";
 import formatSchemaDefault from "../../templates/_format_schema.md";
 import { render } from "./template";
-import { missingTokensWithContext, appendMissingLines, restoreObsidianEmbeds, missingObsidianEmbeds, parseSentinelOutput, stripSentinelMarkers } from "./format-utils";
+import { missingTokensWithContext, appendMissingLines, restoreObsidianEmbeds, missingObsidianEmbeds, stripSentinelMarkers } from "./format-utils";
 import { fixWikiLinks } from "../wiki-link-validator";
 import { restoreSourceFrontmatter } from "../utils/raw-frontmatter";
-import { FormatBaseSchema, FormatWithVisionSchema } from "./zod-schemas";
+import { FormatOutputSchema, FormatWithVisionSchema } from "./zod-schemas";
+import { parseFormatFrames } from "./framed-output";
 import { structuralErrorCounter } from "../structural-error-counter";
 import { extractObsidianEmbedPaths, analyzeSingleAttachment } from "./attachment-analyzer";
 import type { VisionTempStore } from "./vision-temp-store";
@@ -23,29 +24,23 @@ function parseFormatOutput(
   text: string,
   hasVisionDescriptions: boolean,
 ): { data: import("./zod-schemas").FormatOutput | null; hint: string; truncated: boolean } {
-  const sentinel = parseSentinelOutput(text, hasVisionDescriptions);
-  if (!sentinel) {
+  let parsedFrames: ReturnType<typeof parseFormatFrames>;
+  try {
+    parsedFrames = parseFormatFrames(text, hasVisionDescriptions);
+  } catch (e) {
     structuralErrorCounter.record(false, 0);
-    return { data: null, hint: "sentinel markers not found", truncated: false };
+    return { data: null, hint: (e as Error).message || "sentinel markers not found", truncated: false };
   }
-  const raw = hasVisionDescriptions
-    ? {
-        report: sentinel.report,
-        formatted: sentinel.formatted,
-        vision_blocks_count: sentinel.visionCount ?? 0,
-        embeds_preserved: sentinel.embeds ?? [],
-      }
-    : { report: sentinel.report, formatted: sentinel.formatted };
 
-  const schema = hasVisionDescriptions ? FormatWithVisionSchema : FormatBaseSchema;
-  const result = schema.safeParse(raw);
+  const schema = hasVisionDescriptions ? FormatWithVisionSchema : FormatOutputSchema;
+  const result = schema.safeParse(parsedFrames.raw);
   if (result.success) {
     structuralErrorCounter.record(true, 0);
-    return { data: result.data, hint: "", truncated: sentinel.truncated };
+    return { data: result.data, hint: "", truncated: parsedFrames.truncated };
   }
   structuralErrorCounter.record(false, 0);
   const hint = result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
-  return { data: null, hint, truncated: sentinel.truncated };
+  return { data: null, hint, truncated: parsedFrames.truncated };
 }
 
 function extractImagePaths(md: string): string[] {
@@ -224,10 +219,11 @@ export async function* runFormat(
     { role: "user", content: userContent },
     ...chatHistory.map((m) => ({ role: m.role, content: m.content })),
   ];
+  const formatOpts: LlmCallOptions = { ...opts, jsonMode: false, jsonSchema: undefined };
 
   yield { kind: "assistant_text", delta: progress.analysing(filePath) };
 
-  const baseParams = buildChatParams(model, messages, opts, true);
+  const baseParams = buildChatParams(model, messages, formatOpts, true);
 
   let lastFinishReason: string | null = null;
   let outputTokens = 0;
@@ -298,7 +294,7 @@ export async function* runFormat(
       { role: "system", content: retrySystemContent },
       { role: "user", content: userContent },
     ];
-    const retryParams = buildChatParams(model, retryMessages, opts, true);
+    const retryParams = buildChatParams(model, retryMessages, formatOpts, true);
     yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
     fullText = yield* callOnce(retryParams);
     if (signal.aborted) return;
@@ -346,7 +342,7 @@ export async function* runFormat(
         content: render(restoreTokensTemplate, { tokens: tokenList }),
       },
     ];
-    const restoreParams = buildChatParams(model, restoreMessages, opts, true);
+    const restoreParams = buildChatParams(model, restoreMessages, formatOpts, true);
     yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
     const fullText2 = yield* callOnce(restoreParams);
     if (!signal.aborted) {

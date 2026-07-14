@@ -1,5 +1,5 @@
 import type OpenAI from "openai";
-import type { LlmCallOptions, LlmClient, RunEvent } from "../types";
+import type { LlmCallOptions, RunEvent } from "../types";
 import baseContract from "../../prompts/base.md";
 import { jsonrepair } from "jsonrepair";
 import { resolveLang, resolveReasoningLang } from "../i18n";
@@ -241,96 +241,6 @@ export function isJsonModeError(e: unknown): boolean {
   if (status !== 400 && status !== 422) return false;
   const msg = String((e as { message?: unknown }).message ?? "").toLowerCase();
   return JSON_MODE_KEYWORDS.some((kw) => msg.includes(kw));
-}
-
-function hasContentDelta(chunk: OpenAI.Chat.ChatCompletionChunk): boolean {
-  const c = chunk.choices?.[0]?.delta?.content;
-  return typeof c === "string" && c.length > 0;
-}
-
-/** Two-stage response_format degradation: json_schema → json_object → nothing. */
-function degradeResponseFormat(params: Record<string, unknown>): Record<string, unknown> {
-  const rf = params.response_format as { type?: string } | undefined;
-  if (rf?.type === "json_schema") {
-    return { ...params, response_format: { type: "json_object" } };
-  }
-  const next = { ...params };
-  delete next.response_format;
-  return next;
-}
-
-/**
- * Decorator over LlmClient: if a request with `response_format` fails because the backend
- * doesn't support it (see {@link isJsonModeError}), retry once with `response_format` stripped.
- *
- * - Non-streaming: on caught json-mode error, transparently retry without `response_format`.
- * - Streaming: retry only if no content delta has been yielded yet. Reasoning chunks
- *   (`delta.reasoning`) do NOT count as content, so retry is still possible after them.
- * - When request has no `response_format`, behaves as pass-through.
- *
- * Trade-off: mid-stream retry replays reasoning chunks already yielded to the consumer.
- * Downstream parsers (parseStructured) tolerate `<think>` noise, so this is safe in practice.
- */
-export function wrapWithJsonFallback(inner: LlmClient): LlmClient {
-  const create = ((params: Record<string, unknown>, callOpts?: { signal?: AbortSignal }) => {
-    const hasRf = params.response_format !== undefined;
-    const isStream = params.stream === true;
-
-    if (!hasRf) {
-      return (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<unknown>)(params, callOpts);
-    }
-
-    if (!isStream) {
-      return (async () => {
-        let current = params;
-        while (current.response_format !== undefined) {
-          try {
-            return await (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<unknown>)(current, callOpts);
-          } catch (e) {
-            if (!isJsonModeError(e)) throw e;
-            current = degradeResponseFormat(current);
-          }
-        }
-        return (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<unknown>)(current, callOpts);
-      })();
-    }
-
-    return (async () => {
-      // Initial connection: loop through degradation levels until connected.
-      let current = params;
-      let upstream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk> | undefined;
-      while (upstream === undefined) {
-        try {
-          upstream = await (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk>>)(current, callOpts);
-        } catch (e) {
-          if (!isJsonModeError(e) || current.response_format === undefined) throw e;
-          current = degradeResponseFormat(current);
-        }
-      }
-      const connectedParams = current;
-
-      async function* gated(): AsyncIterable<OpenAI.Chat.ChatCompletionChunk> {
-        let seenContent = false;
-        try {
-          for await (const chunk of upstream!) {
-            if (hasContentDelta(chunk)) seenContent = true;
-            yield chunk;
-          }
-        } catch (e) {
-          if (seenContent || !isJsonModeError(e)) throw e;
-          // Mid-stream error before any content: degrade one level from the params
-          // that connected successfully (connectedParams), not from original params.
-          const degraded = degradeResponseFormat(connectedParams);
-          if (degraded.response_format === connectedParams.response_format) throw e;
-          const retry = await (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk>>)(degraded, callOpts);
-          for await (const c of retry) yield c;
-        }
-      }
-      return gated();
-    })();
-  }) as unknown as LlmClient["chat"]["completions"]["create"];
-
-  return { chat: { completions: { create } } };
 }
 
 function injectSystemPrompt(

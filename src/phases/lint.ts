@@ -4,7 +4,9 @@ import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { parseWithRetry } from "./parse-with-retry";
-import { EntityTypesDeltaSchema, LintOutputSchema } from "./zod-schemas";
+import { lintOutputProfile } from "./framed-output";
+import { runStructuredWithRetry } from "./structured-output";
+import { EntityTypesDeltaSchema } from "./zod-schemas";
 import type { LintOutput } from "./zod-schemas";
 import lintTemplate from "../../prompts/lint.md";
 import lintActualizeTemplate from "../../prompts/lint-actualize.md";
@@ -338,11 +340,11 @@ export async function* runLint(
       const pwtEvents: RunEvent[] = [];
       let lintResult: { value: LintOutput; outputTokens: number };
       try {
-        lintResult = await parseWithRetry({
+        lintResult = await runStructuredWithRetry({
           llm, model,
           baseMessages: messages,
-          opts,
-          schema: LintOutputSchema,
+          opts: { ...opts, jsonMode: false },
+          profile: lintOutputProfile(),
           maxRetries: opts.structuredRetries ?? 1,
           callSite: "lint.fix",
           signal,

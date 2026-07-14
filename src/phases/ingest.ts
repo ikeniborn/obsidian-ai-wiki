@@ -6,8 +6,10 @@ import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas, wikiSections } from "./llm-utils";
 import { parseWithRetry } from "./parse-with-retry";
-import { WikiPagesOutputSchema, EntitiesOutputSchema, MergedPageOutputSchema } from "./zod-schemas";
+import { EntitiesOutputSchema } from "./zod-schemas";
 import type { WikiPagesOutput, EntitiesOutput } from "./zod-schemas";
+import { mergeContentFrameInstruction, mergedPageProfile, parseWikiPageRepairFramesOrJson, wikiPagesFrameInstruction, wikiPagesProfile } from "./framed-output";
+import { runStructuredWithRetry } from "./structured-output";
 import ingestTemplate from "../../prompts/ingest.md";
 import ingestMerge from "../../prompts/ingest-merge.md";
 import ingestEntitiesTemplate from "../../prompts/ingest-entities.md";
@@ -248,9 +250,9 @@ export async function* runIngest(
   const pwtEvents: RunEvent[] = [];
   let parseResult: { value: WikiPagesOutput; outputTokens: number };
   try {
-    parseResult = await parseWithRetry({
-      llm, model, baseMessages: messages, opts,
-      schema: WikiPagesOutputSchema,
+    parseResult = await runStructuredWithRetry({
+      llm, model, baseMessages: messages, opts: { ...opts, jsonMode: false },
+      profile: wikiPagesProfile(),
       maxRetries: opts.structuredRetries ?? 1,
       callSite: "ingest.pages",
       signal,
@@ -281,8 +283,8 @@ export async function* runIngest(
     };
     const retryText = await retryInvalidPaths(llm, model, messages, invalid, signal, opts);
     if (signal.aborted) return;
-    if (retryText) {
-      const retried = parseJsonPages(retryText);
+    const retried = retryText ? parseWikiPageRepairFramesOrJson(retryText) : [];
+    if (retried.length > 0) {
       const { valid: retriedValid, invalid: retriedInvalid } = splitByPathValidity(retried, wikiVaultPath);
       // Emit ok:false for paths still invalid after retry
       for (const p of retriedInvalid) {
@@ -291,7 +293,7 @@ export async function* runIngest(
       }
       pages = [...valid, ...retriedValid];
     } else {
-      // No retry text (error) — skip all invalid
+      // No usable retry pages — skip all original invalid pages.
       for (const p of invalid) {
         yield { kind: "tool_use", name: "Write", input: { path: p.path } };
         yield { kind: "tool_result", ok: false, preview: `Path violates 4-level rule (!Wiki/<d>/<e>/<f>.md): ${p.path}` };
@@ -412,14 +414,16 @@ export async function* runIngest(
             summary: `Дубль: ${pageId(page.path)} ≈ ${hit.pid} (cosine ${hit.score.toFixed(2)}) → merge`,
             details: [targetPath] };
           const mergeMsgs = [{ role: "user" as const, content:
-            render(ingestMerge, { existing: existingTarget, incoming: page.content }) }];
+            render(ingestMerge, { existing: existingTarget, incoming: page.content, frame_instruction: mergeContentFrameInstruction }) }];
+          const mergeEvents: RunEvent[] = [];
           try {
-            const merged = await parseWithRetry({
-              llm, model, baseMessages: mergeMsgs, opts,
-              schema: MergedPageOutputSchema,
+            const merged = await runStructuredWithRetry({
+              llm, model, baseMessages: mergeMsgs, opts: { ...opts, jsonMode: false },
+              profile: mergedPageProfile(),
               maxRetries: opts.structuredRetries ?? 1,
-              callSite: "ingest.merge", signal, onEvent: () => {},
+              callSite: "ingest.merge", signal, onEvent: (ev) => mergeEvents.push(ev),
             });
+            for (const ev of mergeEvents) yield ev;
             yield { kind: "tool_use", name: "Update", input: { path: targetPath } };
             await vaultTools.write(targetPath, merged.value.content);
             written.push(targetPath);
@@ -431,6 +435,7 @@ export async function* runIngest(
             }
             continue; // skip the normal create
           } catch (e) {
+            for (const ev of mergeEvents) yield ev;
             // merge failed — fall through to a normal create rather than lose the new content
             yield { kind: "info_text", icon: "⚠️", summary: `merge не удался, создаю отдельно: ${(e as Error).message}` };
           }
@@ -670,25 +675,6 @@ export function detectDomain(absFilePath: string, domains: DomainEntry[], vaultR
   return detectDomainStrict(absFilePath, domains, vaultRoot) ?? domains[0] ?? null;
 }
 
-export function parseJsonPages(text: string): Array<{ path: string; content: string; annotation?: string }> {
-  const match = text.match(/\[[\s\S]*\]/);
-  if (!match) return [];
-  try {
-    const arr: unknown = JSON.parse(match[0]);
-    if (!Array.isArray(arr)) return [];
-    return (arr as unknown[]).filter(
-      (x): x is { path: string; content: string; annotation?: string } =>
-        x !== null &&
-        typeof x === "object" &&
-        typeof (x as { path?: unknown }).path === "string" &&
-        typeof (x as { content?: unknown }).content === "string",
-    );
-  } catch {
-    return [];
-  }
-}
-
-
 async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
   try { return await vaultTools.read(path); } catch { return ""; }
 }
@@ -735,14 +721,15 @@ async function retryInvalidPaths(
   opts: LlmCallOptions,
 ): Promise<string> {
   const invalidList = invalidPages.map((p) => p.path).join(", ");
+  const invalidFrames = renderPageRepairFrames(invalidPages);
   const retryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     ...originalMessages,
     {
       role: "user",
-      content: render(fixPathsTemplate, { paths: invalidList }),
+      content: render(fixPathsTemplate, { paths: invalidList, pages: invalidFrames }),
     },
   ];
-  const retryParams = buildChatParams(model, retryMessages, opts, false);
+  const retryParams = buildChatParams(model, retryMessages, { ...opts, jsonMode: false, jsonSchema: undefined }, false);
   try {
     let text = "";
     const stream = await llm.chat.completions.create(
@@ -757,6 +744,22 @@ async function retryInvalidPaths(
   } catch {
     return "";
   }
+}
+
+function renderPageRepairFrames(pages: Array<{ path: string; content: string; annotation?: string }>): string {
+  return [
+    "<<<REPORT>>>",
+    "Pages needing corrected paths.",
+    ...pages.flatMap((p) => [
+      "<<<PAGE>>>",
+      `path: ${p.path}`,
+      ...(p.annotation ? [`annotation: ${p.annotation}`] : []),
+      "<<<CONTENT>>>",
+      p.content,
+      "<<<END_PAGE>>>",
+    ]),
+    "<<<END>>>",
+  ].join("\n");
 }
 
 export function buildEntityTypesBlock(domain: DomainEntry, wikiVaultPath: string): string {
@@ -829,6 +832,7 @@ function buildIngestMessages(
     source_path: sourcePath,
     source_stem: sourcePath.split("/").pop()!.replace(/\.md$/, ""),
     forbidden_stems_block: forbiddenStemsBlock,
+    frame_instruction: wikiPagesFrameInstruction,
   });
 
   const existingPathSet = new Set(existingPages.keys());

@@ -12,7 +12,6 @@ import { runDelete } from "./phases/delete";
 import { VisionTempStore } from "./phases/vision-temp-store";
 import type { LlmCallOptions, LlmClient, LlmWikiPluginSettings, RunEvent, RunRequest } from "./types";
 import type { VaultTools } from "./vault-tools";
-import { wrapWithJsonFallback } from "./phases/llm-utils";
 import { domainWikiFolder } from "./wiki-path";
 import { writeEvalRecord, type EvalRecord, type EvalMetaFields, type LlmError } from "./eval-log";
 import { PageSimilarityService, DEFAULT_CHUNKING } from "./page-similarity";
@@ -33,7 +32,7 @@ export class AgentRunner {
     private visionTempBaseDir?: string,
     private isMobile: boolean = false,
   ) {
-    this.llm = wrapWithJsonFallback(llm);
+    this.llm = llm;
   }
 
   private buildOptsFor(op: RunRequest["operation"]): { model: string; opts: LlmCallOptions } {
@@ -54,11 +53,11 @@ export class AgentRunner {
     const na = s.nativeAgent;
     const c = na.perOperation ? na.operations[key] : undefined;
     const budgetTokens = c?.thinkingBudgetTokens ?? na.thinkingBudgetTokens;
-    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, reasoningLanguage: s.reasoningLanguage, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold,
+    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, reasoningLanguage: s.reasoningLanguage, structuredRetries, mergeDeleteWarnThreshold,
       dedupOnIngest: na.dedupOnIngest, dedupThreshold: na.dedupThreshold,
       lintNearDuplicate: na.lintNearDuplicate, nearDupThreshold: na.nearDupThreshold,
     } };
-    return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, reasoningLanguage: s.reasoningLanguage, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold,
+    return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, reasoningLanguage: s.reasoningLanguage, structuredRetries, mergeDeleteWarnThreshold,
       dedupOnIngest: na.dedupOnIngest, dedupThreshold: na.dedupThreshold,
       lintNearDuplicate: na.lintNearDuplicate, nearDupThreshold: na.nearDupThreshold,
     } };
@@ -203,6 +202,12 @@ export class AgentRunner {
     const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1000;
     const maxRetries = this.settings.llmIdleRetries ?? 3;
     let attempt = 0;
+    let destructivePreludeSeen = false;
+
+    const idleAfterDestructivePreludeAbort = () => new DOMException(
+      `LLM idle timeout (${Math.round(idleTimeoutMs / 1000)}s) after destructive prelude; refusing to replay operation`,
+      "AbortError",
+    );
 
     const llmErrors: LlmError[] = [];
     const ruleFirings: Record<string, number> = {};
@@ -237,6 +242,7 @@ export class AgentRunner {
             ev.kind === "llm_call_stats" || ev.kind === "assistant_text" ||
             ev.kind === "tool_use" || ev.kind === "tool_result"
           ) resetTimer();
+          if (ev.kind === "tool_use" && ev.name === "WipeDomain") destructivePreludeSeen = true;
           if (ev.kind === "result") finalResultText = ev.text;
           if (ev.kind === "error") {
             llmErrors.push({ kind: "error", message: ev.message });
@@ -256,6 +262,7 @@ export class AgentRunner {
         // Detect silent idle abort by checking if idleCtrl fired but user didn't cancel.
         if (idleCtrl.signal.aborted && !req.signal.aborted) {
           if (attempt < maxRetries) {
+            if (destructivePreludeSeen) throw idleAfterDestructivePreludeAbort();
             attempt++;
             const sec = Math.round(idleTimeoutMs / 1000);
             yield { kind: "system", message: `LLM idle ${sec}s — retrying (${attempt}/${maxRetries})` };
@@ -289,6 +296,7 @@ export class AgentRunner {
         if (idleTimer) window.clearTimeout(idleTimer);
         const isIdleAbort = !req.signal.aborted && (err as Error).name === "AbortError";
         if (isIdleAbort && attempt < maxRetries) {
+          if (destructivePreludeSeen) throw idleAfterDestructivePreludeAbort();
           attempt++;
           const sec = Math.round(idleTimeoutMs / 1000);
           yield { kind: "system", message: `LLM idle ${sec}s — retrying (${attempt}/${maxRetries})` };

@@ -20202,7 +20202,7 @@ var require_request2 = __commonJS({
         input = webidl.converters.RequestInfo(input, prefix, "input");
         init = webidl.converters.RequestInit(init, prefix, "init");
         let request = null;
-        let fallbackMode = null;
+        let fallbackMode2 = null;
         const baseUrl = environmentSettingsObject.settingsObject.baseUrl;
         let signal = null;
         if (typeof input === "string") {
@@ -20219,7 +20219,7 @@ var require_request2 = __commonJS({
             );
           }
           request = makeRequest({ urlList: [parsedURL] });
-          fallbackMode = "cors";
+          fallbackMode2 = "cors";
         } else {
           this[kDispatcher] = init.dispatcher || input[kDispatcher];
           assert(input instanceof _Request);
@@ -20318,7 +20318,7 @@ var require_request2 = __commonJS({
         if (init.mode !== void 0) {
           mode = init.mode;
         } else {
-          mode = fallbackMode;
+          mode = fallbackMode2;
         }
         if (mode === "navigate") {
           throw webidl.errors.exception({
@@ -26365,7 +26365,7 @@ var en = {
     historyLimit_name: "History limit",
     historyLimit_desc: "Max operations kept in the sidebar history. Default 20. \u2191 longer history, more memory \xB7 \u2193 leaner.",
     agentLog_name: "Agent log (JSONL)",
-    agentLog_desc: "Log agent events to <vault>/!Wiki/_config/_agent.jsonl.",
+    agentLog_desc: "Log agent events to the plugin directory agent.jsonl.",
     backend_name: "Backend",
     backend_desc: "Select the backend for operations.",
     claudeCodeAgent: "Claude Code agent",
@@ -26432,8 +26432,8 @@ var en = {
     seedMinScore_desc: "Min Jaccard score for a page to qualify as a seed, 0.0\u20131.0. Default 0.1. \u2191 stricter, fewer/cleaner seeds \xB7 \u2193 looser, more recall.",
     mergeDeleteWarnThreshold_name: "Merge delete warning threshold",
     mergeDeleteWarnThreshold_desc: "Ingest warns when the LLM requests deleting more pages than this in one merge. Default 5. \u2191 fewer warnings, risk of bulk loss \xB7 \u2193 flags merges earlier.",
-    structuredRetries_name: "Structured output retries",
-    structuredRetries_desc: "Retries on schema validation failure, 0\u20133. Default 1. \u2191 higher success on weaker models, more latency/tokens \xB7 \u2193 faster, more failures.",
+    structuredRetries_name: "Output repair retries",
+    structuredRetries_desc: "Retries for invalid JSON or invalid framed output after Zod validation, 0\u20133. Default 1. \u2191 higher success on weaker models, more latency/tokens \xB7 \u2193 faster, more failures.",
     llmIdleTimeout_name: "LLM idle timeout (seconds)",
     llmIdleTimeout_desc: "Seconds of LLM silence before aborting the attempt. 0 = disabled. Default 300. \u2191 more patience for slow models \xB7 \u2193 catches stalls sooner.",
     llmIdleRetries_name: "LLM idle retries",
@@ -26731,7 +26731,7 @@ var ru = {
     historyLimit_name: "\u041B\u0438\u043C\u0438\u0442 \u0438\u0441\u0442\u043E\u0440\u0438\u0438",
     historyLimit_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0439 \u0432 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043F\u0430\u043D\u0435\u043B\u0438. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 20. \u2191 \u0434\u043B\u0438\u043D\u043D\u0435\u0435 \u0438\u0441\u0442\u043E\u0440\u0438\u044F, \u0431\u043E\u043B\u044C\u0448\u0435 \u043F\u0430\u043C\u044F\u0442\u0438 \xB7 \u2193 \u043A\u043E\u043C\u043F\u0430\u043A\u0442\u043D\u0435\u0435.",
     agentLog_name: "\u041B\u043E\u0433 \u0430\u0433\u0435\u043D\u0442\u0430 (JSONL)",
-    agentLog_desc: "\u0417\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442 \u0441\u043E\u0431\u044B\u0442\u0438\u044F \u0430\u0433\u0435\u043D\u0442\u0430 \u0432 <vault>/!Wiki/_config/_agent.jsonl.",
+    agentLog_desc: "\u0417\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442 \u0441\u043E\u0431\u044B\u0442\u0438\u044F \u0430\u0433\u0435\u043D\u0442\u0430 \u0432 agent.jsonl \u0432 \u043F\u0430\u043F\u043A\u0435 \u043F\u043B\u0430\u0433\u0438\u043D\u0430.",
     backend_name: "Backend",
     backend_desc: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0431\u044D\u043A\u0435\u043D\u0434 \u0434\u043B\u044F \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0439.",
     claudeCodeAgent: "Claude Code agent",
@@ -26798,8 +26798,8 @@ var ru = {
     seedMinScore_desc: "\u041C\u0438\u043D\u0438\u043C\u0430\u043B\u044C\u043D\u044B\u0439 Jaccard score, \u0447\u0442\u043E\u0431\u044B \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430 \u043F\u043E\u043F\u0430\u043B\u0430 \u0432 seeds, 0.0\u20131.0. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 0.1. \u2191 \u0441\u0442\u0440\u043E\u0436\u0435, \u043C\u0435\u043D\u044C\u0448\u0435/\u0447\u0438\u0449\u0435 seeds \xB7 \u2193 \u043C\u044F\u0433\u0447\u0435, \u0432\u044B\u0448\u0435 \u043F\u043E\u043B\u043D\u043E\u0442\u0430.",
     mergeDeleteWarnThreshold_name: "\u041F\u043E\u0440\u043E\u0433 \u043F\u0440\u0435\u0434\u0443\u043F\u0440\u0435\u0436\u0434\u0435\u043D\u0438\u044F \u043E merge-\u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F\u0445",
     mergeDeleteWarnThreshold_desc: "Ingest \u043F\u0440\u0435\u0434\u0443\u043F\u0440\u0435\u0436\u0434\u0430\u0435\u0442, \u0435\u0441\u043B\u0438 LLM \u043F\u0440\u043E\u0441\u0438\u0442 \u0443\u0434\u0430\u043B\u0438\u0442\u044C \u0431\u043E\u043B\u044C\u0448\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u0437\u0430 \u043E\u0434\u0438\u043D merge. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 5. \u2191 \u0440\u0435\u0436\u0435 \u043F\u0440\u0435\u0434\u0443\u043F\u0440\u0435\u0436\u0434\u0435\u043D\u0438\u044F, \u0440\u0438\u0441\u043A \u043C\u0430\u0441\u0441\u043E\u0432\u043E\u0433\u043E \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F \xB7 \u2193 \u0440\u0430\u043D\u044C\u0448\u0435 \u043B\u043E\u0432\u0438\u0442 merge.",
-    structuredRetries_name: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u043F\u0440\u0438 \u043E\u0448\u0438\u0431\u043A\u0435 \u0441\u0445\u0435\u043C\u044B",
-    structuredRetries_desc: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u0432\u044B\u0437\u043E\u0432\u0430 LLM \u043F\u0440\u0438 \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0435 \u043E\u0442\u0432\u0435\u0442\u0430, 0\u20133. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 1. \u2191 \u043D\u0430\u0434\u0451\u0436\u043D\u0435\u0435 \u043D\u0430 \u0441\u043B\u0430\u0431\u044B\u0445 \u043C\u043E\u0434\u0435\u043B\u044F\u0445, \u0434\u043E\u0440\u043E\u0436\u0435 \u043F\u043E \u0442\u043E\u043A\u0435\u043D\u0430\u043C/\u0432\u0440\u0435\u043C\u0435\u043D\u0438 \xB7 \u2193 \u0431\u044B\u0441\u0442\u0440\u0435\u0435, \u0431\u043E\u043B\u044C\u0448\u0435 \u043E\u0442\u043A\u0430\u0437\u043E\u0432.",
+    structuredRetries_name: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u043E\u0442\u0432\u0435\u0442\u0430",
+    structuredRetries_desc: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u043F\u0440\u0438 \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E\u043C JSON \u0438\u043B\u0438 \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E\u043C framed-\u043E\u0442\u0432\u0435\u0442\u0435 \u043F\u043E\u0441\u043B\u0435 Zod validation, 0\u20133. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 1. \u2191 \u043D\u0430\u0434\u0451\u0436\u043D\u0435\u0435 \u043D\u0430 \u0441\u043B\u0430\u0431\u044B\u0445 \u043C\u043E\u0434\u0435\u043B\u044F\u0445, \u0434\u043E\u0440\u043E\u0436\u0435 \u043F\u043E \u0442\u043E\u043A\u0435\u043D\u0430\u043C/\u0432\u0440\u0435\u043C\u0435\u043D\u0438 \xB7 \u2193 \u0431\u044B\u0441\u0442\u0440\u0435\u0435, \u0431\u043E\u043B\u044C\u0448\u0435 \u043E\u0442\u043A\u0430\u0437\u043E\u0432.",
     llmIdleTimeout_name: "\u0422\u0430\u0439\u043C\u0430\u0443\u0442 \u043F\u0440\u043E\u0441\u0442\u043E\u044F LLM (\u0441\u0435\u043A\u0443\u043D\u0434\u044B)",
     llmIdleTimeout_desc: "\u0421\u0435\u043A\u0443\u043D\u0434 \u0442\u0438\u0448\u0438\u043D\u044B LLM \u0434\u043E \u043F\u0440\u0435\u0440\u044B\u0432\u0430\u043D\u0438\u044F \u043F\u043E\u043F\u044B\u0442\u043A\u0438. 0 = \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 300. \u2191 \u0442\u0435\u0440\u043F\u0435\u043B\u0438\u0432\u0435\u0435 \u043A \u043C\u0435\u0434\u043B\u0435\u043D\u043D\u044B\u043C \u043C\u043E\u0434\u0435\u043B\u044F\u043C \xB7 \u2193 \u0440\u0430\u043D\u044C\u0448\u0435 \u043B\u043E\u0432\u0438\u0442 \u0437\u0430\u0432\u0438\u0441\u0430\u043D\u0438\u044F.",
     llmIdleRetries_name: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u043F\u0440\u0438 \u043F\u0440\u043E\u0441\u0442\u043E\u0435 LLM",
@@ -27096,7 +27096,7 @@ var es = {
     historyLimit_name: "L\xEDmite de historial",
     historyLimit_desc: "M\xE1x. operaciones en el historial lateral. Por defecto 20. \u2191 m\xE1s historial, m\xE1s memoria \xB7 \u2193 m\xE1s ligero.",
     agentLog_name: "Log del agente (JSONL)",
-    agentLog_desc: "Registra eventos del agente en <vault>/!Wiki/_config/_agent.jsonl.",
+    agentLog_desc: "Registra eventos del agente en agent.jsonl dentro de la carpeta del plugin.",
     backend_name: "Backend",
     backend_desc: "Selecciona el backend para las operaciones.",
     claudeCodeAgent: "Claude Code agent",
@@ -27163,8 +27163,8 @@ var es = {
     seedMinScore_desc: "Puntuaci\xF3n Jaccard m\xEDnima para que una p\xE1gina sea semilla, 0.0\u20131.0. Por defecto 0.1. \u2191 m\xE1s estricto, menos/mejores semillas \xB7 \u2193 m\xE1s laxo, m\xE1s exhaustivo.",
     mergeDeleteWarnThreshold_name: "Umbral de aviso de merge-deletes",
     mergeDeleteWarnThreshold_desc: "Ingest avisa cuando el LLM pide borrar m\xE1s p\xE1ginas que esto en un merge. Por defecto 5. \u2191 menos avisos, riesgo de p\xE9rdida masiva \xB7 \u2193 marca merges antes.",
-    structuredRetries_name: "Structured output retries",
-    structuredRetries_desc: "Reintentos ante fallo de validaci\xF3n de esquema, 0\u20133. Por defecto 1. \u2191 m\xE1s \xE9xito en modelos d\xE9biles, m\xE1s latencia/tokens \xB7 \u2193 m\xE1s r\xE1pido, m\xE1s fallos.",
+    structuredRetries_name: "Reintentos de reparaci\xF3n de salida",
+    structuredRetries_desc: "Reintentos para JSON inv\xE1lido o salida framed inv\xE1lida tras validaci\xF3n Zod, 0\u20133. Por defecto 1. \u2191 m\xE1s \xE9xito en modelos d\xE9biles, m\xE1s latencia/tokens \xB7 \u2193 m\xE1s r\xE1pido, m\xE1s fallos.",
     llmIdleTimeout_name: "Tiempo de espera de inactividad LLM (segundos)",
     llmIdleTimeout_desc: "Segundos de silencio del LLM antes de abortar el intento. 0 = desactivado. Por defecto 300. \u2191 m\xE1s paciencia con modelos lentos \xB7 \u2193 detecta bloqueos antes.",
     llmIdleRetries_name: "Reintentos por inactividad LLM",
@@ -28103,7 +28103,6 @@ function legacyDomainLogPath(domainFolder) {
 function legacyDomainEmbeddingsPath(domainFolder) {
   return `${legacyDomainConfigDir(domainFolder)}/_embeddings.json`;
 }
-var domainConfigDir = legacyDomainConfigDir;
 
 // src/source-paths.ts
 function isSelectableSourceFolder(path5) {
@@ -32414,72 +32413,6 @@ function isJsonModeError(e) {
   const msg = String(e.message ?? "").toLowerCase();
   return JSON_MODE_KEYWORDS.some((kw) => msg.includes(kw));
 }
-function hasContentDelta(chunk) {
-  const c = chunk.choices?.[0]?.delta?.content;
-  return typeof c === "string" && c.length > 0;
-}
-function degradeResponseFormat(params) {
-  const rf = params.response_format;
-  if (rf?.type === "json_schema") {
-    return { ...params, response_format: { type: "json_object" } };
-  }
-  const next = { ...params };
-  delete next.response_format;
-  return next;
-}
-function wrapWithJsonFallback(inner) {
-  const create = ((params, callOpts) => {
-    const hasRf = params.response_format !== void 0;
-    const isStream = params.stream === true;
-    if (!hasRf) {
-      return inner.chat.completions.create(params, callOpts);
-    }
-    if (!isStream) {
-      return (async () => {
-        let current = params;
-        while (current.response_format !== void 0) {
-          try {
-            return await inner.chat.completions.create(current, callOpts);
-          } catch (e) {
-            if (!isJsonModeError(e)) throw e;
-            current = degradeResponseFormat(current);
-          }
-        }
-        return inner.chat.completions.create(current, callOpts);
-      })();
-    }
-    return (async () => {
-      let current = params;
-      let upstream;
-      while (upstream === void 0) {
-        try {
-          upstream = await inner.chat.completions.create(current, callOpts);
-        } catch (e) {
-          if (!isJsonModeError(e) || current.response_format === void 0) throw e;
-          current = degradeResponseFormat(current);
-        }
-      }
-      const connectedParams = current;
-      async function* gated() {
-        let seenContent = false;
-        try {
-          for await (const chunk of upstream) {
-            if (hasContentDelta(chunk)) seenContent = true;
-            yield chunk;
-          }
-        } catch (e) {
-          if (seenContent || !isJsonModeError(e)) throw e;
-          const degraded = degradeResponseFormat(connectedParams);
-          if (degraded.response_format === connectedParams.response_format) throw e;
-          const retry = await inner.chat.completions.create(degraded, callOpts);
-          for await (const c of retry) yield c;
-        }
-      }
-      return gated();
-    })();
-  });
-  return { chat: { completions: { create } } };
-}
 function injectSystemPrompt(messages, systemPrompt) {
   if (!systemPrompt) return messages;
   const section = `## Clarification
@@ -34221,87 +34154,6 @@ function applyDomainEvent(domains, ev, opts) {
 
 // src/phases/ingest.ts
 var import_path_browserify6 = __toESM(require_path_browserify(), 1);
-
-// node_modules/zod-to-json-schema/dist/esm/Options.js
-var ignoreOverride = /* @__PURE__ */ Symbol("Let zodToJsonSchema decide on which parser to use");
-var defaultOptions = {
-  name: void 0,
-  $refStrategy: "root",
-  basePath: ["#"],
-  effectStrategy: "input",
-  pipeStrategy: "all",
-  dateStrategy: "format:date-time",
-  mapStrategy: "entries",
-  removeAdditionalStrategy: "passthrough",
-  allowedAdditionalProperties: true,
-  rejectedAdditionalProperties: false,
-  definitionPath: "definitions",
-  target: "jsonSchema7",
-  strictUnions: false,
-  definitions: {},
-  errorMessages: false,
-  markdownDescription: false,
-  patternStrategy: "escape",
-  applyRegexFlags: false,
-  emailStrategy: "format:email",
-  base64Strategy: "contentEncoding:base64",
-  nameStrategy: "ref",
-  openAiAnyTypeName: "OpenAiAnyType"
-};
-var getDefaultOptions = (options) => typeof options === "string" ? {
-  ...defaultOptions,
-  name: options
-} : {
-  ...defaultOptions,
-  ...options
-};
-
-// node_modules/zod-to-json-schema/dist/esm/Refs.js
-var getRefs = (options) => {
-  const _options = getDefaultOptions(options);
-  const currentPath = _options.name !== void 0 ? [..._options.basePath, _options.definitionPath, _options.name] : _options.basePath;
-  return {
-    ..._options,
-    flags: { hasReferencedOpenAiAnyType: false },
-    currentPath,
-    propertyPath: void 0,
-    seen: new Map(Object.entries(_options.definitions).map(([name, def]) => [
-      def._def,
-      {
-        def: def._def,
-        path: [..._options.basePath, _options.definitionPath, name],
-        // Resolution of references will be forced even though seen, so it's ok that the schema is undefined here for now.
-        jsonSchema: void 0
-      }
-    ]))
-  };
-};
-
-// node_modules/zod-to-json-schema/dist/esm/errorMessages.js
-function addErrorMessage(res, key, errorMessage, refs) {
-  if (!refs?.errorMessages)
-    return;
-  if (errorMessage) {
-    res.errorMessage = {
-      ...res.errorMessage,
-      [key]: errorMessage
-    };
-  }
-}
-function setResponseValueAndErrors(res, key, value, errorMessage, refs) {
-  res[key] = value;
-  addErrorMessage(res, key, errorMessage, refs);
-}
-
-// node_modules/zod-to-json-schema/dist/esm/getRelativePath.js
-var getRelativePath = (pathA, pathB) => {
-  let i = 0;
-  for (; i < pathA.length && i < pathB.length; i++) {
-    if (pathA[i] !== pathB[i])
-      break;
-  }
-  return [(pathA.length - i).toString(), ...pathB.slice(i)].join("/");
-};
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -38344,6 +38196,87 @@ var coerce = {
 };
 var NEVER = INVALID;
 
+// node_modules/zod-to-json-schema/dist/esm/Options.js
+var ignoreOverride = /* @__PURE__ */ Symbol("Let zodToJsonSchema decide on which parser to use");
+var defaultOptions = {
+  name: void 0,
+  $refStrategy: "root",
+  basePath: ["#"],
+  effectStrategy: "input",
+  pipeStrategy: "all",
+  dateStrategy: "format:date-time",
+  mapStrategy: "entries",
+  removeAdditionalStrategy: "passthrough",
+  allowedAdditionalProperties: true,
+  rejectedAdditionalProperties: false,
+  definitionPath: "definitions",
+  target: "jsonSchema7",
+  strictUnions: false,
+  definitions: {},
+  errorMessages: false,
+  markdownDescription: false,
+  patternStrategy: "escape",
+  applyRegexFlags: false,
+  emailStrategy: "format:email",
+  base64Strategy: "contentEncoding:base64",
+  nameStrategy: "ref",
+  openAiAnyTypeName: "OpenAiAnyType"
+};
+var getDefaultOptions = (options) => typeof options === "string" ? {
+  ...defaultOptions,
+  name: options
+} : {
+  ...defaultOptions,
+  ...options
+};
+
+// node_modules/zod-to-json-schema/dist/esm/Refs.js
+var getRefs = (options) => {
+  const _options = getDefaultOptions(options);
+  const currentPath = _options.name !== void 0 ? [..._options.basePath, _options.definitionPath, _options.name] : _options.basePath;
+  return {
+    ..._options,
+    flags: { hasReferencedOpenAiAnyType: false },
+    currentPath,
+    propertyPath: void 0,
+    seen: new Map(Object.entries(_options.definitions).map(([name, def]) => [
+      def._def,
+      {
+        def: def._def,
+        path: [..._options.basePath, _options.definitionPath, name],
+        // Resolution of references will be forced even though seen, so it's ok that the schema is undefined here for now.
+        jsonSchema: void 0
+      }
+    ]))
+  };
+};
+
+// node_modules/zod-to-json-schema/dist/esm/errorMessages.js
+function addErrorMessage(res, key, errorMessage, refs) {
+  if (!refs?.errorMessages)
+    return;
+  if (errorMessage) {
+    res.errorMessage = {
+      ...res.errorMessage,
+      [key]: errorMessage
+    };
+  }
+}
+function setResponseValueAndErrors(res, key, value, errorMessage, refs) {
+  res[key] = value;
+  addErrorMessage(res, key, errorMessage, refs);
+}
+
+// node_modules/zod-to-json-schema/dist/esm/getRelativePath.js
+var getRelativePath = (pathA, pathB) => {
+  let i = 0;
+  for (; i < pathA.length && i < pathB.length; i++) {
+    if (pathA[i] !== pathB[i])
+      break;
+  }
+  return [(pathA.length - i).toString(), ...pathB.slice(i)].join("/");
+};
+
 // node_modules/zod-to-json-schema/dist/esm/parsers/any.js
 function parseAnyDef(refs) {
   if (refs.target !== "openAi") {
@@ -39579,10 +39512,12 @@ function render(template, vars) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
 }
 
-// prompts/repair-json.md
-var repair_json_default = "{{detail}}\n\nReturn ONLY a single valid JSON object matching the schema. No markdown fences, no <think> tags, no commentary.";
-
-// src/phases/parse-with-retry.ts
+// src/phases/structured-output.ts
+var repairJson = [
+  "{{detail}}",
+  "",
+  "Return ONLY a single valid JSON object matching the schema. No markdown fences, no <think> tags, no commentary."
+].join("\n");
 var StructuredValidationError = class extends Error {
   constructor(callSite, attempts, lastError) {
     super(`[${callSite}] structural validation failed after ${attempts} attempt(s): ${lastError.message}`);
@@ -39595,17 +39530,69 @@ var StructuredValidationError = class extends Error {
   attempts;
   lastError;
 };
+function fallbackMode(mode) {
+  if (mode === "json_schema") return "json_object";
+  if (mode === "json_object") return "none";
+  return null;
+}
+function emitStructuralError(onEvent, callSite, errorType, retryAttempt, succeeded, message) {
+  onEvent({ kind: "structural_error", callSite, errorType, retryAttempt, succeeded, message });
+}
+function emitResponseFormatFallback(onEvent, callSite, retryAttempt, from, to) {
+  emitStructuralError(
+    onEvent,
+    callSite,
+    "response_format_fallback",
+    retryAttempt,
+    null,
+    `${from} -> ${to}`
+  );
+}
+function initialMode(profile, opts) {
+  if (profile.kind !== "json-zod") return "none";
+  return opts.jsonMode === false ? "none" : "json_schema";
+}
+function optsForMode(opts, mode, callSite, schema) {
+  if (mode === "none") return { ...opts, jsonMode: false, jsonSchema: void 0 };
+  if (mode === "json_object") return { ...opts, jsonMode: "json_object", jsonSchema: void 0 };
+  return {
+    ...opts,
+    jsonMode: "json_schema",
+    jsonSchema: {
+      name: callSite.replace(/\./g, "_"),
+      schema: zodToJsonSchema(schema, { $refStrategy: "none" })
+    }
+  };
+}
 function formatZodFeedback(err, raw) {
   if (err === null) {
-    const detail2 = ["Previous response was not valid JSON.", `Raw output (truncated):`, raw.slice(0, 2e3)].join("\n");
-    return render(repair_json_default, { detail: detail2 });
+    const detail = [
+      "Previous response was not valid JSON.",
+      "Raw output (truncated):",
+      raw.slice(0, 2e3)
+    ].join("\n");
+    return render(repairJson, { detail });
   }
   const bullets = err.issues.slice(0, 20).map((i) => {
     const path5 = i.path.length ? i.path.join(".") : "(root)";
     return `- ${path5}: ${i.message}`;
   }).join("\n");
-  const detail = ["Previous response failed validation:", bullets].join("\n");
-  return render(repair_json_default, { detail });
+  return render(repairJson, {
+    detail: ["Previous response failed validation:", bullets].join("\n")
+  });
+}
+function repairPrompt(profile, lastText, lastError) {
+  if (profile.kind === "framed-zod") {
+    return [
+      "Previous response did not match the required frame format.",
+      lastError.message,
+      profile.repairInstruction,
+      "Return only the required frames. Do not add commentary outside frames.",
+      "Previous response (truncated):",
+      lastText.slice(0, 2e3)
+    ].join("\n");
+  }
+  return lastError instanceof ZodError ? formatZodFeedback(lastError, lastText) : formatZodFeedback(null, lastText);
 }
 async function streamOnce(llm, model, messages, opts, signal) {
   const params = buildChatParams(model, messages, opts, true);
@@ -39621,32 +39608,60 @@ async function streamOnce(llm, model, messages, opts, signal) {
     for await (const chunk of stream) {
       const { content, outputTokens: tok } = extractStreamDeltas(chunk);
       if (content) fullText += content;
-      if (tok !== void 0) outputTokens += tok;
+      if (tok !== void 0) outputTokens = tok;
     }
-    return { fullText, outputTokens, stats: getStats() };
+    const stats = getStats();
+    return {
+      fullText,
+      outputTokens,
+      statsEvent: stats ? buildLlmCallStatsEvent(stats) : void 0
+    };
   } catch (e) {
-    if (signal.aborted || e.name === "AbortError") throw e;
+    if (signal.aborted || e.name === "AbortError" || isJsonModeError(e)) throw e;
     const params2 = buildChatParams(model, messages, opts);
     const resp = await llm.chat.completions.create(
       { ...params2, stream: false },
       { signal }
     );
-    const text = resp.choices[0]?.message?.content ?? "";
-    const tok = extractUsage(resp);
-    return { fullText: text, outputTokens: tok ?? 0, stats: void 0 };
+    return {
+      fullText: resp.choices[0]?.message?.content ?? "",
+      outputTokens: extractUsage(resp) ?? 0
+    };
   }
 }
-async function parseWithRetry(args) {
-  const { llm, model, baseMessages, schema, maxRetries, callSite, signal, onEvent } = args;
-  const opts = args.opts.jsonMode === "json_object" || args.opts.jsonMode === "json_schema" ? {
-    ...args.opts,
-    jsonMode: "json_schema",
-    jsonSchema: {
-      name: callSite.replace(/\./g, "_"),
-      schema: zodToJsonSchema(schema, { $refStrategy: "none" })
+function parseAndValidate(profile, fullText) {
+  const raw = profile.kind === "json-zod" ? parseStructured(fullText) : profile.parse(fullText);
+  const parsed = profile.schema.safeParse(raw);
+  if (!parsed.success) throw parsed.error;
+  return parsed.data;
+}
+function classifyError(profile, err) {
+  if (profile.kind === "framed-zod" && !(err instanceof ZodError)) return "frame_parse";
+  if (err instanceof ZodError) return "schema_validate";
+  return "json_parse";
+}
+async function callWithFormatFallback(args, messages, mode, attempt) {
+  let currentMode = mode;
+  while (true) {
+    const callOpts = args.profile.kind === "json-zod" ? optsForMode(args.opts, currentMode, args.callSite, args.profile.schema) : { ...args.opts, jsonMode: false, jsonSchema: void 0 };
+    try {
+      return {
+        result: await streamOnce(args.llm, args.model, messages, callOpts, args.signal),
+        mode: currentMode
+      };
+    } catch (e) {
+      if (args.profile.kind !== "json-zod" || !isJsonModeError(e)) throw e;
+      const next = fallbackMode(currentMode);
+      if (!next) throw e;
+      emitResponseFormatFallback(args.onEvent, args.callSite, attempt, currentMode, next);
+      currentMode = next;
     }
-  } : args.opts;
+  }
+}
+async function runStructuredWithRetry(args) {
+  const { baseMessages, profile, maxRetries, callSite, signal, onEvent } = args;
   let messages = baseMessages;
+  let mode = initialMode(profile, args.opts);
   let totalTokens = 0;
   let lastError = new Error("no attempts");
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -39656,71 +39671,65 @@ async function parseWithRetry(args) {
       throw err;
     }
     if (attempt > 0) onEvent({ kind: "rule_fired", ruleId: "parseWithRetry", count: 1 });
-    const { fullText, outputTokens, stats } = await streamOnce(llm, model, messages, opts, signal);
+    const call = await callWithFormatFallback(args, messages, mode, attempt);
+    mode = call.mode;
+    const { fullText, outputTokens, statsEvent } = call.result;
     totalTokens += outputTokens;
-    if (stats) onEvent(buildLlmCallStatsEvent(stats));
-    let raw;
-    try {
-      raw = parseStructured(fullText);
-    } catch (e) {
-      lastError = e;
-      const isLast2 = attempt === maxRetries;
-      const ev2 = {
-        kind: "structural_error",
-        callSite,
-        errorType: "json_parse",
-        retryAttempt: attempt,
-        succeeded: isLast2 ? false : null,
-        message: lastError.message
-      };
-      onEvent(ev2);
-      structuralErrorCounter.record(ev2.succeeded, attempt);
-      if (isLast2) throw new StructuredValidationError(callSite, attempt + 1, lastError);
-      const feedback2 = formatZodFeedback(null, fullText);
+    if (statsEvent) onEvent(statsEvent);
+    if (!fullText.trim()) {
+      lastError = new Error("Empty structured output");
+      emitStructuralError(onEvent, callSite, "empty_output", attempt, null, lastError.message);
+      structuralErrorCounter.record(null, attempt);
+      const next = profile.kind === "json-zod" ? fallbackMode(mode) : null;
+      if (next) {
+        emitResponseFormatFallback(onEvent, callSite, attempt, mode, next);
+        mode = next;
+      }
+      if (attempt === maxRetries) throw new StructuredValidationError(callSite, attempt + 1, lastError);
       messages = [
         ...messages,
         { role: "assistant", content: fullText },
-        { role: "user", content: feedback2 }
+        { role: "user", content: repairPrompt(profile, fullText, lastError) }
       ];
       continue;
     }
-    const parsed = schema.safeParse(raw);
-    if (parsed.success) {
+    try {
+      const value = parseAndValidate(profile, fullText);
       if (attempt > 0) {
-        const ev2 = {
-          kind: "structural_error",
-          callSite,
-          errorType: "schema_validate",
-          retryAttempt: attempt,
-          succeeded: true,
-          message: "retry succeeded"
-        };
-        onEvent(ev2);
+        emitStructuralError(onEvent, callSite, "schema_validate", attempt, true, "retry succeeded");
       }
       structuralErrorCounter.record(true, attempt);
-      return { value: parsed.data, outputTokens: totalTokens, fullText };
+      return { value, outputTokens: totalTokens, fullText };
+    } catch (e) {
+      lastError = e;
+      const isLast = attempt === maxRetries;
+      const errorType = classifyError(profile, lastError);
+      emitStructuralError(onEvent, callSite, errorType, attempt, isLast ? false : null, lastError.message);
+      structuralErrorCounter.record(isLast ? false : null, attempt);
+      if (isLast) throw new StructuredValidationError(callSite, attempt + 1, lastError);
+      messages = [
+        ...messages,
+        { role: "assistant", content: fullText },
+        { role: "user", content: repairPrompt(profile, fullText, lastError) }
+      ];
     }
-    lastError = parsed.error;
-    const isLast = attempt === maxRetries;
-    const feedback = formatZodFeedback(parsed.error, fullText);
-    const ev = {
-      kind: "structural_error",
-      callSite,
-      errorType: "schema_validate",
-      retryAttempt: attempt,
-      succeeded: isLast ? false : null,
-      message: feedback
-    };
-    onEvent(ev);
-    structuralErrorCounter.record(ev.succeeded, attempt);
-    if (isLast) throw new StructuredValidationError(callSite, attempt + 1, lastError);
-    messages = [
-      ...messages,
-      { role: "assistant", content: fullText },
-      { role: "user", content: feedback }
-    ];
   }
   throw new StructuredValidationError(callSite, maxRetries + 1, lastError);
+}
+
+// src/phases/parse-with-retry.ts
+async function parseWithRetry(args) {
+  return runStructuredWithRetry({
+    llm: args.llm,
+    model: args.model,
+    baseMessages: args.baseMessages,
+    opts: args.opts,
+    profile: { kind: "json-zod", schema: args.schema },
+    maxRetries: args.maxRetries,
+    callSite: args.callSite,
+    signal: args.signal,
+    onEvent: args.onEvent
+  });
 }
 
 // src/phases/zod-schemas.ts
@@ -39873,29 +39882,504 @@ function makeQueryAnswerSchema(knownStems) {
   });
 }
 
+// src/phases/format-utils.ts
+var STOP_WORDS2 = /* @__PURE__ */ new Set([
+  "The",
+  "This",
+  "That",
+  "These",
+  "Those",
+  "And",
+  "Or",
+  "But",
+  "If",
+  "When"
+]);
+function significantTokens(text) {
+  const out = /* @__PURE__ */ new Set();
+  let residual = text;
+  for (const m of text.matchAll(/https?:\/\/\S+/g)) {
+    out.add(m[0].replace(/[.,;:!?)\]}>"']+$/, ""));
+  }
+  residual = residual.replace(/https?:\/\/\S+/g, " ");
+  for (const m of residual.matchAll(/\b\d+(?:\.\d+)?\b/g)) out.add(m[0]);
+  for (const m of residual.matchAll(/\b[A-Z][A-Za-z0-9-]{2,}/g)) {
+    if (!STOP_WORDS2.has(m[0])) out.add(m[0]);
+  }
+  for (const m of residual.matchAll(/\b[A-Z]{2,}\b/g)) out.add(m[0]);
+  for (const m of residual.matchAll(/`([^`\n]+)`/g)) {
+    for (const id of m[1].matchAll(/\b[A-Za-z_][A-Za-z0-9_]{2,}\b/g)) out.add(id[0]);
+  }
+  for (const m of residual.matchAll(/```[\s\S]*?```/g)) {
+    for (const id of m[0].matchAll(/\b[A-Za-z_][A-Za-z0-9_]{2,}\b/g)) out.add(id[0]);
+  }
+  return out;
+}
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+var OBSIDIAN_EMBED_RE = /!\[\[[^\]]+\]\]/g;
+function restoreObsidianEmbeds(original, formatted) {
+  let result = formatted;
+  for (const m of original.matchAll(OBSIDIAN_EMBED_RE)) {
+    const embedSrc = m[0];
+    if (result.includes(embedSrc)) continue;
+    const innerPath = embedSrc.slice(3, -2);
+    const pipeIdx = innerPath.indexOf("|");
+    const filePath = pipeIdx >= 0 ? innerPath.slice(0, pipeIdx) : innerPath;
+    const stdRe = new RegExp(`!\\[[^\\]]*\\]\\(${escapeRegExp(filePath)}\\)`, "g");
+    result = result.replace(stdRe, embedSrc);
+  }
+  return result;
+}
+function missingObsidianEmbeds(original, formatted) {
+  const missing = [];
+  for (const m of original.matchAll(OBSIDIAN_EMBED_RE)) {
+    if (!formatted.includes(m[0])) missing.push(m[0]);
+  }
+  return missing;
+}
+function lemmas(token) {
+  const out = [token];
+  if (/ies$/i.test(token) && token.length > 4) out.push(token.slice(0, -3) + "y");
+  else if (/(?:s|x|z|ch|sh)es$/i.test(token) && token.length > 4) out.push(token.slice(0, -2));
+  else if (/s$/i.test(token) && !/ss$/i.test(token) && token.length > 3) out.push(token.slice(0, -1));
+  else if (/[^aeiou]y$/i.test(token) && token.length > 2) out.push(token.slice(0, -1) + "ies");
+  else if (/(?:s|x|z|ch|sh)$/i.test(token) && token.length > 2) out.push(token + "es");
+  else if (token.length > 2) out.push(token + "s");
+  return out;
+}
+function appendMissingLines(formatted, missing) {
+  const lines = [...new Set(missing.filter((m) => m.context !== "").map((m) => m.context))];
+  if (lines.length === 0) return formatted;
+  return `${formatted}
+
+---
+<!-- restored-lines: token loss after retry -->
+${lines.join("\n")}`;
+}
+function missingTokensWithContext(original, formatted) {
+  const orig = significantTokens(original);
+  const fmtLower = formatted.toLowerCase();
+  const lines = original.split(/\r?\n/);
+  const out = [];
+  for (const t of orig) {
+    const variants = lemmas(t).map((v) => v.toLowerCase());
+    const found = variants.some((v) => {
+      const re = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(v)}(?:[^A-Za-z0-9_]|$)`);
+      return re.test(fmtLower);
+    });
+    if (found) continue;
+    const lineRe = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(t)}(?:[^A-Za-z0-9_]|$)`);
+    let context = "";
+    for (const line of lines) {
+      if (lineRe.test(line)) {
+        const trimmed = line.trim();
+        context = trimmed.length > 120 ? trimmed.slice(0, 117) + "\u2026" : trimmed;
+        break;
+      }
+    }
+    out.push({ token: t, context });
+  }
+  return out;
+}
+function parseSentinelOutput(text, hasVisionDescriptions) {
+  const reportIdx = text.indexOf("<<<REPORT>>>");
+  const formattedIdx = text.indexOf("<<<FORMATTED>>>");
+  if (reportIdx === -1 || formattedIdx === -1) return null;
+  const report = text.slice(reportIdx + "<<<REPORT>>>".length, formattedIdx).trim();
+  const endIdx = text.indexOf("<<<END>>>");
+  let formattedEnd;
+  let truncated = false;
+  let visionCount;
+  let embeds;
+  if (hasVisionDescriptions) {
+    const visionIdx = text.indexOf("<<<VISION_COUNT>>>", formattedIdx);
+    const embedsIdx = text.indexOf("<<<EMBEDS>>>", formattedIdx);
+    if (visionIdx === -1 || embedsIdx === -1) return null;
+    const tail = [visionIdx, embedsIdx, endIdx].filter((i) => i > formattedIdx);
+    formattedEnd = tail.length ? Math.min(...tail) : text.length;
+    visionCount = parseInt(text.slice(visionIdx + "<<<VISION_COUNT>>>".length, embedsIdx).trim(), 10);
+    const embedsEnd = endIdx === -1 ? text.length : endIdx;
+    embeds = text.slice(embedsIdx + "<<<EMBEDS>>>".length, embedsEnd).trim().split("|").map((s) => s.trim()).filter(Boolean);
+    truncated = endIdx === -1;
+  } else {
+    formattedEnd = endIdx === -1 ? text.length : endIdx;
+    truncated = endIdx === -1;
+  }
+  const formatted = text.slice(formattedIdx + "<<<FORMATTED>>>".length, formattedEnd).trim();
+  return { report, formatted, visionCount, embeds, truncated };
+}
+var SENTINEL_RE = /<<<[A-Z_]+>>>/g;
+function stripSentinelMarkers(text) {
+  const removed = text.match(SENTINEL_RE) ?? [];
+  if (removed.length === 0) return { clean: text, removed };
+  const out = [];
+  for (const line of text.split("\n")) {
+    const stripped = line.replace(SENTINEL_RE, "");
+    if (stripped === line) {
+      out.push(line);
+      continue;
+    }
+    if (stripped.trim() === "") continue;
+    out.push(stripped);
+  }
+  const clean = out.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd();
+  return { clean, removed };
+}
+
+// src/phases/framed-output.ts
+var END = "<<<END>>>";
+var wikiPagesFrameInstruction = [
+  "Return framed wiki pages only.",
+  "Start with <<<REPORT>>> and concise reasoning.",
+  "For each page use <<<PAGE>>> followed by path:, optional annotation:, <<<CONTENT>>>, markdown body, and <<<END_PAGE>>>.",
+  "For deletes use <<<DELETE>>> with path: and <<<END_DELETE>>>.",
+  "For entity type updates use <<<ENTITY_TYPES_DELTA_JSON>>> with a JSON array and <<<END_ENTITY_TYPES_DELTA_JSON>>>.",
+  "Finish with <<<END>>>."
+].join("\n");
+var mergeContentFrameInstruction = [
+  "Return exactly one merged page content frame.",
+  "Optional: <<<REASONING>>> followed by concise reasoning.",
+  "Optional: <<<ANNOTATION>>> followed by one line for the index.",
+  "Required: <<<CONTENT>>> followed by the full markdown page.",
+  "Finish with <<<END>>>."
+].join("\n");
+var lintOutputFrameInstruction = [
+  "Return framed lint output only.",
+  "Start with <<<REPORT>>> followed by the markdown lint report.",
+  "For each changed page use <<<PAGE>>> followed by path:, optional annotation:, <<<CONTENT>>>, full markdown body, and <<<END_PAGE>>>.",
+  "For deletes use <<<DELETE>>> followed by path:, optional redirect_to:, and <<<END_DELETE>>>.",
+  "Finish with <<<END>>>."
+].join("\n");
+var lintChatFrameInstruction = [
+  "Return framed lint-chat output only.",
+  "Start with <<<REPORT>>> followed by the markdown summary.",
+  "For each changed page use <<<PAGE>>> followed by path:, optional annotation:, <<<CONTENT>>>, full markdown body, and <<<END_PAGE>>>.",
+  "Finish with <<<END>>>."
+].join("\n");
+var queryAnswerFrameInstruction = [
+  "Return framed answer repair output only.",
+  "Put the full repaired markdown answer in <<<ANSWER>>>.",
+  "Put citations in <<<CITATIONS>>> as one stem per bullet line.",
+  "Finish with <<<END>>>."
+].join("\n");
+function wikiPagesProfile() {
+  return {
+    kind: "framed-zod",
+    schema: WikiPagesOutputSchema,
+    parse: parseWikiPagesFrames,
+    repairInstruction: wikiPagesFrameInstruction
+  };
+}
+function mergedPageProfile() {
+  return {
+    kind: "framed-zod",
+    schema: MergedPageOutputSchema,
+    parse: parseContentFrame,
+    repairInstruction: mergeContentFrameInstruction
+  };
+}
+function lintOutputProfile() {
+  return {
+    kind: "framed-zod",
+    schema: LintOutputSchema,
+    parse: parseLintFrames,
+    repairInstruction: lintOutputFrameInstruction
+  };
+}
+function lintChatProfile() {
+  return {
+    kind: "framed-zod",
+    schema: outputSchema(LintChatSchema),
+    parse: parseLintChatFrames,
+    repairInstruction: lintChatFrameInstruction
+  };
+}
+function queryAnswerProfile(schema) {
+  return {
+    kind: "framed-zod",
+    schema: outputSchema(schema),
+    parse: parseAnswerFrames,
+    repairInstruction: queryAnswerFrameInstruction
+  };
+}
+function outputSchema(schema) {
+  return schema;
+}
+function parseFormatFrames(text, hasVisionDescriptions) {
+  const protectedText = protectInlineMarkers(text, [
+    "<<<REPORT>>>",
+    "<<<FORMATTED>>>",
+    "<<<VISION_COUNT>>>",
+    "<<<EMBEDS>>>",
+    END
+  ]);
+  const parsed = parseSentinelOutput(protectedText.text, hasVisionDescriptions);
+  if (!parsed) throw new Error("sentinel markers not found");
+  return {
+    raw: {
+      report: protectedText.restore(parsed.report),
+      formatted: protectedText.restore(parsed.formatted),
+      ...hasVisionDescriptions ? {
+        vision_blocks_count: parsed.visionCount ?? 0,
+        embeds_preserved: parsed.embeds?.map((entry) => protectedText.restore(entry)) ?? []
+      } : {}
+    },
+    truncated: parsed.truncated
+  };
+}
+function parseContentFrame(text) {
+  requireMarker(text, END);
+  const content = between(text, "<<<CONTENT>>>", END);
+  const annotation = hasMarker(text, "<<<ANNOTATION>>>") ? between(text, "<<<ANNOTATION>>>", "<<<CONTENT>>>") : void 0;
+  const reasoning = hasMarker(text, "<<<REASONING>>>") ? between(text, "<<<REASONING>>>", hasMarker(text, "<<<ANNOTATION>>>") ? "<<<ANNOTATION>>>" : "<<<CONTENT>>>") : void 0;
+  return {
+    reasoning,
+    content,
+    annotation
+  };
+}
+function parseAnswerFrames(text) {
+  requireMarker(text, END);
+  const answerEnd = hasMarker(text, "<<<CITATIONS>>>") ? "<<<CITATIONS>>>" : END;
+  const answer = between(text, "<<<ANSWER>>>", answerEnd);
+  const citations = hasMarker(text, "<<<CITATIONS>>>") ? parseCitations(between(text, "<<<CITATIONS>>>", END)) : [];
+  const reasoning = hasMarker(text, "<<<REASONING>>>") ? between(text, "<<<REASONING>>>", "<<<ANSWER>>>") : "";
+  return {
+    reasoning,
+    answer_markdown: answer,
+    citations
+  };
+}
+function parseWikiPagesFrames(text) {
+  requireMarker(text, END);
+  const reasoning = parseReasoning(text);
+  const pages = parsePages(text);
+  const deletes = parseDeletes(text);
+  const entityTypesDelta = parseEntityTypesDelta(text);
+  return {
+    reasoning,
+    pages,
+    deletes: deletes.length ? deletes.map((entry) => ({ path: entry.path })) : void 0,
+    ...entityTypesDelta !== void 0 ? { entity_types_delta: entityTypesDelta } : {}
+  };
+}
+function parseWikiPageRepairFramesOrJson(text) {
+  try {
+    return parseWikiPagesFrames(text).pages;
+  } catch {
+    return parseLegacyJsonPages(text);
+  }
+}
+function parseLintFrames(text) {
+  requireMarker(text, END);
+  const parsed = {
+    reasoning: parseReasoning(text),
+    pages: parsePages(text),
+    deletes: parseDeletes(text)
+  };
+  return {
+    reasoning: parsed.reasoning,
+    report: parsed.reasoning,
+    fixes: parsed.pages,
+    deletes: parsed.deletes.length ? parsed.deletes : void 0
+  };
+}
+function parseLintChatFrames(text) {
+  requireMarker(text, END);
+  const parsed = {
+    reasoning: parseReasoning(text),
+    pages: parsePages(text)
+  };
+  return {
+    summary: parsed.reasoning,
+    pages: parsed.pages
+  };
+}
+function requireMarker(text, marker) {
+  const idx = markerLineIndex(linesOf(text), marker);
+  if (idx < 0) throw new Error(`missing ${marker}`);
+  return idx;
+}
+function hasMarker(text, marker) {
+  return markerLineIndex(linesOf(text), marker) >= 0;
+}
+function between(text, start, end) {
+  const lines = linesOf(text);
+  const startIdx = markerLineIndex(lines, start);
+  if (startIdx < 0) throw new Error(`missing ${start}`);
+  const endIdx = markerLineIndex(lines, end, startIdx + 1);
+  if (endIdx < 0) throw new Error(`missing ${end}`);
+  return lines.slice(startIdx + 1, endIdx).join("\n").trim();
+}
+function parseReasoning(text) {
+  const marker = hasMarker(text, "<<<REPORT>>>") ? "<<<REPORT>>>" : hasMarker(text, "<<<REASONING>>>") ? "<<<REASONING>>>" : null;
+  if (!marker) return "";
+  const lines = linesOf(text);
+  const startIdx = markerLineIndex(lines, marker);
+  const endIdx = firstMarkerLineAfter(lines, startIdx + 1, [
+    "<<<PAGE>>>",
+    "<<<DELETE>>>",
+    "<<<ENTITY_TYPES_DELTA_JSON>>>",
+    END
+  ]);
+  if (endIdx < 0) throw new Error(`missing ${END}`);
+  return lines.slice(startIdx + 1, endIdx).join("\n").trim();
+}
+function firstMarkerLineAfter(lines, from, markers) {
+  let inFence = false;
+  for (let i = 0; i < lines.length; i++) {
+    if (i >= from && !inFence && markers.some((marker) => isMarkerLine(lines[i], marker))) return i;
+    if (isFenceToggleLine(lines[i])) inFence = !inFence;
+  }
+  return -1;
+}
+function parsePages(text) {
+  const lines = linesOf(text);
+  const pages = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!isMarkerLine(lines[i], "<<<PAGE>>>")) continue;
+    const contentIdx = markerLineIndex(lines, "<<<CONTENT>>>", i + 1);
+    if (contentIdx < 0) throw new Error("missing <<<CONTENT>>>");
+    const endPageIdx = markerLineIndex(lines, "<<<END_PAGE>>>", contentIdx + 1);
+    if (endPageIdx < 0) throw new Error("missing <<<END_PAGE>>>");
+    const header = parseHeader(lines.slice(i + 1, contentIdx).join("\n"));
+    if (!header.path) throw new Error("page frame missing path");
+    pages.push({
+      path: header.path,
+      content: lines.slice(contentIdx + 1, endPageIdx).join("\n").trim(),
+      annotation: header.annotation || void 0
+    });
+    i = endPageIdx;
+  }
+  return pages;
+}
+function parseDeletes(text) {
+  const lines = linesOf(text);
+  const deletes = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!isMarkerLine(lines[i], "<<<DELETE>>>")) continue;
+    const endDeleteIdx = markerLineIndex(lines, "<<<END_DELETE>>>", i + 1);
+    if (endDeleteIdx < 0) throw new Error("missing <<<END_DELETE>>>");
+    const header = parseHeader(lines.slice(i + 1, endDeleteIdx).join("\n"));
+    if (!header.path) throw new Error("delete frame missing path");
+    deletes.push({
+      path: header.path,
+      redirect_to: header.redirect_to || void 0
+    });
+    i = endDeleteIdx;
+  }
+  return deletes;
+}
+function parseHeader(raw) {
+  const out = {};
+  for (const line of raw.split(/\r?\n/)) {
+    const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$/);
+    if (match) out[match[1]] = match[2].trim();
+  }
+  return out;
+}
+function parseCitations(raw) {
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("[")) {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed) && parsed.every((entry) => typeof entry === "string")) {
+      return parsed;
+    }
+    throw new Error("citations frame must contain strings");
+  }
+  return trimmed.split(/\r?\n/).map((line) => line.replace(/^-\s*/, "").trim()).filter(Boolean);
+}
+function parseLegacyJsonPages(text) {
+  const match = text.match(/\[[\s\S]*\]/);
+  if (!match) return [];
+  try {
+    const arr = JSON.parse(match[0]);
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(
+      (x) => x !== null && typeof x === "object" && typeof x.path === "string" && typeof x.content === "string"
+    );
+  } catch {
+    return [];
+  }
+}
+function parseEntityTypesDelta(text) {
+  if (!hasMarker(text, "<<<ENTITY_TYPES_DELTA_JSON>>>")) return void 0;
+  const raw = between(text, "<<<ENTITY_TYPES_DELTA_JSON>>>", "<<<END_ENTITY_TYPES_DELTA_JSON>>>");
+  return JSON.parse(raw);
+}
+function linesOf(text) {
+  return text.split(/\r?\n/);
+}
+function markerLineIndex(lines, marker, from = 0) {
+  let inFence = false;
+  for (let i = 0; i < lines.length; i++) {
+    if (i >= from && !inFence && isMarkerLine(lines[i], marker)) return i;
+    if (isFenceToggleLine(lines[i])) inFence = !inFence;
+  }
+  return -1;
+}
+function isMarkerLine(line, marker) {
+  return line.trim() === marker;
+}
+function isFenceToggleLine(line) {
+  return /^\s*(?:```|~~~)/.test(line);
+}
+function protectInlineMarkers(text, markers) {
+  const replacements = /* @__PURE__ */ new Map();
+  let nextId = 0;
+  let inFence = false;
+  const protectedLines = linesOf(text).map((line) => {
+    const isBoundaryMarker = !inFence && markers.some((marker) => isMarkerLine(line, marker));
+    const togglesFence = isFenceToggleLine(line);
+    if (isBoundaryMarker) {
+      return line;
+    }
+    let protectedLine = line;
+    for (const marker of markers) {
+      let markerIdx = protectedLine.indexOf(marker);
+      while (markerIdx >= 0) {
+        const token = `__FRAMED_OUTPUT_MARKER_${nextId++}__`;
+        replacements.set(token, marker);
+        protectedLine = `${protectedLine.slice(0, markerIdx)}${token}${protectedLine.slice(markerIdx + marker.length)}`;
+        markerIdx = protectedLine.indexOf(marker, markerIdx + token.length);
+      }
+    }
+    if (togglesFence) inFence = !inFence;
+    return protectedLine;
+  });
+  return {
+    text: protectedLines.join("\n"),
+    restore: (value) => {
+      let restored = value;
+      for (const [token, marker] of replacements) {
+        restored = restored.split(token).join(marker);
+      }
+      return restored;
+    }
+  };
+}
+
 // prompts/ingest.md
-var ingest_default = 'You are a wiki-knowledge synthesis assistant for the domain "{{domain_name}}".\nExtract entities from the source and create/update wiki pages.\n\nDOMAIN ENTITY TYPES:\n{{entity_types_block}}\n{{lang_notes}}\n\nRULES:\n- CREATE: the entity does not exist in the wiki, mentions >= min_mentions_for_page\n- UPDATE: the entity exists \u2192 add new information, do NOT remove the old\n- SKIP: too few mentions or the information is already present\n- The wiki page FILE NAME (stem without `.md`) MUST have the form `wiki_{{domain_id}}_<entity_slug>`:\n  - `<entity_slug>` = the ASCII entity name in lowercase snake_case (only `[a-z0-9_]` characters, no spaces, diacritics, or uppercase letters).\n  - Example: `wiki_{{domain_id}}_neural_networks.md`.\n- The wiki page stem must NOT match any name from the "FORBIDDEN NAMES" section \u2014 those are the source files of this domain. The wiki describes extracted entities, it does not duplicate the source files.\n- The wiki page name must NOT match the name of the current source `{{source_stem}}` (a special case of the previous rule).\n- Synthesis, not copying. Technical configs/SQL may be quoted in code blocks.\n- The article path is determined by the entity type \u2014 use the exact template from the "DOMAIN ENTITY TYPES" section (above, before the RULES block), substituting the entity name for <EntityName>\n- If the entity type is undefined or the domain has no entity_types \u2192 default path: {{wiki_path}}/entities/<EntityName>.md\n- Frontmatter is mandatory: type: <entity type>, resource, timestamp: {{today}}, status: stub|developing|mature\n- tags: hierarchical tags (category/subcategory). Format: lowercase, separated by `/`, no spaces, no `#`. Pick tags in this order:\n  1. The page\'s entity-type tag \u2014 the normalized type of this entity (e.g. `person`). Always include it when the entity type is known.\n  2. Thematic tags reused from the EXISTING DOMAIN TAGS block (provided in the context). Do not invent near-duplicates of listed tags.\n  3. A new thematic tag ONLY when nothing in the block fits. Never start a new top-level category when the block says "reuse only".\n- resource: ONLY sources (files outside !Wiki/) \u2014 plain bare stem, NO `[[ ]]` brackets, no path, no extension: "FileName". Never a wiki page stem.\n- Links live ONLY in two body sections \u2014 NEVER in frontmatter. Do NOT emit `outgoing_links:`/`external_links:` frontmatter fields; they do not exist in this schema.\n  - `## Related` \u2014 outgoing links to OTHER wiki pages (files inside !Wiki/), one `[[wiki_domain_page]]` bullet per line. Never a source file.\n    \u274C FORBIDDEN: `[[CurrentSourceName]]` or `[[AnyOtherSourceFile]]` in `## Related`.\n       The source is already recorded in `resource` \u2014 there is no need to duplicate it in `## Related`.\n       Example: processing "Liquidity farming.md" \u2192 you must NOT put `[[Liquidity farming]]` in `## Related`.\n  - `## External links` \u2014 external URLs, one `[text](url)` bullet per line (`http://` or `https://` only).\n- In article bodies: ONLY [[stem]] \u2014 never [[stem|alias]]. The [[A|B]] syntax is forbidden.\n- Use the mandatory and optional section headings defined in the conventions block (_wiki_schema.md) below, exactly as written there. Each page must include the mandatory characteristics section.\n- For each page, add an "annotation" field to the JSON: a rich description for semantic search (embedding + Jaccard). Structure: <summary 1-2 sentences, covering the MAIN sections of the body, not only the first paragraph> Covers: <entities, tables, systems, Jira IDs, comma-separated>. Type: <type of operation/change>. Terms: <keywords from EVERY section \u2014 synonyms, IDs, terms that are not in the heading>. Aim for ~600\u2013800 characters, all on ONE line without line breaks. Rely on the content of the page itself. Be specific, no filler or boilerplate \u2014 generic phrases raise noise in search.\n- The `annotation` field \u2014 ONLY in the JSON response. Do NOT add `annotation:` to the page frontmatter.\n- DEAD LINKS: every [[wiki_domain_slug]] in `## Related` and elsewhere in the article body must\n  either exist among the "Existing wiki pages" (provided in the context), or\n  be present in the pages list of this response. No page \u2014 do not write the link.\n{{schema_block}}\n{{forbidden_stems_block}}\n\nPATH RULE: each article path = !Wiki/<domain>/<entity>/<Article>.md \u2014 exactly 4 segments.\nNot allowed: !Wiki/os/os/network/NFS.md (domain twice), !Wiki/os/network/nfs/NFS.md (5 segments).\nAllowed:  !Wiki/os/network/NFS.md\n\nTYPE ENRICHMENT (entity_types_delta):\nIf, while analyzing the source, you discover:\n- new entity types (the type key is absent from the current list above), or\n- improvements to existing types (a more precise description or additional extraction_cues for an already existing type key) \u2014\nadd the entity_types_delta field to the JSON response. If nothing is new \u2014 simply do not include this field.\n\nDUPLICATE MERGING (merge):\nIf among the existing wiki pages you find several describing the same entity:\n- emit one new page in pages (with merged content and the canonical path)\n- list the old paths in the deletes field: [{path}, ...]\nThe old pages will be deleted, the index cleaned, and backlinks in the current source updated automatically.\n\nReturn ONLY a JSON object \u2014 no other text:\n{"reasoning":"Rationale: which entities were extracted and why","pages":[{"path":"{{wiki_path}}/entities/wiki_{{domain_id}}_entity_name.md","content":"---\\ntype: <entity type>\\nresource: [\\"{{source_stem}}\\"]\\ntimestamp: {{today}}\\nstatus: stub\\ntags: []\\n---\\n# EntityName\\n\\ncontent...\\n\\n## Related\\n- [[wiki_{{domain_id}}_other_entity]]\\n\\n## External links\\n- [Docs](https://example.com)","annotation":"The essence of the entity in 1-2 sentences. Covers: related entities, systems, tables. Type: reference entity. Terms: synonyms and keywords for search."}],"entity_types_delta":[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]}\n';
+var ingest_default = 'You are a wiki-knowledge synthesis assistant for the domain "{{domain_name}}".\nExtract entities from the source and create/update wiki pages.\n\nDOMAIN ENTITY TYPES:\n{{entity_types_block}}\n{{lang_notes}}\n\nRULES:\n- CREATE: the entity does not exist in the wiki, mentions >= min_mentions_for_page\n- UPDATE: the entity exists \u2192 add new information, do NOT remove the old\n- SKIP: too few mentions or the information is already present\n- The wiki page FILE NAME (stem without `.md`) MUST have the form `wiki_{{domain_id}}_<entity_slug>`:\n  - `<entity_slug>` = the ASCII entity name in lowercase snake_case (only `[a-z0-9_]` characters, no spaces, diacritics, or uppercase letters).\n  - Example: `wiki_{{domain_id}}_neural_networks.md`.\n- The wiki page stem must NOT match any name from the "FORBIDDEN NAMES" section \u2014 those are the source files of this domain. The wiki describes extracted entities, it does not duplicate the source files.\n- The wiki page name must NOT match the name of the current source `{{source_stem}}` (a special case of the previous rule).\n- Synthesis, not copying. Technical configs/SQL may be quoted in code blocks.\n- The article path is determined by the entity type \u2014 use the exact template from the "DOMAIN ENTITY TYPES" section (above, before the RULES block), substituting the entity name for <EntityName>\n- If the entity type is undefined or the domain has no entity_types \u2192 default path: {{wiki_path}}/entities/<EntityName>.md\n- Frontmatter is mandatory: type: <entity type>, resource, timestamp: {{today}}, status: stub|developing|mature\n- tags: hierarchical tags (category/subcategory). Format: lowercase, separated by `/`, no spaces, no `#`. Pick tags in this order:\n  1. The page\'s entity-type tag \u2014 the normalized type of this entity (e.g. `person`). Always include it when the entity type is known.\n  2. Thematic tags reused from the EXISTING DOMAIN TAGS block (provided in the context). Do not invent near-duplicates of listed tags.\n  3. A new thematic tag ONLY when nothing in the block fits. Never start a new top-level category when the block says "reuse only".\n- resource: ONLY sources (files outside !Wiki/) \u2014 plain bare stem, NO `[[ ]]` brackets, no path, no extension: "FileName". Never a wiki page stem.\n- Links live ONLY in two body sections \u2014 NEVER in frontmatter. Do NOT emit `outgoing_links:`/`external_links:` frontmatter fields; they do not exist in this schema.\n  - `## Related` \u2014 outgoing links to OTHER wiki pages (files inside !Wiki/), one `[[wiki_domain_page]]` bullet per line. Never a source file.\n    \u274C FORBIDDEN: `[[CurrentSourceName]]` or `[[AnyOtherSourceFile]]` in `## Related`.\n       The source is already recorded in `resource` \u2014 there is no need to duplicate it in `## Related`.\n       Example: processing "Liquidity farming.md" \u2192 you must NOT put `[[Liquidity farming]]` in `## Related`.\n  - `## External links` \u2014 external URLs, one `[text](url)` bullet per line (`http://` or `https://` only).\n- In article bodies: ONLY [[stem]] \u2014 never [[stem|alias]]. The [[A|B]] syntax is forbidden.\n- Use the mandatory and optional section headings defined in the conventions block (_wiki_schema.md) below, exactly as written there. Each page must include the mandatory characteristics section.\n- For each page, add an `annotation:` header in the `<<<PAGE>>>` frame: a rich description for semantic search (embedding + Jaccard). Structure: <summary 1-2 sentences, covering the MAIN sections of the body, not only the first paragraph> Covers: <entities, tables, systems, Jira IDs, comma-separated>. Type: <type of operation/change>. Terms: <keywords from EVERY section \u2014 synonyms, IDs, terms that are not in the heading>. Aim for ~600\u2013800 characters, all on ONE line without line breaks. Rely on the content of the page itself. Be specific, no filler or boilerplate \u2014 generic phrases raise noise in search.\n- The `annotation:` header is ONLY in the frame header. Do NOT add `annotation:` to the page frontmatter.\n- DEAD LINKS: every [[wiki_domain_slug]] in `## Related` and elsewhere in the article body must\n  either exist among the "Existing wiki pages" (provided in the context), or\n  be present in the pages list of this response. No page \u2014 do not write the link.\n{{schema_block}}\n{{forbidden_stems_block}}\n\nPATH RULE: each article path = !Wiki/<domain>/<entity>/<Article>.md \u2014 exactly 4 segments.\nNot allowed: !Wiki/os/os/network/NFS.md (domain twice), !Wiki/os/network/nfs/NFS.md (5 segments).\nAllowed:  !Wiki/os/network/NFS.md\n\nTYPE ENRICHMENT (entity_types_delta):\nIf, while analyzing the source, you discover:\n- new entity types (the type key is absent from the current list above), or\n- improvements to existing types (a more precise description or additional extraction_cues for an already existing type key) \u2014\nadd an `<<<ENTITY_TYPES_DELTA_JSON>>>` frame containing a JSON array. If nothing is new \u2014 omit this frame.\n\nDUPLICATE MERGING (merge):\nIf among the existing wiki pages you find several describing the same entity:\n- emit one new `<<<PAGE>>>` frame (with merged content and the canonical path)\n- list the old paths as `<<<DELETE>>>` frames\nThe old pages will be deleted, the index cleaned, and backlinks in the current source updated automatically.\n\nOUTPUT FORMAT:\n{{frame_instruction}}\n\nReturn ONLY these frames \u2014 no JSON wrapper, no markdown fence, no text outside frames. If there are no page or delete changes, return `<<<REPORT>>>` and `<<<END>>>` only. Emit `<<<DELETE>>>` and `<<<ENTITY_TYPES_DELTA_JSON>>>` only when needed.\n<<<REPORT>>>\nRationale: which entities were extracted and why\n<<<PAGE>>>\npath: {{wiki_path}}/entities/wiki_{{domain_id}}_entity_name.md\nannotation: The essence of the entity in 1-2 sentences. Covers: related entities, systems, tables. Type: reference entity. Terms: synonyms and keywords for search.\n<<<CONTENT>>>\n---\ntype: <entity type>\nresource: ["{{source_stem}}"]\ntimestamp: {{today}}\nstatus: stub\ntags: []\n---\n# EntityName\n\ncontent...\n\n## Related\n- [[wiki_{{domain_id}}_other_entity]]\n\n## External links\n- [Docs](https://example.com)\n<<<END_PAGE>>>\n<<<DELETE>>>\npath: {{wiki_path}}/entities/wiki_{{domain_id}}_old_entity.md\n<<<END_DELETE>>>\n<<<ENTITY_TYPES_DELTA_JSON>>>\n[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]\n<<<END_ENTITY_TYPES_DELTA_JSON>>>\n<<<END>>>\n';
 
 // prompts/ingest-merge.md
-var ingest_merge_default = '<!-- prompts/ingest-merge.md -->\nYou are merging two wiki pages about the same entity into one.\n\nEXISTING PAGE (keep its frontmatter, path, and resource):\n{{existing}}\n\nNEW DRAFT (same topic, add unique facts from it):\n{{incoming}}\n\nRules:\n- Return ONE merged page. Do not lose facts from either of them.\n- Keep the existing page\'s frontmatter; add the missing resource from the draft.\n- Do not duplicate sections; merge close ones.\n- Links live ONLY in body sections \u2014 never in frontmatter. Do NOT add `outgoing_links:`/`external_links:` fields to the frontmatter.\n  - Merge `## Related` sections from both pages: union the `[[stem]]` bullets, drop duplicates.\n  - Merge `## External links` sections from both pages: union the `[text](url)` bullets, drop duplicates.\n- Response format \u2014 strictly JSON: { "content": "<full page markdown>", "annotation": "<one line for the index>" }.\n';
+var ingest_merge_default = "<!-- prompts/ingest-merge.md -->\nYou are merging two wiki pages about the same entity into one.\n\nEXISTING PAGE (keep its frontmatter, path, and resource):\n{{existing}}\n\nNEW DRAFT (same topic, add unique facts from it):\n{{incoming}}\n\nRules:\n- Return ONE merged page. Do not lose facts from either of them.\n- Keep the existing page's frontmatter; add the missing resource from the draft.\n- Do not duplicate sections; merge close ones.\n- Links live ONLY in body sections \u2014 never in frontmatter. Do NOT add `outgoing_links:`/`external_links:` fields to the frontmatter.\n  - Merge `## Related` sections from both pages: union the `[[stem]]` bullets, drop duplicates.\n  - Merge `## External links` sections from both pages: union the `[text](url)` bullets, drop duplicates.\n- Response format:\n{{frame_instruction}}\n\nReturn ONLY these frames \u2014 no JSON wrapper, no markdown fence, no text outside frames:\n<<<REASONING>>>\nShort merge rationale.\n<<<ANNOTATION>>>\nOne line for the index.\n<<<CONTENT>>>\n<full page markdown>\n<<<END>>>\n";
 
 // prompts/ingest-entities.md
 var ingest_entities_default = 'You are an entity extractor from a source for the domain "{{domain_name}}".\n\nDOMAIN ENTITY TYPES:\n{{entity_types_block}}\n{{lang_notes}}\n\nTASK:\n- Read the source.\n- Return all entities worthy of a separate wiki page:\n  - If an entity matches a type above \u2192 specify its type.\n  - If it matches no type but the concept is significant \u2192 return it without type (a new type, to be determined during synthesis).\n  - Do not return an empty list if the source contains significant concepts.\n- For each entity:\n  - name: the canonical entity name (no quotes, like the heading of the future page)\n  - type: a type from the list above (optional)\n  - context_snippet: one phrase from the source explaining why the entity is needed (optional)\n\nDo not duplicate: one name \u2192 one record. Do not extract entities with min_mentions_for_page > 1 if they are mentioned only once.\n\nReturn ONLY JSON:\n{"reasoning":"...","entities":[{"name":"...","type":"...","context_snippet":"..."},{"name":"...","context_snippet":"..."}]}\n';
 
 // prompts/ingest-fix-paths.md
-var ingest_fix_paths_default = "These paths violate the 4-segment rule (!Wiki/<d>/<e>/<f>.md): {{paths}}. Return a corrected JSON array for these pages only.";
+var ingest_fix_paths_default = "These paths violate the 4-segment rule (!Wiki/<d>/<e>/<f>.md): {{paths}}.\n\nRewrite ONLY these pages with corrected paths. Preserve each page's content and annotation unless a path fix requires changing the title.\n\nInvalid pages:\n{{pages}}\n\nReturn ONLY framed page output:\n<<<REPORT>>>\nBrief path correction note.\n<<<PAGE>>>\npath: !Wiki/<domain>/<entity>/wiki_<domain>_<entity_slug>.md\nannotation: <same or corrected one-line annotation>\n<<<CONTENT>>>\n<full page markdown>\n<<<END_PAGE>>>\n<<<END>>>\n";
 
 // templates/_wiki_schema.md
 var wiki_schema_default = '# Wiki Schema\n\n## Language and style\n- Primary language: follow the configured output-language directive (from settings); when it is "auto", match the source/article language.\n- The output language applies to ALL natural-language text, including content copied from the source: table cell values, field values (prompt, expected, notes, descriptions), list items, and quoted sentences. These are content \u2014 translate them. A full sentence in another language (incl. CJK) is never a "term".\n- Verbatim preservation is ONLY for: fenced code blocks, file paths, identifiers, commands, URLs, proper names, and `[[wiki-link]]` targets (they are filenames \u2014 never translate a link target).\n- Do not translate technical terms: SQL, API, LLM, ETL, SCD, TTL, DDL, JSON, YAML\n- System names \u2014 keep the original spelling (RT.DataExporter, CRM B2C, \u0426\u0425\u0414)\n- Expand abbreviations on first use on the page\n- Style: neutral, informative, no value judgements\n- Forbidden: "Obviously...", "The best way...", the pronouns "I", "we", "our"\n\n## File and folder naming\n- Files: kebab-case, Cyrillic allowed, no spaces or special characters except the hyphen\n  - Examples: `\u0432\u0435\u0440\u0441\u0438\u043E\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435-scd.md`, `clickhouse-\u043E\u0431\u0437\u043E\u0440.md`\n- Domain folders: lowercase, Latin script (`ai/`, `databases/`)\n- H1 heading: the page title in the configured output language; a technical term in parentheses when needed\n\n{{section_conventions}}\n\n## Frontmatter\n\n| Field | Rule |\n|------|---------|\n| `type` | Entity type \u2014 the page\'s entity-type subdirectory (e.g. `concept`, or one of the domain\'s configured entity types). Set once when the page is created; do not change on update. |\n| `description` | One-line overview of the page (plain text, no line breaks). This is the sole source of the retrieval overview embedding \u2014 keep it accurate and current. |\n| `resource` | YAML list of plain source-note stems \u2014 no `[[ ]]`, no folder path: `["source-a", "source-b"]`. On UPDATE \u2014 add, do not remove. |\n| `timestamp` | YYYY-MM-DD |\n| `tags` | YAML list: `[category/subcategory, domain/topic]`. Hierarchy via `/`, lowercase, no spaces, no `#`. Reuse tags from existing domain pages; create new ones following the same scheme. Obsidian recognizes the `tags` key automatically \u2014 do not set the type explicitly. |\n| `status` | `stub` (<2 sources, <10 sentences) / `developing` (\u22652 sources, \u226510 sentences, main sections filled in) / `mature` (\u22654 sources, all sections) |\n| `aliases` | Abbreviations, English variants, synonyms |\n\n## Common mistakes (forbidden)\n\n| Mistake | Why it is bad | Correct |\n|--------|-------------|-----------|\n| `tags: - "[[wiki_fin_...]]"` | A WikiLink is not a tag; the validator will remove it | Put it as a `- [[stem]]` bullet under `## Related` |\n| `tags: - {type: ..., name: ...}` | tags \u2014 strings only | `tags: - finance/technical-analysis` |\n| `resource: ["[[source-a]]"]` | `resource` holds plain stems, not WikiLinks | `resource: ["source-a"]` |\n| A link in the body with no matching bullet under `## Related` / `## External links` | The retrieval graph and reference list miss the connection | Add `- [[stem]]` (outgoing) or `- [text](url)` (external) under the matching heading |\n\n## WikiLinks\n\n- Only `[[page-name]]` \u2014 no aliases, no folder paths\n- \u274C Forbidden: `[[Page|alias]]`, `[[folder/page]]`\n- \u2705 Correct: `[[page-name]]`, `[[\u041A\u0438\u0440\u0438\u043B\u043B\u0438\u0446\u0430]]`, `[[Scalability]]`\n- Link only to existing pages; dead links yield a warning\n\n## Related and external links (body sections, not frontmatter)\n\nOutgoing links no longer live in frontmatter \u2014 they are body sections, each one bullet per line:\n\n- `## Related` \u2014 WikiLinks to other wiki pages:\n  ```markdown\n  ## Related\n\n  - [[page-a]]\n  - [[page-b]]\n  ```\n- `## External links` \u2014 external URLs, `[text](url)`:\n  ```markdown\n  ## External links\n\n  - [Example docs](https://example.com/docs)\n  ```\n\nBoth headings are fixed English literals \u2014 do not translate or localize them, even when the page body is in another language. These two sections are reference data only; they are excluded from retrieval embeddings.\n\n## Content\n- Synthesis, not copying \u2014 rework the information from the sources\n- Verbatim quotes only in code blocks (SQL, configurations)\n- Forbidden: placeholder text (TODO, "see source"), empty sections, removing existing information\n- Tables: markdown with alignment (`| Parameter | Value |` + `|----------|----------|`)\n- Code blocks: always specify the language (` ```sql `, ` ```yaml `, ` ```json `)\n';
 
 // src/domain-config.ts
 async function ensureDomainConfig(vaultTools, domainFolder) {
-  try {
-    await vaultTools.mkdir(domainConfigDir(domainFolder));
-  } catch {
-  }
-  await migrateLegacy(vaultTools, `${domainFolder}/_index.md`, domainIndexPath(domainFolder));
-  await migrateLegacy(vaultTools, `${domainFolder}/_log.md`, domainLogPath(domainFolder));
+  await migrateLegacy(vaultTools, legacyDomainIndexPath(domainFolder), domainIndexPath(domainFolder));
+  await migrateLegacy(vaultTools, legacyDomainLogPath(domainFolder), domainLogPath(domainFolder));
 }
 async function migrateLegacy(vaultTools, oldPath, newPath) {
   if (!await vaultTools.exists(oldPath)) return;
@@ -40568,12 +41052,12 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   const pwtEvents = [];
   let parseResult;
   try {
-    parseResult = await parseWithRetry({
+    parseResult = await runStructuredWithRetry({
       llm,
       model,
       baseMessages: messages,
-      opts,
-      schema: WikiPagesOutputSchema,
+      opts: { ...opts, jsonMode: false },
+      profile: wikiPagesProfile(),
       maxRetries: opts.structuredRetries ?? 1,
       callSite: "ingest.pages",
       signal,
@@ -40602,8 +41086,8 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     };
     const retryText = await retryInvalidPaths(llm, model, messages, invalid, signal, opts);
     if (signal.aborted) return;
-    if (retryText) {
-      const retried = parseJsonPages(retryText);
+    const retried = retryText ? parseWikiPageRepairFramesOrJson(retryText) : [];
+    if (retried.length > 0) {
       const { valid: retriedValid, invalid: retriedInvalid } = splitByPathValidity(retried, wikiVaultPath);
       for (const p of retriedInvalid) {
         yield { kind: "tool_use", name: "Write", input: { path: p.path } };
@@ -40724,20 +41208,21 @@ ${page.content}`;
             summary: `\u0414\u0443\u0431\u043B\u044C: ${pageId(page.path)} \u2248 ${hit.pid} (cosine ${hit.score.toFixed(2)}) \u2192 merge`,
             details: [targetPath]
           };
-          const mergeMsgs = [{ role: "user", content: render(ingest_merge_default, { existing: existingTarget, incoming: page.content }) }];
+          const mergeMsgs = [{ role: "user", content: render(ingest_merge_default, { existing: existingTarget, incoming: page.content, frame_instruction: mergeContentFrameInstruction }) }];
+          const mergeEvents = [];
           try {
-            const merged = await parseWithRetry({
+            const merged = await runStructuredWithRetry({
               llm,
               model,
               baseMessages: mergeMsgs,
-              opts,
-              schema: MergedPageOutputSchema,
+              opts: { ...opts, jsonMode: false },
+              profile: mergedPageProfile(),
               maxRetries: opts.structuredRetries ?? 1,
               callSite: "ingest.merge",
               signal,
-              onEvent: () => {
-              }
+              onEvent: (ev) => mergeEvents.push(ev)
             });
+            for (const ev of mergeEvents) yield ev;
             yield { kind: "tool_use", name: "Update", input: { path: targetPath } };
             await vaultTools.write(targetPath, merged.value.content);
             written.push(targetPath);
@@ -40752,6 +41237,7 @@ ${page.content}`;
             }
             continue;
           } catch (e) {
+            for (const ev of mergeEvents) yield ev;
             yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: `merge \u043D\u0435 \u0443\u0434\u0430\u043B\u0441\u044F, \u0441\u043E\u0437\u0434\u0430\u044E \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E: ${e.message}` };
           }
         }
@@ -40955,19 +41441,6 @@ function detectDomainStrict(absFilePath, domains, vaultRoot) {
 function detectDomain(absFilePath, domains, vaultRoot) {
   return detectDomainStrict(absFilePath, domains, vaultRoot) ?? domains[0] ?? null;
 }
-function parseJsonPages(text) {
-  const match = text.match(/\[[\s\S]*\]/);
-  if (!match) return [];
-  try {
-    const arr = JSON.parse(match[0]);
-    if (!Array.isArray(arr)) return [];
-    return arr.filter(
-      (x) => x !== null && typeof x === "object" && typeof x.path === "string" && typeof x.content === "string"
-    );
-  } catch {
-    return [];
-  }
-}
 async function tryRead(vaultTools, path5) {
   try {
     return await vaultTools.read(path5);
@@ -40998,14 +41471,15 @@ function splitByPathValidity(pages, wikiVaultPath) {
 }
 async function retryInvalidPaths(llm, model, originalMessages, invalidPages, signal, opts) {
   const invalidList = invalidPages.map((p) => p.path).join(", ");
+  const invalidFrames = renderPageRepairFrames(invalidPages);
   const retryMessages = [
     ...originalMessages,
     {
       role: "user",
-      content: render(ingest_fix_paths_default, { paths: invalidList })
+      content: render(ingest_fix_paths_default, { paths: invalidList, pages: invalidFrames })
     }
   ];
-  const retryParams = buildChatParams(model, retryMessages, opts, false);
+  const retryParams = buildChatParams(model, retryMessages, { ...opts, jsonMode: false, jsonSchema: void 0 }, false);
   try {
     let text = "";
     const stream = await llm.chat.completions.create(
@@ -41020,6 +41494,21 @@ async function retryInvalidPaths(llm, model, originalMessages, invalidPages, sig
   } catch {
     return "";
   }
+}
+function renderPageRepairFrames(pages) {
+  return [
+    "<<<REPORT>>>",
+    "Pages needing corrected paths.",
+    ...pages.flatMap((p) => [
+      "<<<PAGE>>>",
+      `path: ${p.path}`,
+      ...p.annotation ? [`annotation: ${p.annotation}`] : [],
+      "<<<CONTENT>>>",
+      p.content,
+      "<<<END_PAGE>>>"
+    ]),
+    "<<<END>>>"
+  ].join("\n");
 }
 function buildEntityTypesBlock(domain, wikiVaultPath) {
   if (!domain.entity_types?.length) return "";
@@ -41069,7 +41558,8 @@ ${[...sourceStems].sort().map((s) => `- ${s}`).join("\n")}` : "";
 ${schemaContent}` : "",
     source_path: sourcePath,
     source_stem: sourcePath.split("/").pop().replace(/\.md$/, ""),
-    forbidden_stems_block: forbiddenStemsBlock
+    forbidden_stems_block: forbiddenStemsBlock,
+    frame_instruction: wikiPagesFrameInstruction
   });
   const existingPathSet = new Set(existingPages.keys());
   const entityLines = entities.map((e) => {
@@ -41298,7 +41788,7 @@ function applyRerankerScores(original, scores, limit2, options = {}) {
       if (aFinal !== bFinal) return bFinal - aFinal;
       return a.index - b.index;
     });
-    const cappedPages = Array.from({ length: rankedPages.length }, () => void 0);
+    const cappedPages = new Array(rankedPages.length).fill(void 0);
     for (const item of rankedPages) {
       let target = Math.max(0, item.index - maxPromotion);
       const baselineTarget = pageItems[target];
@@ -41345,7 +41835,7 @@ function applyRerankerScores(original, scores, limit2, options = {}) {
   if (mode === "full") {
     return ranked.map((item) => item.chunk).slice(0, Math.max(0, limit2));
   }
-  const capped = Array.from({ length: ranked.length }, () => void 0);
+  const capped = new Array(ranked.length).fill(void 0);
   for (const item of ranked) {
     let target = Math.max(0, item.index - maxPromotion);
     while (target < capped.length && capped[target] !== void 0) target += 1;
@@ -41645,28 +42135,27 @@ ${contextBlock}` }
       if (stripped.length > 0 && wikiLinkValidationRetries > 0) {
         const validList = candidates.filter((s) => s.startsWith("wiki_")).join(", ");
         const baseMessages = [
-          { role: "system", content: `Rewrite the answer so every WikiLink points to a valid stem. Broken stems: ${stripped.join(", ")}. Valid stems: ${validList}. Return JSON {reasoning, answer_markdown, citations}.` },
+          { role: "system", content: `Rewrite the answer so every WikiLink points to a valid stem. Broken stems: ${stripped.join(", ")}. Valid stems: ${validList}. Return frames only: <<<ANSWER>>> repaired markdown answer, <<<CITATIONS>>> one valid stem per bullet line, then <<<END>>>.` },
           { role: "user", content: `Question: ${question}
 
 Answer to fix:
 ${answer}` }
         ];
+        const repairEvents = [];
         try {
-          const r = await parseWithRetry({
+          const schema = makeQueryAnswerSchema(knownStems);
+          const r = await runStructuredWithRetry({
             llm,
             model,
             baseMessages,
-            opts: { ...opts, jsonMode: "json_object", thinkingBudgetTokens: void 0 },
-            schema: makeQueryAnswerSchema(knownStems),
+            opts: { ...opts, jsonMode: false, thinkingBudgetTokens: void 0 },
+            profile: queryAnswerProfile(schema),
             maxRetries: wikiLinkValidationRetries,
             callSite: "query.answer",
             signal,
-            // Retry/structural-error events are intentionally not surfaced here:
-            // the FixingLinks tool_result preview already reports the outcome
-            // (llm-fixed/annotated); structuralErrorCounter still records metrics.
-            onEvent: () => {
-            }
+            onEvent: (ev) => repairEvents.push(ev)
           });
+          for (const ev of repairEvents) yield ev;
           outputTokens += r.outputTokens;
           const stillBroken = findBrokenLinks(extractAnswerLinks(r.value.answer_markdown), knownStems);
           if (stillBroken.length === 0) {
@@ -41676,6 +42165,7 @@ ${answer}` }
           }
         } catch (e) {
           if (signal.aborted || e.name === "AbortError") return { answer, outputTokens };
+          for (const ev of repairEvents) yield ev;
         }
       }
       if (stripped.length > 0) {
@@ -42337,7 +42827,7 @@ function buildCrossDomainIndexBlock(annotations, finalIds) {
 var import_path_browserify7 = __toESM(require_path_browserify(), 1);
 
 // prompts/lint.md
-var lint_default = 'You are a reviewer and editor of the wiki knowledge base for the domain "{{domain_name}}".\nAnalyze the wiki quality: duplication, gaps, vague definitions, stale content, broken links.\nAt the same time, prepare corrected versions of the problematic pages.\n{{entity_types_block}}\n{{schema_block}}\n\nWhen fixing pages:\n- tags: check and update hierarchical tags (category/subcategory). Reuse tags from other domain pages (provided in the context). Format: lowercase, separated by `/`, no spaces, no `#`\n- "annotation": a rich description for semantic search (embedding + Jaccard). Structure: <summary 1-2 sentences, covering the MAIN sections of the body, not only the first paragraph> Covers: <entities, tables, systems, Jira IDs, comma-separated>. Type: <type of operation/change>. Terms: <keywords from EVERY section \u2014 synonyms, IDs, terms that are not in the heading>. Aim for ~600\u2013800 characters, all on ONE line without line breaks. Rely on the content of the page itself. Be specific, no filler or boilerplate \u2014 generic phrases raise noise in search.\n- The `annotation` field \u2014 ONLY in the JSON response. Do NOT add `annotation:` to the page frontmatter.\n- remove or replace dead links [[X]]; add missing frontmatter; merge duplication\n- WikiLink without aliases: only `[[target]]`, never `[[target|alias]]`\n- wiki_sources: every list item MUST be in double quotes: `"[[FileName]]"`. Without quotes YAML parses `[[...]]` as a nested array \u2014 this will break the page.\n\nWhen duplicate articles are found in the provided set:\n- merge the content of the duplicates into the main article (include the merged article in fixes[])\n- specify the paths of the duplicates in the deletes[].path field\n- specify the path of the main article in deletes[].redirect_to to update the links\n\nReturn ONLY a JSON object \u2014 no other text:\n{"reasoning":"chain of reasoning","report":"## Lint report\\n\\nQuality analysis in Markdown format...","fixes":[{"path":"!Wiki/domain/type/Entity.md","content":"full content of the corrected page","annotation":"The essence of the page in 1-2 sentences. Covers: related entities, systems, tables. Type: reference entity. Terms: synonyms and keywords for search."}],"deletes":[{"path":"!Wiki/domain/type/Duplicate.md","redirect_to":"!Wiki/domain/type/Entity.md"}]}\n\nThe `fixes` field contains ONLY changed pages (an empty array if there are no edits).\nThe `deletes` field contains duplicate pages to delete (an empty array or absent if there are no deletions).\nThe `report` field is the full markdown report for the user.\n';
+var lint_default = 'You are a reviewer and editor of the wiki knowledge base for the domain "{{domain_name}}".\nAnalyze the wiki quality: duplication, gaps, vague definitions, stale content, broken links.\nAt the same time, prepare corrected versions of the problematic pages.\n{{entity_types_block}}\n{{schema_block}}\n\nWhen fixing pages:\n- tags: check and update hierarchical tags (category/subcategory). Reuse tags from other domain pages (provided in the context). Format: lowercase, separated by `/`, no spaces, no `#`\n- "annotation": a rich description for semantic search (embedding + Jaccard). Structure: <summary 1-2 sentences, covering the MAIN sections of the body, not only the first paragraph> Covers: <entities, tables, systems, Jira IDs, comma-separated>. Type: <type of operation/change>. Terms: <keywords from EVERY section \u2014 synonyms, IDs, terms that are not in the heading>. Aim for ~600\u2013800 characters, all on ONE line without line breaks. Rely on the content of the page itself. Be specific, no filler or boilerplate \u2014 generic phrases raise noise in search.\n- The `annotation` field \u2014 ONLY in the page frame header. Do NOT add `annotation:` to the page frontmatter.\n- remove or replace dead links [[X]]; add missing frontmatter; merge duplication\n- WikiLink without aliases: only `[[target]]`, never `[[target|alias]]`\n- wiki_sources: every list item MUST be in double quotes: `"[[FileName]]"`. Without quotes YAML parses `[[...]]` as a nested array \u2014 this will break the page.\n\nWhen duplicate articles are found in the provided set:\n- merge the content of the duplicates into the main article and include that main article as a <<<PAGE>>> frame\n- emit each duplicate as a <<<DELETE>>> frame with path: set to the duplicate page\n- set redirect_to: in each duplicate\'s <<<DELETE>>> frame to the main article path so links can be updated\n\nReturn ONLY framed output \u2014 no JSON, no markdown fences outside page content:\n<<<REPORT>>>\n## Lint report\n\nQuality analysis in Markdown format...\n<<<PAGE>>>\npath: !Wiki/domain/type/Entity.md\nannotation: The essence of the page in 1-2 sentences. Covers: related entities, systems, tables. Type: reference entity. Terms: synonyms and keywords for search.\n<<<CONTENT>>>\nfull content of the corrected page\n<<<END_PAGE>>>\n<<<DELETE>>>\npath: !Wiki/domain/type/Duplicate.md\nredirect_to: !Wiki/domain/type/Entity.md\n<<<END_DELETE>>>\n<<<END>>>\n\nInclude ONLY changed pages as <<<PAGE>>> frames. If there are no edits, include no page frames.\nInclude duplicate pages to delete as <<<DELETE>>> frames. If there are no deletions, include no delete frames.\nThe <<<REPORT>>> frame is the full markdown report for the user.\n';
 
 // prompts/lint-actualize.md
 var lint_actualize_default = 'You are an architect of a wiki knowledge base. Analyze the current domain config and the actual content of the wiki.\nReturn ONLY valid JSON with the updated fields:\n{\n  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"..."}],\n  "language_notes": "..."\n}\nUpdate rules:\n- Keep existing types if they are useful, refine descriptions based on the actual content\n- Add new types if the wiki has patterns not covered by the current config\n- Remove types with zero coverage only if you are sure they are irrelevant\n- Update extraction_cues based on the actual words from the wiki pages\n- language_notes \u2014 rules for writing terms that the agent must follow\n';
@@ -42576,12 +43066,12 @@ ${contextBlock}` : ""
         const pwtEvents = [];
         let lintResult;
         try {
-          lintResult = await parseWithRetry({
+          lintResult = await runStructuredWithRetry({
             llm,
             model,
             baseMessages: messages,
-            opts,
-            schema: LintOutputSchema,
+            opts: { ...opts, jsonMode: false },
+            profile: lintOutputProfile(),
             maxRetries: opts.structuredRetries ?? 1,
             callSite: "lint.fix",
             signal,
@@ -43023,9 +43513,18 @@ Take the user's task and the lint report, and fix the indicated problems in the 
 
 For each page, the "annotation" field is a rich description for semantic search (embedding + Jaccard). Structure: <summary 1-2 sentences, covering the MAIN sections of the body, not only the first paragraph> Covers: <entities, tables, systems, Jira IDs, comma-separated>. Type: <type of operation/change>. Terms: <keywords from EVERY section \u2014 synonyms, IDs, terms that are not in the heading>. Aim for ~600\u2013800 characters, all on ONE line without line breaks. Be specific, no filler or boilerplate.
 
-Return JSON:
-{"summary":"## markdown of what was done","pages":[{"path":"...","content":"...","annotation":"<rich one-line description: summary + Covers + Type + Terms>"}]}
-If there are no edits \u2014 pages is an empty array, summary is a text answer.
+Return ONLY framed output \u2014 no JSON, no markdown fences outside page content:
+<<<REPORT>>>
+## markdown of what was done
+<<<PAGE>>>
+path: !Wiki/domain/type/Entity.md
+annotation: <rich one-line description: summary + Covers + Type + Terms>
+<<<CONTENT>>>
+full content of the corrected page
+<<<END_PAGE>>>
+<<<END>>>
+
+If there are no edits, include no page frames; keep the answer in <<<REPORT>>>.
 {{schema_block}}
 
 LINT REPORT:
@@ -43072,12 +43571,12 @@ ${schemaContent}` : ""
   const pwtEvents = [];
   let result;
   try {
-    result = await parseWithRetry({
+    result = await runStructuredWithRetry({
       llm,
       model,
       baseMessages: messages,
-      opts: { ...opts, jsonMode: "json_object" },
-      schema: LintChatSchema,
+      opts: { ...opts, jsonMode: false },
+      profile: lintChatProfile(),
       maxRetries: opts.structuredRetries ?? 1,
       callSite: "lint-chat.fix",
       signal,
@@ -43617,152 +44116,6 @@ var format_restore_tokens_default = "RESTORE TOKENS: the following values from t
 // templates/_format_schema.md
 var format_schema_default = '# Format Schema (formatting rules for non-wiki pages)\n\n## Frontmatter\n\n| Field | Rule |\n|------|---------|\n| `tags` | YAML list: `[category/subcategory, domain/topic]`. Hierarchy via `/`, lowercase, no spaces, no `#`. When the input contains an EXISTING DOMAIN TAGS block, reuse tags strictly from it; add a new tag only when nothing there fits, and never start a new top-level category when the block says "reuse only". Without the block, keep the note\'s own valid tags. Only when a thematic classification exists. |\n| `aliases` | Abbreviations, synonyms, English variants |\n| `created` | YYYY-MM-DD when present in the source or at first formatting |\n| `updated` | YYYY-MM-DD the current formatting date |\n| `external_links` | Array of URLs \u2014 only if the body has `http(s)://` links |\n| `related` | Array of `[[wikilinks]]` \u2014 only if the body already contains links to other pages |\n\nThe `wiki_*` fields \u2014 do not include them in the output. They are managed programmatically and will be restored automatically.\n\nIf the source frontmatter is broken \u2014 missing or duplicated `---` fences, invalid YAML, or fields placed outside a fenced block \u2014 rebuild it into a single valid YAML frontmatter block, preserving the real field values (excluding the `wiki_*` fields, which are managed separately). Never emit two `---` fences in a row or leave frontmatter keys in the body.\n\n## Structure\n\n- H1 \u2014 the page title\n- Intro paragraph 1-3 sentences immediately after H1, without a subheading\n- `##` sections by content logic; hierarchy without jumps (H2 \u2192 H3 \u2192 H4)\n- Empty sections and placeholder text are forbidden\n\n## Tables\n\nMarkdown with alignment. Use for structured enumerations of parameters/comparisons. Do not turn narrative text into tables.\n\n## Mermaid\n\n` ```mermaid ` blocks for processes, sequences, relationships.\n- Processes described in text \u2192 flowchart/sequenceDiagram\n- Content of diagrams from images (vision backend only) \u2192 a separate mermaid block below the image. The image itself is preserved.\n\n## Images\n\n- Each image gets a descriptive caption directly below it\n- When `has_vision=true`: an additional text description. For diagrams/schemes \u2014 a structured logical description of the meaning (purpose, components, how the flow is connected), not a verbatim transcription of elements; below, when needed, a mermaid block (process/architecture) or a table (grid/matrix). For other images \u2014 coherent text or a parameter table.\n- When `has_vision=false`: use only alt and existing captions; do not invent new information\n\n## Code\n\nFenced blocks always with a language tag.\n\n## Style\n\n- Neutral, informative, no value judgements\n- Technical terms \u2014 original spelling (SQL, API, LLM)\n- Forbidden: "obviously", "the best way", the pronouns "I/we/our"\n\n## Hard prohibitions\n\n- Do not add facts absent from the source (exception: text extraction from images when `has_vision=true`)\n- Do not remove facts\n- Do not distort the meaning; rephrasing for clarity is allowed\n- List all changes in `report`\n';
 
-// src/phases/format-utils.ts
-var STOP_WORDS2 = /* @__PURE__ */ new Set([
-  "The",
-  "This",
-  "That",
-  "These",
-  "Those",
-  "And",
-  "Or",
-  "But",
-  "If",
-  "When"
-]);
-function significantTokens(text) {
-  const out = /* @__PURE__ */ new Set();
-  let residual = text;
-  for (const m of text.matchAll(/https?:\/\/\S+/g)) {
-    out.add(m[0].replace(/[.,;:!?)\]}>"']+$/, ""));
-  }
-  residual = residual.replace(/https?:\/\/\S+/g, " ");
-  for (const m of residual.matchAll(/\b\d+(?:\.\d+)?\b/g)) out.add(m[0]);
-  for (const m of residual.matchAll(/\b[A-Z][A-Za-z0-9-]{2,}/g)) {
-    if (!STOP_WORDS2.has(m[0])) out.add(m[0]);
-  }
-  for (const m of residual.matchAll(/\b[A-Z]{2,}\b/g)) out.add(m[0]);
-  for (const m of residual.matchAll(/`([^`\n]+)`/g)) {
-    for (const id of m[1].matchAll(/\b[A-Za-z_][A-Za-z0-9_]{2,}\b/g)) out.add(id[0]);
-  }
-  for (const m of residual.matchAll(/```[\s\S]*?```/g)) {
-    for (const id of m[0].matchAll(/\b[A-Za-z_][A-Za-z0-9_]{2,}\b/g)) out.add(id[0]);
-  }
-  return out;
-}
-function escapeRegExp(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-var OBSIDIAN_EMBED_RE = /!\[\[[^\]]+\]\]/g;
-function restoreObsidianEmbeds(original, formatted) {
-  let result = formatted;
-  for (const m of original.matchAll(OBSIDIAN_EMBED_RE)) {
-    const embedSrc = m[0];
-    if (result.includes(embedSrc)) continue;
-    const innerPath = embedSrc.slice(3, -2);
-    const pipeIdx = innerPath.indexOf("|");
-    const filePath = pipeIdx >= 0 ? innerPath.slice(0, pipeIdx) : innerPath;
-    const stdRe = new RegExp(`!\\[[^\\]]*\\]\\(${escapeRegExp(filePath)}\\)`, "g");
-    result = result.replace(stdRe, embedSrc);
-  }
-  return result;
-}
-function missingObsidianEmbeds(original, formatted) {
-  const missing = [];
-  for (const m of original.matchAll(OBSIDIAN_EMBED_RE)) {
-    if (!formatted.includes(m[0])) missing.push(m[0]);
-  }
-  return missing;
-}
-function lemmas(token) {
-  const out = [token];
-  if (/ies$/i.test(token) && token.length > 4) out.push(token.slice(0, -3) + "y");
-  else if (/(?:s|x|z|ch|sh)es$/i.test(token) && token.length > 4) out.push(token.slice(0, -2));
-  else if (/s$/i.test(token) && !/ss$/i.test(token) && token.length > 3) out.push(token.slice(0, -1));
-  else if (/[^aeiou]y$/i.test(token) && token.length > 2) out.push(token.slice(0, -1) + "ies");
-  else if (/(?:s|x|z|ch|sh)$/i.test(token) && token.length > 2) out.push(token + "es");
-  else if (token.length > 2) out.push(token + "s");
-  return out;
-}
-function appendMissingLines(formatted, missing) {
-  const lines = [...new Set(missing.filter((m) => m.context !== "").map((m) => m.context))];
-  if (lines.length === 0) return formatted;
-  return `${formatted}
-
----
-<!-- restored-lines: token loss after retry -->
-${lines.join("\n")}`;
-}
-function missingTokensWithContext(original, formatted) {
-  const orig = significantTokens(original);
-  const fmtLower = formatted.toLowerCase();
-  const lines = original.split(/\r?\n/);
-  const out = [];
-  for (const t of orig) {
-    const variants = lemmas(t).map((v) => v.toLowerCase());
-    const found = variants.some((v) => {
-      const re = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(v)}(?:[^A-Za-z0-9_]|$)`);
-      return re.test(fmtLower);
-    });
-    if (found) continue;
-    const lineRe = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(t)}(?:[^A-Za-z0-9_]|$)`);
-    let context = "";
-    for (const line of lines) {
-      if (lineRe.test(line)) {
-        const trimmed = line.trim();
-        context = trimmed.length > 120 ? trimmed.slice(0, 117) + "\u2026" : trimmed;
-        break;
-      }
-    }
-    out.push({ token: t, context });
-  }
-  return out;
-}
-function parseSentinelOutput(text, hasVisionDescriptions) {
-  const reportIdx = text.indexOf("<<<REPORT>>>");
-  const formattedIdx = text.indexOf("<<<FORMATTED>>>");
-  if (reportIdx === -1 || formattedIdx === -1) return null;
-  const report = text.slice(reportIdx + "<<<REPORT>>>".length, formattedIdx).trim();
-  const endIdx = text.indexOf("<<<END>>>");
-  let formattedEnd;
-  let truncated = false;
-  let visionCount;
-  let embeds;
-  if (hasVisionDescriptions) {
-    const visionIdx = text.indexOf("<<<VISION_COUNT>>>", formattedIdx);
-    const embedsIdx = text.indexOf("<<<EMBEDS>>>", formattedIdx);
-    if (visionIdx === -1 || embedsIdx === -1) return null;
-    const tail = [visionIdx, embedsIdx, endIdx].filter((i) => i > formattedIdx);
-    formattedEnd = tail.length ? Math.min(...tail) : text.length;
-    visionCount = parseInt(text.slice(visionIdx + "<<<VISION_COUNT>>>".length, embedsIdx).trim(), 10);
-    const embedsEnd = endIdx === -1 ? text.length : endIdx;
-    embeds = text.slice(embedsIdx + "<<<EMBEDS>>>".length, embedsEnd).trim().split("|").map((s) => s.trim()).filter(Boolean);
-    truncated = endIdx === -1;
-  } else {
-    formattedEnd = endIdx === -1 ? text.length : endIdx;
-    truncated = endIdx === -1;
-  }
-  const formatted = text.slice(formattedIdx + "<<<FORMATTED>>>".length, formattedEnd).trim();
-  return { report, formatted, visionCount, embeds, truncated };
-}
-var SENTINEL_RE = /<<<[A-Z_]+>>>/g;
-function stripSentinelMarkers(text) {
-  const removed = text.match(SENTINEL_RE) ?? [];
-  if (removed.length === 0) return { clean: text, removed };
-  const out = [];
-  for (const line of text.split("\n")) {
-    const stripped = line.replace(SENTINEL_RE, "");
-    if (stripped === line) {
-      out.push(line);
-      continue;
-    }
-    if (stripped.trim() === "") continue;
-    out.push(stripped);
-  }
-  const clean = out.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd();
-  return { clean, removed };
-}
-
 // prompts/vision-structure.md
 var vision_structure_default = 'Return STRUCTURED markdown matching the content type. Choose ONE form:\n- Table data (rows \xD7 columns, comparison, matrix) \u2192 markdown table with header row and separator.\n- Ordered steps / sequence / pipeline \u2192 numbered list.\n- Unordered items / enumeration / set of features \u2192 bullet list with "- ".\n- Hierarchy / tree / nested structure \u2192 nested bullet list with indentation.\n- Diagram / flow / architecture / scheme (boxes, shapes, arrows) \u2192 work in TWO stages. FIRST read the diagram literally as a SILENT internal step (do NOT output it): parse every node/box/label exactly as written, trace every connection with its direction and edge label (e.g. "A \u2192 B labelled \'retry\'"), note groupings, containers, swimlanes, and the overall layout \u2014 this is your internal understanding of what the scheme depicts. THEN output, from that understanding, a STRUCTURED, LOGICAL description of what the scheme MEANS for a reader: a short lead sentence stating what it represents, then a numbered list for a sequence/pipeline or a bullet list for components/relationships \u2014 explain the logic, purpose, and how the parts connect; synthesize and interpret; do NOT transcribe labels verbatim or walk the canvas element-by-element. AFTER the description, recreate the structure: a mermaid code block (```mermaid ... ```) for flow / architecture / graph schemes, or a markdown table for grid / matrix schemes. Keep proper names and key terms accurate where they carry meaning; every part you describe or draw must actually exist in the source \u2014 do not invent.\n- Math / formula / equation \u2192 LaTeX inside $...$ or $$...$$.\n- Code / config / terminal \u2192 fenced code block with language tag.\n- Single concept / photo / illustration \u2192 1\u20133 plain sentences.\nDo NOT add boilerplate intros ("Here is...", "This image shows..."). Output ONLY the requested content (diagrams: the structured logical description followed by the mermaid/table recreation; other types: the single structured form).\nDo NOT add headings (# or ##) \u2014 caller controls section structure.\nDo NOT add the marker "[Vision]" or any prefix \u2014 caller adds it if needed.\nPreserve any text visible in the source verbatim where it is data (table cells, code, terminal, labels rendered as content); transcribe \u2014 do not paraphrase. This does NOT apply to diagram node/edge labels, which you interpret rather than copy.';
 
@@ -43912,26 +44265,22 @@ async function analyzeSingleAttachment(path5, vaultTools, llm, model, signal, so
 
 // src/phases/format.ts
 function parseFormatOutput(text, hasVisionDescriptions) {
-  const sentinel2 = parseSentinelOutput(text, hasVisionDescriptions);
-  if (!sentinel2) {
+  let parsedFrames;
+  try {
+    parsedFrames = parseFormatFrames(text, hasVisionDescriptions);
+  } catch (e) {
     structuralErrorCounter.record(false, 0);
-    return { data: null, hint: "sentinel markers not found", truncated: false };
+    return { data: null, hint: e.message || "sentinel markers not found", truncated: false };
   }
-  const raw = hasVisionDescriptions ? {
-    report: sentinel2.report,
-    formatted: sentinel2.formatted,
-    vision_blocks_count: sentinel2.visionCount ?? 0,
-    embeds_preserved: sentinel2.embeds ?? []
-  } : { report: sentinel2.report, formatted: sentinel2.formatted };
-  const schema = hasVisionDescriptions ? FormatWithVisionSchema : FormatBaseSchema;
-  const result = schema.safeParse(raw);
+  const schema = hasVisionDescriptions ? FormatWithVisionSchema : FormatOutputSchema;
+  const result = schema.safeParse(parsedFrames.raw);
   if (result.success) {
     structuralErrorCounter.record(true, 0);
-    return { data: result.data, hint: "", truncated: sentinel2.truncated };
+    return { data: result.data, hint: "", truncated: parsedFrames.truncated };
   }
   structuralErrorCounter.record(false, 0);
   const hint = result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
-  return { data: null, hint, truncated: sentinel2.truncated };
+  return { data: null, hint, truncated: parsedFrames.truncated };
 }
 function extractImagePaths(md) {
   const out = [];
@@ -44076,8 +44425,9 @@ ${tagRegistryBlock}` : ""}`;
     { role: "user", content: userContent },
     ...chatHistory.map((m) => ({ role: m.role, content: m.content }))
   ];
+  const formatOpts = { ...opts, jsonMode: false, jsonSchema: void 0 };
   yield { kind: "assistant_text", delta: progress.analysing(filePath) };
-  const baseParams = buildChatParams(model, messages, opts, true);
+  const baseParams = buildChatParams(model, messages, formatOpts, true);
   let lastFinishReason = null;
   let outputTokens = 0;
   async function* callOnce(p) {
@@ -44147,7 +44497,7 @@ The previous attempt failed: ${zodHint}. Fix it and return again using the marke
       { role: "system", content: retrySystemContent },
       { role: "user", content: userContent }
     ];
-    const retryParams = buildChatParams(model, retryMessages, opts, true);
+    const retryParams = buildChatParams(model, retryMessages, formatOpts, true);
     yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
     fullText = yield* callOnce(retryParams);
     if (signal.aborted) return;
@@ -44189,7 +44539,7 @@ The previous attempt failed: ${zodHint}. Fix it and return again using the marke
         content: render(format_restore_tokens_default, { tokens: tokenList })
       }
     ];
-    const restoreParams = buildChatParams(model, restoreMessages, opts, true);
+    const restoreParams = buildChatParams(model, restoreMessages, formatOpts, true);
     yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
     const fullText2 = yield* callOnce(restoreParams);
     if (!signal.aborted) {
@@ -44465,7 +44815,7 @@ var AgentRunner = class {
     this.domains = domains;
     this.visionTempBaseDir = visionTempBaseDir;
     this.isMobile = isMobile;
-    this.llm = wrapWithJsonFallback(llm);
+    this.llm = llm;
   }
   settings;
   vaultTools;
@@ -44495,7 +44845,6 @@ var AgentRunner = class {
       systemPrompt: s.systemPrompt,
       outputLanguage: s.outputLanguage,
       reasoningLanguage: s.reasoningLanguage,
-      jsonMode: "json_object",
       structuredRetries,
       mergeDeleteWarnThreshold,
       dedupOnIngest: na.dedupOnIngest,
@@ -44511,7 +44860,6 @@ var AgentRunner = class {
       systemPrompt: s.systemPrompt,
       outputLanguage: s.outputLanguage,
       reasoningLanguage: s.reasoningLanguage,
-      jsonMode: "json_object",
       structuredRetries,
       mergeDeleteWarnThreshold,
       dedupOnIngest: na.dedupOnIngest,
@@ -44649,6 +44997,11 @@ var AgentRunner = class {
     const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1e3;
     const maxRetries = this.settings.llmIdleRetries ?? 3;
     let attempt = 0;
+    let destructivePreludeSeen = false;
+    const idleAfterDestructivePreludeAbort = () => new DOMException(
+      `LLM idle timeout (${Math.round(idleTimeoutMs / 1e3)}s) after destructive prelude; refusing to replay operation`,
+      "AbortError"
+    );
     const llmErrors = [];
     const ruleFirings = {};
     let evalMeta = {};
@@ -44672,6 +45025,7 @@ var AgentRunner = class {
         try {
           for await (const ev of this.runOperation({ ...req, signal: combined }, model, opts, vaultRoot, domains, similarity, visionTempStore)) {
             if (ev.kind === "llm_call_stats" || ev.kind === "assistant_text" || ev.kind === "tool_use" || ev.kind === "tool_result") resetTimer();
+            if (ev.kind === "tool_use" && ev.name === "WipeDomain") destructivePreludeSeen = true;
             if (ev.kind === "result") finalResultText = ev.text;
             if (ev.kind === "error") {
               llmErrors.push({ kind: "error", message: ev.message });
@@ -44689,6 +45043,7 @@ var AgentRunner = class {
           if (idleTimer) window.clearTimeout(idleTimer);
           if (idleCtrl.signal.aborted && !req.signal.aborted) {
             if (attempt < maxRetries) {
+              if (destructivePreludeSeen) throw idleAfterDestructivePreludeAbort();
               attempt++;
               const sec = Math.round(idleTimeoutMs / 1e3);
               yield { kind: "system", message: `LLM idle ${sec}s \u2014 retrying (${attempt}/${maxRetries})` };
@@ -44719,6 +45074,7 @@ var AgentRunner = class {
           if (idleTimer) window.clearTimeout(idleTimer);
           const isIdleAbort = !req.signal.aborted && err.name === "AbortError";
           if (isIdleAbort && attempt < maxRetries) {
+            if (destructivePreludeSeen) throw idleAfterDestructivePreludeAbort();
             attempt++;
             const sec = Math.round(idleTimeoutMs / 1e3);
             yield { kind: "system", message: `LLM idle ${sec}s \u2014 retrying (${attempt}/${maxRetries})` };

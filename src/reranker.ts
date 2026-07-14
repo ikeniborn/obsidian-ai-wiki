@@ -262,7 +262,7 @@ export function applyRerankerScores(
       return a.index - b.index;
     });
 
-    const cappedPages = Array.from<PageItem | undefined>({ length: rankedPages.length }, () => undefined);
+    const cappedPages = new Array<PageItem | undefined>(rankedPages.length).fill(undefined);
     for (const item of rankedPages) {
       let target = Math.max(0, item.index - maxPromotion);
       const baselineTarget = pageItems[target];
@@ -322,7 +322,7 @@ export function applyRerankerScores(
     return ranked.map((item) => item.chunk).slice(0, Math.max(0, limit));
   }
 
-  const capped = Array.from<RankedRerankerItem | undefined>({ length: ranked.length }, () => undefined);
+  const capped = new Array<RankedRerankerItem | undefined>(ranked.length).fill(undefined);
   for (const item of ranked) {
     let target = Math.max(0, item.index - maxPromotion);
     while (target < capped.length && capped[target] !== undefined) target += 1;

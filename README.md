@@ -190,7 +190,7 @@ The sidebar is the main interface for AI Wiki. Open it via the ribbon (🧠 icon
 | User prompt | Added to the system prompt of every operation | empty |
 | Timeouts (seconds) | `ingest/query/lint/init/format`, slash-separated | `300/300/900/3600/600` |
 | History limit | Max operations in sidebar history | `20` |
-| Agent log (JSONL) | Log agent events to `!Wiki/_config/_agent.jsonl` (desktop only) | off |
+| Agent log (JSONL) | Log agent events to plugin-local `agent.jsonl` (desktop only) | off |
 
 ### Domains
 
@@ -221,7 +221,7 @@ List of created domains with **Edit** / **Delete** buttons. Domain map is stored
 | Model | Model name (`llama3.2`, `mistral`, `gpt-4o`, …). Shown when per-operation is off | `llama3.2` |
 | Temperature | `0.0`–`1.0`. Low values (`0.1`–`0.3`) give more precise, factual answers | `0.2` |
 | Per-operation models | When on, configure `model`/`maxTokens`/`temperature` per operation | off |
-| Structured output retries | Retries on schema validation failure (0–3). Higher = more reliable on weaker models | `1` |
+| Output repair retries | Retries for invalid JSON or invalid framed output after Zod validation (0–3). Higher = more reliable on weaker models | `1` |
 
 ### Proxy (native-agent only)
 
