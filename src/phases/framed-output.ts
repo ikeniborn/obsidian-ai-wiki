@@ -190,6 +190,14 @@ export function parseWikiPagesFrames(text: string): WikiPagesFramesOutput {
   };
 }
 
+export function parseWikiPageRepairFramesOrJson(text: string): PageFrame[] {
+  try {
+    return parseWikiPagesFrames(text).pages;
+  } catch {
+    return parseLegacyJsonPages(text);
+  }
+}
+
 export function parseLintFrames(text: string): LintFramesOutput {
   const parsed = parsePageFrames(text);
   return {
@@ -324,6 +332,24 @@ function parseCitations(raw: string): string[] {
     .split(/\r?\n/)
     .map((line) => line.replace(/^-\s*/, "").trim())
     .filter(Boolean);
+}
+
+function parseLegacyJsonPages(text: string): PageFrame[] {
+  const match = text.match(/\[[\s\S]*\]/);
+  if (!match) return [];
+  try {
+    const arr: unknown = JSON.parse(match[0]);
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(
+      (x): x is PageFrame =>
+        x !== null &&
+        typeof x === "object" &&
+        typeof (x as { path?: unknown }).path === "string" &&
+        typeof (x as { content?: unknown }).content === "string",
+    );
+  } catch {
+    return [];
+  }
 }
 
 function parseEntityTypesDelta(text: string): unknown {

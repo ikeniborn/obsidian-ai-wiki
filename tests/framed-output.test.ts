@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+
 import {
   parseAnswerFrames,
   parseContentFrame,
@@ -8,6 +9,7 @@ import {
   parseLintFrames,
   parsePageFrames,
   parseWikiPagesFrames,
+  parseWikiPageRepairFramesOrJson,
   mergeContentFrameInstruction,
   mergedPageProfile,
   wikiPagesFrameInstruction,
@@ -194,6 +196,36 @@ test("ingest framed profiles wire parser, schema, and repair instructions", () =
     mergeProfile.parse("<<<ANNOTATION>>>\nA page\n<<<CONTENT>>>\n# A\n<<<END>>>").content,
     "# A",
   );
+});
+
+test("parseWikiPageRepairFramesOrJson accepts framed page repair output", () => {
+  const pages = parseWikiPageRepairFramesOrJson([
+    "<<<REPORT>>>",
+    "Corrected path depth.",
+    "<<<PAGE>>>",
+    "path: !Wiki/demo/entities/wiki_demo_fixed.md",
+    "annotation: Fixed page",
+    "<<<CONTENT>>>",
+    "# Fixed",
+    "<<<END_PAGE>>>",
+    "<<<END>>>",
+  ].join("\n"));
+
+  assert.equal(pages[0].path, "!Wiki/demo/entities/wiki_demo_fixed.md");
+  assert.equal(pages[0].annotation, "Fixed page");
+  assert.equal(pages[0].content, "# Fixed");
+});
+
+test("parseWikiPageRepairFramesOrJson keeps legacy JSON repair output", () => {
+  const pages = parseWikiPageRepairFramesOrJson(JSON.stringify([{
+    path: "!Wiki/demo/entities/wiki_demo_fixed.md",
+    annotation: "Fixed page",
+    content: "# Fixed",
+  }]));
+
+  assert.equal(pages[0].path, "!Wiki/demo/entities/wiki_demo_fixed.md");
+  assert.equal(pages[0].annotation, "Fixed page");
+  assert.equal(pages[0].content, "# Fixed");
 });
 
 function pageFramesFixture(): string {
