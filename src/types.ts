@@ -99,7 +99,7 @@ export type RunEvent =
   | { kind: "format_cancelled" }
   | { kind: "structural_error";
       callSite: "init.bootstrap" | "init.delta" | "lint.patch" | "lint.fix" | "lint-chat.fix" | "query.seeds" | "query.answer" | "ingest.entities" | "ingest.pages" | "ingest.merge" | "format.output";
-      errorType: "json_parse" | "schema_validate";
+      errorType: "json_parse" | "schema_validate" | "empty_output" | "response_format_fallback" | "frame_parse" | "idle_abort";
       retryAttempt: number;
       succeeded: boolean | null;
       message: string;
