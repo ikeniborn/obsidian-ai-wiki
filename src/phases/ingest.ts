@@ -6,8 +6,10 @@ import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas, wikiSections } from "./llm-utils";
 import { parseWithRetry } from "./parse-with-retry";
-import { WikiPagesOutputSchema, EntitiesOutputSchema, MergedPageOutputSchema } from "./zod-schemas";
+import { EntitiesOutputSchema } from "./zod-schemas";
 import type { WikiPagesOutput, EntitiesOutput } from "./zod-schemas";
+import { mergeContentFrameInstruction, mergedPageProfile, wikiPagesFrameInstruction, wikiPagesProfile } from "./framed-output";
+import { runStructuredWithRetry } from "./structured-output";
 import ingestTemplate from "../../prompts/ingest.md";
 import ingestMerge from "../../prompts/ingest-merge.md";
 import ingestEntitiesTemplate from "../../prompts/ingest-entities.md";
@@ -248,9 +250,9 @@ export async function* runIngest(
   const pwtEvents: RunEvent[] = [];
   let parseResult: { value: WikiPagesOutput; outputTokens: number };
   try {
-    parseResult = await parseWithRetry({
-      llm, model, baseMessages: messages, opts,
-      schema: WikiPagesOutputSchema,
+    parseResult = await runStructuredWithRetry({
+      llm, model, baseMessages: messages, opts: { ...opts, jsonMode: false },
+      profile: wikiPagesProfile(),
       maxRetries: opts.structuredRetries ?? 1,
       callSite: "ingest.pages",
       signal,
@@ -412,14 +414,16 @@ export async function* runIngest(
             summary: `Дубль: ${pageId(page.path)} ≈ ${hit.pid} (cosine ${hit.score.toFixed(2)}) → merge`,
             details: [targetPath] };
           const mergeMsgs = [{ role: "user" as const, content:
-            render(ingestMerge, { existing: existingTarget, incoming: page.content }) }];
+            render(ingestMerge, { existing: existingTarget, incoming: page.content, frame_instruction: mergeContentFrameInstruction }) }];
+          const mergeEvents: RunEvent[] = [];
           try {
-            const merged = await parseWithRetry({
-              llm, model, baseMessages: mergeMsgs, opts,
-              schema: MergedPageOutputSchema,
+            const merged = await runStructuredWithRetry({
+              llm, model, baseMessages: mergeMsgs, opts: { ...opts, jsonMode: false },
+              profile: mergedPageProfile(),
               maxRetries: opts.structuredRetries ?? 1,
-              callSite: "ingest.merge", signal, onEvent: () => {},
+              callSite: "ingest.merge", signal, onEvent: (ev) => mergeEvents.push(ev),
             });
+            for (const ev of mergeEvents) yield ev;
             yield { kind: "tool_use", name: "Update", input: { path: targetPath } };
             await vaultTools.write(targetPath, merged.value.content);
             written.push(targetPath);
@@ -431,6 +435,7 @@ export async function* runIngest(
             }
             continue; // skip the normal create
           } catch (e) {
+            for (const ev of mergeEvents) yield ev;
             // merge failed — fall through to a normal create rather than lose the new content
             yield { kind: "info_text", icon: "⚠️", summary: `merge не удался, создаю отдельно: ${(e as Error).message}` };
           }
@@ -829,6 +834,7 @@ function buildIngestMessages(
     source_path: sourcePath,
     source_stem: sourcePath.split("/").pop()!.replace(/\.md$/, ""),
     forbidden_stems_block: forbiddenStemsBlock,
+    frame_instruction: wikiPagesFrameInstruction,
   });
 
   const existingPathSet = new Set(existingPages.keys());

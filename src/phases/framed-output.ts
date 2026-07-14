@@ -1,5 +1,6 @@
 import { parseSentinelOutput } from "./format-utils";
 import type { FormatOutput } from "./zod-schemas";
+import { MergedPageOutputSchema, WikiPagesOutputSchema } from "./zod-schemas";
 
 export interface FramedParseResult<T> {
   raw: T;
@@ -60,6 +61,41 @@ export interface AnswerFrameOutput {
 }
 
 const END = "<<<END>>>";
+
+export const wikiPagesFrameInstruction = [
+  "Return framed wiki pages only.",
+  "Start with <<<REPORT>>> and concise reasoning.",
+  "For each page use <<<PAGE>>> followed by path:, optional annotation:, <<<CONTENT>>>, markdown body, and <<<END_PAGE>>>.",
+  "For deletes use <<<DELETE>>> with path: and <<<END_DELETE>>>.",
+  "For entity type updates use <<<ENTITY_TYPES_DELTA_JSON>>> with a JSON array and <<<END_ENTITY_TYPES_DELTA_JSON>>>.",
+  "Finish with <<<END>>>.",
+].join("\n");
+
+export const mergeContentFrameInstruction = [
+  "Return exactly one merged page content frame.",
+  "Optional: <<<REASONING>>> followed by concise reasoning.",
+  "Optional: <<<ANNOTATION>>> followed by one line for the index.",
+  "Required: <<<CONTENT>>> followed by the full markdown page.",
+  "Finish with <<<END>>>.",
+].join("\n");
+
+export function wikiPagesProfile() {
+  return {
+    kind: "framed-zod" as const,
+    schema: WikiPagesOutputSchema,
+    parse: parseWikiPagesFrames,
+    repairInstruction: wikiPagesFrameInstruction,
+  };
+}
+
+export function mergedPageProfile() {
+  return {
+    kind: "framed-zod" as const,
+    schema: MergedPageOutputSchema,
+    parse: parseContentFrame,
+    repairInstruction: mergeContentFrameInstruction,
+  };
+}
 
 export function parseFormatFrames(text: string, hasVisionDescriptions: boolean): FramedParseResult<FormatFrameOutput> {
   const protectedText = protectInlineMarkers(text, [
@@ -141,12 +177,15 @@ export function parsePageFrames(text: string): PageFramesOutput {
 }
 
 export function parseWikiPagesFrames(text: string): WikiPagesFramesOutput {
-  const parsed = parsePageFrames(text);
+  requireMarker(text, END);
+  const reasoning = parseReasoning(text);
+  const pages = parsePages(text);
+  const deletes = parseDeletes(text);
   const entityTypesDelta = parseEntityTypesDelta(text);
   return {
-    reasoning: parsed.reasoning,
-    pages: parsed.pages,
-    deletes: parsed.deletes?.map((entry) => ({ path: entry.path })),
+    reasoning,
+    pages,
+    deletes: deletes.length ? deletes.map((entry) => ({ path: entry.path })) : undefined,
     ...(entityTypesDelta !== undefined ? { entity_types_delta: entityTypesDelta } : {}),
   };
 }

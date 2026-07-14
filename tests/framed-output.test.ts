@@ -8,8 +8,12 @@ import {
   parseLintFrames,
   parsePageFrames,
   parseWikiPagesFrames,
+  mergeContentFrameInstruction,
+  mergedPageProfile,
+  wikiPagesFrameInstruction,
+  wikiPagesProfile,
 } from "../src/phases/framed-output";
-import { LintChatSchema, LintOutputSchema, WikiPagesOutputSchema } from "../src/phases/zod-schemas";
+import { LintChatSchema, LintOutputSchema, MergedPageOutputSchema, WikiPagesOutputSchema } from "../src/phases/zod-schemas";
 
 test("parseFormatFrames parses report and formatted sentinel output", () => {
   const parsed = parseFormatFrames([
@@ -140,6 +144,56 @@ test("schema adapters map frames to expected zod fields", () => {
   const lintChat = LintChatSchema.parse(parseLintChatFrames(raw));
   assert.equal(lintChat.summary, "reasoning text");
   assert.equal(lintChat.pages[0].path, "!Wiki/demo/entities/wiki_demo_a.md");
+});
+
+test("parseWikiPagesFrames parses entity type delta JSON frame", () => {
+  const parsed = WikiPagesOutputSchema.parse(parseWikiPagesFrames([
+    "<<<REPORT>>>",
+    "reasoning text",
+    "<<<PAGE>>>",
+    "path: !Wiki/demo/entities/wiki_demo_a.md",
+    "<<<CONTENT>>>",
+    "# A",
+    "<<<END_PAGE>>>",
+    "<<<ENTITY_TYPES_DELTA_JSON>>>",
+    "[{\"type\":\"Concept\",\"description\":\"Knowledge concept\",\"extraction_cues\":[\"concept\"]}]",
+    "<<<END_ENTITY_TYPES_DELTA_JSON>>>",
+    "<<<END>>>",
+  ].join("\n")));
+
+  assert.equal(parsed.entity_types_delta?.[0]?.type, "Concept");
+});
+
+test("parseWikiPagesFrames accepts report-only no-op output", () => {
+  const parsed = WikiPagesOutputSchema.parse(parseWikiPagesFrames([
+    "<<<REPORT>>>",
+    "No page changes needed.",
+    "<<<END>>>",
+  ].join("\n")));
+
+  assert.equal(parsed.reasoning, "No page changes needed.");
+  assert.deepEqual(parsed.pages, []);
+  assert.equal(parsed.deletes, undefined);
+});
+
+test("ingest framed profiles wire parser, schema, and repair instructions", () => {
+  const pagesProfile = wikiPagesProfile();
+  assert.equal(pagesProfile.kind, "framed-zod");
+  assert.equal(pagesProfile.schema, WikiPagesOutputSchema);
+  assert.match(wikiPagesFrameInstruction, /<<<PAGE>>>/);
+  assert.equal(
+    pagesProfile.parse("<<<REPORT>>>\nok\n<<<PAGE>>>\npath: !Wiki/demo/entities/wiki_demo_a.md\n<<<CONTENT>>>\n# A\n<<<END_PAGE>>>\n<<<END>>>").pages[0].path,
+    "!Wiki/demo/entities/wiki_demo_a.md",
+  );
+
+  const mergeProfile = mergedPageProfile();
+  assert.equal(mergeProfile.kind, "framed-zod");
+  assert.equal(mergeProfile.schema, MergedPageOutputSchema);
+  assert.match(mergeContentFrameInstruction, /<<<CONTENT>>>/);
+  assert.equal(
+    mergeProfile.parse("<<<ANNOTATION>>>\nA page\n<<<CONTENT>>>\n# A\n<<<END>>>").content,
+    "# A",
+  );
 });
 
 function pageFramesFixture(): string {

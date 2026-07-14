@@ -31,8 +31,8 @@ RULES:
   - `## External links` — external URLs, one `[text](url)` bullet per line (`http://` or `https://` only).
 - In article bodies: ONLY [[stem]] — never [[stem|alias]]. The [[A|B]] syntax is forbidden.
 - Use the mandatory and optional section headings defined in the conventions block (_wiki_schema.md) below, exactly as written there. Each page must include the mandatory characteristics section.
-- For each page, add an "annotation" field to the JSON: a rich description for semantic search (embedding + Jaccard). Structure: <summary 1-2 sentences, covering the MAIN sections of the body, not only the first paragraph> Covers: <entities, tables, systems, Jira IDs, comma-separated>. Type: <type of operation/change>. Terms: <keywords from EVERY section — synonyms, IDs, terms that are not in the heading>. Aim for ~600–800 characters, all on ONE line without line breaks. Rely on the content of the page itself. Be specific, no filler or boilerplate — generic phrases raise noise in search.
-- The `annotation` field — ONLY in the JSON response. Do NOT add `annotation:` to the page frontmatter.
+- For each page, add an `annotation:` header in the `<<<PAGE>>>` frame: a rich description for semantic search (embedding + Jaccard). Structure: <summary 1-2 sentences, covering the MAIN sections of the body, not only the first paragraph> Covers: <entities, tables, systems, Jira IDs, comma-separated>. Type: <type of operation/change>. Terms: <keywords from EVERY section — synonyms, IDs, terms that are not in the heading>. Aim for ~600–800 characters, all on ONE line without line breaks. Rely on the content of the page itself. Be specific, no filler or boilerplate — generic phrases raise noise in search.
+- The `annotation:` header is ONLY in the frame header. Do NOT add `annotation:` to the page frontmatter.
 - DEAD LINKS: every [[wiki_domain_slug]] in `## Related` and elsewhere in the article body must
   either exist among the "Existing wiki pages" (provided in the context), or
   be present in the pages list of this response. No page — do not write the link.
@@ -47,13 +47,45 @@ TYPE ENRICHMENT (entity_types_delta):
 If, while analyzing the source, you discover:
 - new entity types (the type key is absent from the current list above), or
 - improvements to existing types (a more precise description or additional extraction_cues for an already existing type key) —
-add the entity_types_delta field to the JSON response. If nothing is new — simply do not include this field.
+add an `<<<ENTITY_TYPES_DELTA_JSON>>>` frame containing a JSON array. If nothing is new — omit this frame.
 
 DUPLICATE MERGING (merge):
 If among the existing wiki pages you find several describing the same entity:
-- emit one new page in pages (with merged content and the canonical path)
-- list the old paths in the deletes field: [{path}, ...]
+- emit one new `<<<PAGE>>>` frame (with merged content and the canonical path)
+- list the old paths as `<<<DELETE>>>` frames
 The old pages will be deleted, the index cleaned, and backlinks in the current source updated automatically.
 
-Return ONLY a JSON object — no other text:
-{"reasoning":"Rationale: which entities were extracted and why","pages":[{"path":"{{wiki_path}}/entities/wiki_{{domain_id}}_entity_name.md","content":"---\ntype: <entity type>\nresource: [\"{{source_stem}}\"]\ntimestamp: {{today}}\nstatus: stub\ntags: []\n---\n# EntityName\n\ncontent...\n\n## Related\n- [[wiki_{{domain_id}}_other_entity]]\n\n## External links\n- [Docs](https://example.com)","annotation":"The essence of the entity in 1-2 sentences. Covers: related entities, systems, tables. Type: reference entity. Terms: synonyms and keywords for search."}],"entity_types_delta":[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]}
+OUTPUT FORMAT:
+{{frame_instruction}}
+
+Return ONLY these frames — no JSON wrapper, no markdown fence, no text outside frames. If there are no page or delete changes, return `<<<REPORT>>>` and `<<<END>>>` only. Emit `<<<DELETE>>>` and `<<<ENTITY_TYPES_DELTA_JSON>>>` only when needed.
+<<<REPORT>>>
+Rationale: which entities were extracted and why
+<<<PAGE>>>
+path: {{wiki_path}}/entities/wiki_{{domain_id}}_entity_name.md
+annotation: The essence of the entity in 1-2 sentences. Covers: related entities, systems, tables. Type: reference entity. Terms: synonyms and keywords for search.
+<<<CONTENT>>>
+---
+type: <entity type>
+resource: ["{{source_stem}}"]
+timestamp: {{today}}
+status: stub
+tags: []
+---
+# EntityName
+
+content...
+
+## Related
+- [[wiki_{{domain_id}}_other_entity]]
+
+## External links
+- [Docs](https://example.com)
+<<<END_PAGE>>>
+<<<DELETE>>>
+path: {{wiki_path}}/entities/wiki_{{domain_id}}_old_entity.md
+<<<END_DELETE>>>
+<<<ENTITY_TYPES_DELTA_JSON>>>
+[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]
+<<<END_ENTITY_TYPES_DELTA_JSON>>>
+<<<END>>>
