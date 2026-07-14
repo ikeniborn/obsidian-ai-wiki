@@ -13,9 +13,9 @@ When fixing pages:
 - wiki_sources: every list item MUST be in double quotes: `"[[FileName]]"`. Without quotes YAML parses `[[...]]` as a nested array — this will break the page.
 
 When duplicate articles are found in the provided set:
-- merge the content of the duplicates into the main article (include the merged article in fixes[])
-- specify the paths of the duplicates in the deletes[].path field
-- specify the path of the main article in deletes[].redirect_to to update the links
+- merge the content of the duplicates into the main article and include that main article as a <<<PAGE>>> frame
+- emit each duplicate as a <<<DELETE>>> frame with path: set to the duplicate page
+- set redirect_to: in each duplicate's <<<DELETE>>> frame to the main article path so links can be updated
 
 Return ONLY framed output — no JSON, no markdown fences outside page content:
 <<<REPORT>>>
