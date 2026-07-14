@@ -1,6 +1,6 @@
 ---
 review:
-  plan_hash: c0eff2a1a81917d7
+  plan_hash: 0308889fb8b45a9e
   spec_hash: 78515e8557574167
   last_run: 2026-07-14
   phases:
@@ -48,6 +48,28 @@ chain:
 
 ---
 
+## Mandatory Corrections From Plan Re-Review
+
+These corrections are binding for implementation. If a later code snippet conflicts with this section, follow this section and the current source signatures.
+
+- Extend `RunEvent.structural_error`; do not replace existing members. Preserve the current `callSite: "init.delta"` member and add the new `errorType` labels to the existing `"json_parse" | "schema_validate"` union.
+- Keep compact structured calls on `json-zod`: `init.bootstrap`, `ingest.entities`, `lint.patch`, `query.seeds`. They must use fallback order `json_schema -> json_object -> none` when `opts.jsonMode` requests JSON, and they must still validate with Zod after parsing.
+- Use framed parsers with schema-specific adapters, not one generic `parsePageFrames` result for every schema:
+  - `parseWikiPagesFrames(text)` returns `{ reasoning, pages, deletes?, entity_types_delta? }` for `WikiPagesOutputSchema`. `entity_types_delta` is optional and may be parsed from an optional JSON sub-frame such as `<<<ENTITY_TYPES_DELTA_JSON>>>...<<<END_ENTITY_TYPES_DELTA_JSON>>>`.
+  - `parseLintFrames(text)` returns `{ reasoning, report, fixes, deletes? }` for `LintOutputSchema`; page frames map to `fixes`.
+  - `parseLintChatFrames(text)` returns `{ summary, pages }` for `LintChatSchema`.
+  - `parseContentFrame(text)` returns `{ reasoning?, content, annotation? }` for `MergedPageOutputSchema`.
+  - `parseAnswerFrames(text)` returns `{ reasoning, answer_markdown, citations }` for `makeQueryAnswerSchema(...)`; if the frame omits reasoning, use an empty string because the current schema requires `reasoning`.
+- Do not import `type { makeQueryAnswerSchema }` for `ReturnType<typeof makeQueryAnswerSchema>` from `framed-output.ts`; that is brittle and can create import-cycle confusion. Accept `schema: z.ZodSchema<QueryAnswer>` or a generic `z.ZodSchema<T>` in `queryAnswerProfile`.
+- `runStructuredWithRetry` must use current `extractStreamDeltas` shape: `{ reasoning, content, outputTokens, inputTokens }`. If it emits streamed text, it must expose a deliberate callback/option; otherwise it must not pretend buffered structural events are a watchdog heartbeat.
+- `runStructuredWithRetry` must explicitly handle backend response-format mismatch. Import and use `isJsonModeError` from `./llm-utils`; on that error, downgrade response format, emit `structural_error` with `errorType: "response_format_fallback"`, and retry without consuming a user-visible repair attempt when possible. Empty content must also downgrade for `json-zod`.
+- `format.ts` must preserve existing truncation/salvage behavior (`lastFinishReason === "length"`, `formatSalvage`, token restore, embed restore, wikilink/frontmatter restoration). If the shared runner cannot preserve those behaviors exactly, keep `callOnce` streaming and replace only validation/repair parsing with framed helpers.
+- `ingest.merge` currently has `onEvent: () => {}`. The fix must collect merge structural events and yield them around the merge attempt so diagnostics are not lost.
+- `AgentRunner` destructive retry guard must be per user-started `run()` and must trigger before both silent idle retry and caught idle retry. It must record `WipeDomain` when the yielded event is observed and must not replay the whole operation after that point.
+- Runtime `_config` rule: do not create per-domain `_config` folders in normal paths. Global legacy constants such as `GLOBAL_AGENT_LOG_PATH` may remain for migration code, but active controller logging must continue to use `${pluginDir()}/agent.jsonl`.
+
+---
+
 ## Task 1: Extend Diagnostics Types
 
 **Files:**
@@ -55,7 +77,7 @@ chain:
 
 - [ ] **Step 1: Update `structural_error.errorType` union**
 
-In `src/types.ts`, replace the `errorType` line inside the `structural_error` event with:
+In `src/types.ts`, extend the `structural_error` event without removing existing call sites. Keep the current `callSite` union including `"init.delta"`, and replace only the `errorType` union with:
 
 ```ts
       errorType:
@@ -101,7 +123,10 @@ import {
   parseAnswerFrames,
   parseContentFrame,
   parseFormatFrames,
+  parseLintChatFrames,
+  parseLintFrames,
   parsePageFrames,
+  parseWikiPagesFrames,
 } from "../src/phases/framed-output";
 
 test("parseFormatFrames parses report and formatted markdown", () => {
@@ -154,6 +179,28 @@ test("parsePageFrames parses pages and deletes", () => {
 
 test("parsePageFrames throws when required markers are missing", () => {
   assert.throws(() => parsePageFrames("<<<PAGE>>>\npath: x\n"), /missing <<<END>>>/i);
+});
+
+test("schema adapters map frames to expected zod fields", () => {
+  const raw = [
+    "<<<REPORT>>>",
+    "## Fixed",
+    "<<<PAGE>>>",
+    "path: !Wiki/demo/entities/wiki_demo_a.md",
+    "annotation: A page",
+    "<<<CONTENT>>>",
+    "---",
+    "type: Entity",
+    "---",
+    "# A",
+    "<<<END_PAGE>>>",
+    "<<<END>>>",
+  ].join("\n");
+  assert.equal(parseWikiPagesFrames(raw).reasoning, "## Fixed");
+  assert.equal(parseLintFrames(raw).report, "## Fixed");
+  assert.equal(parseLintFrames(raw).fixes[0].path, "!Wiki/demo/entities/wiki_demo_a.md");
+  assert.equal(parseLintChatFrames(raw).summary, "## Fixed");
+  assert.equal(parseLintChatFrames(raw).pages[0].path, "!Wiki/demo/entities/wiki_demo_a.md");
 });
 ```
 
@@ -263,7 +310,7 @@ export function parseAnswerFrames(text: string): AnswerFrameOutput {
     : [];
   const reasoning = text.includes("<<<REASONING>>>")
     ? between(text, "<<<REASONING>>>", "<<<ANSWER>>>")
-    : undefined;
+    : "";
   return { reasoning, answer_markdown: answer, citations };
 }
 
@@ -293,6 +340,33 @@ export function parsePageFrames(text: string): PageFramesOutput {
   }
   if (pages.length === 0 && deletes.length === 0) throw new Error("no page or delete frames found");
   return { reasoning, pages, deletes: deletes.length ? deletes : undefined };
+}
+
+export function parseWikiPagesFrames(text: string) {
+  const parsed = parsePageFrames(text);
+  return {
+    reasoning: parsed.reasoning,
+    pages: parsed.pages,
+    deletes: parsed.deletes?.map((d) => ({ path: d.path })),
+  };
+}
+
+export function parseLintFrames(text: string) {
+  const parsed = parsePageFrames(text);
+  return {
+    reasoning: parsed.reasoning,
+    report: parsed.reasoning,
+    fixes: parsed.pages,
+    deletes: parsed.deletes,
+  };
+}
+
+export function parseLintChatFrames(text: string) {
+  const parsed = parsePageFrames(text);
+  return {
+    summary: parsed.reasoning,
+    pages: parsed.pages,
+  };
 }
 ```
 
@@ -482,6 +556,7 @@ import {
   buildLlmCallStatsEvent,
   extractStreamDeltas,
   extractUsage,
+  isJsonModeError,
   parseStructured,
   wrapStreamWithStats,
 } from "./llm-utils";
@@ -683,6 +758,21 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
 }
 ```
 
+When implementing the code above, add one required branch that is intentionally abbreviated in the snippet: if the streaming or non-streaming call throws and `isJsonModeError(e)` is true for a `json-zod` profile, downgrade `mode` with `fallbackMode(mode)`, emit:
+
+```ts
+onEvent({
+  kind: "structural_error",
+  callSite,
+  errorType: "response_format_fallback",
+  retryAttempt: attempt,
+  succeeded: null,
+  message: `${mode} -> ${next}`,
+});
+```
+
+then retry the same logical attempt with the downgraded `response_format`. If there is no next mode, rethrow the original error. This is separate from `wrapWithJsonFallback`; the runner must expose the fallback in diagnostics.
+
 - [ ] **Step 4: Replace `parse-with-retry.ts` with wrapper exports**
 
 In `src/phases/parse-with-retry.ts`, keep the public API but delegate to `runStructuredWithRetry`:
@@ -786,14 +876,17 @@ export function formatProfile(hasVisionDescriptions: boolean) {
 }
 ```
 
-- [ ] **Step 2: Replace initial format call/retry block**
+- [ ] **Step 2: Replace initial format validation without losing truncation/salvage**
 
 In `src/phases/format.ts`:
 
 1. Import `runStructuredWithRetry` from `./structured-output`.
 2. Import `formatProfile` from `./framed-output`.
-3. Keep `callOnce` only if it is still needed for token-restore streaming; otherwise use `runStructuredWithRetry` for both initial and token restore calls.
-4. Replace the block from `yield { kind: "tool_use", name: "Formatting"... }` through the second sentinel retry with:
+3. Keep `callOnce`, `lastFinishReason`, `formatSalvage`, token restore, embed restore, WikiLink repair, and frontmatter restore. These are part of current observable behavior.
+4. Prefer using shared framed parser/profile for validation and repair prompts. Use `runStructuredWithRetry` for format only if the implementation preserves `lastFinishReason === "length"` handling and does not drop the existing token-restore call.
+5. If preserving those behaviors through `runStructuredWithRetry` would make the change risky, leave the streaming `callOnce` path in place and replace `parseFormatOutput` with a wrapper around `parseFormatFrames(...).raw` plus Zod validation. The final contract is still `framed-zod` validation; preserving format behavior is higher priority than forcing every byte through one runner.
+
+The replacement shape, when using the runner directly, is:
 
 ```ts
   yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
@@ -886,7 +979,7 @@ export function wikiPagesProfile() {
   return {
     kind: "framed-zod" as const,
     schema: WikiPagesOutputSchema,
-    parse: parsePageFrames,
+    parse: parseWikiPagesFrames,
     repairInstruction: wikiPagesFrameInstruction,
   };
 }
@@ -983,13 +1076,14 @@ In `src/phases/framed-output.ts`, add:
 
 ```ts
 import { LintChatSchema, LintOutputSchema } from "./zod-schemas";
-import type { makeQueryAnswerSchema } from "./zod-schemas";
+import type { QueryAnswer } from "./zod-schemas";
+import type { z } from "zod";
 
 export function lintOutputProfile() {
   return {
     kind: "framed-zod" as const,
     schema: LintOutputSchema,
-    parse: parsePageFrames,
+    parse: parseLintFrames,
     repairInstruction: wikiPagesFrameInstruction,
   };
 }
@@ -998,12 +1092,12 @@ export function lintChatProfile() {
   return {
     kind: "framed-zod" as const,
     schema: LintChatSchema,
-    parse: (text: string) => ({ summary: parsePageFrames(text).reasoning, pages: parsePageFrames(text).pages }),
+    parse: parseLintChatFrames,
     repairInstruction: wikiPagesFrameInstruction,
   };
 }
 
-export function queryAnswerProfile(schema: ReturnType<typeof makeQueryAnswerSchema>) {
+export function queryAnswerProfile(schema: z.ZodSchema<QueryAnswer>) {
   return {
     kind: "framed-zod" as const,
     schema,
