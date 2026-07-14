@@ -21,8 +21,6 @@ const repairJson = [
   "Return ONLY a single valid JSON object matching the schema. No markdown fences, no <think> tags, no commentary.",
 ].join("\n");
 
-const JSON_FALLBACK_INNER = Symbol.for("obsidian-ai-wiki.jsonFallbackInner");
-
 export type StructuredCallSite =
   | "init.bootstrap"
   | "init.delta"
@@ -115,7 +113,7 @@ function emitResponseFormatFallback(
 
 function initialMode<T>(profile: StructuredProfile<T>, opts: LlmCallOptions): ResponseFormatMode {
   if (profile.kind !== "json-zod") return "none";
-  return opts.jsonMode === "json_object" || opts.jsonMode === "json_schema" ? "json_schema" : "none";
+  return opts.jsonMode === false ? "none" : "json_schema";
 }
 
 function optsForMode<T>(
@@ -228,10 +226,6 @@ function classifyError<T>(profile: StructuredProfile<T>, err: Error): Extract<Ru
   return "json_parse";
 }
 
-function directLlm(llm: LlmClient): LlmClient {
-  return (llm as { [JSON_FALLBACK_INNER]?: LlmClient })[JSON_FALLBACK_INNER] ?? llm;
-}
-
 async function callWithFormatFallback<T>(
   args: RunStructuredArgs<T>,
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
@@ -246,7 +240,7 @@ async function callWithFormatFallback<T>(
 
     try {
       return {
-        result: await streamOnce(directLlm(args.llm), args.model, messages, callOpts, args.signal),
+        result: await streamOnce(args.llm, args.model, messages, callOpts, args.signal),
         mode: currentMode,
       };
     } catch (e) {

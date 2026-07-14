@@ -26432,8 +26432,8 @@ var en = {
     seedMinScore_desc: "Min Jaccard score for a page to qualify as a seed, 0.0\u20131.0. Default 0.1. \u2191 stricter, fewer/cleaner seeds \xB7 \u2193 looser, more recall.",
     mergeDeleteWarnThreshold_name: "Merge delete warning threshold",
     mergeDeleteWarnThreshold_desc: "Ingest warns when the LLM requests deleting more pages than this in one merge. Default 5. \u2191 fewer warnings, risk of bulk loss \xB7 \u2193 flags merges earlier.",
-    structuredRetries_name: "Structured output retries",
-    structuredRetries_desc: "Retries on schema validation failure, 0\u20133. Default 1. \u2191 higher success on weaker models, more latency/tokens \xB7 \u2193 faster, more failures.",
+    structuredRetries_name: "Output repair retries",
+    structuredRetries_desc: "Retries for invalid JSON or invalid framed output after Zod validation, 0\u20133. Default 1. \u2191 higher success on weaker models, more latency/tokens \xB7 \u2193 faster, more failures.",
     llmIdleTimeout_name: "LLM idle timeout (seconds)",
     llmIdleTimeout_desc: "Seconds of LLM silence before aborting the attempt. 0 = disabled. Default 300. \u2191 more patience for slow models \xB7 \u2193 catches stalls sooner.",
     llmIdleRetries_name: "LLM idle retries",
@@ -26798,8 +26798,8 @@ var ru = {
     seedMinScore_desc: "\u041C\u0438\u043D\u0438\u043C\u0430\u043B\u044C\u043D\u044B\u0439 Jaccard score, \u0447\u0442\u043E\u0431\u044B \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430 \u043F\u043E\u043F\u0430\u043B\u0430 \u0432 seeds, 0.0\u20131.0. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 0.1. \u2191 \u0441\u0442\u0440\u043E\u0436\u0435, \u043C\u0435\u043D\u044C\u0448\u0435/\u0447\u0438\u0449\u0435 seeds \xB7 \u2193 \u043C\u044F\u0433\u0447\u0435, \u0432\u044B\u0448\u0435 \u043F\u043E\u043B\u043D\u043E\u0442\u0430.",
     mergeDeleteWarnThreshold_name: "\u041F\u043E\u0440\u043E\u0433 \u043F\u0440\u0435\u0434\u0443\u043F\u0440\u0435\u0436\u0434\u0435\u043D\u0438\u044F \u043E merge-\u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F\u0445",
     mergeDeleteWarnThreshold_desc: "Ingest \u043F\u0440\u0435\u0434\u0443\u043F\u0440\u0435\u0436\u0434\u0430\u0435\u0442, \u0435\u0441\u043B\u0438 LLM \u043F\u0440\u043E\u0441\u0438\u0442 \u0443\u0434\u0430\u043B\u0438\u0442\u044C \u0431\u043E\u043B\u044C\u0448\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u0437\u0430 \u043E\u0434\u0438\u043D merge. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 5. \u2191 \u0440\u0435\u0436\u0435 \u043F\u0440\u0435\u0434\u0443\u043F\u0440\u0435\u0436\u0434\u0435\u043D\u0438\u044F, \u0440\u0438\u0441\u043A \u043C\u0430\u0441\u0441\u043E\u0432\u043E\u0433\u043E \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F \xB7 \u2193 \u0440\u0430\u043D\u044C\u0448\u0435 \u043B\u043E\u0432\u0438\u0442 merge.",
-    structuredRetries_name: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u043F\u0440\u0438 \u043E\u0448\u0438\u0431\u043A\u0435 \u0441\u0445\u0435\u043C\u044B",
-    structuredRetries_desc: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u0432\u044B\u0437\u043E\u0432\u0430 LLM \u043F\u0440\u0438 \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0435 \u043E\u0442\u0432\u0435\u0442\u0430, 0\u20133. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 1. \u2191 \u043D\u0430\u0434\u0451\u0436\u043D\u0435\u0435 \u043D\u0430 \u0441\u043B\u0430\u0431\u044B\u0445 \u043C\u043E\u0434\u0435\u043B\u044F\u0445, \u0434\u043E\u0440\u043E\u0436\u0435 \u043F\u043E \u0442\u043E\u043A\u0435\u043D\u0430\u043C/\u0432\u0440\u0435\u043C\u0435\u043D\u0438 \xB7 \u2193 \u0431\u044B\u0441\u0442\u0440\u0435\u0435, \u0431\u043E\u043B\u044C\u0448\u0435 \u043E\u0442\u043A\u0430\u0437\u043E\u0432.",
+    structuredRetries_name: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u043E\u0442\u0432\u0435\u0442\u0430",
+    structuredRetries_desc: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u043F\u0440\u0438 \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E\u043C JSON \u0438\u043B\u0438 \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E\u043C framed-\u043E\u0442\u0432\u0435\u0442\u0435 \u043F\u043E\u0441\u043B\u0435 Zod validation, 0\u20133. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 1. \u2191 \u043D\u0430\u0434\u0451\u0436\u043D\u0435\u0435 \u043D\u0430 \u0441\u043B\u0430\u0431\u044B\u0445 \u043C\u043E\u0434\u0435\u043B\u044F\u0445, \u0434\u043E\u0440\u043E\u0436\u0435 \u043F\u043E \u0442\u043E\u043A\u0435\u043D\u0430\u043C/\u0432\u0440\u0435\u043C\u0435\u043D\u0438 \xB7 \u2193 \u0431\u044B\u0441\u0442\u0440\u0435\u0435, \u0431\u043E\u043B\u044C\u0448\u0435 \u043E\u0442\u043A\u0430\u0437\u043E\u0432.",
     llmIdleTimeout_name: "\u0422\u0430\u0439\u043C\u0430\u0443\u0442 \u043F\u0440\u043E\u0441\u0442\u043E\u044F LLM (\u0441\u0435\u043A\u0443\u043D\u0434\u044B)",
     llmIdleTimeout_desc: "\u0421\u0435\u043A\u0443\u043D\u0434 \u0442\u0438\u0448\u0438\u043D\u044B LLM \u0434\u043E \u043F\u0440\u0435\u0440\u044B\u0432\u0430\u043D\u0438\u044F \u043F\u043E\u043F\u044B\u0442\u043A\u0438. 0 = \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 300. \u2191 \u0442\u0435\u0440\u043F\u0435\u043B\u0438\u0432\u0435\u0435 \u043A \u043C\u0435\u0434\u043B\u0435\u043D\u043D\u044B\u043C \u043C\u043E\u0434\u0435\u043B\u044F\u043C \xB7 \u2193 \u0440\u0430\u043D\u044C\u0448\u0435 \u043B\u043E\u0432\u0438\u0442 \u0437\u0430\u0432\u0438\u0441\u0430\u043D\u0438\u044F.",
     llmIdleRetries_name: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u043F\u0440\u0438 \u043F\u0440\u043E\u0441\u0442\u043E\u0435 LLM",
@@ -27163,8 +27163,8 @@ var es = {
     seedMinScore_desc: "Puntuaci\xF3n Jaccard m\xEDnima para que una p\xE1gina sea semilla, 0.0\u20131.0. Por defecto 0.1. \u2191 m\xE1s estricto, menos/mejores semillas \xB7 \u2193 m\xE1s laxo, m\xE1s exhaustivo.",
     mergeDeleteWarnThreshold_name: "Umbral de aviso de merge-deletes",
     mergeDeleteWarnThreshold_desc: "Ingest avisa cuando el LLM pide borrar m\xE1s p\xE1ginas que esto en un merge. Por defecto 5. \u2191 menos avisos, riesgo de p\xE9rdida masiva \xB7 \u2193 marca merges antes.",
-    structuredRetries_name: "Structured output retries",
-    structuredRetries_desc: "Reintentos ante fallo de validaci\xF3n de esquema, 0\u20133. Por defecto 1. \u2191 m\xE1s \xE9xito en modelos d\xE9biles, m\xE1s latencia/tokens \xB7 \u2193 m\xE1s r\xE1pido, m\xE1s fallos.",
+    structuredRetries_name: "Reintentos de reparaci\xF3n de salida",
+    structuredRetries_desc: "Reintentos para JSON inv\xE1lido o salida framed inv\xE1lida tras validaci\xF3n Zod, 0\u20133. Por defecto 1. \u2191 m\xE1s \xE9xito en modelos d\xE9biles, m\xE1s latencia/tokens \xB7 \u2193 m\xE1s r\xE1pido, m\xE1s fallos.",
     llmIdleTimeout_name: "Tiempo de espera de inactividad LLM (segundos)",
     llmIdleTimeout_desc: "Segundos de silencio del LLM antes de abortar el intento. 0 = desactivado. Por defecto 300. \u2191 m\xE1s paciencia con modelos lentos \xB7 \u2193 detecta bloqueos antes.",
     llmIdleRetries_name: "Reintentos por inactividad LLM",
@@ -32406,81 +32406,12 @@ ${directive}` };
   return [{ role: "system", content: directive }, ...messages];
 }
 var JSON_MODE_KEYWORDS = ["response_format", "json_object", "json mode", "unsupported"];
-var JSON_FALLBACK_INNER = /* @__PURE__ */ Symbol.for("obsidian-ai-wiki.jsonFallbackInner");
 function isJsonModeError(e) {
   if (!e || typeof e !== "object") return false;
   const status = e.status;
   if (status !== 400 && status !== 422) return false;
   const msg = String(e.message ?? "").toLowerCase();
   return JSON_MODE_KEYWORDS.some((kw) => msg.includes(kw));
-}
-function hasContentDelta(chunk) {
-  const c = chunk.choices?.[0]?.delta?.content;
-  return typeof c === "string" && c.length > 0;
-}
-function degradeResponseFormat(params) {
-  const rf = params.response_format;
-  if (rf?.type === "json_schema") {
-    return { ...params, response_format: { type: "json_object" } };
-  }
-  const next = { ...params };
-  delete next.response_format;
-  return next;
-}
-function wrapWithJsonFallback(inner) {
-  const create = ((params, callOpts) => {
-    const hasRf = params.response_format !== void 0;
-    const isStream = params.stream === true;
-    if (!hasRf) {
-      return inner.chat.completions.create(params, callOpts);
-    }
-    if (!isStream) {
-      return (async () => {
-        let current = params;
-        while (current.response_format !== void 0) {
-          try {
-            return await inner.chat.completions.create(current, callOpts);
-          } catch (e) {
-            if (!isJsonModeError(e)) throw e;
-            current = degradeResponseFormat(current);
-          }
-        }
-        return inner.chat.completions.create(current, callOpts);
-      })();
-    }
-    return (async () => {
-      let current = params;
-      let upstream;
-      while (upstream === void 0) {
-        try {
-          upstream = await inner.chat.completions.create(current, callOpts);
-        } catch (e) {
-          if (!isJsonModeError(e) || current.response_format === void 0) throw e;
-          current = degradeResponseFormat(current);
-        }
-      }
-      const connectedParams = current;
-      async function* gated() {
-        let seenContent = false;
-        try {
-          for await (const chunk of upstream) {
-            if (hasContentDelta(chunk)) seenContent = true;
-            yield chunk;
-          }
-        } catch (e) {
-          if (seenContent || !isJsonModeError(e)) throw e;
-          const degraded = degradeResponseFormat(connectedParams);
-          if (degraded.response_format === connectedParams.response_format) throw e;
-          const retry = await inner.chat.completions.create(degraded, callOpts);
-          for await (const c of retry) yield c;
-        }
-      }
-      return gated();
-    })();
-  });
-  const wrapped = { chat: { completions: { create } } };
-  wrapped[JSON_FALLBACK_INNER] = inner;
-  return wrapped;
 }
 function injectSystemPrompt(messages, systemPrompt) {
   if (!systemPrompt) return messages;
@@ -39587,7 +39518,6 @@ var repairJson = [
   "",
   "Return ONLY a single valid JSON object matching the schema. No markdown fences, no <think> tags, no commentary."
 ].join("\n");
-var JSON_FALLBACK_INNER2 = /* @__PURE__ */ Symbol.for("obsidian-ai-wiki.jsonFallbackInner");
 var StructuredValidationError = class extends Error {
   constructor(callSite, attempts, lastError) {
     super(`[${callSite}] structural validation failed after ${attempts} attempt(s): ${lastError.message}`);
@@ -39620,7 +39550,7 @@ function emitResponseFormatFallback(onEvent, callSite, retryAttempt, from, to) {
 }
 function initialMode(profile, opts) {
   if (profile.kind !== "json-zod") return "none";
-  return opts.jsonMode === "json_object" || opts.jsonMode === "json_schema" ? "json_schema" : "none";
+  return opts.jsonMode === false ? "none" : "json_schema";
 }
 function optsForMode(opts, mode, callSite, schema) {
   if (mode === "none") return { ...opts, jsonMode: false, jsonSchema: void 0 };
@@ -39710,16 +39640,13 @@ function classifyError(profile, err) {
   if (err instanceof ZodError) return "schema_validate";
   return "json_parse";
 }
-function directLlm(llm) {
-  return llm[JSON_FALLBACK_INNER2] ?? llm;
-}
 async function callWithFormatFallback(args, messages, mode, attempt) {
   let currentMode = mode;
   while (true) {
     const callOpts = args.profile.kind === "json-zod" ? optsForMode(args.opts, currentMode, args.callSite, args.profile.schema) : { ...args.opts, jsonMode: false, jsonSchema: void 0 };
     try {
       return {
-        result: await streamOnce(directLlm(args.llm), args.model, messages, callOpts, args.signal),
+        result: await streamOnce(args.llm, args.model, messages, callOpts, args.signal),
         mode: currentMode
       };
     } catch (e) {
@@ -44888,7 +44815,7 @@ var AgentRunner = class {
     this.domains = domains;
     this.visionTempBaseDir = visionTempBaseDir;
     this.isMobile = isMobile;
-    this.llm = wrapWithJsonFallback(llm);
+    this.llm = llm;
   }
   settings;
   vaultTools;
@@ -44918,7 +44845,6 @@ var AgentRunner = class {
       systemPrompt: s.systemPrompt,
       outputLanguage: s.outputLanguage,
       reasoningLanguage: s.reasoningLanguage,
-      jsonMode: "json_object",
       structuredRetries,
       mergeDeleteWarnThreshold,
       dedupOnIngest: na.dedupOnIngest,
@@ -44934,7 +44860,6 @@ var AgentRunner = class {
       systemPrompt: s.systemPrompt,
       outputLanguage: s.outputLanguage,
       reasoningLanguage: s.reasoningLanguage,
-      jsonMode: "json_object",
       structuredRetries,
       mergeDeleteWarnThreshold,
       dedupOnIngest: na.dedupOnIngest,

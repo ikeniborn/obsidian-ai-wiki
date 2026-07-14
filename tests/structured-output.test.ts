@@ -14,8 +14,6 @@ const {
   StructuredValidationError,
 } = await import("../src/phases/structured-output");
 
-const JSON_FALLBACK_INNER = Symbol.for("obsidian-ai-wiki.jsonFallbackInner");
-
 const SmallSchema = z.object({
   value: z.string(),
 });
@@ -64,32 +62,6 @@ function llmFromAttempts(attempts: Array<string | Error>, seenParams: Record<str
       },
     },
   } as unknown as LlmClient;
-}
-
-function jsonFallbackWrappedLlm(inner: LlmClient): LlmClient {
-  const wrapped = {
-    chat: {
-      completions: {
-        create: async (params: unknown, opts?: { signal?: AbortSignal }) => {
-          try {
-            return await inner.chat.completions.create(
-              params as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-              opts,
-            );
-          } catch (e) {
-            if (!isTestJsonModeError(e)) throw e;
-            const next = { ...(params as Record<string, unknown>), response_format: { type: "json_object" } };
-            return inner.chat.completions.create(
-              next as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-              opts,
-            );
-          }
-        },
-      },
-    },
-  } as LlmClient & { [JSON_FALLBACK_INNER]?: LlmClient };
-  wrapped[JSON_FALLBACK_INNER] = inner;
-  return wrapped;
 }
 
 function isTestJsonModeError(e: unknown): boolean {
@@ -212,7 +184,7 @@ test("schema retry recovery emits succeeded structural_error event", async () =>
   );
 });
 
-test("parseWithRetry wrapper with jsonMode unset sends no response_format on first attempt", async () => {
+test("json-zod with jsonMode unset starts with json_schema response_format", async () => {
   const seenParams: Record<string, unknown>[] = [];
 
   await parseWithRetry({
@@ -227,18 +199,36 @@ test("parseWithRetry wrapper with jsonMode unset sends no response_format on fir
     onEvent: () => {},
   });
 
+  assert.equal((seenParams[0]?.response_format as { type?: string } | undefined)?.type, "json_schema");
+});
+
+test("json-zod with jsonMode false sends no response_format", async () => {
+  const seenParams: Record<string, unknown>[] = [];
+
+  await parseWithRetry({
+    llm: llmFromAttempts(['{"value":"plain"}'], seenParams),
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: { jsonMode: false },
+    schema: SmallSchema,
+    maxRetries: 1,
+    callSite: "query.seeds",
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+
   assert.equal(seenParams[0]?.response_format, undefined);
 });
 
-test("runner bypasses hidden json fallback wrapper and emits fallback event", async () => {
+test("runner emits response-format fallback without hidden client wrapper", async () => {
   const events: RunEvent[] = [];
   const seenParams: Record<string, unknown>[] = [];
 
   const result = await runStructuredWithRetry({
-    llm: jsonFallbackWrappedLlm(llmFromAttempts([jsonModeError(), '{"value":"visible"}'], seenParams)),
+    llm: llmFromAttempts([jsonModeError(), '{"value":"visible"}'], seenParams),
     model: "m",
     baseMessages: [{ role: "user", content: "x" }],
-    opts: { jsonMode: "json_schema" },
+    opts: {},
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 1,
     callSite: "query.seeds",

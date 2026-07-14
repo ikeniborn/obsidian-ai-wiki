@@ -170,3 +170,34 @@ test("operation-level idle retry still replays non-destructive operations", asyn
   assert.equal(events.some((ev) => ev.kind === "system" && ev.message.includes("retrying")), true);
   assert.equal(events.some((ev) => ev.kind === "result" && ev.text === "ok"), true);
 });
+
+test("agent runner does not inject global JSON response format into operation options", () => {
+  const base = settings();
+  const runner = new AgentRunner(
+    { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
+    base,
+    new VaultTools(adapter(), "/vault"),
+    "Vault",
+    [],
+  );
+  const optsFor = runner as unknown as {
+    buildOptsFor(op: "query" | "init"): { opts: { jsonMode?: unknown } };
+  };
+
+  assert.equal(optsFor.buildOptsFor("query").opts.jsonMode, undefined);
+
+  const perOp = settings();
+  perOp.nativeAgent.perOperation = true;
+  const perOpRunner = new AgentRunner(
+    { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
+    perOp,
+    new VaultTools(adapter(), "/vault"),
+    "Vault",
+    [],
+  );
+  const perOpOptsFor = perOpRunner as unknown as {
+    buildOptsFor(op: "init"): { opts: { jsonMode?: unknown } };
+  };
+
+  assert.equal(perOpOptsFor.buildOptsFor("init").opts.jsonMode, undefined);
+});

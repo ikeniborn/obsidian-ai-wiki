@@ -121,7 +121,7 @@
   </header>
   <main>
     <section class="grid" aria-label="Итоги">
-      <div class="metric"><strong>113/113</strong><span class="muted">полный test suite</span></div>
+      <div class="metric"><strong>115/115</strong><span class="muted">полный test suite</span></div>
       <div class="metric"><strong>0</strong><span class="muted">TypeScript errors</span></div>
       <div class="metric"><strong>0</strong><span class="muted">lint errors</span></div>
       <div class="metric"><strong>4</strong><span class="muted">pre-existing lint warnings</span></div>
@@ -130,6 +130,7 @@
     <section class="panel">
       <h2>Итог</h2>
       <p>Пайплайн структурированных LLM-вызовов приведён к двум режимам: <code>json-zod</code> для малых объектов и <code>framed-zod</code> для больших Markdown/text payloads. Ошибка из лога bootstrap теперь диагностируется как пустой/non-JSON output или несовместимость <code>response_format</code>, с downgrade и Zod-validation после восстановления.</p>
+      <p>Глобальный <code>jsonMode</code> удалён из operation options: JSON response format теперь включает только <code>json-zod</code> runner, а framed/raw Markdown calls не наследуют JSON mode. Legacy hidden <code>wrapWithJsonFallback</code> удалён, чтобы fallback diagnostics оставались в одном месте.</p>
       <p>Replay после destructive prelude заблокирован: если <code>init --force</code> уже выполнил <code>WipeDomain</code>, operation-level idle retry не повторит весь init и не сотрёт домен повторно.</p>
     </section>
 
@@ -184,10 +185,10 @@
       <table>
         <thead><tr><th>Команда</th><th>Результат</th></tr></thead>
         <tbody>
-          <tr><td><code>node --import tsx --test tests/framed-output.test.ts tests/structured-output.test.ts tests/format-response-format.test.ts tests/init-force-retry.test.ts tests/no-runtime-domain-config.test.ts</code></td><td><span class="ok">PASS</span> 31/31</td></tr>
+          <tr><td><code>node --import tsx --test tests/framed-output.test.ts tests/structured-output.test.ts tests/format-response-format.test.ts tests/init-force-retry.test.ts tests/no-runtime-domain-config.test.ts</code></td><td><span class="ok">PASS</span> 33/33</td></tr>
           <tr><td><code>npx tsc --noEmit --pretty false</code></td><td><span class="ok">PASS</span></td></tr>
           <tr><td><code>npm run lint</code></td><td><span class="ok">PASS</span>, 0 errors, 4 pre-existing warnings</td></tr>
-          <tr><td><code>node --import tsx --test tests/*.test.ts</code></td><td><span class="ok">PASS</span> 113/113</td></tr>
+          <tr><td><code>node --import tsx --test tests/*.test.ts</code></td><td><span class="ok">PASS</span> 115/115</td></tr>
           <tr><td><code>npm run build</code></td><td><span class="ok">PASS</span>, updated <code>dist/main.js</code></td></tr>
           <tr><td><code>wiki_lint obsidian-ai-wiki</code></td><td><span class="ok">PASS</span> for broken/orphan/stale/missing-source; advisory long-lead notes remain.</td></tr>
         </tbody>
@@ -202,14 +203,15 @@
           <thead><tr><th>Файл</th><th>Изменение и причина</th><th>Доказательство</th></tr></thead>
           <tbody>
             <tr><td><code>src/types.ts</code></td><td>Расширены diagnostic labels без удаления <code>init.delta</code>.</td><td>typed events compile.</td></tr>
-            <tr><td><code>src/phases/structured-output.ts</code></td><td>Shared runner для JSON/framed profiles, fallback, retry diagnostics.</td><td>structured-output tests.</td></tr>
+            <tr><td><code>src/phases/structured-output.ts</code></td><td>Shared runner для JSON/framed profiles, fallback, retry diagnostics. <code>json-zod</code> сам стартует с <code>json_schema</code>, если caller явно не передал <code>jsonMode:false</code>.</td><td>structured-output tests.</td></tr>
+            <tr><td><code>src/phases/llm-utils.ts</code></td><td>Удалён legacy hidden <code>wrapWithJsonFallback</code>; response-format downgrade теперь живёт в structured runner.</td><td>structured-output tests.</td></tr>
             <tr><td><code>src/phases/parse-with-retry.ts</code></td><td>Compatibility wrapper на <code>json-zod</code>.</td><td>existing call sites unchanged externally.</td></tr>
             <tr><td><code>src/phases/llm-utils.ts</code></td><td>Raw-client symbol для обхода скрытого JSON fallback.</td><td>diagnostic fallback test.</td></tr>
             <tr><td><code>src/phases/framed-output.ts</code></td><td>Line-anchored framed parsers и schema adapters.</td><td>framed parser tests.</td></tr>
             <tr><td><code>src/phases/format.ts</code></td><td>Format parse через framed helper + Zod; inherited JSON mode отключён для base/retry/token-restore calls; salvage/token/link/frontmatter flow сохранён.</td><td>format response-format test + full suite + build.</td></tr>
             <tr><td><code>src/phases/ingest.ts</code></td><td><code>ingest.pages</code>/<code>merge</code>/path repair переведены на frames; merge diagnostics сохранены.</td><td>framed + full tests.</td></tr>
             <tr><td><code>src/phases/lint.ts</code>, <code>src/phases/lint-chat.ts</code>, <code>src/phases/query-answer.ts</code></td><td>Large text repairs переведены на framed-zod; compact patch остаётся JSON.</td><td>typecheck, tests.</td></tr>
-            <tr><td><code>src/agent-runner.ts</code></td><td>Guard против replay после <code>WipeDomain</code>.</td><td>init-force-retry tests.</td></tr>
+            <tr><td><code>src/agent-runner.ts</code></td><td>Guard против replay после <code>WipeDomain</code>; global JSON mode больше не инжектится в native operation options.</td><td>init-force-retry tests.</td></tr>
             <tr><td><code>src/domain-config.ts</code></td><td>Runtime больше не создаёт per-domain <code>_config</code>; legacy migration сохранена.</td><td>no-runtime-domain-config tests.</td></tr>
             <tr><td><code>src/reranker.ts</code></td><td>Исправлен baseline TS blocker в capped array.</td><td>typecheck PASS.</td></tr>
             <tr><td><code>prompts/*.md</code></td><td>Ingest/lint prompts переведены с JSON wording на framed contracts.</td><td>parser/profile tests + build.</td></tr>
@@ -222,9 +224,9 @@
           <thead><tr><th>Артефакт</th><th>Изменение и причина</th><th>Доказательство</th></tr></thead>
           <tbody>
             <tr><td><code>tests/framed-output.test.ts</code></td><td>Frame parsing, malformed frames, adapters, literal markers.</td><td>PASS.</td></tr>
-            <tr><td><code>tests/structured-output.test.ts</code></td><td>Fallback ladder, empty output, backend mismatch, retry recovery.</td><td>PASS.</td></tr>
+            <tr><td><code>tests/structured-output.test.ts</code></td><td>Fallback ladder, empty output, backend mismatch, retry recovery, default <code>json-zod</code> JSON mode и <code>jsonMode:false</code> escape hatch.</td><td>PASS.</td></tr>
             <tr><td><code>tests/format-response-format.test.ts</code></td><td>Regression guard: <code>format.output</code> не передаёт <code>response_format</code>, даже если caller opts требуют JSON mode.</td><td>PASS.</td></tr>
-            <tr><td><code>tests/init-force-retry.test.ts</code></td><td>Destructive retry guard coverage.</td><td>PASS.</td></tr>
+            <tr><td><code>tests/init-force-retry.test.ts</code></td><td>Destructive retry guard coverage and no global JSON mode injection from <code>AgentRunner</code>.</td><td>PASS.</td></tr>
             <tr><td><code>tests/no-runtime-domain-config.test.ts</code></td><td>Static/runtime guard for <code>agent.jsonl</code> and no per-domain <code>_config</code>.</td><td>PASS.</td></tr>
             <tr><td><code>tests/md-obsidian-loader.mjs</code></td><td>Test-only loader for Markdown prompts and Obsidian stub.</td><td>Node test command PASS.</td></tr>
             <tr><td><code>docs/superpowers/*structured-output*</code></td><td>Intent/spec/plan/result chain artifacts.</td><td>hashes approved.</td></tr>
