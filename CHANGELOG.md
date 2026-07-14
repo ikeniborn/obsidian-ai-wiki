@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.200 — 2026-07-14
+
+### Fixes
+- fix: remove deleted domain metadata from registry
+
+---
+
 ## 0.1.199 — 2026-07-14
 
 ### New
