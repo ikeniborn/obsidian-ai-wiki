@@ -52697,6 +52697,23 @@ var DomainStore = class {
     const adapter = this.vault.adapter;
     if (!await adapter.exists(WIKI_DIR)) await this.vault.createFolder(WIKI_DIR).catch(() => {
     });
+    if (await adapter.exists(LEGACY_GLOBAL_DOMAIN_PATH)) await adapter.remove(LEGACY_GLOBAL_DOMAIN_PATH);
+    const desiredPathsById = new Map(domains.map((domain) => [domain.id, domainMetadataPath(domainWikiFolder(domain.wiki_folder))]));
+    const desiredPaths = new Set(desiredPathsById.values());
+    const listed = await adapter.list(WIKI_DIR);
+    for (const folder of [...listed.folders].sort()) {
+      const name = folder.split("/").pop() ?? folder;
+      if (name.startsWith(".") || name.startsWith("_")) continue;
+      const path5 = domainMetadataPath(folder);
+      if (!await adapter.exists(path5) || desiredPaths.has(path5)) continue;
+      try {
+        const existing = parseDomainMetadata(await adapter.read(path5), path5, name);
+        if (!desiredPathsById.has(existing.id) || desiredPathsById.get(existing.id) !== path5) {
+          await adapter.remove(path5);
+        }
+      } catch {
+      }
+    }
     for (const domain of domains) {
       const folder = domainWikiFolder(domain.wiki_folder);
       if (!await adapter.exists(folder)) await this.vault.createFolder(folder).catch(() => {
