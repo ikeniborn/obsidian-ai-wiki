@@ -216,6 +216,16 @@ test("parseWikiPageRepairFramesOrJson accepts framed page repair output", () => 
   assert.equal(pages[0].content, "# Fixed");
 });
 
+test("parseWikiPageRepairFramesOrJson returns empty array for report-only repair output", () => {
+  const pages = parseWikiPageRepairFramesOrJson([
+    "<<<REPORT>>>",
+    "No corrected pages.",
+    "<<<END>>>",
+  ].join("\n"));
+
+  assert.deepEqual(pages, []);
+});
+
 test("parseWikiPageRepairFramesOrJson keeps legacy JSON repair output", () => {
   const pages = parseWikiPageRepairFramesOrJson(JSON.stringify([{
     path: "!Wiki/demo/entities/wiki_demo_fixed.md",

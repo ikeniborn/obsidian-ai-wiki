@@ -283,8 +283,8 @@ export async function* runIngest(
     };
     const retryText = await retryInvalidPaths(llm, model, messages, invalid, signal, opts);
     if (signal.aborted) return;
-    if (retryText) {
-      const retried = parseWikiPageRepairFramesOrJson(retryText);
+    const retried = retryText ? parseWikiPageRepairFramesOrJson(retryText) : [];
+    if (retried.length > 0) {
       const { valid: retriedValid, invalid: retriedInvalid } = splitByPathValidity(retried, wikiVaultPath);
       // Emit ok:false for paths still invalid after retry
       for (const p of retriedInvalid) {
@@ -293,7 +293,7 @@ export async function* runIngest(
       }
       pages = [...valid, ...retriedValid];
     } else {
-      // No retry text (error) — skip all invalid
+      // No usable retry pages — skip all original invalid pages.
       for (const p of invalid) {
         yield { kind: "tool_use", name: "Write", input: { path: p.path } };
         yield { kind: "tool_result", ok: false, preview: `Path violates 4-level rule (!Wiki/<d>/<e>/<f>.md): ${p.path}` };
