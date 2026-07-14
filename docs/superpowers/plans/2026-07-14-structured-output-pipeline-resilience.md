@@ -10,6 +10,13 @@ review:
     verifiability: { status: passed }
     consistency: { status: passed }
   findings: []
+result_check:
+  verdict: OK
+  plan_hash: 0308889fb8b45a9e
+  spec_hash: 78515e8557574167
+  last_run: 2026-07-14
+  reviewed: true
+  docs_checked: true
 chain:
   intent: docs/superpowers/intents/2026-07-14-structured-output-pipeline-resilience-intent.md
   spec: docs/superpowers/specs/2026-07-14-structured-output-pipeline-resilience-design.md

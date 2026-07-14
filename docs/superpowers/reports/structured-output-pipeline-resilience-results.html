@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Structured Output Pipeline Resilience — result</title>
+  <style>
+    :root {
+      --bg: #f7f7f4;
+      --panel: #ffffff;
+      --text: #1d2328;
+      --muted: #64707a;
+      --line: #d9ded7;
+      --accent: #227a6f;
+      --accent-2: #9a5b17;
+      --ok: #1f7a4d;
+      --warn: #956500;
+      --bad: #a03a36;
+      --code: #f0f2ee;
+    }
+    [data-theme="dark"] {
+      --bg: #141719;
+      --panel: #1d2225;
+      --text: #edf1ee;
+      --muted: #a7b0aa;
+      --line: #374044;
+      --accent: #66c2b1;
+      --accent-2: #e0a858;
+      --ok: #68c58f;
+      --warn: #e5bf63;
+      --bad: #e27b75;
+      --code: #252b2f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.55 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    header, main { max-width: 1180px; margin: 0 auto; padding: 24px; }
+    header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+    h1 { margin: 0 0 8px; font-size: 28px; line-height: 1.15; letter-spacing: 0; }
+    h2 { margin: 28px 0 12px; font-size: 18px; letter-spacing: 0; }
+    h3 { margin: 18px 0 8px; font-size: 15px; letter-spacing: 0; }
+    p { margin: 0 0 10px; }
+    .muted { color: var(--muted); }
+    .badge {
+      display: inline-block;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 2px 8px;
+      margin: 2px 4px 2px 0;
+      color: var(--text);
+      background: var(--panel);
+      white-space: nowrap;
+    }
+    .ok { color: var(--ok); font-weight: 700; }
+    .warn { color: var(--warn); font-weight: 700; }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 16px;
+      margin: 14px 0;
+    }
+    button {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--text);
+      padding: 8px 10px;
+      cursor: pointer;
+    }
+    code {
+      background: var(--code);
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      padding: 1px 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0 18px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+    }
+    th, td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 700; }
+    tr:last-child td { border-bottom: 0; }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .metric { border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: var(--panel); }
+    .metric strong { display: block; font-size: 20px; }
+    .flow { width: 100%; min-height: 220px; }
+    .flow text { fill: var(--text); font: 12px system-ui, sans-serif; }
+    .flow .node { fill: var(--panel); stroke: var(--line); stroke-width: 1.2; }
+    .flow .edge { stroke: var(--accent); stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    .flow .retry { stroke: var(--accent-2); stroke-dasharray: 5 4; }
+    details { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 10px 12px; margin: 10px 0; }
+    summary { cursor: pointer; font-weight: 700; }
+    @media (max-width: 760px) {
+      header { flex-direction: column; }
+      .grid { grid-template-columns: 1fr 1fr; }
+      th, td { font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Structured Output Pipeline Resilience</h1>
+      <p class="muted">Финальная проверка IDD→SDD. Дата: 2026-07-14. Вердикт: <span class="ok">OK</span>.</p>
+      <span class="badge">intent ✓</span>
+      <span class="badge">spec ✓</span>
+      <span class="badge">plan ✓</span>
+      <span class="badge">result OK</span>
+    </div>
+    <button id="theme-toggle" type="button">Сменить тему</button>
+  </header>
+  <main>
+    <section class="grid" aria-label="Итоги">
+      <div class="metric"><strong>112/112</strong><span class="muted">полный test suite</span></div>
+      <div class="metric"><strong>0</strong><span class="muted">TypeScript errors</span></div>
+      <div class="metric"><strong>0</strong><span class="muted">lint errors</span></div>
+      <div class="metric"><strong>4</strong><span class="muted">pre-existing lint warnings</span></div>
+    </section>
+
+    <section class="panel">
+      <h2>Итог</h2>
+      <p>Пайплайн структурированных LLM-вызовов приведён к двум режимам: <code>json-zod</code> для малых объектов и <code>framed-zod</code> для больших Markdown/text payloads. Ошибка из лога bootstrap теперь диагностируется как пустой/non-JSON output или несовместимость <code>response_format</code>, с downgrade и Zod-validation после восстановления.</p>
+      <p>Replay после destructive prelude заблокирован: если <code>init --force</code> уже выполнил <code>WipeDomain</code>, operation-level idle retry не повторит весь init и не сотрёт домен повторно.</p>
+    </section>
+
+    <section>
+      <h2>Поток восстановления</h2>
+      <svg class="flow" viewBox="0 0 1060 230" role="img" aria-label="Схема fallback для structured output">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"></path>
+          </marker>
+        </defs>
+        <rect class="node" x="20" y="45" width="170" height="70" rx="8"></rect>
+        <text x="38" y="75">call site</text>
+        <text x="38" y="95">profile selection</text>
+        <path class="edge" d="M190 80 H280"></path>
+        <rect class="node" x="280" y="28" width="190" height="92" rx="8"></rect>
+        <text x="300" y="58">json-zod</text>
+        <text x="300" y="78">json_schema → json_object</text>
+        <text x="300" y="98">→ no response_format</text>
+        <path class="edge" d="M190 80 C230 160 250 170 280 170"></path>
+        <rect class="node" x="280" y="145" width="190" height="60" rx="8"></rect>
+        <text x="300" y="175">framed-zod</text>
+        <text x="300" y="195">strict frames, no JSON mode</text>
+        <path class="edge" d="M470 75 H570"></path>
+        <path class="edge" d="M470 175 H570"></path>
+        <rect class="node" x="570" y="72" width="190" height="80" rx="8"></rect>
+        <text x="590" y="103">parse / repair</text>
+        <text x="590" y="123">then Zod validate</text>
+        <path class="edge retry" d="M665 72 C665 22 380 8 375 28"></path>
+        <path class="edge" d="M760 112 H850"></path>
+        <rect class="node" x="850" y="72" width="180" height="80" rx="8"></rect>
+        <text x="870" y="103">typed result</text>
+        <text x="870" y="123">or clear diagnostic</text>
+      </svg>
+    </section>
+
+    <section>
+      <h2>Покрытие операций</h2>
+      <table>
+        <thead><tr><th>Call sites</th><th>Режим</th><th>Что защищает</th></tr></thead>
+        <tbody>
+          <tr><td><code>init.bootstrap</code>, <code>ingest.entities</code>, <code>lint.patch</code>, <code>query.seeds</code></td><td><code>json-zod</code></td><td>Малые объекты: JSON repair, fallback response format, Zod validation.</td></tr>
+          <tr><td><code>format.output</code>, <code>ingest.pages</code>, <code>ingest.merge</code>, <code>lint.fix</code>, <code>lint-chat.fix</code>, <code>query.answer</code></td><td><code>framed-zod</code></td><td>Большой Markdown/text: line-anchored frames, schema adapters, no JSON mode dependency.</td></tr>
+          <tr><td><code>AgentRunner.run</code></td><td>destructive retry guard</td><td>После <code>WipeDomain</code> idle retry не replay-ит operation.</td></tr>
+          <tr><td>storage/logging</td><td>runtime path guard</td><td>Активный лог: plugin <code>agent.jsonl</code>; per-domain <code>_config</code> только legacy migration input.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Проверки</h2>
+      <table>
+        <thead><tr><th>Команда</th><th>Результат</th></tr></thead>
+        <tbody>
+          <tr><td><code>node --import tsx --test tests/framed-output.test.ts tests/structured-output.test.ts tests/init-force-retry.test.ts tests/no-runtime-domain-config.test.ts</code></td><td><span class="ok">PASS</span> 30/30</td></tr>
+          <tr><td><code>npx tsc --noEmit --pretty false</code></td><td><span class="ok">PASS</span></td></tr>
+          <tr><td><code>npm run lint</code></td><td><span class="ok">PASS</span>, 0 errors, 4 pre-existing warnings</td></tr>
+          <tr><td><code>node --import tsx --test tests/*.test.ts</code></td><td><span class="ok">PASS</span> 112/112</td></tr>
+          <tr><td><code>npm run build</code></td><td><span class="ok">PASS</span>, updated <code>dist/main.js</code></td></tr>
+          <tr><td><code>wiki_lint obsidian-ai-wiki</code></td><td><span class="ok">PASS</span> for broken/orphan/stale/missing-source; advisory long-lead notes remain.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Изменённые файлы</h2>
+      <details open>
+        <summary>Код и prompts</summary>
+        <table>
+          <thead><tr><th>Файл</th><th>Изменение и причина</th><th>Доказательство</th></tr></thead>
+          <tbody>
+            <tr><td><code>src/types.ts</code></td><td>Расширены diagnostic labels без удаления <code>init.delta</code>.</td><td>typed events compile.</td></tr>
+            <tr><td><code>src/phases/structured-output.ts</code></td><td>Shared runner для JSON/framed profiles, fallback, retry diagnostics.</td><td>structured-output tests.</td></tr>
+            <tr><td><code>src/phases/parse-with-retry.ts</code></td><td>Compatibility wrapper на <code>json-zod</code>.</td><td>existing call sites unchanged externally.</td></tr>
+            <tr><td><code>src/phases/llm-utils.ts</code></td><td>Raw-client symbol для обхода скрытого JSON fallback.</td><td>diagnostic fallback test.</td></tr>
+            <tr><td><code>src/phases/framed-output.ts</code></td><td>Line-anchored framed parsers и schema adapters.</td><td>framed parser tests.</td></tr>
+            <tr><td><code>src/phases/format.ts</code></td><td>Format parse через framed helper + Zod, без потери salvage/token/link/frontmatter flow.</td><td>full suite + build.</td></tr>
+            <tr><td><code>src/phases/ingest.ts</code></td><td><code>ingest.pages</code>/<code>merge</code>/path repair переведены на frames; merge diagnostics сохранены.</td><td>framed + full tests.</td></tr>
+            <tr><td><code>src/phases/lint.ts</code>, <code>src/phases/lint-chat.ts</code>, <code>src/phases/query-answer.ts</code></td><td>Large text repairs переведены на framed-zod; compact patch остаётся JSON.</td><td>typecheck, tests.</td></tr>
+            <tr><td><code>src/agent-runner.ts</code></td><td>Guard против replay после <code>WipeDomain</code>.</td><td>init-force-retry tests.</td></tr>
+            <tr><td><code>src/domain-config.ts</code></td><td>Runtime больше не создаёт per-domain <code>_config</code>; legacy migration сохранена.</td><td>no-runtime-domain-config tests.</td></tr>
+            <tr><td><code>src/reranker.ts</code></td><td>Исправлен baseline TS blocker в capped array.</td><td>typecheck PASS.</td></tr>
+            <tr><td><code>prompts/*.md</code></td><td>Ingest/lint prompts переведены с JSON wording на framed contracts.</td><td>parser/profile tests + build.</td></tr>
+          </tbody>
+        </table>
+      </details>
+      <details>
+        <summary>Тесты, docs, build</summary>
+        <table>
+          <thead><tr><th>Артефакт</th><th>Изменение и причина</th><th>Доказательство</th></tr></thead>
+          <tbody>
+            <tr><td><code>tests/framed-output.test.ts</code></td><td>Frame parsing, malformed frames, adapters, literal markers.</td><td>PASS.</td></tr>
+            <tr><td><code>tests/structured-output.test.ts</code></td><td>Fallback ladder, empty output, backend mismatch, retry recovery.</td><td>PASS.</td></tr>
+            <tr><td><code>tests/init-force-retry.test.ts</code></td><td>Destructive retry guard coverage.</td><td>PASS.</td></tr>
+            <tr><td><code>tests/no-runtime-domain-config.test.ts</code></td><td>Static/runtime guard for <code>agent.jsonl</code> and no per-domain <code>_config</code>.</td><td>PASS.</td></tr>
+            <tr><td><code>tests/md-obsidian-loader.mjs</code></td><td>Test-only loader for Markdown prompts and Obsidian stub.</td><td>Node test command PASS.</td></tr>
+            <tr><td><code>docs/superpowers/*structured-output*</code></td><td>Intent/spec/plan/result chain artifacts.</td><td>hashes approved.</td></tr>
+            <tr><td><code>docs/TODO.md</code></td><td>Task row closed as done.</td><td>result OK.</td></tr>
+            <tr><td><code>dist/main.js</code></td><td>Built plugin bundle updated after implementation.</td><td><code>npm run build</code> PASS.</td></tr>
+          </tbody>
+        </table>
+      </details>
+    </section>
+
+    <section class="panel">
+      <h2>Docs и риски</h2>
+      <p>iwiki pages уже обновлены для <code>architecture/structured-output-runner</code>, <code>architecture/structured-output-framed-parsers</code>, JSONL storage и OKF frontmatter ingest repair. <code>wiki_lint</code> не нашёл broken, orphan, stale или missing-source pages; остались только advisory long-lead замечания, часть предсуществующая.</p>
+      <p>Остаточный риск: live LLM behavior может отличаться по модели, но runner теперь отдаёт явные diagnostics и не зависит от strict Structured Output для больших текстов. Query answer generator-level ordering покрыт косвенно через runner/parser/full suite.</p>
+    </section>
+  </main>
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const button = document.getElementById("theme-toggle");
+      button.addEventListener("click", () => {
+        root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+      });
+    })();
+  </script>
+</body>
+</html>
