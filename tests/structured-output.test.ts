@@ -185,6 +185,33 @@ test("backend json-mode error downgrades and recovers", async () => {
   );
 });
 
+test("schema retry recovery emits succeeded structural_error event", async () => {
+  const events: RunEvent[] = [];
+
+  const result = await runStructuredWithRetry({
+    llm: llmFromAttempts(['{"value":42}', '{"value":"recovered"}']),
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 1,
+    callSite: "query.seeds",
+    signal: new AbortController().signal,
+    onEvent: (ev) => events.push(ev),
+  });
+
+  assert.equal(result.value.value, "recovered");
+  assert.equal(
+    events.some((ev) =>
+      ev.kind === "structural_error"
+      && ev.errorType === "schema_validate"
+      && ev.retryAttempt === 1
+      && ev.succeeded === true
+      && ev.message === "retry succeeded"),
+    true,
+  );
+});
+
 test("parseWithRetry wrapper with jsonMode unset sends no response_format on first attempt", async () => {
   const seenParams: Record<string, unknown>[] = [];
 

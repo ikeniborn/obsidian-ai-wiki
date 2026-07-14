@@ -302,6 +302,9 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
 
     try {
       const value = parseAndValidate(profile, fullText);
+      if (attempt > 0) {
+        emitStructuralError(onEvent, callSite, "schema_validate", attempt, true, "retry succeeded");
+      }
       structuralErrorCounter.record(true, attempt);
       return { value, outputTokens: totalTokens, fullText };
     } catch (e) {
