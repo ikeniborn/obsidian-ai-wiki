@@ -1,6 +1,6 @@
 ---
 review:
-  spec_hash: a437b83912681474
+  spec_hash: 78515e8557574167
   last_run: 2026-07-14
   phases:
     structure: { status: passed }
@@ -45,14 +45,14 @@ The root problem is not the source path or glob. It is a mismatch between struct
 Use a shared structured-output runner with two profiles:
 
 - `json-zod`: small structured objects, preferred mode order `json_schema -> json_object -> no response_format`.
-- `sentinel-zod`: large markdown payloads, used by `format.output`, preferred default `no response_format` with strict sentinel markers and Zod validation after parsing.
+- `framed-zod`: large Markdown/text payloads, preferred default `no response_format` with strict sentinel-style frames and Zod validation after parsing.
 
-This keeps schema validation strict without depending on every model and LiteLLM/Ollama backend route to implement OpenAI-style Structured Outputs correctly. JSON remains the default for compact extraction/control objects. Sentinel remains the safer transport for large markdown because it avoids JSON string escaping for full formatted notes.
+This keeps schema validation strict without depending on every model and LiteLLM/Ollama backend route to implement OpenAI-style Structured Outputs correctly. JSON remains the default for compact extraction/control objects. Framed text remains the safer transport for large Markdown because it avoids JSON string escaping for page bodies, full formatted notes, answers, tables, YAML frontmatter, Mermaid, and fenced code.
 
 Rejected:
 
-- Keep only the current `parseWithRetry` shape and treat format separately. This leaves two incompatible recovery and diagnostics paths.
-- Convert `format.output` to pure JSON schema. Large markdown inside a JSON string is more likely to suffer escaping errors, truncation, code fence corruption, and token preservation issues.
+- Keep only the current `parseWithRetry` shape and treat large-text outputs separately. This leaves two incompatible recovery and diagnostics paths.
+- Convert all structured outputs to pure JSON schema. Large Markdown inside JSON strings is more likely to suffer escaping errors, truncation, code fence corruption, and token preservation issues.
 
 ## Structured Runner Contract
 
@@ -88,13 +88,8 @@ Use this profile for:
 
 - `init.bootstrap`
 - `ingest.entities`
-- `ingest.pages`
-- `ingest.merge`
 - `lint.patch`
-- `lint.fix`
-- `lint-chat.fix`
 - `query.seeds`
-- `query.answer`
 
 Flow:
 
@@ -109,11 +104,20 @@ Flow:
 
 Happy-path calls must not add extra LLM calls.
 
-## Sentinel-Zod Profile
+## Framed-Zod Profile
 
-Use this profile for `format.output`.
+Use this profile for structured calls whose successful payload contains large Markdown or free text:
 
-Format currently returns a large Markdown payload between sentinel markers:
+- `format.output`
+- `ingest.pages`
+- `ingest.merge`
+- `lint.fix`
+- `lint-chat.fix`
+- `query.answer`
+
+The profile uses marker frames as the transport format and existing Zod schemas as the validation format. The model writes Markdown as Markdown inside frames; the parser converts frames into typed objects; Zod validates the result.
+
+`format.output` already uses a simple framed output:
 
 ```text
 <<<REPORT>>>
@@ -123,18 +127,62 @@ Format currently returns a large Markdown payload between sentinel markers:
 <<<END>>>
 ```
 
-This profile makes that path a first-class structured-output adapter:
+For multi-page/page-fix outputs, use an explicit page frame grammar instead of JSON string fields for page content:
 
-1. Build the existing strict sentinel prompt.
+```text
+<<<REPORT>>>
+<optional report or reasoning>
+<<<PAGE>>>
+path: !Wiki/domain/type/wiki_domain_entity.md
+annotation: <one-line annotation, optional>
+<<<CONTENT>>>
+---
+type: Entity
+resource: ["source"]
+tags: []
+---
+# Entity
+
+Markdown body...
+<<<END_PAGE>>>
+<<<DELETE>>>
+path: !Wiki/domain/type/wiki_domain_old.md
+redirect_to: !Wiki/domain/type/wiki_domain_new.md
+<<<END_DELETE>>>
+<<<END>>>
+```
+
+For single-content outputs such as `ingest.merge` and `query.answer`, use narrower frames:
+
+```text
+<<<CONTENT>>>
+Markdown body...
+<<<END>>>
+```
+
+or, for answers that still need citations:
+
+```text
+<<<ANSWER>>>
+Markdown answer...
+<<<CITATIONS>>>
+- wiki_stem_a
+- wiki_stem_b
+<<<END>>>
+```
+
+This profile makes every large-text path a first-class structured-output adapter:
+
+1. Build a strict frame prompt for the call site's frame grammar.
 2. Do not set `response_format` by default.
-3. Stream content and reasoning exactly as today, preserving visible formatting UX.
-4. Parse markers through the existing `parseFormatOutput` behavior.
-5. Validate the parsed `{ report, formatted }` or vision shape with `FormatOutputSchema` / `FormatWithVisionSchema`.
-6. If markers are missing, invalid, or truncated, retry once with a stronger sentinel repair prompt.
-7. Preserve existing post-parse format safeguards: token restore, embed restore, WikiLink fix, source frontmatter restore, sentinel marker sweep, temp write, and `format_preview`.
-8. On exhaustion, emit a `format.output` structural diagnostic and fail the format operation with the existing visible error pattern.
+3. Stream content and reasoning only where the caller already has streaming UX, such as format.
+4. Parse markers through a frame parser for the call site.
+5. Validate the parsed object with the existing Zod schema (`WikiPagesOutputSchema`, `MergedPageOutputSchema`, `LintOutputSchema`, `LintChatSchema`, `QueryAnswerSchema`, `FormatOutputSchema`, or `FormatWithVisionSchema`).
+6. If markers are missing, invalid, or truncated, retry with a stronger frame repair prompt.
+7. Preserve existing post-parse safeguards in the caller. For format this includes token restore, embed restore, WikiLink fix, source frontmatter restore, sentinel marker sweep, temp write, and `format_preview`.
+8. On exhaustion, emit a call-site structural diagnostic and fail the operation with the existing visible error pattern.
 
-The sentinel profile must not force the full formatted Markdown into JSON.
+The framed profile must not force large Markdown bodies into JSON strings.
 
 ## Event And Logging Behavior
 
@@ -146,7 +194,7 @@ Required diagnostics:
 - JSON parse failure;
 - Zod schema failure;
 - response-format fallback;
-- sentinel parse failure;
+- frame parse failure;
 - idle abort inside a structured call.
 
 The current `agent.jsonl` file in the plugin folder remains the active log surface. Diagnostics are emitted as compatible event records inside the existing JSONL envelope. `_agent.jsonl` is legacy migration input only, not a new write target.
@@ -188,7 +236,7 @@ Verification must include a static or executable check that flags non-migration 
 
 Defines:
 
-- profile kind: `json-zod` or `sentinel-zod`;
+- profile kind: `json-zod` or `framed-zod`;
 - preferred response-format modes;
 - parser function;
 - Zod validator;
@@ -203,9 +251,9 @@ Shared orchestration layer for LLM call attempts, fallback modes, parsing, valid
 
 Uses `parseStructured`, `jsonrepair`, schema text in prompt, and the call-site Zod schema.
 
-### Sentinel adapter
+### Framed adapter
 
-Uses `parseFormatOutput` semantics and `FormatOutputSchema` / `FormatWithVisionSchema` while preserving format streaming UX.
+Uses strict marker grammars and maps frame payloads into existing Zod schemas. It reuses `parseFormatOutput` semantics for `format.output` and adds page/content/answer frame parsers for the other large-text call sites.
 
 ### `parseWithRetry` wrapper
 
@@ -213,20 +261,22 @@ Keeps existing call sites stable while delegating JSON behavior to the shared ru
 
 ### Format integration
 
-Replaces the hand-rolled initial sentinel parse/retry loop in `format.ts` with the sentinel profile. Post-parse format-specific cleanup remains in `format.ts`.
+### Large-text call-site integration
+
+Routes `format.output`, `ingest.pages`, `ingest.merge`, `lint.fix`, `lint-chat.fix`, and `query.answer` through the framed profile. `format.ts` keeps post-parse cleanup in place. Ingest, lint, lint-chat, and query keep their existing write/link/merge post-processing after framed output is parsed and Zod-valid.
 
 ## Acceptance Criteria
 
 1. `json-zod` fallback works.
    - DoD: simulated calls cover success with `json_schema`, fallback to `json_object`, fallback to no `response_format`, empty output, malformed JSON, and Zod failure.
-2. `sentinel-zod` format path works.
-   - DoD: simulated format calls cover valid sentinel output, missing markers, truncated salvage, invalid parsed payload, and retry exhaustion.
+2. `framed-zod` large-text paths work.
+   - DoD: simulated calls cover valid format output, valid multi-page output, valid merge content, valid answer citations, missing markers, truncated salvage where supported, invalid parsed payload, and retry exhaustion.
 3. Diagnostics are live and visible.
    - DoD: structured failures emit distinguishable diagnostics and are written through the existing `agent.jsonl` event path without changing the JSONL envelope.
 4. Destructive retry is blocked.
    - DoD: simulated `init --force` bootstrap empty output does not emit `WipeDomain` more than once in one user-started run.
 5. All structured call sites use the shared contract.
-   - DoD: every real `parseWithRetry` caller delegates through the shared runner; `format.output` is integrated through `sentinel-zod`; stale call-site typing is reconciled.
+   - DoD: compact call sites use `json-zod`; large-text call sites use `framed-zod`; stale call-site typing is reconciled.
 6. Legacy `_config` generation is guarded.
    - DoD: normal runtime code does not create `!Wiki/<domain>/_config`; migration-only legacy code remains isolated.
 7. No schema weakening.
