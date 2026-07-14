@@ -14,3 +14,4 @@
 | reranker-quality-pipeline | done | ✓ | ✓ | ✓ | OK | 2026-07-12 | 2026-07-12 | Runtime reranker settings and staged quality pipeline |
 | reranker-integration-eval | in-progress | ✓ | ✓ | ✓ | needs_work | 2026-07-12 |  | LiteLLM rerank eval blocked: lemonade-reranker-bge-reranker-v2-m3 returns provider error |
 | guarded-rerank-tuning | done | ✓ | ✓ | ✓ | OK | 2026-07-13 | 2026-07-13 | Accepted page-aware rerank gate; nDCG@5 0.9254→0.9321, p95 +601 ms |
+| structured-output-pipeline-resilience | in-progress | ✓ | – | – | – | 2026-07-14 |  | Resilient structured-output recovery for empty/non-JSON/backend-incompatible LLM responses |
