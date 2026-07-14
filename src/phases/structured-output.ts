@@ -42,6 +42,8 @@ const repairJson = [
   "Return ONLY a single valid JSON object matching the schema. No markdown fences, no <think> tags, no commentary.",
 ].join("\n");
 
+const JSON_FALLBACK_INNER = Symbol.for("obsidian-ai-wiki.jsonFallbackInner");
+
 export type StructuredCallSite =
   | "init.bootstrap"
   | "init.delta"
@@ -334,9 +336,9 @@ function isJsonModeError(e: unknown): boolean {
   return JSON_MODE_KEYWORDS.some((kw) => msg.includes(kw));
 }
 
-function initialMode(profile: StructuredProfile<unknown>, opts: LlmCallOptions): ResponseFormatMode {
+function initialMode<T>(profile: StructuredProfile<T>, opts: LlmCallOptions): ResponseFormatMode {
   if (profile.kind !== "json-zod") return "none";
-  return opts.jsonMode === false ? "none" : "json_schema";
+  return opts.jsonMode === "json_object" || opts.jsonMode === "json_schema" ? "json_schema" : "none";
 }
 
 function optsForMode<T>(
@@ -375,7 +377,7 @@ export function formatZodFeedback(err: ZodError | null, raw: string): string {
   });
 }
 
-function repairPrompt(profile: StructuredProfile<unknown>, lastText: string, lastError: Error): string {
+function repairPrompt<T>(profile: StructuredProfile<T>, lastText: string, lastError: Error): string {
   if (profile.kind === "framed-zod") {
     return [
       "Previous response did not match the required frame format.",
@@ -443,10 +445,14 @@ function parseAndValidate<T>(profile: StructuredProfile<T>, fullText: string): T
   return parsed.data;
 }
 
-function classifyError(profile: StructuredProfile<unknown>, err: Error): Extract<RunEvent, { kind: "structural_error" }>["errorType"] {
+function classifyError<T>(profile: StructuredProfile<T>, err: Error): Extract<RunEvent, { kind: "structural_error" }>["errorType"] {
   if (profile.kind === "framed-zod" && !(err instanceof ZodError)) return "frame_parse";
   if (err instanceof ZodError) return "schema_validate";
   return "json_parse";
+}
+
+function directLlm(llm: LlmClient): LlmClient {
+  return (llm as { [JSON_FALLBACK_INNER]?: LlmClient })[JSON_FALLBACK_INNER] ?? llm;
 }
 
 async function callWithFormatFallback<T>(
@@ -463,7 +469,7 @@ async function callWithFormatFallback<T>(
 
     try {
       return {
-        result: await streamOnce(args.llm, args.model, messages, callOpts, args.signal),
+        result: await streamOnce(directLlm(args.llm), args.model, messages, callOpts, args.signal),
         mode: currentMode,
       };
     } catch (e) {
@@ -479,7 +485,7 @@ async function callWithFormatFallback<T>(
 export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Promise<RunStructuredResult<T>> {
   const { baseMessages, profile, maxRetries, callSite, signal, onEvent } = args;
   let messages = baseMessages;
-  let mode = initialMode(profile as StructuredProfile<unknown>, args.opts);
+  let mode = initialMode(profile, args.opts);
   let totalTokens = 0;
   let lastError: Error = new Error("no attempts");
 
@@ -512,7 +518,7 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
       messages = [
         ...messages,
         { role: "assistant", content: fullText },
-        { role: "user", content: repairPrompt(profile as StructuredProfile<unknown>, fullText, lastError) },
+        { role: "user", content: repairPrompt(profile, fullText, lastError) },
       ];
       continue;
     }
@@ -524,14 +530,14 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
     } catch (e) {
       lastError = e as Error;
       const isLast = attempt === maxRetries;
-      const errorType = classifyError(profile as StructuredProfile<unknown>, lastError);
+      const errorType = classifyError(profile, lastError);
       emitStructuralError(onEvent, callSite, errorType, attempt, isLast ? false : null, lastError.message);
       structuralErrorCounter.record(isLast ? false : null, attempt);
       if (isLast) throw new StructuredValidationError(callSite, attempt + 1, lastError);
       messages = [
         ...messages,
         { role: "assistant", content: fullText },
-        { role: "user", content: repairPrompt(profile as StructuredProfile<unknown>, fullText, lastError) },
+        { role: "user", content: repairPrompt(profile, fullText, lastError) },
       ];
     }
   }

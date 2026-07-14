@@ -225,6 +225,7 @@ function injectReasoningDirective(
 }
 
 const JSON_MODE_KEYWORDS = ["response_format", "json_object", "json mode", "unsupported"];
+const JSON_FALLBACK_INNER = Symbol.for("obsidian-ai-wiki.jsonFallbackInner");
 
 /**
  * Heuristic: detect if an LLM error means the backend doesn't support `response_format`.
@@ -330,7 +331,9 @@ export function wrapWithJsonFallback(inner: LlmClient): LlmClient {
     })();
   }) as unknown as LlmClient["chat"]["completions"]["create"];
 
-  return { chat: { completions: { create } } };
+  const wrapped = { chat: { completions: { create } } } as LlmClient & { [JSON_FALLBACK_INNER]?: LlmClient };
+  wrapped[JSON_FALLBACK_INNER] = inner;
+  return wrapped;
 }
 
 function injectSystemPrompt(
