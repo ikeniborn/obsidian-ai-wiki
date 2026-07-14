@@ -203,6 +203,12 @@ export class AgentRunner {
     const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1000;
     const maxRetries = this.settings.llmIdleRetries ?? 3;
     let attempt = 0;
+    let destructivePreludeSeen = false;
+
+    const idleAfterDestructivePreludeAbort = () => new DOMException(
+      `LLM idle timeout (${Math.round(idleTimeoutMs / 1000)}s) after destructive prelude; refusing to replay operation`,
+      "AbortError",
+    );
 
     const llmErrors: LlmError[] = [];
     const ruleFirings: Record<string, number> = {};
@@ -237,6 +243,7 @@ export class AgentRunner {
             ev.kind === "llm_call_stats" || ev.kind === "assistant_text" ||
             ev.kind === "tool_use" || ev.kind === "tool_result"
           ) resetTimer();
+          if (ev.kind === "tool_use" && ev.name === "WipeDomain") destructivePreludeSeen = true;
           if (ev.kind === "result") finalResultText = ev.text;
           if (ev.kind === "error") {
             llmErrors.push({ kind: "error", message: ev.message });
@@ -256,6 +263,7 @@ export class AgentRunner {
         // Detect silent idle abort by checking if idleCtrl fired but user didn't cancel.
         if (idleCtrl.signal.aborted && !req.signal.aborted) {
           if (attempt < maxRetries) {
+            if (destructivePreludeSeen) throw idleAfterDestructivePreludeAbort();
             attempt++;
             const sec = Math.round(idleTimeoutMs / 1000);
             yield { kind: "system", message: `LLM idle ${sec}s — retrying (${attempt}/${maxRetries})` };
@@ -289,6 +297,7 @@ export class AgentRunner {
         if (idleTimer) window.clearTimeout(idleTimer);
         const isIdleAbort = !req.signal.aborted && (err as Error).name === "AbortError";
         if (isIdleAbort && attempt < maxRetries) {
+          if (destructivePreludeSeen) throw idleAfterDestructivePreludeAbort();
           attempt++;
           const sec = Math.round(idleTimeoutMs / 1000);
           yield { kind: "system", message: `LLM idle ${sec}s — retrying (${attempt}/${maxRetries})` };
