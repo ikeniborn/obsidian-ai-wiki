@@ -1,14 +1,18 @@
 import assert from "node:assert/strict";
+import { register } from "node:module";
 import test from "node:test";
 import type OpenAI from "openai";
 import { z } from "zod";
 import type { LlmClient, RunEvent } from "../src/types";
 import { parseAnswerFrames } from "../src/phases/framed-output";
-import { parseWithRetry } from "../src/phases/parse-with-retry";
-import {
+
+register(new URL("./md-obsidian-loader.mjs", import.meta.url));
+
+const { parseWithRetry } = await import("../src/phases/parse-with-retry");
+const {
   runStructuredWithRetry,
   StructuredValidationError,
-} from "../src/phases/structured-output";
+} = await import("../src/phases/structured-output");
 
 const JSON_FALLBACK_INNER = Symbol.for("obsidian-ai-wiki.jsonFallbackInner");
 
