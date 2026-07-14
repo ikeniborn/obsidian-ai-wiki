@@ -11,7 +11,7 @@ import { render } from "./template";
 import { missingTokensWithContext, appendMissingLines, restoreObsidianEmbeds, missingObsidianEmbeds, stripSentinelMarkers } from "./format-utils";
 import { fixWikiLinks } from "../wiki-link-validator";
 import { restoreSourceFrontmatter } from "../utils/raw-frontmatter";
-import { FormatBaseSchema, FormatWithVisionSchema } from "./zod-schemas";
+import { FormatOutputSchema, FormatWithVisionSchema } from "./zod-schemas";
 import { parseFormatFrames } from "./framed-output";
 import { structuralErrorCounter } from "../structural-error-counter";
 import { extractObsidianEmbedPaths, analyzeSingleAttachment } from "./attachment-analyzer";
@@ -32,7 +32,7 @@ function parseFormatOutput(
     return { data: null, hint: (e as Error).message || "sentinel markers not found", truncated: false };
   }
 
-  const schema = hasVisionDescriptions ? FormatWithVisionSchema : FormatBaseSchema;
+  const schema = hasVisionDescriptions ? FormatWithVisionSchema : FormatOutputSchema;
   const result = schema.safeParse(parsedFrames.raw);
   if (result.success) {
     structuralErrorCounter.record(true, 0);
