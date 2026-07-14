@@ -44498,8 +44498,9 @@ ${tagRegistryBlock}` : ""}`;
     { role: "user", content: userContent },
     ...chatHistory.map((m) => ({ role: m.role, content: m.content }))
   ];
+  const formatOpts = { ...opts, jsonMode: false, jsonSchema: void 0 };
   yield { kind: "assistant_text", delta: progress.analysing(filePath) };
-  const baseParams = buildChatParams(model, messages, opts, true);
+  const baseParams = buildChatParams(model, messages, formatOpts, true);
   let lastFinishReason = null;
   let outputTokens = 0;
   async function* callOnce(p) {
@@ -44569,7 +44570,7 @@ The previous attempt failed: ${zodHint}. Fix it and return again using the marke
       { role: "system", content: retrySystemContent },
       { role: "user", content: userContent }
     ];
-    const retryParams = buildChatParams(model, retryMessages, opts, true);
+    const retryParams = buildChatParams(model, retryMessages, formatOpts, true);
     yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
     fullText = yield* callOnce(retryParams);
     if (signal.aborted) return;
@@ -44611,7 +44612,7 @@ The previous attempt failed: ${zodHint}. Fix it and return again using the marke
         content: render(format_restore_tokens_default, { tokens: tokenList })
       }
     ];
-    const restoreParams = buildChatParams(model, restoreMessages, opts, true);
+    const restoreParams = buildChatParams(model, restoreMessages, formatOpts, true);
     yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
     const fullText2 = yield* callOnce(restoreParams);
     if (!signal.aborted) {
