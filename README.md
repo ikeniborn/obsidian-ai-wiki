@@ -190,7 +190,7 @@ The sidebar is the main interface for AI Wiki. Open it via the ribbon (🧠 icon
 | User prompt | Added to the system prompt of every operation | empty |
 | Timeouts (seconds) | `ingest/query/lint/init/format`, slash-separated | `300/300/900/3600/600` |
 | History limit | Max operations in sidebar history | `20` |
-| Agent log (JSONL) | Log agent events to `!Wiki/_config/_agent.jsonl` (desktop only) | off |
+| Agent log (JSONL) | Log agent events to plugin-local `agent.jsonl` (desktop only) | off |
 
 ### Domains
 
