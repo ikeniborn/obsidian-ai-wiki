@@ -74,6 +74,52 @@ test("parsePageFrames parses pages and deletes", () => {
   }]);
 });
 
+test("parsePageFrames preserves marker text inside content lines", () => {
+  const parsed = parsePageFrames([
+    "<<<REPORT>>>",
+    "reasoning text",
+    "<<<PAGE>>>",
+    "path: !Wiki/demo/entities/wiki_demo_a.md",
+    "<<<CONTENT>>>",
+    "# A",
+    "",
+    "Example text with literal <<<END_PAGE>>> marker text.",
+    "```",
+    "<<<END_PAGE>>>",
+    "```",
+    "<<<END_PAGE>>>",
+    "<<<END>>>",
+  ].join("\n"));
+
+  assert.equal(parsed.pages[0].content, [
+    "# A",
+    "",
+    "Example text with literal <<<END_PAGE>>> marker text.",
+    "```",
+    "<<<END_PAGE>>>",
+    "```",
+  ].join("\n"));
+});
+
+test("parsePageFrames throws on trailing malformed page frame", () => {
+  const raw = [
+    "<<<REPORT>>>",
+    "reasoning text",
+    "<<<PAGE>>>",
+    "path: !Wiki/demo/entities/wiki_demo_a.md",
+    "<<<CONTENT>>>",
+    "# A",
+    "<<<END_PAGE>>>",
+    "<<<PAGE>>>",
+    "path: !Wiki/demo/entities/wiki_demo_b.md",
+    "<<<CONTENT>>>",
+    "# B",
+    "<<<END>>>",
+  ].join("\n");
+
+  assert.throws(() => parsePageFrames(raw), /missing <<<END_PAGE>>>/i);
+});
+
 test("parsePageFrames throws when required markers are missing", () => {
   assert.throws(() => parsePageFrames("<<<PAGE>>>\npath: x\n"), /missing <<<END>>>/i);
 });

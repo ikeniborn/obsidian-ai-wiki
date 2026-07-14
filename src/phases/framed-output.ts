@@ -62,17 +62,24 @@ export interface AnswerFrameOutput {
 const END = "<<<END>>>";
 
 export function parseFormatFrames(text: string, hasVisionDescriptions: boolean): FramedParseResult<FormatFrameOutput> {
-  const parsed = parseSentinelOutput(text, hasVisionDescriptions);
+  const protectedText = protectInlineMarkers(text, [
+    "<<<REPORT>>>",
+    "<<<FORMATTED>>>",
+    "<<<VISION_COUNT>>>",
+    "<<<EMBEDS>>>",
+    END,
+  ]);
+  const parsed = parseSentinelOutput(protectedText.text, hasVisionDescriptions);
   if (!parsed) throw new Error("sentinel markers not found");
 
   return {
     raw: {
-      report: parsed.report,
-      formatted: parsed.formatted,
+      report: protectedText.restore(parsed.report),
+      formatted: protectedText.restore(parsed.formatted),
       ...(hasVisionDescriptions
         ? {
             vision_blocks_count: parsed.visionCount ?? 0,
-            embeds_preserved: parsed.embeds ?? [],
+            embeds_preserved: parsed.embeds?.map((entry) => protectedText.restore(entry)) ?? [],
           }
         : {}),
     },
@@ -135,11 +142,12 @@ export function parsePageFrames(text: string): PageFramesOutput {
 
 export function parseWikiPagesFrames(text: string): WikiPagesFramesOutput {
   const parsed = parsePageFrames(text);
+  const entityTypesDelta = parseEntityTypesDelta(text);
   return {
     reasoning: parsed.reasoning,
     pages: parsed.pages,
     deletes: parsed.deletes?.map((entry) => ({ path: entry.path })),
-    ...(parseEntityTypesDelta(text) !== undefined ? { entity_types_delta: parseEntityTypesDelta(text) } : {}),
+    ...(entityTypesDelta !== undefined ? { entity_types_delta: entityTypesDelta } : {}),
   };
 }
 
@@ -162,74 +170,93 @@ export function parseLintChatFrames(text: string): LintChatFramesOutput {
 }
 
 function requireMarker(text: string, marker: string): number {
-  const idx = text.indexOf(marker);
+  const idx = markerLineIndex(linesOf(text), marker);
   if (idx < 0) throw new Error(`missing ${marker}`);
   return idx;
 }
 
 function hasMarker(text: string, marker: string): boolean {
-  return text.includes(marker);
+  return markerLineIndex(linesOf(text), marker) >= 0;
 }
 
 function between(text: string, start: string, end: string): string {
-  const startIdx = requireMarker(text, start) + start.length;
-  const endIdx = text.indexOf(end, startIdx);
+  const lines = linesOf(text);
+  const startIdx = markerLineIndex(lines, start);
+  if (startIdx < 0) throw new Error(`missing ${start}`);
+  const endIdx = markerLineIndex(lines, end, startIdx + 1);
   if (endIdx < 0) throw new Error(`missing ${end}`);
-  return text.slice(startIdx, endIdx).trim();
+  return lines.slice(startIdx + 1, endIdx).join("\n").trim();
 }
 
 function parseReasoning(text: string): string {
   const marker = hasMarker(text, "<<<REPORT>>>") ? "<<<REPORT>>>" : hasMarker(text, "<<<REASONING>>>") ? "<<<REASONING>>>" : null;
   if (!marker) return "";
 
-  const startIdx = requireMarker(text, marker) + marker.length;
-  const endIdx = firstMarkerAfter(text, startIdx, [
+  const lines = linesOf(text);
+  const startIdx = markerLineIndex(lines, marker);
+  const endIdx = firstMarkerLineAfter(lines, startIdx + 1, [
     "<<<PAGE>>>",
     "<<<DELETE>>>",
     "<<<ENTITY_TYPES_DELTA_JSON>>>",
     END,
   ]);
   if (endIdx < 0) throw new Error(`missing ${END}`);
-  return text.slice(startIdx, endIdx).trim();
+  return lines.slice(startIdx + 1, endIdx).join("\n").trim();
 }
 
-function firstMarkerAfter(text: string, from: number, markers: string[]): number {
-  const indexes = markers
-    .map((marker) => text.indexOf(marker, from))
-    .filter((idx) => idx >= 0);
-  return indexes.length ? Math.min(...indexes) : -1;
+function firstMarkerLineAfter(lines: string[], from: number, markers: string[]): number {
+  let inFence = false;
+  for (let i = 0; i < lines.length; i++) {
+    if (i >= from && !inFence && markers.some((marker) => isMarkerLine(lines[i], marker))) return i;
+    if (isFenceToggleLine(lines[i])) inFence = !inFence;
+  }
+  return -1;
 }
 
 function parsePages(text: string): PageFrame[] {
+  const lines = linesOf(text);
   const pages: PageFrame[] = [];
-  const pageRe = /<<<PAGE>>>\s*([\s\S]*?)<<<CONTENT>>>\s*([\s\S]*?)<<<END_PAGE>>>/g;
-  let match: RegExpExecArray | null;
 
-  while ((match = pageRe.exec(text)) !== null) {
-    const header = parseHeader(match[1]);
+  for (let i = 0; i < lines.length; i++) {
+    if (!isMarkerLine(lines[i], "<<<PAGE>>>")) continue;
+
+    const contentIdx = markerLineIndex(lines, "<<<CONTENT>>>", i + 1);
+    if (contentIdx < 0) throw new Error("missing <<<CONTENT>>>");
+    const endPageIdx = markerLineIndex(lines, "<<<END_PAGE>>>", contentIdx + 1);
+    if (endPageIdx < 0) throw new Error("missing <<<END_PAGE>>>");
+
+    const header = parseHeader(lines.slice(i + 1, contentIdx).join("\n"));
     if (!header.path) throw new Error("page frame missing path");
     pages.push({
       path: header.path,
-      content: match[2].trim(),
+      content: lines.slice(contentIdx + 1, endPageIdx).join("\n").trim(),
       annotation: header.annotation || undefined,
     });
+
+    i = endPageIdx;
   }
 
   return pages;
 }
 
 function parseDeletes(text: string): DeleteFrame[] {
+  const lines = linesOf(text);
   const deletes: DeleteFrame[] = [];
-  const deleteRe = /<<<DELETE>>>\s*([\s\S]*?)<<<END_DELETE>>>/g;
-  let match: RegExpExecArray | null;
 
-  while ((match = deleteRe.exec(text)) !== null) {
-    const header = parseHeader(match[1]);
+  for (let i = 0; i < lines.length; i++) {
+    if (!isMarkerLine(lines[i], "<<<DELETE>>>")) continue;
+
+    const endDeleteIdx = markerLineIndex(lines, "<<<END_DELETE>>>", i + 1);
+    if (endDeleteIdx < 0) throw new Error("missing <<<END_DELETE>>>");
+
+    const header = parseHeader(lines.slice(i + 1, endDeleteIdx).join("\n"));
     if (!header.path) throw new Error("delete frame missing path");
     deletes.push({
       path: header.path,
       redirect_to: header.redirect_to || undefined,
     });
+
+    i = endDeleteIdx;
   }
 
   return deletes;
@@ -264,4 +291,62 @@ function parseEntityTypesDelta(text: string): unknown {
   if (!hasMarker(text, "<<<ENTITY_TYPES_DELTA_JSON>>>")) return undefined;
   const raw = between(text, "<<<ENTITY_TYPES_DELTA_JSON>>>", "<<<END_ENTITY_TYPES_DELTA_JSON>>>");
   return JSON.parse(raw) as unknown;
+}
+
+function linesOf(text: string): string[] {
+  return text.split(/\r?\n/);
+}
+
+function markerLineIndex(lines: string[], marker: string, from = 0): number {
+  let inFence = false;
+  for (let i = 0; i < lines.length; i++) {
+    if (i >= from && !inFence && isMarkerLine(lines[i], marker)) return i;
+    if (isFenceToggleLine(lines[i])) inFence = !inFence;
+  }
+  return -1;
+}
+
+function isMarkerLine(line: string, marker: string): boolean {
+  return line.trim() === marker;
+}
+
+function isFenceToggleLine(line: string): boolean {
+  return /^\s*(?:```|~~~)/.test(line);
+}
+
+function protectInlineMarkers(text: string, markers: string[]): { text: string; restore: (value: string) => string } {
+  const replacements = new Map<string, string>();
+  let nextId = 0;
+  let inFence = false;
+
+  const protectedLines = linesOf(text).map((line) => {
+    const isBoundaryMarker = !inFence && markers.some((marker) => isMarkerLine(line, marker));
+    const togglesFence = isFenceToggleLine(line);
+    if (isBoundaryMarker) {
+      return line;
+    }
+    let protectedLine = line;
+    for (const marker of markers) {
+      let markerIdx = protectedLine.indexOf(marker);
+      while (markerIdx >= 0) {
+        const token = `__FRAMED_OUTPUT_MARKER_${nextId++}__`;
+        replacements.set(token, marker);
+        protectedLine = `${protectedLine.slice(0, markerIdx)}${token}${protectedLine.slice(markerIdx + marker.length)}`;
+        markerIdx = protectedLine.indexOf(marker, markerIdx + token.length);
+      }
+    }
+    if (togglesFence) inFence = !inFence;
+    return protectedLine;
+  });
+
+  return {
+    text: protectedLines.join("\n"),
+    restore: (value: string) => {
+      let restored = value;
+      for (const [token, marker] of replacements) {
+        restored = restored.split(token).join(marker);
+      }
+      return restored;
+    },
+  };
 }
