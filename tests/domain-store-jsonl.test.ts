@@ -70,3 +70,46 @@ test("DomainStore loads domains from per-domain metadata", async () => {
     analyzed_sources_v3: true,
   }]);
 });
+
+test("DomainStore removes metadata for domains omitted from save", async () => {
+  const adapter = new MemoryAdapter();
+  adapter.files.set(
+    "!Wiki/keep/metadata.jsonl",
+    '{"kind":"domain","schemaVersion":1,"id":"keep","name":"Keep","wiki_folder":"keep","source_paths":["src/keep"]}\n',
+  );
+  adapter.files.set(
+    "!Wiki/drop/metadata.jsonl",
+    '{"kind":"domain","schemaVersion":1,"id":"drop","name":"Drop","wiki_folder":"drop","source_paths":["src/drop"]}\n',
+  );
+  adapter.files.set("!Wiki/drop/page.md", "# Existing wiki page\n");
+  const store = new DomainStore(vault(adapter));
+
+  await store.save([{
+    id: "keep",
+    name: "Keep",
+    wiki_folder: "keep",
+    source_paths: ["src/keep"],
+    entity_types: [],
+  }]);
+
+  assert.equal(await adapter.exists("!Wiki/drop/metadata.jsonl"), false);
+  assert.equal(await adapter.exists("!Wiki/drop/page.md"), true);
+  assert.deepEqual((await store.load()).map((d) => d.id), ["keep"]);
+});
+
+test("DomainStore removes legacy global registry on save", async () => {
+  const adapter = new MemoryAdapter();
+  adapter.files.set("!Wiki/_config/_domain.json", JSON.stringify([{
+    id: "legacy",
+    name: "Legacy",
+    wiki_folder: "legacy",
+    source_paths: ["src/legacy"],
+    entity_types: [],
+  }]));
+  const store = new DomainStore(vault(adapter));
+
+  await store.save([]);
+
+  assert.equal(await adapter.exists("!Wiki/_config/_domain.json"), false);
+  assert.deepEqual(await store.load(), []);
+});
