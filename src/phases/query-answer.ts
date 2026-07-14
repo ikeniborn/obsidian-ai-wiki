@@ -1,7 +1,8 @@
 import type OpenAI from "openai";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import { buildChatParams, extractStreamDeltas, extractUsage, wrapStreamWithStats, buildLlmCallStatsEvent } from "./llm-utils";
-import { parseWithRetry } from "./parse-with-retry";
+import { queryAnswerProfile } from "./framed-output";
+import { runStructuredWithRetry } from "./structured-output";
 import { makeQueryAnswerSchema } from "./zod-schemas";
 import { extractAnswerLinks, findBrokenLinks, annotateBroken } from "./query-link-validator";
 import { resolveLink } from "./link-resolver";
@@ -99,22 +100,23 @@ export async function* answerFromContext(args: {
           { role: "system", content:
             `Rewrite the answer so every WikiLink points to a valid stem. ` +
             `Broken stems: ${stripped.join(", ")}. Valid stems: ${validList}. ` +
-            `Return JSON {reasoning, answer_markdown, citations}.` },
+            `Return frames only: <<<ANSWER>>> repaired markdown answer, ` +
+            `<<<CITATIONS>>> one valid stem per bullet line, then <<<END>>>.` },
           { role: "user", content: `Question: ${question}\n\nAnswer to fix:\n${answer}` },
         ];
+        const repairEvents: RunEvent[] = [];
         try {
-          const r = await parseWithRetry({
+          const schema = makeQueryAnswerSchema(knownStems);
+          const r = await runStructuredWithRetry({
             llm, model, baseMessages,
-            opts: { ...opts, jsonMode: "json_object", thinkingBudgetTokens: undefined },
-            schema: makeQueryAnswerSchema(knownStems),
+            opts: { ...opts, jsonMode: false, thinkingBudgetTokens: undefined },
+            profile: queryAnswerProfile(schema),
             maxRetries: wikiLinkValidationRetries,
             callSite: "query.answer",
             signal,
-            // Retry/structural-error events are intentionally not surfaced here:
-            // the FixingLinks tool_result preview already reports the outcome
-            // (llm-fixed/annotated); structuralErrorCounter still records metrics.
-            onEvent: () => {},
+            onEvent: (ev) => repairEvents.push(ev),
           });
+          for (const ev of repairEvents) yield ev;
           outputTokens += r.outputTokens;
           const stillBroken = findBrokenLinks(extractAnswerLinks(r.value.answer_markdown), knownStems);
           if (stillBroken.length === 0) {
@@ -124,6 +126,7 @@ export async function* answerFromContext(args: {
           }
         } catch (e) {
           if (signal.aborted || (e as Error).name === "AbortError") return { answer, outputTokens };
+          for (const ev of repairEvents) yield ev;
           // fall through to annotation
         }
       }

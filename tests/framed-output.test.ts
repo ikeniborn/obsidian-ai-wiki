@@ -10,12 +10,15 @@ import {
   parsePageFrames,
   parseWikiPagesFrames,
   parseWikiPageRepairFramesOrJson,
+  lintChatProfile,
+  lintOutputProfile,
   mergeContentFrameInstruction,
   mergedPageProfile,
+  queryAnswerProfile,
   wikiPagesFrameInstruction,
   wikiPagesProfile,
 } from "../src/phases/framed-output";
-import { LintChatSchema, LintOutputSchema, MergedPageOutputSchema, WikiPagesOutputSchema } from "../src/phases/zod-schemas";
+import { LintChatSchema, LintOutputSchema, MergedPageOutputSchema, WikiPagesOutputSchema, makeQueryAnswerSchema } from "../src/phases/zod-schemas";
 
 test("parseFormatFrames parses report and formatted sentinel output", () => {
   const parsed = parseFormatFrames([
@@ -148,6 +151,23 @@ test("schema adapters map frames to expected zod fields", () => {
   assert.equal(lintChat.pages[0].path, "!Wiki/demo/entities/wiki_demo_a.md");
 });
 
+test("lint framed parsers accept report-only no-op output", () => {
+  const raw = [
+    "<<<REPORT>>>",
+    "No edits needed.",
+    "<<<END>>>",
+  ].join("\n");
+
+  const lint = LintOutputSchema.parse(parseLintFrames(raw));
+  assert.equal(lint.report, "No edits needed.");
+  assert.deepEqual(lint.fixes, []);
+  assert.equal(lint.deletes, undefined);
+
+  const lintChat = LintChatSchema.parse(parseLintChatFrames(raw));
+  assert.equal(lintChat.summary, "No edits needed.");
+  assert.deepEqual(lintChat.pages, []);
+});
+
 test("parseWikiPagesFrames parses entity type delta JSON frame", () => {
   const parsed = WikiPagesOutputSchema.parse(parseWikiPagesFrames([
     "<<<REPORT>>>",
@@ -195,6 +215,30 @@ test("ingest framed profiles wire parser, schema, and repair instructions", () =
   assert.equal(
     mergeProfile.parse("<<<ANNOTATION>>>\nA page\n<<<CONTENT>>>\n# A\n<<<END>>>").content,
     "# A",
+  );
+});
+
+test("large text repair profiles wire parser, schema, and repair instructions", () => {
+  const lintProfile = lintOutputProfile();
+  assert.equal(lintProfile.kind, "framed-zod");
+  assert.equal(lintProfile.schema, LintOutputSchema);
+  assert.match(lintProfile.repairInstruction, /<<<REPORT>>>/);
+  assert.equal(lintProfile.parse(pageFramesFixture()).fixes[0].path, "!Wiki/demo/entities/wiki_demo_a.md");
+
+  const chatProfile = lintChatProfile();
+  assert.equal(chatProfile.kind, "framed-zod");
+  assert.equal(chatProfile.schema, LintChatSchema);
+  assert.match(chatProfile.repairInstruction, /<<<PAGE>>>/);
+  assert.equal(chatProfile.parse(pageFramesFixture()).pages[0].annotation, "A page");
+
+  const answerSchema = makeQueryAnswerSchema(new Set(["wiki_demo_a"]));
+  const answerProfile = queryAnswerProfile(answerSchema);
+  assert.equal(answerProfile.kind, "framed-zod");
+  assert.equal(answerProfile.schema, answerSchema);
+  assert.match(answerProfile.repairInstruction, /<<<ANSWER>>>/);
+  assert.equal(
+    answerProfile.parse("<<<ANSWER>>>\nSee [[wiki_demo_a]].\n<<<CITATIONS>>>\n- wiki_demo_a\n<<<END>>>").answer_markdown,
+    "See [[wiki_demo_a]].",
   );
 });
 

@@ -2,8 +2,8 @@ import type OpenAI from "openai";
 import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient, RunRequest } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { parseWithRetry } from "./parse-with-retry";
-import { LintChatSchema } from "./zod-schemas";
+import { lintChatProfile } from "./framed-output";
+import { runStructuredWithRetry } from "./structured-output";
 import type { LintChatResponse } from "./zod-schemas";
 import lintChatTemplate from "../../prompts/lint-chat.md";
 import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
@@ -73,17 +73,17 @@ export async function* runLintFixChat(
   const pwtEvents: RunEvent[] = [];
   let result: { value: LintChatResponse; outputTokens: number; fullText: string };
   try {
-    result = await parseWithRetry({
+    result = await runStructuredWithRetry({
       llm,
       model,
       baseMessages: messages,
-      opts: { ...opts, jsonMode: "json_object" },
-      schema: LintChatSchema,
+      opts: { ...opts, jsonMode: false },
+      profile: lintChatProfile(),
       maxRetries: opts.structuredRetries ?? 1,
       callSite: "lint-chat.fix",
       signal,
       onEvent: (ev) => pwtEvents.push(ev),
-    }) as { value: LintChatResponse; outputTokens: number; fullText: string };
+    });
     yield { kind: "tool_result", ok: true, preview: `${result.value.pages?.length ?? 0} pages` };
   } catch (e) {
     yield { kind: "tool_result", ok: false, preview: (e as Error).message };

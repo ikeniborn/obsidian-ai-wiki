@@ -1,6 +1,8 @@
+import type { z } from "zod";
 import { parseSentinelOutput } from "./format-utils";
-import type { FormatOutput } from "./zod-schemas";
-import { MergedPageOutputSchema, WikiPagesOutputSchema } from "./zod-schemas";
+import type { StructuredProfile } from "./structured-output";
+import type { FormatOutput, LintChatResponse, LintOutput, QueryAnswer } from "./zod-schemas";
+import { LintChatSchema, LintOutputSchema, MergedPageOutputSchema, WikiPagesOutputSchema } from "./zod-schemas";
 
 export interface FramedParseResult<T> {
   raw: T;
@@ -79,6 +81,28 @@ export const mergeContentFrameInstruction = [
   "Finish with <<<END>>>.",
 ].join("\n");
 
+export const lintOutputFrameInstruction = [
+  "Return framed lint output only.",
+  "Start with <<<REPORT>>> followed by the markdown lint report.",
+  "For each changed page use <<<PAGE>>> followed by path:, optional annotation:, <<<CONTENT>>>, full markdown body, and <<<END_PAGE>>>.",
+  "For deletes use <<<DELETE>>> followed by path:, optional redirect_to:, and <<<END_DELETE>>>.",
+  "Finish with <<<END>>>.",
+].join("\n");
+
+export const lintChatFrameInstruction = [
+  "Return framed lint-chat output only.",
+  "Start with <<<REPORT>>> followed by the markdown summary.",
+  "For each changed page use <<<PAGE>>> followed by path:, optional annotation:, <<<CONTENT>>>, full markdown body, and <<<END_PAGE>>>.",
+  "Finish with <<<END>>>.",
+].join("\n");
+
+export const queryAnswerFrameInstruction = [
+  "Return framed answer repair output only.",
+  "Put the full repaired markdown answer in <<<ANSWER>>>.",
+  "Put citations in <<<CITATIONS>>> as one stem per bullet line.",
+  "Finish with <<<END>>>.",
+].join("\n");
+
 export function wikiPagesProfile() {
   return {
     kind: "framed-zod" as const,
@@ -95,6 +119,37 @@ export function mergedPageProfile() {
     parse: parseContentFrame,
     repairInstruction: mergeContentFrameInstruction,
   };
+}
+
+export function lintOutputProfile(): StructuredProfile<LintOutput> {
+  return {
+    kind: "framed-zod" as const,
+    schema: LintOutputSchema,
+    parse: parseLintFrames,
+    repairInstruction: lintOutputFrameInstruction,
+  };
+}
+
+export function lintChatProfile(): StructuredProfile<LintChatResponse> {
+  return {
+    kind: "framed-zod" as const,
+    schema: outputSchema(LintChatSchema),
+    parse: parseLintChatFrames,
+    repairInstruction: lintChatFrameInstruction,
+  };
+}
+
+export function queryAnswerProfile<T extends QueryAnswer>(schema: z.ZodType<T, z.ZodTypeDef, unknown>): StructuredProfile<T> {
+  return {
+    kind: "framed-zod" as const,
+    schema: outputSchema(schema),
+    parse: parseAnswerFrames,
+    repairInstruction: queryAnswerFrameInstruction,
+  };
+}
+
+function outputSchema<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>): z.ZodSchema<T> {
+  return schema as unknown as z.ZodSchema<T>;
 }
 
 export function parseFormatFrames(text: string, hasVisionDescriptions: boolean): FramedParseResult<FormatFrameOutput> {
@@ -199,17 +254,26 @@ export function parseWikiPageRepairFramesOrJson(text: string): PageFrame[] {
 }
 
 export function parseLintFrames(text: string): LintFramesOutput {
-  const parsed = parsePageFrames(text);
+  requireMarker(text, END);
+  const parsed = {
+    reasoning: parseReasoning(text),
+    pages: parsePages(text),
+    deletes: parseDeletes(text),
+  };
   return {
     reasoning: parsed.reasoning,
     report: parsed.reasoning,
     fixes: parsed.pages,
-    deletes: parsed.deletes,
+    deletes: parsed.deletes.length ? parsed.deletes : undefined,
   };
 }
 
 export function parseLintChatFrames(text: string): LintChatFramesOutput {
-  const parsed = parsePageFrames(text);
+  requireMarker(text, END);
+  const parsed = {
+    reasoning: parseReasoning(text),
+    pages: parsePages(text),
+  };
   return {
     summary: parsed.reasoning,
     pages: parsed.pages,
