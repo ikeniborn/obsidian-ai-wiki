@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.1.199 — 2026-07-14
+
+### New
+- feat(phases): add shared structured output runner
+- feat(phases): add framed output parsers
+- feat(format): route large output through framed zod
+- feat(ingest): use framed zod for markdown outputs
+- feat(phases): use framed zod for large text repairs
+
+### Fixes
+- fix(output): centralize response-format repair
+- fix(format): disable json mode for framed output
+- fix(storage): stop runtime per-domain _config creation
+- fix(agent-runner): block retry after destructive prelude
+- fix(prompts): remove json field wording from lint frames
+- fix(ingest): preserve framed path repair retry and report empty path repair retries
+- fix(format): enforce frontmatter schema for framed output
+- fix(phases): expose structured output fallback diagnostics
+- fix(phases): reuse llm utils in structured runner
+- fix(phases): emit structured retry recovery event
+- fix(phases): anchor framed output markers
+- fix(types): expand structured output diagnostics
+- fix(reranker): restore capped array typecheck
+
+---
+
 ## 0.1.198 — 2026-07-14
 
 ### Fixes
