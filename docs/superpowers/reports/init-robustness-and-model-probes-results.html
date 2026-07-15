@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chain · init-robustness-and-model-probes</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1120px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s, color .3s;
+}
+h1{ font-size:1.5rem; margin:.2rem 0 .1rem; }
+h2{ font-size:1.2rem; margin:1.6rem 0 .6rem; border-bottom:2px solid var(--border); padding-bottom:.25rem; }
+h3{ font-size:1.02rem; margin:1.1rem 0 .4rem; color:var(--accent); }
+code{ font-family:ui-monospace, monospace; font-size:.9em; }
+.theme-btn{
+  position:sticky; top:.5rem; float:right;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface); z-index:5;
+}
+header h1{ clear:none; }
+.sub{ color:var(--muted); font-size:.95rem; }
+.lead{ font-size:1.08rem; }
+.note{ border-left:4px solid var(--accent); padding:.55rem 1rem; margin:1rem 0;
+  background:color-mix(in srgb, var(--accent) 8%, var(--surface)); border-radius:0 8px 8px 0;
+  box-shadow:0 1px 8px var(--shadow); }
+.note.ok{ border-left-color:var(--ok); background:color-mix(in srgb, var(--ok) 10%, var(--surface)); }
+.note.warn{ border-left-color:var(--warn); background:color-mix(in srgb, var(--warn) 10%, var(--surface)); }
+
+/* tabs */
+.chain-tabs{ display:flex; gap:.25rem; margin:1.1rem 0 0; flex-wrap:wrap; }
+.chain-tabs label{ cursor:pointer; padding:.4rem .9rem; border:1px solid var(--border);
+  border-bottom:none; border-radius:8px 8px 0 0; background:var(--surface); color:var(--muted); }
+.tab-pane{ display:none; border:1px solid var(--border); border-radius:0 8px 8px 8px; padding:1rem 1.3rem; background:color-mix(in srgb,var(--surface) 60%, transparent); }
+body:has(#tab-intent:checked) #pane-intent,
+body:has(#tab-spec:checked)   #pane-spec,
+body:has(#tab-plan:checked)   #pane-plan,
+body:has(#tab-result:checked) #pane-result{ display:block; }
+body:has(#tab-intent:checked) label[for="tab-intent"],
+body:has(#tab-spec:checked)   label[for="tab-spec"],
+body:has(#tab-plan:checked)   label[for="tab-plan"],
+body:has(#tab-result:checked) label[for="tab-result"]{ color:var(--accent); border-color:var(--accent); font-weight:600; }
+
+/* tables */
+.rpt-table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface);
+  margin:1rem 0; font-size:.9rem; border:1px solid var(--border); border-radius:10px;
+  overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
+.rpt-table th, .rpt-table td{ border-bottom:1px solid var(--border); padding:.5rem .75rem; text-align:left; vertical-align:top; }
+.rpt-table tbody tr:last-child td{ border-bottom:none; }
+.rpt-table thead th{ background:var(--accent); color:var(--bg); }
+.rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
+.rpt-table tbody tr:hover{ background:color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.rpt-table td code{ white-space:nowrap; }
+.center{ text-align:center; }
+
+.badge{ display:inline-block; font-size:.72rem; padding:.05rem .5rem; border-radius:999px; border:1px solid var(--border); }
+.badge.ok{ color:var(--ok-2); border-color:var(--ok); }
+.badge.warn{ color:var(--warn-2); border-color:var(--warn); }
+.badge.info{ color:var(--accent-2); border-color:var(--accent); }
+.badge.crit{ color:var(--danger-2); border-color:var(--danger); }
+.badge.na{ color:var(--muted); }
+
+/* C4 */
+.rpt-c4 .boundary{
+  border:1.6px dashed var(--accent); border-radius:12px;
+  padding:1.8rem 1rem 1rem; margin:.7rem 0; position:relative;
+  display:flex; flex-wrap:wrap; gap:.6rem;
+  background:color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.rpt-c4 .boundary::before{
+  content:attr(data-label); position:absolute; top:-.7rem; left:.9rem;
+  background:var(--bg); padding:0 .45rem; font-size:.8rem; color:var(--accent); font-weight:600;
+}
+.rpt-c4 .comp{
+  background:var(--surface); border:1px solid var(--border); border-radius:8px;
+  padding:.55rem .85rem; min-width:6rem; font-size:.82rem; box-shadow:0 1px 6px var(--shadow);
+  border-left:4px solid var(--accent);
+}
+.rpt-c4 .comp b{ color:var(--accent); }
+.rpt-c4 .comp .role{ color:var(--muted); font-size:.75rem; }
+
+/* SVG diagram */
+figure.diagram{ margin:1.2rem 0; }
+figure.diagram svg{ width:100%; height:auto; display:block; overflow:visible; }
+figcaption{ color:var(--muted); font-size:.85rem; margin-top:.35rem; text-align:center; }
+.card{ fill:var(--surface); stroke:var(--border); stroke-width:1.5; filter:url(#dropshadow); transition:stroke .15s, stroke-width .15s; }
+.node:hover .card{ stroke:var(--accent); stroke-width:2.5; }
+.bar-accent{ fill:var(--accent); } .bar-ok{ fill:var(--ok); } .bar-warn{ fill:var(--warn); }
+.t-title{ fill:var(--fg); font:600 13px system-ui, sans-serif; }
+.t-sub{ fill:var(--muted); font:10px system-ui, sans-serif; }
+.t-mono{ font-family:ui-monospace, monospace; }
+text{ pointer-events:none; }
+.conn-a{ fill:none; stroke:var(--accent); stroke-width:2; stroke-dasharray:5 5; }
+.conn{ fill:none; stroke:var(--line); stroke-width:2; }
+.lbl-bg{ fill:var(--bg); }
+.lbl{ fill:var(--fg); font:10px system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden checked>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <filter id="dropshadow" x="-20%" y="-20%" width="140%" height="160%">
+    <feDropShadow dx="0" dy="2.5" stdDeviation="3.5" flood-color="var(--shadow)" flood-opacity="1"/>
+  </filter>
+  <marker id="arrA" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="9" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="var(--accent)"/></marker>
+</defs></svg>
+
+<header>
+  <label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+  <h1>IDD→SDD Chain · init-robustness-and-model-probes</h1>
+  <p class="sub">Отчёт по цепочке · этап Spec обновлён 2026-07-15 · <code>spec_hash 04eb2f4e969c264f</code></p>
+</header>
+
+<nav class="chain-tabs">
+  <label for="tab-intent">Intent</label>
+  <label for="tab-spec">Spec</label>
+  <label for="tab-plan">Plan</label>
+  <label for="tab-result">Result</label>
+</nav>
+
+<!-- TAB:intent START -->
+<section class="tab-pane" id="pane-intent">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:intent END -->
+
+<!-- TAB:spec START -->
+<section class="tab-pane" id="pane-spec">
+  <p class="lead">Спецификация: устойчивость <code>init</code> и проверки моделей (эмбеддинг + реранкер).</p>
+  <p class="sub">Артефакт: <code>docs/superpowers/specs/2026-07-15-init-robustness-and-model-probes-design.md</code> · verdict <span class="badge ok">OK</span></p>
+
+  <h2>1. Резюме спецификации</h2>
+  <h3>Требования по разделам</h3>
+  <table class="rpt-table">
+    <thead><tr><th>ID</th><th>Раздел</th><th>Требование</th><th>Корень</th></tr></thead>
+    <tbody>
+      <tr><td><code>F1</code></td><td>Design · F1</td><td><code>effectiveSubfolder(et)=wiki_subfolder||sanitizeWikiSubfolder(et.type)</code>; провести 7 сайтов через хелпер; <code>validateArticlePath</code> без изменений (строгие 2 сегмента).</td><td>path policy</td></tr>
+      <tr><td><code>F2</code></td><td>Design · F2</td><td>Централизовать инлайн-фильтр <code>.md &amp;&amp; !/_config/</code> на <code>isWikiPagePath</code> в 4 сайтах (delete.ts:49, delete.ts:133, tag-registry.ts:46, migrate-jsonl-domain-storage.ts:78).</td><td>дублирование</td></tr>
+      <tr><td><code>F3</code></td><td>Design · F3</td><td>(1) обогатить throw <code>fetchEmbeddings</code> статусом+телом; (2) прокинуть <code>failReason</code>; (3) fail-fast <code>EmbeddingUnavailableError</code>; (4) оба init-цикла останавливают весь прогон один раз, файл не помечается analyzed; (5) <code>dimensions</code> — opt-in (не авто-сеять; пусто → опустить).</td><td>R1</td></tr>
+      <tr><td><code>F4</code></td><td>Design · F4</td><td>При провале bootstrap structured-output — остановить <code>init</code> с явной ошибкой; легитимно-пустой <code>entity_types</code> (bootstrap успешен) остаётся допустимым.</td><td>R2</td></tr>
+      <tr><td><code>F5</code></td><td>Decisions / Out of scope</td><td>Отдельного backfill нет; следствие R1 — исправление эмбеддингов + чистый reinit наполняют <code>index.jsonl</code>. Помечено как out-of-scope.</td><td>R1 (➖)</td></tr>
+      <tr><td><code>F6</code></td><td>Design · F6</td><td>Выделить <code>probeEmbeddingDimensionsResult({probe?,error?})</code>; тонкая обёртка сохраняет старую сигнатуру; «Check» показывает реальную ошибку.</td><td>R1</td></tr>
+      <tr><td><code>F7</code></td><td>Design · F7</td><td>Добавить <code>probeRerankerModel()</code> + кнопку «Check» рядом с моделью реранкера, зеркалящую UX эмбеддинга.</td><td>новая фича</td></tr>
+      <tr><td><code>Base URL</code></td><td>Root causes / Decisions</td><td>Оставить один общий <code>baseUrl</code> (проводка проверена корректной); отдельные embedding/rerank base URL не добавлять.</td><td>решение</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Критерии приёмки (Success Criteria — из Testing / Verification)</h3>
+  <table class="rpt-table">
+    <thead><tr><th>#</th><th>Критерий</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Сборка + unit-тесты зелёные (<code>npm test</code>, lint, <code>tsc</code>).</td></tr>
+      <tr><td>2</td><td><code>effectiveSubfolder</code>: пусто → sanitized тип; непусто → как есть; слэши срезаны.</td></tr>
+      <tr><td>3</td><td>Тип с пустым <code>wiki_subfolder</code> → страницы под <code>&lt;TypeName&gt;/</code> (вложенный путь), учитываются lint; <code>validateArticlePath</code> по-прежнему отвергает плоский путь.</td></tr>
+      <tr><td>4</td><td>Ошибка эмбеддинга → <code>init</code> останавливается один раз с реальным статусом/телом; нет пофайлового перемалывания; файл не помечен analyzed.</td></tr>
+      <tr><td>5</td><td>Провал bootstrap → ошибка F4 и возврат без создания/обновления домена.</td></tr>
+      <tr><td>6</td><td>«Check» эмбеддинга показывает реальную ошибку; «Check» реранкера сообщает доступность.</td></tr>
+      <tr><td>7</td><td>При пустом <code>embeddingDimensions</code> тело запроса не содержит <code>dimensions</code>.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Схемы решения и зависимостей</h2>
+
+  <h3>Схема решения (компоненты и связи)</h3>
+  <figure class="rpt-c4">
+    <div class="boundary" data-label="wiki-path.ts · политика путей">
+      <div class="comp"><b>effectiveSubfolder</b><br><span class="role">F1 · fallback на sanitized тип</span></div>
+      <div class="comp"><b>sanitizeWikiSubfolder</b><br><span class="role">используется F1</span></div>
+      <div class="comp"><b>isWikiPagePath</b><br><span class="role">F2 · единый фильтр страниц</span></div>
+      <div class="comp"><b>validateArticlePath</b><br><span class="role">без изменений · 2 сегмента</span></div>
+    </div>
+    <div class="boundary" data-label="init.ts / ingest.ts · control flow">
+      <div class="comp"><b>buildEntityTypesBlock</b><br><span class="role">F1 · шаблон пути через хелпер</span></div>
+      <div class="comp"><b>runIngest guard</b><br><span class="role">F3 · throw EmbeddingUnavailableError</span></div>
+      <div class="comp"><b>runInitWithSources</b><br><span class="role">F3/F4 · stop прогон один раз</span></div>
+      <div class="comp"><b>runIncrementalReinit</b><br><span class="role">F3 · распознаёт ошибку по имени</span></div>
+    </div>
+    <div class="boundary" data-label="page-similarity.ts / reranker.ts · транспорт">
+      <div class="comp"><b>fetchEmbeddings</b><br><span class="role">F3 · обогащённый throw (status+body); dimensions opt-in</span></div>
+      <div class="comp"><b>selectByEntities</b><br><span class="role">F3 · прокидывает failReason</span></div>
+      <div class="comp"><b>probeRerankerModel</b><br><span class="role">F7 · через fetchRerankerScores</span></div>
+    </div>
+    <div class="boundary" data-label="settings.ts · UI-проверки">
+      <div class="comp"><b>probeEmbeddingDimensionsResult</b><br><span class="role">F6 · {probe?,error?}</span></div>
+      <div class="comp"><b>checkDimensions</b><br><span class="role">F6 · показывает реальную ошибку</span></div>
+      <div class="comp"><b>reranker «Check»</b><br><span class="role">F7 · Notice OK/ошибка</span></div>
+      <div class="comp"><b>dimensions opt-in</b><br><span class="role">F3 · не авто-сеять</span></div>
+    </div>
+  </figure>
+
+  <h3>Граф зависимостей (A→B = «A зависит от / использует B»)</h3>
+  <figure class="diagram">
+  <svg viewBox="0 0 940 320" role="img" aria-label="Граф зависимостей требований спецификации">
+    <!-- nodes -->
+    <g class="node"><rect class="card" x="24"  y="24" width="180" height="52" rx="10"/><rect class="bar-accent" x="32" y="34" width="5" height="32" rx="2.5"/><text class="t-title" x="114" y="46" text-anchor="middle">F1 сайты (7)</text><text class="t-sub" x="114" y="63" text-anchor="middle">ingest/lint/tag/modals</text></g>
+    <g class="node"><rect class="card" x="260" y="24" width="200" height="52" rx="10"/><rect class="bar-ok" x="268" y="34" width="5" height="32" rx="2.5"/><text class="t-title" x="360" y="46" text-anchor="middle">effectiveSubfolder</text><text class="t-sub" x="360" y="63" text-anchor="middle">wiki-path.ts · F1</text></g>
+    <g class="node"><rect class="card" x="520" y="24" width="200" height="52" rx="10"/><rect class="bar-ok" x="528" y="34" width="5" height="32" rx="2.5"/><text class="t-title" x="620" y="46" text-anchor="middle">sanitizeWikiSubfolder</text><text class="t-sub" x="620" y="63" text-anchor="middle">wiki-path.ts</text></g>
+
+    <g class="node"><rect class="card" x="24"  y="120" width="180" height="52" rx="10"/><rect class="bar-accent" x="32" y="130" width="5" height="32" rx="2.5"/><text class="t-title" x="114" y="142" text-anchor="middle">F2 сайты (4)</text><text class="t-sub" x="114" y="159" text-anchor="middle">delete/tag/migrate</text></g>
+    <g class="node"><rect class="card" x="260" y="120" width="200" height="52" rx="10"/><rect class="bar-ok" x="268" y="130" width="5" height="32" rx="2.5"/><text class="t-title" x="360" y="142" text-anchor="middle">isWikiPagePath</text><text class="t-sub" x="360" y="159" text-anchor="middle">wiki-path.ts · F2</text></g>
+
+    <g class="node"><rect class="card" x="24"  y="216" width="180" height="52" rx="10"/><rect class="bar-warn" x="32" y="226" width="5" height="32" rx="2.5"/><text class="t-title" x="114" y="238" text-anchor="middle">F3/F4 init-циклы</text><text class="t-sub" x="114" y="255" text-anchor="middle">runInit / reinit</text></g>
+    <g class="node"><rect class="card" x="260" y="216" width="200" height="52" rx="10"/><rect class="bar-warn" x="268" y="226" width="5" height="32" rx="2.5"/><text class="t-title" x="360" y="238" text-anchor="middle">EmbeddingUnavailErr</text><text class="t-sub" x="360" y="255" text-anchor="middle">ingest guard · F3</text></g>
+    <g class="node"><rect class="card" x="520" y="216" width="200" height="52" rx="10"/><rect class="bar-ok" x="528" y="226" width="5" height="32" rx="2.5"/><text class="t-title" x="620" y="238" text-anchor="middle">fetchEmbeddings throw</text><text class="t-sub" x="620" y="255" text-anchor="middle">status+body · F3</text></g>
+    <g class="node"><rect class="card" x="760" y="120" width="156" height="52" rx="10"/><rect class="bar-accent" x="768" y="130" width="5" height="32" rx="2.5"/><text class="t-title" x="838" y="142" text-anchor="middle">F6 checkDimensions</text><text class="t-sub" x="838" y="159" text-anchor="middle">settings.ts</text></g>
+    <g class="node"><rect class="card" x="760" y="216" width="156" height="52" rx="10"/><rect class="bar-accent" x="768" y="226" width="5" height="32" rx="2.5"/><text class="t-title" x="838" y="238" text-anchor="middle">F7 probeReranker</text><text class="t-sub" x="838" y="255" text-anchor="middle">reranker.ts</text></g>
+
+    <!-- edges A depends on B -->
+    <path class="conn-a" marker-end="url(#arrA)" d="M204,50 H256"/>
+    <path class="conn-a" marker-end="url(#arrA)" d="M460,50 H516"/>
+    <path class="conn-a" marker-end="url(#arrA)" d="M204,146 H256"/>
+    <path class="conn-a" marker-end="url(#arrA)" d="M204,242 H256"/>
+    <path class="conn-a" marker-end="url(#arrA)" d="M460,242 H516"/>
+    <!-- F6 checkDimensions -> fetchEmbeddings throw (uses enriched error) -->
+    <path class="conn-a" marker-end="url(#arrA)" d="M760,150 C700,160 690,215 720,232"/>
+    <rect class="lbl-bg" x="686" y="182" width="70" height="16"/><text class="lbl" x="721" y="194" text-anchor="middle">исп. F3</text>
+  </svg>
+  <figcaption>DAG требований: F1/F2 сайты зависят от хелперов wiki-path; F6 переиспользует обогащённую ошибку F3. Циклов нет.</figcaption>
+  </figure>
+  <div class="note ok"><b>Циклов нет:</b> зависимости образуют направленный ацикличный граф; ни одно требование не зависит само от себя ни транзитивно.</div>
+
+  <h3>Карта покрытия (задача → требование)</h3>
+  <table class="rpt-table">
+    <thead><tr><th>Задача (контекст)</th><th>Требование спецификации</th><th>Раздел</th><th>Покрыто</th></tr></thead>
+    <tbody>
+      <tr><td>F1 · пустой <code>wiki_subfolder</code> → плоский путь</td><td><code>effectiveSubfolder</code> + 7 сайтов; validator без изменений</td><td>Design · F1</td><td class="center"><span class="badge ok">✓</span></td></tr>
+      <tr><td>F2 · дублированный фильтр страниц</td><td>централизация на <code>isWikiPagePath</code> (4 сайта)</td><td>Design · F2</td><td class="center"><span class="badge ok">✓</span></td></tr>
+      <tr><td>F3 · сбой эмбеддинга + пофайловое перемалывание</td><td>fail-fast + реальная ошибка + <code>dimensions</code> opt-in (5 пунктов)</td><td>Design · F3</td><td class="center"><span class="badge ok">✓</span></td></tr>
+      <tr><td>F4 · молчаливый провал bootstrap</td><td>fail-loud stop; пустой список допустим при успехе</td><td>Design · F4 / Decisions</td><td class="center"><span class="badge ok">✓</span></td></tr>
+      <tr><td>F5 · пустой <code>index.jsonl</code></td><td>без backfill; out-of-scope, resolved via R1</td><td>Decisions / Out of scope / Finding map</td><td class="center"><span class="badge ok">✓</span></td></tr>
+      <tr><td>F6 · «Check» эмбеддинга — общая ошибка</td><td><code>probeEmbeddingDimensionsResult</code>; реальная ошибка</td><td>Design · F6</td><td class="center"><span class="badge ok">✓</span></td></tr>
+      <tr><td>F7 · нет проверки реранкера</td><td><code>probeRerankerModel</code> + кнопка «Check»</td><td>Design · F7</td><td class="center"><span class="badge ok">✓</span></td></tr>
+      <tr><td>Base URL · один общий</td><td>оставить один <code>baseUrl</code>; отдельные не добавлять</td><td>Root causes / Decisions</td><td class="center"><span class="badge ok">✓</span></td></tr>
+    </tbody>
+  </table>
+  <p class="sub">Экстра-требований не обнаружено: каждое требование спецификации привязано к задаче из контекста.</p>
+
+  <h2>3. Результаты проверки</h2>
+  <h3>Статусы фаз</h3>
+  <table class="rpt-table">
+    <thead><tr><th>Фаза</th><th>Статус</th><th>Комментарий</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td class="center"><span class="badge ok">passed</span></td><td>Плейсхолдеров нет (<code>&lt;msg&gt;</code>/<code>&lt;reason&gt;</code>/<code>&lt;TypeName&gt;</code> — намеренные шаблоны); битых ссылок нет; заголовки уникальны; пропусков нумерации нет.</td></tr>
+      <tr><td>coverage</td><td class="center"><span class="badge ok">passed</span></td><td>Все 8 задач покрыты ≥1 требованием; экстра-требований нет; противоречий между требованиями нет.</td></tr>
+      <tr><td>clarity</td><td class="center"><span class="badge ok">passed</span></td><td>1 WARNING + 1 INFO (не CRITICAL): расхождение номеров строк <code>fetchEmbeddings</code>; отсутствует тест «пустой bootstrap допустим».</td></tr>
+      <tr><td>consistency</td><td class="center"><span class="badge ok">passed</span></td><td>F5 (out-of-scope), Base URL (single), F4 (fail-loud vs empty allowed) — во всех разделах согласованы, противоречий нет.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Находки</h3>
+  <table class="rpt-table">
+    <thead><tr><th>ID</th><th>Severity</th><th>Фаза</th><th>Раздел</th><th>Текст</th><th>Fix</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>F-001</code></td><td class="center"><span class="badge warn">WARNING</span></td><td>clarity</td><td>Root causes / Design · F3</td>
+        <td>Одна и та же сущность указана с разными номерами строк: Root causes — <code>fetchEmbeddings</code> на <code>page-similarity.ts:778</code>, catch на строке 779; Design F3 — <code>page-similarity.ts:460</code> (и :449), catch <code>selectByEntitiesEmbedding</code> на строке 783. Может дезориентировать реализатора.</td>
+        <td>Свести к одному каноническому номеру строки на сущность, одинаково в Root causes и Design F3.</td>
+        <td class="center"><span class="badge warn">open</span></td>
+      </tr>
+      <tr>
+        <td><code>F-002</code></td><td class="center"><span class="badge info">INFO</span></td><td>clarity</td><td>Testing</td>
+        <td>Требование F4 «успешный bootstrap с пустым <code>entity_types</code> остаётся допустимым (init продолжается)» не имеет теста в Testing; проверяется только путь провала bootstrap.</td>
+        <td>Добавить пункт Testing: успешный bootstrap с пустым списком не останавливает init, страницы уходят в <code>entities/</code>.</td>
+        <td class="center"><span class="badge info">open</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Сводка</h3>
+  <div class="note ok"><b>Итог:</b> 0 CRITICAL open · 1 WARNING open · 1 INFO open. Все четыре фазы <span class="badge ok">passed</span>.</div>
+
+  <h3>Итоговый вердикт</h3>
+  <p class="lead"><span class="badge ok">OK</span> — открытых CRITICAL нет; body-hash <code>04eb2f4e969c264f</code>.</p>
+
+  <h3>Цепочка</h3>
+  <div class="rpt-c4">
+    <div class="boundary" data-label="chain">
+      <div class="comp"><b>intent</b><br><span class="role">n/a</span></div>
+      <div class="comp"><b>spec</b><br><span class="role">OK · 2026-07-15</span></div>
+    </div>
+  </div>
+</section>
+<!-- TAB:spec END -->
+
+<!-- TAB:plan START -->
+<section class="tab-pane" id="pane-plan">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:plan END -->
+
+<!-- TAB:result START -->
+<section class="tab-pane" id="pane-result">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:result END -->
+
+</body>
+</html>

@@ -16,3 +16,4 @@
 | guarded-rerank-tuning | done | ✓ | ✓ | ✓ | OK | 2026-07-13 | 2026-07-13 | Accepted page-aware rerank gate; nDCG@5 0.9254→0.9321, p95 +601 ms |
 | structured-output-pipeline-resilience | done | ✓ | ✓ | ✓ | OK | 2026-07-14 | 2026-07-14 | Resilient structured-output recovery for empty/non-JSON/backend-incompatible LLM responses |
 | storage-layout-sidecar-fix | done | n/a | ✓ | ✓ | OK | 2026-07-14 | 2026-07-15 | Fresh init aborts: JSONL sidecars leak into content filter; orphan !Wiki/_config folder |
+| init-robustness-and-model-probes | in-progress | n/a | ✓ | – | – | 2026-07-15 |  | effectiveSubfolder fallback, isWikiPagePath centralization, fail-fast embedding/bootstrap, dimensions opt-in, embedding+reranker Check probes |
