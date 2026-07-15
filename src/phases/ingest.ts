@@ -16,7 +16,7 @@ import ingestEntitiesTemplate from "../../prompts/ingest-entities.md";
 import fixPathsTemplate from "../../prompts/ingest-fix-paths.md";
 import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
-import { domainWikiFolder, validateArticlePath, domainIndexPath, isWikiPagePath } from "../wiki-path";
+import { domainWikiFolder, validateArticlePath, domainIndexPath, isWikiPagePath, effectiveSubfolder } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureType, ensureDescription, entityTypeFromPath, ensureResource, stripInvalidWikiArticles, recoverSourceFrontmatter, parseTagsFromFm, normalizeTag } from "../utils/raw-frontmatter";
 import { collectDomainTags, renderTagRegistryBlock, thematicCategories, ensureEntityTypeTag, DEFAULT_MAX_TAG_CATEGORIES } from "../utils/tag-registry";
@@ -764,16 +764,14 @@ function renderPageRepairFrames(pages: Array<{ path: string; content: string; an
 export function buildEntityTypesBlock(domain: DomainEntry, wikiVaultPath: string): string {
   if (!domain.entity_types?.length) return "";
   return domain.entity_types.map((et) => {
-    const pathTemplate = et.wiki_subfolder
-      ? `${wikiVaultPath}/${et.wiki_subfolder}/<EntityName>.md`
-      : `${wikiVaultPath}/<EntityName>.md`;
+    const sub = effectiveSubfolder(et);
     return [
       `### Type: ${et.type}`,
       `Description: ${et.description}`,
       `Keywords: ${et.extraction_cues.join(", ")}`,
       et.min_mentions_for_page != null ? `Min. mentions for a page: ${et.min_mentions_for_page}` : "",
-      et.wiki_subfolder ? `Wiki subfolder: ${et.wiki_subfolder}` : "",
-      `Path for entities of this type: ${pathTemplate}`,
+      `Wiki subfolder: ${sub}`,
+      `Path for entities of this type: ${wikiVaultPath}/${sub}/<EntityName>.md`,
     ].filter(Boolean).join("\n");
   }).join("\n\n");
 }
