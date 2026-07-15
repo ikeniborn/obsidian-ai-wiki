@@ -132,7 +132,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
     const requested = na.embeddingDimensions;
     const result = await probeEmbeddingDimensionsResult(this.plugin.settings.nativeAgent.baseUrl, apiKey, na.embeddingModel, requested);
-    if (result.error) { new Notice(`Dimension check failed: ${result.error}`); return; }
+    if (!result.probe) { new Notice(`Dimension check failed: ${result.error ?? "unknown error"}`); return; }
     const probe = result.probe!;
     const nativeProbe = await probeEmbeddingDimensions(na.baseUrl, apiKey, na.embeddingModel);
     const native = nativeProbe?.actual;
