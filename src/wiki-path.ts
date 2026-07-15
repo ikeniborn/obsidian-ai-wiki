@@ -53,9 +53,10 @@ export function validateArticlePath(path: string, wikiVaultPath: string): boolea
   if (!path.startsWith(prefix)) return false;
   if (isDomainMetaPath(path)) return false;
   const remainder = path.slice(prefix.length);
+  // Reject old dotted .config paths.
+  if (remainder.includes(".config")) return false;
   const segments = remainder.split("/");
-  // Accept a flat page (<file>.md) or one entity-type subfolder deep (<subfolder>/<file>.md).
-  return segments.length <= 2 && segments[segments.length - 1].endsWith(".md");
+  return segments.length === 2 && segments[1].endsWith(".md");
 }
 
 export function domainMetadataPath(domainFolder: string): string {

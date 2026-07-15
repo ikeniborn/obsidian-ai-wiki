@@ -21,7 +21,7 @@ test("isWikiPagePath accepts only content .md pages", () => {
 });
 
 test("validateArticlePath rejects legacy _config service paths", () => {
-  assert.equal(validateArticlePath("!Wiki/os/wiki_os_safari.md", "!Wiki/os"), true);
+  assert.equal(validateArticlePath("!Wiki/os/systems/wiki_os_safari.md", "!Wiki/os"), true);
   assert.equal(validateArticlePath("!Wiki/os/_config/_index.md", "!Wiki/os"), false);
   assert.equal(validateArticlePath("!Wiki/os/metadata.jsonl", "!Wiki/os"), false);
 });

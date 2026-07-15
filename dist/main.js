@@ -28092,8 +28092,9 @@ function validateArticlePath(path5, wikiVaultPath) {
   if (!path5.startsWith(prefix)) return false;
   if (isDomainMetaPath(path5)) return false;
   const remainder = path5.slice(prefix.length);
+  if (remainder.includes(".config")) return false;
   const segments = remainder.split("/");
-  return segments.length <= 2 && segments[segments.length - 1].endsWith(".md");
+  return segments.length === 2 && segments[1].endsWith(".md");
 }
 function domainMetadataPath(domainFolder) {
   return `${domainFolder}/metadata.jsonl`;
