@@ -44337,15 +44337,19 @@ async function* runIncrementalReinit(domainId, changedFiles, vaultTools, llm, mo
 }
 async function wipeDomainFolder(vaultTools, wikiFolder) {
   const root = domainWikiFolder(wikiFolder);
+  const metaPath = domainMetadataPath(root);
   const files = await vaultTools.listFiles(root);
+  const removed = [];
   for (const f of files) {
+    if (f === metaPath) continue;
     try {
       await vaultTools.remove(f);
+      removed.push(f);
     } catch {
     }
   }
   await vaultTools.removeSubfolders(root);
-  return files;
+  return removed;
 }
 async function tryRead4(vaultTools, path5) {
   try {

@@ -9,7 +9,7 @@ import initTemplate from "../../prompts/init.md";
 import { render } from "./template";
 import { wikiSections } from "./llm-utils";
 import { runIngest } from "./ingest";
-import { domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainIndexPath } from "../wiki-path";
+import { domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainIndexPath, domainMetadataPath } from "../wiki-path";
 import type { PageSimilarityService } from "../page-similarity";
 import { parseIndexAnnotations } from "../wiki-index";
 import { i18nFor, resolveLang } from "../i18n";
@@ -503,12 +503,21 @@ export async function* runIncrementalReinit(
 
 export async function wipeDomainFolder(vaultTools: VaultTools, wikiFolder: string): Promise<string[]> {
   const root = domainWikiFolder(wikiFolder);
+  // Preserve metadata.jsonl — it is the domain's registry identity. A force
+  // reinit resets its contents (entity_types/analyzed_sources) via later
+  // domain_updated events, but deleting the file drops the domain from the
+  // registry mid-run, so those events (re-loaded against a domain-less registry)
+  // are silently discarded and the metadata is never rewritten. index.jsonl and
+  // log.jsonl are content — they are removed and rebuilt by the re-ingest.
+  const metaPath = domainMetadataPath(root);
   const files = await vaultTools.listFiles(root);
+  const removed: string[] = [];
   for (const f of files) {
-    try { await vaultTools.remove(f); } catch { /* skip locked */ }
+    if (f === metaPath) continue;
+    try { await vaultTools.remove(f); removed.push(f); } catch { /* skip locked */ }
   }
   await vaultTools.removeSubfolders(root);
-  return files;
+  return removed;
 }
 
 async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
