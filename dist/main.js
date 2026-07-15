@@ -9571,6 +9571,7 @@ var require_dispatcher_base = __commonJS({
       }
       get webSocketOptions() {
         return {
+          maxFragments: this[kWebSocketOptions].maxFragments ?? 131072,
           maxPayloadSize: this[kWebSocketOptions].maxPayloadSize ?? 128 * 1024 * 1024
         };
       }
@@ -13225,6 +13226,9 @@ var require_client_h1 = __commonJS({
     var FastBuffer = Buffer[Symbol.species];
     var addListener = util2.addListener;
     var removeAllListeners = util2.removeAllListeners;
+    var kIdleSocketValidation = /* @__PURE__ */ Symbol("kIdleSocketValidation");
+    var kIdleSocketValidationTimeout = /* @__PURE__ */ Symbol("kIdleSocketValidationTimeout");
+    var kSocketUsed = /* @__PURE__ */ Symbol("kSocketUsed");
     var extractBody;
     async function lazyllhttp() {
       const llhttpWasmData = process.env.JEST_WORKER_ID ? require_llhttp_wasm() : void 0;
@@ -13387,23 +13391,54 @@ var require_client_h1 = __commonJS({
             currentBufferRef = null;
           }
           const offset = llhttp.llhttp_get_error_pos(this.ptr) - currentBufferPtr;
-          if (ret === constants.ERROR.PAUSED_UPGRADE) {
-            this.onUpgrade(data.slice(offset));
-          } else if (ret === constants.ERROR.PAUSED) {
-            this.paused = true;
-            socket.unshift(data.slice(offset));
-          } else if (ret !== constants.ERROR.OK) {
-            const ptr = llhttp.llhttp_get_error_reason(this.ptr);
-            let message = "";
-            if (ptr) {
-              const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0);
-              message = "Response does not match the HTTP/1.1 protocol (" + Buffer.from(llhttp.memory.buffer, ptr, len).toString() + ")";
+          if (ret !== constants.ERROR.OK) {
+            const body = data.subarray(offset);
+            if (ret === constants.ERROR.PAUSED_UPGRADE) {
+              this.onUpgrade(body);
+            } else if (ret === constants.ERROR.PAUSED) {
+              this.paused = true;
+              socket.unshift(body);
+            } else {
+              throw this.createError(ret, body);
             }
-            throw new HTTPParserError(message, constants.ERROR[ret], data.slice(offset));
           }
         } catch (err) {
           util2.destroy(socket, err);
         }
+      }
+      finish() {
+        assert(currentParser === null);
+        assert(this.ptr != null);
+        assert(!this.paused);
+        const { llhttp } = this;
+        let ret;
+        try {
+          currentParser = this;
+          ret = llhttp.llhttp_finish(this.ptr);
+        } finally {
+          currentParser = null;
+        }
+        if (ret === constants.ERROR.OK) {
+          return null;
+        }
+        if (ret === constants.ERROR.PAUSED || ret === constants.ERROR.PAUSED_UPGRADE) {
+          this.paused = true;
+          return null;
+        }
+        return this.createError(ret, EMPTY_BUF);
+      }
+      createError(ret, data) {
+        const { llhttp, contentLength, bytesRead } = this;
+        if (contentLength && bytesRead !== parseInt(contentLength, 10)) {
+          return new ResponseContentLengthMismatchError();
+        }
+        const ptr = llhttp.llhttp_get_error_reason(this.ptr);
+        let message = "";
+        if (ptr) {
+          const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0);
+          message = "Response does not match the HTTP/1.1 protocol (" + Buffer.from(llhttp.memory.buffer, ptr, len).toString() + ")";
+        }
+        return new HTTPParserError(message, constants.ERROR[ret], data);
       }
       destroy() {
         assert(this.ptr != null);
@@ -13422,6 +13457,10 @@ var require_client_h1 = __commonJS({
       onMessageBegin() {
         const { socket, client } = this;
         if (socket.destroyed) {
+          return -1;
+        }
+        if (client[kRunning] === 0) {
+          util2.destroy(socket, new SocketError("bad response", util2.getSocketInfo(socket)));
           return -1;
         }
         const request = client[kQueue][client[kRunningIdx]];
@@ -13501,6 +13540,10 @@ var require_client_h1 = __commonJS({
       onHeadersComplete(statusCode, upgrade, shouldKeepAlive) {
         const { client, socket, headers, statusText } = this;
         if (socket.destroyed) {
+          return -1;
+        }
+        if (client[kRunning] === 0) {
+          util2.destroy(socket, new SocketError("bad response", util2.getSocketInfo(socket)));
           return -1;
         }
         const request = client[kQueue][client[kRunningIdx]];
@@ -13628,6 +13671,7 @@ var require_client_h1 = __commonJS({
         }
         request.onComplete(headers);
         client[kQueue][client[kRunningIdx]++] = null;
+        socket[kSocketUsed] = true;
         if (socket[kWriting]) {
           assert(client[kRunning] === 0);
           util2.destroy(socket, new InformationalError("reset"));
@@ -13671,12 +13715,19 @@ var require_client_h1 = __commonJS({
       socket[kWriting] = false;
       socket[kReset] = false;
       socket[kBlocking] = false;
+      socket[kIdleSocketValidation] = 0;
+      socket[kIdleSocketValidationTimeout] = null;
+      socket[kSocketUsed] = false;
       socket[kParser] = new Parser(client, socket, llhttpInstance);
       addListener(socket, "error", function(err) {
         assert(err.code !== "ERR_TLS_CERT_ALTNAME_INVALID");
         const parser = this[kParser];
         if (err.code === "ECONNRESET" && parser.statusCode && !parser.shouldKeepAlive) {
-          parser.onMessageComplete();
+          const parserErr = parser.finish();
+          if (parserErr) {
+            this[kError] = parserErr;
+            this[kClient][kOnError](parserErr);
+          }
           return;
         }
         this[kError] = err;
@@ -13691,7 +13742,10 @@ var require_client_h1 = __commonJS({
       addListener(socket, "end", function() {
         const parser = this[kParser];
         if (parser.statusCode && !parser.shouldKeepAlive) {
-          parser.onMessageComplete();
+          const parserErr = parser.finish();
+          if (parserErr) {
+            util2.destroy(this, parserErr);
+          }
           return;
         }
         util2.destroy(this, new SocketError("other side closed", util2.getSocketInfo(this)));
@@ -13699,9 +13753,10 @@ var require_client_h1 = __commonJS({
       addListener(socket, "close", function() {
         const client2 = this[kClient];
         const parser = this[kParser];
+        clearIdleSocketValidation(this);
         if (parser) {
           if (!this[kError] && parser.statusCode && !parser.shouldKeepAlive) {
-            parser.onMessageComplete();
+            this[kError] = parser.finish() || this[kError];
           }
           this[kParser].destroy();
           this[kParser] = null;
@@ -13750,7 +13805,7 @@ var require_client_h1 = __commonJS({
           return socket.destroyed;
         },
         busy(request) {
-          if (socket[kWriting] || socket[kReset] || socket[kBlocking]) {
+          if (socket[kWriting] || socket[kReset] || socket[kBlocking] || socket[kIdleSocketValidation] === 1) {
             return true;
           }
           if (request) {
@@ -13768,6 +13823,24 @@ var require_client_h1 = __commonJS({
         }
       };
     }
+    function clearIdleSocketValidation(socket) {
+      if (socket[kIdleSocketValidationTimeout]) {
+        clearTimeout(socket[kIdleSocketValidationTimeout]);
+        socket[kIdleSocketValidationTimeout] = null;
+      }
+      socket[kIdleSocketValidation] = 0;
+    }
+    function scheduleIdleSocketValidation(client, socket) {
+      socket[kIdleSocketValidation] = 1;
+      socket[kIdleSocketValidationTimeout] = setTimeout(() => {
+        socket[kIdleSocketValidationTimeout] = null;
+        socket[kIdleSocketValidation] = 2;
+        if (client[kSocket] === socket && !socket.destroyed) {
+          client[kResume]();
+        }
+      }, 0);
+      socket[kIdleSocketValidationTimeout].unref?.();
+    }
     function resumeH1(client) {
       const socket = client[kSocket];
       if (socket && !socket.destroyed) {
@@ -13779,6 +13852,29 @@ var require_client_h1 = __commonJS({
         } else if (socket[kNoRef] && socket.ref) {
           socket.ref();
           socket[kNoRef] = false;
+        }
+        if (client[kRunning] === 0 && client[kPending] > 0 && socket[kSocketUsed]) {
+          if (socket[kIdleSocketValidation] === 0) {
+            scheduleIdleSocketValidation(client, socket);
+            socket[kParser].readMore();
+            if (socket.destroyed) {
+              return;
+            }
+            return;
+          }
+          if (socket[kIdleSocketValidation] === 1) {
+            socket[kParser].readMore();
+            if (socket.destroyed) {
+              return;
+            }
+            return;
+          }
+        }
+        if (client[kRunning] === 0) {
+          socket[kParser].readMore();
+          if (socket.destroyed) {
+            return;
+          }
         }
         if (client[kSize] === 0) {
           if (socket[kParser].timeoutType !== TIMEOUT_KEEP_ALIVE) {
@@ -13832,6 +13928,7 @@ var require_client_h1 = __commonJS({
         process.emitWarning(new RequestContentLengthMismatchError());
       }
       const socket = client[kSocket];
+      clearIdleSocketValidation(socket);
       const abort = (err) => {
         if (request.aborted || request.completed) {
           return;
@@ -23616,18 +23713,14 @@ var require_parse = __commonJS({
       } else if (attributeNameLowercase === "httponly") {
         cookieAttributeList.httpOnly = true;
       } else if (attributeNameLowercase === "samesite") {
-        let enforcement = "Default";
         const attributeValueLowercase = attributeValue.toLowerCase();
-        if (attributeValueLowercase.includes("none")) {
-          enforcement = "None";
+        if (attributeValueLowercase === "none") {
+          cookieAttributeList.sameSite = "None";
+        } else if (attributeValueLowercase === "strict") {
+          cookieAttributeList.sameSite = "Strict";
+        } else if (attributeValueLowercase === "lax") {
+          cookieAttributeList.sameSite = "Lax";
         }
-        if (attributeValueLowercase.includes("strict")) {
-          enforcement = "Strict";
-        }
-        if (attributeValueLowercase.includes("lax")) {
-          enforcement = "Lax";
-        }
-        cookieAttributeList.sameSite = enforcement;
       } else {
         cookieAttributeList.unparsed ??= [];
         cookieAttributeList.unparsed.push(`${attributeName}=${attributeValue}`);
@@ -24649,6 +24742,10 @@ var require_receiver = __commonJS({
     var { closeWebSocketConnection } = require_connection();
     var { PerMessageDeflate } = require_permessage_deflate();
     var { MessageSizeExceededError } = require_errors2();
+    function failWebsocketConnectionWithCode(ws, code, reason) {
+      closeWebSocketConnection(ws, code, reason, Buffer.byteLength(reason));
+      failWebsocketConnection(ws, reason);
+    }
     var ByteParser = class extends Writable {
       #buffers = [];
       #fragmentsBytes = 0;
@@ -24660,16 +24757,19 @@ var require_receiver = __commonJS({
       /** @type {Map<string, PerMessageDeflate>} */
       #extensions;
       /** @type {number} */
+      #maxFragments;
+      /** @type {number} */
       #maxPayloadSize;
       /**
        * @param {import('./websocket').WebSocket} ws
        * @param {Map<string, string>|null} extensions
-       * @param {{ maxPayloadSize?: number }} [options]
+       * @param {{ maxFragments?: number, maxPayloadSize?: number }} [options]
        */
       constructor(ws, extensions, options = {}) {
         super();
         this.ws = ws;
         this.#extensions = extensions == null ? /* @__PURE__ */ new Map() : extensions;
+        this.#maxFragments = options.maxFragments ?? 0;
         this.#maxPayloadSize = options.maxPayloadSize ?? 0;
         if (this.#extensions.has("permessage-deflate")) {
           this.#extensions.set("permessage-deflate", new PerMessageDeflate(extensions, options));
@@ -24686,8 +24786,8 @@ var require_receiver = __commonJS({
         this.run(callback);
       }
       #validatePayloadLength() {
-        if (this.#maxPayloadSize > 0 && !isControlFrame(this.#info.opcode) && this.#info.payloadLength > this.#maxPayloadSize) {
-          failWebsocketConnection(this.ws, "Payload size exceeds maximum allowed size");
+        if (this.#maxPayloadSize > 0 && !isControlFrame(this.#info.opcode) && this.#info.payloadLength + this.#fragmentsBytes > this.#maxPayloadSize) {
+          failWebsocketConnectionWithCode(this.ws, 1009, "Payload size exceeds maximum allowed size");
           return false;
         }
         return true;
@@ -24803,9 +24903,11 @@ var require_receiver = __commonJS({
               this.#state = parserStates.INFO;
             } else {
               if (!this.#info.compressed) {
-                this.writeFragments(body);
+                if (!this.writeFragments(body)) {
+                  return;
+                }
                 if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
-                  failWebsocketConnection(this.ws, new MessageSizeExceededError().message);
+                  failWebsocketConnectionWithCode(this.ws, 1009, new MessageSizeExceededError().message);
                   return;
                 }
                 if (!this.#info.fragmented && this.#info.fin) {
@@ -24818,12 +24920,15 @@ var require_receiver = __commonJS({
                   this.#info.fin,
                   (error, data) => {
                     if (error) {
-                      failWebsocketConnection(this.ws, error.message);
+                      const code = error instanceof MessageSizeExceededError ? 1009 : 1007;
+                      failWebsocketConnectionWithCode(this.ws, code, error.message);
                       return;
                     }
-                    this.writeFragments(data);
+                    if (!this.writeFragments(data)) {
+                      return;
+                    }
                     if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
-                      failWebsocketConnection(this.ws, new MessageSizeExceededError().message);
+                      failWebsocketConnectionWithCode(this.ws, 1009, new MessageSizeExceededError().message);
                       return;
                     }
                     if (!this.#info.fin) {
@@ -24881,8 +24986,13 @@ var require_receiver = __commonJS({
         return buffer;
       }
       writeFragments(fragment) {
+        if (this.#maxFragments > 0 && this.#fragments.length === this.#maxFragments) {
+          failWebsocketConnectionWithCode(this.ws, 1008, "Too many message fragments");
+          return false;
+        }
         this.#fragmentsBytes += fragment.length;
         this.#fragments.push(fragment);
+        return true;
       }
       consumeFragments() {
         const fragments = this.#fragments;
@@ -25332,8 +25442,11 @@ var require_websocket = __commonJS({
        */
       #onConnectionEstablished(response, parsedExtensions) {
         this[kResponse] = response;
-        const maxPayloadSize = this[kController]?.dispatcher?.webSocketOptions?.maxPayloadSize;
+        const webSocketOptions = this[kController]?.dispatcher?.webSocketOptions;
+        const maxFragments = webSocketOptions?.maxFragments;
+        const maxPayloadSize = webSocketOptions?.maxPayloadSize;
         const parser = new ByteParser(this, parsedExtensions, {
+          maxFragments,
           maxPayloadSize
         });
         parser.on("drain", onParserDrain);
@@ -38502,6 +38615,635 @@ var coerce = {
 };
 var NEVER = INVALID;
 
+// src/phases/zod-schemas.ts
+var EntityTypeSchema = external_exports.object({
+  type: external_exports.string().min(1),
+  description: external_exports.string(),
+  extraction_cues: external_exports.array(external_exports.string()),
+  min_mentions_for_page: external_exports.number().optional(),
+  wiki_subfolder: external_exports.string().optional()
+});
+var DomainEntrySchema = external_exports.object({
+  reasoning: external_exports.string(),
+  id: external_exports.string().min(1),
+  name: external_exports.string(),
+  wiki_folder: external_exports.string().min(1),
+  entity_types: external_exports.array(EntityTypeSchema),
+  language_notes: external_exports.string()
+});
+var EntityTypesDeltaSchema = external_exports.object({
+  reasoning: external_exports.string(),
+  entity_types: external_exports.array(EntityTypeSchema).optional(),
+  language_notes: external_exports.string().optional()
+});
+var SeedsSchema = external_exports.object({
+  reasoning: external_exports.string().optional(),
+  seeds: external_exports.array(external_exports.string())
+});
+var LintChatSchema = external_exports.object({
+  summary: external_exports.string(),
+  pages: external_exports.array(external_exports.object({
+    path: external_exports.string(),
+    content: external_exports.string(),
+    annotation: external_exports.string().optional()
+  })).default([])
+});
+var WikiPageSchema = external_exports.object({
+  path: external_exports.string(),
+  content: external_exports.string(),
+  annotation: external_exports.string().optional()
+}).superRefine((val, ctx) => {
+  const fmEnd = val.content.startsWith("---\n") ? (() => {
+    const i = val.content.indexOf("\n---", 4);
+    return i >= 0 ? i + 4 : 0;
+  })() : 0;
+  const body = val.content.slice(fmEnd);
+  if (/\[\[[^\]]+\|[^\]]+\]\]/.test(body)) {
+    ctx.addIssue({ code: external_exports.ZodIssueCode.custom, message: "WikiLink aliases not allowed", path: ["content"] });
+  }
+  const linkRe = /\[\[([^\]|]+)\]\]/g;
+  let m;
+  while ((m = linkRe.exec(body)) !== null) {
+    if (m[1].includes("/")) {
+      ctx.addIssue({ code: external_exports.ZodIssueCode.custom, message: "WikiLink with path", path: ["content"] });
+      break;
+    }
+  }
+  const stem = val.path.split("/").pop()?.replace(/\.md$/, "") ?? "";
+  if (!GENERIC_WIKI_STEM_REGEX.test(stem)) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      message: `Wiki page stem "${stem}" must match wiki_<domain>_<entity>`,
+      path: ["path"]
+    });
+  }
+});
+var MergedPageOutputSchema = external_exports.object({
+  reasoning: external_exports.string().optional(),
+  content: external_exports.string(),
+  annotation: external_exports.string().optional()
+});
+var EntitiesOutputSchema = external_exports.object({
+  reasoning: external_exports.string(),
+  entities: external_exports.array(external_exports.object({
+    name: external_exports.string().min(1),
+    type: external_exports.string().optional(),
+    context_snippet: external_exports.string().optional()
+  })).max(50)
+});
+var WikiPagesOutputSchema = external_exports.object({
+  reasoning: external_exports.string(),
+  pages: external_exports.array(WikiPageSchema),
+  deletes: external_exports.array(external_exports.object({ path: external_exports.string() })).optional(),
+  entity_types_delta: external_exports.array(EntityTypeSchema).optional()
+});
+var LintDeleteSchema = external_exports.object({
+  path: external_exports.string(),
+  redirect_to: external_exports.string().optional()
+});
+var LintOutputSchema = external_exports.object({
+  reasoning: external_exports.string(),
+  report: external_exports.string(),
+  fixes: external_exports.array(WikiPageSchema),
+  deletes: external_exports.array(LintDeleteSchema).optional()
+});
+var FormatBaseSchema = external_exports.object({
+  report: external_exports.string().min(1, "report \u043D\u0435 \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043F\u0443\u0441\u0442\u044B\u043C"),
+  formatted: external_exports.string().min(10, "formatted \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043A\u043E\u0440\u043E\u0442\u043A\u0438\u0439")
+});
+var FormatWithVisionSchema = FormatBaseSchema.extend({
+  vision_blocks_count: external_exports.number().int().min(0),
+  embeds_preserved: external_exports.array(external_exports.string())
+}).superRefine((val, ctx) => {
+  if (!val.formatted.startsWith("---\n")) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["formatted"],
+      message: "formatted \u0434\u043E\u043B\u0436\u0435\u043D \u043D\u0430\u0447\u0438\u043D\u0430\u0442\u044C\u0441\u044F \u0441 YAML frontmatter (---)"
+    });
+  }
+  if (val.report.trim().length === 0) {
+    ctx.addIssue({ code: external_exports.ZodIssueCode.custom, path: ["report"], message: "report \u043F\u0443\u0441\u0442" });
+  }
+  for (const path5 of val.embeds_preserved) {
+    if (!val.formatted.includes(`![[${path5}]]`)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["formatted"],
+        message: `embed ![[${path5}]] \u043F\u043E\u0442\u0435\u0440\u044F\u043D`
+      });
+    }
+  }
+});
+var FormatOutputSchema = FormatBaseSchema.superRefine((val, ctx) => {
+  if (!val.formatted.startsWith("---\n")) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["formatted"],
+      message: "formatted \u0434\u043E\u043B\u0436\u0435\u043D \u043D\u0430\u0447\u0438\u043D\u0430\u0442\u044C\u0441\u044F \u0441 YAML frontmatter (---)"
+    });
+  }
+  if (val.report.trim().length === 0) {
+    ctx.addIssue({ code: external_exports.ZodIssueCode.custom, path: ["report"], message: "report \u043F\u0443\u0441\u0442" });
+  }
+});
+function makeQueryAnswerSchema(knownStems) {
+  return external_exports.object({
+    reasoning: external_exports.string(),
+    answer_markdown: external_exports.string().min(1),
+    citations: external_exports.array(external_exports.string()).default([])
+  }).superRefine((val, ctx) => {
+    for (const c of val.citations) {
+      if (!knownStems.has(c)) {
+        ctx.addIssue({
+          code: external_exports.ZodIssueCode.custom,
+          path: ["citations"],
+          message: `citation "${c}" is not a known wiki page stem`
+        });
+      }
+    }
+  });
+}
+
+// src/phases/format-utils.ts
+var STOP_WORDS2 = /* @__PURE__ */ new Set([
+  "The",
+  "This",
+  "That",
+  "These",
+  "Those",
+  "And",
+  "Or",
+  "But",
+  "If",
+  "When"
+]);
+function significantTokens(text) {
+  const out = /* @__PURE__ */ new Set();
+  let residual = text;
+  for (const m of text.matchAll(/https?:\/\/\S+/g)) {
+    out.add(m[0].replace(/[.,;:!?)\]}>"']+$/, ""));
+  }
+  residual = residual.replace(/https?:\/\/\S+/g, " ");
+  for (const m of residual.matchAll(/\b\d+(?:\.\d+)?\b/g)) out.add(m[0]);
+  for (const m of residual.matchAll(/\b[A-Z][A-Za-z0-9-]{2,}/g)) {
+    if (!STOP_WORDS2.has(m[0])) out.add(m[0]);
+  }
+  for (const m of residual.matchAll(/\b[A-Z]{2,}\b/g)) out.add(m[0]);
+  for (const m of residual.matchAll(/`([^`\n]+)`/g)) {
+    for (const id of m[1].matchAll(/\b[A-Za-z_][A-Za-z0-9_]{2,}\b/g)) out.add(id[0]);
+  }
+  for (const m of residual.matchAll(/```[\s\S]*?```/g)) {
+    for (const id of m[0].matchAll(/\b[A-Za-z_][A-Za-z0-9_]{2,}\b/g)) out.add(id[0]);
+  }
+  return out;
+}
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+var OBSIDIAN_EMBED_RE = /!\[\[[^\]]+\]\]/g;
+function restoreObsidianEmbeds(original, formatted) {
+  let result = formatted;
+  for (const m of original.matchAll(OBSIDIAN_EMBED_RE)) {
+    const embedSrc = m[0];
+    if (result.includes(embedSrc)) continue;
+    const innerPath = embedSrc.slice(3, -2);
+    const pipeIdx = innerPath.indexOf("|");
+    const filePath = pipeIdx >= 0 ? innerPath.slice(0, pipeIdx) : innerPath;
+    const stdRe = new RegExp(`!\\[[^\\]]*\\]\\(${escapeRegExp(filePath)}\\)`, "g");
+    result = result.replace(stdRe, embedSrc);
+  }
+  return result;
+}
+function missingObsidianEmbeds(original, formatted) {
+  const missing = [];
+  for (const m of original.matchAll(OBSIDIAN_EMBED_RE)) {
+    if (!formatted.includes(m[0])) missing.push(m[0]);
+  }
+  return missing;
+}
+function lemmas(token) {
+  const out = [token];
+  if (/ies$/i.test(token) && token.length > 4) out.push(token.slice(0, -3) + "y");
+  else if (/(?:s|x|z|ch|sh)es$/i.test(token) && token.length > 4) out.push(token.slice(0, -2));
+  else if (/s$/i.test(token) && !/ss$/i.test(token) && token.length > 3) out.push(token.slice(0, -1));
+  else if (/[^aeiou]y$/i.test(token) && token.length > 2) out.push(token.slice(0, -1) + "ies");
+  else if (/(?:s|x|z|ch|sh)$/i.test(token) && token.length > 2) out.push(token + "es");
+  else if (token.length > 2) out.push(token + "s");
+  return out;
+}
+function appendMissingLines(formatted, missing) {
+  const lines = [...new Set(missing.filter((m) => m.context !== "").map((m) => m.context))];
+  if (lines.length === 0) return formatted;
+  return `${formatted}
+
+---
+<!-- restored-lines: token loss after retry -->
+${lines.join("\n")}`;
+}
+function missingTokensWithContext(original, formatted) {
+  const orig = significantTokens(original);
+  const fmtLower = formatted.toLowerCase();
+  const lines = original.split(/\r?\n/);
+  const out = [];
+  for (const t of orig) {
+    const variants = lemmas(t).map((v) => v.toLowerCase());
+    const found = variants.some((v) => {
+      const re = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(v)}(?:[^A-Za-z0-9_]|$)`);
+      return re.test(fmtLower);
+    });
+    if (found) continue;
+    const lineRe = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(t)}(?:[^A-Za-z0-9_]|$)`);
+    let context = "";
+    for (const line of lines) {
+      if (lineRe.test(line)) {
+        const trimmed = line.trim();
+        context = trimmed.length > 120 ? trimmed.slice(0, 117) + "\u2026" : trimmed;
+        break;
+      }
+    }
+    out.push({ token: t, context });
+  }
+  return out;
+}
+function parseSentinelOutput(text, hasVisionDescriptions) {
+  const reportIdx = text.indexOf("<<<REPORT>>>");
+  const formattedIdx = text.indexOf("<<<FORMATTED>>>");
+  if (reportIdx === -1 || formattedIdx === -1) return null;
+  const report = text.slice(reportIdx + "<<<REPORT>>>".length, formattedIdx).trim();
+  const endIdx = text.indexOf("<<<END>>>");
+  let formattedEnd;
+  let truncated = false;
+  let visionCount;
+  let embeds;
+  if (hasVisionDescriptions) {
+    const visionIdx = text.indexOf("<<<VISION_COUNT>>>", formattedIdx);
+    const embedsIdx = text.indexOf("<<<EMBEDS>>>", formattedIdx);
+    if (visionIdx === -1 || embedsIdx === -1) return null;
+    const tail = [visionIdx, embedsIdx, endIdx].filter((i) => i > formattedIdx);
+    formattedEnd = tail.length ? Math.min(...tail) : text.length;
+    visionCount = parseInt(text.slice(visionIdx + "<<<VISION_COUNT>>>".length, embedsIdx).trim(), 10);
+    const embedsEnd = endIdx === -1 ? text.length : endIdx;
+    embeds = text.slice(embedsIdx + "<<<EMBEDS>>>".length, embedsEnd).trim().split("|").map((s) => s.trim()).filter(Boolean);
+    truncated = endIdx === -1;
+  } else {
+    formattedEnd = endIdx === -1 ? text.length : endIdx;
+    truncated = endIdx === -1;
+  }
+  const formatted = text.slice(formattedIdx + "<<<FORMATTED>>>".length, formattedEnd).trim();
+  return { report, formatted, visionCount, embeds, truncated };
+}
+var SENTINEL_RE = /<<<[A-Z_]+>>>/g;
+function stripSentinelMarkers(text) {
+  const removed = text.match(SENTINEL_RE) ?? [];
+  if (removed.length === 0) return { clean: text, removed };
+  const out = [];
+  for (const line of text.split("\n")) {
+    const stripped = line.replace(SENTINEL_RE, "");
+    if (stripped === line) {
+      out.push(line);
+      continue;
+    }
+    if (stripped.trim() === "") continue;
+    out.push(stripped);
+  }
+  const clean = out.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd();
+  return { clean, removed };
+}
+
+// src/phases/framed-output.ts
+var END = "<<<END>>>";
+var wikiPagesFrameInstruction = [
+  "Return framed wiki pages only.",
+  "Start with <<<REPORT>>> and concise reasoning.",
+  "For each page use <<<PAGE>>> followed by path:, optional annotation:, <<<CONTENT>>>, markdown body, and <<<END_PAGE>>>.",
+  "For deletes use <<<DELETE>>> with path: and <<<END_DELETE>>>.",
+  "For entity type updates use <<<ENTITY_TYPES_DELTA_JSON>>> with a JSON array and <<<END_ENTITY_TYPES_DELTA_JSON>>>.",
+  "Finish with <<<END>>>."
+].join("\n");
+var mergeContentFrameInstruction = [
+  "Return exactly one merged page content frame.",
+  "Optional: <<<REASONING>>> followed by concise reasoning.",
+  "Optional: <<<ANNOTATION>>> followed by one line for the index.",
+  "Required: <<<CONTENT>>> followed by the full markdown page.",
+  "Finish with <<<END>>>."
+].join("\n");
+var lintOutputFrameInstruction = [
+  "Return framed lint output only.",
+  "Start with <<<REPORT>>> followed by the markdown lint report.",
+  "For each changed page use <<<PAGE>>> followed by path:, optional annotation:, <<<CONTENT>>>, full markdown body, and <<<END_PAGE>>>.",
+  "For deletes use <<<DELETE>>> followed by path:, optional redirect_to:, and <<<END_DELETE>>>.",
+  "Finish with <<<END>>>."
+].join("\n");
+var lintChatFrameInstruction = [
+  "Return framed lint-chat output only.",
+  "Start with <<<REPORT>>> followed by the markdown summary.",
+  "For each changed page use <<<PAGE>>> followed by path:, optional annotation:, <<<CONTENT>>>, full markdown body, and <<<END_PAGE>>>.",
+  "Finish with <<<END>>>."
+].join("\n");
+var queryAnswerFrameInstruction = [
+  "Return framed answer repair output only.",
+  "Put the full repaired markdown answer in <<<ANSWER>>>.",
+  "Put citations in <<<CITATIONS>>> as one stem per bullet line.",
+  "Finish with <<<END>>>."
+].join("\n");
+function wikiPagesProfile() {
+  return {
+    kind: "framed-zod",
+    schema: WikiPagesOutputSchema,
+    parse: parseWikiPagesFrames,
+    repairInstruction: wikiPagesFrameInstruction
+  };
+}
+function mergedPageProfile() {
+  return {
+    kind: "framed-zod",
+    schema: MergedPageOutputSchema,
+    parse: parseContentFrame,
+    repairInstruction: mergeContentFrameInstruction
+  };
+}
+function lintOutputProfile() {
+  return {
+    kind: "framed-zod",
+    schema: LintOutputSchema,
+    parse: parseLintFrames,
+    repairInstruction: lintOutputFrameInstruction
+  };
+}
+function lintChatProfile() {
+  return {
+    kind: "framed-zod",
+    schema: outputSchema(LintChatSchema),
+    parse: parseLintChatFrames,
+    repairInstruction: lintChatFrameInstruction
+  };
+}
+function queryAnswerProfile(schema) {
+  return {
+    kind: "framed-zod",
+    schema: outputSchema(schema),
+    parse: parseAnswerFrames,
+    repairInstruction: queryAnswerFrameInstruction
+  };
+}
+function outputSchema(schema) {
+  return schema;
+}
+function parseFormatFrames(text, hasVisionDescriptions) {
+  const protectedText = protectInlineMarkers(text, [
+    "<<<REPORT>>>",
+    "<<<FORMATTED>>>",
+    "<<<VISION_COUNT>>>",
+    "<<<EMBEDS>>>",
+    END
+  ]);
+  const parsed = parseSentinelOutput(protectedText.text, hasVisionDescriptions);
+  if (!parsed) throw new Error("sentinel markers not found");
+  return {
+    raw: {
+      report: protectedText.restore(parsed.report),
+      formatted: protectedText.restore(parsed.formatted),
+      ...hasVisionDescriptions ? {
+        vision_blocks_count: parsed.visionCount ?? 0,
+        embeds_preserved: parsed.embeds?.map((entry) => protectedText.restore(entry)) ?? []
+      } : {}
+    },
+    truncated: parsed.truncated
+  };
+}
+function parseContentFrame(text) {
+  requireMarker(text, END);
+  const content = between(text, "<<<CONTENT>>>", END);
+  const annotation = hasMarker(text, "<<<ANNOTATION>>>") ? between(text, "<<<ANNOTATION>>>", "<<<CONTENT>>>") : void 0;
+  const reasoning = hasMarker(text, "<<<REASONING>>>") ? between(text, "<<<REASONING>>>", hasMarker(text, "<<<ANNOTATION>>>") ? "<<<ANNOTATION>>>" : "<<<CONTENT>>>") : void 0;
+  return {
+    reasoning,
+    content,
+    annotation
+  };
+}
+function parseAnswerFrames(text) {
+  requireMarker(text, END);
+  const answerEnd = hasMarker(text, "<<<CITATIONS>>>") ? "<<<CITATIONS>>>" : END;
+  const answer = between(text, "<<<ANSWER>>>", answerEnd);
+  const citations = hasMarker(text, "<<<CITATIONS>>>") ? parseCitations(between(text, "<<<CITATIONS>>>", END)) : [];
+  const reasoning = hasMarker(text, "<<<REASONING>>>") ? between(text, "<<<REASONING>>>", "<<<ANSWER>>>") : "";
+  return {
+    reasoning,
+    answer_markdown: answer,
+    citations
+  };
+}
+function parseWikiPagesFrames(text) {
+  requireMarker(text, END);
+  const reasoning = parseReasoning(text);
+  const pages = parsePages(text);
+  const deletes = parseDeletes(text);
+  const entityTypesDelta = parseEntityTypesDelta(text);
+  return {
+    reasoning,
+    pages,
+    deletes: deletes.length ? deletes.map((entry) => ({ path: entry.path })) : void 0,
+    ...entityTypesDelta !== void 0 ? { entity_types_delta: entityTypesDelta } : {}
+  };
+}
+function parseWikiPageRepairFramesOrJson(text) {
+  try {
+    return parseWikiPagesFrames(text).pages;
+  } catch {
+    return parseLegacyJsonPages(text);
+  }
+}
+function parseLintFrames(text) {
+  requireMarker(text, END);
+  const parsed = {
+    reasoning: parseReasoning(text),
+    pages: parsePages(text),
+    deletes: parseDeletes(text)
+  };
+  return {
+    reasoning: parsed.reasoning,
+    report: parsed.reasoning,
+    fixes: parsed.pages,
+    deletes: parsed.deletes.length ? parsed.deletes : void 0
+  };
+}
+function parseLintChatFrames(text) {
+  requireMarker(text, END);
+  const parsed = {
+    reasoning: parseReasoning(text),
+    pages: parsePages(text)
+  };
+  return {
+    summary: parsed.reasoning,
+    pages: parsed.pages
+  };
+}
+function requireMarker(text, marker) {
+  const idx = markerLineIndex(linesOf(text), marker);
+  if (idx < 0) throw new Error(`missing ${marker}`);
+  return idx;
+}
+function hasMarker(text, marker) {
+  return markerLineIndex(linesOf(text), marker) >= 0;
+}
+function between(text, start, end) {
+  const lines = linesOf(text);
+  const startIdx = markerLineIndex(lines, start);
+  if (startIdx < 0) throw new Error(`missing ${start}`);
+  const endIdx = markerLineIndex(lines, end, startIdx + 1);
+  if (endIdx < 0) throw new Error(`missing ${end}`);
+  return lines.slice(startIdx + 1, endIdx).join("\n").trim();
+}
+function parseReasoning(text) {
+  const marker = hasMarker(text, "<<<REPORT>>>") ? "<<<REPORT>>>" : hasMarker(text, "<<<REASONING>>>") ? "<<<REASONING>>>" : null;
+  if (!marker) return "";
+  const lines = linesOf(text);
+  const startIdx = markerLineIndex(lines, marker);
+  const endIdx = firstMarkerLineAfter(lines, startIdx + 1, [
+    "<<<PAGE>>>",
+    "<<<DELETE>>>",
+    "<<<ENTITY_TYPES_DELTA_JSON>>>",
+    END
+  ]);
+  if (endIdx < 0) throw new Error(`missing ${END}`);
+  return lines.slice(startIdx + 1, endIdx).join("\n").trim();
+}
+function firstMarkerLineAfter(lines, from, markers) {
+  let inFence = false;
+  for (let i = 0; i < lines.length; i++) {
+    if (i >= from && !inFence && markers.some((marker) => isMarkerLine(lines[i], marker))) return i;
+    if (isFenceToggleLine(lines[i])) inFence = !inFence;
+  }
+  return -1;
+}
+function parsePages(text) {
+  const lines = linesOf(text);
+  const pages = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!isMarkerLine(lines[i], "<<<PAGE>>>")) continue;
+    const contentIdx = markerLineIndex(lines, "<<<CONTENT>>>", i + 1);
+    if (contentIdx < 0) throw new Error("missing <<<CONTENT>>>");
+    const endPageIdx = markerLineIndex(lines, "<<<END_PAGE>>>", contentIdx + 1);
+    if (endPageIdx < 0) throw new Error("missing <<<END_PAGE>>>");
+    const header = parseHeader(lines.slice(i + 1, contentIdx).join("\n"));
+    if (!header.path) throw new Error("page frame missing path");
+    pages.push({
+      path: header.path,
+      content: lines.slice(contentIdx + 1, endPageIdx).join("\n").trim(),
+      annotation: header.annotation || void 0
+    });
+    i = endPageIdx;
+  }
+  return pages;
+}
+function parseDeletes(text) {
+  const lines = linesOf(text);
+  const deletes = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!isMarkerLine(lines[i], "<<<DELETE>>>")) continue;
+    const endDeleteIdx = markerLineIndex(lines, "<<<END_DELETE>>>", i + 1);
+    if (endDeleteIdx < 0) throw new Error("missing <<<END_DELETE>>>");
+    const header = parseHeader(lines.slice(i + 1, endDeleteIdx).join("\n"));
+    if (!header.path) throw new Error("delete frame missing path");
+    deletes.push({
+      path: header.path,
+      redirect_to: header.redirect_to || void 0
+    });
+    i = endDeleteIdx;
+  }
+  return deletes;
+}
+function parseHeader(raw) {
+  const out = {};
+  for (const line of raw.split(/\r?\n/)) {
+    const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$/);
+    if (match) out[match[1]] = match[2].trim();
+  }
+  return out;
+}
+function parseCitations(raw) {
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("[")) {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed) && parsed.every((entry) => typeof entry === "string")) {
+      return parsed;
+    }
+    throw new Error("citations frame must contain strings");
+  }
+  return trimmed.split(/\r?\n/).map((line) => line.replace(/^-\s*/, "").trim()).filter(Boolean);
+}
+function parseLegacyJsonPages(text) {
+  const match = text.match(/\[[\s\S]*\]/);
+  if (!match) return [];
+  try {
+    const arr = JSON.parse(match[0]);
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(
+      (x) => x !== null && typeof x === "object" && typeof x.path === "string" && typeof x.content === "string"
+    );
+  } catch {
+    return [];
+  }
+}
+function parseEntityTypesDelta(text) {
+  if (!hasMarker(text, "<<<ENTITY_TYPES_DELTA_JSON>>>")) return void 0;
+  const raw = between(text, "<<<ENTITY_TYPES_DELTA_JSON>>>", "<<<END_ENTITY_TYPES_DELTA_JSON>>>");
+  return JSON.parse(raw);
+}
+function linesOf(text) {
+  return text.split(/\r?\n/);
+}
+function markerLineIndex(lines, marker, from = 0) {
+  let inFence = false;
+  for (let i = 0; i < lines.length; i++) {
+    if (i >= from && !inFence && isMarkerLine(lines[i], marker)) return i;
+    if (isFenceToggleLine(lines[i])) inFence = !inFence;
+  }
+  return -1;
+}
+function isMarkerLine(line, marker) {
+  return line.trim() === marker;
+}
+function isFenceToggleLine(line) {
+  return /^\s*(?:```|~~~)/.test(line);
+}
+function protectInlineMarkers(text, markers) {
+  const replacements = /* @__PURE__ */ new Map();
+  let nextId = 0;
+  let inFence = false;
+  const protectedLines = linesOf(text).map((line) => {
+    const isBoundaryMarker = !inFence && markers.some((marker) => isMarkerLine(line, marker));
+    const togglesFence = isFenceToggleLine(line);
+    if (isBoundaryMarker) {
+      return line;
+    }
+    let protectedLine = line;
+    for (const marker of markers) {
+      let markerIdx = protectedLine.indexOf(marker);
+      while (markerIdx >= 0) {
+        const token = `__FRAMED_OUTPUT_MARKER_${nextId++}__`;
+        replacements.set(token, marker);
+        protectedLine = `${protectedLine.slice(0, markerIdx)}${token}${protectedLine.slice(markerIdx + marker.length)}`;
+        markerIdx = protectedLine.indexOf(marker, markerIdx + token.length);
+      }
+    }
+    if (togglesFence) inFence = !inFence;
+    return protectedLine;
+  });
+  return {
+    text: protectedLines.join("\n"),
+    restore: (value) => {
+      let restored = value;
+      for (const [token, marker] of replacements) {
+        restored = restored.split(token).join(marker);
+      }
+      return restored;
+    }
+  };
+}
+
 // node_modules/zod-to-json-schema/dist/esm/Options.js
 var ignoreOverride = /* @__PURE__ */ Symbol("Let zodToJsonSchema decide on which parser to use");
 var defaultOptions = {
@@ -39900,7 +40642,7 @@ function repairPrompt(profile, lastText, lastError) {
   }
   return lastError instanceof ZodError ? formatZodFeedback(lastError, lastText) : formatZodFeedback(null, lastText);
 }
-async function streamOnce(llm, model, messages, opts, signal) {
+async function streamOnce(llm, model, messages, opts, signal, onEvent) {
   const params = buildChatParams(model, messages, opts, true);
   let fullText = "";
   let outputTokens = 0;
@@ -39912,8 +40654,12 @@ async function streamOnce(llm, model, messages, opts, signal) {
     );
     const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs);
     for await (const chunk of stream) {
-      const { content, outputTokens: tok } = extractStreamDeltas(chunk);
-      if (content) fullText += content;
+      const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
+      if (reasoning) onEvent({ kind: "assistant_text", delta: reasoning, isReasoning: true });
+      if (content) {
+        fullText += content;
+        onEvent({ kind: "assistant_text", delta: content });
+      }
       if (tok !== void 0) outputTokens = tok;
     }
     const stats = getStats();
@@ -39952,7 +40698,7 @@ async function callWithFormatFallback(args, messages, mode, attempt) {
     const callOpts = args.profile.kind === "json-zod" ? optsForMode(args.opts, currentMode, args.callSite, args.profile.schema) : { ...args.opts, jsonMode: false, jsonSchema: void 0 };
     try {
       return {
-        result: await streamOnce(args.llm, args.model, messages, callOpts, args.signal),
+        result: await streamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent),
         mode: currentMode
       };
     } catch (e) {
@@ -40022,649 +40768,36 @@ async function runStructuredWithRetry(args) {
   }
   throw new StructuredValidationError(callSite, maxRetries + 1, lastError);
 }
-
-// src/phases/parse-with-retry.ts
-async function parseWithRetry(args) {
-  return runStructuredWithRetry({
-    llm: args.llm,
-    model: args.model,
-    baseMessages: args.baseMessages,
-    opts: args.opts,
-    profile: { kind: "json-zod", schema: args.schema },
-    maxRetries: args.maxRetries,
-    callSite: args.callSite,
-    signal: args.signal,
-    onEvent: args.onEvent
+async function* runStructuredStreaming(args, sink) {
+  const queue = [];
+  let wake = null;
+  let settled = false;
+  let error = null;
+  const onEvent = (ev) => {
+    queue.push(ev);
+    wake?.();
+  };
+  const p = runStructuredWithRetry({ ...args, onEvent }).then((r) => {
+    sink.value = r.value;
+    sink.outputTokens = r.outputTokens;
+    sink.fullText = r.fullText;
+  }).catch((e) => {
+    error = e;
+  }).finally(() => {
+    settled = true;
+    wake?.();
   });
-}
-
-// src/phases/zod-schemas.ts
-var EntityTypeSchema = external_exports.object({
-  type: external_exports.string().min(1),
-  description: external_exports.string(),
-  extraction_cues: external_exports.array(external_exports.string()),
-  min_mentions_for_page: external_exports.number().optional(),
-  wiki_subfolder: external_exports.string().optional()
-});
-var DomainEntrySchema = external_exports.object({
-  reasoning: external_exports.string(),
-  id: external_exports.string().min(1),
-  name: external_exports.string(),
-  wiki_folder: external_exports.string().min(1),
-  entity_types: external_exports.array(EntityTypeSchema),
-  language_notes: external_exports.string()
-});
-var EntityTypesDeltaSchema = external_exports.object({
-  reasoning: external_exports.string(),
-  entity_types: external_exports.array(EntityTypeSchema).optional(),
-  language_notes: external_exports.string().optional()
-});
-var SeedsSchema = external_exports.object({
-  reasoning: external_exports.string().optional(),
-  seeds: external_exports.array(external_exports.string())
-});
-var LintChatSchema = external_exports.object({
-  summary: external_exports.string(),
-  pages: external_exports.array(external_exports.object({
-    path: external_exports.string(),
-    content: external_exports.string(),
-    annotation: external_exports.string().optional()
-  })).default([])
-});
-var WikiPageSchema = external_exports.object({
-  path: external_exports.string(),
-  content: external_exports.string(),
-  annotation: external_exports.string().optional()
-}).superRefine((val, ctx) => {
-  const fmEnd = val.content.startsWith("---\n") ? (() => {
-    const i = val.content.indexOf("\n---", 4);
-    return i >= 0 ? i + 4 : 0;
-  })() : 0;
-  const body = val.content.slice(fmEnd);
-  if (/\[\[[^\]]+\|[^\]]+\]\]/.test(body)) {
-    ctx.addIssue({ code: external_exports.ZodIssueCode.custom, message: "WikiLink aliases not allowed", path: ["content"] });
-  }
-  const linkRe = /\[\[([^\]|]+)\]\]/g;
-  let m;
-  while ((m = linkRe.exec(body)) !== null) {
-    if (m[1].includes("/")) {
-      ctx.addIssue({ code: external_exports.ZodIssueCode.custom, message: "WikiLink with path", path: ["content"] });
-      break;
-    }
-  }
-  const stem = val.path.split("/").pop()?.replace(/\.md$/, "") ?? "";
-  if (!GENERIC_WIKI_STEM_REGEX.test(stem)) {
-    ctx.addIssue({
-      code: external_exports.ZodIssueCode.custom,
-      message: `Wiki page stem "${stem}" must match wiki_<domain>_<entity>`,
-      path: ["path"]
+  while (!settled || queue.length) {
+    while (queue.length) yield queue.shift();
+    if (!settled) await new Promise((res) => {
+      wake = () => {
+        wake = null;
+        res();
+      };
     });
   }
-});
-var MergedPageOutputSchema = external_exports.object({
-  reasoning: external_exports.string().optional(),
-  content: external_exports.string(),
-  annotation: external_exports.string().optional()
-});
-var EntitiesOutputSchema = external_exports.object({
-  reasoning: external_exports.string(),
-  entities: external_exports.array(external_exports.object({
-    name: external_exports.string().min(1),
-    type: external_exports.string().optional(),
-    context_snippet: external_exports.string().optional()
-  })).max(50)
-});
-var WikiPagesOutputSchema = external_exports.object({
-  reasoning: external_exports.string(),
-  pages: external_exports.array(WikiPageSchema),
-  deletes: external_exports.array(external_exports.object({ path: external_exports.string() })).optional(),
-  entity_types_delta: external_exports.array(EntityTypeSchema).optional()
-});
-var LintDeleteSchema = external_exports.object({
-  path: external_exports.string(),
-  redirect_to: external_exports.string().optional()
-});
-var LintOutputSchema = external_exports.object({
-  reasoning: external_exports.string(),
-  report: external_exports.string(),
-  fixes: external_exports.array(WikiPageSchema),
-  deletes: external_exports.array(LintDeleteSchema).optional()
-});
-var FormatBaseSchema = external_exports.object({
-  report: external_exports.string().min(1, "report \u043D\u0435 \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043F\u0443\u0441\u0442\u044B\u043C"),
-  formatted: external_exports.string().min(10, "formatted \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043A\u043E\u0440\u043E\u0442\u043A\u0438\u0439")
-});
-var FormatWithVisionSchema = FormatBaseSchema.extend({
-  vision_blocks_count: external_exports.number().int().min(0),
-  embeds_preserved: external_exports.array(external_exports.string())
-}).superRefine((val, ctx) => {
-  if (!val.formatted.startsWith("---\n")) {
-    ctx.addIssue({
-      code: external_exports.ZodIssueCode.custom,
-      path: ["formatted"],
-      message: "formatted \u0434\u043E\u043B\u0436\u0435\u043D \u043D\u0430\u0447\u0438\u043D\u0430\u0442\u044C\u0441\u044F \u0441 YAML frontmatter (---)"
-    });
-  }
-  if (val.report.trim().length === 0) {
-    ctx.addIssue({ code: external_exports.ZodIssueCode.custom, path: ["report"], message: "report \u043F\u0443\u0441\u0442" });
-  }
-  for (const path5 of val.embeds_preserved) {
-    if (!val.formatted.includes(`![[${path5}]]`)) {
-      ctx.addIssue({
-        code: external_exports.ZodIssueCode.custom,
-        path: ["formatted"],
-        message: `embed ![[${path5}]] \u043F\u043E\u0442\u0435\u0440\u044F\u043D`
-      });
-    }
-  }
-});
-var FormatOutputSchema = FormatBaseSchema.superRefine((val, ctx) => {
-  if (!val.formatted.startsWith("---\n")) {
-    ctx.addIssue({
-      code: external_exports.ZodIssueCode.custom,
-      path: ["formatted"],
-      message: "formatted \u0434\u043E\u043B\u0436\u0435\u043D \u043D\u0430\u0447\u0438\u043D\u0430\u0442\u044C\u0441\u044F \u0441 YAML frontmatter (---)"
-    });
-  }
-  if (val.report.trim().length === 0) {
-    ctx.addIssue({ code: external_exports.ZodIssueCode.custom, path: ["report"], message: "report \u043F\u0443\u0441\u0442" });
-  }
-});
-function makeQueryAnswerSchema(knownStems) {
-  return external_exports.object({
-    reasoning: external_exports.string(),
-    answer_markdown: external_exports.string().min(1),
-    citations: external_exports.array(external_exports.string()).default([])
-  }).superRefine((val, ctx) => {
-    for (const c of val.citations) {
-      if (!knownStems.has(c)) {
-        ctx.addIssue({
-          code: external_exports.ZodIssueCode.custom,
-          path: ["citations"],
-          message: `citation "${c}" is not a known wiki page stem`
-        });
-      }
-    }
-  });
-}
-
-// src/phases/format-utils.ts
-var STOP_WORDS2 = /* @__PURE__ */ new Set([
-  "The",
-  "This",
-  "That",
-  "These",
-  "Those",
-  "And",
-  "Or",
-  "But",
-  "If",
-  "When"
-]);
-function significantTokens(text) {
-  const out = /* @__PURE__ */ new Set();
-  let residual = text;
-  for (const m of text.matchAll(/https?:\/\/\S+/g)) {
-    out.add(m[0].replace(/[.,;:!?)\]}>"']+$/, ""));
-  }
-  residual = residual.replace(/https?:\/\/\S+/g, " ");
-  for (const m of residual.matchAll(/\b\d+(?:\.\d+)?\b/g)) out.add(m[0]);
-  for (const m of residual.matchAll(/\b[A-Z][A-Za-z0-9-]{2,}/g)) {
-    if (!STOP_WORDS2.has(m[0])) out.add(m[0]);
-  }
-  for (const m of residual.matchAll(/\b[A-Z]{2,}\b/g)) out.add(m[0]);
-  for (const m of residual.matchAll(/`([^`\n]+)`/g)) {
-    for (const id of m[1].matchAll(/\b[A-Za-z_][A-Za-z0-9_]{2,}\b/g)) out.add(id[0]);
-  }
-  for (const m of residual.matchAll(/```[\s\S]*?```/g)) {
-    for (const id of m[0].matchAll(/\b[A-Za-z_][A-Za-z0-9_]{2,}\b/g)) out.add(id[0]);
-  }
-  return out;
-}
-function escapeRegExp(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-var OBSIDIAN_EMBED_RE = /!\[\[[^\]]+\]\]/g;
-function restoreObsidianEmbeds(original, formatted) {
-  let result = formatted;
-  for (const m of original.matchAll(OBSIDIAN_EMBED_RE)) {
-    const embedSrc = m[0];
-    if (result.includes(embedSrc)) continue;
-    const innerPath = embedSrc.slice(3, -2);
-    const pipeIdx = innerPath.indexOf("|");
-    const filePath = pipeIdx >= 0 ? innerPath.slice(0, pipeIdx) : innerPath;
-    const stdRe = new RegExp(`!\\[[^\\]]*\\]\\(${escapeRegExp(filePath)}\\)`, "g");
-    result = result.replace(stdRe, embedSrc);
-  }
-  return result;
-}
-function missingObsidianEmbeds(original, formatted) {
-  const missing = [];
-  for (const m of original.matchAll(OBSIDIAN_EMBED_RE)) {
-    if (!formatted.includes(m[0])) missing.push(m[0]);
-  }
-  return missing;
-}
-function lemmas(token) {
-  const out = [token];
-  if (/ies$/i.test(token) && token.length > 4) out.push(token.slice(0, -3) + "y");
-  else if (/(?:s|x|z|ch|sh)es$/i.test(token) && token.length > 4) out.push(token.slice(0, -2));
-  else if (/s$/i.test(token) && !/ss$/i.test(token) && token.length > 3) out.push(token.slice(0, -1));
-  else if (/[^aeiou]y$/i.test(token) && token.length > 2) out.push(token.slice(0, -1) + "ies");
-  else if (/(?:s|x|z|ch|sh)$/i.test(token) && token.length > 2) out.push(token + "es");
-  else if (token.length > 2) out.push(token + "s");
-  return out;
-}
-function appendMissingLines(formatted, missing) {
-  const lines = [...new Set(missing.filter((m) => m.context !== "").map((m) => m.context))];
-  if (lines.length === 0) return formatted;
-  return `${formatted}
-
----
-<!-- restored-lines: token loss after retry -->
-${lines.join("\n")}`;
-}
-function missingTokensWithContext(original, formatted) {
-  const orig = significantTokens(original);
-  const fmtLower = formatted.toLowerCase();
-  const lines = original.split(/\r?\n/);
-  const out = [];
-  for (const t of orig) {
-    const variants = lemmas(t).map((v) => v.toLowerCase());
-    const found = variants.some((v) => {
-      const re = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(v)}(?:[^A-Za-z0-9_]|$)`);
-      return re.test(fmtLower);
-    });
-    if (found) continue;
-    const lineRe = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(t)}(?:[^A-Za-z0-9_]|$)`);
-    let context = "";
-    for (const line of lines) {
-      if (lineRe.test(line)) {
-        const trimmed = line.trim();
-        context = trimmed.length > 120 ? trimmed.slice(0, 117) + "\u2026" : trimmed;
-        break;
-      }
-    }
-    out.push({ token: t, context });
-  }
-  return out;
-}
-function parseSentinelOutput(text, hasVisionDescriptions) {
-  const reportIdx = text.indexOf("<<<REPORT>>>");
-  const formattedIdx = text.indexOf("<<<FORMATTED>>>");
-  if (reportIdx === -1 || formattedIdx === -1) return null;
-  const report = text.slice(reportIdx + "<<<REPORT>>>".length, formattedIdx).trim();
-  const endIdx = text.indexOf("<<<END>>>");
-  let formattedEnd;
-  let truncated = false;
-  let visionCount;
-  let embeds;
-  if (hasVisionDescriptions) {
-    const visionIdx = text.indexOf("<<<VISION_COUNT>>>", formattedIdx);
-    const embedsIdx = text.indexOf("<<<EMBEDS>>>", formattedIdx);
-    if (visionIdx === -1 || embedsIdx === -1) return null;
-    const tail = [visionIdx, embedsIdx, endIdx].filter((i) => i > formattedIdx);
-    formattedEnd = tail.length ? Math.min(...tail) : text.length;
-    visionCount = parseInt(text.slice(visionIdx + "<<<VISION_COUNT>>>".length, embedsIdx).trim(), 10);
-    const embedsEnd = endIdx === -1 ? text.length : endIdx;
-    embeds = text.slice(embedsIdx + "<<<EMBEDS>>>".length, embedsEnd).trim().split("|").map((s) => s.trim()).filter(Boolean);
-    truncated = endIdx === -1;
-  } else {
-    formattedEnd = endIdx === -1 ? text.length : endIdx;
-    truncated = endIdx === -1;
-  }
-  const formatted = text.slice(formattedIdx + "<<<FORMATTED>>>".length, formattedEnd).trim();
-  return { report, formatted, visionCount, embeds, truncated };
-}
-var SENTINEL_RE = /<<<[A-Z_]+>>>/g;
-function stripSentinelMarkers(text) {
-  const removed = text.match(SENTINEL_RE) ?? [];
-  if (removed.length === 0) return { clean: text, removed };
-  const out = [];
-  for (const line of text.split("\n")) {
-    const stripped = line.replace(SENTINEL_RE, "");
-    if (stripped === line) {
-      out.push(line);
-      continue;
-    }
-    if (stripped.trim() === "") continue;
-    out.push(stripped);
-  }
-  const clean = out.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd();
-  return { clean, removed };
-}
-
-// src/phases/framed-output.ts
-var END = "<<<END>>>";
-var wikiPagesFrameInstruction = [
-  "Return framed wiki pages only.",
-  "Start with <<<REPORT>>> and concise reasoning.",
-  "For each page use <<<PAGE>>> followed by path:, optional annotation:, <<<CONTENT>>>, markdown body, and <<<END_PAGE>>>.",
-  "For deletes use <<<DELETE>>> with path: and <<<END_DELETE>>>.",
-  "For entity type updates use <<<ENTITY_TYPES_DELTA_JSON>>> with a JSON array and <<<END_ENTITY_TYPES_DELTA_JSON>>>.",
-  "Finish with <<<END>>>."
-].join("\n");
-var mergeContentFrameInstruction = [
-  "Return exactly one merged page content frame.",
-  "Optional: <<<REASONING>>> followed by concise reasoning.",
-  "Optional: <<<ANNOTATION>>> followed by one line for the index.",
-  "Required: <<<CONTENT>>> followed by the full markdown page.",
-  "Finish with <<<END>>>."
-].join("\n");
-var lintOutputFrameInstruction = [
-  "Return framed lint output only.",
-  "Start with <<<REPORT>>> followed by the markdown lint report.",
-  "For each changed page use <<<PAGE>>> followed by path:, optional annotation:, <<<CONTENT>>>, full markdown body, and <<<END_PAGE>>>.",
-  "For deletes use <<<DELETE>>> followed by path:, optional redirect_to:, and <<<END_DELETE>>>.",
-  "Finish with <<<END>>>."
-].join("\n");
-var lintChatFrameInstruction = [
-  "Return framed lint-chat output only.",
-  "Start with <<<REPORT>>> followed by the markdown summary.",
-  "For each changed page use <<<PAGE>>> followed by path:, optional annotation:, <<<CONTENT>>>, full markdown body, and <<<END_PAGE>>>.",
-  "Finish with <<<END>>>."
-].join("\n");
-var queryAnswerFrameInstruction = [
-  "Return framed answer repair output only.",
-  "Put the full repaired markdown answer in <<<ANSWER>>>.",
-  "Put citations in <<<CITATIONS>>> as one stem per bullet line.",
-  "Finish with <<<END>>>."
-].join("\n");
-function wikiPagesProfile() {
-  return {
-    kind: "framed-zod",
-    schema: WikiPagesOutputSchema,
-    parse: parseWikiPagesFrames,
-    repairInstruction: wikiPagesFrameInstruction
-  };
-}
-function mergedPageProfile() {
-  return {
-    kind: "framed-zod",
-    schema: MergedPageOutputSchema,
-    parse: parseContentFrame,
-    repairInstruction: mergeContentFrameInstruction
-  };
-}
-function lintOutputProfile() {
-  return {
-    kind: "framed-zod",
-    schema: LintOutputSchema,
-    parse: parseLintFrames,
-    repairInstruction: lintOutputFrameInstruction
-  };
-}
-function lintChatProfile() {
-  return {
-    kind: "framed-zod",
-    schema: outputSchema(LintChatSchema),
-    parse: parseLintChatFrames,
-    repairInstruction: lintChatFrameInstruction
-  };
-}
-function queryAnswerProfile(schema) {
-  return {
-    kind: "framed-zod",
-    schema: outputSchema(schema),
-    parse: parseAnswerFrames,
-    repairInstruction: queryAnswerFrameInstruction
-  };
-}
-function outputSchema(schema) {
-  return schema;
-}
-function parseFormatFrames(text, hasVisionDescriptions) {
-  const protectedText = protectInlineMarkers(text, [
-    "<<<REPORT>>>",
-    "<<<FORMATTED>>>",
-    "<<<VISION_COUNT>>>",
-    "<<<EMBEDS>>>",
-    END
-  ]);
-  const parsed = parseSentinelOutput(protectedText.text, hasVisionDescriptions);
-  if (!parsed) throw new Error("sentinel markers not found");
-  return {
-    raw: {
-      report: protectedText.restore(parsed.report),
-      formatted: protectedText.restore(parsed.formatted),
-      ...hasVisionDescriptions ? {
-        vision_blocks_count: parsed.visionCount ?? 0,
-        embeds_preserved: parsed.embeds?.map((entry) => protectedText.restore(entry)) ?? []
-      } : {}
-    },
-    truncated: parsed.truncated
-  };
-}
-function parseContentFrame(text) {
-  requireMarker(text, END);
-  const content = between(text, "<<<CONTENT>>>", END);
-  const annotation = hasMarker(text, "<<<ANNOTATION>>>") ? between(text, "<<<ANNOTATION>>>", "<<<CONTENT>>>") : void 0;
-  const reasoning = hasMarker(text, "<<<REASONING>>>") ? between(text, "<<<REASONING>>>", hasMarker(text, "<<<ANNOTATION>>>") ? "<<<ANNOTATION>>>" : "<<<CONTENT>>>") : void 0;
-  return {
-    reasoning,
-    content,
-    annotation
-  };
-}
-function parseAnswerFrames(text) {
-  requireMarker(text, END);
-  const answerEnd = hasMarker(text, "<<<CITATIONS>>>") ? "<<<CITATIONS>>>" : END;
-  const answer = between(text, "<<<ANSWER>>>", answerEnd);
-  const citations = hasMarker(text, "<<<CITATIONS>>>") ? parseCitations(between(text, "<<<CITATIONS>>>", END)) : [];
-  const reasoning = hasMarker(text, "<<<REASONING>>>") ? between(text, "<<<REASONING>>>", "<<<ANSWER>>>") : "";
-  return {
-    reasoning,
-    answer_markdown: answer,
-    citations
-  };
-}
-function parseWikiPagesFrames(text) {
-  requireMarker(text, END);
-  const reasoning = parseReasoning(text);
-  const pages = parsePages(text);
-  const deletes = parseDeletes(text);
-  const entityTypesDelta = parseEntityTypesDelta(text);
-  return {
-    reasoning,
-    pages,
-    deletes: deletes.length ? deletes.map((entry) => ({ path: entry.path })) : void 0,
-    ...entityTypesDelta !== void 0 ? { entity_types_delta: entityTypesDelta } : {}
-  };
-}
-function parseWikiPageRepairFramesOrJson(text) {
-  try {
-    return parseWikiPagesFrames(text).pages;
-  } catch {
-    return parseLegacyJsonPages(text);
-  }
-}
-function parseLintFrames(text) {
-  requireMarker(text, END);
-  const parsed = {
-    reasoning: parseReasoning(text),
-    pages: parsePages(text),
-    deletes: parseDeletes(text)
-  };
-  return {
-    reasoning: parsed.reasoning,
-    report: parsed.reasoning,
-    fixes: parsed.pages,
-    deletes: parsed.deletes.length ? parsed.deletes : void 0
-  };
-}
-function parseLintChatFrames(text) {
-  requireMarker(text, END);
-  const parsed = {
-    reasoning: parseReasoning(text),
-    pages: parsePages(text)
-  };
-  return {
-    summary: parsed.reasoning,
-    pages: parsed.pages
-  };
-}
-function requireMarker(text, marker) {
-  const idx = markerLineIndex(linesOf(text), marker);
-  if (idx < 0) throw new Error(`missing ${marker}`);
-  return idx;
-}
-function hasMarker(text, marker) {
-  return markerLineIndex(linesOf(text), marker) >= 0;
-}
-function between(text, start, end) {
-  const lines = linesOf(text);
-  const startIdx = markerLineIndex(lines, start);
-  if (startIdx < 0) throw new Error(`missing ${start}`);
-  const endIdx = markerLineIndex(lines, end, startIdx + 1);
-  if (endIdx < 0) throw new Error(`missing ${end}`);
-  return lines.slice(startIdx + 1, endIdx).join("\n").trim();
-}
-function parseReasoning(text) {
-  const marker = hasMarker(text, "<<<REPORT>>>") ? "<<<REPORT>>>" : hasMarker(text, "<<<REASONING>>>") ? "<<<REASONING>>>" : null;
-  if (!marker) return "";
-  const lines = linesOf(text);
-  const startIdx = markerLineIndex(lines, marker);
-  const endIdx = firstMarkerLineAfter(lines, startIdx + 1, [
-    "<<<PAGE>>>",
-    "<<<DELETE>>>",
-    "<<<ENTITY_TYPES_DELTA_JSON>>>",
-    END
-  ]);
-  if (endIdx < 0) throw new Error(`missing ${END}`);
-  return lines.slice(startIdx + 1, endIdx).join("\n").trim();
-}
-function firstMarkerLineAfter(lines, from, markers) {
-  let inFence = false;
-  for (let i = 0; i < lines.length; i++) {
-    if (i >= from && !inFence && markers.some((marker) => isMarkerLine(lines[i], marker))) return i;
-    if (isFenceToggleLine(lines[i])) inFence = !inFence;
-  }
-  return -1;
-}
-function parsePages(text) {
-  const lines = linesOf(text);
-  const pages = [];
-  for (let i = 0; i < lines.length; i++) {
-    if (!isMarkerLine(lines[i], "<<<PAGE>>>")) continue;
-    const contentIdx = markerLineIndex(lines, "<<<CONTENT>>>", i + 1);
-    if (contentIdx < 0) throw new Error("missing <<<CONTENT>>>");
-    const endPageIdx = markerLineIndex(lines, "<<<END_PAGE>>>", contentIdx + 1);
-    if (endPageIdx < 0) throw new Error("missing <<<END_PAGE>>>");
-    const header = parseHeader(lines.slice(i + 1, contentIdx).join("\n"));
-    if (!header.path) throw new Error("page frame missing path");
-    pages.push({
-      path: header.path,
-      content: lines.slice(contentIdx + 1, endPageIdx).join("\n").trim(),
-      annotation: header.annotation || void 0
-    });
-    i = endPageIdx;
-  }
-  return pages;
-}
-function parseDeletes(text) {
-  const lines = linesOf(text);
-  const deletes = [];
-  for (let i = 0; i < lines.length; i++) {
-    if (!isMarkerLine(lines[i], "<<<DELETE>>>")) continue;
-    const endDeleteIdx = markerLineIndex(lines, "<<<END_DELETE>>>", i + 1);
-    if (endDeleteIdx < 0) throw new Error("missing <<<END_DELETE>>>");
-    const header = parseHeader(lines.slice(i + 1, endDeleteIdx).join("\n"));
-    if (!header.path) throw new Error("delete frame missing path");
-    deletes.push({
-      path: header.path,
-      redirect_to: header.redirect_to || void 0
-    });
-    i = endDeleteIdx;
-  }
-  return deletes;
-}
-function parseHeader(raw) {
-  const out = {};
-  for (const line of raw.split(/\r?\n/)) {
-    const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$/);
-    if (match) out[match[1]] = match[2].trim();
-  }
-  return out;
-}
-function parseCitations(raw) {
-  const trimmed = raw.trim();
-  if (trimmed.startsWith("[")) {
-    const parsed = JSON.parse(trimmed);
-    if (Array.isArray(parsed) && parsed.every((entry) => typeof entry === "string")) {
-      return parsed;
-    }
-    throw new Error("citations frame must contain strings");
-  }
-  return trimmed.split(/\r?\n/).map((line) => line.replace(/^-\s*/, "").trim()).filter(Boolean);
-}
-function parseLegacyJsonPages(text) {
-  const match = text.match(/\[[\s\S]*\]/);
-  if (!match) return [];
-  try {
-    const arr = JSON.parse(match[0]);
-    if (!Array.isArray(arr)) return [];
-    return arr.filter(
-      (x) => x !== null && typeof x === "object" && typeof x.path === "string" && typeof x.content === "string"
-    );
-  } catch {
-    return [];
-  }
-}
-function parseEntityTypesDelta(text) {
-  if (!hasMarker(text, "<<<ENTITY_TYPES_DELTA_JSON>>>")) return void 0;
-  const raw = between(text, "<<<ENTITY_TYPES_DELTA_JSON>>>", "<<<END_ENTITY_TYPES_DELTA_JSON>>>");
-  return JSON.parse(raw);
-}
-function linesOf(text) {
-  return text.split(/\r?\n/);
-}
-function markerLineIndex(lines, marker, from = 0) {
-  let inFence = false;
-  for (let i = 0; i < lines.length; i++) {
-    if (i >= from && !inFence && isMarkerLine(lines[i], marker)) return i;
-    if (isFenceToggleLine(lines[i])) inFence = !inFence;
-  }
-  return -1;
-}
-function isMarkerLine(line, marker) {
-  return line.trim() === marker;
-}
-function isFenceToggleLine(line) {
-  return /^\s*(?:```|~~~)/.test(line);
-}
-function protectInlineMarkers(text, markers) {
-  const replacements = /* @__PURE__ */ new Map();
-  let nextId = 0;
-  let inFence = false;
-  const protectedLines = linesOf(text).map((line) => {
-    const isBoundaryMarker = !inFence && markers.some((marker) => isMarkerLine(line, marker));
-    const togglesFence = isFenceToggleLine(line);
-    if (isBoundaryMarker) {
-      return line;
-    }
-    let protectedLine = line;
-    for (const marker of markers) {
-      let markerIdx = protectedLine.indexOf(marker);
-      while (markerIdx >= 0) {
-        const token = `__FRAMED_OUTPUT_MARKER_${nextId++}__`;
-        replacements.set(token, marker);
-        protectedLine = `${protectedLine.slice(0, markerIdx)}${token}${protectedLine.slice(markerIdx + marker.length)}`;
-        markerIdx = protectedLine.indexOf(marker, markerIdx + token.length);
-      }
-    }
-    if (togglesFence) inFence = !inFence;
-    return protectedLine;
-  });
-  return {
-    text: protectedLines.join("\n"),
-    restore: (value) => {
-      let restored = value;
-      for (const [token, marker] of replacements) {
-        restored = restored.split(token).join(marker);
-      }
-      return restored;
-    }
-  };
+  await p;
+  if (error) throw error;
 }
 
 // prompts/ingest.md
@@ -41242,30 +41375,32 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   const start = Date.now();
   const messages_extract = buildExtractMessages(sourceVaultPath, sourceContent, domain);
   yield { kind: "tool_use", name: "Extracting entities", input: {} };
-  const extractEvents = [];
+  const extractSink = {};
   let entitiesResult;
   try {
-    entitiesResult = await parseWithRetry({
+    for await (const ev of runStructuredStreaming({
       llm,
       model,
       baseMessages: messages_extract,
       opts,
-      schema: EntitiesOutputSchema,
+      profile: { kind: "json-zod", schema: EntitiesOutputSchema },
       maxRetries: opts.structuredRetries ?? 1,
       callSite: "ingest.entities",
       signal,
-      onEvent: (ev) => extractEvents.push(ev)
-    });
+      onEvent: () => {
+      }
+    }, extractSink)) {
+      yield ev;
+    }
+    entitiesResult = { value: extractSink.value, outputTokens: extractSink.outputTokens ?? 0 };
     yield { kind: "tool_result", ok: true, preview: `${entitiesResult.value.entities.length} entities` };
   } catch (e) {
     if (signal.aborted || e.name === "AbortError") return;
     yield { kind: "tool_result", ok: false, preview: e.message };
-    for (const ev of extractEvents) yield ev;
     yield { kind: "error", message: `ingest: entity extraction failed \u2014 ${e.message}` };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: 0 };
     return;
   }
-  for (const ev of extractEvents) yield ev;
   if (signal.aborted) return;
   const foundPages = [];
   let existingPages;
@@ -41361,10 +41496,10 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   const inputTokEst = Math.round(inputChars / 4);
   const inputTokFmt = inputTokEst >= 1e3 ? `~${(inputTokEst / 1e3).toFixed(1)}k` : `~${inputTokEst}`;
   yield { kind: "tool_use", name: "Synthesising pages", input: {} };
-  const pwtEvents = [];
+  const pwtSink = {};
   let parseResult;
   try {
-    parseResult = await runStructuredWithRetry({
+    for await (const ev of runStructuredStreaming({
       llm,
       model,
       baseMessages: messages,
@@ -41373,18 +41508,20 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
       maxRetries: opts.structuredRetries ?? 1,
       callSite: "ingest.pages",
       signal,
-      onEvent: (ev) => pwtEvents.push(ev)
-    });
+      onEvent: () => {
+      }
+    }, pwtSink)) {
+      yield ev;
+    }
+    parseResult = { value: pwtSink.value, outputTokens: pwtSink.outputTokens ?? 0 };
     yield { kind: "tool_result", ok: true, preview: `${existingPages.size} pages \xB7 ${inputTokFmt} tokens sent` };
   } catch (e) {
     if (signal.aborted || e.name === "AbortError") return;
     yield { kind: "tool_result", ok: false, preview: e.message };
-    for (const ev of pwtEvents) yield ev;
     yield { kind: "error", message: `ingest: LLM output failed validation \u2014 ${e.message}` };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: 0 };
     return;
   }
-  for (const ev of pwtEvents) yield ev;
   if (signal.aborted) return;
   const outputTokens = parseResult.outputTokens;
   yield { kind: "assistant_text", delta: parseResult.value.reasoning, isReasoning: true };
@@ -41521,9 +41658,9 @@ ${page.content}`;
             details: [targetPath]
           };
           const mergeMsgs = [{ role: "user", content: render(ingest_merge_default, { existing: existingTarget, incoming: page.content, frame_instruction: mergeContentFrameInstruction }) }];
-          const mergeEvents = [];
+          const mergeSink = {};
           try {
-            const merged = await runStructuredWithRetry({
+            for await (const ev of runStructuredStreaming({
               llm,
               model,
               baseMessages: mergeMsgs,
@@ -41532,9 +41669,12 @@ ${page.content}`;
               maxRetries: opts.structuredRetries ?? 1,
               callSite: "ingest.merge",
               signal,
-              onEvent: (ev) => mergeEvents.push(ev)
-            });
-            for (const ev of mergeEvents) yield ev;
+              onEvent: () => {
+              }
+            }, mergeSink)) {
+              yield ev;
+            }
+            const merged = { value: mergeSink.value };
             yield { kind: "tool_use", name: "Update", input: { path: targetPath } };
             await vaultTools.write(targetPath, merged.value.content);
             written.push(targetPath);
@@ -41549,7 +41689,6 @@ ${page.content}`;
             }
             continue;
           } catch (e) {
-            for (const ev of mergeEvents) yield ev;
             yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: `merge \u043D\u0435 \u0443\u0434\u0430\u043B\u0441\u044F, \u0441\u043E\u0437\u0434\u0430\u044E \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E: ${e.message}` };
           }
         }
@@ -41914,6 +42053,21 @@ ${indexContent}` : ""
 
 // src/agent-runner.ts
 var import_path_browserify8 = __toESM(require_path_browserify(), 1);
+
+// src/phases/parse-with-retry.ts
+async function parseWithRetry(args) {
+  return runStructuredWithRetry({
+    llm: args.llm,
+    model: args.model,
+    baseMessages: args.baseMessages,
+    opts: args.opts,
+    profile: { kind: "json-zod", schema: args.schema },
+    maxRetries: args.maxRetries,
+    callSite: args.callSite,
+    signal: args.signal,
+    onEvent: args.onEvent
+  });
+}
 
 // prompts/query.md
 var query_default = 'You are an assistant for the wiki knowledge base of the domain "{{domain_name}}".\nAnswer strictly based on the provided wiki pages. When referring to pages, use WikiLinks [[name]].\n\n{{available_links_block}}\n{{entity_types_block}}\n{{index_block}}\n\n## Formatting rules\n\n**MANDATORY \u2014 code and commands:**\n\nAny command, script, path, or config is ALWAYS rendered as a fenced block with a language tag.\n\nWRONG:\nRun sudo systemctl restart nginx\n\nRIGHT:\n```bash\nsudo systemctl restart nginx\n```\n\nWRONG:\nAdd to the config: key: value\n\nRIGHT:\n```yaml\nkey: value\n```\n\nThis rule applies inside numbered and bulleted lists as well.\n\nWRONG:\n- Disable all swap: `sudo swapoff -a`\n- Check: `sudo swapon --show`\n\nRIGHT:\n- Disable all swap:\n  ```bash\n  sudo swapoff -a\n  ```\n- Check:\n  ```bash\n  sudo swapon --show\n  ```\n\nLanguages: `bash` for shell commands, `yaml`/`toml`/`ini` for configs, `python`/`go`/`js` for code, `text` if the language is unknown.\nOnly file names and flags without spaces may be written inline in `` `backticks` ``: `/etc/fstab`, `--show`, `vm.swappiness`.\n\n**Answer structure:**\n- A short, direct answer at the start \u2014 no introductions.\n- If there are several topics \u2014 separate them with `##` headings.\n- Enumerations: ALWAYS a list (`-` or `1.`), not comma-separated inline.\n- Comparative/numeric data (\u22653 rows, \u22652 columns) \u2192 a table.\n- Key terms and entities \u2192 `**bold**` at first mention.\n\nWRONG:\nThree recipes: kharcho \u2014 2 hours, shchi \u2014 3 hours, broth \u2014 6 hours.\n\nRIGHT:\n**Soup recipes** [[Wiki-page]]:\n\n| Dish | Time |\n|---|---|\n| **Kharcho** | 1.5\u20132 h |\n| **Shchi** | 3 h |\n| **Bone broth** | \u22656 h |\n\n**Links to the wiki:**\n- Reference the source page via [[WikiLink]] after a fact or section.\n- Do not list sources in a separate block \u2014 insert links in place.\n\n**Compactness:**\n- No intro phrases ("Of course", "In order to").\n- No repetition from the context without adding meaning.\n- Use a table only if the data is genuinely tabular (\u22653 rows, \u22652 columns).\n';
@@ -43792,27 +43946,29 @@ ${file}:
 ${fileContent}` }
       ];
       yield { kind: "tool_use", name: "Initialising domain", input: {} };
-      const collected = [];
+      const sink = {};
       let parsed;
       try {
-        const r = await parseWithRetry({
+        for await (const ev of runStructuredStreaming({
           llm,
           model,
           baseMessages: messages,
           opts,
-          schema: DomainEntrySchema,
+          profile: { kind: "json-zod", schema: DomainEntrySchema },
           maxRetries: opts.structuredRetries ?? 1,
           callSite: "init.bootstrap",
           signal,
-          onEvent: (e) => collected.push(e)
-        });
-        parsed = r.value;
-        outputTokens += r.outputTokens;
+          onEvent: () => {
+          }
+        }, sink)) {
+          yield ev;
+        }
+        parsed = sink.value;
+        outputTokens += sink.outputTokens ?? 0;
         yield { kind: "tool_result", ok: true, preview: `domain: ${parsed.id}` };
-        if (r.fullText) yield { kind: "assistant_text", delta: r.fullText };
+        if (sink.fullText) yield { kind: "assistant_text", delta: sink.fullText };
       } catch (e) {
         yield { kind: "tool_result", ok: false, preview: e.message };
-        for (const ev of collected) yield ev;
         if (e.name === "AbortError" || signal.aborted) return;
         yield {
           kind: "error",
@@ -43821,7 +43977,6 @@ ${fileContent}` }
         yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || void 0 };
         return;
       }
-      for (const ev of collected) yield ev;
       if (signal.aborted) return;
       let entry;
       try {
@@ -52644,13 +52799,20 @@ var DomainStore = class {
   async load() {
     const adapter = this.vault.adapter;
     const domains = [];
+    let healed = false;
     if (await adapter.exists(WIKI_DIR)) {
       const listed = await adapter.list(WIKI_DIR);
       for (const folder of [...listed.folders].sort()) {
         const name = folder.split("/").pop() ?? folder;
         if (name.startsWith(".") || name.startsWith("_")) continue;
         const path5 = domainMetadataPath(folder);
-        if (!await adapter.exists(path5)) continue;
+        if (!await adapter.exists(path5)) {
+          const recovered = await this.promoteTmpMetadata(adapter, folder, name);
+          if (!recovered) continue;
+          domains.push(recovered);
+          healed = true;
+          continue;
+        }
         try {
           domains.push(parseDomainMetadata(await adapter.read(path5), path5, name));
         } catch (e) {
@@ -52676,7 +52838,7 @@ var DomainStore = class {
     }
     const { migrated: m2 } = migrateDomainsV2(domains);
     const { migrated: m3 } = migrateDomainsV3(domains);
-    if (m2 || m3) await this.save(domains);
+    if (m2 || m3 || healed) await this.save(domains);
     return domains;
   }
   async save(domains) {
@@ -52706,10 +52868,42 @@ var DomainStore = class {
       });
       const path5 = domainMetadataPath(folder);
       const tmpPath = `${path5}.tmp`;
-      await adapter.write(tmpPath, stringifyDomainMetadata(domainEntryToMetadataRecords(domain)));
-      if (await adapter.exists(path5)) await adapter.remove(path5);
-      await adapter.rename(tmpPath, path5);
+      if (await adapter.exists(tmpPath)) await adapter.remove(tmpPath).catch(() => {
+      });
+      await adapter.write(path5, stringifyDomainMetadata(domainEntryToMetadataRecords(domain)));
+      if (!await adapter.exists(path5)) {
+        throw new Error(`domain metadata write failed: ${path5}`);
+      }
     }
+  }
+  /**
+   * Recover a domain whose metadata write was interrupted: the old tmp+rename
+   * save left a `metadata.jsonl.tmp` with no `metadata.jsonl`. Promote the tmp
+   * to the final path so the domain is selectable again. Returns null when
+   * there is no tmp — a folder with content but no tmp is left alone, because
+   * that is indistinguishable from an intentionally deleted domain (Delete
+   * removes metadata.jsonl but leaves the folder; it never leaves a tmp).
+   *
+   * Parse BEFORE mutating: a corrupt tmp must be left intact (never written to
+   * the final path, never deleted), so it can be inspected manually instead of
+   * becoming a corrupt metadata.jsonl that throws DomainCorruptError on every
+   * future load.
+   */
+  async promoteTmpMetadata(adapter, folder, name) {
+    const path5 = domainMetadataPath(folder);
+    const tmpPath = `${path5}.tmp`;
+    if (!await adapter.exists(tmpPath)) return null;
+    let entry;
+    try {
+      const raw = await adapter.read(tmpPath);
+      entry = parseDomainMetadata(raw, path5, name);
+      await adapter.write(path5, raw);
+    } catch {
+      return null;
+    }
+    await adapter.remove(tmpPath).catch(() => {
+    });
+    return entry;
   }
 };
 
@@ -53241,7 +53435,13 @@ var WikiController = class {
       entity_types: [],
       language_notes: ""
     }];
-    await this.domainStore.save(next);
+    try {
+      await this.domainStore.save(next);
+    } catch (e) {
+      const msg = e.message;
+      new import_obsidian11.Notice(i18n().ctrl.domainAddFailed(msg));
+      return { ok: false, error: msg };
+    }
     new import_obsidian11.Notice(i18n().ctrl.domainAdded(id));
     return { ok: true };
   }
