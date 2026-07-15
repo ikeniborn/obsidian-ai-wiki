@@ -7,7 +7,7 @@ import { SeedsSchema } from "./zod-schemas";
 import queryTemplate from "../../prompts/query.md";
 import querySeedsTemplate from "../../prompts/query-seeds.md";
 import { render } from "./template";
-import { domainWikiFolder, domainIndexPath } from "../wiki-path";
+import { domainWikiFolder, domainIndexPath, isWikiPagePath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
 import { pageId, bfsExpandRanked } from "../wiki-graph";
 import { fuseVectorGraph } from "../fusion";
@@ -32,7 +32,6 @@ import {
 import { pruneByRelevance, robustLow, FLOOR_LO_PCT } from "../retrieval-prune";
 import { answerFromContext } from "./query-answer";
 
-const META_FILES = ["_index.md", "_log.md"];
 const DEFAULT_RERANKER_RUNTIME: RerankerRuntime = {
   config: normalizeRerankerConfig(undefined),
   baseUrl: "",
@@ -105,9 +104,7 @@ export async function* retrieveDomainCandidates(
   // overview text (docs/superpowers/plans/2026-07-09-okf-integration-plan.md Task 5b).
   yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
-  const files = allFiles.filter(
-    (f) => !META_FILES.some((m) => f.endsWith(m)) && !f.includes("/_config/"),
-  );
+  const files = allFiles.filter(isWikiPagePath);
   yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
   if (signal.aborted) return null;
 

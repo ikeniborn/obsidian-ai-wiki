@@ -16,7 +16,7 @@ import ingestEntitiesTemplate from "../../prompts/ingest-entities.md";
 import fixPathsTemplate from "../../prompts/ingest-fix-paths.md";
 import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
-import { domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
+import { domainWikiFolder, validateArticlePath, domainIndexPath, isWikiPagePath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureType, ensureDescription, entityTypeFromPath, ensureResource, stripInvalidWikiArticles, recoverSourceFrontmatter, parseTagsFromFm, normalizeTag } from "../utils/raw-frontmatter";
 import { collectDomainTags, renderTagRegistryBlock, thematicCategories, ensureEntityTypeTag, DEFAULT_MAX_TAG_CATEGORIES } from "../utils/tag-registry";
@@ -120,7 +120,7 @@ export async function* runIngest(
   const schemaContent = render(wikiSchemaTemplate, { section_conventions: wikiSections(resolveLang(opts.outputLanguage)) });
   const indexContent = await tryRead(vaultTools, domainIndexPath(domainRoot));
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
-  const nonMetaPaths = existingPaths.filter((f) => !f.endsWith("_index.md"));
+  const nonMetaPaths = existingPaths.filter(isWikiPagePath);
   const annotations = cachedAnnotations ?? parseIndexAnnotations(indexContent);
 
   yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).ingestProgress.synthesizing(domain.id) };
@@ -362,7 +362,7 @@ export async function* runIngest(
       validateAndRepairSourceFrontmatter(updatedSource);
     const wikiFileStems = new Set(
       [...existingPaths, ...plannedPagePaths]
-        .filter((p) => !plannedDeletePaths.has(p) && !p.endsWith("_index.md"))
+        .filter((p) => !plannedDeletePaths.has(p) && isWikiPagePath(p))
         .map((p) => p.split("/").pop()!.replace(/\.md$/, "")),
     );
     const { content: wikiArticlesFiltered, warnings: wikiArticlesWarnings } =
@@ -559,8 +559,7 @@ export async function* runIngest(
   // (legacy un-annotated pages get a deterministic fallback) and drop orphan
   // entries whose file no longer exists. Non-critical.
   try {
-    const finalPaths = (await vaultTools.listFiles(wikiVaultPath))
-      .filter((f) => f.endsWith(".md") && !f.endsWith("_index.md") && !f.endsWith("_log.md"));
+    const finalPaths = (await vaultTools.listFiles(wikiVaultPath)).filter(isWikiPagePath);
     const finalPages = await vaultTools.readAll(finalPaths);
     const currentIndex = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
     const recon = reconcileIndex(

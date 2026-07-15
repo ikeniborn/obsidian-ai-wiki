@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>storage-layout-sidecar-fix — отчёт о внедрении</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1b1f24; --muted: #5b6570;
+    --border: #dfe3e8; --accent: #2f6feb; --ok: #1a7f47; --ok-bg: #e5f4ec;
+    --warn: #9a6700; --warn-bg: #fff5e0; --bad: #b42318; --bad-bg: #fdecea;
+    --code-bg: #eef1f4; --shadow: 0 1px 3px rgba(0,0,0,.08), 0 6px 18px rgba(0,0,0,.06);
+    --before: #b42318; --after: #1a7f47;
+  }
+  [data-theme="dark"] {
+    --bg: #0f1216; --panel: #171b21; --ink: #e6e9ee; --muted: #9aa4b0;
+    --border: #2a313a; --accent: #6ea8fe; --ok: #56d38a; --ok-bg: #13291d;
+    --warn: #e3b341; --warn-bg: #2b2312; --bad: #f97066; --bad-bg: #2c1614;
+    --code-bg: #1e242c; --shadow: 0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    --before: #f97066; --after: #56d38a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.6 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 0 0 64px;
+  }
+  header {
+    position: sticky; top: 0; z-index: 5; background: var(--panel);
+    border-bottom: 1px solid var(--border); padding: 18px 28px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    box-shadow: var(--shadow);
+  }
+  header h1 { font-size: 19px; margin: 0; font-weight: 650; }
+  header .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  main { max-width: 1080px; margin: 0 auto; padding: 28px; }
+  section { margin: 0 0 34px; }
+  h2 {
+    font-size: 16px; margin: 0 0 14px; padding-bottom: 8px;
+    border-bottom: 2px solid var(--border); letter-spacing: .2px;
+  }
+  h2 .n { color: var(--accent); font-weight: 700; margin-right: 8px; }
+  p { margin: 0 0 12px; }
+  code { background: var(--code-bg); padding: 1px 6px; border-radius: 5px;
+    font: 13px/1.5 "SF Mono", ui-monospace, Menlo, Consolas, monospace; }
+  .panel { background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px; box-shadow: var(--shadow); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px){ .grid2 { grid-template-columns: 1fr; } }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 11px; border-bottom: 1px solid var(--border);
+    vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase;
+    letter-spacing: .4px; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 999px;
+    font-size: 12px; font-weight: 650; white-space: nowrap; }
+  .b-ok { background: var(--ok-bg); color: var(--ok); }
+  .b-warn { background: var(--warn-bg); color: var(--warn); }
+  .b-bad { background: var(--bad-bg); color: var(--bad); }
+  .b-neutral { background: var(--code-bg); color: var(--muted); }
+  .kadd { color: var(--ok); font-weight: 600; }
+  .kmod { color: var(--accent); font-weight: 600; }
+  .metrics { display: flex; flex-wrap: wrap; gap: 12px; }
+  .metric { flex: 1 1 150px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px; box-shadow: var(--shadow); }
+  .metric .v { font-size: 22px; font-weight: 700; }
+  .metric .l { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .toggle { cursor: pointer; border: 1px solid var(--border); background: var(--bg);
+    color: var(--ink); border-radius: 8px; padding: 7px 12px; font-size: 13px; }
+  .note { border-left: 3px solid var(--accent); background: var(--code-bg);
+    padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 12px 0; font-size: 13.5px; }
+  .note.warn { border-left-color: var(--warn); }
+  figure { margin: 0; }
+  figcaption { color: var(--muted); font-size: 12.5px; margin-top: 8px; text-align: center; }
+  .flow { display:flex; flex-direction:column; gap:10px; }
+  .fnode { border:1px solid var(--border); border-radius:9px; padding:9px 12px;
+    background:var(--panel); font-size:13px; }
+  .fnode.bad { border-color: var(--before); }
+  .fnode.good { border-color: var(--after); }
+  .ftitle { font-weight:650; font-size:11px; text-transform:uppercase; letter-spacing:.4px; }
+  .ftitle.bad { color: var(--before); } .ftitle.good { color: var(--after); }
+  .arrow { text-align:center; color:var(--muted); font-size:14px; line-height:1; }
+  .c4 { display:flex; flex-direction:column; gap:12px; }
+  .c4row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .c4box { border:1px solid var(--border); border-radius:9px; padding:10px 13px;
+    background:var(--panel); min-width:150px; }
+  .c4box .t { font-weight:650; font-size:13px; }
+  .c4box .d { color:var(--muted); font-size:12px; margin-top:2px; }
+  .c4box.src { border-color: var(--accent); }
+  .c4to { color:var(--muted); font-size:13px; }
+  .consumers { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { border:1px solid var(--border); border-radius:7px; padding:5px 9px;
+    background:var(--code-bg); font-size:12.5px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>storage-layout-sidecar-fix — отчёт о внедрении</h1>
+    <div class="sub">IDD→SDD chain · вердикт <span class="badge b-ok">OK</span> · база диффа <code>08b1b4e</code></div>
+  </div>
+  <button class="toggle" id="tg" aria-label="Переключить тему">◐ Тема</button>
+</header>
+<main>
+
+  <section>
+    <div class="metrics">
+      <div class="metric"><div class="v" style="color:var(--ok)">124/124</div><div class="l">тестов пройдено</div></div>
+      <div class="metric"><div class="v" style="color:var(--ok)">0</div><div class="l">ошибок линта</div></div>
+      <div class="metric"><div class="v">8+3</div><div class="l">source + новых тестов</div></div>
+      <div class="metric"><div class="v" style="color:var(--ok)">clean</div><div class="l">финальный review</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">1</span>Резюме внедрения</h2>
+    <div class="panel">
+      <p>Свежая инициализация домена (<code>init</code>) падала с ошибкой
+      <code>ingest: per-entity retrieval failed for all entities</code> и оставляла пустую
+      папку <code>!Wiki/_config</code>.</p>
+      <p><b>Первопричина.</b> JSONL-миграция добавила per-domain sidecar-файлы
+      (<code>metadata.jsonl</code>, <code>index.jsonl</code>, <code>log.jsonl</code>) под
+      <code>!Wiki/&lt;domain&gt;/</code>, но код, отделяющий контент-страницы вики от служебных
+      файлов, распознавал только легаси <code>_index.md</code>. Поэтому
+      <code>metadata.jsonl</code> свежего домена попадал в список страниц, делал
+      <code>allPaths</code> непустым и при пустом индексе взводил guard <code>allFailed</code>.</p>
+      <table>
+        <tr><th>Артефакт</th><th>Путь</th></tr>
+        <tr><td>Intent</td><td><span class="badge b-neutral">n/a</span></td></tr>
+        <tr><td>Spec</td><td><code>docs/superpowers/specs/2026-07-14-storage-layout-sidecar-fix-design.md</code></td></tr>
+        <tr><td>Plan</td><td><code>docs/superpowers/plans/2026-07-15-storage-layout-sidecar-fix.md</code></td></tr>
+        <tr><td>База диффа</td><td><code>08b1b4e</code> (merge-base master, <code>--since</code>)</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">2</span>Выполненные изменения</h2>
+    <div class="panel">
+      <table>
+        <tr><th>Файл</th><th>Тип</th><th>±</th><th>Что делает</th></tr>
+        <tr><td><code>src/wiki-path.ts</code></td><td class="kmod">modified</td><td>+25/-4</td>
+          <td>Предикаты <code>isDomainMetaPath</code> / <code>isWikiPagePath</code>; <code>validateArticlePath</code> сохраняет строгое 2-сегментное правило, но отвергает meta-пути; удалён легаси whitelist <code>_config/_index.md</code>/<code>_log.md</code>.</td></tr>
+        <tr><td><code>src/phases/ingest.ts</code></td><td class="kmod">modified</td><td>+9</td>
+          <td><code>isWikiPagePath</code> на 3 сайтах: <code>nonMetaPaths</code>, index-reconciliation <code>finalPaths</code>, known-stem set <code>wikiFileStems</code>.</td></tr>
+        <tr><td><code>src/phases/query.ts</code></td><td class="kmod">modified</td><td>+7</td>
+          <td>Удалён устаревший <code>META_FILES</code>, фильтр → <code>isWikiPagePath</code>.</td></tr>
+        <tr><td><code>src/phases/lint.ts</code></td><td class="kmod">modified</td><td>+6</td>
+          <td>То же — <code>META_FILES</code> → <code>isWikiPagePath</code>.</td></tr>
+        <tr><td><code>src/phases/lint-chat.ts</code></td><td class="kmod">modified</td><td>+6</td>
+          <td>То же — <code>META_FILES</code> → <code>isWikiPagePath</code>.</td></tr>
+        <tr><td><code>src/page-similarity.ts</code></td><td class="kmod">modified</td><td>+19</td>
+          <td><code>allFailed</code> = true только при реальном сбое embedding-fetch; jaccard и нормальное завершение → <code>false</code>; удалён <code>anySuccess</code>.</td></tr>
+        <tr><td><code>src/storage-migration.ts</code></td><td class="kmod">modified</td><td>+27</td>
+          <td>Новая <code>removeEmptyConfigDirs(vault)</code> + helper <code>rmdirIfEmpty</code> (удаляет пустые <code>_config</code> только при <code>files==0 &amp;&amp; folders==0</code>, best-effort).</td></tr>
+        <tr><td><code>src/main.ts</code></td><td class="kmod">modified</td><td>+3/-1</td>
+          <td><code>removeEmptyConfigDirs</code> вызывается в <code>onload()</code> после <code>migrateLogsToPluginDir</code>; импорт обновлён.</td></tr>
+        <tr><td><code>tests/wiki-path-meta.test.ts</code></td><td class="kadd">added</td><td>+27</td>
+          <td>Предикаты + <code>validateArticlePath</code> (3 теста).</td></tr>
+        <tr><td><code>tests/page-similarity-guard.test.ts</code></td><td class="kadd">added</td><td>+23</td>
+          <td>Пустой/несвязанный индекс → <code>allFailed:false</code> (2 теста).</td></tr>
+        <tr><td><code>tests/storage-config-cleanup.test.ts</code></td><td class="kadd">added</td><td>+47</td>
+          <td>Удаление пустых global + per-domain <code>_config</code>, сохранение непустого (2 теста).</td></tr>
+        <tr><td><code>dist/main.js</code></td><td class="kmod">rebuilt</td><td>—</td>
+          <td>Пересобранный bundle (конвенция репозитория).</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">3</span>Результаты (plan↔diff)</h2>
+    <div class="panel">
+      <table>
+        <tr><th>Шаг плана</th><th>Статус</th><th>Свидетельство в диффе</th></tr>
+        <tr><td>Task 1 — предикаты + drop whitelist</td><td><span class="badge b-ok">DONE</span></td>
+          <td><code>wiki-path.ts</code> + <code>wiki-path-meta.test.ts</code></td></tr>
+        <tr><td>Task 2 — применить <code>isWikiPagePath</code></td><td><span class="badge b-ok">DONE</span></td>
+          <td>ingest/query/lint/lint-chat (+2 авторизованных сайта в ingest)</td></tr>
+        <tr><td>Task 3 — guard <code>allFailed</code></td><td><span class="badge b-ok">DONE</span></td>
+          <td><code>page-similarity.ts</code> + <code>page-similarity-guard.test.ts</code></td></tr>
+        <tr><td>Task 4 — <code>removeEmptyConfigDirs</code></td><td><span class="badge b-ok">DONE</span></td>
+          <td><code>storage-migration.ts</code> + <code>main.ts</code> + <code>storage-config-cleanup.test.ts</code></td></tr>
+        <tr><td>Task 5 — полная регрессия</td><td><span class="badge b-ok">DONE</span></td>
+          <td>124/124 tests, lint 0 err, build clean, dist rebuilt</td></tr>
+      </table>
+      <div class="note">
+        <b>Покрытие spec:</b> Fix A (предикаты + применение) ✓ · Fix B (guard-семантика) ✓ ·
+        Fix C (<code>_config</code> cleanup) ✓ · Fix D (drop whitelist) ✓ · тесты ✓ — <b>4/4 требования</b>.<br>
+        <b>Excess:</b> <code>dist/main.js</code> (build-артефакт) + chain-docs (TODO/spec/plan) — ожидаемо.
+        <b>MISSING/CRITICAL — нет.</b> Итоговый вердикт: <span class="badge b-ok">OK</span>.
+      </div>
+      <div class="note warn">
+        <b>Замечание по Task 1.</b> Первоначальный Step-1 тест плана ассертил flat-путь как valid —
+        противоречие с политикой ingest «правило 4 сегментов». Разрешено фиксом: строгий валидатор +
+        nested-тест (commit <code>6c10b7a</code>).
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">4</span>Влияние на систему</h2>
+    <div class="panel">
+      <table>
+        <tr><th>Компонент</th><th>Поведенческое изменение</th><th>Риск</th></tr>
+        <tr><td><code>wiki-path.ts</code></td>
+          <td>Единый источник истины «контент-страница vs служебный файл»; <code>validateArticlePath</code> отвергает meta-пути.</td>
+          <td><span class="badge b-ok">низкий</span> — 2-сегментное правило сохранено</td></tr>
+        <tr><td>Фазы ingest/query/lint/lint-chat</td>
+          <td>JSONL-сайдкары больше не считаются страницами. Свежий <code>init</code> проходит guard и формирует вики (домен <code>os</code> с <code>entity_types:[]</code> роутится в nested <code>entities/&lt;Name&gt;.md</code>). Бонус: query больше не читает <code>index.jsonl</code>/<code>log.jsonl</code> как контент.</td>
+          <td><span class="badge b-ok">низкий</span></td></tr>
+        <tr><td><code>page-similarity.ts</code></td>
+          <td><code>allFailed</code> отражает только реальный сбой embedding-endpoint; пустой индекс = не ошибка.</td>
+          <td><span class="badge b-warn">намеренно</span> — при недоступных embeddings init аборт с явным сообщением</td></tr>
+        <tr><td><code>storage-migration.ts</code> + <code>main.ts</code></td>
+          <td>Пустые <code>_config</code> (global + per-domain) чистятся на каждой загрузке; идемпотентно, best-effort, непустые не трогаются.</td>
+          <td><span class="badge b-ok">низкий</span></td></tr>
+      </table>
+      <div class="note warn">
+        <b>Follow-ups (out of scope, не блокеры).</b>
+        <b>F1:</b> flat-page шаблон срабатывает только для entity type с пустым <code>wiki_subfolder</code>
+        (<code>init.ts:262</code> может обнулить) → <code>validateArticlePath</code> отвергает → retry/drop.
+        Pre-existing, веткой не тронуто.
+        <b>F2:</b> <code>delete.ts:49,133</code> и <code>tag-registry.ts:46</code> используют inline
+        <code>.md &amp;&amp; !/_config/</code> фильтр вместо <code>isWikiPagePath</code> — безопасно
+        (jsonl исключён), упущенная централизация.
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">5</span>Схемы</h2>
+    <div class="grid2">
+      <figure class="panel">
+        <div class="flow">
+          <div class="fnode"><div class="ftitle">Общий вход</div>fresh <code>init</code> → <code>listFiles(!Wiki/os)</code> → включает <code>metadata.jsonl</code></div>
+          <div class="arrow">┃ ветвление ┃</div>
+          <div class="fnode bad">
+            <div class="ftitle bad">ДО (баг)</div>
+            фильтр только <code>!_index.md</code> → <code>metadata.jsonl</code> протекает →
+            <code>nonMetaPaths</code> непустой → <code>allPaths&gt;0</code> →
+            guard <code>allFailed</code> (индекс пуст) → <b style="color:var(--before)">ABORT</b>
+          </div>
+          <div class="fnode good">
+            <div class="ftitle good">ПОСЛЕ (фикс)</div>
+            фильтр <code>isWikiPagePath</code> → сайдкары исключены →
+            <code>nonMetaPaths</code> пуст → guard не взводится →
+            <b style="color:var(--after)">генерация страниц</b>
+          </div>
+        </div>
+        <figcaption>Диаграмма A — control flow бага и фикса</figcaption>
+      </figure>
+
+      <figure class="panel">
+        <div class="c4">
+          <div class="c4row">
+            <div class="c4box src"><div class="t">wiki-path.ts</div><div class="d">isWikiPagePath / isDomainMetaPath</div></div>
+            <span class="c4to">→</span>
+            <div class="consumers">
+              <span class="chip">ingest.ts</span><span class="chip">query.ts</span>
+              <span class="chip">lint.ts</span><span class="chip">lint-chat.ts</span>
+              <span class="chip">validateArticlePath</span>
+            </div>
+          </div>
+          <div class="c4row">
+            <div class="c4box src"><div class="t">page-similarity.ts</div><div class="d">allFailed</div></div>
+            <span class="c4to">→</span>
+            <div class="consumers"><span class="chip">ingest.ts · retrieval guard</span></div>
+          </div>
+          <div class="c4row">
+            <div class="c4box src"><div class="t">storage-migration.ts</div><div class="d">removeEmptyConfigDirs</div></div>
+            <span class="c4to">→</span>
+            <div class="consumers"><span class="chip">main.ts · onload()</span></div>
+          </div>
+        </div>
+        <figcaption>Диаграмма B — impact map (источник → потребители)</figcaption>
+      </figure>
+    </div>
+  </section>
+
+</main>
+<script>
+  (function(){
+    var root = document.documentElement, btn = document.getElementById('tg');
+    var saved = null;
+    try { saved = localStorage.getItem('slsf-theme'); } catch(e){}
+    if (saved) root.setAttribute('data-theme', saved);
+    btn.addEventListener('click', function(){
+      var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem('slsf-theme', next); } catch(e){}
+    });
+  })();
+</script>
+</body>
+</html>

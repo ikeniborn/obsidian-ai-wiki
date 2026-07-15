@@ -10,13 +10,11 @@ import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
 import { wikiSections } from "./llm-utils";
 import { resolveLang } from "../i18n";
-import { domainWikiFolder } from "../wiki-path";
+import { domainWikiFolder, isWikiPagePath } from "../wiki-path";
 import { upsertIndexAnnotation } from "../wiki-index";
 import { pageId } from "../wiki-graph";
 import { ensureDomainConfig } from "../domain-config";
 import { promptVersionOf } from "../prompt-version";
-
-const META_FILES = ["_index.md", "_log.md"];
 
 export async function* runLintFixChat(
   req: RunRequest,
@@ -43,7 +41,7 @@ export async function* runLintFixChat(
   await ensureDomainConfig(vaultTools, wikiVaultPath);
   const schemaContent = render(wikiSchemaTemplate, { section_conventions: wikiSections(resolveLang(opts.outputLanguage)) });
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
-  const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
+  const files = allFiles.filter(isWikiPagePath);
   yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
 
   yield { kind: "tool_use", name: "Read", input: { files: String(files.length) } };

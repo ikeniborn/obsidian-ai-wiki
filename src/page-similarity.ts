@@ -754,13 +754,11 @@ export class PageSimilarityService {
     allPaths: string[],
   ): EntityRetrievalResult {
     const results = new Map<string, string[]>();
-    let anySuccess = false;
     for (const e of entities) {
-      const top = this.scoreJaccardOnce(tokenize(entityQuery(e)), indexAnnotations, allPaths);
-      results.set(entityKey(e), top);
-      if (indexAnnotations.size > 0) anySuccess = true;
+      results.set(entityKey(e), this.scoreJaccardOnce(tokenize(entityQuery(e)), indexAnnotations, allPaths));
     }
-    return { results, allFailed: allPaths.length > 0 && !anySuccess };
+    // Local scoring cannot fail; an empty result just means "no related pages".
+    return { results, allFailed: false };
   }
 
   private async selectByEntitiesEmbedding(
@@ -779,7 +777,10 @@ export class PageSimilarityService {
     try {
       entityVecs = await fetchEmbeddings(baseUrl, apiKey, model, entities.map(entityQuery), this.config.dimensions);
     } catch {
-      return this.jaccardFallbackAll(entities, indexAnnotations, allPaths);
+      // Embeddings are configured but the endpoint failed for the whole entity
+      // set — a genuine infrastructure failure. Degrade to jaccard for results,
+      // but signal the failure so ingest can abort with a clear message.
+      return { ...this.jaccardFallbackAll(entities, indexAnnotations, allPaths), allFailed: true };
     }
 
     const pids = allPaths.map((p) => pageId(p));
@@ -816,7 +817,6 @@ export class PageSimilarityService {
       }
     }
 
-    let anySuccess = false;
     for (let ei = 0; ei < entities.length; ei++) {
       const e = entities[ei];
       const queryVec = entityVecs[ei];
@@ -834,10 +834,11 @@ export class PageSimilarityService {
       scored.sort((a, b) => b.score - a.score);
       const top = scored.slice(0, topK).map((x) => x.path);
       results.set(entityKey(e), top);
-      if (indexAnnotations.size > 0) anySuccess = true;
     }
 
-    return { results, allFailed: allPaths.length > 0 && !anySuccess };
+    // Reaching here means entity vectors were fetched successfully; empty
+    // per-entity results are normal, not a failure.
+    return { results, allFailed: false };
   }
 
   private selectJaccard(
