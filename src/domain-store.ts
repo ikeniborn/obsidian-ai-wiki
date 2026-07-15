@@ -19,13 +19,20 @@ export class DomainStore {
   async load(): Promise<DomainEntry[]> {
     const adapter = this.vault.adapter;
     const domains: DomainEntry[] = [];
+    let healed = false;
     if (await adapter.exists(WIKI_DIR)) {
       const listed = await adapter.list(WIKI_DIR);
       for (const folder of [...listed.folders].sort()) {
         const name = folder.split("/").pop() ?? folder;
         if (name.startsWith(".") || name.startsWith("_")) continue;
         const path = domainMetadataPath(folder);
-        if (!(await adapter.exists(path))) continue;
+        if (!(await adapter.exists(path))) {
+          const recovered = await this.promoteTmpMetadata(adapter, folder, name);
+          if (!recovered) continue;
+          domains.push(recovered);
+          healed = true;
+          continue;
+        }
         try {
           domains.push(parseDomainMetadata(await adapter.read(path), path, name));
         } catch (e) {
@@ -49,7 +56,7 @@ export class DomainStore {
     }
     const { migrated: m2 } = migrateDomainsV2(domains);
     const { migrated: m3 } = migrateDomainsV3(domains);
-    if (m2 || m3) await this.save(domains);
+    if (m2 || m3 || healed) await this.save(domains);
     return domains;
   }
 
@@ -88,6 +95,33 @@ export class DomainStore {
       if (!(await adapter.exists(path))) {
         throw new Error(`domain metadata write failed: ${path}`);
       }
+    }
+  }
+
+  /**
+   * Recover a domain whose metadata write was interrupted: the old tmp+rename
+   * save left a `metadata.jsonl.tmp` with no `metadata.jsonl`. Promote the tmp
+   * to the final path so the domain is selectable again. Returns null when
+   * there is no tmp — a folder with content but no tmp is left alone, because
+   * that is indistinguishable from an intentionally deleted domain (Delete
+   * removes metadata.jsonl but leaves the folder; it never leaves a tmp).
+   */
+  private async promoteTmpMetadata(
+    adapter: Vault["adapter"],
+    folder: string,
+    name: string,
+  ): Promise<DomainEntry | null> {
+    const path = domainMetadataPath(folder);
+    const tmpPath = `${path}.tmp`;
+    if (!(await adapter.exists(tmpPath))) return null;
+    try {
+      const raw = await adapter.read(tmpPath);
+      await adapter.write(path, raw);
+      await adapter.remove(tmpPath).catch(() => {});
+      return parseDomainMetadata(raw, path, name);
+    } catch {
+      // Corrupt tmp — cannot recover; leave it for manual inspection.
+      return null;
     }
   }
 }
