@@ -62,6 +62,26 @@ test("bootstrap failure stops init with a loud error and creates no domain", asy
   assert.equal(events.some((e) => e.kind === "domain_created" || e.kind === "domain_updated"), false);
 });
 
+test("init runs bootstrap for a registered domain with empty entity_types (analyzed_sources defined)", async () => {
+  // A domain added via the wizard and reloaded has analyzed_sources:{} (defined)
+  // but no entity_types yet. Bootstrap MUST still run to derive the types — the
+  // resume decision keys on entity_types, not on analyzed_sources being present.
+  const vt = new VaultTools(adapter(), "/vault");
+  const existing = {
+    id: "demo", name: "Demo", wiki_folder: "demo", source_paths: ["src"],
+    entity_types: [], analyzed_sources: {}, analyzed_sources_v2: true, analyzed_sources_v3: true,
+  };
+  const events: RunEvent[] = [];
+  for await (const ev of runInitWithSources(
+    "demo", ["src"], false, vt, brokenBootstrapLlm(), "m",
+    [existing], "Vault", new AbortController().signal, { structuredRetries: 0 }, undefined, false, undefined,
+  )) {
+    events.push(ev);
+  }
+  // Bootstrap ran and failed loud (proves it was NOT skipped as "resuming").
+  assert.ok(events.some((e) => e.kind === "error" && /domain bootstrap failed/i.test(e.message)));
+});
+
 test("successful bootstrap with empty entity_types does not stop init", async () => {
   const vt = new VaultTools(adapter(), "/vault");
   const events: RunEvent[] = [];

@@ -44015,7 +44015,7 @@ async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, ll
   }
   yield { kind: "tool_result", ok: true, preview: `${sourceFiles.length} source files` };
   const existing = domains.find((d) => d.id === domainId);
-  const isResuming = !force && existing?.analyzed_sources !== void 0;
+  const isResuming = !force && !!existing?.entity_types?.length;
   const alreadyAnalyzed = new Set(force ? [] : Object.keys(existing?.analyzed_sources ?? {}));
   const toAnalyze = isResuming ? sourceFiles.filter((f) => !alreadyAnalyzed.has(f)) : sourceFiles;
   yield { kind: "init_start", totalFiles: toAnalyze.length };

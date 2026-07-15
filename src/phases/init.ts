@@ -161,7 +161,12 @@ export async function* runInitWithSources(
   yield { kind: "tool_result", ok: true, preview: `${sourceFiles.length} source files` };
 
   const existing = domains.find((d) => d.id === domainId);
-  const isResuming = !force && existing?.analyzed_sources !== undefined;
+  // "Resuming" means the domain was already bootstrapped (has entity_types), so
+  // the bootstrap step is skipped and only unanalyzed sources are processed.
+  // A freshly-registered domain reloads with analyzed_sources:{} (always defined),
+  // so keying on analyzed_sources would wrongly skip bootstrap and leave the
+  // domain with zero entity_types — which then routes/rejects every page.
+  const isResuming = !force && !!existing?.entity_types?.length;
   const alreadyAnalyzed = new Set(force ? [] : Object.keys(existing?.analyzed_sources ?? {}));
   const toAnalyze = isResuming
     ? sourceFiles.filter((f) => !alreadyAnalyzed.has(f))
