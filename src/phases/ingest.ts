@@ -19,7 +19,7 @@ import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
 import { domainWikiFolder, validateArticlePath, domainIndexPath, isWikiPagePath, effectiveSubfolder } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureType, ensureDescription, entityTypeFromPath, ensureResource, stripInvalidWikiArticles, recoverSourceFrontmatter, parseTagsFromFm, normalizeTag } from "../utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureType, ensureDescription, entityTypeFromPath, ensureResource, ensureSourcesSection, parseResourceFromFm, stripInvalidWikiArticles, recoverSourceFrontmatter, parseTagsFromFm, normalizeTag } from "../utils/raw-frontmatter";
 import { collectDomainTags, renderTagRegistryBlock, thematicCategories, ensureEntityTypeTag, DEFAULT_MAX_TAG_CATEGORIES } from "../utils/tag-registry";
 import { upsertIndexAnnotation, parseIndexAnnotations, removeIndexAnnotation, deriveFallbackDescription, reconcileIndex, collectDescriptions } from "../wiki-index";
 import { pageId } from "../wiki-graph";
@@ -521,11 +521,15 @@ export async function* runIngest(
         details: [`Added [[${sourceStem}]] — LLM did not emit resource`],
       };
     }
+    // OKF: navigable source links live in a body `## Sources` section (not
+    // frontmatter). Derive it server-side from the governed `resource` stems so
+    // the wiki→source link is always present regardless of what the LLM emitted.
+    const withSources = ensureSourcesSection(sourcedPage, parseResourceFromFm(sourcedPage));
     yield { kind: "tool_use", name: existingContent === null ? "Create" : "Update", input: { path: page.path } };
     try {
-      await vaultTools.write(page.path, sourcedPage);
+      await vaultTools.write(page.path, withSources);
       written.push(page.path);
-      for (const t of parseTagsFromFm(sourcedPage)) writtenTagCats.add(t.split("/")[0]);
+      for (const t of parseTagsFromFm(withSources)) writtenTagCats.add(t.split("/")[0]);
       yield { kind: "tool_result", ok: true };
 
       const relPath = page.path.startsWith(wikiVaultPath + "/")

@@ -23,7 +23,8 @@ RULES:
   2. Thematic tags reused from the EXISTING DOMAIN TAGS block (provided in the context). Do not invent near-duplicates of listed tags.
   3. A new thematic tag ONLY when nothing in the block fits. Never start a new top-level category when the block says "reuse only".
 - resource: ONLY sources (files outside !Wiki/) — plain bare stem, NO `[[ ]]` brackets, no path, no extension: "FileName". Never a wiki page stem.
-- Links live ONLY in two body sections — NEVER in frontmatter. Do NOT emit `outgoing_links:`/`external_links:` frontmatter fields; they do not exist in this schema.
+- Links live ONLY in body sections — NEVER in frontmatter. Do NOT emit `outgoing_links:`/`external_links:` frontmatter fields; they do not exist in this schema.
+  - `## Sources` — the source note(s) this page was extracted from, one `[[SourceName]]` bullet per line (the SAME bare stems as the `resource` frontmatter). This is the ONE body section where a source file is linked. The ingest pipeline also injects this section from `resource`, so keep it consistent.
   - `## Related` — outgoing links to OTHER wiki pages (files inside !Wiki/), one `[[wiki_domain_page]]` bullet per line. Never a source file.
     ❌ FORBIDDEN: `[[CurrentSourceName]]` or `[[AnyOtherSourceFile]]` in `## Related`.
        The source is already recorded in `resource` — there is no need to duplicate it in `## Related`.
@@ -75,6 +76,9 @@ tags: []
 # EntityName
 
 content...
+
+## Sources
+- [[{{source_stem}}]]
 
 ## Related
 - [[wiki_{{domain_id}}_other_entity]]
