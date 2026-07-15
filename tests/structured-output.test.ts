@@ -297,3 +297,38 @@ test("framed-zod invalid frames emit frame_parse and throw StructuredValidationE
     true,
   );
 });
+
+function reasoningChunk(reasoning: string): OpenAI.Chat.ChatCompletionChunk {
+  return {
+    id: "r", object: "chat.completion.chunk", created: 0, model: "m",
+    choices: [{ index: 0, delta: { reasoning } as unknown as OpenAI.Chat.ChatCompletionChunk.Choice.Delta, finish_reason: null }],
+  };
+}
+
+test("streaming structured call emits reasoning and content deltas live", async () => {
+  const events: RunEvent[] = [];
+  const llm = {
+    chat: { completions: { create: async () => (async function* () {
+      yield reasoningChunk("thinking hard");
+      yield chunk('{"value":"ok"}');
+      yield usageChunk();
+    })() } },
+  } as unknown as LlmClient;
+
+  const result = await runStructuredWithRetry({
+    llm, model: "m", baseMessages: [{ role: "user", content: "x" }],
+    opts: {}, profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 1, callSite: "query.seeds",
+    signal: new AbortController().signal, onEvent: (ev) => events.push(ev),
+  });
+
+  assert.equal(result.value.value, "ok");
+  assert.equal(
+    events.some((ev) => ev.kind === "assistant_text" && ev.isReasoning === true && ev.delta === "thinking hard"),
+    true,
+  );
+  assert.equal(
+    events.some((ev) => ev.kind === "assistant_text" && !ev.isReasoning && ev.delta.includes('"value"')),
+    true,
+  );
+});

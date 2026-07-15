@@ -174,6 +174,7 @@ async function streamOnce(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   opts: LlmCallOptions,
   signal: AbortSignal,
+  onEvent: (ev: RunEvent) => void,
 ): Promise<CallResult> {
   const params = buildChatParams(model, messages, opts, true);
   let fullText = "";
@@ -187,8 +188,12 @@ async function streamOnce(
     );
     const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs);
     for await (const chunk of stream) {
-      const { content, outputTokens: tok } = extractStreamDeltas(chunk);
-      if (content) fullText += content;
+      const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
+      if (reasoning) onEvent({ kind: "assistant_text", delta: reasoning, isReasoning: true });
+      if (content) {
+        fullText += content;
+        onEvent({ kind: "assistant_text", delta: content });
+      }
       if (tok !== undefined) outputTokens = tok;
     }
     const stats = getStats();
@@ -240,7 +245,7 @@ async function callWithFormatFallback<T>(
 
     try {
       return {
-        result: await streamOnce(args.llm, args.model, messages, callOpts, args.signal),
+        result: await streamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent),
         mode: currentMode,
       };
     } catch (e) {
