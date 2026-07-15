@@ -18,3 +18,4 @@
 | storage-layout-sidecar-fix | done | n/a | ✓ | ✓ | OK | 2026-07-14 | 2026-07-15 | Fresh init aborts: JSONL sidecars leak into content filter; orphan !Wiki/_config folder |
 | init-robustness-and-model-probes | in-progress | n/a | ✓ | ✓ | – | 2026-07-15 |  | effectiveSubfolder fallback, isWikiPagePath centralization, fail-fast embedding/bootstrap, dimensions opt-in, embedding+reranker Check probes |
 | domain-metadata-live-stream | done | n/a | ✓ | ✓ | OK | 2026-07-15 | 2026-07-15 | Robust metadata.jsonl persistence (direct write + verify + tmp-promotion self-heal + surfaced error) and live LLM reasoning/token stream on init+ingest structured steps |
+| domain-type-routing | done | n/a | n/a | n/a | OK | 2026-07-15 | 2026-07-15 | Directed bugfix (no formal chain): stop recreating !Wiki/_config on init; server-enforced per-entity-type page routing (entity-routing.ts) with LLM classifier fallback + reject, no entities/ default |
