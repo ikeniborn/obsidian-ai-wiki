@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.201 — 2026-07-15
+
+### New
+- feat(wiki-path): add sidecar/meta predicates, drop legacy _config whitelist
+
+### Fixes
+- fix(phases): use isWikiPagePath so jsonl sidecars are not treated as pages
+- fix(page-similarity): allFailed only on genuine embedding failure, not empty index
+- fix(storage): remove empty global and per-domain _config folders on load
+- fix(wiki-path): keep strict 2-segment article-path rule, reject meta paths
+
+---
+
 ## 0.1.200 — 2026-07-14
 
 ### Fixes
