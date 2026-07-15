@@ -5,11 +5,10 @@ import { mergeEntityTypes } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas, wikiSections } from "./llm-utils";
-import { parseWithRetry } from "./parse-with-retry";
 import { EntitiesOutputSchema } from "./zod-schemas";
-import type { WikiPagesOutput, EntitiesOutput } from "./zod-schemas";
+import type { WikiPagesOutput, EntitiesOutput, MergedPageOutput } from "./zod-schemas";
 import { mergeContentFrameInstruction, mergedPageProfile, parseWikiPageRepairFramesOrJson, wikiPagesFrameInstruction, wikiPagesProfile } from "./framed-output";
-import { runStructuredWithRetry } from "./structured-output";
+import { runStructuredStreaming, type StructuredSink } from "./structured-output";
 import ingestTemplate from "../../prompts/ingest.md";
 import ingestMerge from "../../prompts/ingest-merge.md";
 import ingestEntitiesTemplate from "../../prompts/ingest-entities.md";
@@ -130,27 +129,28 @@ export async function* runIngest(
   // === LLM #1: extract entities =========================================
   const messages_extract = buildExtractMessages(sourceVaultPath, sourceContent, domain);
   yield { kind: "tool_use", name: "Extracting entities", input: {} };
-  const extractEvents: RunEvent[] = [];
+  const extractSink: StructuredSink<EntitiesOutput> = {};
   let entitiesResult: { value: EntitiesOutput; outputTokens: number };
   try {
-    entitiesResult = await parseWithRetry({
+    for await (const ev of runStructuredStreaming({
       llm, model, baseMessages: messages_extract, opts,
-      schema: EntitiesOutputSchema,
+      profile: { kind: "json-zod", schema: EntitiesOutputSchema },
       maxRetries: opts.structuredRetries ?? 1,
       callSite: "ingest.entities",
       signal,
-      onEvent: (ev) => extractEvents.push(ev),
-    });
+      onEvent: () => {},
+    }, extractSink)) {
+      yield ev;
+    }
+    entitiesResult = { value: extractSink.value!, outputTokens: extractSink.outputTokens ?? 0 };
     yield { kind: "tool_result", ok: true, preview: `${entitiesResult.value.entities.length} entities` };
   } catch (e) {
     if (signal.aborted || (e as Error).name === "AbortError") return;
     yield { kind: "tool_result", ok: false, preview: (e as Error).message };
-    for (const ev of extractEvents) yield ev;
     yield { kind: "error", message: `ingest: entity extraction failed — ${(e as Error).message}` };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: 0 };
     return;
   }
-  for (const ev of extractEvents) yield ev;
   if (signal.aborted) return;
 
   // === Per-entity top-K retrieval =======================================
@@ -246,27 +246,28 @@ export async function* runIngest(
   const inputTokFmt = inputTokEst >= 1000 ? `~${(inputTokEst / 1000).toFixed(1)}k` : `~${inputTokEst}`;
 
   yield { kind: "tool_use", name: "Synthesising pages", input: {} };
-  const pwtEvents: RunEvent[] = [];
+  const pwtSink: StructuredSink<WikiPagesOutput> = {};
   let parseResult: { value: WikiPagesOutput; outputTokens: number };
   try {
-    parseResult = await runStructuredWithRetry({
+    for await (const ev of runStructuredStreaming({
       llm, model, baseMessages: messages, opts: { ...opts, jsonMode: false },
       profile: wikiPagesProfile(),
       maxRetries: opts.structuredRetries ?? 1,
       callSite: "ingest.pages",
       signal,
-      onEvent: (ev) => pwtEvents.push(ev),
-    });
+      onEvent: () => {},
+    }, pwtSink)) {
+      yield ev;
+    }
+    parseResult = { value: pwtSink.value!, outputTokens: pwtSink.outputTokens ?? 0 };
     yield { kind: "tool_result", ok: true, preview: `${existingPages.size} pages · ${inputTokFmt} tokens sent` };
   } catch (e) {
     if (signal.aborted || (e as Error).name === "AbortError") return;
     yield { kind: "tool_result", ok: false, preview: (e as Error).message };
-    for (const ev of pwtEvents) yield ev;
     yield { kind: "error", message: `ingest: LLM output failed validation — ${(e as Error).message}` };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: 0 };
     return;
   }
-  for (const ev of pwtEvents) yield ev;
   if (signal.aborted) return;
 
   const outputTokens = parseResult.outputTokens;
@@ -414,15 +415,17 @@ export async function* runIngest(
             details: [targetPath] };
           const mergeMsgs = [{ role: "user" as const, content:
             render(ingestMerge, { existing: existingTarget, incoming: page.content, frame_instruction: mergeContentFrameInstruction }) }];
-          const mergeEvents: RunEvent[] = [];
+          const mergeSink: StructuredSink<MergedPageOutput> = {};
           try {
-            const merged = await runStructuredWithRetry({
+            for await (const ev of runStructuredStreaming({
               llm, model, baseMessages: mergeMsgs, opts: { ...opts, jsonMode: false },
               profile: mergedPageProfile(),
               maxRetries: opts.structuredRetries ?? 1,
-              callSite: "ingest.merge", signal, onEvent: (ev) => mergeEvents.push(ev),
-            });
-            for (const ev of mergeEvents) yield ev;
+              callSite: "ingest.merge", signal, onEvent: () => {},
+            }, mergeSink)) {
+              yield ev;
+            }
+            const merged = { value: mergeSink.value! };
             yield { kind: "tool_use", name: "Update", input: { path: targetPath } };
             await vaultTools.write(targetPath, merged.value.content);
             written.push(targetPath);
@@ -434,7 +437,6 @@ export async function* runIngest(
             }
             continue; // skip the normal create
           } catch (e) {
-            for (const ev of mergeEvents) yield ev;
             // merge failed — fall through to a normal create rather than lose the new content
             yield { kind: "info_text", icon: "⚠️", summary: `merge не удался, создаю отдельно: ${(e as Error).message}` };
           }

@@ -2,7 +2,7 @@ import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient, OnFileError } from "../types";
 import { VaultTools } from "../vault-tools";
-import { parseWithRetry } from "./parse-with-retry";
+import { runStructuredStreaming, type StructuredSink } from "./structured-output";
 import { DomainEntrySchema } from "./zod-schemas";
 import schemaTemplate from "../../templates/_wiki_schema.md";
 import initTemplate from "../../prompts/init.md";
@@ -220,24 +220,25 @@ export async function* runInitWithSources(
       ];
 
       yield { kind: "tool_use", name: "Initialising domain", input: {} };
-      const collected: RunEvent[] = [];
+      const sink: StructuredSink<{ id: string; name: string; wiki_folder: string; entity_types: EntityType[]; language_notes: string }> = {};
       let parsed: { id: string; name: string; wiki_folder: string; entity_types: EntityType[]; language_notes: string };
       try {
-        const r = await parseWithRetry({
+        for await (const ev of runStructuredStreaming({
           llm, model, baseMessages: messages, opts,
-          schema: DomainEntrySchema,
+          profile: { kind: "json-zod", schema: DomainEntrySchema },
           maxRetries: opts.structuredRetries ?? 1,
           callSite: "init.bootstrap",
           signal,
-          onEvent: (e) => collected.push(e),
-        });
-        parsed = r.value;
-        outputTokens += r.outputTokens;
+          onEvent: () => {},
+        }, sink)) {
+          yield ev;
+        }
+        parsed = sink.value!;
+        outputTokens += sink.outputTokens ?? 0;
         yield { kind: "tool_result", ok: true, preview: `domain: ${parsed.id}` };
-        if (r.fullText) yield { kind: "assistant_text", delta: r.fullText };
+        if (sink.fullText) yield { kind: "assistant_text", delta: sink.fullText };
       } catch (e) {
         yield { kind: "tool_result", ok: false, preview: (e as Error).message };
-        for (const ev of collected) yield ev;
         if ((e as Error).name === "AbortError" || signal.aborted) return;
         yield {
           kind: "error",
@@ -246,7 +247,6 @@ export async function* runInitWithSources(
         yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
         return;
       }
-      for (const ev of collected) yield ev;
 
       if (signal.aborted) return;
 
