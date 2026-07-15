@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.203 — 2026-07-16
+
+### New
+- feat(ingest): add OKF ## Sources body sections with navigable source links
+- feat(init,ingest): stream LLM reasoning and token deltas during structured domain creation
+- feat(structured-output): add runStructuredStreaming live bridge helper
+- feat(structured-output): emit live reasoning/content deltas during streaming calls
+
+### Fixes
+- fix(settings): remove the wiki folder when deleting a domain
+- fix(init): base resume decisions on entity_types instead of analyzed_sources
+- fix(init): preserve metadata.jsonl during force-reinit wipes
+- fix(init,ingest): stop recreating !Wiki/_config and enforce per-type page routing
+- fix(domain-store): parse tmp metadata before promotion so corrupt tmp files stay intact
+- fix(domain-store): recover domains from leftover metadata.jsonl.tmp files on load
+- fix(domain-store): write metadata directly, verify persistence, and surface registerDomain save failures
+
+---
+
 ## 0.1.202 — 2026-07-15
 
 ### New
