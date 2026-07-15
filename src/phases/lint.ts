@@ -13,7 +13,7 @@ import lintActualizeTemplate from "../../prompts/lint-actualize.md";
 import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
 import { wikiSections } from "./llm-utils";
-import { domainWikiFolder, domainIndexPath, WIKI_ROOT } from "../wiki-path";
+import { domainWikiFolder, domainIndexPath, WIKI_ROOT, isWikiPagePath } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseResourceFromFm, validateAndRepairWikiPageFrontmatter, stripInvalidWikiArticles } from "../utils/raw-frontmatter";
 import { checkGraphStructure, pageId, bfsExpand } from "../wiki-graph";
 import { checkWikiLinks, fixWikiLinks, stripDeadLinks } from "../wiki-link-validator";
@@ -25,8 +25,6 @@ import type { PageSimilarityService } from "../page-similarity";
 import { GENERIC_WIKI_STEM_REGEX } from "../wiki-stem";
 import { i18nFor, resolveLang } from "../i18n";
 import { promptVersionOf } from "../prompt-version";
-
-const META_FILES = ["_index.md", "_log.md"];
 
 export async function cleanupInvalidPages(
   vaultTools: VaultTools,
@@ -198,7 +196,7 @@ export async function* runLint(
     await ensureDomainConfig(vaultTools, wikiVaultPath);
     const schemaContent = render(wikiSchemaTemplate, { section_conventions: wikiSections(resolveLang(opts.outputLanguage)) });
     const allFiles = await vaultTools.listFiles(wikiVaultPath);
-    const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
+    const files = allFiles.filter(isWikiPagePath);
     yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
 
     const pages = await vaultTools.readAll(files);
