@@ -513,7 +513,7 @@ export async function raceRerankerRequest<T>(
 }
 
 export const fetchRerankerScores: RerankerTransport = async (input) => {
-  const { requestUrl } = await import("obsidian");
+  const { requestUrl } = await import("./request-url");
 
   // requestUrl itself is not cancellable; this race only bounds adapter wait time.
   const response = await raceRerankerRequest(
@@ -537,3 +537,33 @@ export const fetchRerankerScores: RerankerTransport = async (input) => {
 
   return parseRerankerResponseText(response.text, input.candidates);
 };
+
+/**
+ * Verify the reranker model is reachable by scoring a single trivial pair.
+ * Returns { ok:true } on a valid non-empty score list, else { ok:false, error }.
+ * The transport is injectable for testing (defaults to the live HTTP transport).
+ */
+export async function probeRerankerModel(
+  baseUrl: string,
+  apiKey: string,
+  config: RerankerConfig,
+  transport: RerankerTransport = fetchRerankerScores,
+): Promise<{ ok: boolean; error?: string }> {
+  const candidates = [{ id: "probe", text: "ping" }] as unknown as RerankerCandidate[];
+  try {
+    const scores = await transport({
+      query: "ping",
+      candidates,
+      config,
+      baseUrl,
+      apiKey,
+      signal: new AbortController().signal,
+    });
+    if (!Array.isArray(scores) || scores.length === 0) {
+      return { ok: false, error: "empty or malformed rerank response" };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}

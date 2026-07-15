@@ -13,7 +13,7 @@ import lintActualizeTemplate from "../../prompts/lint-actualize.md";
 import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
 import { wikiSections } from "./llm-utils";
-import { domainWikiFolder, domainIndexPath, WIKI_ROOT, isWikiPagePath } from "../wiki-path";
+import { domainWikiFolder, domainIndexPath, WIKI_ROOT, isWikiPagePath, effectiveSubfolder } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseResourceFromFm, validateAndRepairWikiPageFrontmatter, stripInvalidWikiArticles } from "../utils/raw-frontmatter";
 import { checkGraphStructure, pageId, bfsExpand } from "../wiki-graph";
 import { checkWikiLinks, fixWikiLinks, stripDeadLinks } from "../wiki-link-validator";
@@ -240,8 +240,8 @@ export async function* runLint(
     const filteredArticlePaths = entityTypeFilter.length > 0
       ? articlePaths.filter(p =>
           entityTypeFilter.some(et => {
-            const subfolder = domain.entity_types?.find(e => e.type === et)?.wiki_subfolder;
-            return subfolder && p.includes(`/${subfolder}/`);
+            const found = domain.entity_types?.find(e => e.type === et);
+            return found ? p.includes(`/${effectiveSubfolder(found)}/`) : false;
           })
         )
       : articlePaths;
@@ -507,16 +507,11 @@ export async function* runLint(
     const survivingTypes: EntityType[] = [];
     const removedTypes: EntityType[] = [];
     for (const et of effectiveEntityTypes) {
-      const sub = et.wiki_subfolder;
-      // Types with no wiki_subfolder have no folder to scan; treat as empty and remove.
-      const count = sub
-        ? [...pages.keys()].filter((p) => p.startsWith(`${wikiVaultPath}/${sub}/`)).length
-        : 0;
+      const sub = effectiveSubfolder(et);
+      const count = [...pages.keys()].filter((p) => p.startsWith(`${wikiVaultPath}/${sub}/`)).length;
       if (count > 0) { survivingTypes.push(et); continue; }
       removedTypes.push(et);
-      if (sub) {
-        try { await vaultTools.rmdir(`${wikiVaultPath}/${sub}`, true); } catch { /* folder already gone */ }
-      }
+      try { await vaultTools.rmdir(`${wikiVaultPath}/${sub}`, true); } catch { /* folder already gone */ }
     }
     if (removedTypes.length > 0) {
       yield { kind: "domain_updated", domainId: domain.id, patch: { entity_types: survivingTypes } };

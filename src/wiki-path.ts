@@ -1,3 +1,5 @@
+import type { EntityType } from "./domain";
+
 export const WIKI_ROOT = "!Wiki";
 
 export const LEGACY_GLOBAL_CONFIG_DIR = `${WIKI_ROOT}/_config`;
@@ -46,6 +48,16 @@ export function sanitizeWikiFolder(raw: string): string {
 export function sanitizeWikiSubfolder(raw: string): string {
   if (!raw.includes("/")) return raw;
   return raw.split("/").pop()!;
+}
+
+/**
+ * The subfolder an entity type's pages live under. Falls back to the sanitized
+ * type name when `wiki_subfolder` is empty, so every type produces a valid
+ * nested (2-segment) article path — never a flat one that validateArticlePath
+ * would reject.
+ */
+export function effectiveSubfolder(et: EntityType): string {
+  return et.wiki_subfolder || sanitizeWikiSubfolder(et.type);
 }
 
 export function validateArticlePath(path: string, wikiVaultPath: string): boolean {

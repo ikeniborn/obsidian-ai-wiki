@@ -2,7 +2,7 @@ import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import type { DomainEntry } from "../domain";
 import type { PageSimilarityService } from "../page-similarity";
-import { domainWikiFolder, validateArticlePath } from "../wiki-path";
+import { domainWikiFolder, validateArticlePath, isWikiPagePath } from "../wiki-path";
 import { removeIndexAnnotation } from "../wiki-index";
 import { pageId } from "../wiki-graph";
 import { stripInvalidWikiArticles } from "../utils/raw-frontmatter";
@@ -45,9 +45,7 @@ export async function* runDelete(
   const wikiFolder = domainWikiFolder(domain.wiki_folder);
 
   // --- Build pages map + remaining-source map (vaultTools-based) ---
-  const pageFiles = (await vaultTools.listFiles(wikiFolder)).filter(
-    (p) => p.endsWith(".md") && !p.includes("/_config/"),
-  );
+  const pageFiles = (await vaultTools.listFiles(wikiFolder)).filter(isWikiPagePath);
   const pages = new Map<string, string>();
   for (const p of pageFiles) {
     try { pages.set(p, await vaultTools.read(p)); } catch { /* skip unreadable */ }
@@ -130,7 +128,7 @@ export async function* runDelete(
   // --- 5. Backlink cleanup: strip references to now-missing pages from source files ---
   const remainingPageStems = new Set(
     (await vaultTools.listFiles(wikiFolder))
-      .filter((p) => p.endsWith(".md") && !p.includes("/_config/"))
+      .filter(isWikiPagePath)
       .map((p) => pageId(p)),
   );
   for (const src of sourceStemToPath.values()) {

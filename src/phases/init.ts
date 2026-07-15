@@ -15,6 +15,7 @@ import { parseIndexAnnotations } from "../wiki-index";
 import { i18nFor, resolveLang } from "../i18n";
 import { hashSource } from "../incremental-sources";
 import { promptVersionOf } from "../prompt-version";
+import { EmbeddingUnavailableError } from "../embedding-error";
 
 /** Read a source file and return its body hash; "" on read failure. */
 async function sourceHashFor(vaultTools: VaultTools, file: string): Promise<string> {
@@ -238,9 +239,12 @@ export async function* runInitWithSources(
         yield { kind: "tool_result", ok: false, preview: (e as Error).message };
         for (const ev of collected) yield ev;
         if ((e as Error).name === "AbortError" || signal.aborted) return;
-        yield { kind: "assistant_text", delta: `⚠ ${file}: LLM вернул невалидный JSON, пропускаем bootstrap (${(e as Error).message})\n` };
-        yield { kind: "file_done", file };
-        continue;
+        yield {
+          kind: "error",
+          message: `init: domain bootstrap failed — could not derive entity types (structured-output error: ${(e as Error).message}). Fix model/prompt and re-run.`,
+        };
+        yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
+        return;
       }
       for (const ev of collected) yield ev;
 
@@ -339,6 +343,11 @@ export async function* runInitWithSources(
         caughtErr = e as Error;
       }
       if (hadError && caughtErr) {
+        if (caughtErr instanceof EmbeddingUnavailableError || caughtErr.name === "EmbeddingUnavailableError") {
+          yield { kind: "error", message: `init stopped — embedding endpoint failed: ${caughtErr.message}. Fix embedding config and re-run.` };
+          yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
+          return;
+        }
         const canRetry = !retried;
         const choice = onFileError ? await onFileError(file, caughtErr, canRetry) : "skip";
         if (choice === "stop") return;
@@ -443,6 +452,11 @@ export async function* runIncrementalReinit(
         caught = e as Error;
       }
       if (caught) {
+        if (caught instanceof EmbeddingUnavailableError || caught.name === "EmbeddingUnavailableError") {
+          yield { kind: "error", message: `init stopped — embedding endpoint failed: ${caught.message}. Fix embedding config and re-run.` };
+          yield { kind: "result", durationMs: Date.now() - start, text: "" };
+          return;
+        }
         if (caught.name === "AbortError" || signal.aborted) return;
         const canRetry = !retried;
         const choice = onFileError ? await onFileError(file, caught, canRetry) : "skip";

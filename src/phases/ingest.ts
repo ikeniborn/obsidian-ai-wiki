@@ -16,7 +16,7 @@ import ingestEntitiesTemplate from "../../prompts/ingest-entities.md";
 import fixPathsTemplate from "../../prompts/ingest-fix-paths.md";
 import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
-import { domainWikiFolder, validateArticlePath, domainIndexPath, isWikiPagePath } from "../wiki-path";
+import { domainWikiFolder, validateArticlePath, domainIndexPath, isWikiPagePath, effectiveSubfolder } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureType, ensureDescription, entityTypeFromPath, ensureResource, stripInvalidWikiArticles, recoverSourceFrontmatter, parseTagsFromFm, normalizeTag } from "../utils/raw-frontmatter";
 import { collectDomainTags, renderTagRegistryBlock, thematicCategories, ensureEntityTypeTag, DEFAULT_MAX_TAG_CATEGORIES } from "../utils/tag-registry";
@@ -29,6 +29,7 @@ import { fixWikiLinks, stripDeadLinks } from "../wiki-link-validator";
 import { GENERIC_WIKI_STEM_REGEX, stemRegex } from "../wiki-stem";
 import { i18nFor, resolveLang } from "../i18n";
 import { promptVersionOf } from "../prompt-version";
+import { EmbeddingUnavailableError } from "../embedding-error";
 
 function deriveSectionForPath(wikiFolder: string, fullPath: string): string {
   const prefix = wikiFolder + "/";
@@ -158,14 +159,12 @@ export async function* runIngest(
   const retrievalDetails: string[] = [];
   if (similarity) {
     await similarity.loadCache(domainRoot, vaultTools);
-    const { results: entityMap, allFailed } = await similarity.selectByEntities(
+    const { results: entityMap, allFailed, failReason } = await similarity.selectByEntities(
       entitiesResult.value.entities, annotations, nonMetaPaths,
     );
 
     if (allFailed && entitiesResult.value.entities.length > 0 && nonMetaPaths.length > 0) {
-      yield { kind: "error", message: "ingest: per-entity retrieval failed for all entities" };
-      yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: 0 };
-      return;
+      throw new EmbeddingUnavailableError(failReason ?? "per-entity retrieval failed for all entities");
     }
 
     const union = new Set<string>();
@@ -764,16 +763,14 @@ function renderPageRepairFrames(pages: Array<{ path: string; content: string; an
 export function buildEntityTypesBlock(domain: DomainEntry, wikiVaultPath: string): string {
   if (!domain.entity_types?.length) return "";
   return domain.entity_types.map((et) => {
-    const pathTemplate = et.wiki_subfolder
-      ? `${wikiVaultPath}/${et.wiki_subfolder}/<EntityName>.md`
-      : `${wikiVaultPath}/<EntityName>.md`;
+    const sub = effectiveSubfolder(et);
     return [
       `### Type: ${et.type}`,
       `Description: ${et.description}`,
       `Keywords: ${et.extraction_cues.join(", ")}`,
       et.min_mentions_for_page != null ? `Min. mentions for a page: ${et.min_mentions_for_page}` : "",
-      et.wiki_subfolder ? `Wiki subfolder: ${et.wiki_subfolder}` : "",
-      `Path for entities of this type: ${pathTemplate}`,
+      `Wiki subfolder: ${sub}`,
+      `Path for entities of this type: ${wikiVaultPath}/${sub}/<EntityName>.md`,
     ].filter(Boolean).join("\n");
   }).join("\n\n");
 }

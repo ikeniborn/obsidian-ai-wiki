@@ -12,6 +12,7 @@ import {
   domainLogPath,
   domainMetadataPath,
   domainWikiFolder,
+  isWikiPagePath,
   legacyDomainEmbeddingsPath,
   legacyDomainIndexPath,
   legacyDomainLogPath,
@@ -75,7 +76,7 @@ async function collectMarkdownPages(adapter: AdapterLike, root: string): Promise
   async function walk(folder: string): Promise<void> {
     const listed = await adapter.list(folder);
     for (const file of listed.files) {
-      if (file.endsWith(".md") && !file.includes("/_config/")) out.push({ path: file, content: await adapter.read(file) });
+      if (isWikiPagePath(file)) out.push({ path: file, content: await adapter.read(file) });
     }
     for (const child of listed.folders) {
       if (child.endsWith("/_config")) continue;
