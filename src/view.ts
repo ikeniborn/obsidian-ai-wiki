@@ -216,8 +216,8 @@ export class LlmWikiView extends ItemView {
     const askRow = ask.createDiv("ai-wiki-ask-row");
     this.cancelBtn = askRow.createEl("button", { text: T.view.cancel, cls: "mod-warning" });
     const askButtons = askRow.createDiv("ai-wiki-ask-buttons");
-    this.askDomainBtn = askButtons.createEl("button", { text: T.view.askDomain });
-    this.askWikiBtn = askButtons.createEl("button", { text: T.view.askWiki, cls: "mod-cta" });
+    this.askWikiBtn = askButtons.createEl("button", { text: T.view.askWiki });
+    this.askDomainBtn = askButtons.createEl("button", { text: T.view.askDomain, cls: "mod-cta" });
     this.cancelBtn.disabled = true;
     this.askDomainBtn.addEventListener("click", () => {
       const d = this.domainSelect?.value;
