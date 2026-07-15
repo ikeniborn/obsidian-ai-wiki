@@ -133,7 +133,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     const requested = na.embeddingDimensions;
     const result = await probeEmbeddingDimensionsResult(this.plugin.settings.nativeAgent.baseUrl, apiKey, na.embeddingModel, requested);
     if (!result.probe) { new Notice(`Dimension check failed: ${result.error ?? "unknown error"}`); return; }
-    const probe = result.probe!;
+    const probe = result.probe;
     const nativeProbe = await probeEmbeddingDimensions(na.baseUrl, apiKey, na.embeddingModel);
     const native = nativeProbe?.actual;
     const nativeStr = native != null ? String(native) : "?";
@@ -158,6 +158,30 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     const config = normalizeRerankerConfig({ enabled: true, model: na.rerankerModel });
     const r = await probeRerankerModel(na.baseUrl, apiKey, config);
     new Notice(r.ok ? `OK — reranker "${na.rerankerModel}" reachable` : `Reranker check failed: ${r.error}`);
+  }
+
+  // Verify the chat model responds (a minimal /chat/completions probe).
+  private async checkChatModel(): Promise<void> {
+    const na = this.plugin.settings.nativeAgent;
+    if (!na.baseUrl || !na.model) { new Notice("Set Base URL and model first"); return; }
+    const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
+    try {
+      await checkNativeAvailability(na.baseUrl, apiKey, na.model);
+      new Notice(`OK — chat model "${na.model}" reachable`);
+    } catch (e) {
+      new Notice(`Chat model check failed: ${(e as Error).message}`);
+    }
+  }
+
+  // Verify the embedding model is reachable (a native-dimension probe).
+  private async checkEmbeddingModel(): Promise<void> {
+    const na = this.plugin.settings.nativeAgent;
+    if (!na.baseUrl || !na.embeddingModel) { new Notice("Set Base URL and embedding model first"); return; }
+    const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
+    const result = await probeEmbeddingDimensionsResult(na.baseUrl, apiKey, na.embeddingModel);
+    new Notice(result.probe
+      ? `OK — embedding model "${na.embeddingModel}" reachable (native dim ${result.probe.actual})`
+      : `Embedding model check failed: ${result.error ?? "unknown error"}`);
   }
 
   private openExportOkfModal(domainEntry: DomainEntry): void {
@@ -189,7 +213,14 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     currentValue: string,
     onChange: (v: string) => Promise<void>,
     saveOnTyping = false,
+    check?: { tooltip: string; run: () => void | Promise<void> },
   ): void {
+    if (check) {
+      s.addButton((b) =>
+        b.setButtonText("Check").setTooltip(check.tooltip)
+          .onClick(() => { void check.run(); }),
+      );
+    }
     s.addButton((b) =>
       b.setIcon("refresh-cw").setTooltip("Fetch available models from base URL")
         .onClick(() => { void this.fetchModels(); }),
@@ -534,25 +565,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             .onChange(async (v) => { await this.patchLocalNativeApiKey(v.trim()); }),
         );
 
-      new Setting(containerEl)
-        .setName(T.settings.testConnection_name)
-        .setDesc(T.settings.testConnection_desc)
-        .addButton(b => {
-          b.setButtonText(T.settings.testConnection_btn).onClick(async () => {
-            b.setButtonText(T.settings.testConnection_btnBusy).setDisabled(true);
-            const na = eff.nativeAgent;
-            try {
-              await checkNativeAvailability(na.baseUrl, na.apiKey, na.model);
-              new Notice(T.settings.testConnection_ok);
-            } catch (e) {
-              new Notice(`❌ ${(e as Error).message}`);
-            } finally {
-              b.setButtonText(T.settings.testConnection_btn).setDisabled(false);
-            }
-          });
-          return b;
-      });
-
       if (!s.nativeAgent.perOperation) {
         new Setting(containerEl).setName(T.settings.h3_defaultChatModel).setHeading();
 
@@ -560,6 +572,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           new Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native),
           eff.nativeAgent.model,
           async (v) => { s.nativeAgent.model = v; await this.plugin.saveSettings(); },
+          false,
+          { tooltip: "Verify the chat model is reachable", run: () => this.checkChatModel() },
         );
 
         new Setting(containerEl)
@@ -732,6 +746,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             s.nativeAgent.embeddingModel = v || undefined;
             await this.plugin.saveSettings();
           },
+          false,
+          { tooltip: "Verify the embedding model is reachable", run: () => this.checkEmbeddingModel() },
         );
 
         new Setting(containerEl)
@@ -804,18 +820,12 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           t.setValue(s.nativeAgent.rerankerEnabled ?? false)
             .onChange(async (v) => { s.nativeAgent.rerankerEnabled = v; await this.plugin.saveSettings(); }),
         );
-      const rerankerModelSetting = new Setting(containerEl)
-        .setName(T.settings.rerankerModel_name)
-        .setDesc(T.settings.rerankerModel_desc);
       this.addModelControl(
-        rerankerModelSetting,
+        new Setting(containerEl).setName(T.settings.rerankerModel_name).setDesc(T.settings.rerankerModel_desc),
         s.nativeAgent.rerankerModel ?? "",
         async (v) => { s.nativeAgent.rerankerModel = v.trim(); await this.plugin.saveSettings(); },
         true,
-      );
-      rerankerModelSetting.addButton((b) =>
-        b.setButtonText("Check").setTooltip("Verify the reranker model is reachable")
-          .onClick(() => { void this.checkReranker(); }),
+        { tooltip: "Verify the reranker model is reachable", run: () => this.checkReranker() },
       );
       new Setting(containerEl)
         .setName(T.settings.rerankerTopN_name)
