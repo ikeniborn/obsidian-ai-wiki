@@ -513,7 +513,7 @@ export async function raceRerankerRequest<T>(
 }
 
 export const fetchRerankerScores: RerankerTransport = async (input) => {
-  const { requestUrl } = await import("obsidian");
+  const { requestUrl } = await import("./request-url");
 
   // requestUrl itself is not cancellable; this race only bounds adapter wait time.
   const response = await raceRerankerRequest(

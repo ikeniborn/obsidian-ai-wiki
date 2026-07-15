@@ -450,7 +450,7 @@ async function fetchEmbeddings(
   inputs: string[],
   dimensions?: number,
 ): Promise<Float32Array[]> {
-  const { requestUrl } = await import("obsidian");
+  const { requestUrl } = await import("./request-url");
   const url = `${baseUrl.replace(/\/$/, "")}/embeddings`;
   // Send `dimensions` (OpenAI-standard MRL truncation) when configured, so the whole
   // pipeline and the probe agree on the requested size. Models that don't support it
