@@ -79,9 +79,15 @@ export class DomainStore {
       if (!(await adapter.exists(folder))) await this.vault.createFolder(folder).catch(() => {});
       const path = domainMetadataPath(folder);
       const tmpPath = `${path}.tmp`;
-      await adapter.write(tmpPath, stringifyDomainMetadata(domainEntryToMetadataRecords(domain)));
-      if (await adapter.exists(path)) await adapter.remove(path);
-      await adapter.rename(tmpPath, path);
+      // Clean up a leftover tmp from a previously-interrupted write.
+      if (await adapter.exists(tmpPath)) await adapter.remove(tmpPath).catch(() => {});
+      // Direct in-place write. Obsidian's adapter.rename is the flaky step that
+      // left domain folders with content but no metadata.jsonl; a small local
+      // file does not need the tmp+rename dance. Verify the file landed.
+      await adapter.write(path, stringifyDomainMetadata(domainEntryToMetadataRecords(domain)));
+      if (!(await adapter.exists(path))) {
+        throw new Error(`domain metadata write failed: ${path}`);
+      }
     }
   }
 }

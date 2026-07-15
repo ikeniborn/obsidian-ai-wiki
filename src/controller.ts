@@ -475,7 +475,13 @@ export class WikiController {
       entity_types: [],
       language_notes: "",
     }];
-    await this.domainStore.save(next);
+    try {
+      await this.domainStore.save(next);
+    } catch (e) {
+      const msg = (e as Error).message;
+      new Notice(i18n().ctrl.domainAddFailed(msg));
+      return { ok: false, error: msg };
+    }
     new Notice(i18n().ctrl.domainAdded(id));
     return { ok: true };
   }
