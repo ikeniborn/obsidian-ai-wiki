@@ -74,6 +74,7 @@ export type RunEvent =
       rerankerEnabled?: boolean;
       rerankerTopN?: number;
       contextTopN?: number;
+      chunkDupsDropped?: number;   // exact-duplicate chunks removed before rerank
       reranker?: {
         enabled: boolean;
         candidates: number;
