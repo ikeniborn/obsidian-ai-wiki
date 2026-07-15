@@ -8,6 +8,7 @@ import { i18n } from "./i18n";
 import { resolveEffective } from "./effective-settings";
 import { DEFAULT_CHUNKING, probeEmbeddingDimensions, probeEmbeddingDimensionsResult } from "./page-similarity";
 import type { LocalConfig } from "./local-config";
+import { probeRerankerModel, normalizeRerankerConfig } from "./reranker";
 
 async function checkNativeAvailability(baseUrl: string, apiKey: string, model: string): Promise<void> {
   let timerId: number | undefined;
@@ -148,6 +149,15 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     } else {
       new Notice(`OK — model returns ${probe.actual} (native ${nativeStr}).`);
     }
+  }
+
+  private async checkReranker(): Promise<void> {
+    const na = this.plugin.settings.nativeAgent;
+    if (!na.baseUrl || !na.rerankerModel) { new Notice("Set Base URL and reranker model first"); return; }
+    const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
+    const config = normalizeRerankerConfig({ enabled: true, model: na.rerankerModel });
+    const r = await probeRerankerModel(na.baseUrl, apiKey, config);
+    new Notice(r.ok ? `OK — reranker "${na.rerankerModel}" reachable` : `Reranker check failed: ${r.error}`);
   }
 
   private openExportOkfModal(domainEntry: DomainEntry): void {
@@ -794,11 +804,18 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           t.setValue(s.nativeAgent.rerankerEnabled ?? false)
             .onChange(async (v) => { s.nativeAgent.rerankerEnabled = v; await this.plugin.saveSettings(); }),
         );
+      const rerankerModelSetting = new Setting(containerEl)
+        .setName(T.settings.rerankerModel_name)
+        .setDesc(T.settings.rerankerModel_desc);
       this.addModelControl(
-        new Setting(containerEl).setName(T.settings.rerankerModel_name).setDesc(T.settings.rerankerModel_desc),
+        rerankerModelSetting,
         s.nativeAgent.rerankerModel ?? "",
         async (v) => { s.nativeAgent.rerankerModel = v.trim(); await this.plugin.saveSettings(); },
         true,
+      );
+      rerankerModelSetting.addButton((b) =>
+        b.setButtonText("Check").setTooltip("Verify the reranker model is reachable")
+          .onClick(() => { void this.checkReranker(); }),
       );
       new Setting(containerEl)
         .setName(T.settings.rerankerTopN_name)
