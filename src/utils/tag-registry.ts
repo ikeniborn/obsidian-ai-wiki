@@ -2,7 +2,7 @@ import path from "path-browserify";
 import { parse as yamlParse, stringify as yamlStringify } from "yaml";
 import type { DomainEntry } from "../domain";
 import { normalizeTag, parseTagsFromFm, TAG_RE } from "./raw-frontmatter";
-import { isWikiPagePath } from "../wiki-path";
+import { isWikiPagePath, effectiveSubfolder } from "../wiki-path";
 
 /** Default cap on distinct thematic (non-entity) top-level tag categories per domain. */
 export const DEFAULT_MAX_TAG_CATEGORIES = 12;
@@ -129,7 +129,7 @@ export function ensureEntityTypeTag(
   const segments = pagePath.split("/");
   if (segments.length < 2) return { content, added: false, tag: null };
   const subfolder = segments[segments.length - 2];
-  const et = domain.entity_types?.find((e) => e.wiki_subfolder === subfolder);
+  const et = domain.entity_types?.find((e) => effectiveSubfolder(e) === subfolder);
   if (!et) return { content, added: false, tag: null };
   const tag = normalizeTag(et.type);
   if (!TAG_RE.test(tag)) return { content, added: false, tag: null };
