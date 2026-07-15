@@ -720,7 +720,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           async (v) => {
             s.nativeAgent.embeddingModel = v || undefined;
             await this.plugin.saveSettings();
-            if (v) await this.setDefaultDimensions(true);  // seed the model's native dimension
           },
         );
 

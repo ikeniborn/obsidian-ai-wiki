@@ -433,6 +433,16 @@ const EMBEDDING_BATCH_SIZE = 100;
 // vault) so cost stays flat; RRF then returns the caller's topK.
 const RRF_CANDIDATE_POOL = 50;
 
+export function buildEmbeddingRequestBody(
+  model: string,
+  inputs: string[],
+  dimensions?: number,
+): Record<string, unknown> {
+  const body: Record<string, unknown> = { model, input: inputs };
+  if (dimensions && dimensions > 0) body.dimensions = dimensions;
+  return body;
+}
+
 async function fetchEmbeddings(
   baseUrl: string,
   apiKey: string,
@@ -445,8 +455,7 @@ async function fetchEmbeddings(
   // Send `dimensions` (OpenAI-standard MRL truncation) when configured, so the whole
   // pipeline and the probe agree on the requested size. Models that don't support it
   // either ignore the field (return native size) or error — the probe surfaces which.
-  const body: Record<string, unknown> = { model, input: inputs };
-  if (dimensions && dimensions > 0) body.dimensions = dimensions;
+  const body = buildEmbeddingRequestBody(model, inputs, dimensions);
   const resp = await requestUrl({
     url,
     method: "POST",
@@ -457,7 +466,10 @@ async function fetchEmbeddings(
     body: JSON.stringify(body),
     throw: false,
   });
-  if (resp.status >= 400) throw new Error(`Embedding API error: ${resp.status}`);
+  if (resp.status >= 400) {
+    const detail = resp.text ? ` — ${resp.text.slice(0, 200)}` : "";
+    throw new Error(`Embedding API error: ${resp.status}${detail}`);
+  }
   const json = JSON.parse(resp.text) as { data: { embedding: number[] }[] };
   return json.data.map((d) => new Float32Array(d.embedding));
 }
@@ -506,6 +518,7 @@ export interface ExtractedEntity {
 export interface EntityRetrievalResult {
   results: Map<string, string[]>;
   allFailed: boolean;
+  failReason?: string;
 }
 
 function entityKey(e: { name: string; type?: string }): string {
@@ -776,11 +789,11 @@ export class PageSimilarityService {
     let entityVecs: Float32Array[];
     try {
       entityVecs = await fetchEmbeddings(baseUrl, apiKey, model, entities.map(entityQuery), this.config.dimensions);
-    } catch {
+    } catch (e) {
       // Embeddings are configured but the endpoint failed for the whole entity
       // set — a genuine infrastructure failure. Degrade to jaccard for results,
       // but signal the failure so ingest can abort with a clear message.
-      return { ...this.jaccardFallbackAll(entities, indexAnnotations, allPaths), allFailed: true };
+      return { ...this.jaccardFallbackAll(entities, indexAnnotations, allPaths), allFailed: true, failReason: (e as Error).message };
     }
 
     const pids = allPaths.map((p) => pageId(p));
