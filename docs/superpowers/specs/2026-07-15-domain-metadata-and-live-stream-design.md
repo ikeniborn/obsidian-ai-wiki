@@ -2,7 +2,7 @@
 chain:
   intent: n/a
 review:
-  spec_hash: 4df05d97c29bca62
+  spec_hash: 410ced405739635e
   last_run: 2026-07-15
   phases:
     - name: structure
@@ -18,7 +18,7 @@ review:
       phase: clarity
       severity: WARNING
       section: "Design / F4"
-      section_hash: aa384aa590d1bc3a
+      section_hash: 11b63173bd802d8c
       fragment: "the post-parse assistant_text{ isReasoning } emit … is kept or dropped per callsite"
       text: >-
         "kept or dropped per callsite" gave no firm per-callsite rule for which
@@ -51,7 +51,7 @@ review:
       phase: consistency
       severity: WARNING
       section: "Design / F3"
-      section_hash: aa384aa590d1bc3a
+      section_hash: 11b63173bd802d8c
       fragment: "but ${folder}.jsonl.tmp does (a metadata.jsonl.tmp leftover), promote it"
       text: >-
         Wrong path expression: folder is the full subfolder path, so
@@ -66,7 +66,7 @@ review:
       phase: consistency
       severity: INFO
       section: "Design / F4"
-      section_hash: aa384aa590d1bc3a
+      section_hash: 11b63173bd802d8c
       fragment: "runStructuredStreaming({ … profile, … onEvent: () => {} }, sink)"
       text: >-
         The two schema-based callsites (bootstrap, extract) supply a schema via
@@ -75,6 +75,26 @@ review:
       fix: >-
         Noted that schema-based callsites must build { kind: "json-zod", schema }
         when switching to the streaming bridge.
+      verdict: fixed
+      verdict_at: 2026-07-15
+    - id: F-005
+      phase: coverage
+      severity: WARNING
+      section: "Design / F3"
+      section_hash: 11b63173bd802d8c
+      fragment: "reconstruct a minimal DomainEntry ... when the folder looks like a real domain"
+      text: >-
+        Found during Task 2 implementation: content-based self-heal resurrects
+        intentionally deleted domains. Delete-domain (settings.ts:398-402) does
+        save(filter) — removes metadata.jsonl but leaves the folder, index.jsonl,
+        and pages — so reconstructing from content would revive every deleted
+        domain on the next load (zombie), and broke the existing
+        domain-store-jsonl "removes metadata for domains omitted from save" test.
+      fix: >-
+        Narrowed self-heal to metadata.jsonl.tmp promotion only (the unambiguous
+        interrupted-write signal, which Delete never leaves). Dropped
+        content-based reconstruction from F3, the Decisions bullet, and the
+        finding map. User-approved.
       verdict: fixed
       verdict_at: 2026-07-15
 ---
@@ -169,7 +189,7 @@ to the view.
 |----|---------|------|----------|
 | F1 | `metadata.jsonl` missing → domain not selectable | R1 | ✅ |
 | F2 | save failure swallowed, no user feedback | R1 | ✅ |
-| F3 | already-broken domain (folder, no metadata) stays invisible | R1 | ✅ (self-heal) |
+| F3 | already-broken domain (leftover `.tmp`, no metadata) stays invisible | R1 | ✅ (tmp promotion) |
 | F4 | no live token/reasoning stream on structured steps | R2 | ✅ |
 | F5 | one corrupt `metadata.jsonl` throws `DomainCorruptError`, hides **all** domains | load policy | ➖ out of scope (see Decisions) |
 
@@ -183,9 +203,12 @@ to the view.
 - **Surface, don't swallow.** `registerDomain` wraps `save` and returns
   `{ ok: false, error }` + `Notice` on failure, so a persist failure is visible
   and the wizard does not proceed into `init` on a broken domain.
-- **Self-heal on load.** A domain folder that has content but no
-  `metadata.jsonl` is reconstructed to a minimal record and re-persisted, so
-  domains broken by the old code become selectable again after one load.
+- **Self-heal on load (tmp-only).** A domain folder with a leftover
+  `metadata.jsonl.tmp` but no `metadata.jsonl` (interrupted old-style write) has
+  its tmp promoted to the final path, so domains broken by the old code become
+  selectable again after one load. Reconstruction from bare folder content is
+  deliberately **not** done — it would resurrect intentionally deleted domains
+  (see F3).
 - **Stream reasoning live; content only as status.** Emit `assistant_text`
   reasoning deltas (🧠) live; emit content deltas too but rely on the view not
   rendering them as panel text (they only drive the 💬 status). No raw JSON is
@@ -227,24 +250,35 @@ persist now stops cleanly instead of silently continuing.
 
 ### F3 — self-heal in `DomainStore.load`
 
-In `src/domain-store.ts:19-35`, when iterating `!Wiki` subfolders:
+Recover **only** from a leftover `metadata.jsonl.tmp` — the unambiguous
+signature of an interrupted old-style write. In `src/domain-store.ts:19-35`,
+when iterating `!Wiki` subfolders and `domainMetadataPath(folder)` does **not**
+exist:
 
-- If `domainMetadataPath(folder)` does **not** exist, but
-  `${domainMetadataPath(folder)}.tmp` does — i.e.
+- If `${domainMetadataPath(folder)}.tmp` exists — i.e.
   `!Wiki/<folder>/metadata.jsonl.tmp`, the leftover from the old `save`'s
-  `tmpPath` — promote it: read it, write it to the final path, remove the tmp,
-  then parse normally.
-- Else if the metadata file does not exist but the folder looks like a real
-  domain — `domainIndexPath(folder)` exists **or** it contains ≥1 wiki page
-  (`isWikiPagePath`) — reconstruct a minimal `DomainEntry`:
-  `{ id: name, name, wiki_folder: name, source_paths: [], entity_types: [] }`
-  (where `name` is the folder basename), and mark the set dirty.
-- After the scan, if any domain was self-healed, `await this.save(domains)` to
-  persist the reconstructed metadata (guarded to run once, before the existing
-  `m2 || m3` migration save so a single write suffices).
+  `tmpPath` after a failed `rename` — promote it: read it, write it to the final
+  path, remove the tmp, parse it, and mark the set dirty.
+- Otherwise (metadata absent, no tmp) — leave the folder alone (`continue`).
+- After the scan, if any domain was promoted, `await this.save(domains)` to
+  canonicalize (guarded to run once, folded into the existing `m2 || m3`
+  migration save so a single write suffices).
 
-This keeps the discovery contract (a domain is a `!Wiki` subfolder) and makes a
-missing metadata file recoverable instead of fatal.
+**Why not reconstruct from folder content.** The reported failure (old
+`write(tmp)` → `rename` throws) always leaves a `metadata.jsonl.tmp`, so tmp
+promotion recovers exactly the reported bug. Reconstructing from mere content
+(index/pages) would be indistinguishable from an **intentionally deleted**
+domain: Delete-domain (`settings.ts:398-402`) does `save(filter)`, which removes
+`metadata.jsonl` but leaves the folder, `index.jsonl`, and pages on disk. A
+content-based self-heal would resurrect every deleted domain (a zombie) on the
+next load. The `.tmp` signal is unique to an interrupted write — Delete never
+leaves one — so tmp-only recovery fixes the bug without the collision.
+
+Accepted tradeoff: a domain broken with **no** leftover `.tmp` (e.g. metadata
+deleted by hand) is not auto-recovered — that state is indistinguishable from an
+intentional deletion, and Task 1's robust write prevents the failure going
+forward. This keeps the discovery contract (a domain is a `!Wiki` subfolder with
+`metadata.jsonl`) intact.
 
 ### F4 — live structured stream
 

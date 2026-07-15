@@ -3,7 +3,7 @@ chain:
   intent: n/a
   spec: docs/superpowers/specs/2026-07-15-domain-metadata-and-live-stream-design.md
 review:
-  plan_hash: 2a6ec56264cb2038
+  plan_hash: 2553144e7160c4ec
   last_run: 2026-07-15
   phases:
     - name: structure
@@ -249,16 +249,17 @@ git commit -m "fix(domain-store): direct metadata write + verify; surface regist
 
 ---
 
-### Task 2: Self-heal missing metadata on `load` (F3)
+### Task 2: Self-heal missing metadata on `load` via tmp-promotion (F3)
 
 **Files:**
-- Modify: `src/domain-store.ts:19-54` (`load`) — add recovery; add private helpers `recoverMissingMetadata`, `hasWikiPage`
-- Modify: `src/domain-store.ts:5` (import) — add `domainIndexPath`, `isWikiPagePath`
+- Modify: `src/domain-store.ts:19-54` (`load`) — add tmp-promotion recovery; add private helper `promoteTmpMetadata`
 - Test: `tests/domain-store-selfheal.test.ts` (create)
 
 **Interfaces:**
-- Consumes: `parseDomainMetadata` (imported); `domainMetadataPath`, `domainIndexPath`, `isWikiPagePath` from `./wiki-path`.
-- Produces: `DomainStore.load()` returns a reconstructed `DomainEntry` (`{ id, name, wiki_folder }` all = folder basename) for a content-bearing folder missing `metadata.jsonl`, and persists it; promotes a leftover `metadata.jsonl.tmp` to `metadata.jsonl`.
+- Consumes: `parseDomainMetadata` (imported); `domainMetadataPath` (imported). No new wiki-path imports.
+- Produces: `DomainStore.load()` promotes a leftover `metadata.jsonl.tmp` to `metadata.jsonl` and returns that domain; a folder missing `metadata.jsonl` with **no** `.tmp` is left untouched (never resurrected).
+
+**Design note:** self-heal recovers ONLY from a leftover `metadata.jsonl.tmp` — the unambiguous signature of the old `save`'s interrupted `write(tmp)`→`rename` failure. It deliberately does NOT reconstruct a domain from bare folder content: Delete-domain (`settings.ts:398-402`) does `save(filter)`, which removes `metadata.jsonl` but leaves `index.jsonl`+pages, so content-based recovery would resurrect deleted domains (zombies). Delete never leaves a `.tmp`, so tmp-promotion has no such collision.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -301,16 +302,6 @@ function vault(adapter: MemoryAdapter): any {
   return { adapter, createFolder: async (path: string) => { adapter.files.set(`${path}/.keep`, ""); } };
 }
 
-test("load reconstructs metadata for a content-bearing folder missing metadata.jsonl", async () => {
-  const adapter = new MemoryAdapter();
-  adapter.files.set("!Wiki/foo/index.jsonl", "");
-  adapter.files.set("!Wiki/foo/concepts/x.md", "# X\n");
-  const store = new DomainStore(vault(adapter));
-  const domains = await store.load();
-  assert.deepEqual(domains.map((d) => d.id), ["foo"]);
-  assert.equal(await adapter.exists("!Wiki/foo/metadata.jsonl"), true);
-});
-
 test("load promotes a leftover metadata.jsonl.tmp to metadata.jsonl", async () => {
   const adapter = new MemoryAdapter();
   adapter.files.set(
@@ -324,7 +315,16 @@ test("load promotes a leftover metadata.jsonl.tmp to metadata.jsonl", async () =
   assert.equal(await adapter.exists("!Wiki/bar/metadata.jsonl.tmp"), false);
 });
 
-test("load ignores a folder with no domain content", async () => {
+test("load leaves a content-only folder with no tmp untouched (deleted-domain safety)", async () => {
+  const adapter = new MemoryAdapter();
+  adapter.files.set("!Wiki/foo/index.jsonl", "");
+  adapter.files.set("!Wiki/foo/concepts/x.md", "# X\n");
+  const store = new DomainStore(vault(adapter));
+  assert.deepEqual(await store.load(), []);
+  assert.equal(await adapter.exists("!Wiki/foo/metadata.jsonl"), false);
+});
+
+test("load ignores an empty folder", async () => {
   const adapter = new MemoryAdapter();
   adapter.files.set("!Wiki/empty/.keep", "");
   const store = new DomainStore(vault(adapter));
@@ -335,23 +335,9 @@ test("load ignores a folder with no domain content", async () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `npx tsx --test tests/domain-store-selfheal.test.ts`
-Expected: FAIL — first two tests return `[]` (old `load` skips folders with no `metadata.jsonl`).
+Expected: FAIL — the tmp-promotion test returns `[]` (old `load` skips a folder whose `metadata.jsonl` is absent). The two negative tests already pass.
 
-- [ ] **Step 3: Extend the wiki-path import**
-
-In `src/domain-store.ts`, change the import (currently line 5):
-
-```ts
-import { WIKI_ROOT, LEGACY_GLOBAL_DOMAIN_PATH, domainMetadataPath, domainWikiFolder } from "./wiki-path";
-```
-
-to:
-
-```ts
-import { WIKI_ROOT, LEGACY_GLOBAL_DOMAIN_PATH, domainMetadataPath, domainWikiFolder, domainIndexPath, isWikiPagePath } from "./wiki-path";
-```
-
-- [ ] **Step 4: Add recovery to the `load` scan loop**
+- [ ] **Step 3: Add tmp-promotion to the `load` scan loop**
 
 In `src/domain-store.ts`, inside `load`, replace the folder loop (currently lines 22-35):
 
@@ -383,7 +369,7 @@ with:
         if (name.startsWith(".") || name.startsWith("_")) continue;
         const path = domainMetadataPath(folder);
         if (!(await adapter.exists(path))) {
-          const recovered = await this.recoverMissingMetadata(adapter, folder, name);
+          const recovered = await this.promoteTmpMetadata(adapter, folder, name);
           if (!recovered) continue;
           domains.push(recovered);
           healed = true;
@@ -398,7 +384,7 @@ with:
     }
 ```
 
-- [ ] **Step 5: Persist self-healed domains**
+- [ ] **Step 4: Persist promoted domains**
 
 In the same `load`, change the migration-save line (currently line 52):
 
@@ -412,77 +398,54 @@ to:
     if (m2 || m3 || healed) await this.save(domains);
 ```
 
-- [ ] **Step 6: Add the recovery helpers**
+- [ ] **Step 5: Add the tmp-promotion helper**
 
-In `src/domain-store.ts`, add these two private methods to the `DomainStore` class (e.g. after `save`), and add `import type { DomainEntry } from "./domain";` if not already present (it is imported at line 2):
+In `src/domain-store.ts`, add this private method to the `DomainStore` class (e.g. after `save`). `DomainEntry` is already imported at line 2.
 
 ```ts
   /**
-   * A domain folder with content but no metadata.jsonl — recover it so the
-   * domain stays selectable. Promote a leftover metadata.jsonl.tmp if present;
-   * otherwise reconstruct a minimal record from the folder name, but only when
-   * the folder looks like a real domain (has index.jsonl or ≥1 wiki page).
+   * Recover a domain whose metadata write was interrupted: the old tmp+rename
+   * save left a `metadata.jsonl.tmp` with no `metadata.jsonl`. Promote the tmp
+   * to the final path so the domain is selectable again. Returns null when
+   * there is no tmp — a folder with content but no tmp is left alone, because
+   * that is indistinguishable from an intentionally deleted domain (Delete
+   * removes metadata.jsonl but leaves the folder; it never leaves a tmp).
    */
-  private async recoverMissingMetadata(
+  private async promoteTmpMetadata(
     adapter: Vault["adapter"],
     folder: string,
     name: string,
   ): Promise<DomainEntry | null> {
     const path = domainMetadataPath(folder);
     const tmpPath = `${path}.tmp`;
-    if (await adapter.exists(tmpPath)) {
-      try {
-        const raw = await adapter.read(tmpPath);
-        await adapter.write(path, raw);
-        await adapter.remove(tmpPath).catch(() => {});
-        return parseDomainMetadata(raw, path, name);
-      } catch {
-        // Corrupt tmp — fall through to reconstruction.
-      }
+    if (!(await adapter.exists(tmpPath))) return null;
+    try {
+      const raw = await adapter.read(tmpPath);
+      await adapter.write(path, raw);
+      await adapter.remove(tmpPath).catch(() => {});
+      return parseDomainMetadata(raw, path, name);
+    } catch {
+      // Corrupt tmp — cannot recover; leave it for manual inspection.
+      return null;
     }
-    const looksLikeDomain =
-      (await adapter.exists(domainIndexPath(folder))) ||
-      (await this.hasWikiPage(adapter, folder));
-    if (!looksLikeDomain) return null;
-    return {
-      id: name,
-      name,
-      wiki_folder: name,
-      source_paths: [],
-      entity_types: [],
-      analyzed_sources: {},
-      analyzed_sources_v2: true,
-      analyzed_sources_v3: true,
-    };
-  }
-
-  /** True if `folder` or any of its immediate subfolders contains a wiki page. */
-  private async hasWikiPage(adapter: Vault["adapter"], folder: string): Promise<boolean> {
-    const listed = await adapter.list(folder);
-    if (listed.files.some((f) => isWikiPagePath(f))) return true;
-    for (const sub of listed.folders) {
-      const subListed = await adapter.list(sub);
-      if (subListed.files.some((f) => isWikiPagePath(f))) return true;
-    }
-    return false;
   }
 ```
 
-- [ ] **Step 7: Run test to verify it passes**
+- [ ] **Step 6: Run test to verify it passes**
 
 Run: `npx tsx --test tests/domain-store-selfheal.test.ts`
 Expected: PASS (3 tests).
 
-- [ ] **Step 8: Regression-check + build + lint**
+- [ ] **Step 7: Regression-check + build + lint**
 
 Run: `npx tsx --test tests/domain-store-jsonl.test.ts tests/domain-store-robust-save.test.ts && npm run build && npm run lint`
-Expected: all tests PASS, build succeeds, no lint errors.
+Expected: all tests PASS (incl. the existing "removes metadata for domains omitted from save"), build succeeds, no lint errors.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add src/domain-store.ts tests/domain-store-selfheal.test.ts
-git commit -m "fix(domain-store): self-heal a domain folder missing metadata.jsonl on load"
+git commit -m "fix(domain-store): recover a domain from a leftover metadata.jsonl.tmp on load"
 ```
 
 ---
@@ -1066,7 +1029,7 @@ git commit -m "feat(init,ingest): stream LLM reasoning/tokens live on structured
 **Spec coverage:**
 - F1 (metadata missing → not selectable) → Task 1 (direct write + verify).
 - F2 (save failure swallowed) → Task 1 (registerDomain try/catch + Notice).
-- F3 (already-broken domain invisible) → Task 2 (self-heal + tmp promotion).
+- F3 (already-broken domain invisible) → Task 2 (tmp-promotion self-heal; no content-based reconstruction, to avoid resurrecting deleted domains).
 - F4 (no live stream) → Task 3 (emit deltas) + Task 4 (bridge) + Task 5 (switch the four init/ingest callsites to live `yield`; the synthesise `ingest.ts:273` post-parse reasoning block is kept, since framed reasoning is not a native 🧠 stream).
 - F5 (`DomainCorruptError`), lint/format/query streaming → explicitly out of scope per spec Decisions; no task, by design.
 
