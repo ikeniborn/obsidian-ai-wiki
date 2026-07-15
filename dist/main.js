@@ -28075,6 +28075,9 @@ function isDomainMetaPath(path5) {
   const base = path5.split("/").pop() ?? path5;
   return DOMAIN_META_BASENAMES.has(base);
 }
+function isWikiPagePath(path5) {
+  return path5.endsWith(".md") && !isDomainMetaPath(path5);
+}
 function sanitizeWikiFolder(raw) {
   let s = raw;
   const vaultMatch = s.match(/^vaults\/[^/]+\//);
@@ -30281,13 +30284,10 @@ var PageSimilarityService = class _PageSimilarityService {
   }
   jaccardFallbackAll(entities, indexAnnotations, allPaths) {
     const results = /* @__PURE__ */ new Map();
-    let anySuccess = false;
     for (const e of entities) {
-      const top = this.scoreJaccardOnce(tokenize(entityQuery(e)), indexAnnotations, allPaths);
-      results.set(entityKey(e), top);
-      if (indexAnnotations.size > 0) anySuccess = true;
+      results.set(entityKey(e), this.scoreJaccardOnce(tokenize(entityQuery(e)), indexAnnotations, allPaths));
     }
-    return { results, allFailed: allPaths.length > 0 && !anySuccess };
+    return { results, allFailed: false };
   }
   async selectByEntitiesEmbedding(entities, indexAnnotations, allPaths) {
     const { baseUrl, apiKey, model, topK } = this.config;
@@ -30299,7 +30299,7 @@ var PageSimilarityService = class _PageSimilarityService {
     try {
       entityVecs = await fetchEmbeddings(baseUrl, apiKey, model, entities.map(entityQuery), this.config.dimensions);
     } catch {
-      return this.jaccardFallbackAll(entities, indexAnnotations, allPaths);
+      return { ...this.jaccardFallbackAll(entities, indexAnnotations, allPaths), allFailed: true };
     }
     const pids = allPaths.map((p) => pageId(p));
     const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
@@ -30331,7 +30331,6 @@ var PageSimilarityService = class _PageSimilarityService {
         for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], []);
       }
     }
-    let anySuccess = false;
     for (let ei = 0; ei < entities.length; ei++) {
       const e = entities[ei];
       const queryVec = entityVecs[ei];
@@ -30347,9 +30346,8 @@ var PageSimilarityService = class _PageSimilarityService {
       scored.sort((a, b) => b.score - a.score);
       const top = scored.slice(0, topK).map((x) => x.path);
       results.set(entityKey(e), top);
-      if (indexAnnotations.size > 0) anySuccess = true;
     }
-    return { results, allFailed: allPaths.length > 0 && !anySuccess };
+    return { results, allFailed: false };
   }
   selectJaccard(queryTokens2, indexAnnotations, allPaths) {
     const scored = [];
@@ -40936,7 +40934,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   const schemaContent = render(wiki_schema_default, { section_conventions: wikiSections(resolveLang(opts.outputLanguage)) });
   const indexContent = await tryRead(vaultTools, domainIndexPath(domainRoot));
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
-  const nonMetaPaths = existingPaths.filter((f) => !f.endsWith("_index.md"));
+  const nonMetaPaths = existingPaths.filter(isWikiPagePath);
   const annotations = cachedAnnotations ?? parseIndexAnnotations(indexContent);
   yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).ingestProgress.synthesizing(domain.id) };
   const start = Date.now();
@@ -41164,7 +41162,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     });
     const { content: repairedSource, warnings: sourceWarnings } = validateAndRepairSourceFrontmatter(updatedSource);
     const wikiFileStems = new Set(
-      [...existingPaths, ...plannedPagePaths].filter((p) => !plannedDeletePaths.has(p) && !p.endsWith("_index.md")).map((p) => p.split("/").pop().replace(/\.md$/, ""))
+      [...existingPaths, ...plannedPagePaths].filter((p) => !plannedDeletePaths.has(p) && isWikiPagePath(p)).map((p) => p.split("/").pop().replace(/\.md$/, ""))
     );
     const { content: wikiArticlesFiltered, warnings: wikiArticlesWarnings } = stripInvalidWikiArticles(repairedSource, wikiFileStems);
     const { content: filteredSource, warnings: relatedWarnings } = filterStaleWikiLinks(wikiArticlesFiltered, wikiFileStems, ["related"]);
@@ -41358,7 +41356,7 @@ ${page.content}`;
     }
   }
   try {
-    const finalPaths = (await vaultTools.listFiles(wikiVaultPath)).filter((f) => f.endsWith(".md") && !f.endsWith("_index.md") && !f.endsWith("_log.md"));
+    const finalPaths = (await vaultTools.listFiles(wikiVaultPath)).filter(isWikiPagePath);
     const finalPages = await vaultTools.readAll(finalPaths);
     const currentIndex = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
     const recon = reconcileIndex(
@@ -42199,7 +42197,6 @@ ${answer}` }
 }
 
 // src/phases/query.ts
-var META_FILES = ["_index.md", "_log.md"];
 var DEFAULT_RERANKER_RUNTIME = {
   config: normalizeRerankerConfig(void 0),
   baseUrl: "",
@@ -42218,9 +42215,7 @@ async function* retrieveDomainCandidates(domain, question, vaultTools, similarit
   yield { kind: "tool_result", ok: true, preview: indexContent ? "read" : "empty" };
   yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
-  const files = allFiles.filter(
-    (f) => !META_FILES.some((m) => f.endsWith(m)) && !f.includes("/_config/")
-  );
+  const files = allFiles.filter(isWikiPagePath);
   yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
   if (signal.aborted) return null;
   yield { kind: "tool_use", name: "Read", input: { files: files.length } };
@@ -42847,7 +42842,6 @@ var lint_default = 'You are a reviewer and editor of the wiki knowledge base for
 var lint_actualize_default = 'You are an architect of a wiki knowledge base. Analyze the current domain config and the actual content of the wiki.\nReturn ONLY valid JSON with the updated fields:\n{\n  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"..."}],\n  "language_notes": "..."\n}\nUpdate rules:\n- Keep existing types if they are useful, refine descriptions based on the actual content\n- Add new types if the wiki has patterns not covered by the current config\n- Remove types with zero coverage only if you are sure they are irrelevant\n- Update extraction_cues based on the actual words from the wiki pages\n- language_notes \u2014 rules for writing terms that the agent must follow\n';
 
 // src/phases/lint.ts
-var META_FILES2 = ["_index.md", "_log.md"];
 async function cleanupInvalidPages(vaultTools, wikiVaultPath, _domainId) {
   const files = await vaultTools.listFiles(wikiVaultPath);
   const candidates = files.filter((f) => {
@@ -42965,7 +42959,7 @@ Wiki folder outside vault \u2014 skipped.`);
     await ensureDomainConfig(vaultTools, wikiVaultPath);
     const schemaContent = render(wiki_schema_default, { section_conventions: wikiSections(resolveLang(opts.outputLanguage)) });
     const allFiles = await vaultTools.listFiles(wikiVaultPath);
-    const files = allFiles.filter((f) => !META_FILES2.some((m) => f.endsWith(m)));
+    const files = allFiles.filter(isWikiPagePath);
     yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
     const pages = await vaultTools.readAll(files);
     let { graph } = graphCache.get(domain.id, pages);
@@ -43548,7 +43542,6 @@ DOMAIN PAGES:
 `;
 
 // src/phases/lint-chat.ts
-var META_FILES3 = ["_index.md", "_log.md"];
 async function* runLintFixChat(req, vaultTools, _vaultRoot, domain, llm, model, opts, signal) {
   const start = Date.now();
   if (!domain) {
@@ -43561,7 +43554,7 @@ async function* runLintFixChat(req, vaultTools, _vaultRoot, domain, llm, model, 
   await ensureDomainConfig(vaultTools, wikiVaultPath);
   const schemaContent = render(wiki_schema_default, { section_conventions: wikiSections(resolveLang(opts.outputLanguage)) });
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
-  const files = allFiles.filter((f) => !META_FILES3.some((m) => f.endsWith(m)));
+  const files = allFiles.filter(isWikiPagePath);
   yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
   yield { kind: "tool_use", name: "Read", input: { files: String(files.length) } };
   const pages = await vaultTools.readAll(files);
@@ -53822,6 +53815,28 @@ async function cleanDir(adapter, dir, knownFiles) {
   } catch {
   }
 }
+async function removeEmptyConfigDirs(vault) {
+  const adapter = vault.adapter;
+  await rmdirIfEmpty(adapter, GLOBAL_CONFIG_DIR);
+  try {
+    const wiki = await adapter.list(WIKI_ROOT);
+    for (const folder of wiki.folders) {
+      await rmdirIfEmpty(adapter, `${folder}/_config`);
+    }
+  } catch {
+  }
+}
+async function rmdirIfEmpty(adapter, dir) {
+  try {
+    if (!await adapter.exists(dir)) return;
+    const listing = await adapter.list(dir);
+    if (listing.files.length === 0 && listing.folders.length === 0) {
+      await adapter.rmdir(dir, false).catch(() => {
+      });
+    }
+  } catch {
+  }
+}
 
 // src/migrate-index-format.ts
 var import_obsidian11 = require("obsidian");
@@ -54315,6 +54330,7 @@ var LlmWikiPlugin = class extends import_obsidian14.Plugin {
     }
     await cleanupBundledSchemaCopies(this.app.vault);
     await migrateLogsToPluginDir(this.app.vault, this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`);
+    await removeEmptyConfigDirs(this.app.vault);
     await migrateLegacyData(this, this.domainStore, this.localConfigStore);
     await this.loadSettings();
     await migrateToLocalV1(this, this.localConfigStore);
