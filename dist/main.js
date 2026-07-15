@@ -27488,8 +27488,24 @@ var GENERIC_WIKI_STEM_REGEX = new RegExp(
   `^${WIKI_STEM_PREFIX}_[${DOMAIN_ID_CHARS}]+_[${ENTITY_SLUG_CHARS}]+$`
 );
 var DOMAIN_ID_RE = new RegExp(`^[${DOMAIN_ID_CHARS}]+$`);
+function slugifyEntity(name) {
+  const stripped = name.normalize("NFD").replace(/\p{M}+/gu, "");
+  const split = stripped.replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2");
+  const replaced = split.replace(/[^A-Za-z0-9]+/g, "_");
+  const trimmed = replaced.replace(/^_+|_+$/g, "").toLowerCase();
+  if (!trimmed) {
+    throw new Error(`slugifyEntity: cannot derive slug from "${name}"`);
+  }
+  return trimmed;
+}
 function escapeForRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function buildWikiStem(domainId, entityName) {
+  if (!DOMAIN_ID_RE.test(domainId)) {
+    throw new Error(`buildWikiStem: invalid domainId "${domainId}"`);
+  }
+  return `${WIKI_STEM_PREFIX}_${domainId}_${slugifyEntity(entityName)}`;
 }
 function stemRegex(domainId) {
   if (!DOMAIN_ID_RE.test(domainId)) {
@@ -38691,6 +38707,13 @@ var EntitiesOutputSchema = external_exports.object({
     context_snippet: external_exports.string().optional()
   })).max(50)
 });
+var TypeAssignmentsSchema = external_exports.object({
+  reasoning: external_exports.string().optional(),
+  assignments: external_exports.array(external_exports.object({
+    stem: external_exports.string().min(1),
+    type: external_exports.string().min(1)
+  }))
+});
 var WikiPagesOutputSchema = external_exports.object({
   reasoning: external_exports.string(),
   pages: external_exports.array(WikiPageSchema),
@@ -38764,6 +38787,55 @@ function makeQueryAnswerSchema(knownStems) {
     }
   });
 }
+
+// src/phases/entity-routing.ts
+function stemOf(path5) {
+  return path5.split("/").pop().replace(/\.md$/, "");
+}
+async function routeAndValidatePages(pages, entities, domain, wikiVaultPath, classify, maxClassifyRounds = 2) {
+  const typeToEt = /* @__PURE__ */ new Map();
+  for (const et of domain.entity_types ?? []) typeToEt.set(et.type, et);
+  const stemToType = /* @__PURE__ */ new Map();
+  for (const e of entities) {
+    if (!e.type || !typeToEt.has(e.type)) continue;
+    let stem;
+    try {
+      stem = buildWikiStem(domain.id, e.name);
+    } catch {
+      continue;
+    }
+    stemToType.set(stem, e.type);
+  }
+  const unresolvedStems = () => pages.map((p) => stemOf(p.path)).filter((s) => !stemToType.has(s));
+  for (let round = 0; round < maxClassifyRounds && unresolvedStems().length > 0; round++) {
+    let assignments;
+    try {
+      assignments = await classify(unresolvedStems());
+    } catch {
+      break;
+    }
+    for (const [stem, type] of assignments) {
+      if (typeToEt.has(type)) stemToType.set(stem, type);
+    }
+  }
+  const knownTypes = [...typeToEt.keys()].join(", ") || "(none defined)";
+  const routed = [];
+  const rejected = [];
+  for (const p of pages) {
+    const stem = stemOf(p.path);
+    const type = stemToType.get(stem);
+    if (!type) {
+      rejected.push({ page: p, reason: `no valid entity type (expected one of: ${knownTypes})` });
+      continue;
+    }
+    const sub = effectiveSubfolder(typeToEt.get(type));
+    routed.push({ ...p, path: `${wikiVaultPath}/${sub}/${stem}.md` });
+  }
+  return { routed, rejected };
+}
+
+// prompts/ingest-classify-types.md
+var ingest_classify_types_default = 'Assign exactly one entity TYPE to each entity below. Choose ONLY from the domain\'s declared types \u2014 never invent a new type, never leave a type blank.\n\nDOMAIN TYPES (pick one per entity):\n{{type_block}}\n\nENTITIES TO CLASSIFY (`stem` is the wiki page id):\n{{entity_lines}}\n\nReturn JSON only, no prose, no markdown fences:\n{"reasoning":"<one short sentence>","assignments":[{"stem":"<stem>","type":"<one of the types above>"}]}\n\nEvery listed `stem` MUST appear exactly once, each with a `type` copied verbatim from the DOMAIN TYPES list above.\n';
 
 // src/phases/format-utils.ts
 var STOP_WORDS2 = /* @__PURE__ */ new Set([
@@ -41568,6 +41640,56 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     stemValid.push(p);
   }
   pages = stemValid;
+  const stemToName = /* @__PURE__ */ new Map();
+  for (const e of entitiesResult.value.entities) {
+    try {
+      stemToName.set(buildWikiStem(domain.id, e.name), e.name);
+    } catch {
+    }
+  }
+  const classifyTypes = async (stems) => {
+    const typeBlock = (domain.entity_types ?? []).map((et) => `- ${et.type}: ${et.description}`).join("\n");
+    const entityLines = stems.map((s) => `- stem: ${s} | name: ${stemToName.get(s) ?? s}`).join("\n");
+    const messages2 = [
+      { role: "system", content: render(ingest_classify_types_default, { type_block: typeBlock, entity_lines: entityLines }) }
+    ];
+    const sink = {};
+    try {
+      const gen = runStructuredStreaming({
+        llm,
+        model,
+        baseMessages: messages2,
+        opts,
+        profile: { kind: "json-zod", schema: TypeAssignmentsSchema },
+        maxRetries: opts.structuredRetries ?? 1,
+        callSite: "ingest.classify",
+        signal,
+        onEvent: () => {
+        }
+      }, sink);
+      while (!(await gen.next()).done) {
+      }
+    } catch {
+      return /* @__PURE__ */ new Map();
+    }
+    const out = /* @__PURE__ */ new Map();
+    for (const a of sink.value?.assignments ?? []) out.set(a.stem, a.type);
+    return out;
+  };
+  {
+    const { routed, rejected } = await routeAndValidatePages(
+      pages,
+      entitiesResult.value.entities,
+      domain,
+      wikiVaultPath,
+      classifyTypes
+    );
+    for (const r of rejected) {
+      yield { kind: "tool_use", name: "Write", input: { path: r.page.path } };
+      yield { kind: "tool_result", ok: false, preview: `rejected \u2014 ${r.reason}` };
+    }
+    pages = routed;
+  }
   const pagesMap = new Map(pages.map((p) => [p.path, p.content]));
   const allVaultPaths = await vaultTools.listFiles("").catch(() => []);
   const knownStems = /* @__PURE__ */ new Set([
@@ -44237,10 +44359,6 @@ async function ensureRootFiles(vaultTools, wikiRoot) {
   const legacyLog = `${wikiRoot}/_log.md`;
   try {
     await vaultTools.mkdir(wikiRoot);
-  } catch {
-  }
-  try {
-    await vaultTools.mkdir(GLOBAL_CONFIG_DIR);
   } catch {
   }
   try {

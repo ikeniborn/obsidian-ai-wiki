@@ -29,6 +29,7 @@ export type StructuredCallSite =
   | "ingest.entities"
   | "ingest.pages"
   | "ingest.merge"
+  | "ingest.classify"
   | "format.output";
 
 type ResponseFormatMode = "json_schema" | "json_object" | "none";

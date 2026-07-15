@@ -5,8 +5,10 @@ import { mergeEntityTypes } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas, wikiSections } from "./llm-utils";
-import { EntitiesOutputSchema } from "./zod-schemas";
-import type { WikiPagesOutput, EntitiesOutput, MergedPageOutput } from "./zod-schemas";
+import { EntitiesOutputSchema, TypeAssignmentsSchema } from "./zod-schemas";
+import type { WikiPagesOutput, EntitiesOutput, MergedPageOutput, TypeAssignments } from "./zod-schemas";
+import { routeAndValidatePages, type TypeClassifier } from "./entity-routing";
+import classifyTypesTemplate from "../../prompts/ingest-classify-types.md";
 import { mergeContentFrameInstruction, mergedPageProfile, parseWikiPageRepairFramesOrJson, wikiPagesFrameInstruction, wikiPagesProfile } from "./framed-output";
 import { runStructuredStreaming, type StructuredSink } from "./structured-output";
 import ingestTemplate from "../../prompts/ingest.md";
@@ -25,7 +27,7 @@ import type { PageSimilarityService, ExtractedEntity } from "../page-similarity"
 import { appendWikiLog } from "../wiki-log";
 import type { IngestLogEntry } from "../wiki-log";
 import { fixWikiLinks, stripDeadLinks } from "../wiki-link-validator";
-import { GENERIC_WIKI_STEM_REGEX, stemRegex } from "../wiki-stem";
+import { GENERIC_WIKI_STEM_REGEX, stemRegex, buildWikiStem } from "../wiki-stem";
 import { i18nFor, resolveLang } from "../i18n";
 import { promptVersionOf } from "../prompt-version";
 import { EmbeddingUnavailableError } from "../embedding-error";
@@ -320,6 +322,48 @@ export async function* runIngest(
     stemValid.push(p);
   }
   pages = stemValid;
+
+  // --- Type-enforced routing: each page lands in its entity type's subfolder ---
+  // Weak local models copy the prompt's example path for every page, so the
+  // subfolder is decided server-side from the entity's type. Types are validated
+  // BEFORE writing; a page whose type is unknown is re-asked from the model
+  // (classifier fallback) and, if still unresolved, rejected — never dumped into
+  // a generic `entities/` bucket.
+  const stemToName = new Map<string, string>();
+  for (const e of entitiesResult.value.entities) {
+    try { stemToName.set(buildWikiStem(domain.id, e.name), e.name); } catch { /* unsluggable name */ }
+  }
+  const classifyTypes: TypeClassifier = async (stems) => {
+    const typeBlock = (domain.entity_types ?? []).map((et) => `- ${et.type}: ${et.description}`).join("\n");
+    const entityLines = stems.map((s) => `- stem: ${s} | name: ${stemToName.get(s) ?? s}`).join("\n");
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      { role: "system", content: render(classifyTypesTemplate, { type_block: typeBlock, entity_lines: entityLines }) },
+    ];
+    const sink: StructuredSink<TypeAssignments> = {};
+    try {
+      // Fallback classification — drain events without streaming to the panel.
+      const gen = runStructuredStreaming({
+        llm, model, baseMessages: messages, opts,
+        profile: { kind: "json-zod", schema: TypeAssignmentsSchema },
+        maxRetries: opts.structuredRetries ?? 1,
+        callSite: "ingest.classify", signal, onEvent: () => {},
+      }, sink);
+      while (!(await gen.next()).done) { /* drain */ }
+    } catch { return new Map(); }
+    const out = new Map<string, string>();
+    for (const a of sink.value?.assignments ?? []) out.set(a.stem, a.type);
+    return out;
+  };
+  {
+    const { routed, rejected } = await routeAndValidatePages(
+      pages, entitiesResult.value.entities, domain, wikiVaultPath, classifyTypes,
+    );
+    for (const r of rejected) {
+      yield { kind: "tool_use", name: "Write", input: { path: r.page.path } };
+      yield { kind: "tool_result", ok: false, preview: `rejected — ${r.reason}` };
+    }
+    pages = routed;
+  }
 
   // Programmatic WikiLink fix (always run; maxPasses=0 only warns)
   const pagesMap = new Map(pages.map((p) => [p.path, p.content]));

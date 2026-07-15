@@ -9,7 +9,7 @@ import initTemplate from "../../prompts/init.md";
 import { render } from "./template";
 import { wikiSections } from "./llm-utils";
 import { runIngest } from "./ingest";
-import { GLOBAL_CONFIG_DIR, domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainIndexPath } from "../wiki-path";
+import { domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainIndexPath } from "../wiki-path";
 import type { PageSimilarityService } from "../page-similarity";
 import { parseIndexAnnotations } from "../wiki-index";
 import { i18nFor, resolveLang } from "../i18n";
@@ -520,7 +520,9 @@ async function ensureRootFiles(vaultTools: VaultTools, wikiRoot: string): Promis
   const legacyLog    = `${wikiRoot}/_log.md`;
 
   try { await vaultTools.mkdir(wikiRoot); } catch { /* already exists */ }
-  try { await vaultTools.mkdir(GLOBAL_CONFIG_DIR); } catch { /* already exists */ }
+  // NB: do NOT create GLOBAL_CONFIG_DIR (!Wiki/_config) — it is a legacy artifact
+  // (JSONL layout keeps config per-domain). Creating it here re-spawned the empty
+  // dir that removeEmptyConfigDirs cleans on load. See storage-layout-sidecar-fix.
 
   try {
     if (await vaultTools.exists(legacyIndex)) await vaultTools.remove(legacyIndex);
