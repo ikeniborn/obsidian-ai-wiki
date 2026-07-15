@@ -29339,6 +29339,293 @@ ${stderr()}` : ""}`);
   }
 };
 
+// src/domain.ts
+function migrateDomainsV2(domains) {
+  let migrated = false;
+  for (const d of domains) {
+    if (d.analyzed_sources !== void 0 && !d.analyzed_sources_v2) {
+      d.analyzed_sources = {};
+      d.analyzed_sources_v2 = true;
+      migrated = true;
+    }
+  }
+  return { domains, migrated };
+}
+function migrateDomainsV3(domains) {
+  let migrated = false;
+  for (const d of domains) {
+    if (d.analyzed_sources_v3) continue;
+    const cur = d.analyzed_sources;
+    if (Array.isArray(cur)) {
+      const map = {};
+      for (const p of cur) map[String(p)] = "";
+      d.analyzed_sources = map;
+    }
+    d.analyzed_sources_v3 = true;
+    migrated = true;
+  }
+  return { domains, migrated };
+}
+function validateDomainId(id) {
+  if (!id) return "ID \u0434\u043E\u043C\u0435\u043D\u0430 \u043F\u0443\u0441\u0442";
+  if (!/^[\p{L}\p{N}_-]+$/u.test(id)) return "ID \u0434\u043E\u043F\u0443\u0441\u043A\u0430\u0435\u0442 \u0442\u043E\u043B\u044C\u043A\u043E \u0431\u0443\u043A\u0432\u044B/\u0446\u0438\u0444\u0440\u044B/_/-";
+  return null;
+}
+function mergeEntityTypes(current, incoming) {
+  const map = new Map(current.map((e) => [e.type, e]));
+  for (const e of incoming) map.set(e.type, e);
+  return [...map.values()];
+}
+function applyDomainEvent(domains, ev, opts) {
+  const next = [...domains];
+  if (ev.kind === "domain_created") {
+    if (next.some((d) => d.id === ev.entry.id)) return next;
+    next.push(ev.entry);
+    return next;
+  }
+  const i = next.findIndex((d) => d.id === ev.domainId);
+  if (i < 0) return next;
+  if (ev.kind === "domain_updated") {
+    next[i] = { ...next[i], ...ev.patch };
+    return next;
+  }
+  if (ev.kind === "source_path_removed") {
+    const existing2 = next[i].source_paths ?? [];
+    const updated2 = existing2.filter((p) => p !== ev.path);
+    if (updated2.length === existing2.length) return domains;
+    next[i] = { ...next[i], source_paths: updated2 };
+    return next;
+  }
+  const existing = next[i].source_paths ?? [];
+  let updated;
+  if (opts?.vaultRoot !== void 0) {
+    updated = consolidateSourcePaths(existing, ev.path, opts.vaultRoot);
+    if (updated === existing) return domains;
+  } else {
+    if (existing.includes(ev.path)) return domains;
+    updated = [...existing, ev.path];
+  }
+  next[i] = { ...next[i], source_paths: updated };
+  return next;
+}
+
+// src/jsonl.ts
+var JsonlParseError = class extends Error {
+  constructor(path5, line, cause) {
+    const msg = cause instanceof Error ? cause.message : String(cause);
+    super(`${path5}:${line}: ${msg}`);
+    this.name = "JsonlParseError";
+  }
+};
+function parseJsonl(text, path5) {
+  const out = [];
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i].trim();
+    if (!raw) continue;
+    try {
+      out.push(JSON.parse(raw));
+    } catch (e) {
+      throw new JsonlParseError(path5, i + 1, e);
+    }
+  }
+  return out;
+}
+function stringifyJsonl(records) {
+  return records.map((record) => JSON.stringify(record)).join("\n") + (records.length ? "\n" : "");
+}
+
+// src/domain-metadata.ts
+function setIfDefined(target, key, value) {
+  if (value !== void 0) {
+    target[key] = value;
+  }
+}
+function domainEntryToMetadataRecords(entry) {
+  const domain = {
+    kind: "domain",
+    schemaVersion: 1,
+    id: entry.id,
+    name: entry.name,
+    wiki_folder: entry.wiki_folder,
+    source_paths: entry.source_paths ?? []
+  };
+  setIfDefined(domain, "language_notes", entry.language_notes);
+  setIfDefined(domain, "max_tag_categories", entry.max_tag_categories);
+  setIfDefined(domain, "pageNameVersion", entry.pageNameVersion);
+  const types = (entry.entity_types ?? []).map((type) => ({ kind: "entity_type", ...type }));
+  const sources = Object.entries(entry.analyzed_sources ?? {}).map(([path5, hash]) => ({ kind: "source_state", path: path5, hash }));
+  return [domain, ...types, ...sources];
+}
+function metadataRecordsToDomainEntry(records, fallbackFolder) {
+  const domain = records.find((r) => r.kind === "domain");
+  if (!domain) throw new Error(`${fallbackFolder}: missing domain record`);
+  const entityTypes = records.filter((r) => r.kind === "entity_type").map(({ kind: _kind, ...type }) => type);
+  const analyzedSources = {};
+  for (const record of records) {
+    if (record.kind === "source_state" && typeof record.path === "string" && typeof record.hash === "string") {
+      analyzedSources[record.path] = record.hash;
+    }
+  }
+  const entry = {
+    id: domain.id,
+    name: domain.name,
+    wiki_folder: domain.wiki_folder || fallbackFolder,
+    source_paths: domain.source_paths ?? [],
+    entity_types: entityTypes,
+    analyzed_sources: analyzedSources,
+    analyzed_sources_v2: true,
+    analyzed_sources_v3: true
+  };
+  setIfDefined(entry, "language_notes", domain.language_notes);
+  setIfDefined(entry, "pageNameVersion", domain.pageNameVersion);
+  setIfDefined(entry, "max_tag_categories", domain.max_tag_categories);
+  return entry;
+}
+function parseDomainMetadata(text, path5, fallbackFolder) {
+  return metadataRecordsToDomainEntry(parseJsonl(text, path5), fallbackFolder);
+}
+function stringifyDomainMetadata(records) {
+  return stringifyJsonl(records);
+}
+
+// src/domain-store.ts
+var WIKI_DIR = WIKI_ROOT;
+var DomainCorruptError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "DomainCorruptError";
+  }
+};
+var DomainStore = class {
+  constructor(vault) {
+    this.vault = vault;
+  }
+  vault;
+  async load() {
+    const adapter = this.vault.adapter;
+    const domains = [];
+    let healed = false;
+    if (await adapter.exists(WIKI_DIR)) {
+      const listed = await adapter.list(WIKI_DIR);
+      for (const folder of [...listed.folders].sort()) {
+        const name = folder.split("/").pop() ?? folder;
+        if (name.startsWith(".") || name.startsWith("_")) continue;
+        const path5 = domainMetadataPath(folder);
+        if (!await adapter.exists(path5)) {
+          const recovered = await this.promoteTmpMetadata(adapter, folder, name);
+          if (!recovered) continue;
+          domains.push(recovered);
+          healed = true;
+          continue;
+        }
+        try {
+          domains.push(parseDomainMetadata(await adapter.read(path5), path5, name));
+        } catch (e) {
+          throw new DomainCorruptError(`${path5}: ${e.message}`);
+        }
+      }
+    }
+    if (domains.length === 0 && await adapter.exists(LEGACY_GLOBAL_DOMAIN_PATH)) {
+      const raw = await adapter.read(LEGACY_GLOBAL_DOMAIN_PATH);
+      let parsed;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (e) {
+        throw new DomainCorruptError(`${LEGACY_GLOBAL_DOMAIN_PATH}: ${e.message}`);
+      }
+      if (!Array.isArray(parsed)) throw new DomainCorruptError(`${LEGACY_GLOBAL_DOMAIN_PATH}: expected JSON array`);
+      domains.push(...parsed);
+    }
+    for (const d of domains) {
+      if (d.wiki_folder?.startsWith("!Wiki/")) {
+        d.wiki_folder = d.wiki_folder.slice("!Wiki/".length);
+      }
+    }
+    const { migrated: m2 } = migrateDomainsV2(domains);
+    const { migrated: m3 } = migrateDomainsV3(domains);
+    if (m2 || m3 || healed) await this.save(domains);
+    return domains;
+  }
+  async save(domains) {
+    const adapter = this.vault.adapter;
+    if (!await adapter.exists(WIKI_DIR)) await this.vault.createFolder(WIKI_DIR).catch(() => {
+    });
+    if (await adapter.exists(LEGACY_GLOBAL_DOMAIN_PATH)) await adapter.remove(LEGACY_GLOBAL_DOMAIN_PATH);
+    const desiredPathsById = new Map(domains.map((domain) => [domain.id, domainMetadataPath(domainWikiFolder(domain.wiki_folder))]));
+    const desiredPaths = new Set(desiredPathsById.values());
+    const listed = await adapter.list(WIKI_DIR);
+    for (const folder of [...listed.folders].sort()) {
+      const name = folder.split("/").pop() ?? folder;
+      if (name.startsWith(".") || name.startsWith("_")) continue;
+      const path5 = domainMetadataPath(folder);
+      if (!await adapter.exists(path5) || desiredPaths.has(path5)) continue;
+      try {
+        const existing = parseDomainMetadata(await adapter.read(path5), path5, name);
+        if (!desiredPathsById.has(existing.id) || desiredPathsById.get(existing.id) !== path5) {
+          await adapter.remove(path5);
+        }
+      } catch {
+      }
+    }
+    for (const domain of domains) {
+      const folder = domainWikiFolder(domain.wiki_folder);
+      if (!await adapter.exists(folder)) await this.vault.createFolder(folder).catch(() => {
+      });
+      const path5 = domainMetadataPath(folder);
+      const tmpPath = `${path5}.tmp`;
+      if (await adapter.exists(tmpPath)) await adapter.remove(tmpPath).catch(() => {
+      });
+      await adapter.write(path5, stringifyDomainMetadata(domainEntryToMetadataRecords(domain)));
+      if (!await adapter.exists(path5)) {
+        throw new Error(`domain metadata write failed: ${path5}`);
+      }
+    }
+  }
+  /**
+   * Recover a domain whose metadata write was interrupted: the old tmp+rename
+   * save left a `metadata.jsonl.tmp` with no `metadata.jsonl`. Promote the tmp
+   * to the final path so the domain is selectable again. Returns null when
+   * there is no tmp — a folder with content but no tmp is left alone, because
+   * that is indistinguishable from an intentionally deleted domain (Delete
+   * removes metadata.jsonl but leaves the folder; it never leaves a tmp).
+   *
+   * Parse BEFORE mutating: a corrupt tmp must be left intact (never written to
+   * the final path, never deleted), so it can be inspected manually instead of
+   * becoming a corrupt metadata.jsonl that throws DomainCorruptError on every
+   * future load.
+   */
+  async promoteTmpMetadata(adapter, folder, name) {
+    const path5 = domainMetadataPath(folder);
+    const tmpPath = `${path5}.tmp`;
+    if (!await adapter.exists(tmpPath)) return null;
+    let entry;
+    try {
+      const raw = await adapter.read(tmpPath);
+      entry = parseDomainMetadata(raw, path5, name);
+      await adapter.write(path5, raw);
+    } catch {
+      return null;
+    }
+    await adapter.remove(tmpPath).catch(() => {
+    });
+    return entry;
+  }
+};
+async function removeDomainFolder(adapter, wikiFolder) {
+  const folder = domainWikiFolder(wikiFolder);
+  if (!await adapter.exists(folder)) return;
+  const removeRec = async (dir) => {
+    const { files, folders } = await adapter.list(dir);
+    for (const f of files) await adapter.remove(f).catch(() => {
+    });
+    for (const sub of folders) await removeRec(sub);
+    await adapter.rmdir(dir, true).catch(() => {
+    });
+  };
+  await removeRec(folder);
+}
+
 // src/effective-settings.ts
 function resolveEffective(s, l) {
   const proxyBase = s.proxy ?? { enabled: false, url: "" };
@@ -29754,32 +30041,6 @@ function selectSeeds(question, pages, topK, minScore, indexAnnotations, boilerpl
     boilerplateDemotion ?? { enabled: false, factor: 0 },
     topK
   ).map(({ id, score }) => ({ id, score }));
-}
-
-// src/jsonl.ts
-var JsonlParseError = class extends Error {
-  constructor(path5, line, cause) {
-    const msg = cause instanceof Error ? cause.message : String(cause);
-    super(`${path5}:${line}: ${msg}`);
-    this.name = "JsonlParseError";
-  }
-};
-function parseJsonl(text, path5) {
-  const out = [];
-  const lines = text.split(/\r?\n/);
-  for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i].trim();
-    if (!raw) continue;
-    try {
-      out.push(JSON.parse(raw));
-    } catch (e) {
-      throw new JsonlParseError(path5, i + 1, e);
-    }
-  }
-  return out;
-}
-function stringifyJsonl(records) {
-  return records.map((record) => JSON.stringify(record)).join("\n") + (records.length ? "\n" : "");
 }
 
 // src/wiki-index-jsonl.ts
@@ -31360,6 +31621,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
                 new import_obsidian5.Notice(T.settings.domainDeleted(d.id));
                 const cur = await this.plugin.domainStore.load();
                 await this.plugin.domainStore.save(cur.filter((x) => x.id !== d.id));
+                await removeDomainFolder(this.plugin.app.vault.adapter, d.wiki_folder);
                 await this.refresh();
               })();
             }).open();
@@ -34516,76 +34778,6 @@ function translateSystemEvent(message) {
 // src/controller.ts
 var import_obsidian11 = require("obsidian");
 var import_path_browserify9 = __toESM(require_path_browserify(), 1);
-
-// src/domain.ts
-function migrateDomainsV2(domains) {
-  let migrated = false;
-  for (const d of domains) {
-    if (d.analyzed_sources !== void 0 && !d.analyzed_sources_v2) {
-      d.analyzed_sources = {};
-      d.analyzed_sources_v2 = true;
-      migrated = true;
-    }
-  }
-  return { domains, migrated };
-}
-function migrateDomainsV3(domains) {
-  let migrated = false;
-  for (const d of domains) {
-    if (d.analyzed_sources_v3) continue;
-    const cur = d.analyzed_sources;
-    if (Array.isArray(cur)) {
-      const map = {};
-      for (const p of cur) map[String(p)] = "";
-      d.analyzed_sources = map;
-    }
-    d.analyzed_sources_v3 = true;
-    migrated = true;
-  }
-  return { domains, migrated };
-}
-function validateDomainId(id) {
-  if (!id) return "ID \u0434\u043E\u043C\u0435\u043D\u0430 \u043F\u0443\u0441\u0442";
-  if (!/^[\p{L}\p{N}_-]+$/u.test(id)) return "ID \u0434\u043E\u043F\u0443\u0441\u043A\u0430\u0435\u0442 \u0442\u043E\u043B\u044C\u043A\u043E \u0431\u0443\u043A\u0432\u044B/\u0446\u0438\u0444\u0440\u044B/_/-";
-  return null;
-}
-function mergeEntityTypes(current, incoming) {
-  const map = new Map(current.map((e) => [e.type, e]));
-  for (const e of incoming) map.set(e.type, e);
-  return [...map.values()];
-}
-function applyDomainEvent(domains, ev, opts) {
-  const next = [...domains];
-  if (ev.kind === "domain_created") {
-    if (next.some((d) => d.id === ev.entry.id)) return next;
-    next.push(ev.entry);
-    return next;
-  }
-  const i = next.findIndex((d) => d.id === ev.domainId);
-  if (i < 0) return next;
-  if (ev.kind === "domain_updated") {
-    next[i] = { ...next[i], ...ev.patch };
-    return next;
-  }
-  if (ev.kind === "source_path_removed") {
-    const existing2 = next[i].source_paths ?? [];
-    const updated2 = existing2.filter((p) => p !== ev.path);
-    if (updated2.length === existing2.length) return domains;
-    next[i] = { ...next[i], source_paths: updated2 };
-    return next;
-  }
-  const existing = next[i].source_paths ?? [];
-  let updated;
-  if (opts?.vaultRoot !== void 0) {
-    updated = consolidateSourcePaths(existing, ev.path, opts.vaultRoot);
-    if (updated === existing) return domains;
-  } else {
-    if (existing.includes(ev.path)) return domains;
-    updated = [...existing, ev.path];
-  }
-  next[i] = { ...next[i], source_paths: updated };
-  return next;
-}
 
 // src/phases/ingest.ts
 var import_path_browserify6 = __toESM(require_path_browserify(), 1);
@@ -52850,184 +53042,6 @@ function mkChunk(base, delta, finish_reason = null, usage = null) {
     usage: usage ?? void 0
   };
 }
-
-// src/domain-metadata.ts
-function setIfDefined(target, key, value) {
-  if (value !== void 0) {
-    target[key] = value;
-  }
-}
-function domainEntryToMetadataRecords(entry) {
-  const domain = {
-    kind: "domain",
-    schemaVersion: 1,
-    id: entry.id,
-    name: entry.name,
-    wiki_folder: entry.wiki_folder,
-    source_paths: entry.source_paths ?? []
-  };
-  setIfDefined(domain, "language_notes", entry.language_notes);
-  setIfDefined(domain, "max_tag_categories", entry.max_tag_categories);
-  setIfDefined(domain, "pageNameVersion", entry.pageNameVersion);
-  const types = (entry.entity_types ?? []).map((type) => ({ kind: "entity_type", ...type }));
-  const sources = Object.entries(entry.analyzed_sources ?? {}).map(([path5, hash]) => ({ kind: "source_state", path: path5, hash }));
-  return [domain, ...types, ...sources];
-}
-function metadataRecordsToDomainEntry(records, fallbackFolder) {
-  const domain = records.find((r) => r.kind === "domain");
-  if (!domain) throw new Error(`${fallbackFolder}: missing domain record`);
-  const entityTypes = records.filter((r) => r.kind === "entity_type").map(({ kind: _kind, ...type }) => type);
-  const analyzedSources = {};
-  for (const record of records) {
-    if (record.kind === "source_state" && typeof record.path === "string" && typeof record.hash === "string") {
-      analyzedSources[record.path] = record.hash;
-    }
-  }
-  const entry = {
-    id: domain.id,
-    name: domain.name,
-    wiki_folder: domain.wiki_folder || fallbackFolder,
-    source_paths: domain.source_paths ?? [],
-    entity_types: entityTypes,
-    analyzed_sources: analyzedSources,
-    analyzed_sources_v2: true,
-    analyzed_sources_v3: true
-  };
-  setIfDefined(entry, "language_notes", domain.language_notes);
-  setIfDefined(entry, "pageNameVersion", domain.pageNameVersion);
-  setIfDefined(entry, "max_tag_categories", domain.max_tag_categories);
-  return entry;
-}
-function parseDomainMetadata(text, path5, fallbackFolder) {
-  return metadataRecordsToDomainEntry(parseJsonl(text, path5), fallbackFolder);
-}
-function stringifyDomainMetadata(records) {
-  return stringifyJsonl(records);
-}
-
-// src/domain-store.ts
-var WIKI_DIR = WIKI_ROOT;
-var DomainCorruptError = class extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "DomainCorruptError";
-  }
-};
-var DomainStore = class {
-  constructor(vault) {
-    this.vault = vault;
-  }
-  vault;
-  async load() {
-    const adapter = this.vault.adapter;
-    const domains = [];
-    let healed = false;
-    if (await adapter.exists(WIKI_DIR)) {
-      const listed = await adapter.list(WIKI_DIR);
-      for (const folder of [...listed.folders].sort()) {
-        const name = folder.split("/").pop() ?? folder;
-        if (name.startsWith(".") || name.startsWith("_")) continue;
-        const path5 = domainMetadataPath(folder);
-        if (!await adapter.exists(path5)) {
-          const recovered = await this.promoteTmpMetadata(adapter, folder, name);
-          if (!recovered) continue;
-          domains.push(recovered);
-          healed = true;
-          continue;
-        }
-        try {
-          domains.push(parseDomainMetadata(await adapter.read(path5), path5, name));
-        } catch (e) {
-          throw new DomainCorruptError(`${path5}: ${e.message}`);
-        }
-      }
-    }
-    if (domains.length === 0 && await adapter.exists(LEGACY_GLOBAL_DOMAIN_PATH)) {
-      const raw = await adapter.read(LEGACY_GLOBAL_DOMAIN_PATH);
-      let parsed;
-      try {
-        parsed = JSON.parse(raw);
-      } catch (e) {
-        throw new DomainCorruptError(`${LEGACY_GLOBAL_DOMAIN_PATH}: ${e.message}`);
-      }
-      if (!Array.isArray(parsed)) throw new DomainCorruptError(`${LEGACY_GLOBAL_DOMAIN_PATH}: expected JSON array`);
-      domains.push(...parsed);
-    }
-    for (const d of domains) {
-      if (d.wiki_folder?.startsWith("!Wiki/")) {
-        d.wiki_folder = d.wiki_folder.slice("!Wiki/".length);
-      }
-    }
-    const { migrated: m2 } = migrateDomainsV2(domains);
-    const { migrated: m3 } = migrateDomainsV3(domains);
-    if (m2 || m3 || healed) await this.save(domains);
-    return domains;
-  }
-  async save(domains) {
-    const adapter = this.vault.adapter;
-    if (!await adapter.exists(WIKI_DIR)) await this.vault.createFolder(WIKI_DIR).catch(() => {
-    });
-    if (await adapter.exists(LEGACY_GLOBAL_DOMAIN_PATH)) await adapter.remove(LEGACY_GLOBAL_DOMAIN_PATH);
-    const desiredPathsById = new Map(domains.map((domain) => [domain.id, domainMetadataPath(domainWikiFolder(domain.wiki_folder))]));
-    const desiredPaths = new Set(desiredPathsById.values());
-    const listed = await adapter.list(WIKI_DIR);
-    for (const folder of [...listed.folders].sort()) {
-      const name = folder.split("/").pop() ?? folder;
-      if (name.startsWith(".") || name.startsWith("_")) continue;
-      const path5 = domainMetadataPath(folder);
-      if (!await adapter.exists(path5) || desiredPaths.has(path5)) continue;
-      try {
-        const existing = parseDomainMetadata(await adapter.read(path5), path5, name);
-        if (!desiredPathsById.has(existing.id) || desiredPathsById.get(existing.id) !== path5) {
-          await adapter.remove(path5);
-        }
-      } catch {
-      }
-    }
-    for (const domain of domains) {
-      const folder = domainWikiFolder(domain.wiki_folder);
-      if (!await adapter.exists(folder)) await this.vault.createFolder(folder).catch(() => {
-      });
-      const path5 = domainMetadataPath(folder);
-      const tmpPath = `${path5}.tmp`;
-      if (await adapter.exists(tmpPath)) await adapter.remove(tmpPath).catch(() => {
-      });
-      await adapter.write(path5, stringifyDomainMetadata(domainEntryToMetadataRecords(domain)));
-      if (!await adapter.exists(path5)) {
-        throw new Error(`domain metadata write failed: ${path5}`);
-      }
-    }
-  }
-  /**
-   * Recover a domain whose metadata write was interrupted: the old tmp+rename
-   * save left a `metadata.jsonl.tmp` with no `metadata.jsonl`. Promote the tmp
-   * to the final path so the domain is selectable again. Returns null when
-   * there is no tmp — a folder with content but no tmp is left alone, because
-   * that is indistinguishable from an intentionally deleted domain (Delete
-   * removes metadata.jsonl but leaves the folder; it never leaves a tmp).
-   *
-   * Parse BEFORE mutating: a corrupt tmp must be left intact (never written to
-   * the final path, never deleted), so it can be inspected manually instead of
-   * becoming a corrupt metadata.jsonl that throws DomainCorruptError on every
-   * future load.
-   */
-  async promoteTmpMetadata(adapter, folder, name) {
-    const path5 = domainMetadataPath(folder);
-    const tmpPath = `${path5}.tmp`;
-    if (!await adapter.exists(tmpPath)) return null;
-    let entry;
-    try {
-      const raw = await adapter.read(tmpPath);
-      entry = parseDomainMetadata(raw, path5, name);
-      await adapter.write(path5, raw);
-    } catch {
-      return null;
-    }
-    await adapter.remove(tmpPath).catch(() => {
-    });
-    return entry;
-  }
-};
 
 // src/okf-export.ts
 var import_yaml4 = __toESM(require_dist(), 1);

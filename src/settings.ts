@@ -4,6 +4,7 @@ import { probeClaudeBinary } from "./claude-cli-client";
 import type LlmWikiPlugin from "./main";
 import type { LlmWikiPluginSettings, OpKey } from "./types";
 import type { DomainEntry } from "./domain";
+import { removeDomainFolder } from "./domain-store";
 import { i18n } from "./i18n";
 import { resolveEffective } from "./effective-settings";
 import { DEFAULT_CHUNKING, probeEmbeddingDimensions, probeEmbeddingDimensionsResult } from "./page-similarity";
@@ -399,6 +400,9 @@ export class LlmWikiSettingTab extends PluginSettingTab {
                   new Notice(T.settings.domainDeleted(d.id));
                   const cur = await this.plugin.domainStore.load();
                   await this.plugin.domainStore.save(cur.filter((x) => x.id !== d.id));
+                  // Remove the whole wiki folder (pages, sidecars, and the empty
+                  // !Wiki/<domain> folder itself) — deletion should leave nothing behind.
+                  await removeDomainFolder(this.plugin.app.vault.adapter, d.wiki_folder);
                   await this.refresh();
                 })();
               }).open();

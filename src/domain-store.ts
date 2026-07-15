@@ -132,3 +132,22 @@ export class DomainStore {
     return entry;
   }
 }
+
+/**
+ * Completely remove a domain's wiki folder — every page, sidecar
+ * (metadata/index/log), nested subfolder, and the `!Wiki/<domain>` folder
+ * itself. Used when a domain is deleted from settings so no empty folder is
+ * left behind. Files are removed bottom-up before each folder is rmdir'd, and
+ * the whole thing is best-effort (a locked file or adapter error never throws).
+ */
+export async function removeDomainFolder(adapter: Vault["adapter"], wikiFolder: string): Promise<void> {
+  const folder = domainWikiFolder(wikiFolder);
+  if (!(await adapter.exists(folder))) return;
+  const removeRec = async (dir: string): Promise<void> => {
+    const { files, folders } = await adapter.list(dir);
+    for (const f of files) await adapter.remove(f).catch(() => {});
+    for (const sub of folders) await removeRec(sub);
+    await adapter.rmdir(dir, true).catch(() => {});
+  };
+  await removeRec(folder);
+}
