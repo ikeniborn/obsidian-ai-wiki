@@ -13,6 +13,7 @@ import { mergeContentFrameInstruction, mergedPageProfile, parseWikiPageRepairFra
 import { runStructuredStreaming, type StructuredSink } from "./structured-output";
 import ingestTemplate from "../../prompts/ingest.md";
 import ingestMerge from "../../prompts/ingest-merge.md";
+import { ensureIncomingSections } from "../merge-sections";
 import ingestEntitiesTemplate from "../../prompts/ingest-entities.md";
 import fixPathsTemplate from "../../prompts/ingest-fix-paths.md";
 import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
@@ -471,7 +472,8 @@ export async function* runIngest(
             }
             const merged = { value: mergeSink.value! };
             yield { kind: "tool_use", name: "Update", input: { path: targetPath } };
-            await vaultTools.write(targetPath, merged.value.content);
+            const guardedContent = ensureIncomingSections(merged.value.content, page.content);
+            await vaultTools.write(targetPath, guardedContent);
             written.push(targetPath);
             yield { kind: "tool_result", ok: true, preview: `merged ← ${pageId(page.path)}` };
             const relTarget = targetPath.slice(wikiVaultPath.length + 1);
