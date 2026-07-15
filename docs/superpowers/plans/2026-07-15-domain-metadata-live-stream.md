@@ -3,7 +3,7 @@ chain:
   intent: n/a
   spec: docs/superpowers/specs/2026-07-15-domain-metadata-and-live-stream-design.md
 review:
-  plan_hash: 2553144e7160c4ec
+  plan_hash: 20449c1d7a6501a3
   last_run: 2026-07-15
   phases:
     - name: structure
@@ -322,6 +322,19 @@ test("load leaves a content-only folder with no tmp untouched (deleted-domain sa
   const store = new DomainStore(vault(adapter));
   assert.deepEqual(await store.load(), []);
   assert.equal(await adapter.exists("!Wiki/foo/metadata.jsonl"), false);
+  // content is left in place — self-heal never removes pages/index
+  assert.equal(await adapter.exists("!Wiki/foo/index.jsonl"), true);
+  assert.equal(await adapter.exists("!Wiki/foo/concepts/x.md"), true);
+});
+
+test("load leaves a corrupt metadata.jsonl.tmp intact (does not promote or delete it)", async () => {
+  const adapter = new MemoryAdapter();
+  adapter.files.set("!Wiki/bad/metadata.jsonl.tmp", "not valid jsonl {{{");
+  const store = new DomainStore(vault(adapter));
+  assert.deepEqual(await store.load(), []);
+  // corrupt tmp must NOT be promoted into a corrupt metadata.jsonl, and must be preserved
+  assert.equal(await adapter.exists("!Wiki/bad/metadata.jsonl"), false);
+  assert.equal(await adapter.exists("!Wiki/bad/metadata.jsonl.tmp"), true);
 });
 
 test("load ignores an empty folder", async () => {
@@ -335,7 +348,7 @@ test("load ignores an empty folder", async () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `npx tsx --test tests/domain-store-selfheal.test.ts`
-Expected: FAIL — the tmp-promotion test returns `[]` (old `load` skips a folder whose `metadata.jsonl` is absent). The two negative tests already pass.
+Expected: FAIL — the tmp-promotion test returns `[]` (old `load` skips a folder whose `metadata.jsonl` is absent). The three negative tests (content-only, corrupt-tmp, empty) already pass.
 
 - [ ] **Step 3: Add tmp-promotion to the `load` scan loop**
 
@@ -410,6 +423,11 @@ In `src/domain-store.ts`, add this private method to the `DomainStore` class (e.
    * there is no tmp — a folder with content but no tmp is left alone, because
    * that is indistinguishable from an intentionally deleted domain (Delete
    * removes metadata.jsonl but leaves the folder; it never leaves a tmp).
+   *
+   * Parse BEFORE mutating: a corrupt tmp must be left intact (never written to
+   * the final path, never deleted), so it can be inspected manually instead of
+   * becoming a corrupt metadata.jsonl that throws DomainCorruptError on every
+   * future load.
    */
   private async promoteTmpMetadata(
     adapter: Vault["adapter"],
@@ -419,22 +437,24 @@ In `src/domain-store.ts`, add this private method to the `DomainStore` class (e.
     const path = domainMetadataPath(folder);
     const tmpPath = `${path}.tmp`;
     if (!(await adapter.exists(tmpPath))) return null;
+    let entry: DomainEntry;
     try {
       const raw = await adapter.read(tmpPath);
+      entry = parseDomainMetadata(raw, path, name); // throws first — nothing mutated yet
       await adapter.write(path, raw);
-      await adapter.remove(tmpPath).catch(() => {});
-      return parseDomainMetadata(raw, path, name);
     } catch {
-      // Corrupt tmp — cannot recover; leave it for manual inspection.
+      // Corrupt/unreadable tmp — leave it (and any partial state) for manual inspection.
       return null;
     }
+    await adapter.remove(tmpPath).catch(() => {});
+    return entry;
   }
 ```
 
 - [ ] **Step 6: Run test to verify it passes**
 
 Run: `npx tsx --test tests/domain-store-selfheal.test.ts`
-Expected: PASS (3 tests).
+Expected: PASS (4 tests).
 
 - [ ] **Step 7: Regression-check + build + lint**
 

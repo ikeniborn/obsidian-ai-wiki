@@ -2,7 +2,7 @@
 chain:
   intent: n/a
 review:
-  spec_hash: 410ced405739635e
+  spec_hash: d8a9f62ed898818b
   last_run: 2026-07-15
   phases:
     - name: structure
@@ -18,7 +18,7 @@ review:
       phase: clarity
       severity: WARNING
       section: "Design / F4"
-      section_hash: 11b63173bd802d8c
+      section_hash: 803be30f5240e949
       fragment: "the post-parse assistant_text{ isReasoning } emit … is kept or dropped per callsite"
       text: >-
         "kept or dropped per callsite" gave no firm per-callsite rule for which
@@ -51,7 +51,7 @@ review:
       phase: consistency
       severity: WARNING
       section: "Design / F3"
-      section_hash: 11b63173bd802d8c
+      section_hash: 803be30f5240e949
       fragment: "but ${folder}.jsonl.tmp does (a metadata.jsonl.tmp leftover), promote it"
       text: >-
         Wrong path expression: folder is the full subfolder path, so
@@ -66,7 +66,7 @@ review:
       phase: consistency
       severity: INFO
       section: "Design / F4"
-      section_hash: 11b63173bd802d8c
+      section_hash: 803be30f5240e949
       fragment: "runStructuredStreaming({ … profile, … onEvent: () => {} }, sink)"
       text: >-
         The two schema-based callsites (bootstrap, extract) supply a schema via
@@ -81,7 +81,7 @@ review:
       phase: coverage
       severity: WARNING
       section: "Design / F3"
-      section_hash: 11b63173bd802d8c
+      section_hash: 803be30f5240e949
       fragment: "reconstruct a minimal DomainEntry ... when the folder looks like a real domain"
       text: >-
         Found during Task 2 implementation: content-based self-heal resurrects
@@ -257,8 +257,12 @@ exist:
 
 - If `${domainMetadataPath(folder)}.tmp` exists — i.e.
   `!Wiki/<folder>/metadata.jsonl.tmp`, the leftover from the old `save`'s
-  `tmpPath` after a failed `rename` — promote it: read it, write it to the final
-  path, remove the tmp, parse it, and mark the set dirty.
+  `tmpPath` after a failed `rename` — promote it: read it, **parse it first**,
+  and only on a successful parse write it to the final path and remove the tmp,
+  then mark the set dirty. Parse-before-mutate matters: a **corrupt** tmp (a
+  crash mid-tmp-write) must be left intact for manual inspection — never written
+  into `metadata.jsonl` (which would then throw `DomainCorruptError` on every
+  future load) nor deleted.
 - Otherwise (metadata absent, no tmp) — leave the folder alone (`continue`).
 - After the scan, if any domain was promoted, `await this.save(domains)` to
   canonicalize (guarded to run once, folded into the existing `m2 || m3`
