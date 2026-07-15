@@ -9,7 +9,7 @@ import { i18n } from "./i18n";
 import { DomainStore } from "./domain-store";
 import { LocalConfigStore } from "./local-config";
 import { structuralErrorCounter } from "./structural-error-counter";
-import { runStorageMigration, cleanupBundledSchemaCopies, migrateLogsToPluginDir } from "./storage-migration";
+import { runStorageMigration, cleanupBundledSchemaCopies, migrateLogsToPluginDir, removeEmptyConfigDirs } from "./storage-migration";
 import { migrateIndexFormat } from "./migrate-index-format";
 import { migrateDropSections } from "./migrate-drop-sections";
 import { migrateOkfFrontmatter } from "./migrate-okf-frontmatter";
@@ -40,6 +40,7 @@ export default class LlmWikiPlugin extends Plugin {
     // Schemas are bundled & delivered via release; drop any stale vault copies.
     await cleanupBundledSchemaCopies(this.app.vault);
     await migrateLogsToPluginDir(this.app.vault, this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`);
+    await removeEmptyConfigDirs(this.app.vault);
     await migrateLegacyData(this, this.domainStore, this.localConfigStore);
     await this.loadSettings();
     await migrateToLocalV1(this, this.localConfigStore);

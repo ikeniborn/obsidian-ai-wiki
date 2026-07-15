@@ -142,3 +142,30 @@ async function cleanDir(
     }
   } catch { /* ignore */ }
 }
+
+/**
+ * Remove empty `_config` folders left behind by the storage migrations: the
+ * global `!Wiki/_config` and each per-domain `!Wiki/<domain>/_config`. Runs
+ * unconditionally on load; a no-op when the folders are absent or non-empty.
+ * Best-effort — never throws.
+ */
+export async function removeEmptyConfigDirs(vault: Vault): Promise<void> {
+  const adapter = vault.adapter;
+  await rmdirIfEmpty(adapter, GLOBAL_CONFIG_DIR);
+  try {
+    const wiki = await adapter.list(WIKI_ROOT);
+    for (const folder of wiki.folders) {
+      await rmdirIfEmpty(adapter, `${folder}/_config`);
+    }
+  } catch { /* !Wiki absent — nothing to clean */ }
+}
+
+async function rmdirIfEmpty(adapter: Vault["adapter"], dir: string): Promise<void> {
+  try {
+    if (!(await adapter.exists(dir))) return;
+    const listing = await adapter.list(dir);
+    if (listing.files.length === 0 && listing.folders.length === 0) {
+      await adapter.rmdir(dir, false).catch(() => { /* ignore */ });
+    }
+  } catch { /* best-effort */ }
+}
