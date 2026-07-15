@@ -3,6 +3,7 @@ import type { AddDomainInput, DomainEntry, EntityType } from "./domain";
 import { i18n } from "./i18n";
 import { capList } from "./incremental-sources";
 import { isSelectableSourceFolder } from "./source-paths";
+import { effectiveSubfolder } from "./wiki-path";
 
 export class BusyCloseModal extends Modal {
   constructor(app: App, private onAbort: () => void) { super(app); }
@@ -530,9 +531,7 @@ export class EditDomainModal extends Modal {
     const card = container.createDiv({ cls: "ai-wiki-et-card" });
     const head = card.createDiv({ cls: "ai-wiki-et-card-head" });
     head.createEl("span", { text: et.type, cls: "ai-wiki-et-card-type" });
-    if (et.wiki_subfolder) {
-      head.createEl("span", { text: et.wiki_subfolder + "/", cls: "ai-wiki-et-card-subfolder" });
-    }
+    head.createEl("span", { text: effectiveSubfolder(et) + "/", cls: "ai-wiki-et-card-subfolder" });
     const body = card.createDiv({ cls: "ai-wiki-et-card-body" });
     if (et.description) {
       body.createEl("p", { text: et.description, cls: "ai-wiki-et-card-desc" });

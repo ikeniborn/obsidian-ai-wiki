@@ -6,7 +6,7 @@ import type { DomainEntry } from "./domain";
 import { i18n, i18nFor, resolveLang } from "./i18n";
 import { isSourceFile } from "./source-deletion";
 import { resolveRerunDomain } from "./rerun-domain";
-import { domainWikiFolder, domainLogPath, domainIndexPath, isWikiArticlePath } from "./wiki-path";
+import { domainWikiFolder, domainLogPath, domainIndexPath, isWikiArticlePath, effectiveSubfolder } from "./wiki-path";
 import { computeSpeedText } from "./phases/llm-utils";
 import { isAbsolute, relative } from "path-browserify";
 import { retrievalTag } from "./retrieval-diag";
@@ -405,8 +405,7 @@ export class LlmWikiView extends ItemView {
         const counts = new Map<string, number>();
         const allMd = this.plugin.app.vault.getMarkdownFiles();
         for (const et of domainEntry.entity_types ?? []) {
-          if (!et.wiki_subfolder) { counts.set(et.type, 0); continue; }
-          const prefix = `${domainWikiFolder(domainEntry.wiki_folder)}/${et.wiki_subfolder}/`;
+          const prefix = `${domainWikiFolder(domainEntry.wiki_folder)}/${effectiveSubfolder(et)}/`;
           counts.set(et.type, allMd.filter(f => f.path.startsWith(prefix)).length);
         }
 

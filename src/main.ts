@@ -14,7 +14,7 @@ import { migrateIndexFormat } from "./migrate-index-format";
 import { migrateDropSections } from "./migrate-drop-sections";
 import { migrateOkfFrontmatter } from "./migrate-okf-frontmatter";
 import { migrateJsonlDomainStorage } from "./migrate-jsonl-domain-storage";
-import { GLOBAL_DOMAIN_PATH, domainWikiFolder } from "./wiki-path";
+import { GLOBAL_DOMAIN_PATH, domainWikiFolder, effectiveSubfolder } from "./wiki-path";
 
 export default class LlmWikiPlugin extends Plugin {
   settings!: LlmWikiPluginSettings;
@@ -137,8 +137,7 @@ export default class LlmWikiPlugin extends Plugin {
             const counts = new Map<string, number>();
             const allMd = this.app.vault.getMarkdownFiles();
             for (const et of domainEntry.entity_types ?? []) {
-              if (!et.wiki_subfolder) { counts.set(et.type, 0); continue; }
-              const prefix = `${domainWikiFolder(domainEntry.wiki_folder)}/${et.wiki_subfolder}/`;
+              const prefix = `${domainWikiFolder(domainEntry.wiki_folder)}/${effectiveSubfolder(et)}/`;
               counts.set(et.type, allMd.filter(f => f.path.startsWith(prefix)).length);
             }
             new LintOptionsModal(this.app, domainEntry, this.settings.lintOptions.useLlm,
