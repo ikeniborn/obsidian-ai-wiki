@@ -323,3 +323,40 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
 
   throw new StructuredValidationError(callSite, maxRetries + 1, lastError);
 }
+
+export interface StructuredSink<T> {
+  value?: T;
+  outputTokens?: number;
+  fullText?: string;
+}
+
+/**
+ * Streaming wrapper over `runStructuredWithRetry`. Yields every RunEvent —
+ * including the live reasoning/content deltas from streamOnce — as it is
+ * produced, so a generator consumer can `yield*` them to the UI instead of
+ * buffering until the call resolves. The parsed result lands in `sink`; a
+ * structured failure is re-thrown out of the generator. `args.onEvent` is
+ * ignored — the bridge installs its own.
+ */
+export async function* runStructuredStreaming<T>(
+  args: RunStructuredArgs<T>,
+  sink: StructuredSink<T>,
+): AsyncGenerator<RunEvent> {
+  const queue: RunEvent[] = [];
+  let wake: (() => void) | null = null;
+  let settled = false;
+  let error: unknown = null;
+  const onEvent = (ev: RunEvent) => { queue.push(ev); wake?.(); };
+
+  const p = runStructuredWithRetry({ ...args, onEvent })
+    .then((r) => { sink.value = r.value; sink.outputTokens = r.outputTokens; sink.fullText = r.fullText; })
+    .catch((e) => { error = e; })
+    .finally(() => { settled = true; wake?.(); });
+
+  while (!settled || queue.length) {
+    while (queue.length) yield queue.shift()!;
+    if (!settled) await new Promise<void>((res) => { wake = () => { wake = null; res(); }; });
+  }
+  await p;
+  if (error) throw error as Error;
+}

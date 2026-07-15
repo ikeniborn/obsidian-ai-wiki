@@ -11,6 +11,7 @@ register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 const { parseWithRetry } = await import("../src/phases/parse-with-retry");
 const {
   runStructuredWithRetry,
+  runStructuredStreaming,
   StructuredValidationError,
 } = await import("../src/phases/structured-output");
 
@@ -331,4 +332,41 @@ test("streaming structured call emits reasoning and content deltas live", async 
     events.some((ev) => ev.kind === "assistant_text" && !ev.isReasoning && ev.delta.includes('"value"')),
     true,
   );
+});
+
+test("runStructuredStreaming yields events live and fills the sink", async () => {
+  const seen: RunEvent[] = [];
+  const sink: { value?: { value: string }; outputTokens?: number; fullText?: string } = {};
+  const llm = {
+    chat: { completions: { create: async () => (async function* () {
+      yield reasoningChunk("live reasoning");
+      yield chunk('{"value":"ok"}');
+      yield usageChunk();
+    })() } },
+  } as unknown as LlmClient;
+
+  for await (const ev of runStructuredStreaming({
+    llm, model: "m", baseMessages: [{ role: "user", content: "x" }],
+    opts: {}, profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 1, callSite: "query.seeds",
+    signal: new AbortController().signal, onEvent: () => {},
+  }, sink)) {
+    seen.push(ev);
+  }
+
+  assert.equal(sink.value?.value, "ok");
+  assert.equal(seen.some((ev) => ev.kind === "assistant_text" && ev.isReasoning === true), true);
+});
+
+test("runStructuredStreaming propagates a structured failure", async () => {
+  const sink: { value?: unknown } = {};
+  await assert.rejects(async () => {
+    for await (const _ev of runStructuredStreaming({
+      llm: llmFromAttempts(["bad", "still bad"]),
+      model: "m", baseMessages: [{ role: "user", content: "x" }],
+      opts: {}, profile: { kind: "framed-zod", schema: AnswerSchema, parse: parseAnswerFrames, repairInstruction: "x" },
+      maxRetries: 1, callSite: "query.answer",
+      signal: new AbortController().signal, onEvent: () => {},
+    }, sink)) { /* drain */ }
+  }, StructuredValidationError);
 });
