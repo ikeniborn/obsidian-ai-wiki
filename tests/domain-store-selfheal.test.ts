@@ -54,6 +54,17 @@ test("load leaves a content-only folder with no tmp untouched (deleted-domain sa
   const store = new DomainStore(vault(adapter));
   assert.deepEqual(await store.load(), []);
   assert.equal(await adapter.exists("!Wiki/foo/metadata.jsonl"), false);
+  assert.equal(await adapter.exists("!Wiki/foo/index.jsonl"), true);
+  assert.equal(await adapter.exists("!Wiki/foo/concepts/x.md"), true);
+});
+
+test("load leaves a corrupt metadata.jsonl.tmp intact (does not promote or delete it)", async () => {
+  const adapter = new MemoryAdapter();
+  adapter.files.set("!Wiki/bad/metadata.jsonl.tmp", "not valid jsonl {{{");
+  const store = new DomainStore(vault(adapter));
+  assert.deepEqual(await store.load(), []);
+  assert.equal(await adapter.exists("!Wiki/bad/metadata.jsonl"), false);
+  assert.equal(await adapter.exists("!Wiki/bad/metadata.jsonl.tmp"), true);
 });
 
 test("load ignores an empty folder", async () => {

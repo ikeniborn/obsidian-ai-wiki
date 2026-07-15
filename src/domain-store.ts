@@ -105,6 +105,11 @@ export class DomainStore {
    * there is no tmp — a folder with content but no tmp is left alone, because
    * that is indistinguishable from an intentionally deleted domain (Delete
    * removes metadata.jsonl but leaves the folder; it never leaves a tmp).
+   *
+   * Parse BEFORE mutating: a corrupt tmp must be left intact (never written to
+   * the final path, never deleted), so it can be inspected manually instead of
+   * becoming a corrupt metadata.jsonl that throws DomainCorruptError on every
+   * future load.
    */
   private async promoteTmpMetadata(
     adapter: Vault["adapter"],
@@ -114,14 +119,16 @@ export class DomainStore {
     const path = domainMetadataPath(folder);
     const tmpPath = `${path}.tmp`;
     if (!(await adapter.exists(tmpPath))) return null;
+    let entry: DomainEntry;
     try {
       const raw = await adapter.read(tmpPath);
+      entry = parseDomainMetadata(raw, path, name); // throws first — nothing mutated yet
       await adapter.write(path, raw);
-      await adapter.remove(tmpPath).catch(() => {});
-      return parseDomainMetadata(raw, path, name);
     } catch {
-      // Corrupt tmp — cannot recover; leave it for manual inspection.
+      // Corrupt/unreadable tmp — leave it (and any partial state) for manual inspection.
       return null;
     }
+    await adapter.remove(tmpPath).catch(() => {});
+    return entry;
   }
 }
