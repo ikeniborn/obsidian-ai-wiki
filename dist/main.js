@@ -9555,7 +9555,6 @@ var require_dispatcher_base = __commonJS({
       }
       get webSocketOptions() {
         return {
-          maxFragments: this[kWebSocketOptions].maxFragments ?? 131072,
           maxPayloadSize: this[kWebSocketOptions].maxPayloadSize ?? 128 * 1024 * 1024
         };
       }
@@ -13210,9 +13209,6 @@ var require_client_h1 = __commonJS({
     var FastBuffer = Buffer[Symbol.species];
     var addListener = util2.addListener;
     var removeAllListeners = util2.removeAllListeners;
-    var kIdleSocketValidation = /* @__PURE__ */ Symbol("kIdleSocketValidation");
-    var kIdleSocketValidationTimeout = /* @__PURE__ */ Symbol("kIdleSocketValidationTimeout");
-    var kSocketUsed = /* @__PURE__ */ Symbol("kSocketUsed");
     var extractBody;
     async function lazyllhttp() {
       const llhttpWasmData = process.env.JEST_WORKER_ID ? require_llhttp_wasm() : void 0;
@@ -13375,54 +13371,23 @@ var require_client_h1 = __commonJS({
             currentBufferRef = null;
           }
           const offset = llhttp.llhttp_get_error_pos(this.ptr) - currentBufferPtr;
-          if (ret !== constants.ERROR.OK) {
-            const body = data.subarray(offset);
-            if (ret === constants.ERROR.PAUSED_UPGRADE) {
-              this.onUpgrade(body);
-            } else if (ret === constants.ERROR.PAUSED) {
-              this.paused = true;
-              socket.unshift(body);
-            } else {
-              throw this.createError(ret, body);
+          if (ret === constants.ERROR.PAUSED_UPGRADE) {
+            this.onUpgrade(data.slice(offset));
+          } else if (ret === constants.ERROR.PAUSED) {
+            this.paused = true;
+            socket.unshift(data.slice(offset));
+          } else if (ret !== constants.ERROR.OK) {
+            const ptr = llhttp.llhttp_get_error_reason(this.ptr);
+            let message = "";
+            if (ptr) {
+              const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0);
+              message = "Response does not match the HTTP/1.1 protocol (" + Buffer.from(llhttp.memory.buffer, ptr, len).toString() + ")";
             }
+            throw new HTTPParserError(message, constants.ERROR[ret], data.slice(offset));
           }
         } catch (err) {
           util2.destroy(socket, err);
         }
-      }
-      finish() {
-        assert(currentParser === null);
-        assert(this.ptr != null);
-        assert(!this.paused);
-        const { llhttp } = this;
-        let ret;
-        try {
-          currentParser = this;
-          ret = llhttp.llhttp_finish(this.ptr);
-        } finally {
-          currentParser = null;
-        }
-        if (ret === constants.ERROR.OK) {
-          return null;
-        }
-        if (ret === constants.ERROR.PAUSED || ret === constants.ERROR.PAUSED_UPGRADE) {
-          this.paused = true;
-          return null;
-        }
-        return this.createError(ret, EMPTY_BUF);
-      }
-      createError(ret, data) {
-        const { llhttp, contentLength, bytesRead } = this;
-        if (contentLength && bytesRead !== parseInt(contentLength, 10)) {
-          return new ResponseContentLengthMismatchError();
-        }
-        const ptr = llhttp.llhttp_get_error_reason(this.ptr);
-        let message = "";
-        if (ptr) {
-          const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0);
-          message = "Response does not match the HTTP/1.1 protocol (" + Buffer.from(llhttp.memory.buffer, ptr, len).toString() + ")";
-        }
-        return new HTTPParserError(message, constants.ERROR[ret], data);
       }
       destroy() {
         assert(this.ptr != null);
@@ -13441,10 +13406,6 @@ var require_client_h1 = __commonJS({
       onMessageBegin() {
         const { socket, client } = this;
         if (socket.destroyed) {
-          return -1;
-        }
-        if (client[kRunning] === 0) {
-          util2.destroy(socket, new SocketError("bad response", util2.getSocketInfo(socket)));
           return -1;
         }
         const request = client[kQueue][client[kRunningIdx]];
@@ -13524,10 +13485,6 @@ var require_client_h1 = __commonJS({
       onHeadersComplete(statusCode, upgrade, shouldKeepAlive) {
         const { client, socket, headers, statusText } = this;
         if (socket.destroyed) {
-          return -1;
-        }
-        if (client[kRunning] === 0) {
-          util2.destroy(socket, new SocketError("bad response", util2.getSocketInfo(socket)));
           return -1;
         }
         const request = client[kQueue][client[kRunningIdx]];
@@ -13655,7 +13612,6 @@ var require_client_h1 = __commonJS({
         }
         request.onComplete(headers);
         client[kQueue][client[kRunningIdx]++] = null;
-        socket[kSocketUsed] = true;
         if (socket[kWriting]) {
           assert(client[kRunning] === 0);
           util2.destroy(socket, new InformationalError("reset"));
@@ -13699,19 +13655,12 @@ var require_client_h1 = __commonJS({
       socket[kWriting] = false;
       socket[kReset] = false;
       socket[kBlocking] = false;
-      socket[kIdleSocketValidation] = 0;
-      socket[kIdleSocketValidationTimeout] = null;
-      socket[kSocketUsed] = false;
       socket[kParser] = new Parser(client, socket, llhttpInstance);
       addListener(socket, "error", function(err) {
         assert(err.code !== "ERR_TLS_CERT_ALTNAME_INVALID");
         const parser = this[kParser];
         if (err.code === "ECONNRESET" && parser.statusCode && !parser.shouldKeepAlive) {
-          const parserErr = parser.finish();
-          if (parserErr) {
-            this[kError] = parserErr;
-            this[kClient][kOnError](parserErr);
-          }
+          parser.onMessageComplete();
           return;
         }
         this[kError] = err;
@@ -13726,10 +13675,7 @@ var require_client_h1 = __commonJS({
       addListener(socket, "end", function() {
         const parser = this[kParser];
         if (parser.statusCode && !parser.shouldKeepAlive) {
-          const parserErr = parser.finish();
-          if (parserErr) {
-            util2.destroy(this, parserErr);
-          }
+          parser.onMessageComplete();
           return;
         }
         util2.destroy(this, new SocketError("other side closed", util2.getSocketInfo(this)));
@@ -13737,10 +13683,9 @@ var require_client_h1 = __commonJS({
       addListener(socket, "close", function() {
         const client2 = this[kClient];
         const parser = this[kParser];
-        clearIdleSocketValidation(this);
         if (parser) {
           if (!this[kError] && parser.statusCode && !parser.shouldKeepAlive) {
-            this[kError] = parser.finish() || this[kError];
+            parser.onMessageComplete();
           }
           this[kParser].destroy();
           this[kParser] = null;
@@ -13789,7 +13734,7 @@ var require_client_h1 = __commonJS({
           return socket.destroyed;
         },
         busy(request) {
-          if (socket[kWriting] || socket[kReset] || socket[kBlocking] || socket[kIdleSocketValidation] === 1) {
+          if (socket[kWriting] || socket[kReset] || socket[kBlocking]) {
             return true;
           }
           if (request) {
@@ -13807,24 +13752,6 @@ var require_client_h1 = __commonJS({
         }
       };
     }
-    function clearIdleSocketValidation(socket) {
-      if (socket[kIdleSocketValidationTimeout]) {
-        clearTimeout(socket[kIdleSocketValidationTimeout]);
-        socket[kIdleSocketValidationTimeout] = null;
-      }
-      socket[kIdleSocketValidation] = 0;
-    }
-    function scheduleIdleSocketValidation(client, socket) {
-      socket[kIdleSocketValidation] = 1;
-      socket[kIdleSocketValidationTimeout] = setTimeout(() => {
-        socket[kIdleSocketValidationTimeout] = null;
-        socket[kIdleSocketValidation] = 2;
-        if (client[kSocket] === socket && !socket.destroyed) {
-          client[kResume]();
-        }
-      }, 0);
-      socket[kIdleSocketValidationTimeout].unref?.();
-    }
     function resumeH1(client) {
       const socket = client[kSocket];
       if (socket && !socket.destroyed) {
@@ -13836,29 +13763,6 @@ var require_client_h1 = __commonJS({
         } else if (socket[kNoRef] && socket.ref) {
           socket.ref();
           socket[kNoRef] = false;
-        }
-        if (client[kRunning] === 0 && client[kPending] > 0 && socket[kSocketUsed]) {
-          if (socket[kIdleSocketValidation] === 0) {
-            scheduleIdleSocketValidation(client, socket);
-            socket[kParser].readMore();
-            if (socket.destroyed) {
-              return;
-            }
-            return;
-          }
-          if (socket[kIdleSocketValidation] === 1) {
-            socket[kParser].readMore();
-            if (socket.destroyed) {
-              return;
-            }
-            return;
-          }
-        }
-        if (client[kRunning] === 0) {
-          socket[kParser].readMore();
-          if (socket.destroyed) {
-            return;
-          }
         }
         if (client[kSize] === 0) {
           if (socket[kParser].timeoutType !== TIMEOUT_KEEP_ALIVE) {
@@ -13912,7 +13816,6 @@ var require_client_h1 = __commonJS({
         process.emitWarning(new RequestContentLengthMismatchError());
       }
       const socket = client[kSocket];
-      clearIdleSocketValidation(socket);
       const abort = (err) => {
         if (request.aborted || request.completed) {
           return;
@@ -23697,14 +23600,18 @@ var require_parse = __commonJS({
       } else if (attributeNameLowercase === "httponly") {
         cookieAttributeList.httpOnly = true;
       } else if (attributeNameLowercase === "samesite") {
+        let enforcement = "Default";
         const attributeValueLowercase = attributeValue.toLowerCase();
-        if (attributeValueLowercase === "none") {
-          cookieAttributeList.sameSite = "None";
-        } else if (attributeValueLowercase === "strict") {
-          cookieAttributeList.sameSite = "Strict";
-        } else if (attributeValueLowercase === "lax") {
-          cookieAttributeList.sameSite = "Lax";
+        if (attributeValueLowercase.includes("none")) {
+          enforcement = "None";
         }
+        if (attributeValueLowercase.includes("strict")) {
+          enforcement = "Strict";
+        }
+        if (attributeValueLowercase.includes("lax")) {
+          enforcement = "Lax";
+        }
+        cookieAttributeList.sameSite = enforcement;
       } else {
         cookieAttributeList.unparsed ??= [];
         cookieAttributeList.unparsed.push(`${attributeName}=${attributeValue}`);
@@ -24726,10 +24633,6 @@ var require_receiver = __commonJS({
     var { closeWebSocketConnection } = require_connection();
     var { PerMessageDeflate } = require_permessage_deflate();
     var { MessageSizeExceededError } = require_errors2();
-    function failWebsocketConnectionWithCode(ws, code, reason) {
-      closeWebSocketConnection(ws, code, reason, Buffer.byteLength(reason));
-      failWebsocketConnection(ws, reason);
-    }
     var ByteParser = class extends Writable {
       #buffers = [];
       #fragmentsBytes = 0;
@@ -24741,19 +24644,16 @@ var require_receiver = __commonJS({
       /** @type {Map<string, PerMessageDeflate>} */
       #extensions;
       /** @type {number} */
-      #maxFragments;
-      /** @type {number} */
       #maxPayloadSize;
       /**
        * @param {import('./websocket').WebSocket} ws
        * @param {Map<string, string>|null} extensions
-       * @param {{ maxFragments?: number, maxPayloadSize?: number }} [options]
+       * @param {{ maxPayloadSize?: number }} [options]
        */
       constructor(ws, extensions, options = {}) {
         super();
         this.ws = ws;
         this.#extensions = extensions == null ? /* @__PURE__ */ new Map() : extensions;
-        this.#maxFragments = options.maxFragments ?? 0;
         this.#maxPayloadSize = options.maxPayloadSize ?? 0;
         if (this.#extensions.has("permessage-deflate")) {
           this.#extensions.set("permessage-deflate", new PerMessageDeflate(extensions, options));
@@ -24770,8 +24670,8 @@ var require_receiver = __commonJS({
         this.run(callback);
       }
       #validatePayloadLength() {
-        if (this.#maxPayloadSize > 0 && !isControlFrame(this.#info.opcode) && this.#info.payloadLength + this.#fragmentsBytes > this.#maxPayloadSize) {
-          failWebsocketConnectionWithCode(this.ws, 1009, "Payload size exceeds maximum allowed size");
+        if (this.#maxPayloadSize > 0 && !isControlFrame(this.#info.opcode) && this.#info.payloadLength > this.#maxPayloadSize) {
+          failWebsocketConnection(this.ws, "Payload size exceeds maximum allowed size");
           return false;
         }
         return true;
@@ -24887,11 +24787,9 @@ var require_receiver = __commonJS({
               this.#state = parserStates.INFO;
             } else {
               if (!this.#info.compressed) {
-                if (!this.writeFragments(body)) {
-                  return;
-                }
+                this.writeFragments(body);
                 if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
-                  failWebsocketConnectionWithCode(this.ws, 1009, new MessageSizeExceededError().message);
+                  failWebsocketConnection(this.ws, new MessageSizeExceededError().message);
                   return;
                 }
                 if (!this.#info.fragmented && this.#info.fin) {
@@ -24904,15 +24802,12 @@ var require_receiver = __commonJS({
                   this.#info.fin,
                   (error, data) => {
                     if (error) {
-                      const code = error instanceof MessageSizeExceededError ? 1009 : 1007;
-                      failWebsocketConnectionWithCode(this.ws, code, error.message);
+                      failWebsocketConnection(this.ws, error.message);
                       return;
                     }
-                    if (!this.writeFragments(data)) {
-                      return;
-                    }
+                    this.writeFragments(data);
                     if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
-                      failWebsocketConnectionWithCode(this.ws, 1009, new MessageSizeExceededError().message);
+                      failWebsocketConnection(this.ws, new MessageSizeExceededError().message);
                       return;
                     }
                     if (!this.#info.fin) {
@@ -24970,13 +24865,8 @@ var require_receiver = __commonJS({
         return buffer;
       }
       writeFragments(fragment) {
-        if (this.#maxFragments > 0 && this.#fragments.length === this.#maxFragments) {
-          failWebsocketConnectionWithCode(this.ws, 1008, "Too many message fragments");
-          return false;
-        }
         this.#fragmentsBytes += fragment.length;
         this.#fragments.push(fragment);
-        return true;
       }
       consumeFragments() {
         const fragments = this.#fragments;
@@ -25426,11 +25316,8 @@ var require_websocket = __commonJS({
        */
       #onConnectionEstablished(response, parsedExtensions) {
         this[kResponse] = response;
-        const webSocketOptions = this[kController]?.dispatcher?.webSocketOptions;
-        const maxFragments = webSocketOptions?.maxFragments;
-        const maxPayloadSize = webSocketOptions?.maxPayloadSize;
+        const maxPayloadSize = this[kController]?.dispatcher?.webSocketOptions?.maxPayloadSize;
         const parser = new ByteParser(this, parsedExtensions, {
-          maxFragments,
           maxPayloadSize
         });
         parser.on("drain", onParserDrain);
@@ -28090,6 +27977,9 @@ function sanitizeWikiSubfolder(raw) {
   if (!raw.includes("/")) return raw;
   return raw.split("/").pop();
 }
+function effectiveSubfolder(et) {
+  return et.wiki_subfolder || sanitizeWikiSubfolder(et.type);
+}
 function validateArticlePath(path5, wikiVaultPath) {
   const prefix = `${wikiVaultPath}/`;
   if (!path5.startsWith(prefix)) return false;
@@ -28635,9 +28525,7 @@ var EditDomainModal = class extends import_obsidian2.Modal {
     const card = container.createDiv({ cls: "ai-wiki-et-card" });
     const head = card.createDiv({ cls: "ai-wiki-et-card-head" });
     head.createEl("span", { text: et.type, cls: "ai-wiki-et-card-type" });
-    if (et.wiki_subfolder) {
-      head.createEl("span", { text: et.wiki_subfolder + "/", cls: "ai-wiki-et-card-subfolder" });
-    }
+    head.createEl("span", { text: effectiveSubfolder(et) + "/", cls: "ai-wiki-et-card-subfolder" });
     const body = card.createDiv({ cls: "ai-wiki-et-card-body" });
     if (et.description) {
       body.createEl("p", { text: et.description, cls: "ai-wiki-et-card-desc" });
@@ -30057,11 +29945,15 @@ function maxCosine(query, vecs) {
 }
 var EMBEDDING_BATCH_SIZE = 100;
 var RRF_CANDIDATE_POOL = 50;
+function buildEmbeddingRequestBody(model, inputs, dimensions) {
+  const body = { model, input: inputs };
+  if (dimensions && dimensions > 0) body.dimensions = dimensions;
+  return body;
+}
 async function fetchEmbeddings(baseUrl, apiKey, model, inputs, dimensions) {
   const { requestUrl: requestUrl3 } = await import("obsidian");
   const url = `${baseUrl.replace(/\/$/, "")}/embeddings`;
-  const body = { model, input: inputs };
-  if (dimensions && dimensions > 0) body.dimensions = dimensions;
+  const body = buildEmbeddingRequestBody(model, inputs, dimensions);
   const resp = await requestUrl3({
     url,
     method: "POST",
@@ -30072,22 +29964,30 @@ async function fetchEmbeddings(baseUrl, apiKey, model, inputs, dimensions) {
     body: JSON.stringify(body),
     throw: false
   });
-  if (resp.status >= 400) throw new Error(`Embedding API error: ${resp.status}`);
+  if (resp.status >= 400) {
+    const detail = resp.text ? ` \u2014 ${resp.text.slice(0, 200)}` : "";
+    throw new Error(`Embedding API error: ${resp.status}${detail}`);
+  }
   const json = JSON.parse(resp.text);
   return json.data.map((d) => new Float32Array(d.embedding));
 }
-async function probeEmbeddingDimensions(baseUrl, apiKey, model, requested) {
+async function probeEmbeddingDimensionsResult(baseUrl, apiKey, model, requested) {
   try {
     const [vec] = await fetchEmbeddings(baseUrl, apiKey, model, ["ping"], requested);
-    if (!vec || vec.length === 0) return null;
+    if (!vec || vec.length === 0) return { error: "empty embedding response" };
     return {
-      actual: vec.length,
-      requested: requested && requested > 0 ? requested : void 0,
-      honored: !requested || requested <= 0 || vec.length === requested
+      probe: {
+        actual: vec.length,
+        requested: requested && requested > 0 ? requested : void 0,
+        honored: !requested || requested <= 0 || vec.length === requested
+      }
     };
-  } catch {
-    return null;
+  } catch (e) {
+    return { error: e.message };
   }
+}
+async function probeEmbeddingDimensions(baseUrl, apiKey, model, requested) {
+  return (await probeEmbeddingDimensionsResult(baseUrl, apiKey, model, requested)).probe ?? null;
 }
 function entityKey(e) {
   return `${e.name}::${e.type ?? ""}`;
@@ -30298,8 +30198,8 @@ var PageSimilarityService = class _PageSimilarityService {
     let entityVecs;
     try {
       entityVecs = await fetchEmbeddings(baseUrl, apiKey, model, entities.map(entityQuery), this.config.dimensions);
-    } catch {
-      return { ...this.jaccardFallbackAll(entities, indexAnnotations, allPaths), allFailed: true };
+    } catch (e) {
+      return { ...this.jaccardFallbackAll(entities, indexAnnotations, allPaths), allFailed: true, failReason: e.message };
     }
     const pids = allPaths.map((p) => pageId(p));
     const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
@@ -30620,6 +30520,354 @@ function renderContextChunks(chunks) {
   ].join("\n")).join("\n\n");
 }
 
+// src/reranker.ts
+var DEFAULT_RERANKER_SETTINGS = {
+  enabled: false,
+  model: "",
+  rerankerTopN: 30,
+  contextTopN: 8,
+  timeoutMs: 800
+};
+var DEFAULT_RERANKER_BLEND_ALPHA = 0.6;
+var DEFAULT_RERANKER_MAX_PROMOTION = 1;
+var DEFAULT_RERANKER_PROMOTION_SCOPE = "page";
+var DEFAULT_RERANKER_MIN_PROMOTION_SCORE_GAP = 0.2;
+var DEFAULT_RERANKER_MIN_PROMOTION_BASELINE_RATIO = 0.95;
+var DEFAULT_RERANKER_MAX_PROMOTION_TARGET_INDEX = 2;
+var DEFAULT_RERANKER_CANDIDATE_TEXT_CHARS = 120;
+function clampInt(value, fallback, min, max) {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(min, Math.min(max, Math.floor(numeric)));
+}
+function normalizeRerankerConfig(input) {
+  const contextTopN = clampInt(input?.contextTopN, DEFAULT_RERANKER_SETTINGS.contextTopN, 1, 50);
+  const requestedRerankerTopN = clampInt(
+    input?.rerankerTopN,
+    DEFAULT_RERANKER_SETTINGS.rerankerTopN,
+    1,
+    100
+  );
+  const model = typeof input?.model === "string" ? input.model.trim() : DEFAULT_RERANKER_SETTINGS.model;
+  return {
+    enabled: input?.enabled ?? DEFAULT_RERANKER_SETTINGS.enabled,
+    model,
+    rerankerTopN: Math.max(requestedRerankerTopN, contextTopN),
+    contextTopN,
+    timeoutMs: clampInt(input?.timeoutMs, DEFAULT_RERANKER_SETTINGS.timeoutMs, 100, 5e3),
+    candidateTextChars: clampInt(input?.candidateTextChars, DEFAULT_RERANKER_CANDIDATE_TEXT_CHARS, 80, 1e3)
+  };
+}
+function rerankerChunkId(chunk) {
+  return `${chunk.articleId}::${chunk.ordinal}`;
+}
+function normalizeWhitespace(text) {
+  return text.replace(/\s+/g, " ").trim();
+}
+function titleFromPath(pathValue) {
+  const fileName = pathValue.split("/").pop() ?? pathValue;
+  return fileName.replace(/\.md$/i, "");
+}
+function queryTokens(query) {
+  return [...new Set(query.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? [])];
+}
+function queryAwareExcerpt(query, body, maxChars) {
+  const normalizedBody = normalizeWhitespace(body);
+  if (normalizedBody.length <= maxChars) return normalizedBody;
+  const lower = normalizedBody.toLowerCase();
+  const matchIndex = queryTokens(query).map((token) => lower.indexOf(token)).filter((index) => index >= 0).sort((a, b) => a - b)[0];
+  if (matchIndex === void 0) return normalizedBody.slice(0, maxChars).trim();
+  const start = Math.max(0, matchIndex - Math.floor(maxChars / 3));
+  return normalizedBody.slice(start, start + maxChars).trim();
+}
+function buildCandidateText(query, chunk, maxChars) {
+  const prefix = [
+    `Title: ${titleFromPath(chunk.path)}`,
+    `Path: ${chunk.path}`,
+    `Heading: ${normalizeWhitespace(chunk.heading)}`,
+    "Text:"
+  ].join("\n");
+  const excerptBudget = Math.max(0, maxChars - prefix.length - 1);
+  const excerpt = queryAwareExcerpt(query, chunk.body, excerptBudget);
+  return `${prefix} ${excerpt}`.trim().slice(0, maxChars);
+}
+function buildRerankerCandidates(query, chunks, config) {
+  const candidateTextChars = Number.isFinite(config.candidateTextChars) ? config.candidateTextChars : DEFAULT_RERANKER_CANDIDATE_TEXT_CHARS;
+  return chunks.slice(0, config.rerankerTopN).map((chunk) => ({
+    id: rerankerChunkId(chunk),
+    text: buildCandidateText(query, chunk, candidateTextChars),
+    chunk
+  }));
+}
+function applyRerankerScores(original, scores, limit2, options = {}) {
+  const mode = options.mode ?? "guarded";
+  const alpha = Number.isFinite(options.alpha) ? Math.max(0, options.alpha ?? DEFAULT_RERANKER_BLEND_ALPHA) : DEFAULT_RERANKER_BLEND_ALPHA;
+  const maxPromotion = Number.isFinite(options.maxPromotion) ? Math.max(0, Math.floor(options.maxPromotion ?? DEFAULT_RERANKER_MAX_PROMOTION)) : DEFAULT_RERANKER_MAX_PROMOTION;
+  const promotionScope = options.promotionScope ?? DEFAULT_RERANKER_PROMOTION_SCOPE;
+  const minPromotionScoreGap = Number.isFinite(options.minPromotionScoreGap) ? Math.max(0, options.minPromotionScoreGap ?? DEFAULT_RERANKER_MIN_PROMOTION_SCORE_GAP) : DEFAULT_RERANKER_MIN_PROMOTION_SCORE_GAP;
+  const minPromotionBaselineRatio = Number.isFinite(options.minPromotionBaselineRatio) ? Math.max(0, options.minPromotionBaselineRatio ?? DEFAULT_RERANKER_MIN_PROMOTION_BASELINE_RATIO) : DEFAULT_RERANKER_MIN_PROMOTION_BASELINE_RATIO;
+  const maxPromotionTargetIndex = Number.isFinite(options.maxPromotionTargetIndex) ? Math.max(0, Math.floor(options.maxPromotionTargetIndex ?? DEFAULT_RERANKER_MAX_PROMOTION_TARGET_INDEX)) : DEFAULT_RERANKER_MAX_PROMOTION_TARGET_INDEX;
+  const scoreById = new Map(
+    scores.filter((score) => Number.isFinite(score.score)).map((score) => [score.id, score.score])
+  );
+  const finiteScores = [...scoreById.values()];
+  const minScore = finiteScores.length > 0 ? Math.min(...finiteScores) : 0;
+  const maxScore = finiteScores.length > 0 ? Math.max(...finiteScores) : 0;
+  const spread = maxScore - minScore;
+  function normalizedScore(score) {
+    if (score === void 0) return 0;
+    if (spread <= 0) return 1;
+    return (score - minScore) / spread;
+  }
+  if (mode === "guarded" && promotionScope === "page") {
+    const pageItems = [];
+    const pageByArticleId = /* @__PURE__ */ new Map();
+    for (const chunk of original) {
+      const existing = pageByArticleId.get(chunk.articleId);
+      const score = scoreById.get(rerankerChunkId(chunk));
+      if (existing) {
+        existing.chunks.push(chunk);
+        existing.baselineScore = Math.max(existing.baselineScore, chunk.score);
+        if (score !== void 0 && (existing.score === void 0 || score > existing.score)) {
+          existing.score = score;
+        }
+        continue;
+      }
+      const item = {
+        articleId: chunk.articleId,
+        index: pageItems.length,
+        score,
+        baselineScore: chunk.score,
+        chunks: [chunk]
+      };
+      pageItems.push(item);
+      pageByArticleId.set(chunk.articleId, item);
+    }
+    const rankedPages = [...pageItems].sort((a, b) => {
+      const aFinal = 1 / (a.index + 1) + alpha * normalizedScore(a.score);
+      const bFinal = 1 / (b.index + 1) + alpha * normalizedScore(b.score);
+      if (aFinal !== bFinal) return bFinal - aFinal;
+      return a.index - b.index;
+    });
+    const cappedPages = new Array(rankedPages.length).fill(void 0);
+    for (const item of rankedPages) {
+      let target = Math.max(0, item.index - maxPromotion);
+      const baselineTarget = pageItems[target];
+      const promotes = target < item.index;
+      if (promotes && target > maxPromotionTargetIndex) {
+        target = item.index;
+      }
+      if (promotes && normalizedScore(item.score) - normalizedScore(baselineTarget?.score) < minPromotionScoreGap) {
+        target = item.index;
+      }
+      if (promotes && target < item.index && minPromotionBaselineRatio > 0 && item.baselineScore < (baselineTarget?.baselineScore ?? 0) * minPromotionBaselineRatio) {
+        target = item.index;
+      }
+      while (target < cappedPages.length && cappedPages[target] !== void 0) target += 1;
+      if (target < cappedPages.length) cappedPages[target] = item;
+    }
+    const orderedPages = cappedPages.filter((item) => item !== void 0);
+    const out = [];
+    const maxChunksPerPage = Math.max(0, ...orderedPages.map((page) => page.chunks.length));
+    for (let chunkIndex = 0; chunkIndex < maxChunksPerPage; chunkIndex++) {
+      for (const page of orderedPages) {
+        const chunk = page.chunks[chunkIndex];
+        if (chunk) out.push(chunk);
+      }
+    }
+    return out.slice(0, Math.max(0, limit2));
+  }
+  const ranked = original.map((chunk, index) => ({ chunk, index, score: scoreById.get(rerankerChunkId(chunk)), finalScore: 0 })).sort((a, b) => {
+    const aScored = a.score !== void 0;
+    const bScored = b.score !== void 0;
+    if (mode === "full") {
+      if (aScored && bScored) return b.score - a.score || a.index - b.index;
+      if (aScored) return -1;
+      if (bScored) return 1;
+      return a.index - b.index;
+    }
+    const aFinal = 1 / (a.index + 1) + alpha * normalizedScore(a.score);
+    const bFinal = 1 / (b.index + 1) + alpha * normalizedScore(b.score);
+    a.finalScore = aFinal;
+    b.finalScore = bFinal;
+    if (aFinal !== bFinal) return bFinal - aFinal;
+    return a.index - b.index;
+  });
+  if (mode === "full") {
+    return ranked.map((item) => item.chunk).slice(0, Math.max(0, limit2));
+  }
+  const capped = new Array(ranked.length).fill(void 0);
+  for (const item of ranked) {
+    let target = Math.max(0, item.index - maxPromotion);
+    while (target < capped.length && capped[target] !== void 0) target += 1;
+    if (target < capped.length) capped[target] = item;
+  }
+  return capped.filter((item) => item !== void 0).map((item) => item.chunk).slice(0, Math.max(0, limit2));
+}
+function fallbackResult(chunks, started, contextLimit, candidates, fallbackReason) {
+  return {
+    chunks: chunks.slice(0, contextLimit),
+    durationMs: Date.now() - started,
+    candidates,
+    fallbackReason
+  };
+}
+function hasMalformedScores(scores) {
+  return scores.length === 0 || scores.some((score) => !score.id || !Number.isFinite(score.score));
+}
+var RerankerMalformedResponseError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "RerankerMalformedResponseError";
+  }
+};
+function isTimeoutError(err) {
+  if (!(err instanceof Error)) return false;
+  return err.name === "RerankerTimeoutError" || err.name === "TimeoutError" || err.name === "AbortError" && err.message.toLowerCase().includes("timeout");
+}
+function isMalformedResponseError(err) {
+  return err instanceof Error && err.name === "RerankerMalformedResponseError";
+}
+async function rerankChunks(query, chunks, options) {
+  const started = Date.now();
+  const contextLimit = options.config.contextTopN;
+  if (!options.config.enabled) {
+    return fallbackResult(chunks, started, contextLimit, 0, "disabled");
+  }
+  if (!options.config.model) {
+    return fallbackResult(chunks, started, contextLimit, 0, "missing-model");
+  }
+  const candidates = buildRerankerCandidates(query, chunks, options.config);
+  if (candidates.length === 0) {
+    return {
+      chunks: [],
+      durationMs: Date.now() - started,
+      candidates: 0,
+      fallbackReason: "empty-candidates"
+    };
+  }
+  try {
+    const transport = options.transport ?? fetchRerankerScores;
+    const scores = await transport({
+      query,
+      candidates,
+      config: options.config,
+      baseUrl: options.baseUrl,
+      apiKey: options.apiKey,
+      signal: options.signal
+    });
+    if (hasMalformedScores(scores)) {
+      return fallbackResult(chunks, started, contextLimit, candidates.length, "malformed-response");
+    }
+    return {
+      chunks: applyRerankerScores(chunks, scores, contextLimit),
+      durationMs: Date.now() - started,
+      candidates: candidates.length,
+      scores
+    };
+  } catch (err) {
+    return fallbackResult(
+      chunks,
+      started,
+      contextLimit,
+      candidates.length,
+      isTimeoutError(err) ? "timeout" : isMalformedResponseError(err) ? "malformed-response" : "error"
+    );
+  }
+}
+function malformed(message) {
+  return new RerankerMalformedResponseError(message);
+}
+function isRecord2(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function parseRerankerResponseText(text, candidates) {
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
+    throw malformed(err instanceof Error ? err.message : "Invalid JSON");
+  }
+  if (!isRecord2(parsed) || !Array.isArray(parsed.results)) {
+    throw malformed("Reranker response must contain a results array");
+  }
+  return parsed.results.map((item) => {
+    if (!isRecord2(item)) {
+      throw malformed("Reranker result item must be an object");
+    }
+    const index = item.index;
+    const score = typeof item.relevance_score === "number" ? item.relevance_score : item.score;
+    if (typeof index !== "number" || !Number.isInteger(index) || index < 0 || index >= candidates.length || typeof score !== "number" || !Number.isFinite(score)) {
+      throw malformed("Reranker result item has invalid index or score");
+    }
+    return { id: candidates[index].id, score };
+  });
+}
+async function raceRerankerRequest(request, signal, timeoutMs) {
+  if (signal.aborted) {
+    throw new DOMException("Reranker aborted", "AbortError");
+  }
+  let timeoutId;
+  let abortHandler;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      reject(new DOMException("Reranker timeout", "AbortError"));
+    }, timeoutMs);
+  });
+  const abort = new Promise((_, reject) => {
+    abortHandler = () => reject(new DOMException("Reranker aborted", "AbortError"));
+    signal.addEventListener("abort", abortHandler, { once: true });
+    if (signal.aborted) abortHandler();
+  });
+  try {
+    return await Promise.race([request, timeout, abort]);
+  } finally {
+    if (timeoutId !== void 0) window.clearTimeout(timeoutId);
+    if (abortHandler) signal.removeEventListener("abort", abortHandler);
+  }
+}
+var fetchRerankerScores = async (input) => {
+  const { requestUrl: requestUrl3 } = await import("obsidian");
+  const response = await raceRerankerRequest(
+    requestUrl3({
+      url: `${input.baseUrl.replace(/\/$/, "")}/rerank`,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${input.apiKey}`
+      },
+      body: JSON.stringify({
+        model: input.config.model,
+        query: input.query,
+        documents: input.candidates.map((candidate) => candidate.text)
+      }),
+      throw: true
+    }),
+    input.signal,
+    input.config.timeoutMs
+  );
+  return parseRerankerResponseText(response.text, input.candidates);
+};
+async function probeRerankerModel(baseUrl, apiKey, config, transport = fetchRerankerScores) {
+  const candidates = [{ id: "probe", text: "ping" }];
+  try {
+    const scores = await transport({
+      query: "ping",
+      candidates,
+      config,
+      baseUrl,
+      apiKey,
+      signal: new AbortController().signal
+    });
+    if (!Array.isArray(scores) || scores.length === 0) {
+      return { ok: false, error: "empty or malformed rerank response" };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
 // src/settings.ts
 async function checkNativeAvailability(baseUrl, apiKey, model) {
   let timerId;
@@ -30746,11 +30994,12 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
     }
     const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
     const requested = na.embeddingDimensions;
-    const probe = await probeEmbeddingDimensions(na.baseUrl, apiKey, na.embeddingModel, requested);
-    if (probe == null) {
-      new import_obsidian4.Notice("Dimension check failed: API error");
+    const result = await probeEmbeddingDimensionsResult(this.plugin.settings.nativeAgent.baseUrl, apiKey, na.embeddingModel, requested);
+    if (!result.probe) {
+      new import_obsidian4.Notice(`Dimension check failed: ${result.error ?? "unknown error"}`);
       return;
     }
+    const probe = result.probe;
     const nativeProbe = await probeEmbeddingDimensions(na.baseUrl, apiKey, na.embeddingModel);
     const native = nativeProbe?.actual;
     const nativeStr = native != null ? String(native) : "?";
@@ -30763,6 +31012,17 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
     } else {
       new import_obsidian4.Notice(`OK \u2014 model returns ${probe.actual} (native ${nativeStr}).`);
     }
+  }
+  async checkReranker() {
+    const na = this.plugin.settings.nativeAgent;
+    if (!na.baseUrl || !na.rerankerModel) {
+      new import_obsidian4.Notice("Set Base URL and reranker model first");
+      return;
+    }
+    const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
+    const config = normalizeRerankerConfig({ enabled: true, model: na.rerankerModel });
+    const r = await probeRerankerModel(na.baseUrl, apiKey, config);
+    new import_obsidian4.Notice(r.ok ? `OK \u2014 reranker "${na.rerankerModel}" reachable` : `Reranker check failed: ${r.error}`);
   }
   openExportOkfModal(domainEntry) {
     const defaultDest = `${this.plugin.controller.cwdOrEmpty()}/okf-export/${domainEntry.wiki_folder}`;
@@ -31202,7 +31462,6 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
           async (v) => {
             s.nativeAgent.embeddingModel = v || void 0;
             await this.plugin.saveSettings();
-            if (v) await this.setDefaultDimensions(true);
           }
         );
         new import_obsidian4.Setting(containerEl).setName("Embedding dimensions").setDesc(T.settings.embeddingDimensions_desc).addButton(
@@ -31277,14 +31536,20 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
           await this.plugin.saveSettings();
         })
       );
+      const rerankerModelSetting = new import_obsidian4.Setting(containerEl).setName(T.settings.rerankerModel_name).setDesc(T.settings.rerankerModel_desc);
       this.addModelControl(
-        new import_obsidian4.Setting(containerEl).setName(T.settings.rerankerModel_name).setDesc(T.settings.rerankerModel_desc),
+        rerankerModelSetting,
         s.nativeAgent.rerankerModel ?? "",
         async (v) => {
           s.nativeAgent.rerankerModel = v.trim();
           await this.plugin.saveSettings();
         },
         true
+      );
+      rerankerModelSetting.addButton(
+        (b) => b.setButtonText("Check").setTooltip("Verify the reranker model is reachable").onClick(() => {
+          void this.checkReranker();
+        })
       );
       new import_obsidian4.Setting(containerEl).setName(T.settings.rerankerTopN_name).setDesc(T.settings.rerankerTopN_desc).addText(
         (t) => t.setPlaceholder("30").setValue(String(s.nativeAgent.rerankerTopN ?? 30)).onChange(async (v) => {
@@ -32988,11 +33253,7 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
         const counts = /* @__PURE__ */ new Map();
         const allMd = this.plugin.app.vault.getMarkdownFiles();
         for (const et of domainEntry.entity_types ?? []) {
-          if (!et.wiki_subfolder) {
-            counts.set(et.type, 0);
-            continue;
-          }
-          const prefix = `${domainWikiFolder(domainEntry.wiki_folder)}/${et.wiki_subfolder}/`;
+          const prefix = `${domainWikiFolder(domainEntry.wiki_folder)}/${effectiveSubfolder(et)}/`;
           counts.set(et.type, allMd.filter((f) => f.path.startsWith(prefix)).length);
         }
         new LintOptionsModal(
@@ -40417,7 +40678,7 @@ async function collectDomainTags(vault, wikiFolder, sourcePaths) {
   for (const dir of dirs) {
     const listed = await vault.listFiles(dir).catch(() => []);
     for (const f of listed) {
-      if (f.endsWith(".md") && !f.includes("/_config/")) files.add(f);
+      if (isWikiPagePath(f)) files.add(f);
     }
   }
   const contents = await vault.readAll([...files]);
@@ -40476,7 +40737,7 @@ function ensureEntityTypeTag(content, pagePath, domain) {
   const segments = pagePath.split("/");
   if (segments.length < 2) return { content, added: false, tag: null };
   const subfolder = segments[segments.length - 2];
-  const et = domain.entity_types?.find((e) => e.wiki_subfolder === subfolder);
+  const et = domain.entity_types?.find((e) => effectiveSubfolder(e) === subfolder);
   if (!et) return { content, added: false, tag: null };
   const tag = normalizeTag(et.type);
   if (!TAG_RE.test(tag)) return { content, added: false, tag: null };
@@ -40871,6 +41132,14 @@ function visionPromptVersionOf(templates) {
   return hash8(joined);
 }
 
+// src/embedding-error.ts
+var EmbeddingUnavailableError = class extends Error {
+  constructor(reason) {
+    super(reason);
+    this.name = "EmbeddingUnavailableError";
+  }
+};
+
 // src/phases/ingest.ts
 function deriveSectionForPath(wikiFolder, fullPath) {
   const prefix = wikiFolder + "/";
@@ -40970,15 +41239,13 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   const retrievalDetails = [];
   if (similarity) {
     await similarity.loadCache(domainRoot, vaultTools);
-    const { results: entityMap, allFailed } = await similarity.selectByEntities(
+    const { results: entityMap, allFailed, failReason } = await similarity.selectByEntities(
       entitiesResult.value.entities,
       annotations,
       nonMetaPaths
     );
     if (allFailed && entitiesResult.value.entities.length > 0 && nonMetaPaths.length > 0) {
-      yield { kind: "error", message: "ingest: per-entity retrieval failed for all entities" };
-      yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: 0 };
-      return;
+      throw new EmbeddingUnavailableError(failReason ?? "per-entity retrieval failed for all entities");
     }
     const union = /* @__PURE__ */ new Set();
     for (let i = 0; i < entitiesResult.value.entities.length; i++) {
@@ -41525,14 +41792,14 @@ function renderPageRepairFrames(pages) {
 function buildEntityTypesBlock(domain, wikiVaultPath) {
   if (!domain.entity_types?.length) return "";
   return domain.entity_types.map((et) => {
-    const pathTemplate = et.wiki_subfolder ? `${wikiVaultPath}/${et.wiki_subfolder}/<EntityName>.md` : `${wikiVaultPath}/<EntityName>.md`;
+    const sub = effectiveSubfolder(et);
     return [
       `### Type: ${et.type}`,
       `Description: ${et.description}`,
       `Keywords: ${et.extraction_cues.join(", ")}`,
       et.min_mentions_for_page != null ? `Min. mentions for a page: ${et.min_mentions_for_page}` : "",
-      et.wiki_subfolder ? `Wiki subfolder: ${et.wiki_subfolder}` : "",
-      `Path for entities of this type: ${pathTemplate}`
+      `Wiki subfolder: ${sub}`,
+      `Path for entities of this type: ${wikiVaultPath}/${sub}/<EntityName>.md`
     ].filter(Boolean).join("\n");
   }).join("\n\n");
 }
@@ -41670,335 +41937,6 @@ var GraphCache = class {
   }
 };
 var graphCache = new GraphCache();
-
-// src/reranker.ts
-var DEFAULT_RERANKER_SETTINGS = {
-  enabled: false,
-  model: "",
-  rerankerTopN: 30,
-  contextTopN: 8,
-  timeoutMs: 800
-};
-var DEFAULT_RERANKER_BLEND_ALPHA = 0.6;
-var DEFAULT_RERANKER_MAX_PROMOTION = 1;
-var DEFAULT_RERANKER_PROMOTION_SCOPE = "page";
-var DEFAULT_RERANKER_MIN_PROMOTION_SCORE_GAP = 0.2;
-var DEFAULT_RERANKER_MIN_PROMOTION_BASELINE_RATIO = 0.95;
-var DEFAULT_RERANKER_MAX_PROMOTION_TARGET_INDEX = 2;
-var DEFAULT_RERANKER_CANDIDATE_TEXT_CHARS = 120;
-function clampInt(value, fallback, min, max) {
-  const numeric = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(numeric)) return fallback;
-  return Math.max(min, Math.min(max, Math.floor(numeric)));
-}
-function normalizeRerankerConfig(input) {
-  const contextTopN = clampInt(input?.contextTopN, DEFAULT_RERANKER_SETTINGS.contextTopN, 1, 50);
-  const requestedRerankerTopN = clampInt(
-    input?.rerankerTopN,
-    DEFAULT_RERANKER_SETTINGS.rerankerTopN,
-    1,
-    100
-  );
-  const model = typeof input?.model === "string" ? input.model.trim() : DEFAULT_RERANKER_SETTINGS.model;
-  return {
-    enabled: input?.enabled ?? DEFAULT_RERANKER_SETTINGS.enabled,
-    model,
-    rerankerTopN: Math.max(requestedRerankerTopN, contextTopN),
-    contextTopN,
-    timeoutMs: clampInt(input?.timeoutMs, DEFAULT_RERANKER_SETTINGS.timeoutMs, 100, 5e3),
-    candidateTextChars: clampInt(input?.candidateTextChars, DEFAULT_RERANKER_CANDIDATE_TEXT_CHARS, 80, 1e3)
-  };
-}
-function rerankerChunkId(chunk) {
-  return `${chunk.articleId}::${chunk.ordinal}`;
-}
-function normalizeWhitespace(text) {
-  return text.replace(/\s+/g, " ").trim();
-}
-function titleFromPath(pathValue) {
-  const fileName = pathValue.split("/").pop() ?? pathValue;
-  return fileName.replace(/\.md$/i, "");
-}
-function queryTokens(query) {
-  return [...new Set(query.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? [])];
-}
-function queryAwareExcerpt(query, body, maxChars) {
-  const normalizedBody = normalizeWhitespace(body);
-  if (normalizedBody.length <= maxChars) return normalizedBody;
-  const lower = normalizedBody.toLowerCase();
-  const matchIndex = queryTokens(query).map((token) => lower.indexOf(token)).filter((index) => index >= 0).sort((a, b) => a - b)[0];
-  if (matchIndex === void 0) return normalizedBody.slice(0, maxChars).trim();
-  const start = Math.max(0, matchIndex - Math.floor(maxChars / 3));
-  return normalizedBody.slice(start, start + maxChars).trim();
-}
-function buildCandidateText(query, chunk, maxChars) {
-  const prefix = [
-    `Title: ${titleFromPath(chunk.path)}`,
-    `Path: ${chunk.path}`,
-    `Heading: ${normalizeWhitespace(chunk.heading)}`,
-    "Text:"
-  ].join("\n");
-  const excerptBudget = Math.max(0, maxChars - prefix.length - 1);
-  const excerpt = queryAwareExcerpt(query, chunk.body, excerptBudget);
-  return `${prefix} ${excerpt}`.trim().slice(0, maxChars);
-}
-function buildRerankerCandidates(query, chunks, config) {
-  const candidateTextChars = Number.isFinite(config.candidateTextChars) ? config.candidateTextChars : DEFAULT_RERANKER_CANDIDATE_TEXT_CHARS;
-  return chunks.slice(0, config.rerankerTopN).map((chunk) => ({
-    id: rerankerChunkId(chunk),
-    text: buildCandidateText(query, chunk, candidateTextChars),
-    chunk
-  }));
-}
-function applyRerankerScores(original, scores, limit2, options = {}) {
-  const mode = options.mode ?? "guarded";
-  const alpha = Number.isFinite(options.alpha) ? Math.max(0, options.alpha ?? DEFAULT_RERANKER_BLEND_ALPHA) : DEFAULT_RERANKER_BLEND_ALPHA;
-  const maxPromotion = Number.isFinite(options.maxPromotion) ? Math.max(0, Math.floor(options.maxPromotion ?? DEFAULT_RERANKER_MAX_PROMOTION)) : DEFAULT_RERANKER_MAX_PROMOTION;
-  const promotionScope = options.promotionScope ?? DEFAULT_RERANKER_PROMOTION_SCOPE;
-  const minPromotionScoreGap = Number.isFinite(options.minPromotionScoreGap) ? Math.max(0, options.minPromotionScoreGap ?? DEFAULT_RERANKER_MIN_PROMOTION_SCORE_GAP) : DEFAULT_RERANKER_MIN_PROMOTION_SCORE_GAP;
-  const minPromotionBaselineRatio = Number.isFinite(options.minPromotionBaselineRatio) ? Math.max(0, options.minPromotionBaselineRatio ?? DEFAULT_RERANKER_MIN_PROMOTION_BASELINE_RATIO) : DEFAULT_RERANKER_MIN_PROMOTION_BASELINE_RATIO;
-  const maxPromotionTargetIndex = Number.isFinite(options.maxPromotionTargetIndex) ? Math.max(0, Math.floor(options.maxPromotionTargetIndex ?? DEFAULT_RERANKER_MAX_PROMOTION_TARGET_INDEX)) : DEFAULT_RERANKER_MAX_PROMOTION_TARGET_INDEX;
-  const scoreById = new Map(
-    scores.filter((score) => Number.isFinite(score.score)).map((score) => [score.id, score.score])
-  );
-  const finiteScores = [...scoreById.values()];
-  const minScore = finiteScores.length > 0 ? Math.min(...finiteScores) : 0;
-  const maxScore = finiteScores.length > 0 ? Math.max(...finiteScores) : 0;
-  const spread = maxScore - minScore;
-  function normalizedScore(score) {
-    if (score === void 0) return 0;
-    if (spread <= 0) return 1;
-    return (score - minScore) / spread;
-  }
-  if (mode === "guarded" && promotionScope === "page") {
-    const pageItems = [];
-    const pageByArticleId = /* @__PURE__ */ new Map();
-    for (const chunk of original) {
-      const existing = pageByArticleId.get(chunk.articleId);
-      const score = scoreById.get(rerankerChunkId(chunk));
-      if (existing) {
-        existing.chunks.push(chunk);
-        existing.baselineScore = Math.max(existing.baselineScore, chunk.score);
-        if (score !== void 0 && (existing.score === void 0 || score > existing.score)) {
-          existing.score = score;
-        }
-        continue;
-      }
-      const item = {
-        articleId: chunk.articleId,
-        index: pageItems.length,
-        score,
-        baselineScore: chunk.score,
-        chunks: [chunk]
-      };
-      pageItems.push(item);
-      pageByArticleId.set(chunk.articleId, item);
-    }
-    const rankedPages = [...pageItems].sort((a, b) => {
-      const aFinal = 1 / (a.index + 1) + alpha * normalizedScore(a.score);
-      const bFinal = 1 / (b.index + 1) + alpha * normalizedScore(b.score);
-      if (aFinal !== bFinal) return bFinal - aFinal;
-      return a.index - b.index;
-    });
-    const cappedPages = new Array(rankedPages.length).fill(void 0);
-    for (const item of rankedPages) {
-      let target = Math.max(0, item.index - maxPromotion);
-      const baselineTarget = pageItems[target];
-      const promotes = target < item.index;
-      if (promotes && target > maxPromotionTargetIndex) {
-        target = item.index;
-      }
-      if (promotes && normalizedScore(item.score) - normalizedScore(baselineTarget?.score) < minPromotionScoreGap) {
-        target = item.index;
-      }
-      if (promotes && target < item.index && minPromotionBaselineRatio > 0 && item.baselineScore < (baselineTarget?.baselineScore ?? 0) * minPromotionBaselineRatio) {
-        target = item.index;
-      }
-      while (target < cappedPages.length && cappedPages[target] !== void 0) target += 1;
-      if (target < cappedPages.length) cappedPages[target] = item;
-    }
-    const orderedPages = cappedPages.filter((item) => item !== void 0);
-    const out = [];
-    const maxChunksPerPage = Math.max(0, ...orderedPages.map((page) => page.chunks.length));
-    for (let chunkIndex = 0; chunkIndex < maxChunksPerPage; chunkIndex++) {
-      for (const page of orderedPages) {
-        const chunk = page.chunks[chunkIndex];
-        if (chunk) out.push(chunk);
-      }
-    }
-    return out.slice(0, Math.max(0, limit2));
-  }
-  const ranked = original.map((chunk, index) => ({ chunk, index, score: scoreById.get(rerankerChunkId(chunk)), finalScore: 0 })).sort((a, b) => {
-    const aScored = a.score !== void 0;
-    const bScored = b.score !== void 0;
-    if (mode === "full") {
-      if (aScored && bScored) return b.score - a.score || a.index - b.index;
-      if (aScored) return -1;
-      if (bScored) return 1;
-      return a.index - b.index;
-    }
-    const aFinal = 1 / (a.index + 1) + alpha * normalizedScore(a.score);
-    const bFinal = 1 / (b.index + 1) + alpha * normalizedScore(b.score);
-    a.finalScore = aFinal;
-    b.finalScore = bFinal;
-    if (aFinal !== bFinal) return bFinal - aFinal;
-    return a.index - b.index;
-  });
-  if (mode === "full") {
-    return ranked.map((item) => item.chunk).slice(0, Math.max(0, limit2));
-  }
-  const capped = new Array(ranked.length).fill(void 0);
-  for (const item of ranked) {
-    let target = Math.max(0, item.index - maxPromotion);
-    while (target < capped.length && capped[target] !== void 0) target += 1;
-    if (target < capped.length) capped[target] = item;
-  }
-  return capped.filter((item) => item !== void 0).map((item) => item.chunk).slice(0, Math.max(0, limit2));
-}
-function fallbackResult(chunks, started, contextLimit, candidates, fallbackReason) {
-  return {
-    chunks: chunks.slice(0, contextLimit),
-    durationMs: Date.now() - started,
-    candidates,
-    fallbackReason
-  };
-}
-function hasMalformedScores(scores) {
-  return scores.length === 0 || scores.some((score) => !score.id || !Number.isFinite(score.score));
-}
-var RerankerMalformedResponseError = class extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "RerankerMalformedResponseError";
-  }
-};
-function isTimeoutError(err) {
-  if (!(err instanceof Error)) return false;
-  return err.name === "RerankerTimeoutError" || err.name === "TimeoutError" || err.name === "AbortError" && err.message.toLowerCase().includes("timeout");
-}
-function isMalformedResponseError(err) {
-  return err instanceof Error && err.name === "RerankerMalformedResponseError";
-}
-async function rerankChunks(query, chunks, options) {
-  const started = Date.now();
-  const contextLimit = options.config.contextTopN;
-  if (!options.config.enabled) {
-    return fallbackResult(chunks, started, contextLimit, 0, "disabled");
-  }
-  if (!options.config.model) {
-    return fallbackResult(chunks, started, contextLimit, 0, "missing-model");
-  }
-  const candidates = buildRerankerCandidates(query, chunks, options.config);
-  if (candidates.length === 0) {
-    return {
-      chunks: [],
-      durationMs: Date.now() - started,
-      candidates: 0,
-      fallbackReason: "empty-candidates"
-    };
-  }
-  try {
-    const transport = options.transport ?? fetchRerankerScores;
-    const scores = await transport({
-      query,
-      candidates,
-      config: options.config,
-      baseUrl: options.baseUrl,
-      apiKey: options.apiKey,
-      signal: options.signal
-    });
-    if (hasMalformedScores(scores)) {
-      return fallbackResult(chunks, started, contextLimit, candidates.length, "malformed-response");
-    }
-    return {
-      chunks: applyRerankerScores(chunks, scores, contextLimit),
-      durationMs: Date.now() - started,
-      candidates: candidates.length,
-      scores
-    };
-  } catch (err) {
-    return fallbackResult(
-      chunks,
-      started,
-      contextLimit,
-      candidates.length,
-      isTimeoutError(err) ? "timeout" : isMalformedResponseError(err) ? "malformed-response" : "error"
-    );
-  }
-}
-function malformed(message) {
-  return new RerankerMalformedResponseError(message);
-}
-function isRecord2(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function parseRerankerResponseText(text, candidates) {
-  let parsed;
-  try {
-    parsed = JSON.parse(text);
-  } catch (err) {
-    throw malformed(err instanceof Error ? err.message : "Invalid JSON");
-  }
-  if (!isRecord2(parsed) || !Array.isArray(parsed.results)) {
-    throw malformed("Reranker response must contain a results array");
-  }
-  return parsed.results.map((item) => {
-    if (!isRecord2(item)) {
-      throw malformed("Reranker result item must be an object");
-    }
-    const index = item.index;
-    const score = typeof item.relevance_score === "number" ? item.relevance_score : item.score;
-    if (typeof index !== "number" || !Number.isInteger(index) || index < 0 || index >= candidates.length || typeof score !== "number" || !Number.isFinite(score)) {
-      throw malformed("Reranker result item has invalid index or score");
-    }
-    return { id: candidates[index].id, score };
-  });
-}
-async function raceRerankerRequest(request, signal, timeoutMs) {
-  if (signal.aborted) {
-    throw new DOMException("Reranker aborted", "AbortError");
-  }
-  let timeoutId;
-  let abortHandler;
-  const timeout = new Promise((_, reject) => {
-    timeoutId = window.setTimeout(() => {
-      reject(new DOMException("Reranker timeout", "AbortError"));
-    }, timeoutMs);
-  });
-  const abort = new Promise((_, reject) => {
-    abortHandler = () => reject(new DOMException("Reranker aborted", "AbortError"));
-    signal.addEventListener("abort", abortHandler, { once: true });
-    if (signal.aborted) abortHandler();
-  });
-  try {
-    return await Promise.race([request, timeout, abort]);
-  } finally {
-    if (timeoutId !== void 0) window.clearTimeout(timeoutId);
-    if (abortHandler) signal.removeEventListener("abort", abortHandler);
-  }
-}
-var fetchRerankerScores = async (input) => {
-  const { requestUrl: requestUrl3 } = await import("obsidian");
-  const response = await raceRerankerRequest(
-    requestUrl3({
-      url: `${input.baseUrl.replace(/\/$/, "")}/rerank`,
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${input.apiKey}`
-      },
-      body: JSON.stringify({
-        model: input.config.model,
-        query: input.query,
-        documents: input.candidates.map((candidate) => candidate.text)
-      }),
-      throw: true
-    }),
-    input.signal,
-    input.config.timeoutMs
-  );
-  return parseRerankerResponseText(response.text, input.candidates);
-};
 
 // src/retrieval-prune.ts
 var FLOOR_LO_PCT = 0.05;
@@ -42990,8 +42928,8 @@ Wiki folder outside vault \u2014 skipped.`);
     ])];
     const filteredArticlePaths = entityTypeFilter.length > 0 ? articlePaths.filter(
       (p) => entityTypeFilter.some((et) => {
-        const subfolder = domain.entity_types?.find((e) => e.type === et)?.wiki_subfolder;
-        return subfolder && p.includes(`/${subfolder}/`);
+        const found = domain.entity_types?.find((e) => e.type === et);
+        return found ? p.includes(`/${effectiveSubfolder(found)}/`) : false;
       })
     ) : articlePaths;
     allFilteredArticlePaths.push(...filteredArticlePaths);
@@ -43219,18 +43157,16 @@ ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
     const survivingTypes = [];
     const removedTypes = [];
     for (const et of effectiveEntityTypes) {
-      const sub = et.wiki_subfolder;
-      const count = sub ? [...pages.keys()].filter((p) => p.startsWith(`${wikiVaultPath}/${sub}/`)).length : 0;
+      const sub = effectiveSubfolder(et);
+      const count = [...pages.keys()].filter((p) => p.startsWith(`${wikiVaultPath}/${sub}/`)).length;
       if (count > 0) {
         survivingTypes.push(et);
         continue;
       }
       removedTypes.push(et);
-      if (sub) {
-        try {
-          await vaultTools.rmdir(`${wikiVaultPath}/${sub}`, true);
-        } catch {
-        }
+      try {
+        await vaultTools.rmdir(`${wikiVaultPath}/${sub}`, true);
+      } catch {
       }
     }
     if (removedTypes.length > 0) {
@@ -43845,10 +43781,12 @@ ${fileContent}` }
         yield { kind: "tool_result", ok: false, preview: e.message };
         for (const ev of collected) yield ev;
         if (e.name === "AbortError" || signal.aborted) return;
-        yield { kind: "assistant_text", delta: `\u26A0 ${file}: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON, \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u0430\u0435\u043C bootstrap (${e.message})
-` };
-        yield { kind: "file_done", file };
-        continue;
+        yield {
+          kind: "error",
+          message: `init: domain bootstrap failed \u2014 could not derive entity types (structured-output error: ${e.message}). Fix model/prompt and re-run.`
+        };
+        yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || void 0 };
+        return;
       }
       for (const ev of collected) yield ev;
       if (signal.aborted) return;
@@ -43942,6 +43880,11 @@ ${JSON.stringify(entry, null, 2)}
         caughtErr = e;
       }
       if (hadError && caughtErr) {
+        if (caughtErr instanceof EmbeddingUnavailableError || caughtErr.name === "EmbeddingUnavailableError") {
+          yield { kind: "error", message: `init stopped \u2014 embedding endpoint failed: ${caughtErr.message}. Fix embedding config and re-run.` };
+          yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || void 0 };
+          return;
+        }
         const canRetry = !retried;
         const choice = onFileError ? await onFileError(file, caughtErr, canRetry) : "skip";
         if (choice === "stop") return;
@@ -44036,6 +43979,11 @@ async function* runIncrementalReinit(domainId, changedFiles, vaultTools, llm, mo
         caught = e;
       }
       if (caught) {
+        if (caught instanceof EmbeddingUnavailableError || caught.name === "EmbeddingUnavailableError") {
+          yield { kind: "error", message: `init stopped \u2014 embedding endpoint failed: ${caught.message}. Fix embedding config and re-run.` };
+          yield { kind: "result", durationMs: Date.now() - start, text: "" };
+          return;
+        }
         if (caught.name === "AbortError" || signal.aborted) return;
         const canRetry = !retried;
         const choice = onFileError ? await onFileError(file, caught, canRetry) : "skip";
@@ -44625,9 +44573,7 @@ async function* runDelete(args, vaultTools, llm, model, domains, vaultRoot, sign
     return;
   }
   const wikiFolder = domainWikiFolder(domain.wiki_folder);
-  const pageFiles = (await vaultTools.listFiles(wikiFolder)).filter(
-    (p) => p.endsWith(".md") && !p.includes("/_config/")
-  );
+  const pageFiles = (await vaultTools.listFiles(wikiFolder)).filter(isWikiPagePath);
   const pages = /* @__PURE__ */ new Map();
   for (const p of pageFiles) {
     try {
@@ -44718,7 +44664,7 @@ async function* runDelete(args, vaultTools, llm, model, domains, vaultRoot, sign
     else yield { kind: "info_text", icon: "alert-triangle", summary: `Skipped invalid path: ${p}` };
   }
   const remainingPageStems = new Set(
-    (await vaultTools.listFiles(wikiFolder)).filter((p) => p.endsWith(".md") && !p.includes("/_config/")).map((p) => pageId(p))
+    (await vaultTools.listFiles(wikiFolder)).filter(isWikiPagePath).map((p) => pageId(p))
   );
   for (const src of sourceStemToPath.values()) {
     try {
@@ -54183,7 +54129,7 @@ async function collectMarkdownPages(adapter, root) {
   async function walk(folder) {
     const listed = await adapter.list(folder);
     for (const file of listed.files) {
-      if (file.endsWith(".md") && !file.includes("/_config/")) out.push({ path: file, content: await adapter.read(file) });
+      if (isWikiPagePath(file)) out.push({ path: file, content: await adapter.read(file) });
     }
     for (const child of listed.folders) {
       if (child.endsWith("/_config")) continue;
@@ -54423,11 +54369,7 @@ var LlmWikiPlugin = class extends import_obsidian14.Plugin {
             const counts = /* @__PURE__ */ new Map();
             const allMd = this.app.vault.getMarkdownFiles();
             for (const et of domainEntry.entity_types ?? []) {
-              if (!et.wiki_subfolder) {
-                counts.set(et.type, 0);
-                continue;
-              }
-              const prefix = `${domainWikiFolder(domainEntry.wiki_folder)}/${et.wiki_subfolder}/`;
+              const prefix = `${domainWikiFolder(domainEntry.wiki_folder)}/${effectiveSubfolder(et)}/`;
               counts.set(et.type, allMd.filter((f) => f.path.startsWith(prefix)).length);
             }
             new LintOptionsModal(
