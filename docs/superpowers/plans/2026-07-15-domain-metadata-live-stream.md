@@ -62,6 +62,10 @@ review:
         Corrected to 132-154, 248-274, 417-439.
       verdict: fixed
       verdict_at: 2026-07-15
+result_check:
+  verdict: OK
+  plan_hash: 20449c1d7a6501a3
+  last_run: 2026-07-15
 ---
 # Robust Domain Metadata & Live LLM Stream — Implementation Plan
 
