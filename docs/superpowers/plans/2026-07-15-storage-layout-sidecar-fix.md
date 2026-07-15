@@ -14,6 +14,10 @@ review:
     - name: consistency
       status: passed
   findings: []
+result_check:
+  verdict: OK
+  plan_hash: 4100bb76c56601fa
+  last_run: 2026-07-15
 chain:
   intent: n/a
   spec:
