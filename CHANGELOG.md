@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.202 — 2026-07-15
+
+### New
+- Per-model availability Check buttons on the chat, embedding, and reranker model selectors (left of refresh); each reports the real endpoint error on failure
+- `effectiveSubfolder` fallback — entity types with an empty `wiki_subfolder` now route to a valid per-type folder everywhere (ingest path, tags, lint/sidebar counts)
+- Embedding failures now surface the real reason (`failReason`); the `dimensions` parameter is opt-in
+
+### Fixes
+- Embedding and reranker calls no longer fail at runtime with `Failed to resolve module specifier 'obsidian'` — the true cause of `per-entity retrieval failed for all entities`; obsidian's `requestUrl` is now loaded via a local re-export
+- Init fails fast on a genuine embedding-endpoint failure (one clear error, stops the run) instead of grinding file-by-file
+- Init fails loud when bootstrap can't derive entity types, instead of silently continuing with empty types (which dumped every page into `entities/`)
+- Empty-subfolder entity types are counted and tagged correctly (lint, sidebar, tags, ingest)
+- `checkDimensions` guards on probe presence, not error truthiness
+
+### Other
+- Centralized the wiki page-vs-meta filter on `isWikiPagePath`
+
+---
+
 ## 0.1.201 — 2026-07-15
 
 ### New
