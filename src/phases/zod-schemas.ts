@@ -88,6 +88,14 @@ export const EntitiesOutputSchema = z.object({
   })).max(50),
 });
 
+export const TypeAssignmentsSchema = z.object({
+  reasoning: z.string().optional(),
+  assignments: z.array(z.object({
+    stem: z.string().min(1),
+    type: z.string().min(1),
+  })),
+});
+
 export const WikiPagesOutputSchema = z.object({
   reasoning: z.string(),
   pages: z.array(WikiPageSchema),
@@ -150,6 +158,7 @@ export const FormatOutputSchema = FormatBaseSchema.superRefine((val, ctx) => {
   }
 });
 
+export type TypeAssignments = z.infer<typeof TypeAssignmentsSchema>;
 export type DomainEntryResponse = z.infer<typeof DomainEntrySchema>;
 export type EntityTypesDeltaResponse = z.infer<typeof EntityTypesDeltaSchema>;
 export type SeedsResponse = z.infer<typeof SeedsSchema>;

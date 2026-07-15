@@ -46,10 +46,16 @@
 - ✅ Correct: `[[page-name]]`, `[[Кириллица]]`, `[[Scalability]]`
 - Link only to existing pages; dead links yield a warning
 
-## Related and external links (body sections, not frontmatter)
+## Source, related, and external links (body sections, not frontmatter)
 
-Outgoing links no longer live in frontmatter — they are body sections, each one bullet per line:
+Links live in body sections, one bullet per line — never in frontmatter:
 
+- `## Sources` — the source note(s) this page was extracted from, as WikiLinks. Same bare stems as the `resource` frontmatter; the ingest pipeline injects this section from `resource`:
+  ```markdown
+  ## Sources
+
+  - [[source-note]]
+  ```
 - `## Related` — WikiLinks to other wiki pages:
   ```markdown
   ## Related
@@ -64,7 +70,7 @@ Outgoing links no longer live in frontmatter — they are body sections, each on
   - [Example docs](https://example.com/docs)
   ```
 
-Both headings are fixed English literals — do not translate or localize them, even when the page body is in another language. These two sections are reference data only; they are excluded from retrieval embeddings.
+All three headings are fixed English literals — do not translate or localize them, even when the page body is in another language. `## Related` and `## External links` are reference data excluded from retrieval embeddings; `## Sources` IS embedded, so the wiki→source connection stays searchable as well as navigable.
 
 ## Content
 - Synthesis, not copying — rework the information from the sources

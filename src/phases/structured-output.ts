@@ -29,6 +29,7 @@ export type StructuredCallSite =
   | "ingest.entities"
   | "ingest.pages"
   | "ingest.merge"
+  | "ingest.classify"
   | "format.output";
 
 type ResponseFormatMode = "json_schema" | "json_object" | "none";
@@ -174,6 +175,7 @@ async function streamOnce(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   opts: LlmCallOptions,
   signal: AbortSignal,
+  onEvent: (ev: RunEvent) => void,
 ): Promise<CallResult> {
   const params = buildChatParams(model, messages, opts, true);
   let fullText = "";
@@ -187,8 +189,12 @@ async function streamOnce(
     );
     const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs);
     for await (const chunk of stream) {
-      const { content, outputTokens: tok } = extractStreamDeltas(chunk);
-      if (content) fullText += content;
+      const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
+      if (reasoning) onEvent({ kind: "assistant_text", delta: reasoning, isReasoning: true });
+      if (content) {
+        fullText += content;
+        onEvent({ kind: "assistant_text", delta: content });
+      }
       if (tok !== undefined) outputTokens = tok;
     }
     const stats = getStats();
@@ -240,7 +246,7 @@ async function callWithFormatFallback<T>(
 
     try {
       return {
-        result: await streamOnce(args.llm, args.model, messages, callOpts, args.signal),
+        result: await streamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent),
         mode: currentMode,
       };
     } catch (e) {
@@ -317,4 +323,41 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
   }
 
   throw new StructuredValidationError(callSite, maxRetries + 1, lastError);
+}
+
+export interface StructuredSink<T> {
+  value?: T;
+  outputTokens?: number;
+  fullText?: string;
+}
+
+/**
+ * Streaming wrapper over `runStructuredWithRetry`. Yields every RunEvent —
+ * including the live reasoning/content deltas from streamOnce — as it is
+ * produced, so a generator consumer can `yield*` them to the UI instead of
+ * buffering until the call resolves. The parsed result lands in `sink`; a
+ * structured failure is re-thrown out of the generator. `args.onEvent` is
+ * ignored — the bridge installs its own.
+ */
+export async function* runStructuredStreaming<T>(
+  args: RunStructuredArgs<T>,
+  sink: StructuredSink<T>,
+): AsyncGenerator<RunEvent> {
+  const queue: RunEvent[] = [];
+  let wake: (() => void) | null = null;
+  let settled = false;
+  let error: unknown = null;
+  const onEvent = (ev: RunEvent) => { queue.push(ev); wake?.(); };
+
+  const p = runStructuredWithRetry({ ...args, onEvent })
+    .then((r) => { sink.value = r.value; sink.outputTokens = r.outputTokens; sink.fullText = r.fullText; })
+    .catch((e) => { error = e; })
+    .finally(() => { settled = true; wake?.(); });
+
+  while (!settled || queue.length) {
+    while (queue.length) yield queue.shift()!;
+    if (!settled) await new Promise<void>((res) => { wake = () => { wake = null; res(); }; });
+  }
+  await p;
+  if (error) throw error as Error;
 }

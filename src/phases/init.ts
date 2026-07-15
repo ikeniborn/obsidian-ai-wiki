@@ -2,14 +2,14 @@ import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient, OnFileError } from "../types";
 import { VaultTools } from "../vault-tools";
-import { parseWithRetry } from "./parse-with-retry";
+import { runStructuredStreaming, type StructuredSink } from "./structured-output";
 import { DomainEntrySchema } from "./zod-schemas";
 import schemaTemplate from "../../templates/_wiki_schema.md";
 import initTemplate from "../../prompts/init.md";
 import { render } from "./template";
 import { wikiSections } from "./llm-utils";
 import { runIngest } from "./ingest";
-import { GLOBAL_CONFIG_DIR, domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainIndexPath } from "../wiki-path";
+import { domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainIndexPath, domainMetadataPath } from "../wiki-path";
 import type { PageSimilarityService } from "../page-similarity";
 import { parseIndexAnnotations } from "../wiki-index";
 import { i18nFor, resolveLang } from "../i18n";
@@ -161,7 +161,12 @@ export async function* runInitWithSources(
   yield { kind: "tool_result", ok: true, preview: `${sourceFiles.length} source files` };
 
   const existing = domains.find((d) => d.id === domainId);
-  const isResuming = !force && existing?.analyzed_sources !== undefined;
+  // "Resuming" means the domain was already bootstrapped (has entity_types), so
+  // the bootstrap step is skipped and only unanalyzed sources are processed.
+  // A freshly-registered domain reloads with analyzed_sources:{} (always defined),
+  // so keying on analyzed_sources would wrongly skip bootstrap and leave the
+  // domain with zero entity_types — which then routes/rejects every page.
+  const isResuming = !force && !!existing?.entity_types?.length;
   const alreadyAnalyzed = new Set(force ? [] : Object.keys(existing?.analyzed_sources ?? {}));
   const toAnalyze = isResuming
     ? sourceFiles.filter((f) => !alreadyAnalyzed.has(f))
@@ -220,24 +225,25 @@ export async function* runInitWithSources(
       ];
 
       yield { kind: "tool_use", name: "Initialising domain", input: {} };
-      const collected: RunEvent[] = [];
+      const sink: StructuredSink<{ id: string; name: string; wiki_folder: string; entity_types: EntityType[]; language_notes: string }> = {};
       let parsed: { id: string; name: string; wiki_folder: string; entity_types: EntityType[]; language_notes: string };
       try {
-        const r = await parseWithRetry({
+        for await (const ev of runStructuredStreaming({
           llm, model, baseMessages: messages, opts,
-          schema: DomainEntrySchema,
+          profile: { kind: "json-zod", schema: DomainEntrySchema },
           maxRetries: opts.structuredRetries ?? 1,
           callSite: "init.bootstrap",
           signal,
-          onEvent: (e) => collected.push(e),
-        });
-        parsed = r.value;
-        outputTokens += r.outputTokens;
+          onEvent: () => {},
+        }, sink)) {
+          yield ev;
+        }
+        parsed = sink.value!;
+        outputTokens += sink.outputTokens ?? 0;
         yield { kind: "tool_result", ok: true, preview: `domain: ${parsed.id}` };
-        if (r.fullText) yield { kind: "assistant_text", delta: r.fullText };
+        if (sink.fullText) yield { kind: "assistant_text", delta: sink.fullText };
       } catch (e) {
         yield { kind: "tool_result", ok: false, preview: (e as Error).message };
-        for (const ev of collected) yield ev;
         if ((e as Error).name === "AbortError" || signal.aborted) return;
         yield {
           kind: "error",
@@ -246,7 +252,6 @@ export async function* runInitWithSources(
         yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
         return;
       }
-      for (const ev of collected) yield ev;
 
       if (signal.aborted) return;
 
@@ -503,12 +508,21 @@ export async function* runIncrementalReinit(
 
 export async function wipeDomainFolder(vaultTools: VaultTools, wikiFolder: string): Promise<string[]> {
   const root = domainWikiFolder(wikiFolder);
+  // Preserve metadata.jsonl — it is the domain's registry identity. A force
+  // reinit resets its contents (entity_types/analyzed_sources) via later
+  // domain_updated events, but deleting the file drops the domain from the
+  // registry mid-run, so those events (re-loaded against a domain-less registry)
+  // are silently discarded and the metadata is never rewritten. index.jsonl and
+  // log.jsonl are content — they are removed and rebuilt by the re-ingest.
+  const metaPath = domainMetadataPath(root);
   const files = await vaultTools.listFiles(root);
+  const removed: string[] = [];
   for (const f of files) {
-    try { await vaultTools.remove(f); } catch { /* skip locked */ }
+    if (f === metaPath) continue;
+    try { await vaultTools.remove(f); removed.push(f); } catch { /* skip locked */ }
   }
   await vaultTools.removeSubfolders(root);
-  return files;
+  return removed;
 }
 
 async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
@@ -520,7 +534,9 @@ async function ensureRootFiles(vaultTools: VaultTools, wikiRoot: string): Promis
   const legacyLog    = `${wikiRoot}/_log.md`;
 
   try { await vaultTools.mkdir(wikiRoot); } catch { /* already exists */ }
-  try { await vaultTools.mkdir(GLOBAL_CONFIG_DIR); } catch { /* already exists */ }
+  // NB: do NOT create GLOBAL_CONFIG_DIR (!Wiki/_config) — it is a legacy artifact
+  // (JSONL layout keeps config per-domain). Creating it here re-spawned the empty
+  // dir that removeEmptyConfigDirs cleans on load. See storage-layout-sidecar-fix.
 
   try {
     if (await vaultTools.exists(legacyIndex)) await vaultTools.remove(legacyIndex);

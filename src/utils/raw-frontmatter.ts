@@ -566,6 +566,46 @@ export function parseResourceFromFm(content: string): string[] {
   return Array.isArray(r) ? (r as unknown[]).filter((x): x is string => typeof x === "string") : [];
 }
 
+const SOURCES_HEADING = "## Sources";
+
+/**
+ * Ensure the page body carries a `## Sources` section listing each source note
+ * as a navigable `[[stem]]` wikilink. OKF keeps links in body sections, not
+ * frontmatter: the plain `resource` frontmatter records provenance, while this
+ * section makes the wiki→source link clickable (the source note lives outside
+ * `!Wiki/`, so its bare stem resolves to a real vault note). Idempotent —
+ * existing links are kept and new ones unioned; an empty stem list is a no-op.
+ * Heading is a fixed English literal, mirroring `## Related` / `## External links`.
+ */
+export function ensureSourcesSection(content: string, sourceStems: string[]): string {
+  const stems = [...new Set(sourceStems.map((s) => s.trim()).filter((s) => s.length > 0))];
+  if (stems.length === 0) return content;
+
+  const lines = content.split("\n");
+  const headIdx = lines.findIndex((l) => l.trim().toLowerCase() === SOURCES_HEADING.toLowerCase());
+
+  if (headIdx === -1) {
+    const block = [SOURCES_HEADING, ...stems.map((s) => `- [[${s}]]`)].join("\n");
+    return `${content.replace(/\s*$/, "")}\n\n${block}\n`;
+  }
+
+  const nextIdx = lines.findIndex((l, i) => i > headIdx && /^##\s/.test(l));
+  const end = nextIdx === -1 ? lines.length : nextIdx;
+  const existing = new Set(
+    lines.slice(headIdx + 1, end)
+      .map((l) => l.match(/\[\[([^\]]+)\]\]/)?.[1]?.trim())
+      .filter((x): x is string => !!x),
+  );
+  const toAdd = stems.filter((s) => !existing.has(s)).map((s) => `- [[${s}]]`);
+  if (toAdd.length === 0) return content;
+
+  let insertAt = headIdx + 1;
+  for (let i = headIdx + 1; i < end; i++) {
+    if (lines[i].trim().startsWith("- ")) insertAt = i + 1;
+  }
+  return [...lines.slice(0, insertAt), ...toAdd, ...lines.slice(insertAt)].join("\n");
+}
+
 export function ensureResource(
   content: string,
   sourceStem: string,

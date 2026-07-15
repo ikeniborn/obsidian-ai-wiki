@@ -19,13 +19,20 @@ export class DomainStore {
   async load(): Promise<DomainEntry[]> {
     const adapter = this.vault.adapter;
     const domains: DomainEntry[] = [];
+    let healed = false;
     if (await adapter.exists(WIKI_DIR)) {
       const listed = await adapter.list(WIKI_DIR);
       for (const folder of [...listed.folders].sort()) {
         const name = folder.split("/").pop() ?? folder;
         if (name.startsWith(".") || name.startsWith("_")) continue;
         const path = domainMetadataPath(folder);
-        if (!(await adapter.exists(path))) continue;
+        if (!(await adapter.exists(path))) {
+          const recovered = await this.promoteTmpMetadata(adapter, folder, name);
+          if (!recovered) continue;
+          domains.push(recovered);
+          healed = true;
+          continue;
+        }
         try {
           domains.push(parseDomainMetadata(await adapter.read(path), path, name));
         } catch (e) {
@@ -49,7 +56,7 @@ export class DomainStore {
     }
     const { migrated: m2 } = migrateDomainsV2(domains);
     const { migrated: m3 } = migrateDomainsV3(domains);
-    if (m2 || m3) await this.save(domains);
+    if (m2 || m3 || healed) await this.save(domains);
     return domains;
   }
 
@@ -79,9 +86,68 @@ export class DomainStore {
       if (!(await adapter.exists(folder))) await this.vault.createFolder(folder).catch(() => {});
       const path = domainMetadataPath(folder);
       const tmpPath = `${path}.tmp`;
-      await adapter.write(tmpPath, stringifyDomainMetadata(domainEntryToMetadataRecords(domain)));
-      if (await adapter.exists(path)) await adapter.remove(path);
-      await adapter.rename(tmpPath, path);
+      // Clean up a leftover tmp from a previously-interrupted write.
+      if (await adapter.exists(tmpPath)) await adapter.remove(tmpPath).catch(() => {});
+      // Direct in-place write. Obsidian's adapter.rename is the flaky step that
+      // left domain folders with content but no metadata.jsonl; a small local
+      // file does not need the tmp+rename dance. Verify the file landed.
+      await adapter.write(path, stringifyDomainMetadata(domainEntryToMetadataRecords(domain)));
+      if (!(await adapter.exists(path))) {
+        throw new Error(`domain metadata write failed: ${path}`);
+      }
     }
   }
+
+  /**
+   * Recover a domain whose metadata write was interrupted: the old tmp+rename
+   * save left a `metadata.jsonl.tmp` with no `metadata.jsonl`. Promote the tmp
+   * to the final path so the domain is selectable again. Returns null when
+   * there is no tmp — a folder with content but no tmp is left alone, because
+   * that is indistinguishable from an intentionally deleted domain (Delete
+   * removes metadata.jsonl but leaves the folder; it never leaves a tmp).
+   *
+   * Parse BEFORE mutating: a corrupt tmp must be left intact (never written to
+   * the final path, never deleted), so it can be inspected manually instead of
+   * becoming a corrupt metadata.jsonl that throws DomainCorruptError on every
+   * future load.
+   */
+  private async promoteTmpMetadata(
+    adapter: Vault["adapter"],
+    folder: string,
+    name: string,
+  ): Promise<DomainEntry | null> {
+    const path = domainMetadataPath(folder);
+    const tmpPath = `${path}.tmp`;
+    if (!(await adapter.exists(tmpPath))) return null;
+    let entry: DomainEntry;
+    try {
+      const raw = await adapter.read(tmpPath);
+      entry = parseDomainMetadata(raw, path, name); // throws first — nothing mutated yet
+      await adapter.write(path, raw);
+    } catch {
+      // Corrupt/unreadable tmp — leave it (and any partial state) for manual inspection.
+      return null;
+    }
+    await adapter.remove(tmpPath).catch(() => {});
+    return entry;
+  }
+}
+
+/**
+ * Completely remove a domain's wiki folder — every page, sidecar
+ * (metadata/index/log), nested subfolder, and the `!Wiki/<domain>` folder
+ * itself. Used when a domain is deleted from settings so no empty folder is
+ * left behind. Files are removed bottom-up before each folder is rmdir'd, and
+ * the whole thing is best-effort (a locked file or adapter error never throws).
+ */
+export async function removeDomainFolder(adapter: Vault["adapter"], wikiFolder: string): Promise<void> {
+  const folder = domainWikiFolder(wikiFolder);
+  if (!(await adapter.exists(folder))) return;
+  const removeRec = async (dir: string): Promise<void> => {
+    const { files, folders } = await adapter.list(dir);
+    for (const f of files) await adapter.remove(f).catch(() => {});
+    for (const sub of folders) await removeRec(sub);
+    await adapter.rmdir(dir, true).catch(() => {});
+  };
+  await removeRec(folder);
 }
