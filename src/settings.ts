@@ -6,7 +6,7 @@ import type { LlmWikiPluginSettings, OpKey } from "./types";
 import type { DomainEntry } from "./domain";
 import { i18n } from "./i18n";
 import { resolveEffective } from "./effective-settings";
-import { DEFAULT_CHUNKING, probeEmbeddingDimensions } from "./page-similarity";
+import { DEFAULT_CHUNKING, probeEmbeddingDimensions, probeEmbeddingDimensionsResult } from "./page-similarity";
 import type { LocalConfig } from "./local-config";
 
 async function checkNativeAvailability(baseUrl: string, apiKey: string, model: string): Promise<void> {
@@ -130,8 +130,9 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     if (!na.embeddingDimensions) { new Notice("Enter a dimension value to check, or use Default"); return; }
     const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
     const requested = na.embeddingDimensions;
-    const probe = await probeEmbeddingDimensions(na.baseUrl, apiKey, na.embeddingModel, requested);
-    if (probe == null) { new Notice("Dimension check failed: API error"); return; }
+    const result = await probeEmbeddingDimensionsResult(this.plugin.settings.nativeAgent.baseUrl, apiKey, na.embeddingModel, requested);
+    if (result.error) { new Notice(`Dimension check failed: ${result.error}`); return; }
+    const probe = result.probe!;
     const nativeProbe = await probeEmbeddingDimensions(na.baseUrl, apiKey, na.embeddingModel);
     const native = nativeProbe?.actual;
     const nativeStr = native != null ? String(native) : "?";

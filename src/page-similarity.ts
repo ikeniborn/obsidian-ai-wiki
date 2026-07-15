@@ -488,25 +488,37 @@ export interface DimensionProbe {
  * vector length. When `requested` is given it is sent as the `dimensions` field so the
  * model can either honor it (MRL truncation) or ignore it (returns its native size) —
  * the caller compares `actual` vs `requested` to tell the user whether their configured
- * value is valid. Returns null on any HTTP/parse failure (the "или ошибка" case).
+ * value is valid. Returns a result object; on success, `probe` is set; on any
+ * HTTP/parse failure, `error` is set (the "или ошибка" case).
  */
+export async function probeEmbeddingDimensionsResult(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  requested?: number,
+): Promise<{ probe?: DimensionProbe; error?: string }> {
+  try {
+    const [vec] = await fetchEmbeddings(baseUrl, apiKey, model, ["ping"], requested);
+    if (!vec || vec.length === 0) return { error: "empty embedding response" };
+    return {
+      probe: {
+        actual: vec.length,
+        requested: requested && requested > 0 ? requested : undefined,
+        honored: !requested || requested <= 0 || vec.length === requested,
+      },
+    };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
 export async function probeEmbeddingDimensions(
   baseUrl: string,
   apiKey: string,
   model: string,
   requested?: number,
 ): Promise<DimensionProbe | null> {
-  try {
-    const [vec] = await fetchEmbeddings(baseUrl, apiKey, model, ["ping"], requested);
-    if (!vec || vec.length === 0) return null;
-    return {
-      actual: vec.length,
-      requested: requested && requested > 0 ? requested : undefined,
-      honored: !requested || requested <= 0 || vec.length === requested,
-    };
-  } catch {
-    return null;
-  }
+  return (await probeEmbeddingDimensionsResult(baseUrl, apiKey, model, requested)).probe ?? null;
 }
 
 export interface ExtractedEntity {
