@@ -2,7 +2,7 @@
 chain:
   intent: n/a
 review:
-  spec_hash: 6f73f4a3be814a68
+  spec_hash: 4df05d97c29bca62
   last_run: 2026-07-15
   phases:
     - name: structure
@@ -18,7 +18,7 @@ review:
       phase: clarity
       severity: WARNING
       section: "Design / F4"
-      section_hash: 11cebcce790fd561
+      section_hash: aa384aa590d1bc3a
       fragment: "the post-parse assistant_text{ isReasoning } emit … is kept or dropped per callsite"
       text: >-
         "kept or dropped per callsite" gave no firm per-callsite rule for which
@@ -51,7 +51,7 @@ review:
       phase: consistency
       severity: WARNING
       section: "Design / F3"
-      section_hash: 11cebcce790fd561
+      section_hash: aa384aa590d1bc3a
       fragment: "but ${folder}.jsonl.tmp does (a metadata.jsonl.tmp leftover), promote it"
       text: >-
         Wrong path expression: folder is the full subfolder path, so
@@ -66,7 +66,7 @@ review:
       phase: consistency
       severity: INFO
       section: "Design / F4"
-      section_hash: 11cebcce790fd561
+      section_hash: aa384aa590d1bc3a
       fragment: "runStructuredStreaming({ … profile, … onEvent: () => {} }, sink)"
       text: >-
         The two schema-based callsites (bootstrap, extract) supply a schema via
@@ -321,10 +321,17 @@ const r = { value: sink.value!, outputTokens: sink.outputTokens ?? 0, fullText: 
 `try/catch` around the `for await` preserves each callsite's existing
 error/abort handling (bootstrap fail-loud, embedding-stop, per-file retry).
 
-**Per-callsite post-parse emit (DoD, no double reasoning):**
+**Per-callsite post-parse emit (DoD):**
 - ingest synthesise emits the parsed reasoning post-hoc at `ingest.ts:273`
-  (`assistant_text{ isReasoning:true }`). Because that same reasoning now streams
-  live via the framed profile's `reasoning` deltas, **drop** the `:273` emit.
+  (`assistant_text{ isReasoning:true }`). **Keep** it. `wikiPagesProfile()` is
+  framed-zod: its `reasoning` field is parsed from the `<<<REPORT>>>` frame
+  carried in the model's **content** stream, which `streamOnce` emits as
+  non-`isReasoning` deltas (a 💬 status nudge, not a 🧠 block). Only a model's
+  native `delta.reasoning` tokens stream as a live 🧠 block. Dropping the `:273`
+  emit would therefore remove the visible reasoning block for models that carry
+  reasoning only inside the frame — so the post-parse block stays. Live
+  streaming still adds a progress signal (💬 activity, plus native 🧠 tokens
+  when the model emits them).
 - init.bootstrap emits `r.fullText` (JSON content, not reasoning) at
   `init.ts:237`; that is unaffected by live reasoning — **keep** it.
 - ingest extract and merge have no post-parse `isReasoning` emit — **no change**.
