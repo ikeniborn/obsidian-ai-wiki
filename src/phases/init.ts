@@ -238,9 +238,12 @@ export async function* runInitWithSources(
         yield { kind: "tool_result", ok: false, preview: (e as Error).message };
         for (const ev of collected) yield ev;
         if ((e as Error).name === "AbortError" || signal.aborted) return;
-        yield { kind: "assistant_text", delta: `⚠ ${file}: LLM вернул невалидный JSON, пропускаем bootstrap (${(e as Error).message})\n` };
-        yield { kind: "file_done", file };
-        continue;
+        yield {
+          kind: "error",
+          message: `init: domain bootstrap failed — could not derive entity types (structured-output error: ${(e as Error).message}). Fix model/prompt and re-run.`,
+        };
+        yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
+        return;
       }
       for (const ev of collected) yield ev;
 
