@@ -2,6 +2,7 @@ import path from "path-browserify";
 import { parse as yamlParse, stringify as yamlStringify } from "yaml";
 import type { DomainEntry } from "../domain";
 import { normalizeTag, parseTagsFromFm, TAG_RE } from "./raw-frontmatter";
+import { isWikiPagePath } from "../wiki-path";
 
 /** Default cap on distinct thematic (non-entity) top-level tag categories per domain. */
 export const DEFAULT_MAX_TAG_CATEGORIES = 12;
@@ -43,7 +44,7 @@ export async function collectDomainTags(
   for (const dir of dirs) {
     const listed = await vault.listFiles(dir).catch(() => [] as string[]);
     for (const f of listed) {
-      if (f.endsWith(".md") && !f.includes("/_config/")) files.add(f);
+      if (isWikiPagePath(f)) files.add(f);
     }
   }
   const contents = await vault.readAll([...files]);
