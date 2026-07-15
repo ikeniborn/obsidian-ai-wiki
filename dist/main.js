@@ -28061,6 +28061,20 @@ function domainWikiFolder(subfolder) {
 function isWikiArticlePath(path5) {
   return path5 === WIKI_ROOT || path5.startsWith(`${WIKI_ROOT}/`);
 }
+var DOMAIN_META_BASENAMES = /* @__PURE__ */ new Set([
+  "metadata.jsonl",
+  "index.jsonl",
+  "log.jsonl",
+  // current JSONL layout
+  "_index.md",
+  "_log.md"
+  // legacy markdown layout
+]);
+function isDomainMetaPath(path5) {
+  if (path5.includes("/_config/")) return true;
+  const base = path5.split("/").pop() ?? path5;
+  return DOMAIN_META_BASENAMES.has(base);
+}
 function sanitizeWikiFolder(raw) {
   let s = raw;
   const vaultMatch = s.match(/^vaults\/[^/]+\//);
@@ -28074,13 +28088,12 @@ function sanitizeWikiSubfolder(raw) {
   return raw.split("/").pop();
 }
 function validateArticlePath(path5, wikiVaultPath) {
-  if (path5 === `${wikiVaultPath}/_config/_index.md` || path5 === `${wikiVaultPath}/_config/_log.md`) return true;
   const prefix = `${wikiVaultPath}/`;
   if (!path5.startsWith(prefix)) return false;
+  if (isDomainMetaPath(path5)) return false;
   const remainder = path5.slice(prefix.length);
-  if (remainder.includes(".config")) return false;
   const segments = remainder.split("/");
-  return segments.length === 2 && segments[1].endsWith(".md");
+  return segments.length <= 2 && segments[segments.length - 1].endsWith(".md");
 }
 function domainMetadataPath(domainFolder) {
   return `${domainFolder}/metadata.jsonl`;
