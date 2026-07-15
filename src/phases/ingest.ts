@@ -29,6 +29,7 @@ import { fixWikiLinks, stripDeadLinks } from "../wiki-link-validator";
 import { GENERIC_WIKI_STEM_REGEX, stemRegex } from "../wiki-stem";
 import { i18nFor, resolveLang } from "../i18n";
 import { promptVersionOf } from "../prompt-version";
+import { EmbeddingUnavailableError } from "../embedding-error";
 
 function deriveSectionForPath(wikiFolder: string, fullPath: string): string {
   const prefix = wikiFolder + "/";
@@ -158,14 +159,12 @@ export async function* runIngest(
   const retrievalDetails: string[] = [];
   if (similarity) {
     await similarity.loadCache(domainRoot, vaultTools);
-    const { results: entityMap, allFailed } = await similarity.selectByEntities(
+    const { results: entityMap, allFailed, failReason } = await similarity.selectByEntities(
       entitiesResult.value.entities, annotations, nonMetaPaths,
     );
 
     if (allFailed && entitiesResult.value.entities.length > 0 && nonMetaPaths.length > 0) {
-      yield { kind: "error", message: "ingest: per-entity retrieval failed for all entities" };
-      yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: 0 };
-      return;
+      throw new EmbeddingUnavailableError(failReason ?? "per-entity retrieval failed for all entities");
     }
 
     const union = new Set<string>();
