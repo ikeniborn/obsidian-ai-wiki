@@ -344,5 +344,8 @@ export function computeSpeedText(stats: Array<{
   if (totalDurS <= 0) return "";
   const inS = Math.round(totalIn / totalDurS);
   const outS = Math.round(totalOut / totalDurS);
-  return ` in: ${totalIn} tok (${inS} tok/s) · out: ${totalOut} tok (${outS} tok/s) · latency: ${medTtft}ms`;
+  const inputText = stats.some((value) => value.inputTokens === undefined)
+    ? "in: n/a"
+    : `in: ${totalIn} tok (${inS} tok/s)`;
+  return ` ${inputText} · out: ${totalOut} tok (${outS} tok/s) · latency: ${medTtft}ms`;
 }

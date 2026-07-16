@@ -207,10 +207,12 @@ async function streamOnce(
     if (
       signal.aborted
       || (e as Error).name === "AbortError"
-      || isJsonModeError(e)
-      || classifyContextError(e) !== null
+    ) throw e;
+    if (
+      classifyContextError(e) !== null
       || e instanceof PromptBudgetExceededError
     ) throw e;
+    if (isJsonModeError(e)) throw e;
     const params2 = buildChatParams(model, messages, opts);
     const resp = await llm.chat.completions.create(
       { ...params2, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
@@ -259,6 +261,10 @@ async function callWithFormatFallback<T>(
         mode: currentMode,
       };
     } catch (e) {
+      if (
+        classifyContextError(e) !== null
+        || e instanceof PromptBudgetExceededError
+      ) throw e;
       if (args.profile.kind !== "json-zod" || !isJsonModeError(e)) throw e;
       const next = fallbackMode(currentMode);
       if (!next) throw e;

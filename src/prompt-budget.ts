@@ -176,8 +176,10 @@ const CONTEXT_ERROR_CODES = new Set([
   "prompt_too_long",
 ]);
 
-const INPUT_CONTEXT_SEMANTICS = /\b(?:input|prompt|messages?|context(?:\s+(?:length|limit|size|window))?)\b/i;
-const NON_CONTEXT_LIMIT_SEMANTICS = /\b(?:account|billing|completion|credits?|generated|output|quota|rate\s+limit)\b/i;
+const INPUT_SEMANTICS = /\b(?:input|prompt|messages?)\b/i;
+const CONTEXT_SEMANTICS = /\bcontext(?:\s+(?:length|limit|size|window))?\b/i;
+const OUTPUT_SEMANTICS = /\b(?:completion|generated|output)\b/i;
+const NON_CONTEXT_ERROR_SEMANTICS = /\b(?:account|billing|credits?|deadline|quota|rate\s+limit|time(?:d)?\s*out|timeout)\b/i;
 const OVERFLOW_RELATION = /\b(?:exceeds?|exceeded|exceeding|overflow(?:ed)?|too\s+(?:long|large|many)|over\s+(?:the\s+)?(?:limit|maximum)|greater\s+than|more\s+than|beyond)\b|>/i;
 const TOKEN_NUMBER = "(\\d[\\d,_]*)";
 const MAXIMUM_INPUT = "(?:maximum\\s+context(?:\\s+length)?|max(?:imum)?\\s+context|context\\s+(?:length|window)|maximum(?:\\s+number)?\\s+of\\s+tokens(?:\\s+allowed)?|maximum\\s+tokens(?:\\s+allowed)?)";
@@ -225,8 +227,10 @@ function extractContextCounts(message: string): ContextErrorDetails {
 
 function classifyContextMessage(message: string): ContextErrorDetails | null {
   const details = extractContextCounts(message);
-  if (!INPUT_CONTEXT_SEMANTICS.test(message)) return null;
-  if (NON_CONTEXT_LIMIT_SEMANTICS.test(message)) return null;
+  const hasInput = INPUT_SEMANTICS.test(message);
+  const hasContext = CONTEXT_SEMANTICS.test(message);
+  if ((!hasInput && !hasContext) || NON_CONTEXT_ERROR_SEMANTICS.test(message)) return null;
+  if (OUTPUT_SEMANTICS.test(message) && (!hasInput || !hasContext)) return null;
 
   const reportedOverflow = details.promptTokens !== undefined
     && details.maxContextTokens !== undefined

@@ -9,6 +9,7 @@ import { parseAnswerFrames } from "../src/phases/framed-output";
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 
 const { parseWithRetry } = await import("../src/phases/parse-with-retry");
+const { computeSpeedText } = await import("../src/phases/llm-utils");
 const {
   runStructuredWithRetry,
   runStructuredStreaming,
@@ -148,6 +149,32 @@ test("an observed zero prompt usage remains zero", async () => {
   assert.equal(result.inputTokens, 0);
 });
 
+test("speed text reports unknown aggregate input usage as n/a", () => {
+  const text = computeSpeedText([
+    { inputTokens: 100, outputTokens: 20, ttftMs: 100, llmDurationMs: 1_000 },
+    { outputTokens: 10, ttftMs: 200, llmDurationMs: 1_000 },
+  ]);
+
+  assert.equal(text, " in: n/a · out: 30 tok (15 tok/s) · latency: 200ms");
+});
+
+test("speed text preserves observed zero input usage", () => {
+  const text = computeSpeedText([
+    { inputTokens: 0, outputTokens: 5, ttftMs: 10, llmDurationMs: 1_000 },
+  ]);
+
+  assert.equal(text, " in: 0 tok (0 tok/s) · out: 5 tok (5 tok/s) · latency: 10ms");
+});
+
+test("speed text aggregates all-known input usage", () => {
+  const text = computeSpeedText([
+    { inputTokens: 100, outputTokens: 20, ttftMs: 100, llmDurationMs: 1_000 },
+    { inputTokens: 50, outputTokens: 10, ttftMs: 200, llmDurationMs: 1_000 },
+  ]);
+
+  assert.equal(text, " in: 150 tok (75 tok/s) · out: 30 tok (15 tok/s) · latency: 200ms");
+});
+
 test("non-stream fallback returns prompt usage", async () => {
   let requests = 0;
   const llm = {
@@ -191,6 +218,47 @@ test("non-stream fallback returns prompt usage", async () => {
   assert.equal(result.inputTokens, 11);
 });
 
+test("context deadline errors retain normal stream-to-non-stream fallback", async () => {
+  let requests = 0;
+  const llm = {
+    chat: {
+      completions: {
+        create: async (params: { stream?: boolean }) => {
+          requests += 1;
+          if (params.stream) throw new Error("context deadline exceeded");
+          return {
+            id: "completion",
+            object: "chat.completion",
+            created: 0,
+            model: "m",
+            choices: [{
+              index: 0,
+              finish_reason: "stop",
+              message: { role: "assistant", content: '{"value":"fallback"}', refusal: null },
+              logprobs: null,
+            }],
+          };
+        },
+      },
+    },
+  } as unknown as LlmClient;
+
+  const result = await runStructuredWithRetry({
+    llm,
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+
+  assert.equal(requests, 2);
+  assert.equal(result.value.value, "fallback");
+});
+
 test("context errors bypass identical stream-to-non-stream fallback", async () => {
   let requests = 0;
   const contextError = Object.assign(
@@ -221,6 +289,45 @@ test("context errors bypass identical stream-to-non-stream fallback", async () =
   }), contextError);
 
   assert.equal(requests, 1);
+});
+
+test("context overflow takes precedence over JSON-mode fallback", async () => {
+  let requests = 0;
+  const events: RunEvent[] = [];
+  const contextError = Object.assign(
+    new Error("response_format unsupported: prompt size 565000 exceeds maximum context 524288"),
+    { status: 400 },
+  );
+  const llm = {
+    chat: {
+      completions: {
+        create: async () => {
+          requests += 1;
+          throw contextError;
+        },
+      },
+    },
+  } as unknown as LlmClient;
+
+  await assert.rejects(runStructuredWithRetry({
+    llm,
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: { jsonMode: "json_schema" },
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    signal: new AbortController().signal,
+    onEvent: (event) => events.push(event),
+  }), contextError);
+
+  assert.equal(requests, 1);
+  assert.equal(
+    events.some((event) =>
+      event.kind === "structural_error"
+      && event.errorType === "response_format_fallback"),
+    false,
+  );
 });
 
 test("explicit input-count context errors also bypass transport fallback", async () => {

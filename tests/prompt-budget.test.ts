@@ -269,6 +269,11 @@ test("context error classifier recognizes input-context provider variants", () =
       expected: { promptTokens: 565_000, maxContextTokens: 524_288 },
     },
     {
+      name: "prompt plus requested completion exceeds context window",
+      error: new Error("prompt size 5000 plus requested completion tokens exceeds maximum context 4096"),
+      expected: { promptTokens: 5_000, maxContextTokens: 4_096 },
+    },
+    {
       name: "nested message",
       error: { error: { message: "prompt size 565000 exceeds maximum context 524288" } },
       expected: { promptTokens: 565_000, maxContextTokens: 524_288 },
@@ -283,6 +288,8 @@ test("context error classifier recognizes input-context provider variants", () =
 test("context error classifier rejects quota and output-limit messages", () => {
   const fixtures: Array<{ name: string; error: unknown }> = [
     { name: "network", error: new Error("connection reset by peer") },
+    { name: "deadline", error: new Error("context deadline exceeded") },
+    { name: "timeout", error: new Error("context timeout exceeded") },
     { name: "quota", error: new Error("You exceeded your current quota; check plan and billing details") },
     { name: "input quota", error: new Error("input token quota exceeded for this account") },
     { name: "prompt rate limit", error: new Error("prompt token rate limit exceeded") },
@@ -290,6 +297,10 @@ test("context error classifier rejects quota and output-limit messages", () => {
     { name: "completion", error: new Error("completion token limit exceeded") },
     { name: "completion mentioning prompt", error: new Error("completion token limit for this prompt exceeded") },
     { name: "output", error: new Error("output token limit exceeded") },
+    {
+      name: "output-only context reservation",
+      error: new Error("requested completion 5000 exceeds maximum context 4096"),
+    },
     { name: "generated tokens", error: new Error("too many tokens were generated in the completion") },
     { name: "descriptive context", error: new Error("This model has a context window of 128000 tokens") },
     {
