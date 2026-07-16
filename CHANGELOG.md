@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.204 — 2026-07-16
+
+### New
+- feat(retrieval): dedupe chunks before rerank in both query paths
+- feat(ingest): guarantee incoming sections survive a dedup merge
+- feat(view): swap ask buttons — Ask Domain primary, Ask Wiki secondary
+
+---
+
 ## 0.1.203 — 2026-07-16
 
 ### New
