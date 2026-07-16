@@ -216,6 +216,33 @@ test("chunking never emits a blank-only leading preamble chunk", () => {
   assert.doesNotThrow(() => assertCompleteSourceCoverage(source, chunks));
 });
 
+test("a leading blank range fails loud when it cannot share the heading budget", () => {
+  assert.throws(
+    () => chunkMarkdownSource("\n# H", { maxEstimatedTokens: 3, overlapLines: 0 }),
+    /blank source range 1-1 cannot be coalesced.*budget 3/i,
+  );
+});
+
+test("blank paragraph separators coalesce with an adjacent range when the result fits", () => {
+  const source = "a\n\n\nb";
+  const chunks = chunkMarkdownSource(source, { maxEstimatedTokens: 2, overlapLines: 0 });
+
+  assert.deepEqual(chunks.map((chunk) => [chunk.startLine, chunk.endLine, chunk.markdown]), [
+    [1, 2, "a\n"],
+    [3, 4, "\nb"],
+  ]);
+  assert.equal(chunks.every((chunk) => chunk.markdown.length > 0), true);
+  assert.equal(chunks.every((chunk) => estimatedBytes(chunk.markdown) <= 2), true);
+  assert.doesNotThrow(() => assertCompleteSourceCoverage(source, chunks));
+});
+
+test("a blank paragraph separator fails loud when neither adjacent range fits", () => {
+  assert.throws(
+    () => chunkMarkdownSource("a\n\nb", { maxEstimatedTokens: 1, overlapLines: 0 }),
+    /blank source range 2-2 cannot be coalesced.*budget 1/i,
+  );
+});
+
 test("oversized sections split at blank lines before using overlap", () => {
   const source = [
     "# Root",

@@ -330,6 +330,67 @@ function splitLineWindows(
   return windows;
 }
 
+function coalesceBlankOnlyRanges(
+  lines: ScannedLine[],
+  bytePrefix: number[],
+  inputRanges: SourceRange[],
+  budget: number,
+): SourceRange[] {
+  const ranges = inputRanges.map((range) => ({ ...range, headingPath: [...range.headingPath] }));
+  let index = 0;
+
+  while (index < ranges.length) {
+    if (renderRangeMarkdown(lines, ranges[index]).trim().length > 0) {
+      index += 1;
+      continue;
+    }
+    if (ranges.length === 1 && renderRangeMarkdown(lines, ranges[index]).length > 0) return ranges;
+
+    let runEnd = index;
+    while (
+      runEnd + 1 < ranges.length
+      && renderRangeMarkdown(lines, ranges[runEnd + 1]).trim().length === 0
+    ) {
+      runEnd += 1;
+    }
+    const blankStart = ranges[index].startIndex;
+    const blankEnd = ranges[runEnd].endIndex;
+
+    if (index > 0) {
+      const previous = ranges[index - 1];
+      const merged: SourceRange = {
+        startIndex: previous.startIndex,
+        endIndex: Math.max(previous.endIndex, blankEnd),
+        headingPath: [...previous.headingPath],
+      };
+      if (renderedRangeEstimatedTokens(lines, bytePrefix, merged) <= budget) {
+        ranges.splice(index - 1, runEnd - index + 2, merged);
+        index = Math.max(0, index - 1);
+        continue;
+      }
+    }
+
+    const next = ranges[runEnd + 1];
+    if (next) {
+      const merged: SourceRange = {
+        startIndex: Math.min(blankStart, next.startIndex),
+        endIndex: next.endIndex,
+        headingPath: [...next.headingPath],
+      };
+      if (renderedRangeEstimatedTokens(lines, bytePrefix, merged) <= budget) {
+        ranges.splice(index, runEnd - index + 2, merged);
+        continue;
+      }
+    }
+
+    throw new RangeError(
+      `Blank source range ${blankStart + 1}-${blankEnd + 1} cannot be coalesced with an adjacent range within budget ${budget}`,
+    );
+  }
+
+  return ranges;
+}
+
 function validateOptions(options: MarkdownChunkOptions): void {
   if (!Number.isSafeInteger(options.maxEstimatedTokens) || options.maxEstimatedTokens <= 0) {
     throw new RangeError("maxEstimatedTokens must be a positive safe integer");
@@ -380,6 +441,8 @@ export function chunkMarkdownSource(
       }
     }
   }
+
+  ranges = coalesceBlankOnlyRanges(lines, bytePrefix, ranges, options.maxEstimatedTokens);
 
   return ranges.map((range, ordinal) => {
     const rawMarkdown = rawRangeMarkdown(lines, range.startIndex, range.endIndex);
