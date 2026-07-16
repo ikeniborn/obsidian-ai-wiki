@@ -597,6 +597,52 @@ test("structural block dedupe keeps indentation significant", () => {
   assert.deepEqual(result.changedHeadings, ["## Facts"]);
 });
 
+test("append preserves one-line four-space-indented code when plain text matches", () => {
+  const current = "# Demo\n\n## Facts\nsame\n";
+  const result = applyPagePatch(current, patchFor(current, [{
+    heading: "## Facts",
+    operation: "append",
+    content: "    same",
+  }]), new Set());
+
+  assert.deepEqual(result, {
+    ok: true,
+    content: "# Demo\n\n## Facts\nsame\n\n    same\n",
+    changedHeadings: ["## Facts"],
+  });
+});
+
+test("append preserves one-line tab-indented code when plain text matches", () => {
+  const current = "# Demo\n\n## Facts\nsame\n";
+  const result = applyPagePatch(current, patchFor(current, [{
+    heading: "## Facts",
+    operation: "append",
+    content: "\tsame",
+  }]), new Set());
+
+  assert.deepEqual(result, {
+    ok: true,
+    content: "# Demo\n\n## Facts\nsame\n\n\tsame\n",
+    changedHeadings: ["## Facts"],
+  });
+});
+
+test("append treats one to three leading spaces as ordinary paragraph indentation", () => {
+  const current = "# Demo\n\n## Facts\nsame\n";
+
+  for (const content of [" same", "  same", "   same"]) {
+    assert.deepEqual(applyPagePatch(current, patchFor(current, [{
+      heading: "## Facts",
+      operation: "append",
+      content,
+    }]), new Set()), {
+      ok: true,
+      content: current,
+      changedHeadings: [],
+    });
+  }
+});
+
 test("append returns an exact no-op when all content already exists", () => {
   const result = applyPagePatch(page, patch([
     { heading: "## Facts", operation: "append", content: "  alpha  \n\nalpha" },

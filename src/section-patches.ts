@@ -416,7 +416,7 @@ function isStructuralBlock(block: string[]): boolean {
     /^ {0,3}(?:[-+*]|\d+[.)])[ \t]+/.test(line)
     || /^ {0,3}>/.test(line)
     || /^#{3,6}[ \t]+/.test(line)
-    || (block.length > 1 && /^(?: {2,}|\t)\S/.test(line))
+    || /^(?: {4,}|\t)[ \t]*\S/.test(line)
   ));
 }
 
