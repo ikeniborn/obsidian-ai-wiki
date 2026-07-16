@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 import type { LlmCallOptions, RunEvent } from "../types";
+import { compressionInstruction } from "../semantic-compression";
 import baseContract from "../../prompts/base.md";
 import { jsonrepair } from "jsonrepair";
 import { resolveLang, resolveReasoningLang } from "../i18n";
@@ -129,10 +130,7 @@ export function buildChatParams(
   opts: LlmCallOptions,
   stream: boolean = false,
 ): Record<string, unknown> {
-  let msgs = prependBaseContract(messages);
-  if (opts.outputLanguage) msgs = injectLanguageDirective(msgs, resolveLang(opts.outputLanguage));
-  msgs = injectReasoningDirective(msgs, resolveReasoningLang(opts.reasoningLanguage, opts.outputLanguage));
-  msgs = opts.systemPrompt ? injectSystemPrompt(msgs, opts.systemPrompt) : msgs;
+  const msgs = prepareChatMessages(messages, opts);
   const params: Record<string, unknown> = { model, messages: msgs };
   if (opts.temperature !== undefined) params.temperature = opts.temperature;
   if (opts.maxTokens != null) params.max_tokens = opts.maxTokens;
@@ -156,6 +154,18 @@ export function buildChatParams(
   }
 
   return params;
+}
+
+export function prepareChatMessages(
+  messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  opts: LlmCallOptions,
+): OpenAI.Chat.ChatCompletionMessageParam[] {
+  let msgs = prependBaseContract(messages);
+  if (opts.outputLanguage) msgs = injectLanguageDirective(msgs, resolveLang(opts.outputLanguage));
+  msgs = injectReasoningDirective(msgs, resolveReasoningLang(opts.reasoningLanguage, opts.outputLanguage));
+  msgs = opts.systemPrompt ? injectSystemPrompt(msgs, opts.systemPrompt) : msgs;
+  if (opts.semanticCompression) msgs = injectCompressionDirective(msgs, compressionInstruction(opts.semanticCompression));
+  return msgs;
 }
 
 function prependBaseContract(
@@ -257,6 +267,20 @@ function injectSystemPrompt(
     return updated;
   }
   return [{ role: "system", content: section }, ...messages];
+}
+
+function injectCompressionDirective(
+  messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  directive: string,
+): OpenAI.Chat.ChatCompletionMessageParam[] {
+  const firstSystem = messages.findIndex((m) => m.role === "system");
+  if (firstSystem >= 0) {
+    const updated = [...messages];
+    const existing = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
+    updated[firstSystem] = { role: "system", content: `${existing}\n\n${directive}` };
+    return updated;
+  }
+  return [{ role: "system", content: directive }, ...messages];
 }
 
 export interface LlmStreamStats {

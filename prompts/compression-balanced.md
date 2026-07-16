@@ -1,0 +1,1 @@
+Use balanced semantic compression. Keep concise context for facts and relationships while removing repetition and prose padding. Never omit governed evidence or fields named by the preservation rules below.

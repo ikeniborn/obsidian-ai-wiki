@@ -1,0 +1,1 @@
+Use maximum semantic compression. Remove repetition, framing prose, and redundant examples. Express each distinct fact once in the densest unambiguous form. Never omit governed evidence or fields named by the preservation rules below.
