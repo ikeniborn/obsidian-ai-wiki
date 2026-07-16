@@ -111,14 +111,21 @@ function isSingleH2Heading(value: string): boolean {
     && normalizeSectionHeading(value).length > 0;
 }
 
+function nextLineEnd(source: string, offset: number): number {
+  for (let index = offset; index < source.length; index++) {
+    if (source[index] === "\n") return index + 1;
+    if (source[index] === "\r") return source[index + 1] === "\n" ? index + 2 : index + 1;
+  }
+  return source.length;
+}
+
 function hasTopLevelH2OutsideFences(source: string): boolean {
   let fence: FenceState | null = null;
   let h2InUnclosedFence = false;
   let offset = 0;
 
   while (offset < source.length) {
-    const newline = source.indexOf("\n", offset);
-    const end = newline === -1 ? source.length : newline + 1;
+    const end = nextLineEnd(source, offset);
     const line = withoutLineEnding(source.slice(offset, end));
 
     if (fence) {
@@ -354,12 +361,26 @@ function normalizeContentItem(source: string): string {
   return source.trim().replace(/\s+/g, " ");
 }
 
+function hasListMarker(block: string[]): boolean {
+  return block.some((line) => /^[ \t]*(?:[-+*]|\d+[.)])[ \t]+/.test(line));
+}
+
+function hasIndentedContinuation(lines: string[], offset: number): boolean {
+  for (let index = offset; index < lines.length; index++) {
+    if (lines[index].trim().length === 0) continue;
+    return /^(?: {2,}|\t)\S/.test(lines[index]);
+  }
+  return false;
+}
+
 function contentBlocks(source: string): string[][] {
   const blocks: string[][] = [];
   let block: string[] = [];
   let fence: FenceState | null = null;
+  const lines = normalizeNewLines(source, "\n").split("\n");
 
-  for (const line of normalizeNewLines(source, "\n").split("\n")) {
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
     if (fence) {
       block.push(line);
       if (closesFence(line, fence)) fence = null;
@@ -374,6 +395,10 @@ function contentBlocks(source: string): string[][] {
     }
 
     if (line.trim().length === 0) {
+      if (hasListMarker(block) && hasIndentedContinuation(lines, index + 1)) {
+        block.push(line);
+        continue;
+      }
       if (block.length > 0) blocks.push(block);
       block = [];
     } else {

@@ -86,19 +86,31 @@ test("page action schema requires exactly one single-line H2 heading", () => {
 });
 
 test("direct apply rejects heading newline injection", () => {
-  assert.throws(() => applyRawPatch(page, [{
-    heading: "## Facts\n## Injected",
-    operation: "append",
-    content: "fact",
-  }]), /single-line H2/i);
+  for (const heading of [
+    "## Facts\n## Injected",
+    "## Facts\r\n## Injected",
+    "## Facts\r## Injected",
+  ]) {
+    assert.throws(() => applyRawPatch(page, [{
+      heading,
+      operation: "append",
+      content: "fact",
+    }]), /single-line H2/i);
+  }
 });
 
 test("page action schema rejects heading newline injection", () => {
-  assert.equal(PageActionSchema.safeParse(rawPatchFor(page, [{
-    heading: "## Facts\n## Injected",
-    operation: "append",
-    content: "fact",
-  }])).success, false);
+  for (const heading of [
+    "## Facts\n## Injected",
+    "## Facts\r\n## Injected",
+    "## Facts\r## Injected",
+  ]) {
+    assert.equal(PageActionSchema.safeParse(rawPatchFor(page, [{
+      heading,
+      operation: "append",
+      content: "fact",
+    }])).success, false);
+  }
 });
 
 test("direct apply rejects blank section content", () => {
@@ -170,6 +182,22 @@ test("page action schema rejects a top-level H2 inside section content", () => {
     heading: "## Facts",
     operation: "append",
     content: "beta\n\n## Injected\nvalue",
+  }])).success, false);
+});
+
+test("direct apply rejects a lone-CR H2 injection inside section content", () => {
+  assert.throws(() => applyRawPatch(page, [{
+    heading: "## Facts",
+    operation: "append",
+    content: "beta\r## Injected\rvalue",
+  }]), /top-level H2/i);
+});
+
+test("page action schema rejects a lone-CR H2 injection inside section content", () => {
+  assert.equal(PageActionSchema.safeParse(rawPatchFor(page, [{
+    heading: "## Facts",
+    operation: "append",
+    content: "beta\r## Injected\rvalue",
   }])).success, false);
 });
 
@@ -505,6 +533,42 @@ test("append keeps a list continuation attached to its marker", () => {
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.ok(result.content.includes(listItem));
+});
+
+test("append keeps a loose-list continuation after a blank line atomic", () => {
+  const current = "# Demo\n\n## Facts\ncontinuation\n";
+  const looseList = "- Parent\n\n  continuation";
+  const result = applyPagePatch(current, patchFor(current, [{
+    heading: "## Facts",
+    operation: "append",
+    content: looseList,
+  }]), new Set());
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.ok(result.content.includes(looseList));
+  assert.equal((result.content.match(/continuation/g) ?? []).length, 2);
+});
+
+test("append keeps nested ordered and unordered loose-list continuations atomic", () => {
+  const current = "# Demo\n\n## Facts\ncontinuation\n";
+  const looseLists = [
+    "1. Parent\n   - Child\n\n     continuation",
+    "- Parent\n  1. Child\n\n     continuation",
+  ];
+
+  for (const looseList of looseLists) {
+    const result = applyPagePatch(current, patchFor(current, [{
+      heading: "## Facts",
+      operation: "append",
+      content: looseList,
+    }]), new Set());
+
+    assert.equal(result.ok, true);
+    if (!result.ok) continue;
+    assert.ok(result.content.includes(looseList));
+    assert.equal((result.content.match(/continuation/g) ?? []).length, 2);
+  }
 });
 
 test("append suppresses an exact duplicate structural block atomically", () => {
