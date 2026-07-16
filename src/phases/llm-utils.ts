@@ -268,7 +268,7 @@ function appendSystemSection(
 }
 
 export interface LlmStreamStats {
-  inputTokens: number;
+  inputTokens?: number;
   outputTokens: number;
   ttftMs: number;
   llmDurationMs: number;
@@ -284,7 +284,7 @@ export function wrapStreamWithStats(
   let ttftMs: number | undefined;
   let firstChunkMs: number | undefined;
   let llmDurationMs: number | undefined;
-  let inputTokens = 0;
+  let inputTokens: number | undefined;
   let outputTokens = 0;
   let yielded = false;
 
@@ -324,17 +324,19 @@ export function buildLlmCallStatsEvent(s: LlmStreamStats): RunEvent {
   return {
     kind: "llm_call_stats",
     ...s,
-    inTokPerSec: durS > 0 ? Math.round(s.inputTokens / durS) : 0,
+    inTokPerSec: durS > 0 && s.inputTokens !== undefined
+      ? Math.round(s.inputTokens / durS)
+      : 0,
     outTokPerSec: durS > 0 ? Math.round(s.outputTokens / durS) : 0,
   };
 }
 
 export function computeSpeedText(stats: Array<{
-  inputTokens: number; outputTokens: number;
+  inputTokens?: number; outputTokens: number;
   ttftMs: number; llmDurationMs: number;
 }>): string {
   if (!stats.length) return "";
-  const totalIn = stats.reduce((s, x) => s + x.inputTokens, 0);
+  const totalIn = stats.reduce((s, x) => s + (x.inputTokens ?? 0), 0);
   const totalOut = stats.reduce((s, x) => s + x.outputTokens, 0);
   const totalDurS = stats.reduce((s, x) => s + x.llmDurationMs, 0) / 1000;
   const sorted = [...stats.map(x => x.ttftMs)].sort((a, b) => a - b);

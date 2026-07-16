@@ -2,7 +2,12 @@ import type OpenAI from "openai";
 import type { z } from "zod";
 import { ZodError } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import type { LlmCallOptions, LlmClient, RunEvent } from "../types";
+import type {
+  LlmCallOptions,
+  LlmClient,
+  RunEvent,
+  StructuredCallSite,
+} from "../types";
 import { classifyContextError, PromptBudgetExceededError } from "../prompt-budget";
 import { structuralErrorCounter } from "../structural-error-counter";
 import {
@@ -22,22 +27,7 @@ const repairJson = [
   "Return ONLY a single valid JSON object matching the schema. No markdown fences, no <think> tags, no commentary.",
 ].join("\n");
 
-export type StructuredCallSite =
-  | "init.bootstrap"
-  | "init.bootstrap-map"
-  | "init.delta"
-  | "lint.patch" | "lint.fix" | "lint.batch" | "lint-chat.fix" | "lint-chat.patch"
-  | "query.seeds" | "query.answer"
-  | "ingest.entities"
-  | "ingest.evidence-map"
-  | "ingest.evidence-reduce"
-  | "ingest.pages"
-  | "ingest.synthesize"
-  | "ingest.merge"
-  | "ingest.classify"
-  | "format.output"
-  | "format.segment"
-  | "vision.analysis";
+export type { StructuredCallSite } from "../types";
 
 type ResponseFormatMode = "json_schema" | "json_object" | "none";
 
@@ -346,6 +336,7 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
 
 export interface StructuredSink<T> {
   value?: T;
+  inputTokens?: number;
   outputTokens?: number;
   fullText?: string;
 }
@@ -369,7 +360,12 @@ export async function* runStructuredStreaming<T>(
   const onEvent = (ev: RunEvent) => { queue.push(ev); wake?.(); };
 
   const p = runStructuredWithRetry({ ...args, onEvent })
-    .then((r) => { sink.value = r.value; sink.outputTokens = r.outputTokens; sink.fullText = r.fullText; })
+    .then((r) => {
+      sink.value = r.value;
+      sink.inputTokens = r.inputTokens;
+      sink.outputTokens = r.outputTokens;
+      sink.fullText = r.fullText;
+    })
     .catch((e) => { error = e; })
     .finally(() => { settled = true; wake?.(); });
 

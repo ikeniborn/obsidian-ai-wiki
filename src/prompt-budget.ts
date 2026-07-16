@@ -1,5 +1,10 @@
 import type OpenAI from "openai";
-import type { CompressionProfile, LlmCallOptions, RunEvent } from "./types";
+import type {
+  CompressionProfile,
+  LlmCallOptions,
+  RunEvent,
+  StructuredCallSite,
+} from "./types";
 
 const MEDIA_TOKENS = 4_096;
 const MAX_CONTEXT_REPACKS = 2;
@@ -77,28 +82,51 @@ export function estimatePreparedMessages(
 
 export interface PackContextUnitsArgs {
   inputBudgetTokens: number;
-  fixedMessages: OpenAI.Chat.ChatCompletionMessageParam[];
+  /** Compatibility input for renderers; the returned render output is authoritative. */
+  fixedMessages: readonly OpenAI.Chat.ChatCompletionMessageParam[];
   opts: LlmCallOptions;
   units: ContextUnit[];
   render: (
-    units: ContextUnit[],
+    units: readonly Readonly<ContextUnit>[],
     opts: LlmCallOptions,
+    fixedMessages: readonly OpenAI.Chat.ChatCompletionMessageParam[],
   ) => OpenAI.Chat.ChatCompletionMessageParam[];
 }
 
+function compareCodePointIds(left: string, right: string): number {
+  const leftPoints = Array.from(left, (value) => value.codePointAt(0) ?? 0);
+  const rightPoints = Array.from(right, (value) => value.codePointAt(0) ?? 0);
+  const length = Math.min(leftPoints.length, rightPoints.length);
+  for (let index = 0; index < length; index++) {
+    if (leftPoints[index] !== rightPoints[index]) return leftPoints[index] - rightPoints[index];
+  }
+  return leftPoints.length - rightPoints.length;
+}
+
 export function packContextUnits(args: PackContextUnitsArgs): PackedPrompt {
+  const ids = new Set<string>();
+  for (const unit of args.units) {
+    if (ids.has(unit.id)) throw new Error(`Duplicate context unit id: ${unit.id}`);
+    ids.add(unit.id);
+  }
+
   const required = args.units.filter((unit) => unit.required);
   const optional = args.units
     .map((unit, index) => ({ unit, index }))
     .filter(({ unit }) => !unit.required)
     .sort((a, b) => b.unit.priority - a.unit.priority
-      || a.unit.id.localeCompare(b.unit.id)
+      || compareCodePointIds(a.unit.id, b.unit.id)
       || a.index - b.index)
     .map(({ unit }) => unit);
 
   const selected: ContextUnit[] = [];
   const omitted: ContextUnit[] = [];
-  let messages = [...args.fixedMessages];
+  const render = (units: ContextUnit[]) => args.render(
+    units.map((unit) => ({ ...unit })),
+    args.opts,
+    args.fixedMessages,
+  );
+  let messages = render(selected);
   let estimatedInputTokens = estimatePreparedMessages(messages);
 
   if (estimatedInputTokens > args.inputBudgetTokens) {
@@ -107,7 +135,7 @@ export function packContextUnits(args: PackContextUnitsArgs): PackedPrompt {
 
   for (const unit of required) {
     selected.push(unit);
-    messages = args.render([...selected], args.opts);
+    messages = render(selected);
     estimatedInputTokens = estimatePreparedMessages(messages);
   }
 
@@ -121,7 +149,7 @@ export function packContextUnits(args: PackContextUnitsArgs): PackedPrompt {
 
   for (const unit of optional) {
     const candidate = [...selected, unit];
-    const candidateMessages = args.render(candidate, args.opts);
+    const candidateMessages = render(candidate);
     const candidateEstimate = estimatePreparedMessages(candidateMessages);
     if (candidateEstimate <= args.inputBudgetTokens) {
       selected.push(unit);
@@ -146,11 +174,13 @@ const CONTEXT_ERROR_CODES = new Set([
   "input_too_long",
   "max_context_length_exceeded",
   "prompt_too_long",
-  "too_many_tokens",
 ]);
 
-const CONTEXT_MESSAGE_PATTERN = /context (?:length|limit|size|window)|maximum context|prompt (?:is )?too long|prompt size|too many tokens|token limit|input (?:is )?too long/i;
+const INPUT_CONTEXT_SEMANTICS = /\b(?:input|prompt|messages?|context(?:\s+(?:length|limit|size|window))?)\b/i;
+const NON_CONTEXT_LIMIT_SEMANTICS = /\b(?:account|billing|completion|credits?|generated|output|quota|rate\s+limit)\b/i;
+const OVERFLOW_RELATION = /\b(?:exceeds?|exceeded|exceeding|overflow(?:ed)?|too\s+(?:long|large|many)|over\s+(?:the\s+)?(?:limit|maximum)|greater\s+than|more\s+than|beyond)\b|>/i;
 const TOKEN_NUMBER = "(\\d[\\d,_]*)";
+const MAXIMUM_INPUT = "(?:maximum\\s+context(?:\\s+length)?|max(?:imum)?\\s+context|context\\s+(?:length|window)|maximum(?:\\s+number)?\\s+of\\s+tokens(?:\\s+allowed)?|maximum\\s+tokens(?:\\s+allowed)?)";
 
 function parseTokenCount(value: string): number {
   return Number.parseInt(value.replace(/[, _]/g, ""), 10);
@@ -158,7 +188,7 @@ function parseTokenCount(value: string): number {
 
 function extractContextCounts(message: string): ContextErrorDetails {
   const promptThenMax = new RegExp(
-    `(?:prompt(?:\\s+size)?|messages?|input|requested)[^\\d]{0,50}${TOKEN_NUMBER}(?:\\s+tokens?)?[\\s\\S]{0,100}?(?:exceeds?|>|over)[\\s\\S]{0,60}?(?:maximum\\s+context(?:\\s+length)?|max(?:imum)?\\s+context|context\\s+(?:length|window))[^\\d]{0,30}${TOKEN_NUMBER}`,
+    `(?:prompt(?:\\s+size)?|messages?|input|requested)[^\\d]{0,50}${TOKEN_NUMBER}(?:\\s+tokens?)?[\\s\\S]{0,100}?(?:exceeds?|>|over)[\\s\\S]{0,60}?${MAXIMUM_INPUT}[^\\d]{0,30}${TOKEN_NUMBER}`,
     "i",
   ).exec(message);
   if (promptThenMax) {
@@ -169,7 +199,7 @@ function extractContextCounts(message: string): ContextErrorDetails {
   }
 
   const maxThenPrompt = new RegExp(
-    `(?:maximum\\s+context(?:\\s+length)?|context\\s+(?:length|window))[^\\d]{0,30}${TOKEN_NUMBER}(?:\\s+tokens?)?[\\s\\S]{0,140}?(?:messages?|prompt|input|requested)[^\\d]{0,50}${TOKEN_NUMBER}`,
+    `${MAXIMUM_INPUT}[^\\d]{0,30}${TOKEN_NUMBER}(?:\\s+tokens?)?[\\s\\S]{0,140}?(?:messages?|prompt|input|requested)[^\\d]{0,50}${TOKEN_NUMBER}`,
     "i",
   ).exec(message);
   if (maxThenPrompt) {
@@ -193,32 +223,58 @@ function extractContextCounts(message: string): ContextErrorDetails {
   return {};
 }
 
+function classifyContextMessage(message: string): ContextErrorDetails | null {
+  const details = extractContextCounts(message);
+  if (!INPUT_CONTEXT_SEMANTICS.test(message)) return null;
+  if (NON_CONTEXT_LIMIT_SEMANTICS.test(message)) return null;
+
+  const reportedOverflow = details.promptTokens !== undefined
+    && details.maxContextTokens !== undefined
+    && details.promptTokens > details.maxContextTokens;
+  return OVERFLOW_RELATION.test(message) || reportedOverflow ? details : null;
+}
+
 export function classifyContextError(error: unknown): ContextErrorDetails | null {
   if (!error || typeof error !== "object") return null;
   const record = error as Record<string, unknown>;
   const nested = isRecord(record.error) ? record.error : undefined;
-  const code = String(record.code ?? nested?.code ?? "").toLowerCase();
-  const type = String(record.type ?? nested?.type ?? "").toLowerCase();
-  const message = String(record.message ?? nested?.message ?? "");
-  const classified = CONTEXT_ERROR_CODES.has(code)
-    || CONTEXT_ERROR_CODES.has(type)
-    || CONTEXT_MESSAGE_PATTERN.test(message);
-  return classified ? extractContextCounts(message) : null;
+  const codes = [record.code, record.type, nested?.code, nested?.type]
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.toLowerCase());
+  const messages = [record.message, nested?.message]
+    .filter((value): value is string => typeof value === "string" && value.length > 0);
+  const details = messages
+    .map(extractContextCounts)
+    .find((value) => value.promptTokens !== undefined || value.maxContextTokens !== undefined)
+    ?? {};
+
+  if (codes.some((value) => CONTEXT_ERROR_CODES.has(value))) return details;
+  for (const message of messages) {
+    const classified = classifyContextMessage(message);
+    if (classified !== null) return classified;
+  }
+  return null;
 }
 
 export function shrinkInputBudget(
   currentBudget: number,
   details: ContextErrorDetails,
 ): number {
+  if (currentBudget <= 1) return currentBudget;
+
+  let next: number;
   if (
     details.promptTokens !== undefined
     && details.maxContextTokens !== undefined
     && details.promptTokens > 0
     && details.maxContextTokens > 0
+    && details.maxContextTokens < details.promptTokens
   ) {
-    return Math.floor(currentBudget * details.maxContextTokens / details.promptTokens * 0.9);
+    next = Math.floor(currentBudget * details.maxContextTokens / details.promptTokens * 0.9);
+  } else {
+    next = Math.floor(currentBudget * 0.75);
   }
-  return Math.floor(currentBudget * 0.75);
+  return Math.max(1, Math.min(currentBudget - 1, next));
 }
 
 export type PromptBudgetRetryReason =
@@ -226,7 +282,7 @@ export type PromptBudgetRetryReason =
   | "provider_context_error";
 
 export interface PromptBudgetMetadata {
-  callSite: string;
+  callSite: StructuredCallSite;
   configuredInputBudget: number;
   effectiveInputBudget: number;
   estimatedInputTokens: number;
@@ -268,7 +324,7 @@ export interface ContextRepackBuild<T> {
 }
 
 export interface RunWithContextRepackArgs<TBuild, TResult> {
-  callSite: string;
+  callSite: StructuredCallSite;
   configuredInputBudget: number;
   outputBudget?: number;
   compressionProfile: CompressionProfile;
@@ -291,49 +347,62 @@ export async function runWithContextRepack<TBuild, TResult>(
 
   for (let attempt = 0; attempt <= MAX_CONTEXT_REPACKS; attempt++) {
     let built: ContextRepackBuild<TBuild> | undefined;
+    let outcome:
+      | { ok: true; built: ContextRepackBuild<TBuild>; result: TResult }
+      | { ok: false; error: unknown };
     try {
       built = await args.build(effectiveInputBudget);
-      const result = await args.execute(built.value);
-      args.onEvent(createPromptBudgetEvent({
-        callSite: args.callSite,
-        configuredInputBudget: args.configuredInputBudget,
-        effectiveInputBudget,
-        estimatedInputTokens: built.estimatedInputTokens,
-        actualInputTokens: resultInputTokens(result),
-        outputBudget: args.outputBudget,
-        compressionProfile: args.compressionProfile,
-        contextUnits: built.contextUnits,
-        sourceChunks: built.sourceChunks,
-        reductionDepth: built.reductionDepth,
-      }));
-      return result;
+      outcome = { ok: true, built, result: await args.execute(built.value) };
     } catch (error) {
-      const details = classifyContextError(error);
-      const preflight = error instanceof PromptBudgetExceededError;
-      const retryReason = preflight
-        ? "preflight_budget_exceeded"
-        : details !== null
-          ? "provider_context_error"
-          : undefined;
+      outcome = { ok: false, error };
+    }
 
+    if (outcome.ok) {
       args.onEvent(createPromptBudgetEvent({
         callSite: args.callSite,
         configuredInputBudget: args.configuredInputBudget,
         effectiveInputBudget,
-        estimatedInputTokens: built?.estimatedInputTokens
-          ?? (preflight ? error.estimated : effectiveInputBudget),
+        estimatedInputTokens: outcome.built.estimatedInputTokens,
+        actualInputTokens: resultInputTokens(outcome.result),
         outputBudget: args.outputBudget,
         compressionProfile: args.compressionProfile,
-        contextUnits: built?.contextUnits
-          ?? (preflight ? error.requiredIds.length : 0),
-        sourceChunks: built?.sourceChunks,
-        reductionDepth: built?.reductionDepth,
-        retryReason,
+        contextUnits: outcome.built.contextUnits,
+        sourceChunks: outcome.built.sourceChunks,
+        reductionDepth: outcome.built.reductionDepth,
       }));
-
-      if (retryReason === undefined || attempt === MAX_CONTEXT_REPACKS) throw error;
-      effectiveInputBudget = shrinkInputBudget(effectiveInputBudget, details ?? {});
+      return outcome.result;
     }
+
+    const error = outcome.error;
+    const details = classifyContextError(error);
+    const preflight = error instanceof PromptBudgetExceededError;
+    const retryReason = preflight
+      ? "preflight_budget_exceeded"
+      : details !== null
+        ? "provider_context_error"
+        : undefined;
+
+    args.onEvent(createPromptBudgetEvent({
+      callSite: args.callSite,
+      configuredInputBudget: args.configuredInputBudget,
+      effectiveInputBudget,
+      estimatedInputTokens: built?.estimatedInputTokens
+        ?? (preflight ? error.estimated : effectiveInputBudget),
+      outputBudget: args.outputBudget,
+      compressionProfile: args.compressionProfile,
+      contextUnits: built?.contextUnits
+        ?? (preflight ? error.requiredIds.length : 0),
+      sourceChunks: built?.sourceChunks,
+      reductionDepth: built?.reductionDepth,
+      retryReason,
+    }));
+
+    if (
+      retryReason === undefined
+      || attempt === MAX_CONTEXT_REPACKS
+      || effectiveInputBudget <= 1
+    ) throw error;
+    effectiveInputBudget = shrinkInputBudget(effectiveInputBudget, details ?? {});
   }
 
   throw new Error("unreachable context-repack state");

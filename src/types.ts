@@ -12,6 +12,28 @@ export type WikiOperation =
   | "format"
   | "delete";
 
+export type StructuredCallSite =
+  | "init.bootstrap"
+  | "init.bootstrap-map"
+  | "init.delta"
+  | "lint.patch"
+  | "lint.fix"
+  | "lint.batch"
+  | "lint-chat.fix"
+  | "lint-chat.patch"
+  | "query.seeds"
+  | "query.answer"
+  | "ingest.entities"
+  | "ingest.evidence-map"
+  | "ingest.evidence-reduce"
+  | "ingest.pages"
+  | "ingest.synthesize"
+  | "ingest.merge"
+  | "ingest.classify"
+  | "format.output"
+  | "format.segment"
+  | "vision.analysis";
+
 export type OnFileError = (
   file: string,
   err: Error,
@@ -52,7 +74,7 @@ export type RunEvent =
   | { kind: "result"; durationMs: number; text: string; outputTokens?: number }
   | {
       kind: "llm_call_stats";
-      inputTokens: number;
+      inputTokens?: number;
       outputTokens: number;
       ttftMs: number;
       llmDurationMs: number;
@@ -61,7 +83,7 @@ export type RunEvent =
     }
   | {
       kind: "prompt_budget";
-      callSite: string;
+      callSite: StructuredCallSite;
       configuredInputBudget: number;
       effectiveInputBudget: number;
       estimatedInputTokens: number;
@@ -114,7 +136,7 @@ export type RunEvent =
   | { kind: "format_applied"; path: string }
   | { kind: "format_cancelled" }
   | { kind: "structural_error";
-      callSite: "init.bootstrap" | "init.bootstrap-map" | "init.delta" | "lint.patch" | "lint.fix" | "lint.batch" | "lint-chat.fix" | "lint-chat.patch" | "query.seeds" | "query.answer" | "ingest.entities" | "ingest.evidence-map" | "ingest.evidence-reduce" | "ingest.pages" | "ingest.synthesize" | "ingest.merge" | "ingest.classify" | "format.output" | "format.segment" | "vision.analysis";
+      callSite: StructuredCallSite;
       errorType: "json_parse" | "schema_validate" | "empty_output" | "response_format_fallback" | "frame_parse" | "idle_abort";
       retryAttempt: number;
       succeeded: boolean | null;

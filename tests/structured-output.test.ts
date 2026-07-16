@@ -35,15 +35,27 @@ function chunk(content: string): OpenAI.Chat.ChatCompletionChunk {
   };
 }
 
-function usageChunk(): OpenAI.Chat.ChatCompletionChunk {
+function usageChunk(promptTokens: number = 2): OpenAI.Chat.ChatCompletionChunk {
   return {
     id: "usage",
     object: "chat.completion.chunk",
     created: 0,
     model: "m",
     choices: [],
-    usage: { prompt_tokens: 2, completion_tokens: 3, total_tokens: 5 },
+    usage: { prompt_tokens: promptTokens, completion_tokens: 3, total_tokens: promptTokens + 3 },
   } as OpenAI.Chat.ChatCompletionChunk;
+}
+
+function llmFromChunks(chunks: OpenAI.Chat.ChatCompletionChunk[]): LlmClient {
+  return {
+    chat: {
+      completions: {
+        create: async () => (async function* () {
+          for (const value of chunks) yield value;
+        })(),
+      },
+    },
+  } as unknown as LlmClient;
 }
 
 function llmFromAttempts(attempts: Array<string | Error>, seenParams: Record<string, unknown>[] = []): LlmClient {
@@ -101,6 +113,41 @@ test("json-zod valid JSON succeeds without structural error", async () => {
   assert.equal(events.some((ev) => ev.kind === "llm_call_stats"), true);
 });
 
+test("usage-free streams keep prompt usage undefined", async () => {
+  const events: RunEvent[] = [];
+  const result = await runStructuredWithRetry({
+    llm: llmFromChunks([chunk('{"value":"ok"}')]),
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    signal: new AbortController().signal,
+    onEvent: (event) => events.push(event),
+  });
+
+  const stats = events.find((event) => event.kind === "llm_call_stats");
+  assert.equal(result.inputTokens, undefined);
+  assert.equal(stats?.kind === "llm_call_stats" ? stats.inputTokens : null, undefined);
+});
+
+test("an observed zero prompt usage remains zero", async () => {
+  const result = await runStructuredWithRetry({
+    llm: llmFromChunks([chunk('{"value":"ok"}'), usageChunk(0)]),
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+
+  assert.equal(result.inputTokens, 0);
+});
+
 test("non-stream fallback returns prompt usage", async () => {
   let requests = 0;
   const llm = {
@@ -149,6 +196,37 @@ test("context errors bypass identical stream-to-non-stream fallback", async () =
   const contextError = Object.assign(
     new Error("prompt size 565000 exceeds maximum context 524288"),
     { code: "context_length_exceeded" },
+  );
+  const llm = {
+    chat: {
+      completions: {
+        create: async () => {
+          requests += 1;
+          throw contextError;
+        },
+      },
+    },
+  } as unknown as LlmClient;
+
+  await assert.rejects(runStructuredWithRetry({
+    llm,
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  }), contextError);
+
+  assert.equal(requests, 1);
+});
+
+test("explicit input-count context errors also bypass transport fallback", async () => {
+  let requests = 0;
+  const contextError = new Error(
+    "input token count 565000 exceeds maximum number of tokens allowed 524288",
   );
   const llm = {
     chat: {
@@ -412,7 +490,7 @@ test("streaming structured call emits reasoning and content deltas live", async 
 
 test("runStructuredStreaming yields events live and fills the sink", async () => {
   const seen: RunEvent[] = [];
-  const sink: { value?: { value: string }; outputTokens?: number; fullText?: string } = {};
+  const sink: { value?: { value: string }; inputTokens?: number; outputTokens?: number; fullText?: string } = {};
   const llm = {
     chat: { completions: { create: async () => (async function* () {
       yield reasoningChunk("live reasoning");
@@ -431,7 +509,27 @@ test("runStructuredStreaming yields events live and fills the sink", async () =>
   }
 
   assert.equal(sink.value?.value, "ok");
+  assert.equal(sink.inputTokens, 2);
   assert.equal(seen.some((ev) => ev.kind === "assistant_text" && ev.isReasoning === true), true);
+});
+
+test("runStructuredStreaming keeps missing prompt usage undefined", async () => {
+  const sink: { value?: { value: string }; inputTokens?: number } = {};
+
+  for await (const _event of runStructuredStreaming({
+    llm: llmFromChunks([chunk('{"value":"ok"}')]),
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  }, sink)) { /* drain */ }
+
+  assert.equal(sink.value?.value, "ok");
+  assert.equal(sink.inputTokens, undefined);
 });
 
 test("runStructuredStreaming propagates a structured failure", async () => {

@@ -131,7 +131,7 @@ export class LlmWikiView extends ItemView {
   private renderSeq = 0;
   private startTs = 0;
   private lastStepTs = 0;
-  private llmStats: Array<{ inputTokens: number; outputTokens: number; ttftMs: number; llmDurationMs: number; }> = [];
+  private llmStats: Array<{ inputTokens?: number; outputTokens: number; ttftMs: number; llmDurationMs: number; }> = [];
   private resultSpeedEl: HTMLElement | null = null;
   private toolCount = 0;
   private stepCount = 0;
@@ -751,7 +751,11 @@ export class LlmWikiView extends ItemView {
     if (ev.kind === "source_path_added") return;
     if (ev.kind === "domain_updated") { void this.refreshDomains(); return; }
     if (ev.kind === "query_stats") { this.renderQueryStats(ev); return; }
-    if (ev.kind === "llm_call_stats") { this.llmStats.push(ev); this.fillQueryStatsTokens(ev.inputTokens); return; }
+    if (ev.kind === "llm_call_stats") {
+      this.llmStats.push(ev);
+      if (ev.inputTokens !== undefined) this.fillQueryStatsTokens(ev.inputTokens);
+      return;
+    }
     if (ev.kind !== "assistant_text") this.stepCount++;
     if (ev.kind === "tool_use") {
       this.stopWaiting();
