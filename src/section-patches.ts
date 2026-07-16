@@ -7,12 +7,24 @@ export interface CreatePage {
   content: string;
 }
 
-export interface SectionPatch {
+interface SectionPatchFields {
   heading: string;
-  expectedSectionHash?: string;
-  operation: "add" | "append" | "replace";
   content: string;
 }
+
+export type SectionPatch =
+  | (SectionPatchFields & {
+    operation: "add";
+    expectedSectionHash?: never;
+  })
+  | (SectionPatchFields & {
+    operation: "append";
+    expectedSectionHash?: string;
+  })
+  | (SectionPatchFields & {
+    operation: "replace";
+    expectedSectionHash: string;
+  });
 
 export interface PatchPage {
   kind: "patch";
@@ -66,6 +78,12 @@ export function normalizeSectionHeading(heading: string): string {
     .toLowerCase();
 }
 
+export interface SectionPatchValidationIssue {
+  index: number;
+  field: "sections" | "heading" | "content" | "operation" | "expectedSectionHash";
+  message: string;
+}
+
 function withoutLineEnding(line: string): string {
   return line.replace(/(?:\r\n|\n|\r)$/, "");
 }
@@ -85,6 +103,141 @@ function closesFence(line: string, fence: FenceState): boolean {
   return match !== null
     && match[1][0] === fence.marker
     && match[1].length >= fence.length;
+}
+
+function isSingleH2Heading(value: string): boolean {
+  return !/[\r\n]/.test(value)
+    && /^##[ \t]+/.test(value)
+    && normalizeSectionHeading(value).length > 0;
+}
+
+function hasTopLevelH2OutsideFences(source: string): boolean {
+  let fence: FenceState | null = null;
+  let h2InUnclosedFence = false;
+  let offset = 0;
+
+  while (offset < source.length) {
+    const newline = source.indexOf("\n", offset);
+    const end = newline === -1 ? source.length : newline + 1;
+    const line = withoutLineEnding(source.slice(offset, end));
+
+    if (fence) {
+      if (closesFence(line, fence)) {
+        fence = null;
+        h2InUnclosedFence = false;
+      } else if (/^##[ \t]+/.test(line)) {
+        h2InUnclosedFence = true;
+      }
+    } else {
+      const opened = openingFence(line);
+      if (opened) {
+        fence = opened;
+      } else if (/^##[ \t]+/.test(line)) {
+        return true;
+      }
+    }
+
+    offset = end;
+  }
+
+  return fence !== null && h2InUnclosedFence;
+}
+
+function hasOwn(value: object, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+export function validateSectionPatches(sections: unknown): SectionPatchValidationIssue[] {
+  if (!Array.isArray(sections)) {
+    return [{ index: -1, field: "sections", message: "sections must be an array" }];
+  }
+
+  const issues: SectionPatchValidationIssue[] = [];
+  const headings = new Map<string, number>();
+
+  sections.forEach((value, index) => {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      issues.push({ index, field: "sections", message: "section patch must be an object" });
+      return;
+    }
+    const patch = value as Record<string, unknown>;
+
+    if (typeof patch.heading !== "string" || !isSingleH2Heading(patch.heading)) {
+      issues.push({
+        index,
+        field: "heading",
+        message: 'heading must be one single-line H2 in the form "## <nonblank>"',
+      });
+    } else {
+      const normalized = normalizeSectionHeading(patch.heading);
+      const previousIndex = headings.get(normalized);
+      if (previousIndex !== undefined) {
+        issues.push({
+          index,
+          field: "heading",
+          message: `duplicate normalized heading "${normalized}" (first used at sections[${previousIndex}])`,
+        });
+      } else {
+        headings.set(normalized, index);
+      }
+    }
+
+    if (typeof patch.content !== "string" || patch.content.trim().length === 0) {
+      issues.push({ index, field: "content", message: "content must not be blank" });
+    } else if (hasTopLevelH2OutsideFences(patch.content)) {
+      issues.push({
+        index,
+        field: "content",
+        message: "content must not contain a top-level H2 outside a valid fence",
+      });
+    }
+
+    if (patch.operation !== "add" && patch.operation !== "append" && patch.operation !== "replace") {
+      issues.push({ index, field: "operation", message: "operation must be add, append, or replace" });
+      return;
+    }
+
+    if (patch.operation === "add" && hasOwn(patch, "expectedSectionHash")) {
+      issues.push({
+        index,
+        field: "expectedSectionHash",
+        message: "expectedSectionHash is forbidden for add",
+      });
+    }
+    if (
+      patch.operation === "append"
+      && hasOwn(patch, "expectedSectionHash")
+      && (typeof patch.expectedSectionHash !== "string" || patch.expectedSectionHash.trim().length === 0)
+    ) {
+      issues.push({
+        index,
+        field: "expectedSectionHash",
+        message: "append expectedSectionHash must be a nonblank string when supplied",
+      });
+    }
+    if (
+      patch.operation === "replace"
+      && (typeof patch.expectedSectionHash !== "string" || patch.expectedSectionHash.trim().length === 0)
+    ) {
+      issues.push({
+        index,
+        field: "expectedSectionHash",
+        message: "replace requires a nonblank expectedSectionHash",
+      });
+    }
+  });
+
+  return issues;
+}
+
+function assertValidSectionPatches(sections: unknown): asserts sections is SectionPatch[] {
+  const issues = validateSectionPatches(sections);
+  if (issues.length === 0) return;
+  const details = issues.map((issue) => {
+    const location = issue.index < 0 ? issue.field : `sections[${issue.index}].${issue.field}`;
+    return `${location}: ${issue.message}`;
+  }).join("; ");
+  throw new TypeError(`Invalid section patch input: ${details}`);
 }
 
 function leadingFrontmatterEnd(source: string): number {
@@ -204,8 +357,22 @@ function normalizeContentItem(source: string): string {
 function contentBlocks(source: string): string[][] {
   const blocks: string[][] = [];
   let block: string[] = [];
+  let fence: FenceState | null = null;
 
   for (const line of normalizeNewLines(source, "\n").split("\n")) {
+    if (fence) {
+      block.push(line);
+      if (closesFence(line, fence)) fence = null;
+      continue;
+    }
+
+    const opened = openingFence(line);
+    if (opened) {
+      block.push(line);
+      fence = opened;
+      continue;
+    }
+
     if (line.trim().length === 0) {
       if (block.length > 0) blocks.push(block);
       block = [];
@@ -217,20 +384,48 @@ function contentBlocks(source: string): string[][] {
   return blocks;
 }
 
+function isStructuralBlock(block: string[]): boolean {
+  if (block.some((line) => openingFence(line) !== null)) return true;
+  if (block.length > 1 && block.some((line) => line.includes("|"))) return true;
+  return block.some((line) => (
+    /^ {0,3}(?:[-+*]|\d+[.)])[ \t]+/.test(line)
+    || /^ {0,3}>/.test(line)
+    || /^#{3,6}[ \t]+/.test(line)
+    || (block.length > 1 && /^(?: {2,}|\t)\S/.test(line))
+  ));
+}
+
+function normalizeStructuralBlock(block: string[]): string {
+  return block.map((line) => line.replace(/[ \t]+$/, "")).join("\n");
+}
+
 function appendableContent(existingSpan: string, incoming: string, lineEnding: string): string {
   const firstNewline = existingSpan.search(/\r\n|\n|\r/);
   const existingBody = firstNewline === -1
     ? ""
     : existingSpan.slice(firstNewline + (existingSpan.startsWith("\r\n", firstNewline) ? 2 : 1));
-  const existingLines = new Set(
-    contentBlocks(existingBody).flat().map(normalizeContentItem),
-  );
+  const existingBlocks = contentBlocks(existingBody);
+  const existingLines = new Set(existingBlocks.flat().map(normalizeContentItem));
   const existingParagraphs = new Set(
-    contentBlocks(existingBody).map((block) => normalizeContentItem(block.join("\n"))),
+    existingBlocks.map((block) => normalizeContentItem(block.join("\n"))),
+  );
+  const existingStructuralBlocks = new Set(
+    existingBlocks.filter(isStructuralBlock).map(normalizeStructuralBlock),
   );
   const additions: string[] = [];
 
   for (const block of contentBlocks(incoming)) {
+    if (isStructuralBlock(block)) {
+      const structuralKey = normalizeStructuralBlock(block);
+      if (existingStructuralBlocks.has(structuralKey)) continue;
+      existingStructuralBlocks.add(structuralKey);
+      for (const line of block) {
+        if (line.trim().length > 0) existingLines.add(normalizeContentItem(line));
+      }
+      additions.push(block.join(lineEnding));
+      continue;
+    }
+
     const paragraphKey = normalizeContentItem(block.join("\n"));
     if (existingParagraphs.has(paragraphKey)) continue;
 
@@ -256,13 +451,37 @@ function sectionText(heading: string, content: string, lineEnding: string): stri
   return `${heading.trim()}${lineEnding}${body}`;
 }
 
+function resolveExistingSection(
+  sections: ScannedSection[],
+  requested: SectionPatch,
+): ScannedSection | undefined {
+  const key = normalizeSectionHeading(requested.heading);
+  const matches = sections.filter((section) => section.key === key);
+  if (matches.length <= 1) return matches[0];
+
+  if (requested.operation === "replace") {
+    const hashMatches = matches.filter((section) => section.hash === requested.expectedSectionHash);
+    if (hashMatches.length === 1) return hashMatches[0];
+  }
+
+  throw new TypeError(
+    `Ambiguous existing heading "${requested.heading}": ${matches.length} normalized matches`,
+  );
+}
+
 export function applyPagePatch(
   currentPage: string,
   patch: PatchPage,
   allowedReplaceHashes: ReadonlySet<string>,
 ): PatchApplyResult {
+  assertValidSectionPatches(patch.sections);
   if (contentHash(currentPage) !== patch.expectedPageHash) {
     return { ok: false, reason: "page_hash_mismatch" };
+  }
+
+  const original = scanPatchablePage(currentPage);
+  for (const requested of patch.sections) {
+    if (requested.operation !== "add") resolveExistingSection(original.sections, requested);
   }
 
   const lineEnding = lineEndingFor(currentPage);
@@ -272,10 +491,10 @@ export function applyPagePatch(
   for (const requested of patch.sections) {
     const inspected = scanPatchablePage(content);
     const key = normalizeSectionHeading(requested.heading);
-    const existing = inspected.sections.find((section) => section.key === key);
+    const matches = inspected.sections.filter((section) => section.key === key);
 
     if (requested.operation === "add") {
-      if (existing) {
+      if (matches.length > 0) {
         return { ok: false, reason: "heading_exists", heading: requested.heading };
       }
       content += sectionSeparatorAfter(content, lineEnding);
@@ -284,6 +503,7 @@ export function applyPagePatch(
       continue;
     }
 
+    const existing = resolveExistingSection(inspected.sections, requested);
     if (!existing) {
       return { ok: false, reason: "heading_missing", heading: requested.heading };
     }

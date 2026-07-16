@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { normalizeSectionHeading } from "../section-patches";
+import { z, type RefinementCtx } from "zod";
+import { validateSectionPatches } from "../section-patches";
 import { GENERIC_WIKI_STEM_REGEX } from "../wiki-stem";
 
 const NonBlankStringSchema = z.string().refine(
@@ -7,47 +7,49 @@ const NonBlankStringSchema = z.string().refine(
   "Value must not be blank",
 );
 
-const SectionHeadingSchema = NonBlankStringSchema.refine(
-  (value) => normalizeSectionHeading(value).length > 0,
-  "Heading must contain text",
-);
-
 const SectionPatchFields = {
-  heading: SectionHeadingSchema,
-  content: NonBlankStringSchema,
+  heading: z.string(),
+  content: z.string(),
 };
 
-export const SectionPatchSchema = z.discriminatedUnion("operation", [
+const SectionPatchBaseSchema = z.discriminatedUnion("operation", [
   z.object({
     ...SectionPatchFields,
     operation: z.literal("add"),
-    expectedSectionHash: z.never().optional(),
+    expectedSectionHash: z.string().optional(),
   }),
   z.object({
     ...SectionPatchFields,
     operation: z.literal("append"),
-    expectedSectionHash: NonBlankStringSchema.optional(),
+    expectedSectionHash: z.string().optional(),
   }),
   z.object({
     ...SectionPatchFields,
     operation: z.literal("replace"),
-    expectedSectionHash: NonBlankStringSchema,
+    expectedSectionHash: z.string().optional(),
   }),
 ]);
 
-const SectionPatchesSchema = z.array(SectionPatchSchema).superRefine((sections, ctx) => {
-  const headings = new Set<string>();
-  sections.forEach((section, index) => {
-    const normalized = normalizeSectionHeading(section.heading);
-    if (headings.has(normalized)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: [index, "heading"],
-        message: `Duplicate normalized heading "${normalized}"`,
-      });
-    }
-    headings.add(normalized);
-  });
+function addSectionPatchIssues(
+  sections: unknown[],
+  ctx: RefinementCtx,
+  includeIndex: boolean,
+): void {
+  for (const issue of validateSectionPatches(sections)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: includeIndex && issue.index >= 0 ? [issue.index, issue.field] : [issue.field],
+      message: issue.message,
+    });
+  }
+}
+
+export const SectionPatchSchema = SectionPatchBaseSchema.superRefine((section, ctx) => {
+  addSectionPatchIssues([section], ctx, false);
+});
+
+const SectionPatchesSchema = z.array(SectionPatchBaseSchema).superRefine((sections, ctx) => {
+  addSectionPatchIssues(sections, ctx, true);
 });
 
 export const CreatePageSchema = z.object({

@@ -47,6 +47,161 @@ function assertSectionStable(
   );
 }
 
+function rawPatchFor(current: string, sections: unknown[]): Record<string, unknown> {
+  return {
+    kind: "patch",
+    path: "!Wiki/d/concept/wiki_d_demo.md",
+    expectedPageHash: inspectPatchablePage(current).pageHash,
+    sections,
+  };
+}
+
+function applyRawPatch(
+  current: string,
+  sections: unknown[],
+  allowedReplaceHashes: ReadonlySet<string> = new Set(),
+): ReturnType<typeof applyPagePatch> {
+  return applyPagePatch(
+    current,
+    rawPatchFor(current, sections) as unknown as PatchPage,
+    allowedReplaceHashes,
+  );
+}
+
+test("direct apply requires exactly one single-line H2 heading", () => {
+  for (const heading of ["Facts", "# Facts", "### Facts", "##   "]) {
+    assert.throws(
+      () => applyRawPatch(page, [{ heading, operation: "add", content: "fact" }]),
+      /single-line H2/i,
+    );
+  }
+});
+
+test("page action schema requires exactly one single-line H2 heading", () => {
+  for (const heading of ["Facts", "# Facts", "### Facts", "##   "]) {
+    assert.equal(PageActionSchema.safeParse(rawPatchFor(page, [
+      { heading, operation: "add", content: "fact" },
+    ])).success, false);
+  }
+});
+
+test("direct apply rejects heading newline injection", () => {
+  assert.throws(() => applyRawPatch(page, [{
+    heading: "## Facts\n## Injected",
+    operation: "append",
+    content: "fact",
+  }]), /single-line H2/i);
+});
+
+test("page action schema rejects heading newline injection", () => {
+  assert.equal(PageActionSchema.safeParse(rawPatchFor(page, [{
+    heading: "## Facts\n## Injected",
+    operation: "append",
+    content: "fact",
+  }])).success, false);
+});
+
+test("direct apply rejects blank section content", () => {
+  assert.throws(() => applyRawPatch(page, [{
+    heading: "## New",
+    operation: "add",
+    content: " \n\t ",
+  }]), /content.*blank/i);
+});
+
+test("page action schema rejects blank section content", () => {
+  assert.equal(PageActionSchema.safeParse(rawPatchFor(page, [{
+    heading: "## New",
+    operation: "add",
+    content: " \n\t ",
+  }])).success, false);
+});
+
+test("direct apply rejects expectedSectionHash on add", () => {
+  assert.throws(() => applyRawPatch(page, [{
+    heading: "## New",
+    expectedSectionHash: "fnv1a:12345678",
+    operation: "add",
+    content: "fact",
+  }]), /expectedSectionHash.*add|add.*expectedSectionHash/i);
+});
+
+test("page action schema rejects expectedSectionHash on add", () => {
+  assert.equal(PageActionSchema.safeParse(rawPatchFor(page, [{
+    heading: "## New",
+    expectedSectionHash: "fnv1a:12345678",
+    operation: "add",
+    content: "fact",
+  }])).success, false);
+});
+
+test("direct apply requires expectedSectionHash on replace", () => {
+  assert.throws(() => applyRawPatch(page, [{
+    heading: "## Facts",
+    operation: "replace",
+    content: "gamma",
+  }]), /replace.*expectedSectionHash|expectedSectionHash.*replace/i);
+});
+
+test("direct apply rejects duplicate normalized patch headings", () => {
+  assert.throws(() => applyRawPatch(page, [
+    { heading: "## New", operation: "add", content: "one" },
+    { heading: "##  new ", operation: "add", content: "two" },
+  ]), /duplicate normalized heading/i);
+});
+
+test("page action schema rejects duplicate normalized patch headings", () => {
+  assert.equal(PageActionSchema.safeParse(rawPatchFor(page, [
+    { heading: "## New", operation: "add", content: "one" },
+    { heading: "##  new ", operation: "add", content: "two" },
+  ])).success, false);
+});
+
+test("direct apply rejects a top-level H2 inside section content", () => {
+  assert.throws(() => applyRawPatch(page, [{
+    heading: "## Facts",
+    operation: "append",
+    content: "beta\n\n## Injected\nvalue",
+  }]), /top-level H2/i);
+});
+
+test("page action schema rejects a top-level H2 inside section content", () => {
+  assert.equal(PageActionSchema.safeParse(rawPatchFor(page, [{
+    heading: "## Facts",
+    operation: "append",
+    content: "beta\n\n## Injected\nvalue",
+  }])).success, false);
+});
+
+test("H3 content and H2-like text inside valid fences remain allowed", () => {
+  const content = [
+    "### Child",
+    "text",
+    "",
+    "```md",
+    "## Backtick example",
+    "",
+    "value",
+    "```",
+    "",
+    "~~~text",
+    "## Tilde example",
+    "~~~",
+  ].join("\n");
+  const action = rawPatchFor(page, [{ heading: "## New", operation: "add", content }]);
+
+  assert.equal(PageActionSchema.safeParse(action).success, true);
+  const result = applyPagePatch(page, action as unknown as PatchPage, new Set());
+  assert.equal(result.ok, true);
+});
+
+test("full preflight rejects a later invalid action before earlier operation handling", () => {
+  assert.throws(() => applyRawPatch(page, [
+    { heading: "## Facts", operation: "add", content: "would conflict" },
+    { heading: "## Injected\n## Other", operation: "add", content: "invalid" },
+  ]), /single-line H2/i);
+});
+
 test("inspection returns the exact preamble and H2 section spans", () => {
   const inspected = inspectPatchablePage(page);
 
@@ -278,6 +433,106 @@ test("append preserves Markdown indentation in new content", () => {
   assert.match(result.content, /  - nested\n    continuation\n$/);
 });
 
+test("append keeps a nested list atomic when its parent line already exists", () => {
+  const current = "# Demo\n\n## Facts\n- Parent\n  - Existing child\n";
+  const result = applyPagePatch(current, patchFor(current, [{
+    heading: "## Facts",
+    operation: "append",
+    content: "- Parent\n  - New child",
+  }]), new Set());
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.match(result.content, /- Parent\n  - Existing child\n\n- Parent\n  - New child\n$/);
+});
+
+test("append keeps a fenced block with a blank line atomic", () => {
+  const current = "# Demo\n\n## Facts\nconst shared = 1;\n";
+  const fenced = "```ts\nconst shared = 1;\n\nconst added = 2;\n```";
+  const result = applyPagePatch(current, patchFor(current, [{
+    heading: "## Facts",
+    operation: "append",
+    content: fenced,
+  }]), new Set());
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.ok(result.content.includes(fenced));
+});
+
+test("append keeps a table block atomic", () => {
+  const current = "# Demo\n\n## Facts\n| Shared | 1 |\n";
+  const table = [
+    "| Name | Value |",
+    "| --- | --- |",
+    "| Shared | 1 |",
+    "| New | 2 |",
+  ].join("\n");
+  const result = applyPagePatch(current, patchFor(current, [{
+    heading: "## Facts",
+    operation: "append",
+    content: table,
+  }]), new Set());
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.ok(result.content.includes(table));
+});
+
+test("append keeps a blockquote block atomic", () => {
+  const current = "# Demo\n\n## Facts\n> Shared\n";
+  const blockquote = "> Shared\n> New";
+  const result = applyPagePatch(current, patchFor(current, [{
+    heading: "## Facts",
+    operation: "append",
+    content: blockquote,
+  }]), new Set());
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.ok(result.content.includes(blockquote));
+});
+
+test("append keeps a list continuation attached to its marker", () => {
+  const current = "# Demo\n\n## Facts\n- Shared\n";
+  const listItem = "- Shared\n  continuation";
+  const result = applyPagePatch(current, patchFor(current, [{
+    heading: "## Facts",
+    operation: "append",
+    content: listItem,
+  }]), new Set());
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.ok(result.content.includes(listItem));
+});
+
+test("append suppresses an exact duplicate structural block atomically", () => {
+  const current = "# Demo\n\n## Facts\n- Parent\n  - Child\n";
+  const result = applyPagePatch(current, patchFor(current, [{
+    heading: "## Facts",
+    operation: "append",
+    content: "- Parent\n  - Child",
+  }]), new Set());
+
+  assert.deepEqual(result, { ok: true, content: current, changedHeadings: [] });
+});
+
+test("structural block dedupe keeps indentation significant", () => {
+  const current = "# Demo\n\n## Facts\n- Parent\n  - Child\n";
+  const differentlyIndented = "- Parent\n    - Child";
+  const result = applyPagePatch(current, patchFor(current, [{
+    heading: "## Facts",
+    operation: "append",
+    content: differentlyIndented,
+  }]), new Set());
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.ok(result.content.includes(differentlyIndented));
+  assert.deepEqual(result.changedHeadings, ["## Facts"]);
+});
+
 test("append returns an exact no-op when all content already exists", () => {
   const result = applyPagePatch(page, patch([
     { heading: "## Facts", operation: "append", content: "  alpha  \n\nalpha" },
@@ -333,6 +588,45 @@ test("replace rejects a hash whose full section context was not supplied", () =>
     reason: "replace_context_missing",
     heading: "## Facts",
   });
+});
+
+test("append rejects normalized-equivalent existing headings as ambiguous", () => {
+  const current = "# Demo\n\n## Facts\none\n\n##  facts \ntwo\n";
+
+  assert.throws(() => applyPagePatch(current, patchFor(current, [{
+    heading: "## Facts",
+    operation: "append",
+    content: "three",
+  }]), new Set()), /ambiguous.*heading|heading.*ambiguous/i);
+});
+
+test("replace uses its expected hash when it uniquely identifies a duplicate heading", () => {
+  const current = "# Demo\n\n## Facts\none\n\n##  facts \ntwo\n";
+  const inspected = inspectPatchablePage(current);
+  const second = inspected.sections[1];
+  const result = applyPagePatch(current, patchFor(current, [{
+    heading: "## Facts",
+    expectedSectionHash: second.hash,
+    operation: "replace",
+    content: "updated",
+  }]), new Set([second.hash]));
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.match(result.content, /## Facts\none\n\n## Facts\nupdated\n$/);
+});
+
+test("replace rejects identical duplicate section hashes as ambiguous", () => {
+  const current = "# Demo\n\n## Facts\nsame\n\n## Facts\nsame\n";
+  const inspected = inspectPatchablePage(current);
+  assert.equal(inspected.sections[0].hash, inspected.sections[1].hash);
+
+  assert.throws(() => applyPagePatch(current, patchFor(current, [{
+    heading: "## Facts",
+    expectedSectionHash: inspected.sections[0].hash,
+    operation: "replace",
+    content: "updated",
+  }]), new Set([inspected.sections[0].hash])), /ambiguous.*heading|heading.*ambiguous/i);
 });
 
 test("stale page and section hashes cannot overwrite content", () => {
