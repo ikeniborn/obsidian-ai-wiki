@@ -164,7 +164,7 @@ export function prepareChatMessages(
   if (opts.outputLanguage) msgs = injectLanguageDirective(msgs, resolveLang(opts.outputLanguage));
   msgs = injectReasoningDirective(msgs, resolveReasoningLang(opts.reasoningLanguage, opts.outputLanguage));
   msgs = opts.systemPrompt ? injectSystemPrompt(msgs, opts.systemPrompt) : msgs;
-  if (opts.semanticCompression) msgs = injectCompressionDirective(msgs, compressionInstruction(opts.semanticCompression));
+  if (opts.semanticCompression) msgs = appendSystemSection(msgs, compressionInstruction(opts.semanticCompression));
   return msgs;
 }
 
@@ -175,7 +175,7 @@ function prependBaseContract(
   if (firstSystem >= 0) {
     const updated = [...messages];
     const existing: string = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
-    updated[firstSystem] = { role: "system", content: `${baseContract}\n\n${existing}` };
+    updated[firstSystem] = { ...updated[firstSystem], role: "system", content: `${baseContract}\n\n${existing}` };
     return updated;
   }
   return [{ role: "system", content: baseContract }, ...messages];
@@ -187,14 +187,7 @@ function injectLanguageDirective(
   lang: "ru" | "en" | "es",
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const directive = `## Language\n${langInstruction(lang)}`;
-  const firstSystem = messages.findIndex((m) => m.role === "system");
-  if (firstSystem >= 0) {
-    const updated = [...messages];
-    const existing = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
-    updated[firstSystem] = { role: "system", content: `${existing}\n\n${directive}` };
-    return updated;
-  }
-  return [{ role: "system", content: directive }, ...messages];
+  return appendSystemSection(messages, directive);
 }
 
 const REASONING_LANG_NAME: Record<"ru" | "en" | "es", string> = {
@@ -223,15 +216,7 @@ function injectReasoningDirective(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   lang: "ru" | "en" | "es",
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
-  const directive = reasoningDirective(lang);
-  const firstSystem = messages.findIndex((m) => m.role === "system");
-  if (firstSystem >= 0) {
-    const updated = [...messages];
-    const existing = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
-    updated[firstSystem] = { role: "system", content: `${existing}\n\n${directive}` };
-    return updated;
-  }
-  return [{ role: "system", content: directive }, ...messages];
+  return appendSystemSection(messages, reasoningDirective(lang));
 }
 
 const JSON_MODE_KEYWORDS = ["response_format", "json_object", "json mode", "unsupported"];
@@ -258,29 +243,21 @@ function injectSystemPrompt(
   systemPrompt: string,
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   if (!systemPrompt) return messages;
-  const section = `## Clarification\n${systemPrompt}`;
-  const firstSystem = messages.findIndex((m) => m.role === "system");
-  if (firstSystem >= 0) {
-    const updated = [...messages];
-    const existing: string = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
-    updated[firstSystem] = { role: "system", content: `${existing}\n\n${section}` };
-    return updated;
-  }
-  return [{ role: "system", content: section }, ...messages];
+  return appendSystemSection(messages, `## Clarification\n${systemPrompt}`);
 }
 
-function injectCompressionDirective(
+function appendSystemSection(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
-  directive: string,
+  section: string,
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const firstSystem = messages.findIndex((m) => m.role === "system");
   if (firstSystem >= 0) {
     const updated = [...messages];
     const existing = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
-    updated[firstSystem] = { role: "system", content: `${existing}\n\n${directive}` };
+    updated[firstSystem] = { ...updated[firstSystem], role: "system", content: `${existing}\n\n${section}` };
     return updated;
   }
-  return [{ role: "system", content: directive }, ...messages];
+  return [{ role: "system", content: section }, ...messages];
 }
 
 export interface LlmStreamStats {
