@@ -28,6 +28,7 @@ import {
   rerankChunks,
   type RerankerRuntime,
 } from "../reranker";
+import { dedupeChunks } from "../chunk-dedup";
 
 import { pruneByRelevance, robustLow, FLOOR_LO_PCT } from "../retrieval-prune";
 import { answerFromContext } from "./query-answer";
@@ -328,7 +329,8 @@ export async function* runQuery(
     yield { kind: "error", message: "No relevant pages found for this query." };
     return;
   }
-  const reranked = await rerankChunks(question, selectedChunks, {
+  const { chunks: dedupedChunks, dropped: chunkDupsDropped } = dedupeChunks(selectedChunks);
+  const reranked = await rerankChunks(question, dedupedChunks, {
     config: rerankerRuntime.config,
     baseUrl: rerankerRuntime.baseUrl,
     apiKey: rerankerRuntime.apiKey,
@@ -389,6 +391,7 @@ export async function* runQuery(
     rerankerEnabled: rerankerRuntime.config.enabled,
     rerankerTopN: rerankerRuntime.config.rerankerTopN,
     contextTopN: rerankerRuntime.config.contextTopN,
+    chunkDupsDropped,
     reranker: rerankerDiagnostics,
   };
   if (signal.aborted) return;

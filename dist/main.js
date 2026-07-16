@@ -33524,8 +33524,8 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     const askRow = ask.createDiv("ai-wiki-ask-row");
     this.cancelBtn = askRow.createEl("button", { text: T.view.cancel, cls: "mod-warning" });
     const askButtons = askRow.createDiv("ai-wiki-ask-buttons");
-    this.askDomainBtn = askButtons.createEl("button", { text: T.view.askDomain });
-    this.askWikiBtn = askButtons.createEl("button", { text: T.view.askWiki, cls: "mod-cta" });
+    this.askWikiBtn = askButtons.createEl("button", { text: T.view.askWiki });
+    this.askDomainBtn = askButtons.createEl("button", { text: T.view.askDomain, cls: "mod-cta" });
     this.cancelBtn.disabled = true;
     this.askDomainBtn.addEventListener("click", () => {
       const d = this.domainSelect?.value;
@@ -41096,6 +41096,46 @@ var ingest_default = 'You are a wiki-knowledge synthesis assistant for the domai
 // prompts/ingest-merge.md
 var ingest_merge_default = "<!-- prompts/ingest-merge.md -->\nYou are merging two wiki pages about the same entity into one.\n\nEXISTING PAGE (keep its frontmatter, path, and resource):\n{{existing}}\n\nNEW DRAFT (same topic, add unique facts from it):\n{{incoming}}\n\nRules:\n- Return ONE merged page. Do not lose facts from either of them.\n- Keep the existing page's frontmatter; add the missing resource from the draft.\n- Do not duplicate sections; merge close ones.\n- Links live ONLY in body sections \u2014 never in frontmatter. Do NOT add `outgoing_links:`/`external_links:` fields to the frontmatter.\n  - Merge `## Related` sections from both pages: union the `[[stem]]` bullets, drop duplicates.\n  - Merge `## External links` sections from both pages: union the `[text](url)` bullets, drop duplicates.\n- Response format:\n{{frame_instruction}}\n\nReturn ONLY these frames \u2014 no JSON wrapper, no markdown fence, no text outside frames:\n<<<REASONING>>>\nShort merge rationale.\n<<<ANNOTATION>>>\nOne line for the index.\n<<<CONTENT>>>\n<full page markdown>\n<<<END>>>\n";
 
+// src/merge-sections.ts
+function headingKey(headingLine) {
+  return headingLine.replace(/^#+\s*/, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+function parseSections(md) {
+  const sections = [];
+  let heading = null;
+  let body = [];
+  const flush = () => {
+    if (heading !== null) {
+      sections.push({ headingKey: headingKey(heading), block: `${heading}
+${body.join("\n")}`.trim() });
+    }
+  };
+  for (const line of md.split("\n")) {
+    if (/^##\s+/.test(line)) {
+      flush();
+      heading = line.trim();
+      body = [];
+    } else if (heading !== null) {
+      body.push(line);
+    }
+  }
+  flush();
+  return sections;
+}
+var SKIP_HEADINGS = /* @__PURE__ */ new Set(["related", "external links"]);
+function ensureIncomingSections(merged, incoming) {
+  const mergedKeys = new Set(parseSections(merged).map((s) => s.headingKey));
+  const missing = parseSections(incoming).filter(
+    (s) => !SKIP_HEADINGS.has(s.headingKey) && !mergedKeys.has(s.headingKey)
+  );
+  if (missing.length === 0) return merged;
+  const appendix = missing.map((s) => s.block).join("\n\n");
+  return `${merged.replace(/\s*$/, "")}
+
+${appendix}
+`;
+}
+
 // prompts/ingest-entities.md
 var ingest_entities_default = 'You are an entity extractor from a source for the domain "{{domain_name}}".\n\nDOMAIN ENTITY TYPES:\n{{entity_types_block}}\n{{lang_notes}}\n\nTASK:\n- Read the source.\n- Return all entities worthy of a separate wiki page:\n  - If an entity matches a type above \u2192 specify its type.\n  - If it matches no type but the concept is significant \u2192 return it without type (a new type, to be determined during synthesis).\n  - Do not return an empty list if the source contains significant concepts.\n- For each entity:\n  - name: the canonical entity name (no quotes, like the heading of the future page)\n  - type: a type from the list above (optional)\n  - context_snippet: one phrase from the source explaining why the entity is needed (optional)\n\nDo not duplicate: one name \u2192 one record. Do not extract entities with min_mentions_for_page > 1 if they are mentioned only once.\n\nReturn ONLY JSON:\n{"reasoning":"...","entities":[{"name":"...","type":"...","context_snippet":"..."},{"name":"...","context_snippet":"..."}]}\n';
 
@@ -42016,7 +42056,8 @@ ${page.content}`;
             }
             const merged = { value: mergeSink.value };
             yield { kind: "tool_use", name: "Update", input: { path: targetPath } };
-            await vaultTools.write(targetPath, merged.value.content);
+            const guardedContent = ensureIncomingSections(merged.value.content, page.content);
+            await vaultTools.write(targetPath, guardedContent);
             written.push(targetPath);
             yield { kind: "tool_result", ok: true, preview: `merged \u2190 ${pageId(page.path)}` };
             const relTarget = targetPath.slice(wikiVaultPath.length + 1);
@@ -42466,6 +42507,28 @@ var GraphCache = class {
 };
 var graphCache = new GraphCache();
 
+// src/chunk-dedup.ts
+function normalizeChunkKey(heading, body) {
+  return `${heading}
+${body}`.toLowerCase().replace(/\s+/g, " ").trim();
+}
+function dedupeChunks(chunks) {
+  const bestByKey = /* @__PURE__ */ new Map();
+  const order = [];
+  for (const chunk of chunks) {
+    const key = normalizeChunkKey(chunk.heading, chunk.body);
+    const prev = bestByKey.get(key);
+    if (!prev) {
+      bestByKey.set(key, chunk);
+      order.push(key);
+    } else if (chunk.score > prev.score) {
+      bestByKey.set(key, chunk);
+    }
+  }
+  const deduped = order.map((key) => bestByKey.get(key));
+  return { chunks: deduped, dropped: chunks.length - deduped.length };
+}
+
 // src/retrieval-prune.ts
 var FLOOR_LO_PCT = 0.05;
 var FLOOR_EPS = 1e-6;
@@ -42887,7 +42950,8 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
     yield { kind: "error", message: "No relevant pages found for this query." };
     return;
   }
-  const reranked = await rerankChunks(question, selectedChunks, {
+  const { chunks: dedupedChunks, dropped: chunkDupsDropped } = dedupeChunks(selectedChunks);
+  const reranked = await rerankChunks(question, dedupedChunks, {
     config: rerankerRuntime.config,
     baseUrl: rerankerRuntime.baseUrl,
     apiKey: rerankerRuntime.apiKey,
@@ -42939,6 +43003,7 @@ ${selectedIndexLines.join("\n")}` : "";
     rerankerEnabled: rerankerRuntime.config.enabled,
     rerankerTopN: rerankerRuntime.config.rerankerTopN,
     contextTopN: rerankerRuntime.config.contextTopN,
+    chunkDupsDropped,
     reranker: rerankerDiagnostics
   };
   if (signal.aborted) return;
@@ -43180,7 +43245,8 @@ async function* runCrossDomainQuery(question, vaultTools, llm, model, domains, s
     yield { kind: "error", message: "No relevant pages found across domains." };
     return;
   }
-  const reranked = await rerankChunks(q, selectedChunks, {
+  const { chunks: dedupedChunks, dropped: chunkDupsDropped } = dedupeChunks(selectedChunks);
+  const reranked = await rerankChunks(q, dedupedChunks, {
     config: rerankerRuntime.config,
     baseUrl: rerankerRuntime.baseUrl,
     apiKey: rerankerRuntime.apiKey,
@@ -43231,6 +43297,7 @@ ${indexBlock}` : ""
     rerankerEnabled: rerankerRuntime.config.enabled,
     rerankerTopN: rerankerRuntime.config.rerankerTopN,
     contextTopN: rerankerRuntime.config.contextTopN,
+    chunkDupsDropped,
     reranker: rerankerDiagnostics
   };
   if (signal.aborted) return;

@@ -15,6 +15,7 @@ import {
   rerankChunks,
   type RerankerRuntime,
 } from "../reranker";
+import { dedupeChunks } from "../chunk-dedup";
 
 export interface MergedPool {
   mergedPages: Map<string, string>;
@@ -150,7 +151,8 @@ export async function* runCrossDomainQuery(
     yield { kind: "error", message: "No relevant pages found across domains." };
     return;
   }
-  const reranked = await rerankChunks(q, selectedChunks, {
+  const { chunks: dedupedChunks, dropped: chunkDupsDropped } = dedupeChunks(selectedChunks);
+  const reranked = await rerankChunks(q, dedupedChunks, {
     config: rerankerRuntime.config,
     baseUrl: rerankerRuntime.baseUrl,
     apiKey: rerankerRuntime.apiKey,
@@ -208,6 +210,7 @@ export async function* runCrossDomainQuery(
     rerankerEnabled: rerankerRuntime.config.enabled,
     rerankerTopN: rerankerRuntime.config.rerankerTopN,
     contextTopN: rerankerRuntime.config.contextTopN,
+    chunkDupsDropped,
     reranker: rerankerDiagnostics,
   };
   if (signal.aborted) return;
