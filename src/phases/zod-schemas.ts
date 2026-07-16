@@ -1,5 +1,74 @@
 import { z } from "zod";
+import { normalizeSectionHeading } from "../section-patches";
 import { GENERIC_WIKI_STEM_REGEX } from "../wiki-stem";
+
+const NonBlankStringSchema = z.string().refine(
+  (value) => value.trim().length > 0,
+  "Value must not be blank",
+);
+
+const SectionHeadingSchema = NonBlankStringSchema.refine(
+  (value) => normalizeSectionHeading(value).length > 0,
+  "Heading must contain text",
+);
+
+const SectionPatchFields = {
+  heading: SectionHeadingSchema,
+  content: NonBlankStringSchema,
+};
+
+export const SectionPatchSchema = z.discriminatedUnion("operation", [
+  z.object({
+    ...SectionPatchFields,
+    operation: z.literal("add"),
+    expectedSectionHash: z.never().optional(),
+  }),
+  z.object({
+    ...SectionPatchFields,
+    operation: z.literal("append"),
+    expectedSectionHash: NonBlankStringSchema.optional(),
+  }),
+  z.object({
+    ...SectionPatchFields,
+    operation: z.literal("replace"),
+    expectedSectionHash: NonBlankStringSchema,
+  }),
+]);
+
+const SectionPatchesSchema = z.array(SectionPatchSchema).superRefine((sections, ctx) => {
+  const headings = new Set<string>();
+  sections.forEach((section, index) => {
+    const normalized = normalizeSectionHeading(section.heading);
+    if (headings.has(normalized)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [index, "heading"],
+        message: `Duplicate normalized heading "${normalized}"`,
+      });
+    }
+    headings.add(normalized);
+  });
+});
+
+export const CreatePageSchema = z.object({
+  kind: z.literal("create"),
+  path: NonBlankStringSchema,
+  annotation: z.string(),
+  content: NonBlankStringSchema,
+});
+
+export const PatchPageSchema = z.object({
+  kind: z.literal("patch"),
+  path: NonBlankStringSchema,
+  expectedPageHash: NonBlankStringSchema,
+  annotation: z.string().optional(),
+  sections: SectionPatchesSchema,
+});
+
+export const PageActionSchema = z.discriminatedUnion("kind", [
+  CreatePageSchema,
+  PatchPageSchema,
+]);
 
 const EntityTypeSchema = z.object({
   type: z.string().min(1),
