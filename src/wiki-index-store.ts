@@ -13,7 +13,7 @@ import {
 import { pageIndexRecordFromMarkdown } from "./wiki-index";
 import { domainIndexPath } from "./wiki-path";
 
-const writeQueues = new WeakMap<VaultTools, Map<string, Promise<void>>>();
+const writeQueues = new WeakMap<object, Map<string, Promise<void>>>();
 
 export async function readWikiIndexRecords(
   vaultTools: VaultTools,
@@ -37,10 +37,11 @@ export async function transformWikiIndexRecords(
   transform: (records: WikiIndexRecord[]) => WikiIndexRecord[],
 ): Promise<void> {
   const path = domainIndexPath(domainRoot);
-  let queues = writeQueues.get(vaultTools);
+  const queueOwner = vaultTools.adapter;
+  let queues = writeQueues.get(queueOwner);
   if (!queues) {
     queues = new Map();
-    writeQueues.set(vaultTools, queues);
+    writeQueues.set(queueOwner, queues);
   }
   const previous = queues.get(path) ?? Promise.resolve();
   const current = previous.catch(() => {}).then(async () => {

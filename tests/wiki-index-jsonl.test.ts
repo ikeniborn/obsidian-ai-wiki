@@ -4,6 +4,8 @@ import { contentHash } from "../src/content-hash";
 import {
   chunkRecordId,
   collectPageDescriptions,
+  isChunkIndexRecord,
+  isPageIndexRecord,
   pageRecordId,
   parseWikiIndexJsonl,
   reconcilePageRecords,
@@ -84,6 +86,48 @@ test("page upsert replaces in place without reordering opposite records", () => 
   );
 });
 
+test("current record guards reject malformed and future page/chunk records", () => {
+  const futurePage = { ...page("a"), schemaVersion: 2 };
+  const futureChunk = { ...chunk, schemaVersion: 2 };
+  const malformedPage = { ...page("a"), resource: "source" };
+  const malformedChunk = { ...chunk, vector: [0.1, Number.NaN] };
+  const lexicalChunk = { ...chunk, vector: [], dimensions: 0, vectorModel: "jaccard-eval" };
+
+  assert.equal(isPageIndexRecord(futurePage), false);
+  assert.equal(isChunkIndexRecord(futureChunk), false);
+  assert.equal(isPageIndexRecord(malformedPage), false);
+  assert.equal(isChunkIndexRecord(malformedChunk), false);
+  assert.equal(isPageIndexRecord(page("a")), true);
+  assert.equal(isChunkIndexRecord(chunk), true);
+  assert.equal(isChunkIndexRecord(lexicalChunk), true);
+});
+
+test("page upsert collapses current duplicates and preserves future identities unchanged", () => {
+  const futurePage = { ...page("a"), schemaVersion: 2, futureField: "keep" };
+  const futureBytes = JSON.stringify(futurePage);
+  const unknown = { kind: "future", value: 1 };
+  const incoming = page("a", "new");
+
+  const records = upsertPageRecord(
+    [futurePage, page("a", "old-1"), unknown, page("a", "old-2"), chunk],
+    incoming,
+  );
+
+  assert.equal(records[0], futurePage);
+  assert.equal(JSON.stringify(records[0]), futureBytes);
+  assert.deepEqual(records, [futurePage, incoming, unknown, chunk]);
+});
+
+test("current mutations leave future page and chunk versions opaque", () => {
+  const futurePage = { ...page("a"), schemaVersion: 2, futureField: [1, 2] };
+  const futureChunk = { ...chunk, schemaVersion: 2, futureField: { keep: true } };
+  const records = [futurePage, futureChunk, page("a"), chunk];
+
+  assert.deepEqual(removePageRecord(records, "a"), [futurePage, futureChunk, chunk]);
+  assert.deepEqual(removeArticleRecords(records, "a"), [futurePage, futureChunk]);
+  assert.deepEqual(reconcilePageRecords(records, [page("b")]), [futurePage, futureChunk, chunk, page("b")]);
+});
+
 test("reconcile replaces only page records and leaves chunk records unchanged", () => {
   const records = reconcilePageRecords([page("old"), chunk], [page("a", "new")]);
   assert.deepEqual(records.filter((record) => record.kind === "chunk"), [chunk]);
@@ -128,4 +172,18 @@ test("page metadata builder reads governed CRLF frontmatter and hashes exact con
     bodyHash: contentHash(content),
     descriptionHash: contentHash("Covers the runtime index."),
   });
+});
+
+test("page metadata builder prefers a valid frontmatter type over the path fallback", () => {
+  const content = [
+    "---",
+    "type: service",
+    "description: Service description.",
+    "resource: [source]",
+    "---",
+    "# Service",
+  ].join("\n");
+
+  const record = pageIndexRecordFromMarkdown("!Wiki/d", "!Wiki/d/concept/service.md", content);
+  assert.equal(record.type, "service");
 });

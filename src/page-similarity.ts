@@ -99,7 +99,7 @@ function cacheFromIndexRecords(
     const chunk: EmbeddingChunk = {
       vector: numbersToVector(record.vector),
       hash: record.embedTextHash,
-      kind: "section",
+      kind: record.ordinal === 0 && record.heading === "" ? "summary" : "section",
       heading: record.heading,
       ordinal: record.ordinal,
     };
@@ -108,18 +108,22 @@ function cacheFromIndexRecords(
   return { version: 3, model, dimensions, entries };
 }
 
-function chunkRecordsFromCache(
+function replaceChunkRecordsFromCache(
   cacheFile: EmbeddingCacheFile,
   domainRoot: string,
   existingRecords: WikiIndexRecord[],
+  articleIds: Set<string>,
 ): WikiIndexRecord[] {
-  const preserved = existingRecords.filter((record) => !isChunkIndexRecord(record));
+  const preserved = existingRecords.filter((record) =>
+    !isChunkIndexRecord(record) || !articleIds.has(record.articleId));
   const pagePaths = new Map(
     existingRecords.filter(isPageIndexRecord).map((record) => [record.articleId, record.path]),
   );
   const now = new Date().toISOString();
   const chunkRecords: WikiIndexRecord[] = [];
-  for (const [pid, entry] of Object.entries(cacheFile.entries)) {
+  for (const pid of articleIds) {
+    const entry = cacheFile.entries[pid];
+    if (!entry) continue;
     for (const chunk of entry.chunks) {
       if (!chunk.vector) continue;
       chunkRecords.push(embeddingChunkToChunkRecord({
@@ -285,7 +289,7 @@ export function buildChunkInputs(
   chunking: ChunkingConfig,
 ): ChunkInput[] {
   const inputs: ChunkInput[] = [
-    { kind: "summary", embedText: annotation, hash: annotationHash(`summary\n${annotation}`) },
+    { kind: "summary", embedText: annotation, hash: annotationHash(`summary\n${annotation}`), ordinal: 0 },
   ];
   splitSections(body, chunking).forEach(({ heading, window }, ordinal) => {
     const embedText = `${heading}\n${window}`.trim();
@@ -295,10 +299,21 @@ export function buildChunkInputs(
       hash: annotationHash(`section\n${ordinal}\n${embedText}`),
       heading,
       window,
-      ordinal,
+      ordinal: ordinal + 1,
     });
   });
   return inputs;
+}
+
+function sameChunkSet(left: EmbeddingChunk[], right: EmbeddingChunk[]): boolean {
+  return left.length === right.length && left.every((chunk, index) => {
+    const other = right[index];
+    return other !== undefined &&
+      chunk.hash === other.hash &&
+      chunk.kind === other.kind &&
+      (chunk.heading ?? "") === (other.heading ?? "") &&
+      chunk.ordinal === other.ordinal;
+  });
 }
 
 function collectCandidateSections(
@@ -1172,8 +1187,16 @@ export class PageSimilarityService {
     const pending: Pending[] = [];
     // Tracks chunk-count change so a write is triggered even when nothing is pending
     // (e.g. a section deleted: surviving hashes all hit oldByHash, but count shrinks).
-    let changed = opts.fullCorpus === true &&
-      Object.keys(cacheFile.entries).some((pid) => !indexAnnotations.has(pid));
+    const changedArticleIds = new Set<string>();
+    let changed = false;
+    if (opts.fullCorpus === true) {
+      for (const pid of Object.keys(cacheFile.entries)) {
+        if (!indexAnnotations.has(pid)) {
+          changedArticleIds.add(pid);
+          changed = true;
+        }
+      }
+    }
 
     for (const [pid, annotation] of indexAnnotations) {
       // A caller may refresh only a subset (incremental ingest supplies bodies only for the
@@ -1184,6 +1207,7 @@ export class PageSimilarityService {
         desired.set(pid, cacheFile.entries[pid].chunks);
         continue;
       }
+      changedArticleIds.add(pid);
       const body = pageBodies.get(pid) ?? "";
       const inputs = buildChunkInputs(annotation, body, chunking);
       const oldByHash = new Map(
@@ -1201,7 +1225,7 @@ export class PageSimilarityService {
         });
         if (reuse === undefined) pending.push({ pid, idx: chunks.length - 1, embedText });
       }
-      if ((cacheFile.entries[pid]?.chunks.length ?? 0) !== chunks.length) changed = true;
+      if (!sameChunkSet(cacheFile.entries[pid]?.chunks ?? [], chunks)) changed = true;
       desired.set(pid, chunks);
     }
 
@@ -1211,28 +1235,41 @@ export class PageSimilarityService {
       let vecs: Float32Array[];
       try {
         vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, batch.map((p) => p.embedText), dimensions);
-      } catch {
-        continue;
+      } catch (error) {
+        throw new Error(`Embedding refresh failed: ${(error as Error).message}`);
+      }
+      if (vecs.length !== batch.length || vecs.some((vec) => !isUsableVector(vec, dimensions))) {
+        throw new Error("Embedding refresh failed: response did not contain one valid vector per pending chunk");
       }
       for (let j = 0; j < batch.length; j++) {
-        if (vecs[j]) desired.get(batch[j].pid)![batch[j].idx].vector = encodeVector(vecs[j]);
+        desired.get(batch[j].pid)![batch[j].idx].vector = encodeVector(vecs[j]);
       }
     }
 
     if (pending.length === 0 && !changed) return { updated: 0 };
 
-    if (opts.fullCorpus === true) cacheFile.entries = {};
-    for (const [pid, chunks] of desired) {
+    for (const pid of changedArticleIds) {
+      const chunks = desired.get(pid) ?? [];
       const filled = chunks.filter((c) => c.vector !== "");
       if (filled.length > 0) cacheFile.entries[pid] = { chunks: filled };
+      else delete cacheFile.entries[pid];
     }
 
+    let committedRecords: WikiIndexRecord[] | undefined;
     await transformWikiIndexRecords(
       vaultTools,
       domainRoot,
-      (latestRecords) => chunkRecordsFromCache(cacheFile, domainRoot, latestRecords),
+      (latestRecords) => {
+        committedRecords = replaceChunkRecordsFromCache(
+          cacheFile,
+          domainRoot,
+          latestRecords,
+          changedArticleIds,
+        );
+        return committedRecords;
+      },
     );
-    this.cache = cacheFile;
+    this.cache = cacheFromIndexRecords(committedRecords ?? [], model, dimensions);
     return { updated: pending.length };
   }
 }

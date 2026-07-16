@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { register } from "node:module";
 import test from "node:test";
 import { buildChunkInputs, DEFAULT_CHUNKING, PageSimilarityService } from "../src/page-similarity";
 import { VaultTools, type VaultAdapter } from "../src/vault-tools";
@@ -10,6 +11,8 @@ import {
   type ChunkIndexRecord,
   type PageIndexRecord,
 } from "../src/wiki-index-jsonl";
+
+register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 
 test("embedding chunks convert to index chunk records with vector metadata", () => {
   const record = embeddingChunkToChunkRecord({
@@ -25,6 +28,18 @@ test("embedding chunks convert to index chunk records with vector metadata", () 
     updatedAt: "2026-07-11T00:00:00.000Z",
   });
   assert.deepEqual(chunkRecordToEmbeddingChunk(record).vector, [0.1, 0.2]);
+});
+
+test("summary and first section use distinct persistent chunk identities", () => {
+  const inputs = buildChunkInputs(
+    "Alpha description",
+    "# Alpha\n\n## Facts\nAlpha facts.",
+    DEFAULT_CHUNKING,
+  );
+
+  assert.deepEqual(inputs.map((input) => input.ordinal), [0, 1]);
+  const records = chunkRecords(pageRecord("a"), inputs);
+  assert.equal(new Set(records.map((record) => `${record.articleId}:${record.ordinal}`)).size, records.length);
 });
 
 test("jaccard chunk fallback prefers heading and path evidence", async () => {
@@ -171,6 +186,32 @@ test("chunk refresh rejects malformed JSONL and preserves exact index bytes", as
   assert.equal(adapter.files.get(indexPath), original);
 });
 
+test("chunk refresh rejects atomically when a pending embedding batch fails", async () => {
+  const domainRoot = "!Wiki/d";
+  const indexPath = `${domainRoot}/index.jsonl`;
+  const page = pageRecord("a");
+  const oldBody = "# Alpha\n\n## Facts\nOld alpha facts.";
+  const oldChunks = chunkRecords(page, buildChunkInputs(page.description, oldBody, DEFAULT_CHUNKING));
+  const future = { kind: "future", value: { preserve: true } };
+  const original = [page, future, ...oldChunks].map((record) => JSON.stringify(record)).join("\r\n") + "\r\n";
+  const adapter = new MemoryAdapter(new Map([[indexPath, original]]));
+
+  let completed = false;
+  await assert.rejects(
+    embeddingService().refreshCache(
+      domainRoot,
+      new VaultTools(adapter, ""),
+      new Map([[page.articleId, "Changed description requiring a new vector"]]),
+      new Map([[page.articleId, "# Alpha\n\n## Facts\nChanged alpha facts requiring a new vector."]]),
+      { fullCorpus: true },
+    ).then(() => { completed = true; }),
+    /embedding/i,
+  );
+
+  assert.equal(completed, false);
+  assert.equal(adapter.files.get(indexPath), original);
+});
+
 test("cache load rejects malformed JSONL instead of treating it as missing", async () => {
   const domainRoot = "!Wiki/d";
   const indexPath = `${domainRoot}/index.jsonl`;
@@ -219,6 +260,58 @@ test("queued chunk refresh and page upsert preserve both mutations", async () =>
   assert.deepEqual(records.find((record) => record.kind === "future"), future);
   assert.equal(records.some((record) => record.kind === "chunk" && record.articleId === "a"), true);
   assert.equal(records.some((record) => record.kind === "chunk" && record.articleId === "stale"), false);
+});
+
+test("concurrent refreshes through different VaultTools wrappers merge changed article chunks", async () => {
+  const domainRoot = "!Wiki/d";
+  const indexPath = `${domainRoot}/index.jsonl`;
+  const pageA = pageRecord("a");
+  const pageB = pageRecord("b");
+  const future = { kind: "future", value: { keep: true } };
+  const bodyA = "# Alpha\n\n## Facts\nAlpha facts.";
+  const bodyB = "# Beta\n\n## Facts\nBeta facts.";
+  const desiredA = chunkRecords(pageA, buildChunkInputs(pageA.description, bodyA, DEFAULT_CHUNKING));
+  const desiredB = chunkRecords(pageB, buildChunkInputs(pageB.description, bodyB, DEFAULT_CHUNKING));
+  const staleA = { ...desiredA[0], heading: "## Stale A", ordinal: 99, bodyHash: "stale-a", embedTextHash: "stale-a" };
+  const staleB = { ...desiredB[0], heading: "## Stale B", ordinal: 99, bodyHash: "stale-b", embedTextHash: "stale-b" };
+  const adapter = new MemoryAdapter(new Map([
+    [indexPath, [pageA, pageB, future, ...desiredA, staleA, ...desiredB, staleB]
+      .map((record) => JSON.stringify(record)).join("\n") + "\n"],
+  ]));
+  const gate = adapter.pauseNextWrite(indexPath);
+  const annotations = new Map([
+    [pageA.articleId, pageA.description],
+    [pageB.articleId, pageB.description],
+  ]);
+
+  const refreshA = embeddingService().refreshCache(
+    domainRoot,
+    new VaultTools(adapter, ""),
+    annotations,
+    new Map([[pageA.articleId, bodyA]]),
+  );
+  await gate.started;
+  const refreshB = embeddingService().refreshCache(
+    domainRoot,
+    new VaultTools(adapter, ""),
+    annotations,
+    new Map([[pageB.articleId, bodyB]]),
+  );
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  gate.release();
+  await Promise.all([refreshA, refreshB]);
+
+  const records = parseWikiIndexJsonl(adapter.files.get(indexPath)!, indexPath);
+  assert.deepEqual(records.filter((record) => record.kind === "page"), [pageA, pageB]);
+  assert.deepEqual(records.find((record) => record.kind === "future"), future);
+  assert.deepEqual(
+    records.filter((record) => record.kind === "chunk" && record.articleId === "a").map((record) => record.ordinal),
+    desiredA.map((record) => record.ordinal),
+  );
+  assert.deepEqual(
+    records.filter((record) => record.kind === "chunk" && record.articleId === "b").map((record) => record.ordinal),
+    desiredB.map((record) => record.ordinal),
+  );
 });
 
 function pageRecord(id: string): PageIndexRecord {

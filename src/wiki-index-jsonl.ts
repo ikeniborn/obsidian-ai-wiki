@@ -50,12 +50,42 @@ export interface NumberVectorCache {
   entries: Record<string, { chunks: ChunkRecordInput[] }>;
 }
 
-export function isPageIndexRecord(record: WikiIndexRecord): record is PageIndexRecord {
-  return record.kind === "page";
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
 }
 
-export function isChunkIndexRecord(record: WikiIndexRecord): record is ChunkIndexRecord {
-  return record.kind === "chunk";
+export function isPageIndexRecord(record: unknown): record is PageIndexRecord {
+  if (record === null || typeof record !== "object" || Array.isArray(record)) return false;
+  const value = record as Record<string, unknown>;
+  return value.kind === "page" &&
+    value.schemaVersion === 1 &&
+    typeof value.articleId === "string" &&
+    typeof value.path === "string" &&
+    typeof value.type === "string" &&
+    typeof value.description === "string" &&
+    isStringArray(value.resource) &&
+    (value.timestamp === undefined || typeof value.timestamp === "string") &&
+    (value.tags === undefined || isStringArray(value.tags)) &&
+    typeof value.bodyHash === "string" &&
+    typeof value.descriptionHash === "string";
+}
+
+export function isChunkIndexRecord(record: unknown): record is ChunkIndexRecord {
+  if (record === null || typeof record !== "object" || Array.isArray(record)) return false;
+  const value = record as Record<string, unknown>;
+  return value.kind === "chunk" &&
+    value.schemaVersion === 1 &&
+    typeof value.articleId === "string" &&
+    typeof value.path === "string" &&
+    typeof value.heading === "string" &&
+    Number.isInteger(value.ordinal) && Number(value.ordinal) >= 0 &&
+    typeof value.bodyHash === "string" &&
+    typeof value.embedTextHash === "string" &&
+    Array.isArray(value.vector) && value.vector.every((entry) => typeof entry === "number" && Number.isFinite(entry)) &&
+    typeof value.vectorModel === "string" &&
+    Number.isInteger(value.dimensions) && Number(value.dimensions) >= 0 &&
+    value.vector.length === value.dimensions &&
+    typeof value.updatedAt === "string";
 }
 
 export function parseWikiIndexJsonl(text: string, path: string): WikiIndexRecord[] {
@@ -133,13 +163,17 @@ export function upsertPageRecord(
   incoming: PageIndexRecord,
 ): WikiIndexRecord[] {
   let replaced = false;
-  const next = records.map((record) => {
+  const next: WikiIndexRecord[] = [];
+  for (const record of records) {
     if (isPageIndexRecord(record) && record.articleId === incoming.articleId) {
-      replaced = true;
-      return incoming;
+      if (!replaced) {
+        next.push(incoming);
+        replaced = true;
+      }
+      continue;
     }
-    return record;
-  });
+    next.push(record);
+  }
   if (!replaced) next.push(incoming);
   return next;
 }

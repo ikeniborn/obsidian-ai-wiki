@@ -108,13 +108,11 @@ export async function* runLintFixChat(
       yield { kind: "tool_result", ok: false, preview: (e as Error).message };
       continue;
     }
-    try {
-      await upsertPageIndex(
-        vaultTools,
-        wikiVaultPath,
-        pageIndexRecordFromMarkdown(wikiVaultPath, page.path, page.content),
-      );
-    } catch { /* non-critical */ }
+    await upsertPageIndex(
+      vaultTools,
+      wikiVaultPath,
+      pageIndexRecordFromMarkdown(wikiVaultPath, page.path, page.content),
+    );
   }
 
   // 5. Emit result

@@ -85,16 +85,17 @@ export function pageIndexRecordFromMarkdown(
   content: string,
 ): PageIndexRecord {
   const normalized = content.replace(/\r\n/g, "\n");
-  const type = entityTypeFromPath(domainRoot, path);
-  const description = parseDescriptionFromFm(normalized) || deriveFallbackDescription(normalized, type);
+  let type = entityTypeFromPath(domainRoot, path);
   const fmMatch = FM_RE.exec(normalized);
   let timestamp: string | undefined;
   if (fmMatch) {
     try {
       const parsed = (yamlParse(fmMatch[1]) as Record<string, unknown>) ?? {};
+      if (typeof parsed.type === "string" && parsed.type.trim()) type = parsed.type.trim();
       if (typeof parsed.timestamp === "string") timestamp = parsed.timestamp.trim() || undefined;
     } catch { /* governed validation handles malformed frontmatter */ }
   }
+  const description = parseDescriptionFromFm(normalized) || deriveFallbackDescription(normalized, type);
   const tags = parseTagsFromFm(normalized);
 
   return {

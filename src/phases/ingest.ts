@@ -39,6 +39,11 @@ function parseWikiStatus(content: string): string {
   return m ? m[1].trim() : "unknown";
 }
 
+async function readPagesStrict(vaultTools: VaultTools, paths: string[]): Promise<Map<string, string>> {
+  return new Map(await Promise.all(paths.map(async (path) =>
+    [path, await vaultTools.read(path)] as const)));
+}
+
 export async function collectSourceStems(
   domain: DomainEntry,
   vaultTools: VaultTools,
@@ -117,7 +122,16 @@ export async function* runIngest(
   const schemaContent = render(wikiSchemaTemplate, { section_conventions: wikiSections(resolveLang(opts.outputLanguage)) });
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
   const nonMetaPaths = existingPaths.filter(isWikiPagePath);
-  const annotations = cachedAnnotations ?? await readPageDescriptions(vaultTools, domainRoot);
+  const governedPages = await readPagesStrict(vaultTools, nonMetaPaths);
+  await reconcilePageIndex(
+    vaultTools,
+    domainRoot,
+    [...governedPages].map(([path, content]) => ({ path, content })),
+  );
+  const loadedAnnotations = await readPageDescriptions(vaultTools, domainRoot);
+  const annotations = cachedAnnotations ?? new Map<string, string>();
+  annotations.clear();
+  for (const [articleId, description] of loadedAnnotations) annotations.set(articleId, description);
 
   yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).ingestProgress.synthesizing(domain.id) };
   const start = Date.now();
@@ -185,7 +199,7 @@ export async function* runIngest(
 
     existingPages = await vaultTools.readAll([...union]);
   } else {
-    existingPages = await vaultTools.readAll(nonMetaPaths);
+    existingPages = governedPages;
   }
 
   // Delete pages missing resource — invalid regardless of naming.
@@ -195,9 +209,10 @@ export async function* runIngest(
   for (const p of noSources) {
     try {
       await vaultTools.remove(p);
-      await removeArticleIndex(vaultTools, wikiVaultPath, pageId(p));
-      annotations.delete(pageId(p));
     } catch { /* skip */ }
+    if (await vaultTools.exists(p)) continue;
+    await removeArticleIndex(vaultTools, wikiVaultPath, pageId(p));
+    annotations.delete(pageId(p));
   }
   if (noSources.length > 0) {
     yield {
@@ -226,9 +241,10 @@ export async function* runIngest(
     for (const p of unprefixed) {
       try {
         await vaultTools.remove(p);
-        await removeArticleIndex(vaultTools, wikiVaultPath, pageId(p));
-        annotations.delete(pageId(p));
       } catch { /* skip */ }
+      if (await vaultTools.exists(p)) continue;
+      await removeArticleIndex(vaultTools, wikiVaultPath, pageId(p));
+      annotations.delete(pageId(p));
     }
     if (unprefixed.length > 0) {
       yield {
@@ -462,6 +478,7 @@ export async function* runIngest(
           const mergeMsgs = [{ role: "user" as const, content:
             render(ingestMerge, { existing: existingTarget, incoming: page.content, frame_instruction: mergeContentFrameInstruction }) }];
           const mergeSink: StructuredSink<MergedPageOutput> = {};
+          let guardedContent: string | undefined;
           try {
             for await (const ev of runStructuredStreaming({
               llm, model, baseMessages: mergeMsgs, opts: { ...opts, jsonMode: false },
@@ -473,23 +490,23 @@ export async function* runIngest(
             }
             const merged = { value: mergeSink.value! };
             yield { kind: "tool_use", name: "Update", input: { path: targetPath } };
-            const guardedContent = ensureIncomingSections(merged.value.content, page.content);
+            guardedContent = ensureIncomingSections(merged.value.content, page.content);
             await vaultTools.write(targetPath, guardedContent);
-            try {
-              await upsertPageIndex(
-                vaultTools,
-                wikiVaultPath,
-                pageIndexRecordFromMarkdown(wikiVaultPath, targetPath, guardedContent),
-              );
-            } catch { /* non-critical */ }
+          } catch (e) {
+            // merge failed — fall through to a normal create rather than lose the new content
+            yield { kind: "info_text", icon: "⚠️", summary: `merge не удался, создаю отдельно: ${(e as Error).message}` };
+          }
+          if (guardedContent !== undefined) {
+            await upsertPageIndex(
+              vaultTools,
+              wikiVaultPath,
+              pageIndexRecordFromMarkdown(wikiVaultPath, targetPath, guardedContent),
+            );
             written.push(targetPath);
             yield { kind: "tool_result", ok: true, preview: `merged ← ${pageId(page.path)}` };
             const relTarget = targetPath.slice(wikiVaultPath.length + 1);
             logEntries.push({ path: relTarget, action: "MERGED" });
             continue; // skip the normal create
-          } catch (e) {
-            // merge failed — fall through to a normal create rather than lose the new content
-            yield { kind: "info_text", icon: "⚠️", summary: `merge не удался, создаю отдельно: ${(e as Error).message}` };
           }
         }
       }
@@ -535,27 +552,25 @@ export async function* runIngest(
     yield { kind: "tool_use", name: existingContent === null ? "Create" : "Update", input: { path: page.path } };
     try {
       await vaultTools.write(page.path, withSources);
-      written.push(page.path);
-      for (const t of parseTagsFromFm(withSources)) writtenTagCats.add(t.split("/")[0]);
-      yield { kind: "tool_result", ok: true };
-
-      const relPath = page.path.startsWith(wikiVaultPath + "/")
-        ? page.path.slice(wikiVaultPath.length + 1)
-        : page.path;
-      const statusTo = parseWikiStatus(repairedPage);
-      if (existingContent === null) {
-        logEntries.push({ path: relPath, action: "CREATED", statusTo });
-      } else {
-        logEntries.push({ path: relPath, action: "UPDATED", statusFrom: parseWikiStatus(existingContent), statusTo });
-      }
-
-      try {
-        const record = pageIndexRecordFromMarkdown(wikiVaultPath, page.path, withSources);
-        await upsertPageIndex(vaultTools, wikiVaultPath, record);
-        annotations.set(record.articleId, record.description);
-      } catch { /* non-critical */ }
     } catch (e) {
       yield { kind: "tool_result", ok: false, preview: (e as Error).message };
+      continue;
+    }
+    const record = pageIndexRecordFromMarkdown(wikiVaultPath, page.path, withSources);
+    await upsertPageIndex(vaultTools, wikiVaultPath, record);
+    annotations.set(record.articleId, record.description);
+    written.push(page.path);
+    for (const t of parseTagsFromFm(withSources)) writtenTagCats.add(t.split("/")[0]);
+    yield { kind: "tool_result", ok: true };
+
+    const relPath = page.path.startsWith(wikiVaultPath + "/")
+      ? page.path.slice(wikiVaultPath.length + 1)
+      : page.path;
+    const statusTo = parseWikiStatus(repairedPage);
+    if (existingContent === null) {
+      logEntries.push({ path: relPath, action: "CREATED", statusTo });
+    } else {
+      logEntries.push({ path: relPath, action: "UPDATED", statusFrom: parseWikiStatus(existingContent), statusTo });
     }
   }
 
@@ -600,7 +615,7 @@ export async function* runIngest(
     yield { kind: "tool_use", name: "Delete", input: { path: d.path } };
     try {
       await vaultTools.remove(d.path);
-      try { await removeArticleIndex(vaultTools, wikiVaultPath, pageId(d.path)); } catch { /* non-critical */ }
+      await removeArticleIndex(vaultTools, wikiVaultPath, pageId(d.path));
       deletedPaths.push(d.path);
       const relPath = d.path.slice(wikiVaultPath.length + 1);
       logEntries.push({ path: relPath, action: "DELETED" });
@@ -612,16 +627,14 @@ export async function* runIngest(
 
   // Full bidirectional index reconciliation: add any page missing from the index
   // (legacy un-annotated pages get a deterministic fallback) and drop orphan
-  // entries whose file no longer exists. Non-critical.
-  try {
-    const finalPaths = (await vaultTools.listFiles(wikiVaultPath)).filter(isWikiPagePath);
-    const finalPages = await vaultTools.readAll(finalPaths);
-    await reconcilePageIndex(
-      vaultTools,
-      wikiVaultPath,
-      [...finalPages].map(([path, content]) => ({ path, content })),
-    );
-  } catch { /* non-critical */ }
+  // entries whose file no longer exists.
+  const finalPaths = (await vaultTools.listFiles(wikiVaultPath)).filter(isWikiPagePath);
+  const finalPages = await readPagesStrict(vaultTools, finalPaths);
+  await reconcilePageIndex(
+    vaultTools,
+    wikiVaultPath,
+    [...finalPages].map(([path, content]) => ({ path, content })),
+  );
 
   const createdCount = logEntries.filter(e => e.action === "CREATED").length;
   const updatedCount = logEntries.filter(e => e.action === "UPDATED").length;
@@ -650,15 +663,13 @@ export async function* runIngest(
   }
 
   if (similarity && written.length > 0) {
-    try {
-      // Read back the final on-disk content (frontmatter description included) rather
-      // than reusing `pages` (pre-processing LLM output, description not yet injected).
-      const writtenPages = await vaultTools.readAll(written);
-      const descriptions = await readPageDescriptions(vaultTools, domainRoot);
-      const pageBodies = new Map<string, string>();
-      for (const [path, content] of writtenPages) pageBodies.set(pageId(path), content);
-      await similarity.refreshCache(domainRoot, vaultTools, descriptions, pageBodies);
-    } catch { /* non-critical */ }
+    // Read back the final on-disk content (frontmatter description included) rather
+    // than reusing `pages` (pre-processing LLM output, description not yet injected).
+    const writtenPages = await vaultTools.readAll(written);
+    const descriptions = await readPageDescriptions(vaultTools, domainRoot);
+    const pageBodies = new Map<string, string>();
+    for (const [path, content] of writtenPages) pageBodies.set(pageId(path), content);
+    await similarity.refreshCache(domainRoot, vaultTools, descriptions, pageBodies);
   }
 
   if (wlFixResult.warnings.length > 0) {

@@ -214,7 +214,6 @@ export async function* runInitWithSources(
         domain_id: domainId,
         vault_name: vaultName,
         schema_block: schemaContent ? `\nWiki conventions (_wiki_schema.md):\n${schemaContent}` : "",
-        index_block: "",
       });
 
       const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [

@@ -9,7 +9,6 @@ Return ONLY valid JSON of the following structure:
   "language_notes": ""
 }
 {{schema_block}}
-{{index_block}}
 
 Include the `reasoning` field first in the JSON response: a step-by-step rationale for the chosen domain structure.
 

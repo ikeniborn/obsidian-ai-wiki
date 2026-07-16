@@ -68,22 +68,24 @@ export async function* runDelete(
     details: [`${plan.toDelete.length} page(s) to delete`, `${plan.toRebuild.length} page(s) to rebuild`],
   };
 
-  // --- 1. Drop source from domain config (source_paths + analyzed_sources) ---
-  yield { kind: "source_path_removed", domainId, path: sourcePath };
+  // Prepare domain state changes, but do not expose them until page/index cleanup succeeds.
   const targetStem = sourceStem(sourcePath);
   const curAnalyzed = domain.analyzed_sources ?? {};
   const prunedAnalyzed: Record<string, string> = {};
   for (const k of Object.keys(curAnalyzed)) {
     if (k !== sourcePath && sourceStem(k) !== targetStem) prunedAnalyzed[k] = curAnalyzed[k];
   }
-  if (Object.keys(prunedAnalyzed).length !== Object.keys(curAnalyzed).length) {
-    yield { kind: "domain_updated", domainId, patch: { analyzed_sources: prunedAnalyzed } };
-  }
+  const analyzedSourcesChanged = Object.keys(prunedAnalyzed).length !== Object.keys(curAnalyzed).length;
 
   const safeRemovePage = async (p: string): Promise<boolean> => {
     if (!validateArticlePath(p, wikiFolder)) return false;
-    try { await vaultTools.remove(p); await removeArticleIndex(vaultTools, wikiFolder, pageId(p)); return true; }
-    catch { return false; }
+    try { await vaultTools.remove(p); }
+    catch (error) {
+      if (await vaultTools.exists(p)) throw error;
+    }
+    if (await vaultTools.exists(p)) throw new Error(`Governed page removal did not remove ${p}`);
+    await removeArticleIndex(vaultTools, wikiFolder, pageId(p));
+    return true;
   };
 
   // --- 2. Wipe rebuild pages ---
@@ -123,6 +125,14 @@ export async function* runDelete(
     if (signal.aborted) break;
     if (await safeRemovePage(p)) deleted++;
     else yield { kind: "info_text", icon: "alert-triangle", summary: `Skipped invalid path: ${p}` };
+  }
+
+  // Persist domain removal only after every page deletion and queued index update completed.
+  if (!signal.aborted) {
+    yield { kind: "source_path_removed", domainId, path: sourcePath };
+    if (analyzedSourcesChanged) {
+      yield { kind: "domain_updated", domainId, patch: { analyzed_sources: prunedAnalyzed } };
+    }
   }
 
   // --- 5. Backlink cleanup: strip references to now-missing pages from source files ---

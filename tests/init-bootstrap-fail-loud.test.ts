@@ -37,6 +37,7 @@ function emptyTypesBootstrapLlm(): LlmClient {
 function adapter() {
   const files = new Map<string, string>();
   return {
+    files,
     read: async (p: string) => files.get(p) ?? "",
     write: async (p: string, v: string) => { files.set(p, v); },
     append: async (p: string, v: string) => { files.set(p, (files.get(p) ?? "") + v); },
@@ -47,6 +48,49 @@ function adapter() {
     rename: async () => {},
   };
 }
+
+test("init bootstrap prompt never includes a large raw structured index", async () => {
+  const rawAdapter = adapter();
+  rawAdapter.files.set("src/a.md", "# Source\n\nAlpha source content.");
+  const vector = Array.from({ length: 2000 }, (_, index) => index + 0.125);
+  const sentinel = String(vector.at(-1));
+  rawAdapter.files.set("!Wiki/demo/index.jsonl", JSON.stringify({
+    kind: "chunk",
+    schemaVersion: 1,
+    articleId: "wiki_demo_alpha",
+    path: "!Wiki/demo/concept/wiki_demo_alpha.md",
+    heading: "## Facts",
+    ordinal: 1,
+    bodyHash: "body",
+    embedTextHash: "embed",
+    vector,
+    vectorModel: "m",
+    dimensions: vector.length,
+    updatedAt: "2026-07-17T00:00:00.000Z",
+  }) + "\n");
+  const prompts: unknown[] = [];
+  const body = JSON.stringify({ reasoning: "", id: "demo", name: "Demo", wiki_folder: "demo", entity_types: [], language_notes: "" });
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      prompts.push(params);
+      return (async function* () { yield chunk(body); yield usageChunk(); })();
+    } } },
+  } as unknown as LlmClient;
+  const existing = {
+    id: "demo", name: "Demo", wiki_folder: "demo", source_paths: ["src"],
+    entity_types: [], analyzed_sources: {}, analyzed_sources_v2: true, analyzed_sources_v3: true,
+  };
+
+  for await (const _ of runInitWithSources(
+    "demo", ["src"], true, new VaultTools(rawAdapter, "/vault"), llm, "m",
+    [existing], "Vault", new AbortController().signal, { structuredRetries: 0 }, undefined, false, undefined,
+  )) { /* drain */ }
+
+  assert.equal(prompts.length, 1);
+  const captured = JSON.stringify(prompts[0]);
+  assert.equal(captured.includes(sentinel), false);
+  assert.equal(captured.includes("index.jsonl"), false);
+});
 
 test("bootstrap failure stops init with a loud error and creates no domain", async () => {
   const vt = new VaultTools(adapter(), "/vault");
