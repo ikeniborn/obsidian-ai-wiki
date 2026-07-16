@@ -23,7 +23,6 @@ import type { LlmWikiPluginSettings } from "./types";
 import { DeleteSourceModal, FileErrorModal, FormatVisionModal, InfoModal, ShellConsentModal } from "./modals";
 import { computeDeletionPlan, sourceStem } from "./source-deletion";
 import { domainWikiFolder, domainIndexPath, domainLogPath } from "./wiki-path";
-import { parseIndexAnnotations } from "./wiki-index";
 import { collectPageDescriptions, parseWikiIndexJsonl } from "./wiki-index-jsonl";
 import { buildOkfBundle } from "./okf-export";
 import { writeOkfBundle } from "./okf-export-fs";
@@ -388,7 +387,6 @@ export class WikiController {
     try {
       const indexRaw = await this.app.vault.adapter.read(domainIndexPath(wikiFolder));
       descriptions = collectPageDescriptions(parseWikiIndexJsonl(indexRaw, domainIndexPath(wikiFolder)));
-      if (descriptions.size === 0) descriptions = parseIndexAnnotations(indexRaw);
     } catch { /* no index */ }
     try { log = await this.app.vault.adapter.read(domainLogPath(wikiFolder)); } catch { /* no log */ }
     const bundle = buildOkfBundle(pages, descriptions, log);

@@ -127,3 +127,38 @@ export function collectPageDescriptions(records: WikiIndexRecord[]): Map<string,
   }
   return descriptions;
 }
+
+export function upsertPageRecord(
+  records: WikiIndexRecord[],
+  incoming: PageIndexRecord,
+): WikiIndexRecord[] {
+  let replaced = false;
+  const next = records.map((record) => {
+    if (isPageIndexRecord(record) && record.articleId === incoming.articleId) {
+      replaced = true;
+      return incoming;
+    }
+    return record;
+  });
+  if (!replaced) next.push(incoming);
+  return next;
+}
+
+export function removePageRecord(records: WikiIndexRecord[], articleId: string): WikiIndexRecord[] {
+  return records.filter((record) => !(isPageIndexRecord(record) && record.articleId === articleId));
+}
+
+export function removeArticleRecords(records: WikiIndexRecord[], articleId: string): WikiIndexRecord[] {
+  return records.filter((record) => {
+    if (isPageIndexRecord(record) || isChunkIndexRecord(record)) return record.articleId !== articleId;
+    return true;
+  });
+}
+
+export function reconcilePageRecords(
+  records: WikiIndexRecord[],
+  pages: PageIndexRecord[],
+): WikiIndexRecord[] {
+  const nonPages = records.filter((record) => !isPageIndexRecord(record));
+  return [...nonPages, ...[...pages].sort((a, b) => a.articleId.localeCompare(b.articleId))];
+}

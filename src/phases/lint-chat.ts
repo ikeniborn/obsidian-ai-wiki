@@ -11,8 +11,8 @@ import { render } from "./template";
 import { wikiSections } from "./llm-utils";
 import { resolveLang } from "../i18n";
 import { domainWikiFolder, isWikiPagePath } from "../wiki-path";
-import { upsertIndexAnnotation } from "../wiki-index";
-import { pageId } from "../wiki-graph";
+import { pageIndexRecordFromMarkdown } from "../wiki-index";
+import { upsertPageIndex } from "../wiki-index-store";
 import { ensureDomainConfig } from "../domain-config";
 import { promptVersionOf } from "../prompt-version";
 
@@ -108,11 +108,13 @@ export async function* runLintFixChat(
       yield { kind: "tool_result", ok: false, preview: (e as Error).message };
       continue;
     }
-    if (page.annotation) {
-      try {
-        await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation, page.path);
-      } catch { /* non-critical */ }
-    }
+    try {
+      await upsertPageIndex(
+        vaultTools,
+        wikiVaultPath,
+        pageIndexRecordFromMarkdown(wikiVaultPath, page.path, page.content),
+      );
+    } catch { /* non-critical */ }
   }
 
   // 5. Emit result

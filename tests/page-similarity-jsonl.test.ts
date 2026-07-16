@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_CHUNKING, PageSimilarityService } from "../src/page-similarity";
-import { chunkRecordToEmbeddingChunk, embeddingChunkToChunkRecord } from "../src/wiki-index-jsonl";
+import { buildChunkInputs, DEFAULT_CHUNKING, PageSimilarityService } from "../src/page-similarity";
+import { VaultTools, type VaultAdapter } from "../src/vault-tools";
+import { upsertPageIndex } from "../src/wiki-index-store";
+import {
+  chunkRecordToEmbeddingChunk,
+  embeddingChunkToChunkRecord,
+  parseWikiIndexJsonl,
+  type ChunkIndexRecord,
+  type PageIndexRecord,
+} from "../src/wiki-index-jsonl";
 
 test("embedding chunks convert to index chunk records with vector metadata", () => {
   const record = embeddingChunkToChunkRecord({
@@ -84,3 +92,211 @@ test("hybrid sparse side uses weighted lexical page score", async () => {
 
   assert.equal(scored[0].path, "!Wiki/hld/pages/export-s3-clickhouse.md");
 });
+
+test("chunk refresh preserves page records and uses their governed page paths", async () => {
+  const domainRoot = "!Wiki/d";
+  const indexPath = `${domainRoot}/index.jsonl`;
+  const page: PageIndexRecord = {
+    kind: "page",
+    schemaVersion: 1,
+    articleId: "a",
+    path: "!Wiki/d/concept/a.md",
+    type: "concept",
+    description: "Alpha description",
+    resource: ["source"],
+    bodyHash: "page-body",
+    descriptionHash: "page-description",
+  };
+  const body = "# Alpha\n\n## Facts\nAlpha facts.";
+  const inputs = buildChunkInputs(page.description, body, DEFAULT_CHUNKING);
+  const vector = [...new Float32Array([0.1, 0.2])];
+  const chunks: ChunkIndexRecord[] = inputs.map((input, ordinal) => ({
+    kind: "chunk",
+    schemaVersion: 1,
+    articleId: "a",
+    path: page.path,
+    heading: input.heading ?? "",
+    ordinal: input.ordinal ?? ordinal,
+    bodyHash: input.hash,
+    embedTextHash: input.hash,
+    vector,
+    vectorModel: "m",
+    dimensions: 2,
+    updatedAt: "2026-07-16T00:00:00.000Z",
+  }));
+  const stale: ChunkIndexRecord = { ...chunks[0], articleId: "stale", path: "!Wiki/d/concept/stale.md" };
+  const adapter = new MemoryAdapter(new Map([
+    [indexPath, [page, ...chunks, stale].map((record) => JSON.stringify(record)).join("\n") + "\n"],
+  ]));
+  const service = new PageSimilarityService({
+    mode: "embedding",
+    topK: 2,
+    model: "m",
+    dimensions: 2,
+    baseUrl: "http://unused",
+  });
+
+  const result = await service.refreshCache(
+    domainRoot,
+    new VaultTools(adapter, ""),
+    new Map([["a", page.description]]),
+    new Map([["a", body]]),
+    { fullCorpus: true },
+  );
+
+  assert.equal(result.updated, 0);
+  const records = parseWikiIndexJsonl(adapter.files.get(indexPath)!, indexPath);
+  assert.deepEqual(records.find((record) => record.kind === "page"), page);
+  assert.equal(records.filter((record) => record.kind === "chunk").every((record) => record.path === page.path), true);
+});
+
+test("chunk refresh rejects malformed JSONL and preserves exact index bytes", async () => {
+  const domainRoot = "!Wiki/d";
+  const indexPath = `${domainRoot}/index.jsonl`;
+  const page = pageRecord("a");
+  const original = `${JSON.stringify(page)}\r\n{bad}\r\n`;
+  const adapter = new MemoryAdapter(new Map([[indexPath, original]]));
+  const service = embeddingService();
+
+  await assert.rejects(
+    service.refreshCache(
+      domainRoot,
+      new VaultTools(adapter, ""),
+      new Map([["a", page.description]]),
+      new Map([["a", "# Alpha\n\n## Facts\nAlpha facts."]]),
+      { fullCorpus: true },
+    ),
+    (error: Error) => error.name === "JsonlParseError" && error.message.includes(`${indexPath}:2:`),
+  );
+  assert.equal(adapter.files.get(indexPath), original);
+});
+
+test("cache load rejects malformed JSONL instead of treating it as missing", async () => {
+  const domainRoot = "!Wiki/d";
+  const indexPath = `${domainRoot}/index.jsonl`;
+  const original = `${JSON.stringify(pageRecord("a"))}\n{bad}\n`;
+  const adapter = new MemoryAdapter(new Map([[indexPath, original]]));
+
+  await assert.rejects(
+    embeddingService().loadCache(domainRoot, new VaultTools(adapter, "")),
+    (error: Error) => error.name === "JsonlParseError" && error.message.includes(`${indexPath}:2:`),
+  );
+  assert.equal(adapter.files.get(indexPath), original);
+});
+
+test("queued chunk refresh and page upsert preserve both mutations", async () => {
+  const domainRoot = "!Wiki/d";
+  const indexPath = `${domainRoot}/index.jsonl`;
+  const pageA = pageRecord("a");
+  const pageB = pageRecord("b");
+  const future = { kind: "future", value: 1 };
+  const body = "# Alpha\n\n## Facts\nAlpha facts.";
+  const inputs = buildChunkInputs(pageA.description, body, DEFAULT_CHUNKING);
+  const chunks = chunkRecords(pageA, inputs);
+  const stale = { ...chunks[0], articleId: "stale", path: "!Wiki/d/concept/stale.md" };
+  const adapter = new MemoryAdapter(new Map([
+    [indexPath, [pageA, future, ...chunks, stale].map((record) => JSON.stringify(record)).join("\n") + "\n"],
+  ]));
+  const gate = adapter.pauseNextWrite(indexPath);
+  const vaultTools = new VaultTools(adapter, "");
+
+  const refresh = embeddingService().refreshCache(
+    domainRoot,
+    vaultTools,
+    new Map([["a", pageA.description]]),
+    new Map([["a", body]]),
+    { fullCorpus: true },
+  );
+  await gate.started;
+  const pageUpsert = upsertPageIndex(vaultTools, domainRoot, pageB);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  gate.release();
+  await Promise.all([refresh, pageUpsert]);
+
+  const records = parseWikiIndexJsonl(adapter.files.get(indexPath)!, indexPath);
+  assert.deepEqual(records.find((record) => record.kind === "page" && record.articleId === "a"), pageA);
+  assert.deepEqual(records.find((record) => record.kind === "page" && record.articleId === "b"), pageB);
+  assert.deepEqual(records.find((record) => record.kind === "future"), future);
+  assert.equal(records.some((record) => record.kind === "chunk" && record.articleId === "a"), true);
+  assert.equal(records.some((record) => record.kind === "chunk" && record.articleId === "stale"), false);
+});
+
+function pageRecord(id: string): PageIndexRecord {
+  return {
+    kind: "page",
+    schemaVersion: 1,
+    articleId: id,
+    path: `!Wiki/d/concept/${id}.md`,
+    type: "concept",
+    description: `${id} description`,
+    resource: ["source"],
+    bodyHash: `body-${id}`,
+    descriptionHash: `description-${id}`,
+  };
+}
+
+function chunkRecords(page: PageIndexRecord, inputs: ReturnType<typeof buildChunkInputs>): ChunkIndexRecord[] {
+  const vector = [...new Float32Array([0.1, 0.2])];
+  return inputs.map((input, ordinal) => ({
+    kind: "chunk",
+    schemaVersion: 1,
+    articleId: page.articleId,
+    path: page.path,
+    heading: input.heading ?? "",
+    ordinal: input.ordinal ?? ordinal,
+    bodyHash: input.hash,
+    embedTextHash: input.hash,
+    vector,
+    vectorModel: "m",
+    dimensions: 2,
+    updatedAt: "2026-07-16T00:00:00.000Z",
+  }));
+}
+
+function embeddingService(): PageSimilarityService {
+  return new PageSimilarityService({
+    mode: "embedding",
+    topK: 2,
+    model: "m",
+    dimensions: 2,
+    baseUrl: "http://unused",
+  });
+}
+
+class MemoryAdapter implements VaultAdapter {
+  private pausedWrite?: {
+    path: string;
+    started: () => void;
+    release: Promise<void>;
+  };
+
+  constructor(readonly files: Map<string, string>) {}
+
+  async read(path: string): Promise<string> {
+    const value = this.files.get(path);
+    if (value === undefined) throw new Error(`ENOENT: ${path}`);
+    return value;
+  }
+  async write(path: string, data: string): Promise<void> {
+    const pause = this.pausedWrite;
+    if (pause?.path === path) {
+      this.pausedWrite = undefined;
+      pause.started();
+      await pause.release;
+    }
+    this.files.set(path, data);
+  }
+  async append(path: string, data: string): Promise<void> { this.files.set(path, (this.files.get(path) ?? "") + data); }
+  async list(): Promise<{ files: string[]; folders: string[] }> { return { files: [], folders: [] }; }
+  async exists(path: string): Promise<boolean> { return this.files.has(path); }
+  async mkdir(): Promise<void> {}
+
+  pauseNextWrite(path: string): { started: Promise<void>; release: () => void } {
+    let markStarted!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    const released = new Promise<void>((resolve) => { release = resolve; });
+    this.pausedWrite = { path, started: markStarted, release: released };
+    return { started, release };
+  }
+}

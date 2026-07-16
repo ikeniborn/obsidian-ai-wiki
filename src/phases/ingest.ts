@@ -18,11 +18,12 @@ import ingestEntitiesTemplate from "../../prompts/ingest-entities.md";
 import fixPathsTemplate from "../../prompts/ingest-fix-paths.md";
 import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
-import { domainWikiFolder, validateArticlePath, domainIndexPath, isWikiPagePath, effectiveSubfolder } from "../wiki-path";
+import { domainWikiFolder, validateArticlePath, isWikiPagePath, effectiveSubfolder } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureType, ensureDescription, entityTypeFromPath, ensureResource, ensureSourcesSection, parseResourceFromFm, stripInvalidWikiArticles, recoverSourceFrontmatter, parseTagsFromFm, normalizeTag } from "../utils/raw-frontmatter";
 import { collectDomainTags, renderTagRegistryBlock, thematicCategories, ensureEntityTypeTag, DEFAULT_MAX_TAG_CATEGORIES } from "../utils/tag-registry";
-import { upsertIndexAnnotation, parseIndexAnnotations, removeIndexAnnotation, deriveFallbackDescription, reconcileIndex, collectDescriptions } from "../wiki-index";
+import { pageIndexRecordFromMarkdown } from "../wiki-index";
+import { readPageDescriptions, reconcilePageIndex, removeArticleIndex, upsertPageIndex } from "../wiki-index-store";
 import { pageId } from "../wiki-graph";
 import type { PageSimilarityService, ExtractedEntity } from "../page-similarity";
 import { appendWikiLog } from "../wiki-log";
@@ -32,13 +33,6 @@ import { GENERIC_WIKI_STEM_REGEX, stemRegex, buildWikiStem } from "../wiki-stem"
 import { i18nFor, resolveLang } from "../i18n";
 import { promptVersionOf } from "../prompt-version";
 import { EmbeddingUnavailableError } from "../embedding-error";
-
-function deriveSectionForPath(wikiFolder: string, fullPath: string): string {
-  const prefix = wikiFolder + "/";
-  const rel = fullPath.startsWith(prefix) ? fullPath.slice(prefix.length) : fullPath;
-  const parts = rel.split("/");
-  return parts.length >= 2 ? parts[0] : "general";
-}
 
 function parseWikiStatus(content: string): string {
   const m = /^---\n[\s\S]*?^status:[ \t]*(.+)$/m.exec(content);
@@ -121,10 +115,9 @@ export async function* runIngest(
   await ensureDomainConfig(vaultTools, domainRoot);
   void graphDepth;
   const schemaContent = render(wikiSchemaTemplate, { section_conventions: wikiSections(resolveLang(opts.outputLanguage)) });
-  const indexContent = await tryRead(vaultTools, domainIndexPath(domainRoot));
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
   const nonMetaPaths = existingPaths.filter(isWikiPagePath);
-  const annotations = cachedAnnotations ?? parseIndexAnnotations(indexContent);
+  const annotations = cachedAnnotations ?? await readPageDescriptions(vaultTools, domainRoot);
 
   yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).ingestProgress.synthesizing(domain.id) };
   const start = Date.now();
@@ -200,7 +193,11 @@ export async function* runIngest(
     .filter(([, content]) => !/resource:/m.test(content))
     .map(([path]) => path);
   for (const p of noSources) {
-    try { await vaultTools.remove(p); } catch { /* skip */ }
+    try {
+      await vaultTools.remove(p);
+      await removeArticleIndex(vaultTools, wikiVaultPath, pageId(p));
+      annotations.delete(pageId(p));
+    } catch { /* skip */ }
   }
   if (noSources.length > 0) {
     yield {
@@ -227,7 +224,11 @@ export async function* runIngest(
       return !GENERIC_WIKI_STEM_REGEX.test(name.replace(/\.md$/, ""));
     });
     for (const p of unprefixed) {
-      try { await vaultTools.remove(p); } catch { /* skip */ }
+      try {
+        await vaultTools.remove(p);
+        await removeArticleIndex(vaultTools, wikiVaultPath, pageId(p));
+        annotations.delete(pageId(p));
+      } catch { /* skip */ }
     }
     if (unprefixed.length > 0) {
       yield {
@@ -240,7 +241,7 @@ export async function* runIngest(
 
   const messages = buildIngestMessages(
     sourceVaultPath, sourceContent, domain, wikiVaultPath,
-    existingPages, schemaContent, indexContent,
+    existingPages, schemaContent,
     entitiesResult.value.entities, sourceStems, tagRegistryBlock,
   );
 
@@ -474,13 +475,17 @@ export async function* runIngest(
             yield { kind: "tool_use", name: "Update", input: { path: targetPath } };
             const guardedContent = ensureIncomingSections(merged.value.content, page.content);
             await vaultTools.write(targetPath, guardedContent);
+            try {
+              await upsertPageIndex(
+                vaultTools,
+                wikiVaultPath,
+                pageIndexRecordFromMarkdown(wikiVaultPath, targetPath, guardedContent),
+              );
+            } catch { /* non-critical */ }
             written.push(targetPath);
             yield { kind: "tool_result", ok: true, preview: `merged ← ${pageId(page.path)}` };
             const relTarget = targetPath.slice(wikiVaultPath.length + 1);
             logEntries.push({ path: relTarget, action: "MERGED" });
-            if (merged.value.annotation) {
-              try { await upsertIndexAnnotation(vaultTools, wikiVaultPath, hit.pid, merged.value.annotation, targetPath); } catch { /* non-critical */ }
-            }
             continue; // skip the normal create
           } catch (e) {
             // merge failed — fall through to a normal create rather than lose the new content
@@ -545,10 +550,9 @@ export async function* runIngest(
       }
 
       try {
-        const annotation = (page.annotation && page.annotation.trim())
-          ? page.annotation
-          : deriveFallbackDescription(sourcedPage, deriveSectionForPath(wikiVaultPath, page.path));
-        await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), annotation, page.path);
+        const record = pageIndexRecordFromMarkdown(wikiVaultPath, page.path, withSources);
+        await upsertPageIndex(vaultTools, wikiVaultPath, record);
+        annotations.set(record.articleId, record.description);
       } catch { /* non-critical */ }
     } catch (e) {
       yield { kind: "tool_result", ok: false, preview: (e as Error).message };
@@ -596,7 +600,7 @@ export async function* runIngest(
     yield { kind: "tool_use", name: "Delete", input: { path: d.path } };
     try {
       await vaultTools.remove(d.path);
-      try { await removeIndexAnnotation(vaultTools, wikiVaultPath, pageId(d.path)); } catch { /* non-critical */ }
+      try { await removeArticleIndex(vaultTools, wikiVaultPath, pageId(d.path)); } catch { /* non-critical */ }
       deletedPaths.push(d.path);
       const relPath = d.path.slice(wikiVaultPath.length + 1);
       logEntries.push({ path: relPath, action: "DELETED" });
@@ -612,17 +616,11 @@ export async function* runIngest(
   try {
     const finalPaths = (await vaultTools.listFiles(wikiVaultPath)).filter(isWikiPagePath);
     const finalPages = await vaultTools.readAll(finalPaths);
-    const currentIndex = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
-    const recon = reconcileIndex(
-      currentIndex, wikiVaultPath,
+    await reconcilePageIndex(
+      vaultTools,
+      wikiVaultPath,
       [...finalPages].map(([path, content]) => ({ path, content })),
     );
-    for (const a of recon.adds) {
-      await upsertIndexAnnotation(vaultTools, wikiVaultPath, a.pid, a.annotation, a.fullPath);
-    }
-    for (const pid of recon.removes) {
-      await removeIndexAnnotation(vaultTools, wikiVaultPath, pid);
-    }
   } catch { /* non-critical */ }
 
   const createdCount = logEntries.filter(e => e.action === "CREATED").length;
@@ -656,7 +654,7 @@ export async function* runIngest(
       // Read back the final on-disk content (frontmatter description included) rather
       // than reusing `pages` (pre-processing LLM output, description not yet injected).
       const writtenPages = await vaultTools.readAll(written);
-      const descriptions = collectDescriptions([...writtenPages].map(([path, content]) => ({ path, content })));
+      const descriptions = await readPageDescriptions(vaultTools, domainRoot);
       const pageBodies = new Map<string, string>();
       for (const [path, content] of writtenPages) pageBodies.set(pageId(path), content);
       await similarity.refreshCache(domainRoot, vaultTools, descriptions, pageBodies);
@@ -723,10 +721,6 @@ export function detectDomainStrict(absFilePath: string, domains: DomainEntry[], 
 
 export function detectDomain(absFilePath: string, domains: DomainEntry[], vaultRoot: string): DomainEntry | null {
   return detectDomainStrict(absFilePath, domains, vaultRoot) ?? domains[0] ?? null;
-}
-
-async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
-  try { return await vaultTools.read(path); } catch { return ""; }
 }
 
 export function extractParentSourcePath(
@@ -852,7 +846,6 @@ function buildIngestMessages(
   wikiVaultPath: string,
   existingPages: Map<string, string>,
   schemaContent: string,
-  indexContent: string,
   entities: ExtractedEntity[],
   sourceStems: Set<string> = new Set(),
   tagRegistryBlock: string = "",
@@ -912,7 +905,6 @@ function buildIngestMessages(
         `Existing wiki pages:\n${existing}`,
         tagRegistryBlock ? `\n${tagRegistryBlock}` : "",
         entitiesBlock,
-        indexContent ? `\nWiki index (_index.md):\n${indexContent}` : "",
       ].filter(Boolean).join("\n"),
     },
   ];

@@ -13,12 +13,13 @@ import lintActualizeTemplate from "../../prompts/lint-actualize.md";
 import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
 import { wikiSections } from "./llm-utils";
-import { domainWikiFolder, domainIndexPath, WIKI_ROOT, isWikiPagePath, effectiveSubfolder } from "../wiki-path";
+import { domainWikiFolder, WIKI_ROOT, isWikiPagePath, effectiveSubfolder } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseResourceFromFm, validateAndRepairWikiPageFrontmatter, stripInvalidWikiArticles } from "../utils/raw-frontmatter";
 import { checkGraphStructure, pageId, bfsExpand } from "../wiki-graph";
 import { checkWikiLinks, fixWikiLinks, stripDeadLinks } from "../wiki-link-validator";
 import { graphCache } from "../wiki-graph-cache";
-import { upsertIndexAnnotation, parseIndexAnnotations, reconcileIndex, removeIndexAnnotation, collectDescriptions } from "../wiki-index";
+import { collectDescriptions, pageIndexRecordFromMarkdown } from "../wiki-index";
+import { readPageDescriptions, reconcilePageIndex, removeArticleIndex, upsertPageIndex } from "../wiki-index-store";
 import { appendWikiLog } from "../wiki-log";
 import { ensureDomainConfig } from "../domain-config";
 import type { PageSimilarityService } from "../page-similarity";
@@ -41,7 +42,11 @@ export async function cleanupInvalidPages(
   for (const f of candidates) {
     const stem = f.split("/").pop()!.replace(/\.md$/, "");
     if (!GENERIC_WIKI_STEM_REGEX.test(stem)) {
-      try { await vaultTools.remove(f); deleted++; } catch { /* skip */ }
+      try {
+        await vaultTools.remove(f);
+        deleted++;
+        try { await removeArticleIndex(vaultTools, wikiVaultPath, pageId(f)); } catch { /* non-critical */ }
+      } catch { /* skip */ }
       continue;
     }
     try {
@@ -49,6 +54,7 @@ export async function cleanupInvalidPages(
       if (!/resource:/m.test(content)) {
         await vaultTools.remove(f);
         deleted++;
+        try { await removeArticleIndex(vaultTools, wikiVaultPath, pageId(f)); } catch { /* non-critical */ }
       }
     } catch { /* skip unreadable */ }
   }
@@ -229,9 +235,8 @@ export async function* runLint(
       allMdPaths.map(p => [p.split("/").pop()!.replace(/\.md$/, ""), p])
     );
 
-    // Index annotations + article iteration order
-    const indexRaw = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
-    const annotations = parseIndexAnnotations(indexRaw);
+    // Structured page descriptions + article iteration order
+    const annotations = await readPageDescriptions(vaultTools, wikiVaultPath);
     const pidToPath = new Map(files.map(p => [pageId(p), p]));
     const articlePaths = [...new Set([
       ...[...annotations.keys()].map(pid => pidToPath.get(pid)!).filter(Boolean),
@@ -392,12 +397,11 @@ export async function* runLint(
             await vaultTools.write(fix.path, fixedContent);
             writtenPaths.push(fix.path);
             pages.set(fix.path, fixedContent);
-            if (fix.annotation) {
-              annotations.set(pageId(fix.path), fix.annotation);
-              try {
-                await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(fix.path), fix.annotation, fix.path);
-              } catch { /* non-critical */ }
-            }
+            try {
+              const record = pageIndexRecordFromMarkdown(wikiVaultPath, fix.path, fixedContent);
+              annotations.set(record.articleId, record.description);
+              await upsertPageIndex(vaultTools, wikiVaultPath, record);
+            } catch { /* non-critical */ }
             yield { kind: "tool_result", ok: true };
           } catch (e) {
             yield { kind: "tool_result", ok: false, preview: (e as Error).message };
@@ -420,6 +424,7 @@ export async function* runLint(
           }
           pages.delete(delPath);
           annotations.delete(deletedName);
+          try { await removeArticleIndex(vaultTools, wikiVaultPath, deletedName); } catch { /* non-critical */ }
 
           // Rewrite [[deletedName]] links in all wiki pages
           for (const [wikiPath, wikiContent] of pages) {
@@ -429,6 +434,13 @@ export async function* runLint(
                 : wikiContent.replaceAll(`[[${deletedName}]]`, "");
               await vaultTools.write(wikiPath, newContent);
               pages.set(wikiPath, newContent);
+              try {
+                await upsertPageIndex(
+                  vaultTools,
+                  wikiVaultPath,
+                  pageIndexRecordFromMarkdown(wikiVaultPath, wikiPath, newContent),
+                );
+              } catch { /* non-critical */ }
             }
           }
 
@@ -467,6 +479,7 @@ export async function* runLint(
           }
         } catch { /* non-critical — page already gone */ }
         pages.delete(wikiPath);
+        try { await removeArticleIndex(vaultTools, wikiVaultPath, stem); } catch { /* non-critical */ }
         deletedRefs.push({ deletedName: stem, redirectName: null });
         yield {
           kind: "info_text" as const,
@@ -613,24 +626,19 @@ export async function* runLint(
       reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
     }
 
-    // Full bidirectional index reconciliation — cure: add pages missing from the
-    // index (fallback annotation when none), drop orphan entries. Runs without LLM.
+    // Full page-record reconciliation preserves chunk/future records. Runs without LLM.
     try {
-      const reconPages = [...pages.entries()].map(([path, content]) => {
-        const pid = pageId(path);
-        const ann = annotations.get(pid);
-        return ann ? { path, content, annotation: ann } : { path, content };
-      });
-      const currentIndex = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
-      const recon = reconcileIndex(currentIndex, wikiVaultPath, reconPages);
-      for (const a of recon.adds) {
-        await upsertIndexAnnotation(vaultTools, wikiVaultPath, a.pid, a.annotation, a.fullPath);
-      }
-      for (const pid of recon.removes) {
-        await removeIndexAnnotation(vaultTools, wikiVaultPath, pid);
-      }
-      if (recon.adds.length || recon.removes.length) {
-        reportParts.push(`Index reconciled: +${recon.adds.length} / -${recon.removes.length}`);
+      const before = new Set((await readPageDescriptions(vaultTools, wikiVaultPath)).keys());
+      const after = new Set([...pages.keys()].map(pageId));
+      const adds = [...after].filter((id) => !before.has(id)).length;
+      const removes = [...before].filter((id) => !after.has(id)).length;
+      await reconcilePageIndex(
+        vaultTools,
+        wikiVaultPath,
+        [...pages].map(([path, content]) => ({ path, content })),
+      );
+      if (adds || removes) {
+        reportParts.push(`Index reconciled: +${adds} / -${removes}`);
       }
     } catch { /* non-critical */ }
 
@@ -694,10 +702,6 @@ function computeEntityDiff(oldTypes: EntityType[], newTypes: EntityType[]): stri
   removed.forEach((et) => lines.push(`- ✖ удалён: **${et.type}**`));
   modified.forEach((et) => lines.push(`- ✎ обновлён: **${et.type}**`));
   return lines.join("\n");
-}
-
-async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
-  try { return await vaultTools.read(path); } catch { return ""; }
 }
 
 async function actualizeDomainConfig(

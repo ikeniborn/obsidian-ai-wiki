@@ -3,7 +3,7 @@ import type { VaultTools } from "../vault-tools";
 import type { DomainEntry } from "../domain";
 import type { PageSimilarityService } from "../page-similarity";
 import { domainWikiFolder, validateArticlePath, isWikiPagePath } from "../wiki-path";
-import { removeIndexAnnotation } from "../wiki-index";
+import { removeArticleIndex } from "../wiki-index-store";
 import { pageId } from "../wiki-graph";
 import { stripInvalidWikiArticles } from "../utils/raw-frontmatter";
 import { computeDeletionPlan, sourceStem } from "../source-deletion";
@@ -82,7 +82,7 @@ export async function* runDelete(
 
   const safeRemovePage = async (p: string): Promise<boolean> => {
     if (!validateArticlePath(p, wikiFolder)) return false;
-    try { await vaultTools.remove(p); await removeIndexAnnotation(vaultTools, wikiFolder, pageId(p)); return true; }
+    try { await vaultTools.remove(p); await removeArticleIndex(vaultTools, wikiFolder, pageId(p)); return true; }
     catch { return false; }
   };
 

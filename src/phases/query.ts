@@ -7,7 +7,7 @@ import { SeedsSchema } from "./zod-schemas";
 import queryTemplate from "../../prompts/query.md";
 import querySeedsTemplate from "../../prompts/query-seeds.md";
 import { render } from "./template";
-import { domainWikiFolder, domainIndexPath, isWikiPagePath } from "../wiki-path";
+import { domainWikiFolder, isWikiPagePath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
 import { pageId, bfsExpandRanked } from "../wiki-graph";
 import { fuseVectorGraph } from "../fusion";
@@ -57,8 +57,7 @@ export interface DomainCandidates {
   seedScores: Record<string, number>;
   expandedScores: Record<string, number>;
   graph: Map<string, Set<string>>;
-  annotations: Map<string, string>;  // index annotations of candidates
-  indexContent: string;              // raw _index.md content
+  annotations: Map<string, string>;  // structured page descriptions of candidates
   retrievalMode: RetrievalMode;
   denseMax: number;
   seedFallback: "none" | "jaccard" | "llm";
@@ -68,7 +67,7 @@ export interface DomainCandidates {
 }
 
 /**
- * Read index → glob → read pages → select seeds (vector gate → jaccard → optional llm)
+ * Read pages → select seeds (vector gate → jaccard → optional llm)
  * → build graph → BFS-rank. Pages are read before seed selection because seeds now score
  * against each page's frontmatter `description` (collected from the page bodies), not the
  * `_index.md` annotation line. Yields the existing progress events; returns the candidate
@@ -92,14 +91,11 @@ export async function* retrieveDomainCandidates(
   }
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
 
-  yield { kind: "tool_use", name: "Read", input: { path: domainIndexPath(wikiVaultPath) } };
   await ensureDomainConfig(vaultTools, wikiVaultPath);
-  const indexContent = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
   if (signal.aborted) return null;
-  yield { kind: "tool_result", ok: true, preview: indexContent ? "read" : "empty" };
 
   // The retrieval overview map now comes from each page's frontmatter `description`
-  // (collectDescriptions), not the cheap _index.md text — so the full page set has to
+  // (collectDescriptions), not serialized index records — so the full page set has to
   // be read before seeds can be scored. This gives up the previous "skip the read when
   // a domain has no seeds" fast path in exchange for a single source of truth for the
   // overview text (docs/superpowers/plans/2026-07-09-okf-integration-plan.md Task 5b).
@@ -240,7 +236,7 @@ export async function* retrieveDomainCandidates(
 
   return {
     domainId: domain.id, pages: candidatePages, seeds, candidateIds: selectedIds,
-    seedScores, expandedScores, graph: graphResult.graph, annotations, indexContent,
+    seedScores, expandedScores, graph: graphResult.graph, annotations,
     retrievalMode, denseMax, seedFallback, seedFallbackReason, seedOutputTokens,
     pagesScanned: files.length,
   };
@@ -463,10 +459,6 @@ export async function* runQuery(
   } else {
     yield { kind: "result", durationMs: Date.now() - start, text: answer, outputTokens: outputTokens || undefined };
   }
-}
-
-async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
-  try { return await vaultTools.read(path); } catch { return ""; }
 }
 
 async function llmSelectSeeds(

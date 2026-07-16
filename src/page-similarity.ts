@@ -8,10 +8,10 @@ import { domainIndexPath, legacyDomainEmbeddingsPath } from "./wiki-path";
 import {
   embeddingChunkToChunkRecord,
   isChunkIndexRecord,
-  parseWikiIndexJsonl,
-  stringifyWikiIndexJsonl,
+  isPageIndexRecord,
   type WikiIndexRecord,
 } from "./wiki-index-jsonl";
+import { readWikiIndexRecords, transformWikiIndexRecords } from "./wiki-index-store";
 import { rrf } from "./rrf";
 import type { SeedDiag } from "./retrieval-diag";
 
@@ -114,6 +114,9 @@ function chunkRecordsFromCache(
   existingRecords: WikiIndexRecord[],
 ): WikiIndexRecord[] {
   const preserved = existingRecords.filter((record) => !isChunkIndexRecord(record));
+  const pagePaths = new Map(
+    existingRecords.filter(isPageIndexRecord).map((record) => [record.articleId, record.path]),
+  );
   const now = new Date().toISOString();
   const chunkRecords: WikiIndexRecord[] = [];
   for (const [pid, entry] of Object.entries(cacheFile.entries)) {
@@ -121,7 +124,7 @@ function chunkRecordsFromCache(
       if (!chunk.vector) continue;
       chunkRecords.push(embeddingChunkToChunkRecord({
         articleId: pid,
-        path: fallbackChunkPath(domainRoot, pid),
+        path: pagePaths.get(pid) ?? fallbackChunkPath(domainRoot, pid),
         heading: chunk.heading ?? "",
         ordinal: chunk.ordinal ?? 0,
         bodyHash: chunk.hash,
@@ -1124,10 +1127,11 @@ export class PageSimilarityService {
     if (this.cache) return;
     const { model, dimensions } = this.config;
     if (!model || !dimensions) return;
-    try {
-      const raw = await vaultTools.read(domainIndexPath(domainRoot));
-      this.cache = cacheFromIndexRecords(parseWikiIndexJsonl(raw, domainIndexPath(domainRoot)), model, dimensions);
-    } catch { /* cache missing or unreadable — stay null */ }
+    this.cache = cacheFromIndexRecords(
+      await readWikiIndexRecords(vaultTools, domainRoot),
+      model,
+      dimensions,
+    );
   }
 
   async refreshCache(
@@ -1146,18 +1150,19 @@ export class PageSimilarityService {
 
     const cachePath = domainIndexPath(domainRoot);
     let cacheFile: EmbeddingCacheFile;
-    let indexRecords: WikiIndexRecord[] = [];
-    try {
-      indexRecords = parseWikiIndexJsonl(await vaultTools.read(cachePath), cachePath);
+    const hasStructuredIndex = await vaultTools.exists(cachePath);
+    const indexRecords = await readWikiIndexRecords(vaultTools, domainRoot);
+    if (hasStructuredIndex) {
       cacheFile = cacheFromIndexRecords(indexRecords, model, dimensions);
-    } catch {
-      try {
-        const parsed = JSON.parse(await vaultTools.read(legacyDomainEmbeddingsPath(domainRoot))) as EmbeddingCacheFile;
+    } else {
+      const legacyPath = legacyDomainEmbeddingsPath(domainRoot);
+      if (await vaultTools.exists(legacyPath)) {
+        const parsed = JSON.parse(await vaultTools.read(legacyPath)) as EmbeddingCacheFile;
         cacheFile =
           parsed.version === 3 && parsed.model === model && parsed.dimensions === dimensions
             ? parsed
             : { version: 3, model, dimensions, entries: {} };
-      } catch {
+      } else {
         cacheFile = { version: 3, model, dimensions, entries: {} };
       }
     }
@@ -1222,7 +1227,11 @@ export class PageSimilarityService {
       if (filled.length > 0) cacheFile.entries[pid] = { chunks: filled };
     }
 
-    await vaultTools.write(cachePath, stringifyWikiIndexJsonl(chunkRecordsFromCache(cacheFile, domainRoot, indexRecords)));
+    await transformWikiIndexRecords(
+      vaultTools,
+      domainRoot,
+      (latestRecords) => chunkRecordsFromCache(cacheFile, domainRoot, latestRecords),
+    );
     this.cache = cacheFile;
     return { updated: pending.length };
   }

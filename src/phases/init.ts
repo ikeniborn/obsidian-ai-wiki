@@ -9,9 +9,9 @@ import initTemplate from "../../prompts/init.md";
 import { render } from "./template";
 import { wikiSections } from "./llm-utils";
 import { runIngest } from "./ingest";
-import { domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainIndexPath, domainMetadataPath } from "../wiki-path";
+import { domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainMetadataPath } from "../wiki-path";
 import type { PageSimilarityService } from "../page-similarity";
-import { parseIndexAnnotations } from "../wiki-index";
+import { readPageDescriptions } from "../wiki-index-store";
 import { i18nFor, resolveLang } from "../i18n";
 import { hashSource } from "../incremental-sources";
 import { promptVersionOf } from "../prompt-version";
@@ -186,9 +186,7 @@ export async function* runInitWithSources(
 
   const initialDomainRoot = existing ? domainWikiFolder(existing.wiki_folder) : wikiRootGuess;
   const schemaContent = render(schemaTemplate, { section_conventions: wikiSections(resolveLang(opts.outputLanguage)) });
-  const indexContent = await tryRead(vaultTools, domainIndexPath(initialDomainRoot));
-
-  let annotationsCache = parseIndexAnnotations(indexContent);
+  let annotationsCache = await readPageDescriptions(vaultTools, initialDomainRoot);
 
   let currentDomain: DomainEntry | null = existing ?? null;
 
@@ -216,7 +214,7 @@ export async function* runInitWithSources(
         domain_id: domainId,
         vault_name: vaultName,
         schema_block: schemaContent ? `\nWiki conventions (_wiki_schema.md):\n${schemaContent}` : "",
-        index_block: indexContent ? `\nExisting structure (_index.md):\n${indexContent}` : "",
+        index_block: "",
       });
 
       const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -363,8 +361,7 @@ export async function* runInitWithSources(
 
     if (similarity) {
       const domainRoot = currentDomain ? domainWikiFolder(currentDomain.wiki_folder) : wikiRootGuess;
-      const fresh = await tryRead(vaultTools, domainIndexPath(domainRoot));
-      annotationsCache = parseIndexAnnotations(fresh);
+      annotationsCache = await readPageDescriptions(vaultTools, domainRoot);
     }
 
     if (signal.aborted) return;
@@ -523,10 +520,6 @@ export async function wipeDomainFolder(vaultTools: VaultTools, wikiFolder: strin
   }
   await vaultTools.removeSubfolders(root);
   return removed;
-}
-
-async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
-  try { return await vaultTools.read(path); } catch { return ""; }
 }
 
 async function ensureRootFiles(vaultTools: VaultTools, wikiRoot: string): Promise<void> {
