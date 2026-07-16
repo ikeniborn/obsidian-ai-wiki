@@ -3,6 +3,7 @@ import type { z } from "zod";
 import { ZodError } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import type { LlmCallOptions, LlmClient, RunEvent } from "../types";
+import { classifyContextError, PromptBudgetExceededError } from "../prompt-budget";
 import { structuralErrorCounter } from "../structural-error-counter";
 import {
   buildChatParams,
@@ -23,14 +24,20 @@ const repairJson = [
 
 export type StructuredCallSite =
   | "init.bootstrap"
+  | "init.bootstrap-map"
   | "init.delta"
-  | "lint.patch" | "lint.fix" | "lint-chat.fix"
+  | "lint.patch" | "lint.fix" | "lint.batch" | "lint-chat.fix" | "lint-chat.patch"
   | "query.seeds" | "query.answer"
   | "ingest.entities"
+  | "ingest.evidence-map"
+  | "ingest.evidence-reduce"
   | "ingest.pages"
+  | "ingest.synthesize"
   | "ingest.merge"
   | "ingest.classify"
-  | "format.output";
+  | "format.output"
+  | "format.segment"
+  | "vision.analysis";
 
 type ResponseFormatMode = "json_schema" | "json_object" | "none";
 
@@ -69,12 +76,14 @@ export interface RunStructuredArgs<T> {
 export interface RunStructuredResult<T> {
   value: T;
   outputTokens: number;
+  inputTokens?: number;
   fullText: string;
 }
 
 interface CallResult {
   fullText: string;
   outputTokens: number;
+  inputTokens?: number;
   statsEvent?: RunEvent;
 }
 
@@ -201,10 +210,17 @@ async function streamOnce(
     return {
       fullText,
       outputTokens,
+      inputTokens: stats?.inputTokens,
       statsEvent: stats ? buildLlmCallStatsEvent(stats) : undefined,
     };
   } catch (e) {
-    if (signal.aborted || (e as Error).name === "AbortError" || isJsonModeError(e)) throw e;
+    if (
+      signal.aborted
+      || (e as Error).name === "AbortError"
+      || isJsonModeError(e)
+      || classifyContextError(e) !== null
+      || e instanceof PromptBudgetExceededError
+    ) throw e;
     const params2 = buildChatParams(model, messages, opts);
     const resp = await llm.chat.completions.create(
       { ...params2, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
@@ -213,6 +229,9 @@ async function streamOnce(
     return {
       fullText: resp.choices[0]?.message?.content ?? "",
       outputTokens: extractUsage(resp) ?? 0,
+      inputTokens: typeof resp.usage?.prompt_tokens === "number"
+        ? resp.usage.prompt_tokens
+        : undefined,
     };
   }
 }
@@ -276,7 +295,7 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
 
     const call = await callWithFormatFallback(args, messages, mode, attempt);
     mode = call.mode;
-    const { fullText, outputTokens, statsEvent } = call.result;
+    const { fullText, outputTokens, inputTokens, statsEvent } = call.result;
     totalTokens += outputTokens;
     if (statsEvent) onEvent(statsEvent);
 
@@ -306,7 +325,7 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
         emitStructuralError(onEvent, callSite, "schema_validate", attempt, true, "retry succeeded");
       }
       structuralErrorCounter.record(true, attempt);
-      return { value, outputTokens: totalTokens, fullText };
+      return { value, outputTokens: totalTokens, inputTokens, fullText };
     } catch (e) {
       lastError = e as Error;
       const isLast = attempt === maxRetries;

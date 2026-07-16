@@ -96,8 +96,84 @@ test("json-zod valid JSON succeeds without structural error", async () => {
   });
 
   assert.equal(result.value.value, "ok");
+  assert.equal(result.inputTokens, 2);
   assert.equal(events.some((ev) => ev.kind === "structural_error"), false);
   assert.equal(events.some((ev) => ev.kind === "llm_call_stats"), true);
+});
+
+test("non-stream fallback returns prompt usage", async () => {
+  let requests = 0;
+  const llm = {
+    chat: {
+      completions: {
+        create: async (params: { stream?: boolean }) => {
+          requests += 1;
+          if (params.stream) throw new Error("stream transport unavailable");
+          return {
+            id: "completion",
+            object: "chat.completion",
+            created: 0,
+            model: "m",
+            choices: [{
+              index: 0,
+              finish_reason: "stop",
+              message: { role: "assistant", content: '{"value":"fallback"}', refusal: null },
+              logprobs: null,
+            }],
+            usage: { prompt_tokens: 11, completion_tokens: 4, total_tokens: 15 },
+          };
+        },
+      },
+    },
+  } as unknown as LlmClient;
+
+  const result = await runStructuredWithRetry({
+    llm,
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+
+  assert.equal(requests, 2);
+  assert.equal(result.value.value, "fallback");
+  assert.equal(result.inputTokens, 11);
+});
+
+test("context errors bypass identical stream-to-non-stream fallback", async () => {
+  let requests = 0;
+  const contextError = Object.assign(
+    new Error("prompt size 565000 exceeds maximum context 524288"),
+    { code: "context_length_exceeded" },
+  );
+  const llm = {
+    chat: {
+      completions: {
+        create: async () => {
+          requests += 1;
+          throw contextError;
+        },
+      },
+    },
+  } as unknown as LlmClient;
+
+  await assert.rejects(runStructuredWithRetry({
+    llm,
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  }), contextError);
+
+  assert.equal(requests, 1);
 });
 
 test("empty JSON output downgrades response formats and validates recovered JSON", async () => {

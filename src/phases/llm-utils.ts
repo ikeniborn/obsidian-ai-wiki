@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 import type { LlmCallOptions, RunEvent } from "../types";
+import { estimatePreparedMessages, PromptBudgetExceededError } from "../prompt-budget";
 import { compressionInstruction } from "../semantic-compression";
 import baseContract from "../../prompts/base.md";
 import { jsonrepair } from "jsonrepair";
@@ -131,6 +132,12 @@ export function buildChatParams(
   stream: boolean = false,
 ): Record<string, unknown> {
   const msgs = prepareChatMessages(messages, opts);
+  if (opts.inputBudgetTokens !== undefined) {
+    const estimated = estimatePreparedMessages(msgs);
+    if (estimated > opts.inputBudgetTokens) {
+      throw new PromptBudgetExceededError(opts.inputBudgetTokens, estimated, []);
+    }
+  }
   const params: Record<string, unknown> = { model, messages: msgs };
   if (opts.temperature !== undefined) params.temperature = opts.temperature;
   if (opts.maxTokens != null) params.max_tokens = opts.maxTokens;

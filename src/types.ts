@@ -60,6 +60,20 @@ export type RunEvent =
       outTokPerSec: number;
     }
   | {
+      kind: "prompt_budget";
+      callSite: string;
+      configuredInputBudget: number;
+      effectiveInputBudget: number;
+      estimatedInputTokens: number;
+      actualInputTokens?: number;
+      outputBudget?: number;
+      compressionProfile: CompressionProfile;
+      contextUnits: number;
+      sourceChunks?: number;
+      reductionDepth?: number;
+      retryReason?: string;
+    }
+  | {
       kind: "query_stats";
       crossDomain: boolean;
       pagesScanned: number;        // pages read/analyzed
@@ -100,7 +114,7 @@ export type RunEvent =
   | { kind: "format_applied"; path: string }
   | { kind: "format_cancelled" }
   | { kind: "structural_error";
-      callSite: "init.bootstrap" | "init.delta" | "lint.patch" | "lint.fix" | "lint-chat.fix" | "query.seeds" | "query.answer" | "ingest.entities" | "ingest.pages" | "ingest.merge" | "ingest.classify" | "format.output";
+      callSite: "init.bootstrap" | "init.bootstrap-map" | "init.delta" | "lint.patch" | "lint.fix" | "lint.batch" | "lint-chat.fix" | "lint-chat.patch" | "query.seeds" | "query.answer" | "ingest.entities" | "ingest.evidence-map" | "ingest.evidence-reduce" | "ingest.pages" | "ingest.synthesize" | "ingest.merge" | "ingest.classify" | "format.output" | "format.segment" | "vision.analysis";
       errorType: "json_parse" | "schema_validate" | "empty_output" | "response_format_fallback" | "frame_parse" | "idle_abort";
       retryAttempt: number;
       succeeded: boolean | null;
