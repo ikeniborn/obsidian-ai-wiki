@@ -238,6 +238,20 @@ export default class LlmWikiPlugin extends Plugin {
       history: (data?.history as RunHistoryEntry[]) ?? [],
     };
 
+    const inputOrDefault = (value: unknown): number =>
+      typeof value === "number" && Number.isFinite(value) && value > 0
+        ? Math.floor(value)
+        : 16_384;
+
+    this.settings.nativeAgent.inputBudgetTokens = inputOrDefault(this.settings.nativeAgent.inputBudgetTokens);
+    this.settings.claudeAgent.inputBudgetTokens = inputOrDefault(this.settings.claudeAgent.inputBudgetTokens);
+    for (const key of ["ingest", "query", "lint", "init", "format"] as const) {
+      this.settings.nativeAgent.operations[key].inputBudgetTokens =
+        inputOrDefault(this.settings.nativeAgent.operations[key].inputBudgetTokens);
+      this.settings.claudeAgent.operations[key].inputBudgetTokens =
+        inputOrDefault(this.settings.claudeAgent.operations[key].inputBudgetTokens);
+    }
+
     // Schema v2: systemPrompt promoted to top-level
     if (!data?.systemPrompt && (caData.systemPrompt || naData.systemPrompt))
       this.settings.systemPrompt = (caData.systemPrompt ?? naData.systemPrompt) as string;

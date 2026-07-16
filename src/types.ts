@@ -27,6 +27,7 @@ export type WikiDomain = string;
 
 export interface RunRequest {
   operation: WikiOperation;
+  policyOperation?: OpKey;
   args: string[];
   cwd: string | undefined;
   signal: AbortSignal;
@@ -140,8 +141,23 @@ export interface RunHistoryEntry {
   steps: Array<{ kind: "tool_use" | "tool_result"; label: string }>;
 }
 
+export type CompressionProfile = "maximum" | "balanced" | "minimum";
+export type CompressionOperation = "ingest" | "query" | "lint" | "vision";
+
+export interface SemanticCompression {
+  profile: CompressionProfile;
+  operation: CompressionOperation;
+}
+
+export interface ModelCallPolicy {
+  inputBudgetTokens: number;
+  outputBudgetTokens?: number;
+  compression: CompressionProfile;
+}
+
 export interface LlmCallOptions {
   temperature?: number;
+  inputBudgetTokens?: number;
   maxTokens?: number;
   topP?: number | null;
   systemPrompt?: string;
@@ -156,6 +172,7 @@ export interface LlmCallOptions {
   dedupThreshold?: number;
   lintNearDuplicate?: boolean;
   nearDupThreshold?: number;
+  semanticCompression?: SemanticCompression;
 }
 
 /** Минимальный интерфейс OpenAI-клиента, используемый фазами. */
@@ -182,13 +199,17 @@ export type OpMap<T> = Record<OpKey, T>;
 export interface ClaudeOperationConfig {
   model: string;
   effort?: "low" | "medium" | "high" | "xhigh" | "max";
+  inputBudgetTokens: number;
+  compressionProfile?: CompressionProfile;
 }
 
 export interface NativeOperationConfig {
   model: string;
+  inputBudgetTokens: number;
   maxTokens: number;
   temperature: number;
   thinkingBudgetTokens?: number;
+  compressionProfile?: CompressionProfile;
 }
 
 export interface LlmWikiPluginSettings {
@@ -213,6 +234,8 @@ export interface LlmWikiPluginSettings {
   history: RunHistoryEntry[];
   claudeAgent: {
     model: string;
+    inputBudgetTokens: number;
+    compressionProfile: CompressionProfile;
     allowedTools: string;
     perOperation: boolean;
     effort?: "low" | "medium" | "high" | "xhigh" | "max";
@@ -222,7 +245,9 @@ export interface LlmWikiPluginSettings {
     baseUrl: string;
     apiKey: string;
     model: string;
+    inputBudgetTokens: number;
     maxTokens: number;
+    compressionProfile: CompressionProfile;
     temperature: number;
     topP: number | null;
     perOperation: boolean;
@@ -288,30 +313,34 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   history: [],
   claudeAgent: {
     model: "sonnet",
+    inputBudgetTokens: 16384,
+    compressionProfile: "balanced",
     allowedTools: "",
     perOperation: false,
     operations: {
-      ingest: { model: "haiku" },
-      query:  { model: "sonnet" },
-      lint:   { model: "sonnet" },
-      init:   { model: "sonnet" },
-      format: { model: "sonnet" },
+      ingest: { model: "haiku", inputBudgetTokens: 16384 },
+      query:  { model: "sonnet", inputBudgetTokens: 16384 },
+      lint:   { model: "sonnet", inputBudgetTokens: 16384 },
+      init:   { model: "sonnet", inputBudgetTokens: 16384 },
+      format: { model: "sonnet", inputBudgetTokens: 16384 },
     },
   },
   nativeAgent: {
     baseUrl: "http://localhost:11434/v1",
     apiKey: "ollama",
     model: "llama3.2",
+    inputBudgetTokens: 16384,
     maxTokens: 4096,
+    compressionProfile: "balanced",
     temperature: 0.2,
     topP: null,
     perOperation: false,
     operations: {
-      ingest: { model: "llama3.2", maxTokens: 4096, temperature: 0.2 },
-      query:  { model: "llama3.2", maxTokens: 4096, temperature: 0.2 },
-      lint:   { model: "llama3.2", maxTokens: 8192, temperature: 0.2 },
-      init:   { model: "llama3.2", maxTokens: 8192, temperature: 0.2 },
-      format: { model: "llama3.2", maxTokens: 32768, temperature: 0.2 },
+      ingest: { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 4096, temperature: 0.2 },
+      query:  { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 4096, temperature: 0.2 },
+      lint:   { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 8192, temperature: 0.2 },
+      init:   { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 8192, temperature: 0.2 },
+      format: { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 32768, temperature: 0.2 },
     },
     structuredRetries: 1,
     rerankerEnabled: false,

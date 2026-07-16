@@ -18,6 +18,7 @@ import { PageSimilarityService, DEFAULT_CHUNKING } from "./page-similarity";
 import { resolveLang, i18nFor } from "./i18n";
 import type { BoilerplateDemotionConfig } from "./boilerplate-demotion";
 import { normalizeRerankerConfig } from "./reranker";
+import { resolveModelCallPolicy } from "./model-call-policy";
 
 const DISABLED_BOILERPLATE_DEMOTION: BoilerplateDemotionConfig = { enabled: false, factor: 0 };
 
@@ -36,31 +37,40 @@ export class AgentRunner {
   }
 
   private buildOptsFor(op: RunRequest["operation"]): { model: string; opts: LlmCallOptions } {
-    // delete rebuilds pages by reusing ingest, so it borrows ingest's per-operation config.
-    const key = (op === "chat" || op === "lint-chat" ? "lint" : op === "delete" ? "ingest" : op);
     const s = this.settings;
+    const resolved = resolveModelCallPolicy(s, op);
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
     const mergeDeleteWarnThreshold = s.nativeAgent.mergeDeleteWarnThreshold;
 
     if (s.backend === "claude-agent") {
-      // claude-agent: maxTokens задаётся на уровне iclaude.sh (env CLAUDE_CODE_MAX_OUTPUT_TOKENS),
-      // плагин его не плумит — параметр был бы избыточным.
-      const c = s.claudeAgent.perOperation ? s.claudeAgent.operations[key] : undefined;
-      const model = c ? c.model : s.claudeAgent.model;
-      return { model, opts: { systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, structuredRetries, mergeDeleteWarnThreshold } };
+      return {
+        model: resolved.model,
+        opts: {
+          ...resolved.opts,
+          systemPrompt: s.systemPrompt,
+          outputLanguage: s.outputLanguage,
+          structuredRetries,
+          mergeDeleteWarnThreshold,
+        },
+      };
     }
 
     const na = s.nativeAgent;
-    const c = na.perOperation ? na.operations[key] : undefined;
-    const budgetTokens = c?.thinkingBudgetTokens ?? na.thinkingBudgetTokens;
-    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, reasoningLanguage: s.reasoningLanguage, structuredRetries, mergeDeleteWarnThreshold,
-      dedupOnIngest: na.dedupOnIngest, dedupThreshold: na.dedupThreshold,
-      lintNearDuplicate: na.lintNearDuplicate, nearDupThreshold: na.nearDupThreshold,
-    } };
-    return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, reasoningLanguage: s.reasoningLanguage, structuredRetries, mergeDeleteWarnThreshold,
-      dedupOnIngest: na.dedupOnIngest, dedupThreshold: na.dedupThreshold,
-      lintNearDuplicate: na.lintNearDuplicate, nearDupThreshold: na.nearDupThreshold,
-    } };
+    return {
+      model: resolved.model,
+      opts: {
+        ...resolved.opts,
+        systemPrompt: s.systemPrompt,
+        outputLanguage: s.outputLanguage,
+        reasoningLanguage: s.reasoningLanguage,
+        structuredRetries,
+        mergeDeleteWarnThreshold,
+        dedupOnIngest: na.dedupOnIngest,
+        dedupThreshold: na.dedupThreshold,
+        lintNearDuplicate: na.lintNearDuplicate,
+        nearDupThreshold: na.nearDupThreshold,
+      },
+    };
   }
 
   private buildSimilarity(): PageSimilarityService | undefined {

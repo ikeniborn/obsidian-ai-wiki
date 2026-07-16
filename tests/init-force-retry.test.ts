@@ -171,7 +171,7 @@ test("operation-level idle retry still replays non-destructive operations", asyn
   assert.equal(events.some((ev) => ev.kind === "result" && ev.text === "ok"), true);
 });
 
-test("agent runner does not inject global JSON response format into operation options", () => {
+test("agent runner keeps non-policy options while applying resolved model policy", () => {
   const base = settings();
   const runner = new AgentRunner(
     { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
@@ -181,13 +181,28 @@ test("agent runner does not inject global JSON response format into operation op
     [],
   );
   const optsFor = runner as unknown as {
-    buildOptsFor(op: "query" | "init"): { opts: { jsonMode?: unknown } };
+    buildOptsFor(op: "query" | "init"): {
+      opts: {
+        inputBudgetTokens?: number;
+        maxTokens?: number;
+        semanticCompression?: unknown;
+        jsonMode?: unknown;
+      };
+    };
   };
 
-  assert.equal(optsFor.buildOptsFor("query").opts.jsonMode, undefined);
+  const queryOpts = optsFor.buildOptsFor("query").opts;
+  assert.equal(queryOpts.inputBudgetTokens, 16_384);
+  assert.equal(queryOpts.maxTokens, 4096);
+  assert.deepEqual(queryOpts.semanticCompression, {
+    profile: "balanced",
+    operation: "query",
+  });
+  assert.equal(queryOpts.jsonMode, undefined);
 
   const perOp = settings();
   perOp.nativeAgent.perOperation = true;
+  perOp.nativeAgent.operations.init.inputBudgetTokens = 12_000;
   const perOpRunner = new AgentRunner(
     { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
     perOp,
@@ -196,8 +211,22 @@ test("agent runner does not inject global JSON response format into operation op
     [],
   );
   const perOpOptsFor = perOpRunner as unknown as {
-    buildOptsFor(op: "init"): { opts: { jsonMode?: unknown } };
+    buildOptsFor(op: "init"): {
+      opts: {
+        inputBudgetTokens?: number;
+        maxTokens?: number;
+        semanticCompression?: unknown;
+        jsonMode?: unknown;
+      };
+    };
   };
 
-  assert.equal(perOpOptsFor.buildOptsFor("init").opts.jsonMode, undefined);
+  const initOpts = perOpOptsFor.buildOptsFor("init").opts;
+  assert.equal(initOpts.inputBudgetTokens, 12_000);
+  assert.equal(initOpts.maxTokens, 8192);
+  assert.deepEqual(initOpts.semanticCompression, {
+    profile: "balanced",
+    operation: "ingest",
+  });
+  assert.equal(initOpts.jsonMode, undefined);
 });
