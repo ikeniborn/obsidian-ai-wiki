@@ -43,7 +43,7 @@ function adapter(): VaultAdapter {
 
 function settings(): LlmWikiPluginSettings {
   return {
-    ...DEFAULT_SETTINGS,
+    ...structuredClone(DEFAULT_SETTINGS),
     backend: "native-agent",
     llmIdleTimeoutSec: 0.01,
     llmIdleRetries: 1,
@@ -229,4 +229,26 @@ test("agent runner keeps non-policy options while applying resolved model policy
     operation: "ingest",
   });
   assert.equal(initOpts.jsonMode, undefined);
+
+  const claude = settings();
+  claude.backend = "claude-agent";
+  const claudeRunner = new AgentRunner(
+    { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
+    claude,
+    new VaultTools(adapter(), "/vault"),
+    "Vault",
+    [],
+  );
+  const claudeOptsFor = claudeRunner as unknown as {
+    buildOptsFor(op: "query"): {
+      opts: {
+        inputBudgetTokens?: number;
+        maxTokens?: number;
+      };
+    };
+  };
+
+  const claudeOpts = claudeOptsFor.buildOptsFor("query").opts;
+  assert.equal(claudeOpts.inputBudgetTokens, 16_384);
+  assert.equal(claudeOpts.maxTokens, undefined);
 });

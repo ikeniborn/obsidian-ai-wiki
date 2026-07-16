@@ -1,5 +1,6 @@
 import { Plugin, WorkspaceLeaf, Platform, Notice } from "obsidian";
 import { DEFAULT_SETTINGS, type LlmWikiPluginSettings, type RunHistoryEntry } from "./types";
+import { normalizeModelCallPolicySettings } from "./model-call-policy";
 import type { DomainEntry } from "./domain";
 import { LlmWikiSettingTab } from "./settings";
 import { AI_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
@@ -237,20 +238,7 @@ export default class LlmWikiPlugin extends Plugin {
       proxy: { ...DEFAULT_SETTINGS.proxy, ...((data?.proxy as object) ?? {}) },
       history: (data?.history as RunHistoryEntry[]) ?? [],
     };
-
-    const inputOrDefault = (value: unknown): number =>
-      typeof value === "number" && Number.isFinite(value) && value > 0
-        ? Math.floor(value)
-        : 16_384;
-
-    this.settings.nativeAgent.inputBudgetTokens = inputOrDefault(this.settings.nativeAgent.inputBudgetTokens);
-    this.settings.claudeAgent.inputBudgetTokens = inputOrDefault(this.settings.claudeAgent.inputBudgetTokens);
-    for (const key of ["ingest", "query", "lint", "init", "format"] as const) {
-      this.settings.nativeAgent.operations[key].inputBudgetTokens =
-        inputOrDefault(this.settings.nativeAgent.operations[key].inputBudgetTokens);
-      this.settings.claudeAgent.operations[key].inputBudgetTokens =
-        inputOrDefault(this.settings.claudeAgent.operations[key].inputBudgetTokens);
-    }
+    normalizeModelCallPolicySettings(this.settings);
 
     // Schema v2: systemPrompt promoted to top-level
     if (!data?.systemPrompt && (caData.systemPrompt || naData.systemPrompt))
