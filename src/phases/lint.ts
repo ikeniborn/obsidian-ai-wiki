@@ -4,10 +4,11 @@ import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { parseWithRetry } from "./parse-with-retry";
-import { lintOutputProfile } from "./framed-output";
 import { runStructuredWithRetry } from "./structured-output";
-import { EntityTypesDeltaSchema } from "./zod-schemas";
-import type { LintOutput } from "./zod-schemas";
+import { runWithContextRepack, classifyContextError, PromptBudgetExceededError } from "../prompt-budget";
+import { applyPagePatch } from "../section-patches";
+import { buildLintBatchMessages, buildLintRelatedSections, buildLintWorkItems, lintReplaceAuthorities, mergeLintFindings, validateLintBatchOutput, validateLintCoverage, type LintBatchOutput, type LintFinding, type LintWorkItem } from "./lint-batches";
+import { EntityTypesDeltaSchema, LintBatchOutputSchema } from "./zod-schemas";
 import lintTemplate from "../../prompts/lint.md";
 import lintActualizeTemplate from "../../prompts/lint-actualize.md";
 import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
@@ -15,7 +16,7 @@ import { render } from "./template";
 import { wikiSections } from "./llm-utils";
 import { domainWikiFolder, WIKI_ROOT, isWikiPagePath, effectiveSubfolder } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseResourceFromFm, validateAndRepairWikiPageFrontmatter, stripInvalidWikiArticles } from "../utils/raw-frontmatter";
-import { checkGraphStructure, pageId, bfsExpand } from "../wiki-graph";
+import { checkGraphStructure, pageId } from "../wiki-graph";
 import { checkWikiLinks, fixWikiLinks, stripDeadLinks } from "../wiki-link-validator";
 import { graphCache } from "../wiki-graph-cache";
 import { collectDescriptions, pageIndexRecordFromMarkdown } from "../wiki-index";
@@ -161,6 +162,165 @@ export function validateWikiSources(
   return result;
 }
 
+function compactFindingReport(findings: readonly LintFinding[]): string {
+  if (findings.length === 0) return "No findings.";
+  return findings.map((finding) =>
+    `- [${finding.severity}] ${finding.path} :: ${finding.heading} :: ${finding.rule} :: ${finding.text}`
+    + (finding.repairInstruction ? ` — ${finding.repairInstruction}` : "")
+  ).join("\n");
+}
+
+function structuralFindings(allStructuralIssues: string, pages: Map<string, string>): LintFinding[] {
+  const findings: LintFinding[] = [];
+  for (const line of allStructuralIssues.split("\n").map((entry) => entry.trim()).filter(Boolean)) {
+    const path = [...pages.keys()].find((candidate) => line.includes(candidate)
+      || line.includes(candidate.split("/").pop() ?? candidate));
+    if (!path) continue;
+    findings.push({
+      path,
+      heading: "## Page",
+      rule: "programmatic-structure",
+      severity: "error",
+      text: line.replace(/^-\s*/, ""),
+      repairInstruction: "Repair the deterministic lint issue without changing unrelated sections.",
+    });
+  }
+  return findings;
+}
+
+function packLintWorkBatches(
+  items: readonly LintWorkItem[],
+  domainName: string,
+  schema: string,
+  inputBudgetTokens: number,
+): LintWorkItem[][] {
+  const batches: LintWorkItem[][] = [];
+  let current: LintWorkItem[] = [];
+  for (const item of items) {
+    const candidate = [...current, item];
+    const messages = buildLintBatchMessages({
+      domainName,
+      schema,
+      workItems: candidate,
+      relatedSections: [],
+    });
+    if (estimateMessages(messages) <= inputBudgetTokens || current.length === 0) {
+      current = candidate;
+      continue;
+    }
+    batches.push(current);
+    current = [item];
+  }
+  if (current.length > 0) batches.push(current);
+  return batches;
+}
+
+function estimateMessages(messages: OpenAI.Chat.ChatCompletionMessageParam[]): number {
+  return new TextEncoder().encode(JSON.stringify(messages)).byteLength;
+}
+
+async function runLintBatchWithSplit(args: {
+  items: readonly LintWorkItem[];
+  allItems?: readonly LintWorkItem[];
+  pages: Map<string, string>;
+  domainName: string;
+  schema: string;
+  llm: LlmClient;
+  model: string;
+  opts: LlmCallOptions;
+  signal: AbortSignal;
+  onEvent: (event: RunEvent) => void;
+}): Promise<{ output: LintBatchOutput; outputTokens: number }> {
+  try {
+    const result = await runWithContextRepack({
+      callSite: "lint.batch",
+      configuredInputBudget: args.opts.inputBudgetTokens ?? 16_384,
+      outputBudget: args.opts.maxTokens,
+      compressionProfile: args.opts.semanticCompression?.profile ?? "balanced",
+      build: (effectiveInputBudget) => {
+        let relatedSections = buildLintRelatedSections(
+          args.allItems ?? args.items,
+          args.items,
+          args.pages,
+          Math.floor(effectiveInputBudget * 0.25),
+        );
+        let messages = buildLintBatchMessages({
+          domainName: args.domainName,
+          schema: args.schema,
+          workItems: args.items,
+          relatedSections,
+        });
+        let estimatedInputTokens = estimateMessages(messages);
+        while (estimatedInputTokens > effectiveInputBudget && relatedSections.length > 0) {
+          relatedSections = relatedSections.slice(0, -1);
+          messages = buildLintBatchMessages({
+            domainName: args.domainName,
+            schema: args.schema,
+            workItems: args.items,
+            relatedSections,
+          });
+          estimatedInputTokens = estimateMessages(messages);
+        }
+        if (estimatedInputTokens > effectiveInputBudget) {
+          throw new PromptBudgetExceededError(
+            effectiveInputBudget,
+            estimatedInputTokens,
+            args.items.map((item) => item.id),
+          );
+        }
+        return {
+          value: messages,
+          estimatedInputTokens,
+          contextUnits: args.items.length,
+        };
+      },
+      execute: async (messages) => {
+        const r = await runStructuredWithRetry({
+          llm: args.llm,
+          model: args.model,
+          baseMessages: messages,
+          opts: {
+            ...args.opts,
+            jsonMode: false,
+            inputBudgetTokens: args.opts.inputBudgetTokens ?? 16_384,
+          },
+          profile: { kind: "json-zod", schema: LintBatchOutputSchema },
+          maxRetries: args.opts.structuredRetries ?? 1,
+          callSite: "lint.batch",
+          signal: args.signal,
+          onEvent: args.onEvent,
+        });
+        const output = {
+          ...r.value,
+          deletes: r.value.deletes ?? [],
+        } as unknown as LintBatchOutput;
+        validateLintBatchOutput(args.items, args.pages, output);
+        return { output, outputTokens: r.outputTokens, inputTokens: r.inputTokens };
+      },
+      onEvent: args.onEvent,
+    });
+    return result;
+  } catch (error) {
+    const canSplit = args.items.length > 1
+      && (classifyContextError(error) !== null
+        || error instanceof PromptBudgetExceededError
+        || /coveredWorkIds|not submitted|section_hash_mismatch/i.test((error as Error).message));
+    if (!canSplit) throw error;
+    const middle = Math.ceil(args.items.length / 2);
+    const left = await runLintBatchWithSplit({ ...args, items: args.items.slice(0, middle) });
+    const right = await runLintBatchWithSplit({ ...args, items: args.items.slice(middle) });
+    return {
+      output: {
+        coveredWorkIds: [...left.output.coveredWorkIds, ...right.output.coveredWorkIds],
+        findings: mergeLintFindings([left.output.findings, right.output.findings]),
+        patches: [...left.output.patches, ...right.output.patches],
+        deletes: [...left.output.deletes, ...right.output.deletes],
+      },
+      outputTokens: left.outputTokens + right.outputTokens,
+    };
+  }
+}
+
 export async function* runLint(
   args: string[],
   vaultTools: VaultTools,
@@ -293,118 +453,87 @@ export async function* runLint(
     const writtenPaths: string[] = [];
     const skippedArticles: string[] = [];
     let effectiveEntityTypes: EntityType[] = domain.entity_types ?? [];
+    let mergedFindings: LintFinding[] = structuralFindings(allStructuralIssues, pages);
 
     if (useLlm) {
-      const loopPaths = filteredArticlePaths;
-      const total = loopPaths.length;
+      const lintPages = new Map(filteredArticlePaths.map((path) => [path, pages.get(path) ?? ""]));
+      const workItems = buildLintWorkItems(lintPages, opts.inputBudgetTokens ?? 16_384);
+      validateLintCoverage(lintPages, workItems);
+      const batches = packLintWorkBatches(workItems, domain.name, systemContent, opts.inputBudgetTokens ?? 16_384);
+      const batchOutputs: LintBatchOutput[] = [];
 
-    // ── Per-article loop ──────────────────────────────────────────────────────
-    for (let i = 0; i < total; i++) {
-      if (signal.aborted) return;
-
-      const targetPath = loopPaths[i];
-      const articleName = targetPath.split("/").pop()!.replace(/\.md$/, "");
-      const articleContent = pages.get(targetPath) ?? "";
-
-      // Context selection: top-K similar + BFS expansion
-      const otherPaths = files.filter(p => p !== targetPath && pages.has(p));
-      const topKPaths = similarity
-        ? await similarity.selectRelevant(articleContent, annotations, otherPaths)
-        : [];
-      const seeds = [pageId(targetPath), ...topKPaths.map(p => pageId(p))];
-      const expanded = bfsExpand(seeds, graph, 1);
-      const contextPaths = [...expanded]
-        .map(pid => pidToPath.get(pid))
-        .filter((p): p is string => !!p && p !== targetPath && pages.has(p));
-
-      // Per-article structural issues
-      const articleIssues = allStructuralIssues
-        .split("\n")
-        .filter(l => l.includes(articleName) || l.includes(targetPath))
-        .join("\n") || "None.";
-
-      // Build user message
-      const contextBlock = contextPaths
-        .map(p => `--- ${p} ---\n${pages.get(p) ?? ""}`)
-        .join("\n\n");
-      const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-        { role: "system", content: systemContent },
-        {
-          role: "user",
-          content: [
-            `Domain: ${domain.id} (${domain.name})`,
-            `Article under analysis: ${targetPath}`,
-            `Automatic issues:\n${articleIssues}`,
-            "",
-            `--- ${targetPath} ---`,
-            articleContent,
-            "",
-            contextBlock ? `--- Context (related articles) ---\n${contextBlock}` : "",
-          ].filter(l => l !== undefined).join("\n"),
-        },
-      ];
-
-      yield { kind: "info_text", icon: "🔍", summary: `Checking ${i + 1}/${total}: ${articleName}` };
-      yield { kind: "tool_use", name: "Analysing wiki", input: { article: articleName, context: contextPaths.length } };
-
-      const pwtEvents: RunEvent[] = [];
-      let lintResult: { value: LintOutput; outputTokens: number };
-      try {
-        lintResult = await runStructuredWithRetry({
-          llm, model,
-          baseMessages: messages,
-          opts: { ...opts, jsonMode: false },
-          profile: lintOutputProfile(),
-          maxRetries: opts.structuredRetries ?? 1,
-          callSite: "lint.fix",
-          signal,
-          onEvent: (ev) => pwtEvents.push(ev),
-        });
-        const delCount = (lintResult.value.deletes ?? []).length;
-        yield { kind: "tool_result", ok: true, preview: `${lintResult.value.fixes.length} fixes${delCount ? `, ${delCount} deleted` : ""}` };
-      } catch (e) {
-        if (signal.aborted || (e as Error).name === "AbortError") return;
-        const errMsg = (e as Error).message ?? "";
-        const isTokenLimit = errMsg.toLowerCase().includes("context_length") || errMsg.toLowerCase().includes("too large");
-        const preview = isTokenLimit ? `Article too large — skipped: ${targetPath}` : errMsg;
-        yield { kind: "tool_result", ok: false, preview };
+      for (let i = 0; i < batches.length; i++) {
+        if (signal.aborted) return;
+        const batch = batches[i];
+        yield { kind: "info_text", icon: "🔍", summary: `Checking batch ${i + 1}/${batches.length}: ${batch.length} work item(s)` };
+        yield { kind: "tool_use", name: "Analysing wiki", input: { batch: i + 1, workItems: batch.length } };
+        const pwtEvents: RunEvent[] = [];
+        try {
+          const result = await runLintBatchWithSplit({
+            items: batch,
+            pages,
+            domainName: domain.name,
+            schema: systemContent,
+            allItems: workItems,
+            llm,
+            model,
+            opts,
+            signal,
+            onEvent: (ev) => pwtEvents.push(ev),
+          });
+          outputTokens += result.outputTokens;
+          batchOutputs.push(result.output);
+          yield { kind: "tool_result", ok: true, preview: `${result.output.findings.length} findings, ${result.output.patches.length} patches` };
+        } catch (e) {
+          if (signal.aborted || (e as Error).name === "AbortError") return;
+          yield { kind: "tool_result", ok: false, preview: (e as Error).message };
+          skippedArticles.push(...batch.map((item) => item.id));
+          continue;
+        }
         for (const ev of pwtEvents) yield ev;
-        skippedArticles.push(articleName);
-        continue;
       }
-      for (const ev of pwtEvents) yield ev;
-      if (signal.aborted) return;
 
-      outputTokens += lintResult.outputTokens;
-      const { fixes, deletes = [] } = lintResult.value;
+      const allBatchFindings = batchOutputs.map((output) => output.findings);
+      mergedFindings = mergeLintFindings([mergedFindings, ...allBatchFindings]);
+      const findingsReport = compactFindingReport(mergedFindings);
+      yield { kind: "assistant_text", delta: findingsReport };
+      reportParts.push(`### ${domain.id} lint findings\n${findingsReport}`);
 
-      yield { kind: "assistant_text", delta: lintResult.value.report };
-      reportParts.push(`### ${articleName}\n${lintResult.value.report}`);
-
-      // Apply fixes (fixWikiLinks per-step)
-      if (fixes.length > 0) {
-        const fixesMapThisStep = new Map(fixes.map(p => [p.path, p.content]));
-        const wlFixResult = fixWikiLinks(fixesMapThisStep, wikiLinkValidationRetries, knownStems);
+      const allPatches = batchOutputs.flatMap((output) => output.patches);
+      const patchPaths = new Set(allPatches.map((patch) => patch.path));
+      if (allPatches.length > 0) {
+        const previewContents = new Map<string, string>();
+        for (const patch of allPatches) {
+          const current = pages.get(patch.path);
+          if (current === undefined) continue;
+          const authorities = lintReplaceAuthorities(
+            workItems.filter((item) => item.path === patch.path),
+            pages,
+          );
+          const applied = applyPagePatch(current, patch, authorities);
+          if (!applied.ok) {
+            yield { kind: "tool_use", name: "Update", input: { path: patch.path } };
+            yield { kind: "tool_result", ok: false, preview: applied.reason };
+            continue;
+          }
+          previewContents.set(patch.path, applied.content);
+        }
+        const wlFixResult = fixWikiLinks(previewContents, wikiLinkValidationRetries, knownStems);
         if (wlFixResult.warnings.length > 0) {
           yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: wlFixResult.warnings };
         }
-        for (const fix of fixes) {
-          yield { kind: "assistant_text", delta: `  • ${fix.path.split("/").pop()}...\n` };
-          if (!fix.path.startsWith(wikiVaultPath + "/")) {
-            yield { kind: "tool_use", name: "Write", input: { path: fix.path } };
-            yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
-            continue;
-          }
-          yield { kind: "tool_use", name: "Update", input: { path: fix.path } };
+        for (const path of patchPaths) {
+          const fixed = wlFixResult.fixed.get(path) ?? previewContents.get(path);
+          if (fixed === undefined) continue;
+          yield { kind: "tool_use", name: "Update", input: { path } };
           try {
-            const rawFixed = wlFixResult.fixed.get(fix.path) ?? fix.content;
-            const originalContent = pages.get(fix.path) ?? "";
+            const originalContent = pages.get(path) ?? "";
             const wikiStems = new Set([...pages.keys()].map(p => p.split("/").pop()!.replace(/\.md$/, "")));
-            const fixedContent = validateWikiSources(rawFixed, originalContent, knownStems, titleMap, wikiStems);
-            await vaultTools.write(fix.path, fixedContent);
-            writtenPaths.push(fix.path);
-            pages.set(fix.path, fixedContent);
-            const record = pageIndexRecordFromMarkdown(wikiVaultPath, fix.path, fixedContent);
+            const fixedContent = validateWikiSources(fixed, originalContent, knownStems, titleMap, wikiStems);
+            await vaultTools.write(path, fixedContent);
+            writtenPaths.push(path);
+            pages.set(path, fixedContent);
+            const record = pageIndexRecordFromMarkdown(wikiVaultPath, path, fixedContent);
             annotations.set(record.articleId, record.description);
             await upsertPageIndex(vaultTools, wikiVaultPath, record);
             yield { kind: "tool_result", ok: true };
@@ -412,11 +541,10 @@ export async function* runLint(
             yield { kind: "tool_result", ok: false, preview: (e as Error).message };
           }
         }
-        reportParts.push(`#### Исправлено: ${fixes.length} страниц`);
+        reportParts.push(`#### Исправлено: ${allPatches.length} patch(es)`);
       }
 
-      // Process deletes
-      for (const { path: delPath, redirect_to } of deletes) {
+      for (const { path: delPath, redirect_to } of batchOutputs.flatMap((output) => output.deletes)) {
         const deletedName = pageId(delPath);
         const redirectName = redirect_to ? pageId(redirect_to) : null;
 
@@ -454,7 +582,6 @@ export async function* runLint(
         }
       }
 
-      // Rebuild graph + refresh vectors after state changes
       ({ graph } = graphCache.get(domain.id, pages));
       if (similarity) {
         const pageBodies = new Map<string, string>();
@@ -465,8 +592,6 @@ export async function* runLint(
           yield { kind: "info_text", icon: "📤", summary: `обновлено векторов: ${updated}` };
         }
       }
-    }
-    // ── End per-article loop ──────────────────────────────────────────────────
 
     // Post-loop: delete wiki pages that ended up with no valid resource.
     // Pushes their stems into deletedRefs so the backlink rewrite below removes
@@ -503,7 +628,7 @@ export async function* runLint(
     // actualizeDomainConfig (runs once after loop)
     yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).lintProgress.actualizing(domain.id) };
     yield { kind: "tool_use", name: "Updating config", input: {} };
-    const patchRes = await actualizeDomainConfig(domain, pages, llm, model, opts, signal);
+    const patchRes = await actualizeDomainConfig(domain, mergedFindings, llm, model, opts, signal);
     yield { kind: "tool_result", ok: true, preview: patchRes.patch ? "config updated" : "no changes" };
     outputTokens += patchRes.outputTokens;
     const patch = patchRes.patch;
@@ -707,7 +832,7 @@ function computeEntityDiff(oldTypes: EntityType[], newTypes: EntityType[]): stri
 
 async function actualizeDomainConfig(
   domain: DomainEntry,
-  pages: Map<string, string>,
+  findings: readonly LintFinding[],
   llm: LlmClient,
   model: string,
   opts: LlmCallOptions,
@@ -718,9 +843,7 @@ async function actualizeDomainConfig(
     language_notes: domain.language_notes ?? "",
   }, null, 2);
 
-  const pagesSnippet = [...pages.entries()]
-    .map(([p, c]) => `${p}:\n${c}`)
-    .join("\n\n");
+  const compactFindings = compactFindingReport(findings).slice(0, 24_000);
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     {
@@ -737,8 +860,8 @@ async function actualizeDomainConfig(
         currentConfig,
         `\`\`\``,
         ``,
-        `Wiki pages (snippets):`,
-        pagesSnippet || "(no pages)",
+        `Compact lint findings:`,
+        compactFindings,
       ].join("\n"),
     },
   ];

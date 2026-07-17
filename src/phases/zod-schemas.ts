@@ -318,6 +318,39 @@ export const LintDeleteSchema = z.object({
   redirect_to: z.string().optional(),
 });
 
+export const LintFindingSchema = z.object({
+  path: NonBlankStringSchema,
+  heading: NonBlankStringSchema,
+  rule: NonBlankStringSchema,
+  severity: z.enum(["info", "warning", "error"]),
+  text: NonBlankStringSchema,
+  repairInstruction: NonBlankStringSchema,
+}).strict();
+
+export const LintBatchOutputSchema = z.object({
+  coveredWorkIds: z.array(NonBlankStringSchema),
+  findings: z.array(LintFindingSchema),
+  patches: z.array(PatchPageSchema),
+  deletes: z.array(LintDeleteSchema),
+}).strict().superRefine((output, ctx) => {
+  const covered = new Set<string>();
+  for (const [index, id] of output.coveredWorkIds.entries()) {
+    if (covered.has(id)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["coveredWorkIds", index],
+        message: "duplicate coveredWorkIds entry",
+      });
+    }
+    covered.add(id);
+  }
+});
+
+export const LintChatPatchSchema = z.object({
+  summary: z.string(),
+  patches: z.array(PatchPageSchema),
+}).strict();
+
 export const LintOutputSchema = z.object({
   reasoning: z.string(),
   report: z.string(),
@@ -377,6 +410,9 @@ export type WikiPageResponse = z.infer<typeof WikiPageSchema>;
 export type EntitiesOutput = z.infer<typeof EntitiesOutputSchema>;
 export type WikiPagesOutput = z.infer<typeof WikiPagesOutputSchema>;
 export type LintDelete = z.infer<typeof LintDeleteSchema>;
+export type LintFindingResponse = z.infer<typeof LintFindingSchema>;
+export type LintBatchOutputResponse = z.infer<typeof LintBatchOutputSchema>;
+export type LintChatPatchResponse = z.infer<typeof LintChatPatchSchema>;
 export type LintOutput = z.infer<typeof LintOutputSchema>;
 export type FormatOutput = z.infer<typeof FormatBaseSchema>;
 
