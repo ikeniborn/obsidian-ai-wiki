@@ -100,6 +100,62 @@ export const SeedsSchema = z.object({
   seeds: z.array(z.string()),
 });
 
+const EvidenceRangeSchema = z.object({
+  startLine: z.number().int().positive(),
+  endLine: z.number().int().positive(),
+}).strict();
+
+export const EvidencePacketSchema = z.object({
+  id: NonBlankStringSchema,
+  chunkId: NonBlankStringSchema,
+  entityKey: NonBlankStringSchema,
+  entityType: NonBlankStringSchema.optional(),
+  facts: z.array(NonBlankStringSchema).min(1),
+  exactSourceRanges: z.array(EvidenceRangeSchema).min(1),
+  links: z.array(NonBlankStringSchema),
+  sourceAnchor: NonBlankStringSchema,
+}).strict();
+
+export const NoEvidenceSchema = z.object({
+  chunkId: NonBlankStringSchema,
+  reason: NonBlankStringSchema,
+}).strict();
+
+export const EvidenceMapperOutputSchema = z.object({
+  packets: z.array(EvidencePacketSchema),
+  noEvidence: z.array(NoEvidenceSchema),
+}).strict();
+
+export const EvidenceMapSchema = z.object({
+  chunk: z.object({
+    id: NonBlankStringSchema,
+    startLine: z.number().int().positive(),
+    endLine: z.number().int().positive(),
+  }).strict(),
+  packets: z.array(EvidencePacketSchema),
+  noEvidence: z.array(NoEvidenceSchema),
+}).strict();
+
+const EntityEvidenceFields = {
+  entityKey: NonBlankStringSchema,
+  entityType: NonBlankStringSchema.optional(),
+  packetIds: z.array(NonBlankStringSchema).min(1),
+  facts: z.array(NonBlankStringSchema).min(1),
+  exactSourceRanges: z.array(EvidenceRangeSchema).min(1),
+  links: z.array(NonBlankStringSchema),
+};
+
+export const PreVerifiedEntityEvidenceSchema = z.object(EntityEvidenceFields).strict();
+
+export const EntityEvidenceSchema = z.object({
+  ...EntityEvidenceFields,
+  exactSource: z.array(z.object({
+    startLine: z.number().int().positive(),
+    endLine: z.number().int().positive(),
+    text: z.string(),
+  }).strict()).min(1),
+}).strict();
+
 export const LintChatSchema = z.object({
   summary: z.string(),
   pages: z.array(z.object({
