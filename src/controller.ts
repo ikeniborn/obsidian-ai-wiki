@@ -4,7 +4,7 @@ import { AI_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
 import { validateDomainId, type DomainEntry, type AddDomainInput } from "./domain";
 import type LlmWikiPlugin from "./main";
 import type { RunEvent, RunHistoryEntry, WikiOperation, OnFileError } from "./types";
-import { AgentRunner } from "./agent-runner";
+import { AgentRunner, resolveFollowUpPolicyOperation } from "./agent-runner";
 import type { ChatMessage } from "./types";
 import { VaultTools, type VaultAdapter } from "./vault-tools";
 import { arrayBufferToBase64, stripImageDataUriPrefix } from "./phases/attachment-analyzer";
@@ -260,10 +260,16 @@ export class WikiController {
     if (!view) return;
 
     const vaultRoot = this.cwdOrEmpty();
+    const policyOperation = resolveFollowUpPolicyOperation(operation);
 
     let agentRunner: AgentRunner;
     try {
-      agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId, "chat", this.plugin.settings.timeouts.lint);
+      agentRunner = await this.buildAgentRunner(
+        vaultRoot,
+        undefined,
+        policyOperation,
+        this.plugin.settings.timeouts.lint,
+      );
     } catch (e) {
       new Notice(i18n().ctrl.errorPrefix((e as Error).message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
@@ -296,7 +302,8 @@ export class WikiController {
     const timeoutMs = this.plugin.settings.timeouts.lint * 1000;
     const runGen = agentRunner.run({
       operation: "chat", args: [], cwd: vaultRoot,
-      signal: ctrl.signal, timeoutMs, domainId, context, chatMessages, operationHeader, runId: sessionId,
+      signal: ctrl.signal, timeoutMs, domainId, context, chatMessages,
+      operationHeader, policyOperation, runId: sessionId,
     });
 
     try {

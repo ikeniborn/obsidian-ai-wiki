@@ -171,6 +171,107 @@ test("operation-level idle retry still replays non-destructive operations", asyn
   assert.equal(events.some((ev) => ev.kind === "result" && ev.text === "ok"), true);
 });
 
+test("silent idle abort after visible assistant text does not replay the operation", async () => {
+  const runner = new AgentRunner(
+    { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
+    settings(),
+    new VaultTools(adapter(), "/vault"),
+    "Vault",
+    [],
+  );
+  let calls = 0;
+
+  (runner as unknown as { runOperation: () => AsyncGenerator<RunEvent> }).runOperation = async function* () {
+    calls++;
+    yield { kind: "assistant_text", delta: `VISIBLE_${calls}` };
+    if (calls === 1) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 30));
+      return;
+    }
+    yield { kind: "result", durationMs: 1, text: "replayed" };
+  };
+
+  const events: RunEvent[] = [];
+  let caught: unknown;
+  try {
+    for await (const ev of runner.run({
+      operation: "query",
+      args: ["hello"],
+      cwd: "/vault",
+      signal: new AbortController().signal,
+      timeoutMs: 0,
+    })) {
+      events.push(ev);
+    }
+  } catch (error) {
+    caught = error;
+  }
+
+  assert.equal(calls, 1);
+  assert.equal((caught as Error | undefined)?.name, "AbortError");
+  assert.deepEqual(
+    events
+      .filter((event) => event.kind === "assistant_text" && !event.isReasoning)
+      .map((event) => event.kind === "assistant_text" ? event.delta : ""),
+    ["VISIBLE_1"],
+  );
+  assert.equal(events.some((event) => event.kind === "system" && event.message.includes("retrying")), false);
+});
+
+test("thrown idle AbortError after visible assistant text does not replay the operation", async () => {
+  const runner = new AgentRunner(
+    { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
+    settings(),
+    new VaultTools(adapter(), "/vault"),
+    "Vault",
+    [],
+  );
+  let calls = 0;
+
+  (runner as unknown as {
+    runOperation: (req: { signal: AbortSignal }) => AsyncGenerator<RunEvent>;
+  }).runOperation = async function* (req) {
+    calls++;
+    yield { kind: "assistant_text", delta: `VISIBLE_${calls}` };
+    if (calls === 1) {
+      await new Promise<void>((_, reject) => {
+        req.signal.addEventListener(
+          "abort",
+          () => reject(new DOMException("Request was aborted", "AbortError")),
+          { once: true },
+        );
+      });
+    }
+    yield { kind: "result", durationMs: 1, text: "replayed" };
+  };
+
+  const events: RunEvent[] = [];
+  let caught: unknown;
+  try {
+    for await (const ev of runner.run({
+      operation: "query",
+      args: ["hello"],
+      cwd: "/vault",
+      signal: new AbortController().signal,
+      timeoutMs: 0,
+    })) {
+      events.push(ev);
+    }
+  } catch (error) {
+    caught = error;
+  }
+
+  assert.equal(calls, 1);
+  assert.equal((caught as Error | undefined)?.name, "AbortError");
+  assert.deepEqual(
+    events
+      .filter((event) => event.kind === "assistant_text" && !event.isReasoning)
+      .map((event) => event.kind === "assistant_text" ? event.delta : ""),
+    ["VISIBLE_1"],
+  );
+  assert.equal(events.some((event) => event.kind === "system" && event.message.includes("retrying")), false);
+});
+
 test("agent runner keeps non-policy options while applying resolved model policy", () => {
   const base = settings();
   const runner = new AgentRunner(

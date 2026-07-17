@@ -6,6 +6,62 @@ import { runStructuredWithRetry } from "./structured-output";
 import { makeQueryAnswerSchema } from "./zod-schemas";
 import { extractAnswerLinks, findBrokenLinks, annotateBroken } from "./query-link-validator";
 import { resolveLink } from "./link-resolver";
+import type { SelectedChunk } from "../page-similarity";
+import {
+  classifyContextError,
+  PromptBudgetExceededError,
+  runWithContextRepack,
+  type PromptBudgetEvent,
+} from "../prompt-budget";
+import { packQueryChunks, type QuerySystemPrompt } from "./query-budget";
+
+interface PackedAnswerRequest {
+  messages: OpenAI.Chat.ChatCompletionMessageParam[];
+  selectedChunks: SelectedChunk[];
+  optionalUnits: number;
+}
+
+interface AnswerAttempt {
+  answer: string;
+  outputTokens: number;
+  events: RunEvent[];
+  selectedChunks: SelectedChunk[];
+  pendingStream?: {
+    iterator: AsyncIterator<OpenAI.Chat.ChatCompletionChunk>;
+    getStats(): import("./llm-utils").LlmStreamStats | undefined;
+  };
+  streamStats?: import("./llm-utils").LlmStreamStats;
+  inputTokens?: number;
+}
+
+function paramsForPreparedMessages(
+  model: string,
+  messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  opts: LlmCallOptions,
+  stream: boolean,
+): Record<string, unknown> {
+  const params = buildChatParams(
+    model,
+    [],
+    { ...opts, inputBudgetTokens: undefined },
+    stream,
+  );
+  params.messages = messages;
+  return params;
+}
+
+function rethrowForContextRepack(error: unknown, optionalUnits: number): void {
+  if (classifyContextError(error) !== null) {
+    if (optionalUnits === 0) {
+      throw new Error(
+        "Provider rejected the required-only Query prompt after optional context was exhausted",
+        { cause: error },
+      );
+    }
+    throw error;
+  }
+  if (error instanceof PromptBudgetExceededError) throw error;
+}
 
 /**
  * Stream one answer for a prepared system prompt + context block, then run the
@@ -17,55 +73,215 @@ export async function* answerFromContext(args: {
   model: string;
   opts: LlmCallOptions;
   signal: AbortSignal;
-  systemPrompt: string;
+  systemPrompt: QuerySystemPrompt;
   question: string;
-  contextBlock: string;
-  selectedIds: Set<string>;
+  chunks: SelectedChunk[];
   wikiLinkValidationRetries: number;
-}): AsyncGenerator<RunEvent, { answer: string; outputTokens: number }> {
-  const { llm, model, opts, signal, systemPrompt, question, contextBlock, selectedIds, wikiLinkValidationRetries } = args;
+  deferLlmCallStats?: boolean;
+}): AsyncGenerator<RunEvent, {
+  answer: string;
+  outputTokens: number;
+  selectedChunks: SelectedChunk[];
+  llmCallStats?: Extract<RunEvent, { kind: "llm_call_stats" }>;
+}> {
+  const {
+    llm,
+    model,
+    opts,
+    signal,
+    systemPrompt,
+    question,
+    chunks,
+    wikiLinkValidationRetries,
+    deferLlmCallStats = false,
+  } = args;
   let outputTokens = 0;
-
-  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-    { role: "system", content: systemPrompt },
-    { role: "user", content: `Question: ${question}\n\nWiki pages:\n${contextBlock}` },
-  ];
-
-  const params = buildChatParams(model, messages, opts, true);
   let answer = "";
   let streamStats: import("./llm-utils").LlmStreamStats | undefined;
+  let selectedChunks: SelectedChunk[] = [];
+  const budgetEvents: PromptBudgetEvent[] = [];
+  let eligibleChunks: SelectedChunk[] | undefined;
   yield { kind: "tool_use", name: "Answering", input: {} };
+
+  let attempt: AnswerAttempt;
   try {
-    const requestStartMs = Date.now();
-    const rawStream = await llm.chat.completions.create(
-      { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-      { signal },
-    );
-    const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs);
-    for await (const chunk of stream) {
-      const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
-      if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
-      if (content) { answer += content; yield { kind: "assistant_text", delta: content }; }
-      if (tok !== undefined) outputTokens += tok;
+    attempt = await runWithContextRepack<PackedAnswerRequest, AnswerAttempt>({
+      callSite: "query.answer",
+      configuredInputBudget: opts.inputBudgetTokens ?? 16_384,
+      outputBudget: opts.maxTokens,
+      compressionProfile: opts.semanticCompression?.profile ?? "balanced",
+      build: (effectiveInputBudget) => {
+        const retryChunks = eligibleChunks === undefined
+          ? chunks
+          : eligibleChunks.slice(0, -1);
+        const packed = packQueryChunks({
+          question,
+          systemPrompt,
+          chunks: retryChunks,
+          inputBudgetTokens: effectiveInputBudget,
+          opts,
+        });
+        eligibleChunks = packed.selected;
+        return {
+          value: {
+            messages: packed.messages,
+            selectedChunks: packed.selected,
+            optionalUnits: packed.selected.length,
+          },
+          estimatedInputTokens: packed.estimatedInputTokens,
+          contextUnits: packed.contextUnits,
+          sourceChunks: packed.selected.length,
+        };
+      },
+      execute: async (request) => {
+        const params = paramsForPreparedMessages(model, request.messages, opts, true);
+        try {
+          const requestStartMs = Date.now();
+          const rawStream = await llm.chat.completions.create(
+            { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
+            { signal },
+          );
+          const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs);
+          let attemptAnswer = "";
+          let attemptOutputTokens = 0;
+          const events: RunEvent[] = [];
+          const iterator = stream[Symbol.asyncIterator]();
+          while (true) {
+            const next = await iterator.next();
+            if (next.done) {
+              const stats = getStats();
+              return {
+                answer: attemptAnswer,
+                outputTokens: attemptOutputTokens,
+                events,
+                selectedChunks: request.selectedChunks,
+                streamStats: stats,
+                inputTokens: stats?.inputTokens,
+              };
+            }
+            const chunk = next.value;
+            const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
+            if (reasoning) events.push({ kind: "assistant_text", delta: reasoning, isReasoning: true });
+            if (content) {
+              attemptAnswer += content;
+              events.push({ kind: "assistant_text", delta: content });
+            }
+            if (tok !== undefined) attemptOutputTokens += tok;
+            if (reasoning || content) {
+              return {
+                answer: attemptAnswer,
+                outputTokens: attemptOutputTokens,
+                events,
+                selectedChunks: request.selectedChunks,
+                pendingStream: { iterator, getStats },
+              };
+            }
+          }
+        } catch (error) {
+          if (
+            signal.aborted
+            || (error as Error).name === "AbortError"
+          ) throw error;
+          rethrowForContextRepack(error, request.optionalUnits);
+          let response: OpenAI.Chat.ChatCompletion;
+          const fallbackStartMs = Date.now();
+          try {
+            const fallbackParams = paramsForPreparedMessages(model, request.messages, opts, false);
+            response = await llm.chat.completions.create(
+              { ...fallbackParams, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+              { signal },
+            );
+          } catch (fallbackError) {
+            rethrowForContextRepack(fallbackError, request.optionalUnits);
+            throw fallbackError;
+          }
+          const fallbackDurationMs = Date.now() - fallbackStartMs;
+          const fallbackAnswer = response.choices[0]?.message?.content ?? "";
+          const fallbackTokens = extractUsage(response) ?? 0;
+          return {
+            answer: fallbackAnswer,
+            outputTokens: fallbackTokens,
+            events: fallbackAnswer
+              ? [{ kind: "assistant_text" as const, delta: fallbackAnswer }]
+              : [],
+            selectedChunks: request.selectedChunks,
+            streamStats: response.usage
+              ? {
+                  inputTokens: response.usage.prompt_tokens,
+                  outputTokens: fallbackTokens,
+                  ttftMs: fallbackDurationMs,
+                  llmDurationMs: fallbackDurationMs,
+                }
+              : undefined,
+            inputTokens: response.usage?.prompt_tokens,
+          };
+        }
+      },
+      onEvent: (event) => budgetEvents.push(event),
+    });
+  } catch (error) {
+    for (const event of budgetEvents) yield event;
+    if (signal.aborted || (error as Error).name === "AbortError") {
+      return { answer: "", outputTokens, selectedChunks };
     }
-    streamStats = getStats();
-  } catch (e) {
-    if (signal.aborted || (e as Error).name === "AbortError") return { answer: "", outputTokens };
-    const resp = await llm.chat.completions.create(
-      { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-    );
-    answer = resp.choices[0]?.message?.content ?? "";
-    const tok = extractUsage(resp);
-    if (tok !== undefined) outputTokens += tok;
-    if (answer) yield { kind: "assistant_text", delta: answer };
+    throw error;
+  }
+  const completionBudgetEvent = attempt.pendingStream
+    ? budgetEvents.pop()
+    : undefined;
+  for (const event of budgetEvents) yield event;
+  answer = attempt.answer;
+  outputTokens = attempt.outputTokens;
+  streamStats = attempt.streamStats;
+  selectedChunks = attempt.selectedChunks;
+  if (attempt.pendingStream) {
+    let streamCompleted = false;
+    let streamAborted = false;
+    let streamFailure: { error: unknown } | undefined;
+    try {
+      for (const event of attempt.events) yield event;
+      while (true) {
+        const next = await attempt.pendingStream.iterator.next();
+        if (next.done) {
+          streamCompleted = true;
+          break;
+        }
+        const { reasoning, content, outputTokens: tok } = extractStreamDeltas(next.value);
+        if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
+        if (content) {
+          answer += content;
+          yield { kind: "assistant_text", delta: content };
+        }
+        if (tok !== undefined) outputTokens += tok;
+      }
+      streamStats = attempt.pendingStream.getStats();
+    } catch (error) {
+      if (signal.aborted || (error as Error).name === "AbortError") {
+        streamAborted = true;
+      } else {
+        streamFailure = { error };
+      }
+    } finally {
+      if (!streamCompleted) await attempt.pendingStream.iterator.return?.();
+    }
+    if (completionBudgetEvent) {
+      if (streamStats?.inputTokens !== undefined) {
+        completionBudgetEvent.actualInputTokens = streamStats.inputTokens;
+      }
+      yield completionBudgetEvent;
+    }
+    if (streamAborted) return { answer, outputTokens, selectedChunks };
+    if (streamFailure) throw streamFailure.error;
+  } else {
+    for (const event of attempt.events) yield event;
   }
 
-  if (signal.aborted) return { answer, outputTokens };
+  if (signal.aborted) return { answer, outputTokens, selectedChunks };
   yield { kind: "tool_result", ok: !!answer, preview: answer ? `${answer.length} chars` : "no response" };
 
   if (answer && !signal.aborted) {
     yield { kind: "tool_use", name: "ValidateLinks", input: {} };
-    const knownStems = new Set(selectedIds);
+    const knownStems = new Set(selectedChunks.map((chunk) => chunk.articleId));
     const links = extractAnswerLinks(answer);
     const broken = findBrokenLinks(links, knownStems);
     yield {
@@ -125,7 +341,9 @@ export async function* answerFromContext(args: {
             stripped.length = 0;
           }
         } catch (e) {
-          if (signal.aborted || (e as Error).name === "AbortError") return { answer, outputTokens };
+          if (signal.aborted || (e as Error).name === "AbortError") {
+            return { answer, outputTokens, selectedChunks };
+          }
           for (const ev of repairEvents) yield ev;
           // fall through to annotation
         }
@@ -144,6 +362,9 @@ export async function* answerFromContext(args: {
     }
   }
 
-  if (streamStats) yield buildLlmCallStatsEvent(streamStats);
-  return { answer, outputTokens };
+  const llmCallStats = streamStats
+    ? buildLlmCallStatsEvent(streamStats) as Extract<RunEvent, { kind: "llm_call_stats" }>
+    : undefined;
+  if (llmCallStats && !deferLlmCallStats) yield llmCallStats;
+  return { answer, outputTokens, selectedChunks, llmCallStats };
 }

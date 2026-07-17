@@ -10,7 +10,15 @@ import { runInit } from "./phases/init";
 import { runFormat } from "./phases/format";
 import { runDelete } from "./phases/delete";
 import { VisionTempStore } from "./phases/vision-temp-store";
-import type { LlmCallOptions, LlmClient, LlmWikiPluginSettings, RunEvent, RunRequest } from "./types";
+import type {
+  LlmCallOptions,
+  LlmClient,
+  LlmWikiPluginSettings,
+  OpKey,
+  RunEvent,
+  RunRequest,
+  WikiOperation,
+} from "./types";
 import type { VaultTools } from "./vault-tools";
 import { domainWikiFolder } from "./wiki-path";
 import { writeEvalRecord, type EvalRecord, type EvalMetaFields, type LlmError } from "./eval-log";
@@ -21,6 +29,10 @@ import { normalizeRerankerConfig } from "./reranker";
 import { resolveModelCallPolicy } from "./model-call-policy";
 
 const DISABLED_BOILERPLATE_DEMOTION: BoilerplateDemotionConfig = { enabled: false, factor: 0 };
+
+export function resolveFollowUpPolicyOperation(parent: WikiOperation): OpKey {
+  return parent === "query" ? "query" : "lint";
+}
 
 export class AgentRunner {
   private llm: LlmClient;
@@ -36,9 +48,12 @@ export class AgentRunner {
     this.llm = llm;
   }
 
-  private buildOptsFor(op: RunRequest["operation"]): { model: string; opts: LlmCallOptions } {
+  private buildOptsFor(
+    op: RunRequest["operation"],
+    policyOperation?: RunRequest["policyOperation"],
+  ): { model: string; opts: LlmCallOptions } {
     const s = this.settings;
-    const resolved = resolveModelCallPolicy(s, op);
+    const resolved = resolveModelCallPolicy(s, op, policyOperation);
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
     const mergeDeleteWarnThreshold = s.nativeAgent.mergeDeleteWarnThreshold;
 
@@ -195,7 +210,7 @@ export class AgentRunner {
   }
 
   async *run(req: RunRequest): AsyncGenerator<RunEvent, void, void> {
-    const { model, opts } = this.buildOptsFor(req.operation);
+    const { model, opts } = this.buildOptsFor(req.operation, req.policyOperation);
     const baseUrlHint = this.settings.backend === "native-agent"
       ? ` @ ${this.settings.nativeAgent.baseUrl}`
       : "";
@@ -213,9 +228,14 @@ export class AgentRunner {
     const maxRetries = this.settings.llmIdleRetries ?? 3;
     let attempt = 0;
     let destructivePreludeSeen = false;
+    let visibleAssistantTextSeen = false;
 
     const idleAfterDestructivePreludeAbort = () => new DOMException(
       `LLM idle timeout (${Math.round(idleTimeoutMs / 1000)}s) after destructive prelude; refusing to replay operation`,
+      "AbortError",
+    );
+    const idleAfterVisibleOutputAbort = () => new DOMException(
+      `LLM idle timeout (${Math.round(idleTimeoutMs / 1000)}s) after visible output; refusing to replay operation`,
       "AbortError",
     );
 
@@ -253,6 +273,9 @@ export class AgentRunner {
             ev.kind === "tool_use" || ev.kind === "tool_result"
           ) resetTimer();
           if (ev.kind === "tool_use" && ev.name === "WipeDomain") destructivePreludeSeen = true;
+          if (ev.kind === "assistant_text" && !ev.isReasoning && ev.delta.length > 0) {
+            visibleAssistantTextSeen = true;
+          }
           if (ev.kind === "result") finalResultText = ev.text;
           if (ev.kind === "error") {
             llmErrors.push({ kind: "error", message: ev.message });
@@ -271,6 +294,7 @@ export class AgentRunner {
         // Phases swallow AbortError silently (return instead of throw).
         // Detect silent idle abort by checking if idleCtrl fired but user didn't cancel.
         if (idleCtrl.signal.aborted && !req.signal.aborted) {
+          if (visibleAssistantTextSeen) throw idleAfterVisibleOutputAbort();
           if (attempt < maxRetries) {
             if (destructivePreludeSeen) throw idleAfterDestructivePreludeAbort();
             attempt++;
@@ -306,6 +330,7 @@ export class AgentRunner {
         if (idleTimer) window.clearTimeout(idleTimer);
         const isIdleAbort = !req.signal.aborted && (err as Error).name === "AbortError";
         if (isIdleAbort && attempt < maxRetries) {
+          if (visibleAssistantTextSeen) throw err;
           if (destructivePreludeSeen) throw idleAfterDestructivePreludeAbort();
           attempt++;
           const sec = Math.round(idleTimeoutMs / 1000);

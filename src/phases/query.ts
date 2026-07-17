@@ -14,7 +14,7 @@ import { fuseVectorGraph } from "../fusion";
 import { graphCache } from "../wiki-graph-cache";
 import { selectSeeds } from "../wiki-seeds";
 import { collectDescriptions } from "../wiki-index";
-import { PageSimilarityService, renderContextChunks, type SelectedChunk } from "../page-similarity";
+import { PageSimilarityService, type SelectedChunk } from "../page-similarity";
 import { seedPassesGate } from "../retrieval-diag";
 import type { RetrievalMode, SeedFallbackReason } from "../retrieval-diag";
 import { promptVersionOf } from "../prompt-version";
@@ -335,35 +335,44 @@ export async function* runQuery(
   if (signal.aborted) return;
 
   const contextChunks = reranked.chunks.slice(0, contextLimit);
-  const contextBlock = renderContextChunks(contextChunks);
-  const finalSelectedIds = new Set(contextChunks.map((chunk) => chunk.articleId));
-  const selectedIndexLines = [...finalSelectedIds]
-    .map((id) => {
-      const annotation = cand.annotations.get(id);
-      return annotation ? `${id}: ${annotation}` : undefined;
-    })
-    .filter((line): line is string => line !== undefined);
-  const indexBlock = selectedIndexLines.length > 0
-    ? `\nWiki index (selected candidates):\n${selectedIndexLines.join("\n")}`
-    : "";
-
   const entityTypesBlock = buildEntityTypesBlock(domain);
+  const systemPrompt = (packedChunks: readonly SelectedChunk[]): string => {
+    const packedIds = new Set(packedChunks.map((chunk) => chunk.articleId));
+    const selectedIndexLines = [...packedIds]
+      .map((id) => {
+        const annotation = cand.annotations.get(id);
+        return annotation ? `${id}: ${annotation}` : undefined;
+      })
+      .filter((line): line is string => line !== undefined);
+    const indexBlock = selectedIndexLines.length > 0
+      ? `\nWiki index (selected candidates):\n${selectedIndexLines.join("\n")}`
+      : "";
+    const wikiFirst = [...packedIds].sort((a, b) =>
+      Number(b.startsWith("wiki_")) - Number(a.startsWith("wiki_")));
+    const availableLinksBlock = wikiFirst.length === 0 ? "" : [
+      "Valid WikiLink targets (use EXACTLY these, copy verbatim):",
+      ...wikiFirst.map((id) => `- ${id}`),
+      "ONLY link to a target from this list. Never invent or abbreviate stems.",
+    ].join("\n");
+    return render(queryTemplate, {
+      domain_name: domain.name,
+      available_links_block: availableLinksBlock,
+      entity_types_block: entityTypesBlock,
+      index_block: indexBlock,
+    });
+  };
 
-  const wikiFirst = [...finalSelectedIds].sort((a, b) =>
-    Number(b.startsWith("wiki_")) - Number(a.startsWith("wiki_")));
-  const availableLinksBlock = wikiFirst.length === 0 ? "" : [
-    "Valid WikiLink targets (use EXACTLY these, copy verbatim):",
-    ...wikiFirst.map((s) => `- ${s}`),
-    "ONLY link to a target from this list. Never invent or abbreviate stems.",
-  ].join("\n");
-
-  const systemPrompt = render(queryTemplate, {
-    domain_name: domain.name,
-    available_links_block: availableLinksBlock,
-    entity_types_block: entityTypesBlock,
-    index_block: indexBlock,
+  const ans = yield* answerFromContext({
+    llm, model, opts, signal,
+    systemPrompt, question, chunks: contextChunks,
+    wikiLinkValidationRetries,
+    deferLlmCallStats: true,
   });
-
+  if (signal.aborted) return;          // restore prior behavior: no eval_meta/result on abort
+  let answer = ans.answer;
+  outputTokens += ans.outputTokens;
+  const finalContextChunks = ans.selectedChunks;
+  const finalSelectedIds = new Set(finalContextChunks.map((chunk) => chunk.articleId));
   const seedCount = [...finalSelectedIds].filter((id) => seedSet.has(id)).length;
   const graphCount = finalSelectedIds.size - seedCount;
   const rerankerDiagnostics = {
@@ -381,7 +390,7 @@ export async function* runQuery(
     pagesScanned: cand.pagesScanned,
     pagesSelected: finalSelectedIds.size,
     candidatePages: selectedIds.size,
-    chunksSelected: contextChunks.length,
+    chunksSelected: finalContextChunks.length,
     seedCount,
     graphCount,
     rerankerEnabled: rerankerRuntime.config.enabled,
@@ -390,16 +399,7 @@ export async function* runQuery(
     chunkDupsDropped,
     reranker: rerankerDiagnostics,
   };
-  if (signal.aborted) return;
-
-  const ans = yield* answerFromContext({
-    llm, model, opts, signal,
-    systemPrompt, question, contextBlock, selectedIds: finalSelectedIds,
-    wikiLinkValidationRetries,
-  });
-  if (signal.aborted) return;          // restore prior behavior: no eval_meta/result on abort
-  let answer = ans.answer;
-  outputTokens += ans.outputTokens;
+  if (ans.llmCallStats) yield ans.llmCallStats;
 
   yield {
     kind: "eval_meta",
@@ -407,7 +407,7 @@ export async function* runQuery(
       question,
       answer,
       found_pages: [...finalSelectedIds],
-      found_chunks: contextChunks.map((chunk) => ({
+      found_chunks: finalContextChunks.map((chunk) => ({
         articleId: chunk.articleId,
         heading: chunk.heading,
         score: chunk.score,
