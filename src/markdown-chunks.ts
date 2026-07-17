@@ -1,4 +1,5 @@
 import { contentHash } from "./content-hash";
+import { inspectPatchablePage } from "./section-patches";
 
 export interface SourceChunk {
   id: string;
@@ -16,6 +17,13 @@ export interface MarkdownSection {
   startLine: number;
   endLine: number;
   markdown: string;
+  contentHash: string;
+}
+
+export interface CompleteH2Section {
+  heading: string;
+  markdown: string;
+  ordinal: number;
   contentHash: string;
 }
 
@@ -228,6 +236,16 @@ function buildSections(lines: ScannedLine[]): MarkdownSection[] {
 export function extractMarkdownSections(source: string): MarkdownSection[] {
   const sourceLines = splitSourceLines(source);
   return sourceLines.length === 0 ? [] : buildSections(scanLines(sourceLines));
+}
+
+/** Returns complete, lossless H2-delimited spans, including their original line endings. */
+export function extractCompleteH2Sections(source: string): CompleteH2Section[] {
+  return inspectPatchablePage(source).sections.map((section) => ({
+    heading: section.heading,
+    markdown: section.span,
+    ordinal: section.ordinal,
+    contentHash: section.hash,
+  }));
 }
 
 function isBlankOutsideFence(line: ScannedLine): boolean {

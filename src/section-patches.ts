@@ -38,6 +38,15 @@ export interface PatchableSection {
   heading: string;
   span: string;
   hash: string;
+  ordinal: number;
+}
+
+export interface ReplaceSectionAuthority {
+  path: string;
+  heading: string;
+  sectionOrdinal: number;
+  sectionHash: string;
+  exactSection: string;
 }
 
 export interface PatchablePage {
@@ -304,6 +313,7 @@ function scanPatchablePage(source: string): ScannedPage {
       heading: section.heading,
       span,
       hash: contentHash(span),
+      ordinal: index,
       key: normalizeSectionHeading(section.heading),
       start: section.start,
       end,
@@ -322,7 +332,7 @@ export function inspectPatchablePage(source: string): PatchablePage {
   return {
     pageHash: inspected.pageHash,
     preamble: inspected.preamble,
-    sections: inspected.sections.map(({ heading, span, hash }) => ({ heading, span, hash })),
+    sections: inspected.sections.map(({ heading, span, hash, ordinal }) => ({ heading, span, hash, ordinal })),
   };
 }
 
@@ -494,10 +504,33 @@ function resolveExistingSection(
   );
 }
 
+function authorityMatches(
+  authority: ReplaceSectionAuthority,
+  path: string,
+  requested: SectionPatch,
+  existing: ScannedSection,
+): boolean {
+  return authority.path === path
+    && normalizeSectionHeading(authority.heading) === existing.key
+    && authority.sectionOrdinal === existing.ordinal
+    && authority.sectionHash === requested.expectedSectionHash
+    && authority.sectionHash === existing.hash
+    && authority.exactSection === existing.span;
+}
+
+function findReplaceAuthority(
+  authorities: readonly ReplaceSectionAuthority[],
+  path: string,
+  requested: SectionPatch,
+  existing: ScannedSection,
+): ReplaceSectionAuthority | undefined {
+  return authorities.find((authority) => authorityMatches(authority, path, requested, existing));
+}
+
 export function applyPagePatch(
   currentPage: string,
   patch: PatchPage,
-  allowedReplaceHashes: ReadonlySet<string>,
+  replaceAuthorities: readonly ReplaceSectionAuthority[],
 ): PatchApplyResult {
   assertValidSectionPatches(patch.sections);
   if (contentHash(currentPage) !== patch.expectedPageHash) {
@@ -506,7 +539,14 @@ export function applyPagePatch(
 
   const original = scanPatchablePage(currentPage);
   for (const requested of patch.sections) {
-    if (requested.operation !== "add") resolveExistingSection(original.sections, requested);
+    if (requested.operation === "add") continue;
+    const existing = resolveExistingSection(original.sections, requested);
+    if (requested.operation === "replace") {
+      if (!existing) return { ok: false, reason: "heading_missing", heading: requested.heading };
+      if (!findReplaceAuthority(replaceAuthorities, patch.path, requested, existing)) {
+        return { ok: false, reason: "replace_context_missing", heading: requested.heading };
+      }
+    }
   }
 
   const lineEnding = lineEndingFor(currentPage);
@@ -543,10 +583,12 @@ export function applyPagePatch(
       continue;
     }
 
-    if (
-      requested.expectedSectionHash === undefined
-      || !allowedReplaceHashes.has(requested.expectedSectionHash)
-    ) {
+    if (requested.expectedSectionHash === undefined || !findReplaceAuthority(
+      replaceAuthorities,
+      patch.path,
+      requested,
+      existing,
+    )) {
       return { ok: false, reason: "replace_context_missing", heading: requested.heading };
     }
     if (requested.expectedSectionHash !== existing.hash) {
