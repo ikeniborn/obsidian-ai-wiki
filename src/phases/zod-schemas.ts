@@ -27,6 +27,7 @@ const SectionPatchBaseSchema = z.discriminatedUnion("operation", [
     ...SectionPatchFields,
     operation: z.literal("replace"),
     expectedSectionHash: z.string().optional(),
+    expectedSectionOrdinal: z.number().int().nonnegative().safe().optional(),
   }),
 ]);
 
@@ -71,6 +72,88 @@ export const PageActionSchema = z.discriminatedUnion("kind", [
   CreatePageSchema,
   PatchPageSchema,
 ]);
+
+const SynthesisSectionPatchSchema = z.discriminatedUnion("operation", [
+  z.object({
+    heading: z.string(),
+    content: z.string(),
+    operation: z.literal("add"),
+  }).strict(),
+  z.object({
+    heading: z.string(),
+    content: z.string(),
+    operation: z.literal("append"),
+    expectedSectionHash: z.string().optional(),
+  }).strict(),
+  z.object({
+    heading: z.string(),
+    content: z.string(),
+    operation: z.literal("replace"),
+    expectedSectionHash: z.string(),
+    expectedSectionOrdinal: z.number().int().nonnegative().safe(),
+  }).strict(),
+]);
+
+const SynthesisSectionPatchesSchema = z.array(SynthesisSectionPatchSchema).superRefine((sections, ctx) => {
+  addSectionPatchIssues(sections, ctx, true);
+});
+
+export const SynthesisCreatePageSchema = CreatePageSchema.extend({
+  entityKey: NonBlankStringSchema,
+}).strict();
+
+export const SynthesisPatchPageSchema = PatchPageSchema.extend({
+  entityKey: NonBlankStringSchema,
+  sections: SynthesisSectionPatchesSchema,
+}).strict();
+
+export const SynthesisActionSchema = z.discriminatedUnion("kind", [
+  SynthesisCreatePageSchema,
+  SynthesisPatchPageSchema,
+]);
+
+export const SynthesisSkipSchema = z.object({
+  entityKey: NonBlankStringSchema,
+  reason: NonBlankStringSchema,
+}).strict();
+
+export const SynthesisOutputSchema = z.object({
+  reasoning: z.string(),
+  actions: z.array(SynthesisActionSchema),
+  skips: z.array(SynthesisSkipSchema),
+  entity_types_delta: z.array(z.object({
+    type: z.string().min(1),
+    description: z.string(),
+    extraction_cues: z.array(z.string()),
+    min_mentions_for_page: z.number().optional(),
+    wiki_subfolder: z.string().optional(),
+  }).strict()).optional(),
+}).strict().superRefine((output, ctx) => {
+  const seenEntities = new Set<string>();
+  const seenPaths = new Set<string>();
+  for (const [index, action] of output.actions.entries()) {
+    const entityKey = action.entityKey.trim().replace(/\s+/g, " ").toLowerCase();
+    if (seenEntities.has(entityKey)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["actions", index, "entityKey"], message: "duplicate entity coverage" });
+    }
+    seenEntities.add(entityKey);
+    const path = action.path.normalize("NFC").trim();
+    if (seenPaths.has(path)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["actions", index, "path"], message: "duplicate action path" });
+    }
+    seenPaths.add(path);
+  }
+  for (const [index, skip] of output.skips.entries()) {
+    const entityKey = skip.entityKey.trim().replace(/\s+/g, " ").toLowerCase();
+    if (seenEntities.has(entityKey)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["skips", index, "entityKey"], message: "duplicate entity coverage" });
+    }
+    seenEntities.add(entityKey);
+  }
+});
+
+export type SynthesisAction = z.infer<typeof SynthesisActionSchema>;
+export type SynthesisOutput = z.infer<typeof SynthesisOutputSchema>;
 
 const EntityTypeSchema = z.object({
   type: z.string().min(1),

@@ -24,6 +24,7 @@ export type SectionPatch =
   | (SectionPatchFields & {
     operation: "replace";
     expectedSectionHash: string;
+    expectedSectionOrdinal?: number;
   });
 
 export interface PatchPage {
@@ -89,7 +90,7 @@ export function normalizeSectionHeading(heading: string): string {
 
 export interface SectionPatchValidationIssue {
   index: number;
-  field: "sections" | "heading" | "content" | "operation" | "expectedSectionHash";
+  field: "sections" | "heading" | "content" | "operation" | "expectedSectionHash" | "expectedSectionOrdinal";
   message: string;
 }
 
@@ -220,6 +221,13 @@ export function validateSectionPatches(sections: unknown): SectionPatchValidatio
         message: "expectedSectionHash is forbidden for add",
       });
     }
+    if (patch.operation !== "replace" && hasOwn(patch, "expectedSectionOrdinal")) {
+      issues.push({
+        index,
+        field: "expectedSectionOrdinal",
+        message: "expectedSectionOrdinal is only valid for replace",
+      });
+    }
     if (
       patch.operation === "append"
       && hasOwn(patch, "expectedSectionHash")
@@ -239,6 +247,19 @@ export function validateSectionPatches(sections: unknown): SectionPatchValidatio
         index,
         field: "expectedSectionHash",
         message: "replace requires a nonblank expectedSectionHash",
+      });
+    }
+    if (
+      patch.operation === "replace"
+      && hasOwn(patch, "expectedSectionOrdinal")
+      && (typeof patch.expectedSectionOrdinal !== "number"
+        || !Number.isSafeInteger(patch.expectedSectionOrdinal)
+        || patch.expectedSectionOrdinal < 0)
+    ) {
+      issues.push({
+        index,
+        field: "expectedSectionOrdinal",
+        message: "expectedSectionOrdinal must be a nonnegative safe integer when supplied",
       });
     }
   });
@@ -492,6 +513,10 @@ function resolveExistingSection(
 ): ScannedSection | undefined {
   const key = normalizeSectionHeading(requested.heading);
   const matches = sections.filter((section) => section.key === key);
+  if (requested.operation === "replace" && requested.expectedSectionOrdinal !== undefined) {
+    const ordinalMatches = matches.filter((section) => section.ordinal === requested.expectedSectionOrdinal);
+    return ordinalMatches.length === 1 ? ordinalMatches[0] : undefined;
+  }
   if (matches.length <= 1) return matches[0];
 
   if (requested.operation === "replace") {
@@ -510,8 +535,12 @@ function authorityMatches(
   requested: SectionPatch,
   existing: ScannedSection,
 ): boolean {
+  const expectedOrdinal = requested.operation === "replace"
+    ? requested.expectedSectionOrdinal
+    : undefined;
   return authority.path === path
     && normalizeSectionHeading(authority.heading) === existing.key
+    && (expectedOrdinal === undefined || authority.sectionOrdinal === expectedOrdinal)
     && authority.sectionOrdinal === existing.ordinal
     && authority.sectionHash === requested.expectedSectionHash
     && authority.sectionHash === existing.hash

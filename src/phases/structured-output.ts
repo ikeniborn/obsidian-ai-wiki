@@ -51,6 +51,13 @@ export class StructuredValidationError extends Error {
   }
 }
 
+export class StructuredOutputTruncatedError extends Error {
+  constructor(public readonly finishReason: string) {
+    super(`Structured output truncated with finish_reason=${finishReason}`);
+    this.name = "StructuredOutputTruncatedError";
+  }
+}
+
 export interface RunStructuredArgs<T> {
   llm: LlmClient;
   model: string;
@@ -75,6 +82,7 @@ interface CallResult {
   outputTokens: number;
   inputTokens?: number;
   statsEvent?: RunEvent;
+  finishReason?: string | null;
 }
 
 function fallbackMode(mode: ResponseFormatMode): ResponseFormatMode | null {
@@ -179,6 +187,7 @@ async function streamOnce(
   const params = buildChatParams(model, messages, opts, true);
   let fullText = "";
   let outputTokens = 0;
+  let finishReason: string | null | undefined;
 
   try {
     const requestStartMs = Date.now();
@@ -188,6 +197,8 @@ async function streamOnce(
     );
     const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs);
     for await (const chunk of stream) {
+      const reason = chunk.choices[0]?.finish_reason;
+      if (reason !== undefined) finishReason = reason;
       const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
       if (reasoning) onEvent({ kind: "assistant_text", delta: reasoning, isReasoning: true });
       if (content) {
@@ -196,12 +207,14 @@ async function streamOnce(
       }
       if (tok !== undefined) outputTokens = tok;
     }
+    if (finishReason === "length") throw new StructuredOutputTruncatedError(finishReason);
     const stats = getStats();
     return {
       fullText,
       outputTokens,
       inputTokens: stats?.inputTokens,
       statsEvent: stats ? buildLlmCallStatsEvent(stats) : undefined,
+      finishReason,
     };
   } catch (e) {
     if (
@@ -211,6 +224,7 @@ async function streamOnce(
     if (
       classifyContextError(e) !== null
       || e instanceof PromptBudgetExceededError
+      || e instanceof StructuredOutputTruncatedError
     ) throw e;
     if (isJsonModeError(e)) throw e;
     const params2 = buildChatParams(model, messages, opts);
@@ -218,6 +232,9 @@ async function streamOnce(
       { ...params2, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
       { signal },
     );
+    if (resp.choices[0]?.finish_reason === "length") {
+      throw new StructuredOutputTruncatedError("length");
+    }
     return {
       fullText: resp.choices[0]?.message?.content ?? "",
       outputTokens: extractUsage(resp) ?? 0,

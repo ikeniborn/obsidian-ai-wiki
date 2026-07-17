@@ -730,6 +730,7 @@ test("replace uses its expected hash when it uniquely identifies a duplicate hea
   const second = inspected.sections[1];
   const result = applyPagePatch(current, patchFor(current, [{
     heading: "## Facts",
+    expectedSectionOrdinal: second.ordinal,
     expectedSectionHash: second.hash,
     operation: "replace",
     content: "updated",
@@ -744,6 +745,55 @@ test("replace uses its expected hash when it uniquely identifies a duplicate hea
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.match(result.content, /## Facts\none\n\n## Facts\nupdated\n$/);
+});
+
+test("replace uses expected ordinal to select a colliding duplicate heading", () => {
+  const current = "# Demo\n\n## Facts\none\n\n## Facts\none\n";
+  const inspected = inspectPatchablePage(current);
+  const second = inspected.sections[1];
+  const result = applyPagePatch(current, patchFor(current, [{
+    heading: "## Facts",
+    expectedSectionOrdinal: second.ordinal,
+    expectedSectionHash: second.hash,
+    operation: "replace",
+    content: "updated",
+  }]), [{
+    path: "!Wiki/d/concept/wiki_d_demo.md",
+    heading: second.heading,
+    sectionOrdinal: second.ordinal,
+    sectionHash: second.hash,
+    exactSection: second.span,
+  }]);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.match(result.content, /## Facts\none\n\n## Facts\nupdated\n$/);
+});
+
+test("replace wrong ordinal cannot fall back to matching hash on a single heading", () => {
+  const current = "# Demo\n\n## Facts\none\n";
+  const section = inspectPatchablePage(current).sections[0];
+  const result = applyPagePatch(current, patchFor(current, [{
+    heading: "## Facts", expectedSectionOrdinal: section.ordinal + 1,
+    expectedSectionHash: section.hash, operation: "replace", content: "updated",
+  }]), [{
+    path: "!Wiki/d/concept/wiki_d_demo.md", heading: section.heading,
+    sectionOrdinal: section.ordinal, sectionHash: section.hash, exactSection: section.span,
+  }]);
+  assert.deepEqual(result, { ok: false, reason: "heading_missing", heading: "## Facts" });
+});
+
+test("replace wrong ordinal cannot fall back to matching hash on duplicate headings", () => {
+  const current = "# Demo\n\n## Facts\none\n\n## Facts\ntwo\n";
+  const sections = inspectPatchablePage(current).sections;
+  const second = sections[1];
+  const result = applyPagePatch(current, patchFor(current, [{
+    heading: "## Facts", expectedSectionOrdinal: second.ordinal + 1,
+    expectedSectionHash: second.hash, operation: "replace", content: "updated",
+  }]), [{
+    path: "!Wiki/d/concept/wiki_d_demo.md", heading: second.heading,
+    sectionOrdinal: second.ordinal, sectionHash: second.hash, exactSection: second.span,
+  }]);
+  assert.deepEqual(result, { ok: false, reason: "heading_missing", heading: "## Facts" });
 });
 
 test("replace rejects identical duplicate section hashes as ambiguous", () => {
@@ -786,6 +836,27 @@ test("replace authority binds path, heading, ordinal, hash, and exact span", () 
     reason: "replace_context_missing",
     heading: "## B",
   });
+});
+
+test("replace rejects an authority with a mismatched exact span", () => {
+  const current = "# Demo\n\n## Facts\nold\n";
+  const inspected = inspectPatchablePage(current);
+  const section = inspected.sections[0];
+  const wrongSpan = "## Facts\nother\n";
+  const result = applyPagePatch(current, patchFor(current, [{
+    heading: "## Facts",
+    expectedSectionOrdinal: section.ordinal,
+    expectedSectionHash: contentHash(wrongSpan),
+    operation: "replace",
+    content: "updated",
+  }]), [{
+    path: "!Wiki/d/concept/wiki_d_demo.md",
+    heading: section.heading,
+    sectionOrdinal: section.ordinal,
+    sectionHash: contentHash(wrongSpan),
+    exactSection: wrongSpan,
+  }]);
+  assert.deepEqual(result, { ok: false, reason: "replace_context_missing", heading: "## Facts" });
 });
 
 test("known FNV collision cannot cross-authorize a distinct section", () => {

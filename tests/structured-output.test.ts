@@ -14,6 +14,7 @@ const {
   runStructuredWithRetry,
   runStructuredStreaming,
   StructuredValidationError,
+  StructuredOutputTruncatedError,
 } = await import("../src/phases/structured-output");
 
 const SmallSchema = z.object({
@@ -216,6 +217,55 @@ test("non-stream fallback returns prompt usage", async () => {
   assert.equal(requests, 2);
   assert.equal(result.value.value, "fallback");
   assert.equal(result.inputTokens, 11);
+});
+
+test("finish_reason length rejects syntactically valid structured JSON without transport fallback", async () => {
+  let requests = 0;
+  const llm = {
+    chat: { completions: { create: async () => {
+      requests++;
+      return (async function* () {
+        yield {
+          ...chunk('{"value":"complete"}'),
+          choices: [{ index: 0, delta: { content: '{"value":"complete"}' }, finish_reason: "length" }],
+        } as OpenAI.Chat.ChatCompletionChunk;
+        yield usageChunk();
+      })();
+    } } },
+  } as unknown as LlmClient;
+  await assert.rejects(runStructuredWithRetry({
+    llm,
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  }), StructuredOutputTruncatedError);
+  assert.equal(requests, 1);
+});
+
+test("non-stream length fallback rejects valid JSON after exactly two underlying requests", async () => {
+  let requests = 0;
+  const llm = {
+    chat: { completions: { create: async (params: { stream?: boolean }) => {
+      requests++;
+      if (params.stream) throw new Error("stream transport unavailable");
+      return {
+        id: "completion", object: "chat.completion", created: 0, model: "m",
+        choices: [{ index: 0, finish_reason: "length", message: { role: "assistant", content: '{"value":"complete"}' } }],
+        usage: { prompt_tokens: 13, completion_tokens: 4, total_tokens: 17 },
+      };
+    } } },
+  } as unknown as LlmClient;
+  await assert.rejects(runStructuredWithRetry({
+    llm, model: "m", baseMessages: [{ role: "user", content: "x" }], opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema }, maxRetries: 0, callSite: "query.seeds",
+    signal: new AbortController().signal, onEvent: () => {},
+  }), StructuredOutputTruncatedError);
+  assert.equal(requests, 2);
 });
 
 test("context deadline errors retain normal stream-to-non-stream fallback", async () => {
