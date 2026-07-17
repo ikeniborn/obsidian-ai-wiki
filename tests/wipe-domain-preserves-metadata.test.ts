@@ -16,6 +16,16 @@ const { wipeDomainFolder } = await import("../src/phases/init");
 
 class MemAdapter {
   files = new Map<string, string>();
+  async read(p: string): Promise<string> {
+    const content = this.files.get(p);
+    if (content === undefined) throw new Error(`ENOENT: ${p}`);
+    return content;
+  }
+  async write(p: string, content: string): Promise<void> { this.files.set(p, content); }
+  async append(p: string, content: string): Promise<void> {
+    this.files.set(p, (this.files.get(p) ?? "") + content);
+  }
+  async mkdir(): Promise<void> {}
   async exists(p: string): Promise<boolean> {
     return this.files.has(p) || [...this.files.keys()].some((k) => k.startsWith(p + "/"));
   }

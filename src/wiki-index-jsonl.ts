@@ -1,4 +1,4 @@
-import { parseJsonl, stringifyJsonl } from "./jsonl";
+import { JsonlParseError, parseJsonl, stringifyJsonl } from "./jsonl";
 
 export interface PageIndexRecord {
   kind: "page";
@@ -89,7 +89,23 @@ export function isChunkIndexRecord(record: unknown): record is ChunkIndexRecord 
 }
 
 export function parseWikiIndexJsonl(text: string, path: string): WikiIndexRecord[] {
-  return parseJsonl<WikiIndexRecord>(text, path);
+  const records = parseJsonl<WikiIndexRecord>(text, path);
+  let recordIndex = 0;
+  const lines = text.split(/\r?\n/);
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    if (!lines[lineIndex].trim()) continue;
+    const record = records[recordIndex++];
+    if (record === null || typeof record !== "object" || Array.isArray(record)) continue;
+    const value = record as Record<string, unknown>;
+    if (value.schemaVersion !== 1) continue;
+    if (value.kind === "page" && !isPageIndexRecord(record)) {
+      throw new JsonlParseError(path, lineIndex + 1, new Error("Invalid current page record"));
+    }
+    if (value.kind === "chunk" && !isChunkIndexRecord(record)) {
+      throw new JsonlParseError(path, lineIndex + 1, new Error("Invalid current chunk record"));
+    }
+  }
+  return records;
 }
 
 export function stringifyWikiIndexJsonl(records: WikiIndexRecord[]): string {
@@ -194,5 +210,6 @@ export function reconcilePageRecords(
   pages: PageIndexRecord[],
 ): WikiIndexRecord[] {
   const nonPages = records.filter((record) => !isPageIndexRecord(record));
-  return [...nonPages, ...[...pages].sort((a, b) => a.articleId.localeCompare(b.articleId))];
+  return [...nonPages, ...[...pages].sort((a, b) =>
+    a.articleId < b.articleId ? -1 : a.articleId > b.articleId ? 1 : 0)];
 }

@@ -9,8 +9,11 @@ import {
   embeddingChunkToChunkRecord,
   isChunkIndexRecord,
   isPageIndexRecord,
+  type PageIndexRecord,
   type WikiIndexRecord,
 } from "./wiki-index-jsonl";
+import { EmbeddingUnavailableError } from "./embedding-error";
+import { contentHash } from "./content-hash";
 import { readWikiIndexRecords, transformWikiIndexRecords } from "./wiki-index-store";
 import { rrf } from "./rrf";
 import type { SeedDiag } from "./retrieval-diag";
@@ -156,6 +159,15 @@ function annotationHash(s: string): string {
     h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
   }
   return (h >>> 0).toString(36);
+}
+
+function compareCodePoints(left: string, right: string): number {
+  const a = Array.from(left, (value) => value.codePointAt(0) ?? 0);
+  const b = Array.from(right, (value) => value.codePointAt(0) ?? 0);
+  for (let index = 0; index < Math.min(a.length, b.length); index++) {
+    if (a[index] !== b[index]) return a[index] - b[index];
+  }
+  return a.length - b.length;
 }
 
 export interface SectionWindow { heading: string; window: string; }
@@ -351,10 +363,10 @@ function sortSelectedChunks(items: SelectedChunk[]): SelectedChunk[] {
     (b.score - a.score) ||
     (Number(b.source === "seed") - Number(a.source === "seed")) ||
     ((b.articleScore ?? 0) - (a.articleScore ?? 0)) ||
-    a.articleId.localeCompare(b.articleId) ||
+    compareCodePoints(a.articleId, b.articleId) ||
     (a.ordinal - b.ordinal) ||
-    a.path.localeCompare(b.path) ||
-    a.heading.localeCompare(b.heading)
+    compareCodePoints(a.path, b.path) ||
+    compareCodePoints(a.heading, b.heading)
   );
 }
 
@@ -572,6 +584,7 @@ export class PageSimilarityService {
   setJaccardCorpus(corpus: Map<string, string>): void { this.jaccardCorpus = corpus; }
 
   setCacheForTest(cache: EmbeddingCacheFile): void { this.cache = cache; }
+  invalidateCache(): void { this.cache = null; }
 
   withBoilerplateDemotion(boilerplateDemotion?: BoilerplateDemotionConfig): PageSimilarityService {
     const service = new PageSimilarityService({ ...this.config, boilerplateDemotion });
@@ -1155,12 +1168,12 @@ export class PageSimilarityService {
     indexAnnotations: Map<string, string>,
     pageBodies: Map<string, string>,
     opts: { fullCorpus?: boolean } = {},
-  ): Promise<{ updated: number }> {
+  ): Promise<{ updated: number; failed: number }> {
     // Persist the embeddings cache for both embedding and hybrid modes — hybrid's dense
     // side reuses it on every query. Only pure jaccard has no vectors to write.
-    if (this.config.mode === "jaccard") return { updated: 0 };
+    if (this.config.mode === "jaccard") return { updated: 0, failed: 0 };
     const { baseUrl, apiKey, model, dimensions } = this.config;
-    if (!baseUrl || !model || !dimensions) return { updated: 0 };
+    if (!baseUrl || !model || !dimensions) return { updated: 0, failed: 0 };
     const chunking = this.config.chunking ?? DEFAULT_CHUNKING;
 
     const cachePath = domainIndexPath(domainRoot);
@@ -1184,31 +1197,43 @@ export class PageSimilarityService {
 
     // Build the desired chunk set per pid, reusing cached vectors whose hash matches.
     const desired = new Map<string, EmbeddingChunk[]>();
+    const expectedPageBodyHashes = new Map<string, string>();
+    const removalPageAuthorities = new Map<string, PageIndexRecord | undefined>();
     const pending: Pending[] = [];
     // Tracks chunk-count change so a write is triggered even when nothing is pending
     // (e.g. a section deleted: surviving hashes all hit oldByHash, but count shrinks).
     const changedArticleIds = new Set<string>();
     let changed = false;
     if (opts.fullCorpus === true) {
+      for (const pid of indexAnnotations.keys()) {
+        if (!pageBodies.has(pid)) {
+          throw new Error(`Full-corpus embedding refresh missing page body for ${pid}`);
+        }
+      }
       for (const pid of Object.keys(cacheFile.entries)) {
         if (!indexAnnotations.has(pid)) {
           changedArticleIds.add(pid);
+          removalPageAuthorities.set(
+            pid,
+            indexRecords.find((record) =>
+              isPageIndexRecord(record) && record.articleId === pid) as PageIndexRecord | undefined,
+          );
           changed = true;
         }
       }
     }
 
     for (const [pid, annotation] of indexAnnotations) {
-      // A caller may refresh only a subset (incremental ingest supplies bodies only for the
-      // pages it rewrote). For a pid with no supplied body, keep its cached chunks untouched
-      // rather than rebuilding from an empty body — otherwise unchanged pages lose their
-      // section vectors. A pid genuinely present with an empty-string body still rebuilds.
-      if (!pageBodies.has(pid) && cacheFile.entries[pid]) {
-        desired.set(pid, cacheFile.entries[pid].chunks);
+      // Incremental callers supply bodies only for governed pages. A missing body means
+      // "not part of this refresh", even when the configured model changed and therefore
+      // cacheFile cannot see that page's old-model chunks. Leaving the pid out of
+      // changedArticleIds preserves every existing index record byte-for-byte.
+      if (!pageBodies.has(pid)) {
         continue;
       }
       changedArticleIds.add(pid);
       const body = pageBodies.get(pid) ?? "";
+      expectedPageBodyHashes.set(pid, contentHash(body));
       const inputs = buildChunkInputs(annotation, body, chunking);
       const oldByHash = new Map(
         (cacheFile.entries[pid]?.chunks ?? []).map((chunk) => [chunk.hash, chunk]),
@@ -1236,17 +1261,17 @@ export class PageSimilarityService {
       try {
         vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, batch.map((p) => p.embedText), dimensions);
       } catch (error) {
-        throw new Error(`Embedding refresh failed: ${(error as Error).message}`);
+        throw new EmbeddingUnavailableError(`Embedding refresh failed: ${(error as Error).message}`);
       }
       if (vecs.length !== batch.length || vecs.some((vec) => !isUsableVector(vec, dimensions))) {
-        throw new Error("Embedding refresh failed: response did not contain one valid vector per pending chunk");
+        throw new EmbeddingUnavailableError("Embedding refresh failed: response did not contain one valid vector per pending chunk");
       }
       for (let j = 0; j < batch.length; j++) {
         desired.get(batch[j].pid)![batch[j].idx].vector = encodeVector(vecs[j]);
       }
     }
 
-    if (pending.length === 0 && !changed) return { updated: 0 };
+    if (pending.length === 0 && !changed) return { updated: 0, failed: 0 };
 
     for (const pid of changedArticleIds) {
       const chunks = desired.get(pid) ?? [];
@@ -1260,6 +1285,23 @@ export class PageSimilarityService {
       vaultTools,
       domainRoot,
       (latestRecords) => {
+        for (const [pid, expectedBodyHash] of expectedPageBodyHashes) {
+          const latestPage = latestRecords.find((record) =>
+            isPageIndexRecord(record) && record.articleId === pid);
+          if (!latestPage || latestPage.bodyHash !== expectedBodyHash) {
+            throw new EmbeddingUnavailableError(`Stale page body for ${pid}; embedding refresh was not committed`);
+          }
+        }
+        for (const [pid, expectedPage] of removalPageAuthorities) {
+          const latestPage = latestRecords.find((record) =>
+            isPageIndexRecord(record) && record.articleId === pid);
+          if (expectedPage === undefined ? latestPage !== undefined
+            : JSON.stringify(latestPage) !== JSON.stringify(expectedPage)) {
+            throw new EmbeddingUnavailableError(
+              `Concurrent page creation or change for expected-absent ${pid}; embedding refresh was not committed`,
+            );
+          }
+        }
         committedRecords = replaceChunkRecordsFromCache(
           cacheFile,
           domainRoot,
@@ -1270,7 +1312,7 @@ export class PageSimilarityService {
       },
     );
     this.cache = cacheFromIndexRecords(committedRecords ?? [], model, dimensions);
-    return { updated: pending.length };
+    return { updated: pending.length, failed: 0 };
   }
 }
 

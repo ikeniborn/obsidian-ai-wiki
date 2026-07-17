@@ -12,6 +12,10 @@ import {
 } from "./wiki-index-jsonl";
 import { pageIndexRecordFromMarkdown } from "./wiki-index";
 import { domainIndexPath } from "./wiki-path";
+import {
+  readFileImage,
+  TransactionVaultTools,
+} from "./file-transaction";
 
 const writeQueues = new WeakMap<object, Map<string, Promise<void>>>();
 
@@ -45,8 +49,15 @@ export async function transformWikiIndexRecords(
   }
   const previous = queues.get(path) ?? Promise.resolve();
   const current = previous.catch(() => {}).then(async () => {
-    const records = await readWikiIndexRecords(vaultTools, domainRoot);
-    await vaultTools.write(path, stringifyWikiIndexJsonl(transform(records)));
+    const before = await readFileImage(vaultTools, path);
+    const records = before.exists ? parseWikiIndexJsonl(before.content, path) : [];
+    const next = stringifyWikiIndexJsonl(transform(records));
+    if (before.exists && before.content === next) return;
+    if (vaultTools instanceof TransactionVaultTools) {
+      await vaultTools.writeIfCurrent(path, before, next);
+    } else {
+      await vaultTools.write(path, next);
+    }
   });
   queues.set(path, current);
   try {
@@ -78,6 +89,40 @@ export async function removeArticleIndex(
   articleId: string,
 ): Promise<void> {
   await transformWikiIndexRecords(vaultTools, domainRoot, (records) => removeArticleRecords(records, articleId));
+}
+
+export async function removeArticleIndexWithAuthority(
+  vaultTools: VaultTools,
+  domainRoot: string,
+  articleId: string,
+): Promise<WikiIndexRecord[]> {
+  let removed: WikiIndexRecord[] = [];
+  await transformWikiIndexRecords(vaultTools, domainRoot, (records) => {
+    const next = removeArticleRecords(records, articleId);
+    const retained = new Set(next);
+    removed = records.filter((record) => !retained.has(record));
+    return next;
+  });
+  return removed;
+}
+
+export async function restoreArticleIndexAuthority(
+  vaultTools: VaultTools,
+  domainRoot: string,
+  articleId: string,
+  removed: WikiIndexRecord[],
+): Promise<void> {
+  await transformWikiIndexRecords(vaultTools, domainRoot, (records) => {
+    const current = records.filter((record) =>
+      (record.kind === "page" || record.kind === "chunk")
+      && record.schemaVersion === 1
+      && record.articleId === articleId);
+    if (current.length > 0) {
+      if (stringifyWikiIndexJsonl(current) === stringifyWikiIndexJsonl(removed)) return records;
+      throw new Error(`index restore conflict for ${articleId}`);
+    }
+    return [...records, ...removed];
+  });
 }
 
 export async function reconcilePageIndex(

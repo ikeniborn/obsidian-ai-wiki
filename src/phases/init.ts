@@ -1,6 +1,6 @@
 import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "../domain";
-import type { LlmCallOptions, RunEvent, LlmClient, OnFileError } from "../types";
+import type { IngestOutcome, LlmCallOptions, RunEvent, LlmClient, OnFileError } from "../types";
 import { VaultTools } from "../vault-tools";
 import { runStructuredStreaming, type StructuredSink } from "./structured-output";
 import { DomainEntrySchema } from "./zod-schemas";
@@ -13,14 +13,257 @@ import { domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainMeta
 import type { PageSimilarityService } from "../page-similarity";
 import { readPageDescriptions } from "../wiki-index-store";
 import { i18nFor, resolveLang } from "../i18n";
-import { hashSource } from "../incremental-sources";
 import { promptVersionOf } from "../prompt-version";
 import { EmbeddingUnavailableError } from "../embedding-error";
+import { prepareBootstrapEvidence, type BootstrapEvidence } from "./ingest-evidence";
+import {
+  createPromptBudgetEvent,
+  estimatePreparedMessages,
+  PromptBudgetExceededError,
+} from "../prompt-budget";
+import { prepareChatMessages } from "./llm-utils";
+import { RunEventBridge } from "../run-event-bridge";
+import {
+  fileImage,
+  readFileImage,
+  rollbackFileMutations,
+  sameFileImage,
+  TransactionVaultTools,
+} from "../file-transaction";
 
-/** Read a source file and return its body hash; "" on read failure. */
-async function sourceHashFor(vaultTools: VaultTools, file: string): Promise<string> {
-  const content = await vaultTools.read(file).catch(() => "");
-  return hashSource(content);
+async function* forwardIngest(
+  generator: AsyncGenerator<RunEvent, IngestOutcome>,
+  onDomainUpdate: (event: Extract<RunEvent, { kind: "domain_updated" }>) => void,
+): AsyncGenerator<RunEvent, IngestOutcome> {
+  while (true) {
+    const next = await generator.next();
+    if (next.done) return next.value;
+    if (next.value.kind === "domain_updated") onDomainUpdate(next.value);
+    yield next.value;
+  }
+}
+
+interface PreparedDomainBootstrap {
+  sourceFile: string;
+  sourceContent: string;
+  preparedSources?: Array<{ path: string; content: string }>;
+  entry: DomainEntry;
+  outputTokens: number;
+}
+
+function compareCodePoints(left: string, right: string): number {
+  const a = Array.from(left, (value) => value.codePointAt(0) ?? 0);
+  const b = Array.from(right, (value) => value.codePointAt(0) ?? 0);
+  for (let index = 0; index < Math.min(a.length, b.length); index++) {
+    if (a[index] !== b[index]) return a[index] - b[index];
+  }
+  return a.length - b.length;
+}
+
+async function* prepareDomainBootstrap(
+  domainId: string,
+  sourcePaths: string[],
+  sourceFile: string,
+  sourceContent: string,
+  existing: DomainEntry | undefined,
+  force: boolean,
+  vaultName: string,
+  llm: LlmClient,
+  model: string,
+  signal: AbortSignal,
+  opts: LlmCallOptions,
+  startedAt: number,
+): AsyncGenerator<RunEvent, PreparedDomainBootstrap | null> {
+  const inputBudgetTokens = opts.inputBudgetTokens ?? 16_384;
+  const outputBudgetTokens = opts.maxTokens;
+  const compressionProfile = opts.semanticCompression?.profile ?? "balanced";
+  const schemaContent = render(schemaTemplate, {
+    section_conventions: wikiSections(resolveLang(opts.outputLanguage)),
+  });
+  const systemContent = render(initTemplate, {
+    domain_id: domainId,
+    vault_name: vaultName,
+    schema_block: schemaContent ? `\nWiki conventions (_wiki_schema.md):\n${schemaContent}` : "",
+  });
+  const bootstrapMessages = (
+    bootstrapEvidence: BootstrapEvidence,
+  ): OpenAI.Chat.ChatCompletionMessageParam[] => [
+    { role: "system", content: systemContent },
+    {
+      role: "user",
+      content: JSON.stringify({
+        domainId,
+        vaultName,
+        sourcePaths,
+        sourceFile,
+        bootstrapEvidence,
+      }),
+    },
+  ];
+  const emptyBootstrapEvidence: BootstrapEvidence = {
+    candidates: [],
+    domainThemes: [],
+    languageEvidence: [],
+  };
+  const fixedRequestEstimate = estimatePreparedMessages(
+    prepareChatMessages(bootstrapMessages(emptyBootstrapEvidence), opts),
+  );
+  const emptyPayloadEstimate = estimatePreparedMessages([{
+    role: "user",
+    content: JSON.stringify(emptyBootstrapEvidence),
+  }]);
+  const bootstrapPayloadBudgetTokens = inputBudgetTokens
+    - fixedRequestEstimate
+    + emptyPayloadEstimate;
+  if (bootstrapPayloadBudgetTokens <= 0) {
+    yield {
+      kind: "error",
+      message: `init: configuration error — fixed bootstrap prompt requires ${fixedRequestEstimate} tokens but input budget is ${inputBudgetTokens}; domain was not created.`,
+    };
+    yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
+    return null;
+  }
+
+  const bootstrapEvents = new RunEventBridge();
+  let bootstrapEvidence: BootstrapEvidence;
+  try {
+    bootstrapEvidence = yield* bootstrapEvents.forward(prepareBootstrapEvidence(sourceContent, domainId, {
+      inputBudgetTokens,
+      outputBudgetTokens,
+      compressionProfile,
+      mapperRetries: opts.structuredRetries ?? 1,
+      reducerRetries: opts.structuredRetries ?? 1,
+      bootstrapPayloadBudgetTokens,
+    }, {
+      llm,
+      model,
+      opts,
+      signal,
+      onEvent: (event) => bootstrapEvents.push(event),
+      configuredEntityTypes: [],
+      mapCallSite: "init.bootstrap-map",
+    }));
+  } catch (error) {
+    if ((error as Error).name === "AbortError" || signal.aborted) return null;
+    const isConfigurationError = error instanceof PromptBudgetExceededError
+      || /bounded mapper chunk size|requires .*budget|exceeds .*budget/i.test((error as Error).message);
+    const message = isConfigurationError
+      ? `init: configuration error — fixed bootstrap evidence prompt exceeds input budget: ${(error as Error).message}; domain was not created.`
+      : `init: domain bootstrap failed — bounded evidence preparation failed: ${(error as Error).message}. Fix model/prompt and re-run.`;
+    yield { kind: "error", message };
+    yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
+    return null;
+  }
+
+  const messages = bootstrapMessages(bootstrapEvidence);
+  const estimatedInputTokens = estimatePreparedMessages(prepareChatMessages(messages, opts));
+  yield createPromptBudgetEvent({
+    callSite: "init.bootstrap",
+    configuredInputBudget: inputBudgetTokens,
+    effectiveInputBudget: inputBudgetTokens,
+    estimatedInputTokens,
+    outputBudget: outputBudgetTokens,
+    compressionProfile,
+    contextUnits: bootstrapEvidence.candidates.length
+      + bootstrapEvidence.domainThemes.length
+      + bootstrapEvidence.languageEvidence.length,
+  });
+  if (estimatedInputTokens > inputBudgetTokens) {
+    yield {
+      kind: "error",
+      message: `init: configuration error — fixed bootstrap prompt requires ${estimatedInputTokens} tokens but input budget is ${inputBudgetTokens}; domain was not created.`,
+    };
+    yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
+    return null;
+  }
+
+  yield { kind: "tool_use", name: "Initialising domain", input: {} };
+  const sink: StructuredSink<{
+    id: string;
+    name: string;
+    wiki_folder: string;
+    entity_types: EntityType[];
+    language_notes: string;
+  }> = {};
+  let parsed: {
+    id: string;
+    name: string;
+    wiki_folder: string;
+    entity_types: EntityType[];
+    language_notes: string;
+  };
+  try {
+    for await (const event of runStructuredStreaming({
+      llm,
+      model,
+      baseMessages: messages,
+      opts,
+      profile: { kind: "json-zod", schema: DomainEntrySchema },
+      maxRetries: opts.structuredRetries ?? 1,
+      callSite: "init.bootstrap",
+      signal,
+      onEvent: () => {},
+    }, sink)) {
+      yield event;
+    }
+    parsed = sink.value!;
+    yield { kind: "tool_result", ok: true, preview: `domain: ${parsed.id}` };
+    if (sink.fullText) yield { kind: "assistant_text", delta: sink.fullText };
+  } catch (error) {
+    yield { kind: "tool_result", ok: false, preview: (error as Error).message };
+    if ((error as Error).name === "AbortError" || signal.aborted) return null;
+    yield {
+      kind: "error",
+      message: `init: domain bootstrap failed — could not derive entity types (structured-output error: ${(error as Error).message}). Fix model/prompt and re-run.`,
+    };
+    yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
+    return null;
+  }
+
+  if (signal.aborted) return null;
+
+  let entry: DomainEntry;
+  try {
+    entry = {
+      id: parsed.id,
+      name: parsed.name,
+      wiki_folder: sanitizeWikiFolder(parsed.wiki_folder),
+      entity_types: parsed.entity_types,
+      language_notes: parsed.language_notes,
+    };
+    for (const entityType of entry.entity_types ?? []) {
+      if (entityType.wiki_subfolder) {
+        entityType.wiki_subfolder = sanitizeWikiSubfolder(entityType.wiki_subfolder);
+      }
+      if (entityType.wiki_subfolder === domainId) entityType.wiki_subfolder = "";
+    }
+    if (!entry.id || !entry.wiki_folder) throw new Error("Missing required fields");
+    if (force && existing) entry.wiki_folder = existing.wiki_folder;
+  } catch {
+    yield {
+      kind: "error",
+      message: `init: domain bootstrap failed — invalid domain entry for ${sourceFile}`,
+    };
+    yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
+    return null;
+  }
+
+  return {
+    sourceFile,
+    sourceContent,
+    entry,
+    outputTokens: sink.outputTokens ?? 0,
+  };
+}
+
+async function* forwardBootstrap(
+  generator: AsyncGenerator<RunEvent, PreparedDomainBootstrap | null>,
+): AsyncGenerator<RunEvent, PreparedDomainBootstrap | null> {
+  while (true) {
+    const next = await generator.next();
+    if (next.done) return next.value;
+    yield next.value;
+  }
 }
 
 export async function* runInit(
@@ -84,24 +327,102 @@ export async function* runInit(
       return;
     }
 
+    let preparedSources: Array<{ path: string; content: string }>;
+    try {
+      const sourceFileLists = await Promise.all(
+        effectiveSources.map((sourcePath) =>
+          sourcePath.endsWith(".md") ? Promise.resolve([sourcePath]) : vaultTools.listFiles(sourcePath)),
+      );
+      const sourceFiles = [...new Set(sourceFileLists.flat())]
+        .filter((file) => file.endsWith(".md"))
+        .sort(compareCodePoints);
+      preparedSources = await Promise.all(sourceFiles.map(async (path) => ({
+        path,
+        content: await vaultTools.read(path),
+      })));
+    } catch (error) {
+      yield { kind: "error", message: `force: could not prepare sources: ${(error as Error).message}` };
+      return;
+    }
+    const firstSource = preparedSources[0]?.path;
+    if (!firstSource) {
+      yield { kind: "error", message: `No .md files found in source paths: ${effectiveSources.join(", ")}` };
+      return;
+    }
+    const firstSourceContent = preparedSources[0].content;
+    const bootstrap = forwardBootstrap(prepareDomainBootstrap(
+      domainId,
+      effectiveSources,
+      firstSource,
+      firstSourceContent,
+      existing,
+      true,
+      vaultName,
+      llm,
+      model,
+      signal,
+      opts,
+      Date.now(),
+    ));
+    let preparedBootstrap: PreparedDomainBootstrap | null;
+    while (true) {
+      const next = await bootstrap.next();
+      if (next.done) {
+        preparedBootstrap = next.value;
+        break;
+      }
+      yield next.value;
+    }
+    if (!preparedBootstrap || signal.aborted) return;
+    preparedBootstrap.preparedSources = preparedSources;
+
     yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).initProgress.reinitWiping(domainWikiFolder(existing.wiki_folder)) };
     yield { kind: "tool_use", name: "WipeDomain", input: { folder: existing.wiki_folder } };
-    const wiped = await wipeDomainFolder(vaultTools, existing.wiki_folder);
-    yield { kind: "tool_result", ok: true };
-    yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).initProgress.removedFiles(wiped.length) };
-
+    if (signal.aborted) {
+      yield { kind: "tool_result", ok: false, preview: "force: cancelled before wipe" };
+      return;
+    }
+    try {
+      for (const prepared of preparedSources) {
+        if (await vaultTools.read(prepared.path) !== prepared.content) {
+          yield { kind: "tool_result", ok: false, preview: `source changed: ${prepared.path}` };
+          yield { kind: "error", message: `force: source changed during bootstrap preflight: ${prepared.path}` };
+          return;
+        }
+        if (signal.aborted) {
+          yield { kind: "tool_result", ok: false, preview: "force: cancelled before wipe" };
+          return;
+        }
+      }
+    } catch (error) {
+      yield { kind: "tool_result", ok: false, preview: (error as Error).message };
+      yield { kind: "error", message: `force: could not recheck prepared sources: ${(error as Error).message}` };
+      return;
+    }
+    if (signal.aborted) {
+      yield { kind: "tool_result", ok: false, preview: "force: cancelled before wipe" };
+      return;
+    }
+    let wiped: string[];
+    try {
+      wiped = await wipeDomainFolder(vaultTools, existing.wiki_folder, signal);
+    } catch (error) {
+      yield { kind: "tool_result", ok: false, preview: (error as Error).message };
+      yield { kind: "error", message: `force: wipe failed — ${(error as Error).message}` };
+      return;
+    }
+    existing.entity_types = [];
+    existing.analyzed_sources = {};
     yield {
       kind: "domain_updated", domainId,
       patch: { entity_types: [], analyzed_sources: {} },
     };
-
-    if (signal.aborted) return;
-
-    existing.entity_types = [];
-    existing.analyzed_sources = {};
+    yield { kind: "tool_result", ok: true };
+    yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).initProgress.removedFiles(wiped.length) };
 
     yield* runInitWithSources(
       domainId, effectiveSources, false, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, true, similarity,
+      preparedBootstrap,
     );
     return;
   }
@@ -143,15 +464,24 @@ export async function* runInitWithSources(
   onFileError: OnFileError | undefined,
   force: boolean = false,
   similarity?: PageSimilarityService,
+  preparedBootstrap?: PreparedDomainBootstrap,
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
   let outputTokens = 0;
   const wikiRootGuess = `!Wiki`;
 
   yield { kind: "tool_use", name: "Glob", input: { pattern: sourcePaths.join(", ") } };
-  await ensureRootFiles(vaultTools, wikiRootGuess);
-  const sourceFileLists = await Promise.all(sourcePaths.map((sp) => vaultTools.listFiles(sp)));
-  const sourceFiles = [...new Set(sourceFileLists.flat())].filter((f) => f.endsWith(".md"));
+  const preparedSourceContents = new Map(
+    preparedBootstrap?.preparedSources?.map(({ path, content }) => [path, content]) ?? [],
+  );
+  let sourceFiles: string[];
+  if (preparedBootstrap?.preparedSources !== undefined) {
+    sourceFiles = preparedBootstrap.preparedSources.map(({ path }) => path);
+  } else {
+    await ensureRootFiles(vaultTools, wikiRootGuess);
+    const sourceFileLists = await Promise.all(sourcePaths.map((sp) => vaultTools.listFiles(sp)));
+    sourceFiles = [...new Set(sourceFileLists.flat())].filter((f) => f.endsWith(".md"));
+  }
 
   if (!sourceFiles.length) {
     yield { kind: "tool_result", ok: false, preview: "no .md files found" };
@@ -185,10 +515,10 @@ export async function* runInitWithSources(
   }
 
   const initialDomainRoot = existing ? domainWikiFolder(existing.wiki_folder) : wikiRootGuess;
-  const schemaContent = render(schemaTemplate, { section_conventions: wikiSections(resolveLang(opts.outputLanguage)) });
   let annotationsCache = await readPageDescriptions(vaultTools, initialDomainRoot);
 
   let currentDomain: DomainEntry | null = existing ?? null;
+  let successfulFiles = 0;
 
   for (let i = 0; i < toAnalyze.length; i++) {
     if (signal.aborted) return;
@@ -198,10 +528,11 @@ export async function* runInitWithSources(
 
     let fileContent: string;
     try {
-      fileContent = await vaultTools.read(file);
+      fileContent = preparedSourceContents.has(file)
+        ? preparedSourceContents.get(file)!
+        : await vaultTools.read(file);
     } catch {
       yield { kind: "assistant_text", delta: `⚠ ${file}: не удалось прочитать файл, пропускаем\n` };
-      yield { kind: "file_done", file };
       continue;
     }
 
@@ -209,74 +540,39 @@ export async function* runInitWithSources(
 
     // --- Step 1: Analyze ---
     if (i === 0 && !isResuming) {
-      // Bootstrap
-      const systemContent = render(initTemplate, {
-        domain_id: domainId,
-        vault_name: vaultName,
-        schema_block: schemaContent ? `\nWiki conventions (_wiki_schema.md):\n${schemaContent}` : "",
-      });
-
-      const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-        { role: "system", content: systemContent },
-        { role: "user", content: `Domain ID: ${domainId}\nVault name: ${vaultName}\nSource paths: ${sourcePaths.join(", ")}\n\n${file}:\n${fileContent}` },
-      ];
-
-      yield { kind: "tool_use", name: "Initialising domain", input: {} };
-      const sink: StructuredSink<{ id: string; name: string; wiki_folder: string; entity_types: EntityType[]; language_notes: string }> = {};
-      let parsed: { id: string; name: string; wiki_folder: string; entity_types: EntityType[]; language_notes: string };
-      try {
-        for await (const ev of runStructuredStreaming({
-          llm, model, baseMessages: messages, opts,
-          profile: { kind: "json-zod", schema: DomainEntrySchema },
-          maxRetries: opts.structuredRetries ?? 1,
-          callSite: "init.bootstrap",
+      let bootstrapResult = preparedBootstrap;
+      if (bootstrapResult) {
+        if (bootstrapResult.sourceFile !== file || bootstrapResult.sourceContent !== fileContent) {
+          yield { kind: "error", message: `force: prepared bootstrap source changed: ${file}` };
+          return;
+        }
+      } else {
+        const bootstrap = forwardBootstrap(prepareDomainBootstrap(
+          domainId,
+          sourcePaths,
+          file,
+          fileContent,
+          existing,
+          force,
+          vaultName,
+          llm,
+          model,
           signal,
-          onEvent: () => {},
-        }, sink)) {
-          yield ev;
+          opts,
+          start,
+        ));
+        while (true) {
+          const next = await bootstrap.next();
+          if (next.done) {
+            bootstrapResult = next.value ?? undefined;
+            break;
+          }
+          yield next.value;
         }
-        parsed = sink.value!;
-        outputTokens += sink.outputTokens ?? 0;
-        yield { kind: "tool_result", ok: true, preview: `domain: ${parsed.id}` };
-        if (sink.fullText) yield { kind: "assistant_text", delta: sink.fullText };
-      } catch (e) {
-        yield { kind: "tool_result", ok: false, preview: (e as Error).message };
-        if ((e as Error).name === "AbortError" || signal.aborted) return;
-        yield {
-          kind: "error",
-          message: `init: domain bootstrap failed — could not derive entity types (structured-output error: ${(e as Error).message}). Fix model/prompt and re-run.`,
-        };
-        yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
-        return;
       }
-
-      if (signal.aborted) return;
-
-      let entry: DomainEntry;
-      try {
-        entry = {
-          id: parsed.id,
-          name: parsed.name,
-          wiki_folder: parsed.wiki_folder,
-          entity_types: parsed.entity_types,
-          language_notes: parsed.language_notes,
-        };
-        entry.wiki_folder = sanitizeWikiFolder(entry.wiki_folder ?? "");
-        for (const et of entry.entity_types ?? []) {
-          if (et.wiki_subfolder) et.wiki_subfolder = sanitizeWikiSubfolder(et.wiki_subfolder);
-          // LLM sometimes echoes domain_id as wiki_subfolder → creates !Wiki/os/os paths
-          if (et.wiki_subfolder === domainId) et.wiki_subfolder = "";
-        }
-        if (!entry.id || !entry.wiki_folder) throw new Error("Missing required fields");
-        // На reinit (force=true) wiki_folder уже зафиксирован — LLM не должен его менять.
-        if (force && existing) {
-          entry.wiki_folder = existing.wiki_folder;
-        }
-      } catch {
-        yield { kind: "assistant_text", delta: `⚠ ${file}: bootstrap построение entry упало, пропускаем\n` };
-        yield { kind: "file_done", file };
-        continue;
-      }
+      if (!bootstrapResult) return;
+      outputTokens += bootstrapResult.outputTokens;
+      const entry = bootstrapResult.entry;
 
       if (dryRun) {
         yield {
@@ -315,48 +611,67 @@ export async function* runInitWithSources(
       yield { kind: "tool_result", ok: true };
     } else {
       if (!currentDomain) {
-        yield { kind: "file_done", file };
         continue;
       }
     }
 
     if (signal.aborted) return;
     if (!currentDomain) {
-      yield { kind: "file_done", file };
       continue;
     }
 
     // --- Ingest: write pages + intercept domain_updated for entity_types propagation ---
     let retried = false;
     let done = false;
+    let ingestOutcome: IngestOutcome | undefined;
     while (!done) {
-      let hadError = false;
       let caughtErr: Error | null = null;
+      let controlledRetryable: boolean | undefined;
       try {
-        for await (const ev of runIngest([file], vaultTools, llm, model, [currentDomain], vaultTools.vaultRoot, signal, opts, similarity, annotationsCache)) {
-          yield ev;
-          if (ev.kind === "domain_updated" && ev.domainId === domainId) {
-            currentDomain = { ...currentDomain, ...ev.patch };
+        const forwarded = forwardIngest(
+          runIngest([file], vaultTools, llm, model, [currentDomain], vaultTools.vaultRoot, signal, opts, similarity, annotationsCache),
+          (event) => {
+            if (event.domainId === domainId && currentDomain) {
+              currentDomain = { ...currentDomain, ...event.patch };
+            }
+          },
+        );
+        while (true) {
+          const next = await forwarded.next();
+          if (next.done) {
+            ingestOutcome = next.value;
+            break;
           }
+          yield next.value;
         }
-        done = true;
+        if (!ingestOutcome.ok) {
+          controlledRetryable = ingestOutcome.retryable;
+          caughtErr = new Error(ingestOutcome.message);
+          caughtErr.name = ingestOutcome.stage === "embedding"
+            ? "EmbeddingUnavailableError"
+            : "IngestOutcomeError";
+        }
       } catch (e) {
-        hadError = true;
         caughtErr = e as Error;
       }
-      if (hadError && caughtErr) {
+      if (caughtErr) {
         if (caughtErr instanceof EmbeddingUnavailableError || caughtErr.name === "EmbeddingUnavailableError") {
           yield { kind: "error", message: `init stopped — embedding endpoint failed: ${caughtErr.message}. Fix embedding config and re-run.` };
           yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
           return;
         }
-        const canRetry = !retried;
+        const canRetry = !retried && (controlledRetryable ?? true);
         const choice = onFileError ? await onFileError(file, caughtErr, canRetry) : "skip";
         if (choice === "stop") return;
         if (choice === "retry" && canRetry) { retried = true; continue; }
         done = true;
+      } else {
+        done = true;
       }
     }
+
+    if (!ingestOutcome?.ok) continue;
+    outputTokens += ingestOutcome.outputTokens;
 
     if (similarity) {
       const domainRoot = currentDomain ? domainWikiFolder(currentDomain.wiki_folder) : wikiRootGuess;
@@ -370,7 +685,7 @@ export async function* runInitWithSources(
       ...currentDomain,
       analyzed_sources: {
         ...(currentDomain.analyzed_sources ?? {}),
-        [file]: await sourceHashFor(vaultTools, file),
+        [file]: ingestOutcome.sourceBodyHash,
       },
     };
     yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
@@ -384,6 +699,7 @@ export async function* runInitWithSources(
     };
     yield { kind: "tool_result", ok: true };
 
+    successfulFiles++;
     yield { kind: "file_done", file };
   }
 
@@ -395,7 +711,7 @@ export async function* runInitWithSources(
   yield {
     kind: "eval_meta",
     fields: {
-      files_processed: toAnalyze.length,
+      files_processed: successfulFiles,
       domain: domainId,
       promptVersion: promptVersionOf(initTemplate),
     },
@@ -403,7 +719,7 @@ export async function* runInitWithSources(
   yield {
     kind: "result",
     durationMs: Date.now() - start,
-    text: `Domain "${domainId}" initialised from ${toAnalyze.length} source files.`,
+    text: `Domain "${domainId}" initialised ${successfulFiles} of ${toAnalyze.length} source files.`,
     outputTokens: outputTokens || undefined,
   };
 }
@@ -437,18 +753,32 @@ export async function* runIncrementalReinit(
 
     let retried = false;
     let fileDone = false;
+    let ingestOutcome: IngestOutcome | undefined;
     while (!fileDone) {
       let caught: Error | null = null;
+      let controlledRetryable: boolean | undefined;
       try {
-        for await (const ev of runIngest(
-          [file], vaultTools, llm, model, [currentDomain], vaultTools.vaultRoot, signal, opts, similarity,
-        )) {
-          yield ev;
-          if (ev.kind === "domain_updated" && ev.domainId === domainId) {
-            currentDomain = { ...currentDomain, ...ev.patch };
+        const forwarded = forwardIngest(
+          runIngest([file], vaultTools, llm, model, [currentDomain], vaultTools.vaultRoot, signal, opts, similarity),
+          (event) => {
+            if (event.domainId === domainId) currentDomain = { ...currentDomain!, ...event.patch };
+          },
+        );
+        while (true) {
+          const next = await forwarded.next();
+          if (next.done) {
+            ingestOutcome = next.value;
+            break;
           }
+          yield next.value;
         }
-        fileDone = true;
+        if (!ingestOutcome.ok) {
+          controlledRetryable = ingestOutcome.retryable;
+          caught = new Error(ingestOutcome.message);
+          caught.name = ingestOutcome.stage === "embedding"
+            ? "EmbeddingUnavailableError"
+            : "IngestOutcomeError";
+        }
       } catch (e) {
         caught = e as Error;
       }
@@ -459,29 +789,31 @@ export async function* runIncrementalReinit(
           return;
         }
         if (caught.name === "AbortError" || signal.aborted) return;
-        const canRetry = !retried;
+        const canRetry = !retried && (controlledRetryable ?? true);
         const choice = onFileError ? await onFileError(file, caught, canRetry) : "skip";
         if (choice === "stop") return;
         if (choice === "retry" && canRetry) { retried = true; continue; }
+        fileDone = true;
+      } else {
         fileDone = true;
       }
     }
 
     if (signal.aborted) return;
+    if (!ingestOutcome?.ok) continue;
 
-    // New-source bookkeeping: record the source hash if not already present.
     const analyzedMap = currentDomain.analyzed_sources ?? {};
-    if (!(file in analyzedMap)) {
-      const hash = await sourceHashFor(vaultTools, file);
-      const nextAnalyzed: Record<string, string> = { ...analyzedMap, [file]: hash };
-      currentDomain = {
-        ...currentDomain,
-        analyzed_sources: nextAnalyzed,
-      };
-      yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
-      yield { kind: "domain_updated", domainId, patch: { analyzed_sources: currentDomain.analyzed_sources } };
-      yield { kind: "tool_result", ok: true };
-    }
+    const nextAnalyzed: Record<string, string> = {
+      ...analyzedMap,
+      [file]: ingestOutcome.sourceBodyHash,
+    };
+    currentDomain = {
+      ...currentDomain,
+      analyzed_sources: nextAnalyzed,
+    };
+    yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
+    yield { kind: "domain_updated", domainId, patch: { analyzed_sources: currentDomain.analyzed_sources } };
+    yield { kind: "tool_result", ok: true };
 
     doneCount++;
     yield { kind: "file_done", file };
@@ -490,7 +822,7 @@ export async function* runIncrementalReinit(
   yield {
     kind: "eval_meta",
     fields: {
-      files_processed: changedFiles.length,
+      files_processed: doneCount,
       domain: domainId,
       promptVersion: promptVersionOf(initTemplate),
     },
@@ -502,7 +834,11 @@ export async function* runIncrementalReinit(
   };
 }
 
-export async function wipeDomainFolder(vaultTools: VaultTools, wikiFolder: string): Promise<string[]> {
+export async function wipeDomainFolder(
+  vaultTools: VaultTools,
+  wikiFolder: string,
+  signal?: AbortSignal,
+): Promise<string[]> {
   const root = domainWikiFolder(wikiFolder);
   // Preserve metadata.jsonl — it is the domain's registry identity. A force
   // reinit resets its contents (entity_types/analyzed_sources) via later
@@ -511,14 +847,50 @@ export async function wipeDomainFolder(vaultTools: VaultTools, wikiFolder: strin
   // are silently discarded and the metadata is never rewritten. index.jsonl and
   // log.jsonl are content — they are removed and rebuilt by the re-ingest.
   const metaPath = domainMetadataPath(root);
-  const files = await vaultTools.listFiles(root);
-  const removed: string[] = [];
-  for (const f of files) {
-    if (f === metaPath) continue;
-    try { await vaultTools.remove(f); removed.push(f); } catch { /* skip locked */ }
+  const files = (await vaultTools.listFiles(root))
+    .filter((path) => path !== metaPath)
+    .sort(compareCodePoints);
+  const planned = new Map<string, ReturnType<typeof fileImage>>();
+  for (const path of files) {
+    planned.set(path, fileImage(await vaultTools.read(path)));
   }
-  await vaultTools.removeSubfolders(root);
-  return removed;
+  const transaction = new TransactionVaultTools(vaultTools);
+  try {
+    for (const path of files) {
+      if (signal?.aborted) throw new Error("force: wipe cancelled");
+      const expected = planned.get(path)!;
+      if (!sameFileImage(await readFileImage(vaultTools, path), expected)) {
+        throw new Error(`force: wipe target changed before removal: ${path}`);
+      }
+      await transaction.removeIfCurrent(path, expected);
+      if (signal?.aborted) throw new Error("force: wipe cancelled");
+    }
+    if (signal?.aborted) throw new Error("force: wipe cancelled");
+    const unexpected = (await vaultTools.listFiles(root))
+      .filter((path) => path !== metaPath)
+      .sort(compareCodePoints);
+    if (unexpected.length > 0) {
+      throw new Error(`force: final inventory contains unexpected files: ${unexpected.join(", ")}`);
+    }
+    if (signal?.aborted) throw new Error("force: wipe cancelled");
+  } catch (error) {
+    let rollbackError: unknown;
+    try {
+      await rollbackFileMutations(vaultTools, transaction.mutations);
+    } catch (caught) {
+      rollbackError = caught;
+    }
+    if (rollbackError !== undefined) {
+      throw rollbackError instanceof Error
+        ? rollbackError
+        : new Error(String(rollbackError));
+    }
+    if (!transaction.manifestComplete) {
+      throw new Error(`force: wipe transaction manifest is untrustworthy — ${(error as Error).message}`);
+    }
+    throw error;
+  }
+  return files;
 }
 
 async function ensureRootFiles(vaultTools: VaultTools, wikiRoot: string): Promise<void> {

@@ -361,6 +361,7 @@ export interface EvidenceRuntime {
   signal?: AbortSignal;
   onEvent?: (event: RunEvent) => void;
   configuredEntityTypes?: string[];
+  mapCallSite?: "ingest.evidence-map" | "init.bootstrap-map";
 }
 
 export interface BootstrapCandidateEvidence {
@@ -716,7 +717,7 @@ export function findLargestFeasibleBudget<T>(
 }
 
 interface RequestTelemetry {
-  callSite: "ingest.evidence-map" | "ingest.evidence-reduce";
+  callSite: "ingest.evidence-map" | "ingest.evidence-reduce" | "init.bootstrap-map";
   configuredInputBudget: number;
   effectiveInputBudget: number;
   outputBudget?: number;
@@ -791,6 +792,7 @@ async function mapChunk(
   mode: EvidenceMappingMode,
 ): Promise<VerifiedEvidencePacket[]> {
   const configuredBudget = policy.inputBudgetTokens;
+  const mapCallSite = runtime.mapCallSite ?? "ingest.evidence-map";
   const opts = { ...(runtime.opts ?? {}), inputBudgetTokens: configuredBudget };
   try {
     const messages = messagesForMapper(mapPrompt, chunk, domainId, mode, source);
@@ -801,7 +803,7 @@ async function mapChunk(
     }
     const result = await runBoundedStructuredWithRetry({
       llm: llmWithRequestTelemetry(runtime, {
-        callSite: "ingest.evidence-map",
+        callSite: mapCallSite,
         configuredInputBudget: configuredBudget,
         effectiveInputBudget: configuredBudget,
         outputBudget: policy.outputBudgetTokens,
@@ -815,7 +817,7 @@ async function mapChunk(
       opts: mapperOpts,
       profile: { kind: "json-zod", schema: mapperSchemaFor(chunk, mode) },
       maxRetries: policy.mapperRetries ?? 1,
-      callSite: "ingest.evidence-map",
+      callSite: mapCallSite,
       signal: runtime.signal ?? new AbortController().signal,
       onEvent: () => {},
     });
@@ -873,10 +875,11 @@ async function mapChunksWithContextRepack(
   mode: EvidenceMappingMode,
 ): Promise<{ chunks: SourceChunk[]; packets: VerifiedEvidencePacket[]; noEvidence: NoEvidence[] }> {
   const configuredBudget = policy.inputBudgetTokens;
+  const mapCallSite = runtime.mapCallSite ?? "ingest.evidence-map";
   const configuredTypes = mode.rejectEntityTypes ? [] : [...(mode.allowedEntityTypes ?? [])];
   let failedMapper: (MapperRequestDetails & Pick<SourceChunk, "id" | "startLine" | "endLine">) | undefined;
   return runWithContextRepack({
-    callSite: "ingest.evidence-map",
+    callSite: mapCallSite,
     configuredInputBudget: configuredBudget,
     outputBudget: policy.outputBudgetTokens,
     compressionProfile: compressionOf(policy),

@@ -11,6 +11,7 @@ import { inspectPatchablePage } from "../src/section-patches";
 
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 
+const synthesisModule = await import("../src/phases/ingest-synthesis");
 const {
   validateSynthesisActions,
   validateSynthesisCoverage,
@@ -20,11 +21,12 @@ const {
   SynthesisSplitRequiredError,
   ConflictRegenerationExhaustedError,
   ConflictStillStaleError,
-} = await import("../src/phases/ingest-synthesis");
+} = synthesisModule;
 import type OpenAI from "openai";
 import type { EntityContextBundle, WikiSectionUnit } from "../src/ingest-context";
 import type { ContextUnit } from "../src/prompt-budget";
 import type { LlmClient, RunEvent } from "../src/types";
+import type { SynthesisOutput } from "../src/phases/zod-schemas";
 import { estimatePreparedMessages } from "../src/prompt-budget";
 
 const existingPath = "!Wiki/d/concept/wiki_d_a.md";
@@ -769,4 +771,32 @@ test("conflicting entity type deltas from recursively split outputs fail final m
   }, [], []);
   await assert.rejects(synthesizeEntityBatch(synthesisArgs([bundle("a"), bundle("b")], llm)), /conflicting entity type delta/i);
   assert.equal(calls, 3);
+});
+
+test("cross-batch synthesis aggregation is deterministic and rejects conflicting deltas", () => {
+  const merge = (
+    synthesisModule as unknown as {
+      mergeSynthesisBatchOutputs?: (outputs: readonly SynthesisOutput[]) => SynthesisOutput;
+    }
+  ).mergeSynthesisBatchOutputs;
+  assert.equal(typeof merge, "function");
+  const output = (type: string, description: string, entityKey: string): SynthesisOutput => ({
+    reasoning: entityKey,
+    actions: [create(entityKey)],
+    skips: [],
+    entity_types_delta: [{ type, description, extraction_cues: [] }],
+  });
+
+  const merged = merge!([
+    output("Zeta", "z", "b"),
+    output("alpha", "a", "a"),
+  ]);
+  assert.deepEqual(merged.entity_types_delta?.map((delta) => delta.type), ["alpha", "zeta"]);
+  assert.throws(
+    () => merge!([
+      output("Concept", "first", "a"),
+      output(" concept ", "second", "b"),
+    ]),
+    /conflicting entity type delta/i,
+  );
 });

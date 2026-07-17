@@ -517,7 +517,7 @@ function orderSynthesisOutput(
   };
 }
 
-function mergeSynthesisOutputs(outputs: readonly SynthesisOutput[]): SynthesisOutput {
+export function mergeSynthesisBatchOutputs(outputs: readonly SynthesisOutput[]): SynthesisOutput {
   const deltas = new Map<string, SynthesisOutput["entity_types_delta"] extends (infer T)[] | undefined ? T : never>();
   for (const output of outputs) {
     for (const raw of normalizeEntityTypeDelta(output.entity_types_delta ?? [])) {
@@ -533,7 +533,8 @@ function mergeSynthesisOutputs(outputs: readonly SynthesisOutput[]): SynthesisOu
     reasoning: outputs.map((output) => output.reasoning).filter((value) => value.trim()).join("\n"),
     actions: outputs.flatMap((output) => output.actions),
     skips: outputs.flatMap((output) => output.skips),
-    entity_types_delta: [...deltas.values()],
+    entity_types_delta: [...deltas.values()].sort((left, right) =>
+      compareCodePoints(normalizeEntityKey(left.type), normalizeEntityKey(right.type))),
   };
 }
 
@@ -865,7 +866,7 @@ async function synthesizeBundles(
     const [left, right] = splitBundles(bundles);
     const leftOutput = await synthesizeBundles(input, left, depth + 1);
     const rightOutput = await synthesizeBundles(input, right, depth + 1);
-    return orderSynthesisOutput(mergeSynthesisOutputs([leftOutput, rightOutput]), bundles);
+    return orderSynthesisOutput(mergeSynthesisBatchOutputs([leftOutput, rightOutput]), bundles);
   }
 }
 

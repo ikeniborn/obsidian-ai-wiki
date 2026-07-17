@@ -31,6 +31,10 @@ import { graphCache } from "./wiki-graph-cache";
 import { collectMdInPaths, parseWikiSources } from "./utils/vault-walk";
 import { computeChangedSources, hashSource, type SourceFileInfo } from "./incremental-sources";
 import { updateEvalRating, readEvalRecord, updateEvalComment, type RatingAxis, type Rating } from "./eval-log";
+import {
+  persistDeleteStateCommitEvent,
+} from "./phases/delete";
+import { processDeleteStateCommitForDispatch } from "./delete-state-dispatch";
 
 /** Minimal surface of the host obsidian-excalidraw-plugin's ExcalidrawAutomate. */
 interface ExcalidrawAutomateLike {
@@ -818,8 +822,41 @@ export class WikiController {
 
     try {
       for await (const ev of runGen) {
-        await this.logEvent(vaultRoot, sessionId, op, domainId, ev);
-        this.activeView()?.appendEvent(ev);
+        if (ev.kind === "delete_state_commit") {
+          const publication = await processDeleteStateCommitForDispatch(ev, {
+            persist: async () => {
+              const stateVaultTools = new VaultTools(
+                this.app.vault.adapter,
+                vaultRoot,
+                this.app.vault,
+              );
+              return persistDeleteStateCommitEvent(
+                this.domainStore,
+                stateVaultTools,
+                ev,
+                vaultRoot,
+              );
+            },
+            log: async (event) => this.logEvent(
+              vaultRoot,
+              sessionId,
+              op,
+              domainId,
+              event,
+            ),
+            append: (event) => this.activeView()?.appendEvent(event),
+          });
+          if (!publication.ok) {
+            finalText = publication.error.message;
+            status = "error";
+            this.collectStep(publication.error, steps);
+            ctrl.abort();
+            break;
+          }
+        } else {
+          await this.logEvent(vaultRoot, sessionId, op, domainId, ev);
+          this.activeView()?.appendEvent(ev);
+        }
         if (ev.kind === "domain_created" || ev.kind === "domain_updated" || ev.kind === "source_path_added" || ev.kind === "source_path_removed") {
           try {
             const cur = await this.domainStore.load();

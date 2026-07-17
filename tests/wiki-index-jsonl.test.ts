@@ -56,6 +56,31 @@ test("index JSONL parses page and chunk records", () => {
   assert.equal(chunkRecordId(records[1] as any), "chunk:hld_system:0");
 });
 
+test("index JSONL rejects malformed known current records and accepts future versions opaquely", () => {
+  const malformedPage = { ...page("a"), resource: "source" };
+  const malformedChunk = { ...chunk, dimensions: 3 };
+  assert.throws(
+    () => parseWikiIndexJsonl(JSON.stringify(malformedPage) + "\n", "!Wiki/d/index.jsonl"),
+    (error: Error) => error.name === "JsonlParseError"
+      && /index\.jsonl:1: invalid current page record/i.test(error.message),
+  );
+  assert.throws(
+    () => parseWikiIndexJsonl(`\n${JSON.stringify(malformedChunk)}\n`, "!Wiki/d/index.jsonl"),
+    (error: Error) => error.name === "JsonlParseError"
+      && /index\.jsonl:2: invalid current chunk record/i.test(error.message),
+  );
+
+  const futurePage = { ...malformedPage, schemaVersion: 2, futureField: "keep" };
+  const futureChunk = { ...malformedChunk, schemaVersion: 2, futureField: [1, 2] };
+  assert.deepEqual(
+    parseWikiIndexJsonl(
+      `${JSON.stringify(futurePage)}\n${JSON.stringify(futureChunk)}\n`,
+      "!Wiki/d/index.jsonl",
+    ),
+    [futurePage, futureChunk],
+  );
+});
+
 test("stringifyWikiIndexJsonl keeps complete records per line", () => {
   assert.match(stringifyWikiIndexJsonl([{
     kind: "page",

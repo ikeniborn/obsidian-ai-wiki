@@ -1,6 +1,8 @@
 import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "./domain";
 import type { EvalMetaFields } from "./eval-log";
+import type { FileMutation } from "./file-transaction";
+import type { IngestLogEntry } from "./wiki-log";
 
 export type WikiOperation =
   | "ingest"
@@ -39,6 +41,67 @@ export type OnFileError = (
   err: Error,
   canRetry: boolean,
 ) => Promise<"skip" | "retry" | "stop">;
+
+export interface IngestDeferredEffects {
+  domainPatch?: { entity_types: EntityType[] };
+  sourcePathAdded?: { domainId: string; path: string };
+  log?: {
+    sourcePath: string;
+    entries: IngestLogEntry[];
+    outputTokens: number;
+  };
+  manifestComplete: boolean;
+  mutations: FileMutation[];
+}
+
+/** Internal delete-rebuild mode; never derived from user-configurable settings. */
+export interface IngestInternalExecution {
+  deferCommitEffects: true;
+  transaction: {
+    readonly manifestComplete: boolean;
+    readonly mutations: FileMutation[];
+  };
+}
+
+export interface DeleteEntityTypeDelta {
+  type: string;
+  before?: EntityType;
+  after?: EntityType;
+}
+
+export interface DeleteStateCommitEvent {
+  kind: "delete_state_commit";
+  domainId: string;
+  journalPath: string;
+  journalHash: string;
+  /** Exact SHA-256 of the controller-persisted published journal receipt. */
+  receiptHash?: string;
+  metadataPath: string;
+  sourcePathAdds: string[];
+  sourcePathRemoved: string;
+  analyzedRemoval: { path: string; beforeHash?: string };
+  entityTypeDeltas: DeleteEntityTypeDelta[];
+}
+
+export type IngestOutcome =
+  | {
+      ok: true;
+      sourcePath: string;
+      created: string[];
+      updated: string[];
+      deleted: string[];
+      outputTokens: number;
+      sourceBodyHash: string;
+      deferred?: IngestDeferredEffects;
+    }
+  | {
+      ok: false;
+      sourcePath?: string;
+      stage: "read" | "evidence" | "context" | "synthesis" | "patch" | "write" | "index" | "embedding" | "backlink";
+      message: string;
+      retryable: boolean;
+      deferred?: IngestDeferredEffects;
+    };
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -127,6 +190,7 @@ export type RunEvent =
   | { kind: "source_path_added"; domainId: string; path: string }
   | { kind: "source_path_removed"; domainId: string; path: string }
   | { kind: "domain_updated"; domainId: string; patch: { entity_types?: EntityType[]; language_notes?: string; wiki_folder?: string; analyzed_sources?: Record<string, string> } }
+  | DeleteStateCommitEvent
   | { kind: "rule_fired"; ruleId: string; count: number }
   | { kind: "eval_meta"; fields: EvalMetaFields }
   | { kind: "init_start"; totalFiles: number; phase?: "analysis" | "ingest" }
