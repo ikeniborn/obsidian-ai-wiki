@@ -392,6 +392,7 @@ export interface LlmWikiPluginSettings {
   vision: {
     enabled: boolean;
     model: string;
+    compressionProfile?: CompressionProfile;
   };
   llmIdleTimeoutSec: number;
   llmIdleRetries: number;

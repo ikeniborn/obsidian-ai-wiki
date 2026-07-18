@@ -10,6 +10,88 @@ import type {
 
 const DEFAULT_INPUT_BUDGET = 16_384;
 
+export type ModelControlField =
+  | "inputBudgetTokens"
+  | "maxTokens"
+  | "compressionProfile";
+
+export interface BackendModelControlDescriptor {
+  globalFields: readonly ModelControlField[];
+  operations: Record<OpKey, readonly ModelControlField[]>;
+  vision: {
+    fields: readonly ["compressionProfile"];
+    check: boolean;
+  };
+}
+
+export function backendModelControlDescriptor(
+  backend: LlmWikiPluginSettings["backend"],
+): BackendModelControlDescriptor {
+  if (backend === "claude-agent") {
+    const fields = ["inputBudgetTokens", "compressionProfile"] as const;
+    return {
+      globalFields: fields,
+      operations: {
+        ingest: fields,
+        query: fields,
+        lint: fields,
+        init: fields,
+        format: ["inputBudgetTokens"],
+      },
+      vision: { fields: ["compressionProfile"], check: false },
+    };
+  }
+
+  const fields = [
+    "inputBudgetTokens",
+    "maxTokens",
+    "compressionProfile",
+  ] as const;
+  return {
+    globalFields: fields,
+    operations: {
+      ingest: fields,
+      query: fields,
+      lint: fields,
+      init: fields,
+      format: ["inputBudgetTokens", "maxTokens"],
+    },
+    vision: { fields: ["compressionProfile"], check: true },
+  };
+}
+
+export function renderModelControlFields(
+  fields: readonly ModelControlField[],
+  renderers: Record<ModelControlField, () => void>,
+): void {
+  for (const field of fields) renderers[field]();
+}
+
+export function createLiveModelControl(
+  initialValue: string,
+  commit: (value: string) => void | Promise<void>,
+  saveOnTyping: boolean,
+): {
+  type: (value: string) => Promise<void>;
+  select: (value: string) => Promise<void>;
+  check: (run: (value: string) => void | Promise<void>) => Promise<void>;
+} {
+  let currentValue = initialValue;
+  return {
+    type: async (value) => {
+      currentValue = value;
+      if (saveOnTyping) await commit(value);
+    },
+    select: async (value) => {
+      currentValue = value;
+      await commit(value);
+    },
+    check: async (run) => {
+      await run(currentValue);
+    },
+  };
+}
+
 function positiveInt(value: unknown, fallback: number): number {
   if (typeof value === "number" && Number.isFinite(value)) {
     const floored = Math.floor(value);
@@ -30,7 +112,14 @@ function normalizeLocalCompression(config: { compressionProfile?: CompressionPro
   else delete config.compressionProfile;
 }
 
-export function normalizeModelCallPolicySettings(settings: LlmWikiPluginSettings): void {
+export function parsePositiveBudgetInput(value: string, previous: number): number {
+  const trimmed = value.trim();
+  if (!/^[1-9]\d*$/.test(trimmed)) return previous;
+  const parsed = Number(trimmed);
+  return Number.isSafeInteger(parsed) ? parsed : previous;
+}
+
+export function normalizePersistedModelControls(settings: LlmWikiPluginSettings): void {
   settings.nativeAgent.inputBudgetTokens = positiveInt(
     settings.nativeAgent.inputBudgetTokens,
     DEFAULT_INPUT_BUDGET,
@@ -49,9 +138,19 @@ export function normalizeModelCallPolicySettings(settings: LlmWikiPluginSettings
     const claude = settings.claudeAgent.operations[key];
     native.inputBudgetTokens = positiveInt(native.inputBudgetTokens, DEFAULT_INPUT_BUDGET);
     claude.inputBudgetTokens = positiveInt(claude.inputBudgetTokens, DEFAULT_INPUT_BUDGET);
-    normalizeLocalCompression(native);
-    normalizeLocalCompression(claude);
+    if (key === "format") {
+      delete native.compressionProfile;
+      delete claude.compressionProfile;
+    } else {
+      normalizeLocalCompression(native);
+      normalizeLocalCompression(claude);
+    }
   }
+  normalizeLocalCompression(settings.vision);
+}
+
+export function normalizeModelCallPolicySettings(settings: LlmWikiPluginSettings): void {
+  normalizePersistedModelControls(settings);
 }
 
 export function policyKey(operation: WikiOperation, parent?: OpKey): OpKey {
@@ -76,7 +175,10 @@ export function resolveModelCallPolicy(
   if (settings.backend === "claude-agent") {
     const global = settings.claudeAgent;
     const local = global.perOperation ? global.operations[key] : undefined;
-    const compression = compressionProfile(local?.compressionProfile)
+    const compression = (key === "format"
+      ? compressionProfile(settings.vision.compressionProfile)
+      : undefined)
+      ?? compressionProfile(local?.compressionProfile)
       ?? compressionProfile(global.compressionProfile)
       ?? "balanced";
     const policy: ModelCallPolicy = {
@@ -97,7 +199,10 @@ export function resolveModelCallPolicy(
 
   const global = settings.nativeAgent;
   const local = global.perOperation ? global.operations[key] : undefined;
-  const compression = compressionProfile(local?.compressionProfile)
+  const compression = (key === "format"
+    ? compressionProfile(settings.vision.compressionProfile)
+    : undefined)
+    ?? compressionProfile(local?.compressionProfile)
     ?? compressionProfile(global.compressionProfile)
     ?? "balanced";
   const outputBudget = positiveInt(local?.maxTokens ?? global.maxTokens, 4096);

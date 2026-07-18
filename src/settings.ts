@@ -2,7 +2,7 @@ import { AbstractInputSuggest, App, DropdownComponent, Notice, Platform, PluginS
 import { ConfirmModal, EditDomainModal, ExportOkfModal, ShellConsentModal } from "./modals";
 import { probeClaudeBinary } from "./claude-cli-client";
 import type LlmWikiPlugin from "./main";
-import type { LlmWikiPluginSettings, OpKey } from "./types";
+import type { CompressionProfile, LlmWikiPluginSettings, OpKey } from "./types";
 import type { DomainEntry } from "./domain";
 import { removeDomainFolder } from "./domain-store";
 import { i18n } from "./i18n";
@@ -10,6 +10,14 @@ import { resolveEffective } from "./effective-settings";
 import { DEFAULT_CHUNKING, probeEmbeddingDimensions, probeEmbeddingDimensionsResult } from "./page-similarity";
 import type { LocalConfig } from "./local-config";
 import { probeRerankerModel, normalizeRerankerConfig } from "./reranker";
+import {
+  backendModelControlDescriptor,
+  createLiveModelControl,
+  parsePositiveBudgetInput,
+  renderModelControlFields,
+  type ModelControlField,
+} from "./model-call-policy";
+import { createRequestUrlVisionTransport, runNativeVisionModelCheck } from "./vision-probe";
 
 async function checkNativeAvailability(baseUrl: string, apiKey: string, model: string): Promise<void> {
   let timerId: number | undefined;
@@ -174,6 +182,30 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     }
   }
 
+  private async checkVisionModel(model: string): Promise<void> {
+    const T = i18n();
+    const na = this.plugin.settings.nativeAgent;
+    await runNativeVisionModelCheck({
+      baseUrl: na.baseUrl,
+      apiKey: this.localCache.nativeAgent?.apiKey ?? "",
+      model,
+      timeoutMs: 30_000,
+      request: createRequestUrlVisionTransport(requestUrl),
+      messages: {
+        missing: T.settings.visionCheck_missing,
+        success: T.settings.visionCheck_ok,
+        details: {
+          timeout: T.settings.visionCheck_timeout,
+          http: T.settings.visionCheck_http,
+          malformed: T.settings.visionCheck_malformed,
+          empty: T.settings.visionCheck_empty,
+        },
+        failure: T.settings.visionCheck_failed,
+      },
+      notify: (message) => { new Notice(message); },
+    });
+  }
+
   // Verify the embedding model is reachable (a native-dimension probe).
   private async checkEmbeddingModel(): Promise<void> {
     const na = this.plugin.settings.nativeAgent;
@@ -214,12 +246,13 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     currentValue: string,
     onChange: (v: string) => Promise<void>,
     saveOnTyping = false,
-    check?: { tooltip: string; run: () => void | Promise<void> },
+    check?: { tooltip: string; run: (currentValue: string) => void | Promise<void> },
   ): void {
+    const live = createLiveModelControl(currentValue, onChange, saveOnTyping);
     if (check) {
       s.addButton((b) =>
         b.setButtonText("Check").setTooltip(check.tooltip)
-          .onClick(() => { void check.run(); }),
+          .onClick(() => { void live.check(check.run); }),
       );
     }
     s.addButton((b) =>
@@ -231,10 +264,13 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       t.inputEl.addEventListener("focus", () => {
         if (this._availableModels.length === 0) void this.fetchModels();
       });
-      if (saveOnTyping) {
-        t.onChange((v) => { void onChange(v); });
-      }
-      new ModelInputSuggest(this.app, t.inputEl, () => this._availableModels, (v) => { void onChange(v); });
+      t.onChange((v) => { void live.type(v); });
+      new ModelInputSuggest(
+        this.app,
+        t.inputEl,
+        () => this._availableModels,
+        (v) => { void live.select(v); },
+      );
     });
   }
 
@@ -251,6 +287,90 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     const s = this.plugin.settings;
     const eff = resolveEffective(s, this.localCache);
     const T = i18n();
+    const modelControls = backendModelControlDescriptor(eff.backend);
+    const addBudgetControl = (
+      setting: Setting,
+      value: number,
+      update: (next: number) => void,
+    ): void => {
+      let previous = value;
+      setting.addText((text) =>
+        text.setValue(String(value)).onChange(async (raw) => {
+          const next = parsePositiveBudgetInput(raw, previous);
+          if (next === previous) return;
+          update(next);
+          previous = next;
+          await this.plugin.saveSettings();
+        }),
+      );
+    };
+    const addCompressionControl = (
+      setting: Setting,
+      value: CompressionProfile | undefined,
+      useGlobal: boolean,
+      update: (next: CompressionProfile | undefined) => void,
+    ): void => {
+      setting.addDropdown((dropdown) => {
+        if (useGlobal) dropdown.addOption("", T.settings.compressionUseGlobal);
+        dropdown
+          .addOption("maximum", T.settings.compressionMaximum)
+          .addOption("balanced", T.settings.compressionBalanced)
+          .addOption("minimum", T.settings.compressionMinimum)
+          .setValue(value ?? "")
+          .onChange(async (raw) => {
+            update((raw || undefined) as CompressionProfile | undefined);
+            await this.plugin.saveSettings();
+          });
+      });
+    };
+    const addPolicyControls = (
+      fields: readonly ModelControlField[],
+      values: {
+        inputBudgetTokens?: number;
+        maxTokens?: number;
+        compressionProfile?: CompressionProfile;
+      },
+      updates: {
+        inputBudgetTokens?: (next: number) => void;
+        maxTokens?: (next: number) => void;
+        compressionProfile?: (next: CompressionProfile | undefined) => void;
+      },
+      useGlobalCompression: boolean,
+    ): void => {
+      renderModelControlFields(fields, {
+        inputBudgetTokens: () => {
+          if (values.inputBudgetTokens === undefined || !updates.inputBudgetTokens) return;
+          addBudgetControl(
+            new Setting(containerEl)
+              .setName(T.settings.inputBudgetTokens_name)
+              .setDesc(T.settings.inputBudgetTokens_desc),
+            values.inputBudgetTokens,
+            updates.inputBudgetTokens,
+          );
+        },
+        maxTokens: () => {
+          if (values.maxTokens === undefined || !updates.maxTokens) return;
+          addBudgetControl(
+            new Setting(containerEl)
+              .setName(T.settings.outputBudgetTokens_name)
+              .setDesc(T.settings.outputBudgetTokens_desc),
+            values.maxTokens,
+            updates.maxTokens,
+          );
+        },
+        compressionProfile: () => {
+          if (!updates.compressionProfile) return;
+          addCompressionControl(
+            new Setting(containerEl)
+              .setName(T.settings.compressionProfile_name)
+              .setDesc(T.settings.compressionProfile_desc),
+            values.compressionProfile,
+            useGlobalCompression,
+            updates.compressionProfile,
+          );
+        },
+      });
+    };
 
     const busy = this.plugin.controller.running;
 
@@ -486,6 +606,19 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           );
       }
 
+      addPolicyControls(
+        modelControls.globalFields,
+        {
+          inputBudgetTokens: s.claudeAgent.inputBudgetTokens,
+          compressionProfile: s.claudeAgent.compressionProfile,
+        },
+        {
+          inputBudgetTokens: (next) => { s.claudeAgent.inputBudgetTokens = next; },
+          compressionProfile: (next) => { s.claudeAgent.compressionProfile = next ?? "balanced"; },
+        },
+        false,
+      );
+
       new Setting(containerEl)
         .setName(T.settings.allowedTools_name)
         .setDesc(T.settings.allowedTools_desc)
@@ -533,6 +666,18 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               t.setValue(s.claudeAgent.operations[key].model)
                 .onChange(async (v) => { s.claudeAgent.operations[key].model = v.trim(); await this.plugin.saveSettings(); }),
             );
+          addPolicyControls(
+            modelControls.operations[key],
+            {
+              inputBudgetTokens: s.claudeAgent.operations[key].inputBudgetTokens,
+              compressionProfile: s.claudeAgent.operations[key].compressionProfile,
+            },
+            {
+              inputBudgetTokens: (next) => { s.claudeAgent.operations[key].inputBudgetTokens = next; },
+              compressionProfile: (next) => { s.claudeAgent.operations[key].compressionProfile = next; },
+            },
+            true,
+          );
           new Setting(containerEl)
             .setName("Effort level")
             .addDropdown(d => {
@@ -569,6 +714,21 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             .onChange(async (v) => { await this.patchLocalNativeApiKey(v.trim()); }),
         );
 
+      addPolicyControls(
+        modelControls.globalFields,
+        {
+          inputBudgetTokens: s.nativeAgent.inputBudgetTokens,
+          maxTokens: s.nativeAgent.maxTokens,
+          compressionProfile: s.nativeAgent.compressionProfile,
+        },
+        {
+          inputBudgetTokens: (next) => { s.nativeAgent.inputBudgetTokens = next; },
+          maxTokens: (next) => { s.nativeAgent.maxTokens = next; },
+          compressionProfile: (next) => { s.nativeAgent.compressionProfile = next ?? "balanced"; },
+        },
+        false,
+      );
+
       if (!s.nativeAgent.perOperation) {
         new Setting(containerEl).setName(T.settings.h3_defaultChatModel).setHeading();
 
@@ -579,21 +739,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           false,
           { tooltip: "Verify the chat model is reachable", run: () => this.checkChatModel() },
         );
-
-        new Setting(containerEl)
-          .setName(T.settings.maxTokens_name)
-          .setDesc(T.settings.maxTokens_desc)
-          .addText((t) =>
-            t.setPlaceholder("4096")
-              .setValue(String(s.nativeAgent.maxTokens))
-              .onChange(async (v) => {
-                const n = Number(v);
-                if (Number.isFinite(n) && n > 0) {
-                  s.nativeAgent.maxTokens = Math.floor(n);
-                  await this.plugin.saveSettings();
-                }
-              }),
-          );
 
         new Setting(containerEl)
           .setName("Thinking budget tokens")
@@ -676,16 +821,20 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             s.nativeAgent.operations[key].model,
             async (v) => { s.nativeAgent.operations[key].model = v; await this.plugin.saveSettings(); },
           );
-          new Setting(containerEl)
-            .setName(T.settings.opMaxTokens_name)
-            .setDesc(T.settings.opMaxTokens_desc)
-            .addText((t) =>
-              t.setValue(String(s.nativeAgent.operations[key].maxTokens))
-                .onChange(async (v) => {
-                  const n = Number(v);
-                  if (Number.isFinite(n) && n > 0) { s.nativeAgent.operations[key].maxTokens = Math.floor(n); await this.plugin.saveSettings(); }
-                }),
-            );
+          addPolicyControls(
+            modelControls.operations[key],
+            {
+              inputBudgetTokens: s.nativeAgent.operations[key].inputBudgetTokens,
+              maxTokens: s.nativeAgent.operations[key].maxTokens,
+              compressionProfile: s.nativeAgent.operations[key].compressionProfile,
+            },
+            {
+              inputBudgetTokens: (next) => { s.nativeAgent.operations[key].inputBudgetTokens = next; },
+              maxTokens: (next) => { s.nativeAgent.operations[key].maxTokens = next; },
+              compressionProfile: (next) => { s.nativeAgent.operations[key].compressionProfile = next; },
+            },
+            true,
+          );
           new Setting(containerEl)
             .setName("Thinking budget tokens")
             .addText(t =>
@@ -992,12 +1141,22 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       );
 
     if (s.vision.enabled) {
+      addPolicyControls(
+        modelControls.vision.fields,
+        { compressionProfile: s.vision.compressionProfile },
+        { compressionProfile: (next) => { s.vision.compressionProfile = next; } },
+        true,
+      );
       this.addModelControl(
         new Setting(containerEl)
           .setName(T.settings.visionModel_name)
           .setDesc(T.settings.visionModel_desc),
         s.vision.model,
         async (v) => { s.vision.model = v; await this.plugin.saveSettings(); },
+        false,
+        modelControls.vision.check
+          ? { tooltip: T.settings.visionCheck_tooltip, run: (model) => this.checkVisionModel(model) }
+          : undefined,
       );
 
     }
