@@ -1,5 +1,11 @@
 import type OpenAI from "openai";
-import type { LlmCallOptions, RunEvent, LlmClient, ChatMessage } from "../types";
+import type {
+  ChatMessage,
+  CompressionProfile,
+  LlmCallOptions,
+  LlmClient,
+  RunEvent,
+} from "../types";
 import type { FormatProgress } from "../i18n";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas, extractUsage, wrapStreamWithStats, buildLlmCallStatsEvent } from "./llm-utils";
@@ -156,7 +162,13 @@ export async function* runFormat(
   backend: "claude-agent" | "native-agent" = "native-agent",
   wikiVaultPath?: string,
   wikiLinkValidationRetries: number = 3,
-  visionSettings: { enabled: boolean; model: string; language?: "auto" | "ru" | "en" | "es"; imageOnly?: boolean } = { enabled: false, model: "" },
+  visionSettings: {
+    enabled: boolean;
+    model: string;
+    language?: "auto" | "ru" | "en" | "es";
+    imageOnly?: boolean;
+    compressionProfile?: CompressionProfile;
+  } = { enabled: false, model: "" },
   visionTempStore?: VisionTempStore,
   progress: FormatProgress = enFormatProgressFallback,
   formatDomain?: DomainEntry,
@@ -204,8 +216,33 @@ export async function* runFormat(
           yield { kind: "tool_result", ok: true, preview: cached };
           continue;
         }
+        const visionEvents: RunEvent[] = [];
+        let visionEventsEmitted = false;
         try {
-          const description = await analyzeSingleAttachment(path, vaultTools, llm, visionSettings.model, signal, filePath, lang, opts.reasoningLanguage, visionTempStore, visionSettings.imageOnly ?? false, usedVisionTemplates);
+          const description = await analyzeSingleAttachment(
+            path,
+            vaultTools,
+            llm,
+            visionSettings.model,
+            signal,
+            filePath,
+            lang,
+            opts.reasoningLanguage,
+            visionTempStore,
+            visionSettings.imageOnly ?? false,
+            usedVisionTemplates,
+            {
+              inputBudgetTokens: opts.inputBudgetTokens,
+              maxTokens: opts.maxTokens,
+              compressionProfile:
+                visionSettings.compressionProfile
+                ?? opts.semanticCompression?.profile
+                ?? "balanced",
+              onEvent: (event) => visionEvents.push(event),
+            },
+          );
+          for (const event of visionEvents) yield event;
+          visionEventsEmitted = true;
           if (description !== null) {
             visionDescriptions.set(path, description);
             await visionTempStore?.putDescription(path, description);
@@ -216,6 +253,9 @@ export async function* runFormat(
             yield { kind: "info_text", icon: "⚠️", summary: "Vision skipped", details: [`${path} — ${why}`] };
           }
         } catch (e) {
+          if (!visionEventsEmitted) {
+            for (const event of visionEvents) yield event;
+          }
           yield { kind: "tool_result", ok: false, preview: (e as Error)?.message ?? "failed" };
           yield { kind: "info_text", icon: "⚠️", summary: "Vision skipped", details: [path] };
         }

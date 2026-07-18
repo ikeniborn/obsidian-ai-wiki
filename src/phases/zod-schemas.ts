@@ -298,6 +298,19 @@ export const EntitiesOutputSchema = z.object({
   })).max(50),
 });
 
+export const VisionRecognitionRecordSchema = z.object({
+  pageId: NonBlankStringSchema,
+  ocr: z.array(z.string()),
+  objects: z.array(z.string()),
+  relationships: z.array(z.string()),
+  layout: z.array(z.string()),
+  uncertainty: z.array(z.string()),
+}).strict();
+
+export const VisionRecognitionBatchSchema = z.object({
+  records: z.array(VisionRecognitionRecordSchema),
+}).strict();
+
 export const TypeAssignmentsSchema = z.object({
   reasoning: z.string().optional(),
   assignments: z.array(z.object({
