@@ -363,6 +363,12 @@ export const FormatBaseSchema = z.object({
   formatted: z.string().min(10, "formatted слишком короткий"),
 });
 
+export const FormatSegmentOutputSchema = z.object({
+  segmentId: NonBlankStringSchema,
+  report: z.string().min(1, "report не должен быть пустым"),
+  formatted: z.string().min(1, "formatted не должен быть пустым"),
+}).strict();
+
 export const FormatWithVisionSchema = FormatBaseSchema.extend({
   vision_blocks_count: z.number().int().min(0),
   embeds_preserved: z.array(z.string()),
@@ -415,6 +421,7 @@ export type LintBatchOutputResponse = z.infer<typeof LintBatchOutputSchema>;
 export type LintChatPatchResponse = z.infer<typeof LintChatPatchSchema>;
 export type LintOutput = z.infer<typeof LintOutputSchema>;
 export type FormatOutput = z.infer<typeof FormatBaseSchema>;
+export type FormatSegmentModelOutput = z.infer<typeof FormatSegmentOutputSchema>;
 
 /**
  * Structured fallback contract for the query answer when deterministic link
