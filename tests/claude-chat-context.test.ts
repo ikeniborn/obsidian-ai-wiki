@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { existsSync, unlinkSync } from "node:fs";
 import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { register } from "node:module";
+import { Readable } from "node:stream";
 import test from "node:test";
 import type OpenAI from "openai";
 import { z } from "zod";
@@ -57,24 +59,37 @@ const labels = {
   },
 } satisfies LlmLifecycleLabels;
 
-function assistantLine(block: Record<string, unknown>): string {
+function assistantBlocks(blocks: Array<Record<string, unknown>>): string {
   return JSON.stringify({
     type: "assistant",
-    message: { content: [block] },
+    message: { content: blocks },
   });
+}
+
+function assistantLine(block: Record<string, unknown>): string {
+  return assistantBlocks([block]);
 }
 
 async function withClaudeCli<T>(
   lines: string[],
   work: (client: InstanceType<typeof ClaudeCliClient>) => Promise<T>,
   trailingNewline = true,
+  processOutput: { stderr?: string; exitCode?: number } = {},
 ): Promise<T> {
   const dir = await mkdtemp(join(tmpdir(), "obsidian-ai-wiki-claude-"));
   const executable = join(dir, "claude-fixture.mjs");
   const payload = `${lines.join("\n")}${trailingNewline ? "\n" : ""}`;
   await writeFile(
     executable,
-    `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(payload)});\n`,
+    [
+      "#!/usr/bin/env node",
+      `process.stdout.write(${JSON.stringify(payload)});`,
+      processOutput.stderr
+        ? `process.stderr.write(${JSON.stringify(processOutput.stderr)});`
+        : "",
+      `process.exitCode = ${processOutput.exitCode ?? 0};`,
+      "",
+    ].join("\n"),
     "utf8",
   );
   await chmod(executable, 0o700);
@@ -101,6 +116,81 @@ function request(stream: boolean) {
   };
 }
 
+async function collectStream(
+  client: InstanceType<typeof ClaudeCliClient>,
+): Promise<OpenAI.Chat.ChatCompletionChunk[]> {
+  const response = await client.chat.completions.create(request(true));
+  const chunks: OpenAI.Chat.ChatCompletionChunk[] = [];
+  for await (const chunk of response as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>) {
+    chunks.push(chunk);
+  }
+  return chunks;
+}
+
+async function captureRejection(work: () => Promise<unknown>): Promise<Error> {
+  try {
+    await work();
+  } catch (error) {
+    assert.ok(error instanceof Error);
+    return error;
+  }
+  assert.fail("Missing expected rejection.");
+}
+
+test("Claude streaming preserves every ordered text and thinking block", async () => {
+  await withClaudeCli([
+    assistantBlocks([
+      { type: "thinking", thinking: "reason-1" },
+      { type: "text", text: "text-1" },
+      { type: "tool_use", name: "HiddenTool", input: { secret: "tool-secret" } },
+      { type: "thinking", thinking: "reason-2" },
+      { type: "text", text: "text-2" },
+    ]),
+    assistantBlocks([
+      { type: "text", text: "text-3" },
+      { type: "thinking", thinking: "reason-3" },
+    ]),
+  ], async (client) => {
+    const chunks = await collectStream(client);
+    const deltas = chunks
+      .map((chunk) => chunk.choices[0]?.delta as Record<string, unknown>)
+      .filter((delta) => Object.keys(delta).length > 0);
+
+    assert.deepEqual(deltas, [
+      { reasoning: "reason-1" },
+      { content: "text-1" },
+      { reasoning: "reason-2" },
+      { content: "text-2" },
+      { content: "text-3" },
+      { reasoning: "reason-3" },
+    ]);
+    assert.equal(JSON.stringify(deltas).includes("tool-secret"), false);
+  });
+});
+
+test("Claude non-stream preserves multiple blocks and keeps redacted thinking opaque", async () => {
+  await withClaudeCli([
+    assistantBlocks([
+      { type: "redacted_thinking", data: "redacted-secret" },
+      { type: "text", text: "text-a" },
+      { type: "thinking", thinking: "reason-a" },
+      { type: "text", text: "text-b" },
+      { type: "thinking", thinking: "reason-b" },
+      { type: "tool_use", name: "HiddenTool", input: { secret: "tool-secret" } },
+    ]),
+  ], async (client) => {
+    const response = await client.chat.completions.create(request(false));
+    const message = (
+      response as OpenAI.Chat.ChatCompletion
+    ).choices[0]?.message as OpenAI.Chat.ChatCompletionMessage & Record<string, unknown>;
+
+    assert.equal(message.content, "text-atext-b");
+    assert.equal(message.reasoning, "reason-areason-b");
+    assert.equal(JSON.stringify(message).includes("redacted-secret"), false);
+    assert.equal(JSON.stringify(message).includes("tool-secret"), false);
+  });
+});
+
 test("Claude streaming exposes thinking and final text as separate OpenAI deltas", async () => {
   await withClaudeCli([
     assistantLine({ type: "thinking", thinking: "Inspect context." }),
@@ -116,6 +206,31 @@ test("Claude streaming exposes thinking and final text as separate OpenAI deltas
     assert.equal(deltas.map((delta) => delta.reasoning ?? "").join(""), "Inspect context.");
     assert.equal(deltas.map((delta) => delta.content ?? "").join(""), "Final answer.");
     assert.equal(JSON.stringify(deltas).includes("opaque-redacted-stream"), false);
+  }, false);
+});
+
+test("malformed midstream JSON rejects with neutral line metadata", async () => {
+  await withClaudeCli([
+    assistantLine({ type: "text", text: "partial-before-error" }),
+    "{\"type\":\"assistant\",\"sensitive\":\"MIDSTREAM_SECRET\"",
+    assistantLine({ type: "text", text: "must-not-complete" }),
+  ], async (client) => {
+    const error = await captureRejection(() => collectStream(client));
+    assert.match(error.message, /line 2.*bytes/i);
+    assert.doesNotMatch(error.message, /MIDSTREAM_SECRET|partial-before-error|must-not-complete/);
+  });
+});
+
+test("malformed EOF JSON rejects non-stream completion with neutral metadata", async () => {
+  await withClaudeCli([
+    assistantLine({ type: "text", text: "partial-before-eof" }),
+    "{\"type\":\"assistant\",\"sensitive\":\"EOF_SECRET\"",
+  ], async (client) => {
+    const error = await captureRejection(
+      () => client.chat.completions.create(request(false)),
+    );
+    assert.match(error.message, /line 2.*bytes/i);
+    assert.doesNotMatch(error.message, /EOF_SECRET|partial-before-eof/);
   }, false);
 });
 
@@ -135,6 +250,111 @@ test("Claude non-stream completion retains reasoning separately from content", a
     assert.equal(String(message.content).includes("Check evidence."), false);
     assert.equal(JSON.stringify(message).includes("opaque-redacted-completion"), false);
   }, false);
+});
+
+test("slow Claude stream applies stdout backpressure and emits one completion", async () => {
+  const lines = Array.from({ length: 256 }, (_, index) =>
+    assistantLine({ type: "text", text: `${index},` }));
+  const originalPause = Readable.prototype.pause;
+  const originalResume = Readable.prototype.resume;
+  let pauses = 0;
+  let resumes = 0;
+  Readable.prototype.pause = function patchedPause() {
+    if (new Error().stack?.includes("claude-cli-client.ts")) pauses += 1;
+    return originalPause.call(this);
+  };
+  Readable.prototype.resume = function patchedResume() {
+    if (new Error().stack?.includes("claude-cli-client.ts")) resumes += 1;
+    return originalResume.call(this);
+  };
+  try {
+    await withClaudeCli(lines, async (client) => {
+      const response = await client.chat.completions.create(request(true));
+      const iterator = (
+        response as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>
+      )[Symbol.asyncIterator]();
+      const chunks: OpenAI.Chat.ChatCompletionChunk[] = [];
+      chunks.push((await iterator.next()).value);
+      await new Promise<void>((resolve) => setTimeout(resolve, 25));
+      assert.ok(pauses >= 1, "stdout must pause at the queue high-water mark");
+      while (true) {
+        const next = await iterator.next();
+        if (next.done) break;
+        chunks.push(next.value);
+      }
+
+      const content = chunks.map((chunk) =>
+        (chunk.choices[0]?.delta as { content?: string })?.content ?? ""
+      ).join("");
+      assert.equal(content, Array.from({ length: 256 }, (_, index) => `${index},`).join(""));
+      assert.equal(chunks.filter((chunk) =>
+        chunk.choices[0]?.finish_reason === "stop").length, 1);
+      assert.ok(pauses >= 2, "stdout must pause repeatedly while the consumer drains");
+      assert.ok(resumes >= 2, "stdout must resume repeatedly below the queue low-water mark");
+    });
+  } finally {
+    Readable.prototype.pause = originalPause;
+    Readable.prototype.resume = originalResume;
+  }
+});
+
+test("large sensitive stderr is bounded and absent from thrown errors", async () => {
+  const sensitive = `AUTH_TOKEN_DO_NOT_EXPOSE_${"x".repeat(1024)}`;
+  await withClaudeCli([], async (client) => {
+    const error = await captureRejection(
+      () => client.chat.completions.create(request(false)),
+    );
+    assert.equal(error.message.includes("AUTH_TOKEN_DO_NOT_EXPOSE"), false);
+    assert.equal(error.message.includes("xxx"), false);
+    assert.ok(error.message.length < 200);
+  }, true, {
+    stderr: sensitive.repeat(1024),
+    exitCode: 7,
+  });
+});
+
+test("pre-aborted non-stream request rejects before spawn and removes temp prompt", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "obsidian-ai-wiki-pre-abort-"));
+  const marker = join(dir, "spawned.marker");
+  const executable = join(dir, "claude-pre-abort.mjs");
+  const removed: string[] = [];
+  await writeFile(executable, [
+    "#!/usr/bin/env node",
+    `await import("node:fs/promises").then((fs) => fs.writeFile(${JSON.stringify(marker)}, "spawned"));`,
+    "",
+  ].join("\n"), "utf8");
+  await chmod(executable, 0o700);
+  const client = new ClaudeCliClient({
+    iclaudePath: executable,
+    model: "claude-test",
+    requestTimeoutSec: 5,
+    tmpDir: dir,
+    tmpWrite: (path, content) => writeFile(path, content, "utf8"),
+    tmpRemove: (path) => {
+      removed.push(path);
+      if (existsSync(path)) unlinkSync(path);
+    },
+  });
+  const controller = new AbortController();
+  controller.abort("pre-aborted");
+  try {
+    const error = await captureRejection(
+      () => client.chat.completions.create({
+        model: "claude-test",
+        stream: false,
+        messages: [
+          { role: "system", content: "s".repeat(262_145) },
+          { role: "user", content: "Answer." },
+        ],
+      }, { signal: controller.signal }),
+    );
+    assert.equal(error.name, "AbortError");
+    assert.equal(existsSync(marker), false);
+    assert.equal(removed.length, 1);
+    assert.equal(existsSync(removed[0]), false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 function nativeNonStreamClient(reasoning: string, content: string): LlmClient {

@@ -1,7 +1,7 @@
 import { Platform } from "obsidian";
 import { join, isAbsolute } from "path-browserify";
 import type OpenAI from "openai";
-import { parseStreamLine } from "./stream";
+import { parseStreamLine, StreamJsonParseError } from "./stream";
 import type { LlmClient } from "./types";
 
 export interface ClaudeCliConfig {
@@ -18,6 +18,36 @@ export interface ClaudeCliConfig {
 }
 
 const SIGTERM_GRACE_MS = 3000;
+const STDOUT_QUEUE_HIGH_WATER = 64;
+const STDOUT_QUEUE_LOW_WATER = 32;
+const STDERR_TAIL_MAX_BYTES = 16_384;
+
+class BoundedByteTail {
+  private tail = Buffer.alloc(0);
+
+  append(chunk: Buffer): void {
+    if (chunk.length >= STDERR_TAIL_MAX_BYTES) {
+      this.tail = Buffer.from(chunk.subarray(chunk.length - STDERR_TAIL_MAX_BYTES));
+      return;
+    }
+    const combined = Buffer.concat([this.tail, chunk]);
+    this.tail = combined.length <= STDERR_TAIL_MAX_BYTES
+      ? combined
+      : Buffer.from(combined.subarray(combined.length - STDERR_TAIL_MAX_BYTES));
+  }
+}
+
+function cleanupTmpFiles(cfg: ClaudeCliConfig, files: string[]): void {
+  for (const file of files) {
+    try { cfg.tmpRemove(file); } catch { /* already gone */ }
+  }
+}
+
+function abortError(): Error {
+  const error = new Error("Claude request aborted");
+  error.name = "AbortError";
+  return error;
+}
 
 function serializeUntrustedTranscript(
   messages: Array<{ role: "user" | "assistant"; content: string }>,
@@ -53,14 +83,17 @@ export async function probeClaudeBinary(iclaudePath: string): Promise<void> {
   const { spawn } = await import("node:child_process");
   await new Promise<void>((resolve, reject) => {
     const child = spawn(iclaudePath, ["--version"], { stdio: ["ignore", "ignore", "pipe"] });
-    let stderr = "";
+    const stderrTail = new BoundedByteTail();
     const timer = window.setTimeout(() => { child.kill("SIGTERM"); reject(new Error("timeout")); }, 5000);
-    child.stderr?.on("data", (d: Buffer) => { stderr += d.toString("utf8"); });
-    child.on("error", (err: Error) => { window.clearTimeout(timer); reject(err); });
+    child.stderr?.on("data", (chunk: Buffer) => stderrTail.append(chunk));
+    child.on("error", () => {
+      window.clearTimeout(timer);
+      reject(new Error("Claude CLI probe failed to start"));
+    });
     child.on("close", (code: number | null) => {
       window.clearTimeout(timer);
       if (code === 0) resolve();
-      else reject(new Error(stderr.trim() || `exit ${code}`));
+      else reject(new Error(`Claude CLI probe failed (exit ${String(code)})`));
     });
   });
 }
@@ -157,10 +190,14 @@ export class ClaudeCliClient implements LlmClient {
         }
       }
     } catch (err) {
-      for (const f of tmpFiles) { try { this.cfg.tmpRemove(f); } catch { /* ignore */ } }
+      cleanupTmpFiles(this.cfg, tmpFiles);
       throw err;
     }
 
+    if (opts?.signal?.aborted) {
+      cleanupTmpFiles(this.cfg, tmpFiles);
+      throw abortError();
+    }
     if ((params as { stream?: boolean }).stream) {
       return this._makeIterable(args, opts?.signal, requestTimeoutSec, tmpFiles);
     }
@@ -184,74 +221,161 @@ export class ClaudeCliClient implements LlmClient {
   ): AsyncGenerator<OpenAI.Chat.ChatCompletionChunk> {
     validateIclaudePath(this.cfg.iclaudePath);
     if (!Platform.isDesktopApp) throw new Error("Claude CLI backend is desktop-only");
+    if (signal?.aborted) {
+      cleanupTmpFiles(this.cfg, tmpFiles);
+      throw abortError();
+    }
     // Lazily loaded so the Node builtin never executes on mobile, where this
     // code path is unreachable but the module would still fail to load.
     const { spawn } = await import("node:child_process");
     const child = spawn(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || undefined });
-    if (!child.stdout || !child.stderr) throw new Error("spawn: missing stdio");
-    const stderrChunks: Buffer[] = [];
-    child.stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
-
-    const onAbort = () => {
-      child.kill("SIGTERM");
-      window.setTimeout(() => { if (child.exitCode === null) child.kill("SIGKILL"); }, SIGTERM_GRACE_MS);
-    };
-    if (signal?.aborted) { onAbort(); return; }
-    signal?.addEventListener("abort", onAbort, { once: true });
-
-    const timeoutHandle = timeoutSec > 0
-      ? window.setTimeout(() => {
-          timedOut = true;
-          child.kill("SIGTERM");
-          window.setTimeout(() => { if (child.exitCode === null) child.kill("SIGKILL"); }, SIGTERM_GRACE_MS);
-        }, timeoutSec * 1000)
-      : null;
-
+    let timeoutHandle: number | null = null;
     let timedOut = false;
-    const queue: OpenAI.Chat.ChatCompletionChunk[] = [];
+    let queue: OpenAI.Chat.ChatCompletionChunk[] = [];
+    let queueCursor = 0;
     let resolveNext: ((v: void) => void) | null = null;
     const wake = () => { if (resolveNext) { resolveNext(); resolveNext = null; } };
-
     let id = 0;
     let buf = "";
-    const processLine = (line: string) => {
-      const ev = parseStreamLine(line);
-      if (ev?.kind === "system" && ev.sessionId) {
-        this.lastSessionId = ev.sessionId;
-      }
-      if (ev?.kind === "assistant_text") {
-        const delta: Record<string, unknown> = ev.isReasoning
-          ? { reasoning: ev.delta }
-          : { content: ev.delta };
-        queue.push({
-          id: `cc-${++id}`,
-          object: "chat.completion.chunk",
-          model: this.cfg.model || "claude",
-          created: 0,
-          choices: [{ index: 0, delta: delta, finish_reason: null }],
-        });
-        wake();
-      }
+    let lineNumber = 0;
+    let parseError: Error | null = null;
+    const throwParseError = () => {
+      if (parseError instanceof Error) throw parseError;
     };
-    child.stdout.on("data", (chunk: Buffer) => {
-      buf += chunk.toString("utf8");
-      let nl: number;
-      while ((nl = buf.indexOf("\n")) !== -1) {
-        const line = buf.slice(0, nl);
-        buf = buf.slice(nl + 1);
-        processLine(line);
-      }
-    });
-
     let exited = false;
     let exitCode: number | null = null;
-    let spawnError: Error | null = null;
-    child.on("close", (code) => { exitCode = code; exited = true; wake(); });
-    child.on("error", (err) => { spawnError = err; exited = true; wake(); });
+    let spawnError = false;
+    let stdoutPaused = false;
+    const stderrTail = new BoundedByteTail();
+
+    const pendingQueue = () => queue.length - queueCursor;
+    const compactQueue = () => {
+      if (queueCursor === 0) return;
+      queue = queue.slice(queueCursor);
+      queueCursor = 0;
+    };
+    const pauseStdout = () => {
+      if (stdoutPaused || !child.stdout) return;
+      stdoutPaused = true;
+      child.stdout.pause();
+    };
+    const enqueue = (chunk: OpenAI.Chat.ChatCompletionChunk) => {
+      queue.push(chunk);
+      if (pendingQueue() >= STDOUT_QUEUE_HIGH_WATER) pauseStdout();
+      wake();
+    };
+    const processLine = (line: string) => {
+      lineNumber += 1;
+      let events;
+      try {
+        events = parseStreamLine(line);
+      } catch (error) {
+        if (!(error instanceof StreamJsonParseError)) throw error;
+        parseError = new Error(
+          `Claude stream JSON parse failed at line ${lineNumber} ` +
+          `(${Buffer.byteLength(line, "utf8")} bytes)`,
+        );
+        pauseStdout();
+        wake();
+        return;
+      }
+      for (const event of events) {
+        if (event.kind === "system" && event.sessionId) {
+          this.lastSessionId = event.sessionId;
+        }
+        if (event.kind === "assistant_text") {
+          const delta: Record<string, unknown> = event.isReasoning
+            ? { reasoning: event.delta }
+            : { content: event.delta };
+          enqueue({
+            id: `cc-${++id}`,
+            object: "chat.completion.chunk",
+            model: this.cfg.model || "claude",
+            created: 0,
+            choices: [{ index: 0, delta: delta, finish_reason: null }],
+          });
+        }
+      }
+    };
+    const processBufferedLines = () => {
+      while (!parseError && pendingQueue() < STDOUT_QUEUE_HIGH_WATER) {
+        const newline = buf.indexOf("\n");
+        if (newline === -1) break;
+        const line = buf.slice(0, newline);
+        buf = buf.slice(newline + 1);
+        processLine(line);
+      }
+      if (pendingQueue() >= STDOUT_QUEUE_HIGH_WATER) pauseStdout();
+    };
+    const maybeResumeStdout = () => {
+      if (!stdoutPaused || pendingQueue() > STDOUT_QUEUE_LOW_WATER || parseError) return;
+      compactQueue();
+      stdoutPaused = false;
+      processBufferedLines();
+      if (!stdoutPaused && !parseError) child.stdout?.resume();
+    };
+    const takeQueued = (): OpenAI.Chat.ChatCompletionChunk | undefined => {
+      if (pendingQueue() === 0) return undefined;
+      const chunk = queue[queueCursor++];
+      maybeResumeStdout();
+      return chunk;
+    };
+    const onStdoutData = (chunk: Buffer) => {
+      buf += chunk.toString("utf8");
+      processBufferedLines();
+    };
+    const onStderrData = (chunk: Buffer) => stderrTail.append(chunk);
+    const resumeForTerminal = () => {
+      if (!stdoutPaused) return;
+      stdoutPaused = false;
+      child.stdout?.resume();
+    };
+    const onClose = (code: number | null) => {
+      exitCode = code;
+      exited = true;
+      wake();
+    };
+    const onSpawnError = () => {
+      spawnError = true;
+      exited = true;
+      wake();
+    };
+    const terminate = () => {
+      child.kill("SIGTERM");
+      window.setTimeout(() => {
+        if (child.exitCode === null) child.kill("SIGKILL");
+      }, SIGTERM_GRACE_MS);
+    };
+    const onAbort = () => {
+      terminate();
+      wake();
+    };
 
     try {
+      if (!child.stdout || !child.stderr) throw new Error("Claude CLI process has no stdio");
+      child.stdout.on("data", onStdoutData);
+      child.stderr.on("data", onStderrData);
+      child.on("close", onClose);
+      child.on("error", onSpawnError);
+      signal?.addEventListener("abort", onAbort, { once: true });
+      if (signal?.aborted) {
+        onAbort();
+        throw abortError();
+      }
+      timeoutHandle = timeoutSec > 0
+        ? window.setTimeout(() => {
+            timedOut = true;
+            terminate();
+            wake();
+          }, timeoutSec * 1000)
+        : null;
+
       while (true) {
-        if (queue.length > 0) { yield queue.shift()!; continue; }
+        throwParseError();
+        if (signal?.aborted) return;
+        if (timedOut) throw new Error(`Claude CLI process timed out after ${timeoutSec}s`);
+        const queued = takeQueued();
+        if (queued) { yield queued; continue; }
         if (exited) break;
         await new Promise<void>((r) => (resolveNext = r));
       }
@@ -259,13 +383,14 @@ export class ClaudeCliClient implements LlmClient {
       if (buf.trim()) {
         processLine(buf.trim());
       }
-      while (queue.length > 0) yield queue.shift()!;
-      const stderr = () => Buffer.concat(stderrChunks).toString("utf8").trim();
-      if (spawnError) throw new Error(`claude spawn failed: ${(spawnError as Error).message}${stderr() ? `\n${stderr()}` : ""}`);
+      throwParseError();
+      while (pendingQueue() > 0) yield takeQueued()!;
+      if (spawnError) throw new Error("Claude CLI process failed to start");
       if (signal?.aborted) return;
       const ec = exitCode;
-      if (ec !== null && ec !== 0) throw new Error(`claude exited with code ${String(ec)}${stderr() ? `\n${stderr()}` : ""}`);
-      if (timedOut) throw new Error(`claude process timed out after ${timeoutSec}s`);
+      if (ec !== null && ec !== 0) {
+        throw new Error(`Claude CLI process exited unsuccessfully (code ${String(ec)})`);
+      }
       yield {
         id: `cc-${++id}`,
         object: "chat.completion.chunk",
@@ -276,10 +401,14 @@ export class ClaudeCliClient implements LlmClient {
     } finally {
       if (timeoutHandle !== null) window.clearTimeout(timeoutHandle);
       signal?.removeEventListener("abort", onAbort);
-      for (const f of tmpFiles) { try { this.cfg.tmpRemove(f); } catch { /* already gone */ } }
+      child.stdout?.off("data", onStdoutData);
+      child.stderr?.off("data", onStderrData);
+      child.off("close", onClose);
+      child.off("error", onSpawnError);
+      resumeForTerminal();
+      cleanupTmpFiles(this.cfg, tmpFiles);
       if (child.exitCode === null) {
-        child.kill("SIGTERM");
-        window.setTimeout(() => { if (child.exitCode === null) child.kill("SIGKILL"); }, SIGTERM_GRACE_MS);
+        terminate();
       }
     }
   }

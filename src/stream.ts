@@ -6,23 +6,30 @@ function isRecord(obj: unknown): obj is Record<string, unknown> {
   return typeof obj === "object" && obj !== null;
 }
 
-export function parseStreamLine(raw: string): RunEvent | null {
+export class StreamJsonParseError extends Error {
+  constructor() {
+    super("Malformed Claude stream JSON");
+    this.name = "StreamJsonParseError";
+  }
+}
+
+export function parseStreamLine(raw: string): RunEvent[] {
   const trimmed = raw.trim();
-  if (!trimmed) return null;
+  if (!trimmed) return [];
 
   // iclaude.sh wrapper и сторонние логгеры могут писать в stdout не-JSON строки
   // (баннеры, ANSI-цвета). Считаем строкой stream-json только те, что начинаются
   // с '{' — остальное молча игнорируем, чтобы не засорять панель.
-  if (!trimmed.startsWith("{")) return null;
+  if (!trimmed.startsWith("{")) return [];
 
   let obj: unknown;
   try {
     obj = JSON.parse(trimmed);
   } catch {
-    return { kind: "error", message: `stream parse error: ${truncate(trimmed, 120)}` };
+    throw new StreamJsonParseError();
   }
 
-  if (!isRecord(obj)) return null;
+  if (!isRecord(obj)) return [];
 
   switch (obj.type) {
     case "system": {
@@ -30,51 +37,63 @@ export function parseStreamLine(raw: string): RunEvent | null {
       const model = typeof obj.model === "string" ? obj.model : "";
       const sessionId = typeof obj.session_id === "string" ? obj.session_id : undefined;
       const msg = `${subtype}${model ? ` (${model})` : ""}`;
-      return { kind: "system", message: msg, sessionId };
+      return [{ kind: "system", message: msg, sessionId }];
     }
     case "assistant":
       return mapAssistant(obj);
-    case "user":
-      return mapUserToolResult(obj);
+    case "user": {
+      const event = mapUserToolResult(obj);
+      return event ? [event] : [];
+    }
     case "result":
-      return mapResult(obj);
+      return [mapResult(obj)];
     default:
-      return null;
+      return [];
   }
 }
 
-function mapAssistant(obj: Record<string, unknown>): RunEvent | null {
+function mapAssistant(obj: Record<string, unknown>): RunEvent[] {
   const msg = obj.message;
-  if (!isRecord(msg)) return null;
+  if (!isRecord(msg)) return [];
   const content = msg.content;
-  if (!Array.isArray(content) || content.length === 0) return null;
-  // одна строка stream-json несёт один блок (один tool_use или один text-чанк)
-  const block = content[0] as Record<string, unknown>;
+  if (!Array.isArray(content)) return [];
+  return content.flatMap((block) =>
+    isRecord(block) ? mapAssistantBlock(block) : []);
+}
+
+function mapAssistantBlock(block: Record<string, unknown>): RunEvent[] {
   if (block?.type === "tool_use") {
     if (block.name === "AskUserQuestion") {
       const input = isRecord(block.input) ? block.input : {};
-      return {
+      return [{
         kind: "ask_user",
         question: typeof input.prompt === "string" ? input.prompt : "",
         options: Array.isArray(input.options)
           ? (input.options as unknown[]).map((o) => typeof o === "string" ? o : String(o))
           : [],
         toolUseId: typeof block.id === "string" ? block.id : "",
-      };
+      }];
     }
-    return { kind: "tool_use", name: typeof block.name === "string" ? block.name : "?", input: block.input };
+    return [{
+      kind: "tool_use",
+      name: typeof block.name === "string" ? block.name : "?",
+      input: block.input,
+    }];
   }
   if (block?.type === "text") {
-    return { kind: "assistant_text", delta: typeof block.text === "string" ? block.text : "" };
+    return [{
+      kind: "assistant_text",
+      delta: typeof block.text === "string" ? block.text : "",
+    }];
   }
   if (block?.type === "thinking") {
-    return {
+    return [{
       kind: "assistant_text",
       delta: typeof block.thinking === "string" ? block.thinking : "",
       isReasoning: true,
-    };
+    }];
   }
-  return null;
+  return [];
 }
 
 function mapUserToolResult(obj: Record<string, unknown>): RunEvent | null {

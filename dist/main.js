@@ -29334,64 +29334,81 @@ var PREVIEW_MAX = 200;
 function isRecord(obj) {
   return typeof obj === "object" && obj !== null;
 }
+var StreamJsonParseError = class extends Error {
+  constructor() {
+    super("Malformed Claude stream JSON");
+    this.name = "StreamJsonParseError";
+  }
+};
 function parseStreamLine(raw) {
   const trimmed = raw.trim();
-  if (!trimmed) return null;
-  if (!trimmed.startsWith("{")) return null;
+  if (!trimmed) return [];
+  if (!trimmed.startsWith("{")) return [];
   let obj;
   try {
     obj = JSON.parse(trimmed);
   } catch {
-    return { kind: "error", message: `stream parse error: ${truncate(trimmed, 120)}` };
+    throw new StreamJsonParseError();
   }
-  if (!isRecord(obj)) return null;
+  if (!isRecord(obj)) return [];
   switch (obj.type) {
     case "system": {
       const subtype = typeof obj.subtype === "string" ? obj.subtype : "system";
       const model = typeof obj.model === "string" ? obj.model : "";
       const sessionId = typeof obj.session_id === "string" ? obj.session_id : void 0;
       const msg = `${subtype}${model ? ` (${model})` : ""}`;
-      return { kind: "system", message: msg, sessionId };
+      return [{ kind: "system", message: msg, sessionId }];
     }
     case "assistant":
       return mapAssistant(obj);
-    case "user":
-      return mapUserToolResult(obj);
+    case "user": {
+      const event = mapUserToolResult(obj);
+      return event ? [event] : [];
+    }
     case "result":
-      return mapResult(obj);
+      return [mapResult(obj)];
     default:
-      return null;
+      return [];
   }
 }
 function mapAssistant(obj) {
   const msg = obj.message;
-  if (!isRecord(msg)) return null;
+  if (!isRecord(msg)) return [];
   const content = msg.content;
-  if (!Array.isArray(content) || content.length === 0) return null;
-  const block = content[0];
+  if (!Array.isArray(content)) return [];
+  return content.flatMap((block) => isRecord(block) ? mapAssistantBlock(block) : []);
+}
+function mapAssistantBlock(block) {
   if (block?.type === "tool_use") {
     if (block.name === "AskUserQuestion") {
       const input = isRecord(block.input) ? block.input : {};
-      return {
+      return [{
         kind: "ask_user",
         question: typeof input.prompt === "string" ? input.prompt : "",
         options: Array.isArray(input.options) ? input.options.map((o) => typeof o === "string" ? o : String(o)) : [],
         toolUseId: typeof block.id === "string" ? block.id : ""
-      };
+      }];
     }
-    return { kind: "tool_use", name: typeof block.name === "string" ? block.name : "?", input: block.input };
+    return [{
+      kind: "tool_use",
+      name: typeof block.name === "string" ? block.name : "?",
+      input: block.input
+    }];
   }
   if (block?.type === "text") {
-    return { kind: "assistant_text", delta: typeof block.text === "string" ? block.text : "" };
+    return [{
+      kind: "assistant_text",
+      delta: typeof block.text === "string" ? block.text : ""
+    }];
   }
   if (block?.type === "thinking") {
-    return {
+    return [{
       kind: "assistant_text",
       delta: typeof block.thinking === "string" ? block.thinking : "",
       isReasoning: true
-    };
+    }];
   }
-  return null;
+  return [];
 }
 function mapUserToolResult(obj) {
   const msg = obj.message;
@@ -29424,6 +29441,33 @@ function truncate(s, n) {
 
 // src/claude-cli-client.ts
 var SIGTERM_GRACE_MS = 3e3;
+var STDOUT_QUEUE_HIGH_WATER = 64;
+var STDOUT_QUEUE_LOW_WATER = 32;
+var STDERR_TAIL_MAX_BYTES = 16384;
+var BoundedByteTail = class {
+  tail = Buffer.alloc(0);
+  append(chunk) {
+    if (chunk.length >= STDERR_TAIL_MAX_BYTES) {
+      this.tail = Buffer.from(chunk.subarray(chunk.length - STDERR_TAIL_MAX_BYTES));
+      return;
+    }
+    const combined = Buffer.concat([this.tail, chunk]);
+    this.tail = combined.length <= STDERR_TAIL_MAX_BYTES ? combined : Buffer.from(combined.subarray(combined.length - STDERR_TAIL_MAX_BYTES));
+  }
+};
+function cleanupTmpFiles(cfg, files) {
+  for (const file of files) {
+    try {
+      cfg.tmpRemove(file);
+    } catch {
+    }
+  }
+}
+function abortError() {
+  const error = new Error("Claude request aborted");
+  error.name = "AbortError";
+  return error;
+}
 function serializeUntrustedTranscript(messages) {
   const serialized = JSON.stringify(messages).replace(
     /[<>&\u2028\u2029]/g,
@@ -29448,22 +29492,20 @@ async function probeClaudeBinary(iclaudePath) {
   const { spawn } = await import("node:child_process");
   await new Promise((resolve, reject) => {
     const child = spawn(iclaudePath, ["--version"], { stdio: ["ignore", "ignore", "pipe"] });
-    let stderr = "";
+    const stderrTail = new BoundedByteTail();
     const timer = window.setTimeout(() => {
       child.kill("SIGTERM");
       reject(new Error("timeout"));
     }, 5e3);
-    child.stderr?.on("data", (d) => {
-      stderr += d.toString("utf8");
-    });
-    child.on("error", (err) => {
+    child.stderr?.on("data", (chunk) => stderrTail.append(chunk));
+    child.on("error", () => {
       window.clearTimeout(timer);
-      reject(err);
+      reject(new Error("Claude CLI probe failed to start"));
     });
     child.on("close", (code) => {
       window.clearTimeout(timer);
       if (code === 0) resolve();
-      else reject(new Error(stderr.trim() || `exit ${code}`));
+      else reject(new Error(`Claude CLI probe failed (exit ${String(code)})`));
     });
   });
 }
@@ -29530,13 +29572,12 @@ var ClaudeCliClient = class {
         }
       }
     } catch (err) {
-      for (const f of tmpFiles) {
-        try {
-          this.cfg.tmpRemove(f);
-        } catch {
-        }
-      }
+      cleanupTmpFiles(this.cfg, tmpFiles);
       throw err;
+    }
+    if (opts?.signal?.aborted) {
+      cleanupTmpFiles(this.cfg, tmpFiles);
+      throw abortError();
     }
     if (params.stream) {
       return this._makeIterable(args, opts?.signal, requestTimeoutSec, tmpFiles);
@@ -29549,31 +29590,16 @@ var ClaudeCliClient = class {
   async *_generate(args, signal, timeoutSec, tmpFiles) {
     validateIclaudePath(this.cfg.iclaudePath);
     if (!import_obsidian3.Platform.isDesktopApp) throw new Error("Claude CLI backend is desktop-only");
+    if (signal?.aborted) {
+      cleanupTmpFiles(this.cfg, tmpFiles);
+      throw abortError();
+    }
     const { spawn } = await import("node:child_process");
     const child = spawn(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || void 0 });
-    if (!child.stdout || !child.stderr) throw new Error("spawn: missing stdio");
-    const stderrChunks = [];
-    child.stderr.on("data", (chunk) => stderrChunks.push(chunk));
-    const onAbort = () => {
-      child.kill("SIGTERM");
-      window.setTimeout(() => {
-        if (child.exitCode === null) child.kill("SIGKILL");
-      }, SIGTERM_GRACE_MS);
-    };
-    if (signal?.aborted) {
-      onAbort();
-      return;
-    }
-    signal?.addEventListener("abort", onAbort, { once: true });
-    const timeoutHandle = timeoutSec > 0 ? window.setTimeout(() => {
-      timedOut = true;
-      child.kill("SIGTERM");
-      window.setTimeout(() => {
-        if (child.exitCode === null) child.kill("SIGKILL");
-      }, SIGTERM_GRACE_MS);
-    }, timeoutSec * 1e3) : null;
+    let timeoutHandle = null;
     let timedOut = false;
-    const queue = [];
+    let queue = [];
+    let queueCursor = 0;
     let resolveNext = null;
     const wake = () => {
       if (resolveNext) {
@@ -29583,49 +29609,138 @@ var ClaudeCliClient = class {
     };
     let id = 0;
     let buf = "";
-    const processLine = (line) => {
-      const ev = parseStreamLine(line);
-      if (ev?.kind === "system" && ev.sessionId) {
-        this.lastSessionId = ev.sessionId;
-      }
-      if (ev?.kind === "assistant_text") {
-        const delta = ev.isReasoning ? { reasoning: ev.delta } : { content: ev.delta };
-        queue.push({
-          id: `cc-${++id}`,
-          object: "chat.completion.chunk",
-          model: this.cfg.model || "claude",
-          created: 0,
-          choices: [{ index: 0, delta, finish_reason: null }]
-        });
-        wake();
-      }
+    let lineNumber = 0;
+    let parseError = null;
+    const throwParseError = () => {
+      if (parseError instanceof Error) throw parseError;
     };
-    child.stdout.on("data", (chunk) => {
-      buf += chunk.toString("utf8");
-      let nl;
-      while ((nl = buf.indexOf("\n")) !== -1) {
-        const line = buf.slice(0, nl);
-        buf = buf.slice(nl + 1);
-        processLine(line);
-      }
-    });
     let exited = false;
     let exitCode = null;
-    let spawnError = null;
-    child.on("close", (code) => {
+    let spawnError = false;
+    let stdoutPaused = false;
+    const stderrTail = new BoundedByteTail();
+    const pendingQueue = () => queue.length - queueCursor;
+    const compactQueue = () => {
+      if (queueCursor === 0) return;
+      queue = queue.slice(queueCursor);
+      queueCursor = 0;
+    };
+    const pauseStdout = () => {
+      if (stdoutPaused || !child.stdout) return;
+      stdoutPaused = true;
+      child.stdout.pause();
+    };
+    const enqueue = (chunk) => {
+      queue.push(chunk);
+      if (pendingQueue() >= STDOUT_QUEUE_HIGH_WATER) pauseStdout();
+      wake();
+    };
+    const processLine = (line) => {
+      lineNumber += 1;
+      let events;
+      try {
+        events = parseStreamLine(line);
+      } catch (error) {
+        if (!(error instanceof StreamJsonParseError)) throw error;
+        parseError = new Error(
+          `Claude stream JSON parse failed at line ${lineNumber} (${Buffer.byteLength(line, "utf8")} bytes)`
+        );
+        pauseStdout();
+        wake();
+        return;
+      }
+      for (const event of events) {
+        if (event.kind === "system" && event.sessionId) {
+          this.lastSessionId = event.sessionId;
+        }
+        if (event.kind === "assistant_text") {
+          const delta = event.isReasoning ? { reasoning: event.delta } : { content: event.delta };
+          enqueue({
+            id: `cc-${++id}`,
+            object: "chat.completion.chunk",
+            model: this.cfg.model || "claude",
+            created: 0,
+            choices: [{ index: 0, delta, finish_reason: null }]
+          });
+        }
+      }
+    };
+    const processBufferedLines = () => {
+      while (!parseError && pendingQueue() < STDOUT_QUEUE_HIGH_WATER) {
+        const newline = buf.indexOf("\n");
+        if (newline === -1) break;
+        const line = buf.slice(0, newline);
+        buf = buf.slice(newline + 1);
+        processLine(line);
+      }
+      if (pendingQueue() >= STDOUT_QUEUE_HIGH_WATER) pauseStdout();
+    };
+    const maybeResumeStdout = () => {
+      if (!stdoutPaused || pendingQueue() > STDOUT_QUEUE_LOW_WATER || parseError) return;
+      compactQueue();
+      stdoutPaused = false;
+      processBufferedLines();
+      if (!stdoutPaused && !parseError) child.stdout?.resume();
+    };
+    const takeQueued = () => {
+      if (pendingQueue() === 0) return void 0;
+      const chunk = queue[queueCursor++];
+      maybeResumeStdout();
+      return chunk;
+    };
+    const onStdoutData = (chunk) => {
+      buf += chunk.toString("utf8");
+      processBufferedLines();
+    };
+    const onStderrData = (chunk) => stderrTail.append(chunk);
+    const resumeForTerminal = () => {
+      if (!stdoutPaused) return;
+      stdoutPaused = false;
+      child.stdout?.resume();
+    };
+    const onClose = (code) => {
       exitCode = code;
       exited = true;
       wake();
-    });
-    child.on("error", (err) => {
-      spawnError = err;
+    };
+    const onSpawnError = () => {
+      spawnError = true;
       exited = true;
       wake();
-    });
+    };
+    const terminate = () => {
+      child.kill("SIGTERM");
+      window.setTimeout(() => {
+        if (child.exitCode === null) child.kill("SIGKILL");
+      }, SIGTERM_GRACE_MS);
+    };
+    const onAbort = () => {
+      terminate();
+      wake();
+    };
     try {
+      if (!child.stdout || !child.stderr) throw new Error("Claude CLI process has no stdio");
+      child.stdout.on("data", onStdoutData);
+      child.stderr.on("data", onStderrData);
+      child.on("close", onClose);
+      child.on("error", onSpawnError);
+      signal?.addEventListener("abort", onAbort, { once: true });
+      if (signal?.aborted) {
+        onAbort();
+        throw abortError();
+      }
+      timeoutHandle = timeoutSec > 0 ? window.setTimeout(() => {
+        timedOut = true;
+        terminate();
+        wake();
+      }, timeoutSec * 1e3) : null;
       while (true) {
-        if (queue.length > 0) {
-          yield queue.shift();
+        throwParseError();
+        if (signal?.aborted) return;
+        if (timedOut) throw new Error(`Claude CLI process timed out after ${timeoutSec}s`);
+        const queued = takeQueued();
+        if (queued) {
+          yield queued;
           continue;
         }
         if (exited) break;
@@ -29634,15 +29749,14 @@ var ClaudeCliClient = class {
       if (buf.trim()) {
         processLine(buf.trim());
       }
-      while (queue.length > 0) yield queue.shift();
-      const stderr = () => Buffer.concat(stderrChunks).toString("utf8").trim();
-      if (spawnError) throw new Error(`claude spawn failed: ${spawnError.message}${stderr() ? `
-${stderr()}` : ""}`);
+      throwParseError();
+      while (pendingQueue() > 0) yield takeQueued();
+      if (spawnError) throw new Error("Claude CLI process failed to start");
       if (signal?.aborted) return;
       const ec = exitCode;
-      if (ec !== null && ec !== 0) throw new Error(`claude exited with code ${String(ec)}${stderr() ? `
-${stderr()}` : ""}`);
-      if (timedOut) throw new Error(`claude process timed out after ${timeoutSec}s`);
+      if (ec !== null && ec !== 0) {
+        throw new Error(`Claude CLI process exited unsuccessfully (code ${String(ec)})`);
+      }
       yield {
         id: `cc-${++id}`,
         object: "chat.completion.chunk",
@@ -29653,17 +29767,14 @@ ${stderr()}` : ""}`);
     } finally {
       if (timeoutHandle !== null) window.clearTimeout(timeoutHandle);
       signal?.removeEventListener("abort", onAbort);
-      for (const f of tmpFiles) {
-        try {
-          this.cfg.tmpRemove(f);
-        } catch {
-        }
-      }
+      child.stdout?.off("data", onStdoutData);
+      child.stderr?.off("data", onStderrData);
+      child.off("close", onClose);
+      child.off("error", onSpawnError);
+      resumeForTerminal();
+      cleanupTmpFiles(this.cfg, tmpFiles);
       if (child.exitCode === null) {
-        child.kill("SIGTERM");
-        window.setTimeout(() => {
-          if (child.exitCode === null) child.kill("SIGKILL");
-        }, SIGTERM_GRACE_MS);
+        terminate();
       }
     }
   }
