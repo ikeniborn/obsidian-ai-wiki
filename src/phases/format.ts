@@ -854,18 +854,31 @@ export async function* runFormat(
         content: render(restoreTokensTemplate, { tokens: tokenList }),
       },
     ];
-    const restoreParams = buildChatParams(model, restoreMessages, formatOpts, true);
+    let restoreParams: Record<string, unknown>;
+    try {
+      signal.throwIfAborted();
+      restoreParams = buildChatParams(model, restoreMessages, formatOpts, true);
+    } catch (e) {
+      const aborted = signal.aborted || (e as Error).name === "AbortError";
+      const terminal = closeActiveFormatLifecycle(aborted ? "cancelled" : "failed");
+      if (terminal) yield terminal;
+      if (!aborted) {
+        const message = `Format: token restoration request failed — ${(e as Error).message}`;
+        yield { kind: "error", message };
+        yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
+      }
+      return;
+    }
     yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
     const fullText2 = yield* callOnce(restoreParams);
-    if (!signal.aborted) {
-      const parsed2Result = parseFormatOutput(fullText2, visionDescriptions.size > 0);
-      const parsed2 = parsed2Result.data;
-      if (parsed2) {
-        finalFormatted = parsed2.formatted;
-        finalReport = parsed2.report;
-      }
-      yield { kind: "tool_result", ok: true, preview: "tokens restored" };
+    if (signal.aborted) return;
+    const parsed2Result = parseFormatOutput(fullText2, visionDescriptions.size > 0);
+    const parsed2 = parsed2Result.data;
+    if (parsed2) {
+      finalFormatted = parsed2.formatted;
+      finalReport = parsed2.report;
     }
+    yield { kind: "tool_result", ok: true, preview: "tokens restored" };
     const missing2 = missingTokensWithContext(original, finalFormatted);
     if (missing2.length > 0) {
       finalFormatted = appendMissingLines(finalFormatted, missing2);

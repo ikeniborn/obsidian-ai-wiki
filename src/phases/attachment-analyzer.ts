@@ -255,11 +255,11 @@ async function callVisionLlm(
   let response: OpenAI.Chat.ChatCompletion;
   try {
     signal.throwIfAborted();
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "sent"));
     const request = llm.chat.completions.create(
       { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
       { signal },
     );
-    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "sent"));
     options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "waiting"));
     response = await request;
   } catch (error) {

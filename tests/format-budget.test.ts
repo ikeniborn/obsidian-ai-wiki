@@ -511,6 +511,57 @@ test("Format synchronous streaming invocation failure emits sent before failed w
   );
 });
 
+test("Format closes validated lifecycle when restore parameter construction exceeds budget", async () => {
+  const original = "---\ntags: [restore]\n---\n# Source\n\nUniqueRestoreToken";
+  const { events } = await collectFormatEvents(
+    original,
+    llmWithResponder(() => frame(
+      "- report",
+      `---\ntags: [restore]\n---\n# Formatted\n\n${"x".repeat(100_000)}`,
+    ), []),
+    10_000,
+  );
+
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  assert.equal(lifecycle.at(-1)?.phase, "failed");
+  assertFormatLifecycleIntegrity(events);
+  assert.equal(events.some((event) =>
+    event.kind === "error" && /budget/i.test(event.message)), true);
+  assert.equal(events.some((event) => event.kind === "format_preview"), false);
+});
+
+test("Format abort during token restoration stops before preview", async () => {
+  const original = "# Source\n\nUniqueRestoreToken";
+  const controller = new AbortController();
+  const seen: Record<string, unknown>[] = [];
+  const { events, adapter } = await collectFormatEvents(
+    original,
+    llmWithCreate((_params, callIndex) => {
+      if (callIndex === 0) {
+        return (async function* () {
+          yield chunk(frame("- report", "# Formatted"));
+        })();
+      }
+      return (async function* () {
+        controller.abort();
+        throw new DOMException("aborted", "AbortError");
+      })();
+    }, seen),
+    10_000,
+    undefined,
+    {},
+    false,
+    controller.signal,
+  );
+
+  assert.equal(seen.length, 2);
+  assert.deepEqual(adapter.writes, []);
+  assert.equal(events.some((event) => event.kind === "format_preview"), false);
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  assert.equal(lifecycle.at(-1)?.phase, "cancelled");
+  assertFormatLifecycleIntegrity(events);
+});
+
 test("format retries a malformed complete segment frame once with correction context", async () => {
   const seenParams: Record<string, unknown>[] = [];
   const attemptsById = new Map<string, number>();

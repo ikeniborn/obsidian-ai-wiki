@@ -137,8 +137,8 @@ export function extractUsage(resp: OpenAI.Chat.ChatCompletion): number | undefin
 export function completionReasoning(message: unknown): string {
   if (message === null || typeof message !== "object") return "";
   const record = message as Record<string, unknown>;
-  const reasoning = record.reasoning ?? record.reasoning_content;
-  return typeof reasoning === "string" ? reasoning : "";
+  if (typeof record.reasoning === "string") return record.reasoning;
+  return typeof record.reasoning_content === "string" ? record.reasoning_content : "";
 }
 
 export async function* runWithLiveEvents<T>(

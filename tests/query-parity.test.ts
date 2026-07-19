@@ -322,6 +322,14 @@ async function drainEvents(
   }
 }
 
+function deferred(): { promise: Promise<void>; resolve(): void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 function messagesText(request: Record<string, unknown>): string {
   return (request.messages as OpenAI.Chat.ChatCompletionMessageParam[])
     .map((message) => typeof message.content === "string" ? message.content : "")
@@ -464,6 +472,7 @@ test("single- and cross-domain Query use the same bounded answer packing behavio
 test("Query seed selection and primary answer expose ordered human lifecycle attempts", async () => {
   const pagePath = "!Wiki/d/concept/wiki_d_failover.md";
   const requests: Record<string, unknown>[] = [];
+  const seedRelease = deferred();
   const llm = {
     chat: {
       completions: {
@@ -471,6 +480,7 @@ test("Query seed selection and primary answer expose ordered human lifecycle att
           const request = params as Record<string, unknown>;
           requests.push(request);
           if (request.stream === false) {
+            await seedRelease.promise;
             return {
               id: "seed-completion",
               object: "chat.completion",
@@ -509,7 +519,7 @@ test("Query seed selection and primary answer expose ordered human lifecycle att
       },
     },
   } as unknown as LlmClient;
-  const events = await drainEvents(runQuery(
+  const generator = runQuery(
     ["unmatched-token-zzzx"],
     false,
     new VaultTools(memoryAdapter({ [pagePath]: queryPage() }), "/vault"),
@@ -550,7 +560,27 @@ test("Query seed selection and primary answer expose ordered human lifecycle att
       baseUrl: "",
       apiKey: "",
     },
-  ));
+  );
+  const events: RunEvent[] = [];
+  const seedPhases: string[] = [];
+  while (seedPhases.length < 3) {
+    const next = await Promise.race([
+      generator.next(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("query seed lifecycle buffered behind request")), 50)),
+    ]);
+    assert.equal(next.done, false);
+    if (!next.done) {
+      events.push(next.value);
+      if (next.value.kind === "llm_lifecycle"
+        && next.value.action === "select_relevant_pages") {
+        seedPhases.push(next.value.phase);
+      }
+    }
+  }
+  assert.deepEqual(seedPhases, ["preparing", "sent", "waiting"]);
+  seedRelease.resolve();
+  for await (const event of generator) events.push(event);
 
   assert.deepEqual(requests.map((request) => request.stream), [false, true]);
   const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");

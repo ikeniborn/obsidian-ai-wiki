@@ -41955,8 +41955,8 @@ function extractUsage(resp) {
 function completionReasoning(message) {
   if (message === null || typeof message !== "object") return "";
   const record = message;
-  const reasoning = record.reasoning ?? record.reasoning_content;
-  return typeof reasoning === "string" ? reasoning : "";
+  if (typeof record.reasoning === "string") return record.reasoning;
+  return typeof record.reasoning_content === "string" ? record.reasoning_content : "";
 }
 async function* runWithLiveEvents(work) {
   const queue = [];
@@ -55505,10 +55505,9 @@ async function* answerFromContext(args) {
 Answer to fix:
 ${answer}` }
         ];
-        const repairEvents = [];
         try {
           const schema = makeQueryAnswerSchema(knownStems);
-          const r = await runStructuredWithRetry({
+          const r = yield* runWithLiveEvents((emit) => runStructuredWithRetry({
             llm,
             model,
             baseMessages,
@@ -55518,10 +55517,9 @@ ${answer}` }
             callSite: "query.answer",
             lifecycle: createLlmLifecycle("answer_question"),
             signal,
-            onEvent: (ev) => repairEvents.push(ev),
+            onEvent: emit,
             transport: "non-stream"
-          });
-          for (const ev of repairEvents) yield ev;
+          }));
           outputTokens += r.outputTokens;
           const stillBroken = findBrokenLinks(extractAnswerLinks(r.value.answer_markdown), knownStems);
           if (stillBroken.length === 0) {
@@ -55535,7 +55533,6 @@ ${answer}` }
             yield lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "completed");
           }
         } catch (e) {
-          for (const ev of repairEvents) yield ev;
           if (signal.aborted || e.name === "AbortError") {
             yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
             return { answer, outputTokens, selectedChunks };
@@ -55639,8 +55636,16 @@ async function* retrieveDomainCandidates(domain, question, vaultTools, similarit
     const allAnnotatedIds = [...indexAnnotations.keys()];
     yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allAnnotatedIds.length } };
     const seedOpts = { ...llmSeedFallback.opts, thinkingBudgetTokens: void 0 };
-    const seedRes = await llmSelectSeeds(question, indexAnnotations, allAnnotatedIds, llmSeedFallback.llm, llmSeedFallback.model, seedOpts, signal);
-    for (const event of seedRes.events) yield event;
+    const seedRes = yield* runWithLiveEvents((emit) => llmSelectSeeds(
+      question,
+      indexAnnotations,
+      allAnnotatedIds,
+      llmSeedFallback.llm,
+      llmSeedFallback.model,
+      seedOpts,
+      signal,
+      emit
+    ));
     seeds = seedRes.seeds;
     seedOutputTokens += seedRes.outputTokens;
     if (seedRes.lifecycle) {
@@ -55929,7 +55934,7 @@ ${answer}`, outputTokens: outputTokens || void 0 };
     yield { kind: "result", durationMs: Date.now() - start, text: answer, outputTokens: outputTokens || void 0 };
   }
 }
-async function llmSelectSeeds(question, indexAnnotations, allPageIds, llm, model, opts, signal) {
+async function llmSelectSeeds(question, indexAnnotations, allPageIds, llm, model, opts, signal, onEvent) {
   const example = JSON.stringify({
     reasoning: "PageA matches keyword X; PageB referenced by index.",
     seeds: ["PageA", "PageB"]
@@ -55951,7 +55956,6 @@ Pages not yet indexed: ${unindexedIds.join(", ")}` : "",
   const messages = [
     { role: "user", content: prompt }
   ];
-  const events = [];
   try {
     const r = await parseWithRetry({
       llm,
@@ -55963,17 +55967,16 @@ Pages not yet indexed: ${unindexedIds.join(", ")}` : "",
       callSite: "query.seeds",
       lifecycle: createLlmLifecycle("select_relevant_pages"),
       signal,
-      onEvent: (event) => events.push(event),
+      onEvent,
       transport: "non-stream"
     });
     return {
       seeds: r.value.seeds,
       outputTokens: r.outputTokens,
-      events,
       lifecycle: r.lifecycle
     };
   } catch {
-    return { seeds: [], outputTokens: 0, events };
+    return { seeds: [], outputTokens: 0 };
   }
 }
 function buildEntityTypesBlock2(domain) {
@@ -56880,9 +56883,8 @@ ${schemaContent}` : ""
         const batch = batches[i];
         yield { kind: "info_text", icon: "\u{1F50D}", summary: `Checking batch ${i + 1}/${batches.length}: ${batch.length} work item(s)` };
         yield { kind: "tool_use", name: "Analysing wiki", input: { batch: i + 1, workItems: batch.length } };
-        const pwtEvents = [];
         try {
-          const result = await runLintBatchWithSplit({
+          const result = yield* runWithLiveEvents((emit) => runLintBatchWithSplit({
             items: batch,
             pages,
             domainName: domain.name,
@@ -56892,8 +56894,8 @@ ${schemaContent}` : ""
             model,
             opts,
             signal,
-            onEvent: (ev) => pwtEvents.push(ev)
-          });
+            onEvent: emit
+          }));
           outputTokens += result.outputTokens;
           batchOutputs.push(result.output);
           batchLifecycles.push(...result.lifecycles);
@@ -56904,7 +56906,6 @@ ${schemaContent}` : ""
           skippedArticles.push(...batch.map((item) => item.id));
           continue;
         }
-        for (const ev of pwtEvents) yield ev;
       }
       const allBatchFindings = batchOutputs.map((output) => output.findings);
       mergedFindings = mergeLintFindings([mergedFindings, ...allBatchFindings]);
@@ -57050,8 +57051,7 @@ ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
       if (signal.aborted) return;
       yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).lintProgress.actualizing(domain.id) };
       yield { kind: "tool_use", name: "Updating config", input: {} };
-      const patchRes = await actualizeDomainConfig(domain, mergedFindings, llm, model, opts, signal);
-      for (const event of patchRes.events) yield event;
+      const patchRes = yield* runWithLiveEvents((emit) => actualizeDomainConfig(domain, mergedFindings, llm, model, opts, signal, emit));
       yield { kind: "tool_result", ok: true, preview: patchRes.patch ? "config updated" : "no changes" };
       outputTokens += patchRes.outputTokens;
       const patch = patchRes.patch;
@@ -57234,7 +57234,7 @@ function computeEntityDiff(oldTypes, newTypes) {
   modified.forEach((et) => lines.push(`- \u270E \u043E\u0431\u043D\u043E\u0432\u043B\u0451\u043D: **${et.type}**`));
   return lines.join("\n");
 }
-async function actualizeDomainConfig(domain, findings, llm, model, opts, signal) {
+async function actualizeDomainConfig(domain, findings, llm, model, opts, signal, onEvent) {
   const currentConfig = JSON.stringify({
     entity_types: domain.entity_types ?? [],
     language_notes: domain.language_notes ?? ""
@@ -57273,7 +57273,6 @@ async function actualizeDomainConfig(domain, findings, llm, model, opts, signal)
     language_notes: "Use the configured output language for business terms."
   }, null, 2);
   messages[0] = { role: "system", content: systemContent };
-  const collected = [];
   try {
     const r = await parseWithRetry({
       llm,
@@ -57285,7 +57284,7 @@ async function actualizeDomainConfig(domain, findings, llm, model, opts, signal)
       callSite: "lint.patch",
       lifecycle: createLlmLifecycle("check_wiki_quality"),
       signal,
-      onEvent: (e) => collected.push(e),
+      onEvent,
       transport: "non-stream"
     });
     const parsed = r.value;
@@ -57295,11 +57294,10 @@ async function actualizeDomainConfig(domain, findings, llm, model, opts, signal)
     return {
       patch: Object.keys(patch).length > 0 ? patch : null,
       outputTokens: r.outputTokens,
-      events: collected,
       lifecycle: r.lifecycle
     };
   } catch {
-    return { patch: null, outputTokens: 0, events: collected };
+    return { patch: null, outputTokens: 0 };
   }
 }
 
@@ -57808,10 +57806,9 @@ ${schemaContent}` : ""
   }
   const olderPairs = compactOlderPairs(chatMessages);
   yield { kind: "tool_use", name: "Applying fixes", input: { pages: String(pages.size) } };
-  const pwtEvents = [];
   let result;
   try {
-    result = await runWithContextRepack({
+    result = yield* runWithLiveEvents((emit) => runWithContextRepack({
       callSite: "lint-chat.patch",
       configuredInputBudget: opts.inputBudgetTokens ?? 16384,
       outputBudget: opts.maxTokens,
@@ -57844,7 +57841,7 @@ ${schemaContent}` : ""
           callSite: "lint-chat.patch",
           lifecycle: createLlmLifecycle("apply_lint_fixes"),
           signal,
-          onEvent: (ev) => pwtEvents.push(ev),
+          onEvent: emit,
           transport: "non-stream",
           contextErrorsRetry: true
         });
@@ -57855,17 +57852,15 @@ ${schemaContent}` : ""
           lifecycle: r.lifecycle
         };
       },
-      onEvent: (ev) => pwtEvents.push(ev)
-    });
+      onEvent: emit
+    }));
     yield { kind: "tool_result", ok: true, preview: `${result.value.patches?.length ?? 0} patch(es)` };
   } catch (e) {
     yield { kind: "tool_result", ok: false, preview: e.message };
-    for (const ev of pwtEvents) yield ev;
     yield { kind: "error", message: `lint-chat: ${e.message}` };
     yield { kind: "result", durationMs: Date.now() - start, text: "" };
     return;
   }
-  for (const ev of pwtEvents) yield ev;
   const parsed = result.value;
   const authorities = /* @__PURE__ */ new Map();
   for (const [path5, content] of activePages) authorities.set(path5, pageAuthorities(path5, content));
@@ -58899,11 +58894,11 @@ async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, 
   let response;
   try {
     signal.throwIfAborted();
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "sent"));
     const request = llm.chat.completions.create(
       { ...params, stream: false },
       { signal }
     );
-    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "sent"));
     options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "waiting"));
     response = await request;
   } catch (error) {
@@ -60159,18 +60154,31 @@ The previous attempt failed: ${zodHint}. Fix it and return again using the marke
         content: render(format_restore_tokens_default, { tokens: tokenList })
       }
     ];
-    const restoreParams = buildChatParams(model, restoreMessages, formatOpts, true);
+    let restoreParams;
+    try {
+      signal.throwIfAborted();
+      restoreParams = buildChatParams(model, restoreMessages, formatOpts, true);
+    } catch (e) {
+      const aborted = signal.aborted || e.name === "AbortError";
+      const terminal = closeActiveFormatLifecycle(aborted ? "cancelled" : "failed");
+      if (terminal) yield terminal;
+      if (!aborted) {
+        const message = `Format: token restoration request failed \u2014 ${e.message}`;
+        yield { kind: "error", message };
+        yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || void 0 };
+      }
+      return;
+    }
     yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
     const fullText2 = yield* callOnce(restoreParams);
-    if (!signal.aborted) {
-      const parsed2Result = parseFormatOutput(fullText2, visionDescriptions.size > 0);
-      const parsed2 = parsed2Result.data;
-      if (parsed2) {
-        finalFormatted = parsed2.formatted;
-        finalReport = parsed2.report;
-      }
-      yield { kind: "tool_result", ok: true, preview: "tokens restored" };
+    if (signal.aborted) return;
+    const parsed2Result = parseFormatOutput(fullText2, visionDescriptions.size > 0);
+    const parsed2 = parsed2Result.data;
+    if (parsed2) {
+      finalFormatted = parsed2.formatted;
+      finalReport = parsed2.report;
     }
+    yield { kind: "tool_result", ok: true, preview: "tokens restored" };
     const missing2 = missingTokensWithContext(original, finalFormatted);
     if (missing2.length > 0) {
       finalFormatted = appendMissingLines(finalFormatted, missing2);

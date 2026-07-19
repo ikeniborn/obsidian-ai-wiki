@@ -1211,6 +1211,7 @@ test("structured repair closes the old lifecycle before opening a new ID", async
 test("completionReasoning accepts native and compatibility completion fields", () => {
   assert.equal(completionReasoning({ reasoning: "native" }), "native");
   assert.equal(completionReasoning({ reasoning_content: "compat" }), "compat");
+  assert.equal(completionReasoning({ reasoning: 1, reasoning_content: "compat fallback" }), "compat fallback");
   assert.equal(completionReasoning({ reasoning: 1, reasoning_content: null }), "");
 });
 

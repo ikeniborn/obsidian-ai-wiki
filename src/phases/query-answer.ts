@@ -380,10 +380,9 @@ export async function* answerFromContext(args: {
             `<<<CITATIONS>>> one valid stem per bullet line, then <<<END>>>.` },
           { role: "user", content: `Question: ${question}\n\nAnswer to fix:\n${answer}` },
         ];
-        const repairEvents: RunEvent[] = [];
         try {
           const schema = makeQueryAnswerSchema(knownStems);
-          const r = await runStructuredWithRetry({
+          const r = yield* runWithLiveEvents((emit) => runStructuredWithRetry({
             llm, model, baseMessages,
             opts: { ...opts, jsonMode: false, thinkingBudgetTokens: undefined },
             profile: queryAnswerProfile(schema),
@@ -391,10 +390,9 @@ export async function* answerFromContext(args: {
             callSite: "query.answer",
             lifecycle: createLlmLifecycle("answer_question"),
             signal,
-            onEvent: (ev) => repairEvents.push(ev),
+            onEvent: emit,
             transport: "non-stream",
-          });
-          for (const ev of repairEvents) yield ev;
+          }));
           outputTokens += r.outputTokens;
           const stillBroken = findBrokenLinks(extractAnswerLinks(r.value.answer_markdown), knownStems);
           if (stillBroken.length === 0) {
@@ -408,7 +406,6 @@ export async function* answerFromContext(args: {
             yield lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "completed");
           }
         } catch (e) {
-          for (const ev of repairEvents) yield ev;
           if (signal.aborted || (e as Error).name === "AbortError") {
             yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
             return { answer, outputTokens, selectedChunks };

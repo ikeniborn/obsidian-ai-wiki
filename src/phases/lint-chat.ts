@@ -11,7 +11,7 @@ import type { LintChatPatchResponse } from "./zod-schemas";
 import lintChatTemplate from "../../prompts/lint-chat.md";
 import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
-import { wikiSections } from "./llm-utils";
+import { runWithLiveEvents, wikiSections } from "./llm-utils";
 import { resolveLang } from "../i18n";
 import { domainWikiFolder, isWikiPagePath } from "../wiki-path";
 import { pageIndexRecordFromMarkdown } from "../wiki-index";
@@ -283,14 +283,13 @@ export async function* runLintFixChat(
 
   // 3. Structured LLM call
   yield { kind: "tool_use", name: "Applying fixes", input: { pages: String(pages.size) } };
-  const pwtEvents: RunEvent[] = [];
   let result: {
     value: LintChatPatchResponse;
     outputTokens: number;
     lifecycle: { id: string; action: LlmLifecycleAction };
   };
   try {
-    result = await runWithContextRepack({
+    result = yield* runWithLiveEvents((emit) => runWithContextRepack({
       callSite: "lint-chat.patch",
       configuredInputBudget: opts.inputBudgetTokens ?? 16_384,
       outputBudget: opts.maxTokens,
@@ -323,7 +322,7 @@ export async function* runLintFixChat(
           callSite: "lint-chat.patch",
           lifecycle: createLlmLifecycle("apply_lint_fixes"),
           signal,
-          onEvent: (ev) => pwtEvents.push(ev),
+          onEvent: emit,
           transport: "non-stream",
           contextErrorsRetry: true,
         });
@@ -334,18 +333,15 @@ export async function* runLintFixChat(
           lifecycle: r.lifecycle,
         };
       },
-      onEvent: (ev) => pwtEvents.push(ev),
-    });
+      onEvent: emit,
+    }));
     yield { kind: "tool_result", ok: true, preview: `${result.value.patches?.length ?? 0} patch(es)` };
   } catch (e) {
     yield { kind: "tool_result", ok: false, preview: (e as Error).message };
-    for (const ev of pwtEvents) yield ev;
     yield { kind: "error", message: `lint-chat: ${(e as Error).message}` };
     yield { kind: "result", durationMs: Date.now() - start, text: "" };
     return;
   }
-  for (const ev of pwtEvents) yield ev;
-
   const parsed = result.value;
 
   // 4. Apply section patches only

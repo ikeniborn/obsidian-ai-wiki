@@ -1009,6 +1009,46 @@ test("analyzeAttachments forwards bounded Vision options to every native call", 
   );
 });
 
+test("Vision synchronous invocation failure emits sent before failed without waiting", async () => {
+  const events: RunEvent[] = [];
+  const error = new Error("vision sync create failed");
+  const llm = {
+    chat: {
+      completions: {
+        create: () => {
+          throw error;
+        },
+      },
+    },
+  } as unknown as LlmClient;
+
+  await assert.rejects(analyzeAttachments(
+    ["image.png"],
+    {
+      resolveLink: () => "image.png",
+      readBinary: async () => new Uint8Array([1]).buffer,
+    } as never,
+    llm,
+    "vision-model",
+    new AbortController().signal,
+    "",
+    "en",
+    "en",
+    {
+      inputBudgetTokens: 20_000,
+      compressionProfile: "minimum",
+      onEvent: (event) => events.push(event),
+    },
+  ), error);
+
+  assert.deepEqual(
+    events
+      .filter((event) => event.kind === "llm_lifecycle")
+      .map((event) => event.kind === "llm_lifecycle" ? event.phase : ""),
+    ["preparing", "sent", "failed"],
+  );
+});
+
 test("Excalidraw uses one media unit with bounded profile and output cap", async () => {
   const seen: Record<string, unknown>[] = [];
   const llm = {

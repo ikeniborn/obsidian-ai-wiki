@@ -20,6 +20,7 @@ import { PageSimilarityService, type SelectedChunk } from "../page-similarity";
 import { seedPassesGate } from "../retrieval-diag";
 import type { RetrievalMode, SeedFallbackReason } from "../retrieval-diag";
 import { promptVersionOf } from "../prompt-version";
+import { runWithLiveEvents } from "./llm-utils";
 import {
   DEFAULT_BOILERPLATE_DEMOTION_FACTOR,
   demoteBoilerplateRankedIds,
@@ -164,8 +165,17 @@ export async function* retrieveDomainCandidates(
     const allAnnotatedIds = [...indexAnnotations.keys()];
     yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allAnnotatedIds.length } };
     const seedOpts = { ...llmSeedFallback.opts, thinkingBudgetTokens: undefined };
-    const seedRes = await llmSelectSeeds(question, indexAnnotations, allAnnotatedIds, llmSeedFallback.llm, llmSeedFallback.model, seedOpts, signal);
-    for (const event of seedRes.events) yield event;
+    const seedRes = yield* runWithLiveEvents((emit) =>
+      llmSelectSeeds(
+        question,
+        indexAnnotations,
+        allAnnotatedIds,
+        llmSeedFallback.llm,
+        llmSeedFallback.model,
+        seedOpts,
+        signal,
+        emit,
+      ));
     seeds = seedRes.seeds;
     seedOutputTokens += seedRes.outputTokens;
     if (seedRes.lifecycle) {
@@ -478,10 +488,10 @@ async function llmSelectSeeds(
   model: string,
   opts: LlmCallOptions,
   signal: AbortSignal,
+  onEvent: (event: RunEvent) => void,
 ): Promise<{
   seeds: string[];
   outputTokens: number;
-  events: RunEvent[];
   lifecycle?: ReturnType<typeof createLlmLifecycle>;
 }> {
   const example = JSON.stringify({
@@ -506,7 +516,6 @@ async function llmSelectSeeds(
     { role: "user", content: prompt },
   ];
 
-  const events: RunEvent[] = [];
   try {
     const r = await parseWithRetry({
       llm, model, baseMessages: messages, opts,
@@ -515,17 +524,16 @@ async function llmSelectSeeds(
       callSite: "query.seeds",
       lifecycle: createLlmLifecycle("select_relevant_pages"),
       signal,
-      onEvent: (event) => events.push(event),
+      onEvent,
       transport: "non-stream",
     });
     return {
       seeds: r.value.seeds,
       outputTokens: r.outputTokens,
-      events,
       lifecycle: r.lifecycle,
     };
   } catch {
-    return { seeds: [], outputTokens: 0, events };
+    return { seeds: [], outputTokens: 0 };
   }
 }
 

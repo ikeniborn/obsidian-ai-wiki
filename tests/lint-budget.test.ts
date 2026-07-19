@@ -130,6 +130,14 @@ async function collectEvents(generator: AsyncGenerator<RunEvent>): Promise<RunEv
   return events;
 }
 
+function deferred(): { promise: Promise<void>; resolve(): void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 test("normal and oversized pages produce complete work-item coverage", () => {
   const pages = new Map([
     ["!Wiki/d/concept/a.md", "# A\n\n## Facts\nshort"],
@@ -568,7 +576,11 @@ function lintPatch(path: string, content: string) {
   };
 }
 
-function lintOperationLlm(path: string, content: string): LlmClient {
+function lintOperationLlm(
+  path: string,
+  content: string,
+  beforeCreate?: (kind: "batch" | "config") => Promise<void>,
+): LlmClient {
   const patch = lintPatch(path, content);
   return {
     chat: {
@@ -582,6 +594,7 @@ function lintOperationLlm(path: string, content: string): LlmClient {
           const match = typeof user?.content === "string"
             ? user.content.match(/Submitted lint work items:\n([\s\S]*?)\n\nOptional related sections:/)
             : null;
+          await beforeCreate?.(match ? "batch" : "config");
           const output = match
             ? (() => {
                 const items = JSON.parse(match[1]) as Array<{
@@ -613,7 +626,68 @@ test("Lint batch/config lifecycle completes only after a successful patch write"
   const path = "!Wiki/d/concept/wiki_d_alpha.md";
   const content = "---\ntype: concept\ndescription: Alpha.\nresource: [source]\n---\n# Alpha\n\n## Facts\nOld fact.\n";
   const adapter = new MemoryAdapter(new Map([[path, content]]));
-  const llm = lintOperationLlm(path, content);
+  const batchRelease = deferred();
+  const configRelease = deferred();
+  const llm = lintOperationLlm(path, content, (kind) =>
+    kind === "batch" ? batchRelease.promise : configRelease.promise);
+
+  const generator = runLint(
+    ["d"],
+    new VaultTools(adapter, "/vault"),
+    llm,
+    "m",
+    [{ id: "d", name: "Demo", wiki_folder: "d", entity_types: [], language_notes: "" } as DomainEntry],
+    "/vault",
+    new AbortController().signal,
+    0,
+    { inputBudgetTokens: 24_000, maxTokens: 2_000, structuredRetries: 0 },
+  );
+  const events: RunEvent[] = [];
+  for (const [callSite, release] of [
+    ["lint.batch", batchRelease],
+    ["lint.patch", configRelease],
+  ] as const) {
+    const livePhases: string[] = [];
+    while (livePhases.length < 3) {
+      const next = await Promise.race([
+        generator.next(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`${callSite} lifecycle buffered behind request`)), 50)),
+      ]);
+      assert.equal(next.done, false);
+      if (!next.done) {
+        events.push(next.value);
+        if (next.value.kind === "llm_lifecycle"
+          && next.value.diagnostics?.callSite === callSite) {
+          livePhases.push(next.value.phase);
+        }
+      }
+    }
+    assert.deepEqual(livePhases, ["preparing", "sent", "waiting"]);
+    release.resolve();
+  }
+  for await (const event of generator) events.push(event);
+
+  assert.match(adapter.files.get(path) ?? "", /Lifecycle mutation fix/, JSON.stringify(events));
+  assert.deepEqual(lifecycleAttempts(events, "lint.batch"), [{
+    action: "check_wiki_quality",
+    phases: ["preparing", "sent", "waiting", "producing", "validating", "applying", "completed"],
+  }]);
+  assert.deepEqual(lifecycleAttempts(events, "lint.patch"), [{
+    action: "check_wiki_quality",
+    phases: ["preparing", "sent", "waiting", "producing", "validating", "applying", "completed"],
+  }]);
+});
+
+test("Lint batch forwards failed lifecycle when model request rejects", async () => {
+  const { runLint } = await import("../src/phases/lint");
+  const { VaultTools } = await import("../src/vault-tools");
+  const path = "!Wiki/d/concept/wiki_d_alpha.md";
+  const content = "---\ntype: concept\ndescription: Alpha.\nresource: [source]\n---\n# Alpha\n\n## Facts\nOld fact.\n";
+  const adapter = new MemoryAdapter(new Map([[path, content]]));
+  const llm = {
+    chat: { completions: { create: () => Promise.reject(new Error("lint model denied")) } },
+  } as unknown as LlmClient;
 
   const events = await collectEvents(runLint(
     ["d"],
@@ -627,15 +701,10 @@ test("Lint batch/config lifecycle completes only after a successful patch write"
     { inputBudgetTokens: 24_000, maxTokens: 2_000, structuredRetries: 0 },
   ));
 
-  assert.match(adapter.files.get(path) ?? "", /Lifecycle mutation fix/, JSON.stringify(events));
   assert.deepEqual(lifecycleAttempts(events, "lint.batch"), [{
     action: "check_wiki_quality",
-    phases: ["preparing", "sent", "waiting", "producing", "validating", "applying", "completed"],
-  }]);
-  assert.deepEqual(lifecycleAttempts(events, "lint.patch"), [{
-    action: "check_wiki_quality",
-    phases: ["preparing", "sent", "waiting", "producing", "validating", "applying", "completed"],
-  }]);
+    phases: ["preparing", "sent", "waiting", "failed"],
+  }], JSON.stringify(events));
 });
 
 test("Lint batch lifecycle fails exactly once when patch write throws", async () => {
@@ -713,6 +782,64 @@ test("Lint-chat mutation lifecycle completes on write and fails on write excepti
       ],
     );
   }
+});
+
+test("Lint-chat yields lifecycle while patch helper is pending and closes rejection", async () => {
+  const { VaultTools } = await import("../src/vault-tools");
+  const { runLintFixChat } = await import("../src/phases/lint-chat");
+  const path = "!Wiki/d/concept/wiki_d_alpha.md";
+  const content = "# Alpha\n\n## Facts\nOld fact.\n";
+  const request = {
+    operation: "lint-chat",
+    context: `- [warning] ${path} :: ## Facts :: stale :: Old fact`,
+    chatMessages: [{ role: "user", content: "Fix wiki_d_alpha" }],
+  } as RunRequest;
+  const args = (llm: LlmClient) => runLintFixChat(
+    request,
+    new VaultTools(new MemoryAdapter(new Map([[path, content]])), ""),
+    "",
+    { id: "d", name: "Demo", wiki_folder: "d", entity_types: [], language_notes: "" } as DomainEntry,
+    llm,
+    "m",
+    { inputBudgetTokens: 10_000, structuredRetries: 0 },
+    new AbortController().signal,
+  );
+  const release = deferred();
+  const success = jsonLlm(JSON.stringify({ summary: "fixed", patches: [] }));
+  const pendingLlm = {
+    chat: { completions: { create: async (params: unknown) => {
+      await release.promise;
+      return success.chat.completions.create(params as never);
+    } } },
+  } as unknown as LlmClient;
+  const generator = args(pendingLlm);
+  const events: RunEvent[] = [];
+  const phases: string[] = [];
+  while (phases.length < 3) {
+    const next = await Promise.race([
+      generator.next(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("lint-chat lifecycle buffered behind request")), 50)),
+    ]);
+    assert.equal(next.done, false);
+    if (!next.done) {
+      events.push(next.value);
+      if (next.value.kind === "llm_lifecycle") phases.push(next.value.phase);
+    }
+  }
+  assert.deepEqual(phases, ["preparing", "sent", "waiting"]);
+  release.resolve();
+  for await (const event of generator) events.push(event);
+
+  const failedEvents = await collectEvents(args({
+    chat: { completions: { create: () => Promise.reject(new Error("lint-chat model denied")) } },
+  } as unknown as LlmClient));
+  assert.deepEqual(
+    failedEvents
+      .filter((event) => event.kind === "llm_lifecycle")
+      .map((event) => event.kind === "llm_lifecycle" ? event.phase : ""),
+    ["preparing", "sent", "waiting", "failed"],
+  );
 });
 
 test("Lint transport and applying boundaries remain explicit", () => {

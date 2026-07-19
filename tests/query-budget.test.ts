@@ -633,12 +633,14 @@ test("immediate Query and Chat failures emit waiting before failed", async () =>
 
 test("Query repair completes its request before primary lifecycle applies final assistant replacement", async () => {
   let calls = 0;
+  const repairRelease = deferred();
   const llm = {
     chat: { completions: { create: async (params: unknown) => {
       calls += 1;
       if ((params as { stream?: boolean }).stream === true) {
         return successfulStream("Answer with [[wiki_missing]].");
       }
+      await repairRelease.promise;
       return completion([
         "<<<ANSWER>>>",
         "Answer with [[wiki_d_0]].",
@@ -648,7 +650,7 @@ test("Query repair completes its request before primary lifecycle applies final 
       ].join("\n"));
     } } },
   } as unknown as LlmClient;
-  const { events } = await drainGenerator(answerFromContext({
+  const generator = answerFromContext({
     llm,
     model: "mock",
     opts: { inputBudgetTokens: 10_000 },
@@ -657,7 +659,30 @@ test("Query repair completes its request before primary lifecycle applies final 
     question: "question",
     chunks: [selectedChunk(0, 1)],
     wikiLinkValidationRetries: 1,
-  }));
+  });
+  const events: RunEvent[] = [];
+  let repairWaiting = false;
+  while (!repairWaiting) {
+    const next = await Promise.race([
+      generator.next(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("query repair lifecycle buffered behind request")), 50)),
+    ]);
+    assert.equal(next.done, false);
+    if (!next.done) {
+      events.push(next.value);
+      const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+      const ids = [...new Set(lifecycle.map((event) => event.id))];
+      repairWaiting = ids.length === 2
+        && lifecycle.some((event) => event.id === ids[1] && event.phase === "waiting");
+    }
+  }
+  repairRelease.resolve();
+  while (true) {
+    const next = await generator.next();
+    if (next.done) break;
+    events.push(next.value);
+  }
 
   assert.equal(calls, 2);
   const replaceIndex = events.findIndex((event) => event.kind === "assistant_replace");

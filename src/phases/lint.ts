@@ -14,7 +14,7 @@ import lintTemplate from "../../prompts/lint.md";
 import lintActualizeTemplate from "../../prompts/lint-actualize.md";
 import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
-import { wikiSections } from "./llm-utils";
+import { runWithLiveEvents, wikiSections } from "./llm-utils";
 import { domainWikiFolder, WIKI_ROOT, isWikiPagePath, effectiveSubfolder } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseResourceFromFm, validateAndRepairWikiPageFrontmatter, stripInvalidWikiArticles } from "../utils/raw-frontmatter";
 import { checkGraphStructure, pageId } from "../wiki-graph";
@@ -490,9 +490,8 @@ export async function* runLint(
         const batch = batches[i];
         yield { kind: "info_text", icon: "🔍", summary: `Checking batch ${i + 1}/${batches.length}: ${batch.length} work item(s)` };
         yield { kind: "tool_use", name: "Analysing wiki", input: { batch: i + 1, workItems: batch.length } };
-        const pwtEvents: RunEvent[] = [];
         try {
-          const result = await runLintBatchWithSplit({
+          const result = yield* runWithLiveEvents((emit) => runLintBatchWithSplit({
             items: batch,
             pages,
             domainName: domain.name,
@@ -502,8 +501,8 @@ export async function* runLint(
             model,
             opts,
             signal,
-            onEvent: (ev) => pwtEvents.push(ev),
-          });
+            onEvent: emit,
+          }));
           outputTokens += result.outputTokens;
           batchOutputs.push(result.output);
           batchLifecycles.push(...result.lifecycles);
@@ -514,7 +513,6 @@ export async function* runLint(
           skippedArticles.push(...batch.map((item) => item.id));
           continue;
         }
-        for (const ev of pwtEvents) yield ev;
       }
 
       const allBatchFindings = batchOutputs.map((output) => output.findings);
@@ -677,8 +675,8 @@ export async function* runLint(
     // actualizeDomainConfig (runs once after loop)
     yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).lintProgress.actualizing(domain.id) };
     yield { kind: "tool_use", name: "Updating config", input: {} };
-    const patchRes = await actualizeDomainConfig(domain, mergedFindings, llm, model, opts, signal);
-    for (const event of patchRes.events) yield event;
+    const patchRes = yield* runWithLiveEvents((emit) =>
+      actualizeDomainConfig(domain, mergedFindings, llm, model, opts, signal, emit));
     yield { kind: "tool_result", ok: true, preview: patchRes.patch ? "config updated" : "no changes" };
     outputTokens += patchRes.outputTokens;
     const patch = patchRes.patch;
@@ -896,10 +894,10 @@ async function actualizeDomainConfig(
   model: string,
   opts: LlmCallOptions,
   signal: AbortSignal,
+  onEvent: (event: RunEvent) => void,
 ): Promise<{
   patch: { entity_types?: EntityType[]; language_notes?: string } | null;
   outputTokens: number;
-  events: RunEvent[];
   lifecycle?: ReturnType<typeof createLlmLifecycle>;
 }> {
   const currentConfig = JSON.stringify({
@@ -941,7 +939,6 @@ async function actualizeDomainConfig(
   }, null, 2);
   messages[0] = { role: "system", content: systemContent };
 
-  const collected: RunEvent[] = [];
   try {
     const r = await parseWithRetry({
       llm, model, baseMessages: messages, opts,
@@ -950,7 +947,7 @@ async function actualizeDomainConfig(
       callSite: "lint.patch",
       lifecycle: createLlmLifecycle("check_wiki_quality"),
       signal,
-      onEvent: (e) => collected.push(e),
+      onEvent,
       transport: "non-stream",
     });
     const parsed = r.value;
@@ -960,10 +957,9 @@ async function actualizeDomainConfig(
     return {
       patch: Object.keys(patch).length > 0 ? patch : null,
       outputTokens: r.outputTokens,
-      events: collected,
       lifecycle: r.lifecycle,
     };
   } catch {
-    return { patch: null, outputTokens: 0, events: collected };
+    return { patch: null, outputTokens: 0 };
   }
 }
