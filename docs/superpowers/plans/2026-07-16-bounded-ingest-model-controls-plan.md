@@ -1,10 +1,26 @@
+---
+review:
+  plan_hash: dffae2e77d80ce2f
+  last_run: 2026-07-19
+  phases:
+    structure: { status: passed }
+    coverage: { status: passed }
+    dependencies: { status: passed }
+    verifiability: { status: passed }
+    consistency: { status: passed }
+  findings: []
+chain:
+  intent: docs/superpowers/intents/2026-07-16-bounded-ingest-model-controls-intent.md
+  spec: docs/superpowers/specs/2026-07-16-bounded-ingest-model-controls-design.md
+---
+
 # Bounded Ingest and Model Controls Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Keep every model request inside an explicit input budget while preserving complete source evidence, non-destructive wiki updates, reusable embeddings, and operation-specific response quality controls.
+**Goal:** Keep every model request inside an explicit input budget while preserving complete source evidence, non-destructive wiki updates, reusable embeddings, operation-specific response quality controls, understandable model progress, and a complete full-Re-init domain rebuild.
 
-**Architecture:** A shared model-call policy resolves backend-specific input/output budgets and semantic compression. A conservative prompt governor packs complete context units and repacks on provider context errors. Ingest becomes a Markdown-aware evidence map/reduce pipeline whose synthesis emits complete creates or hash-guarded section patches; Query, Chat, Lint, Format, and Vision receive preservation-aware budget adapters. `index.jsonl` remains structured storage and never crosses a prompt boundary.
+**Architecture:** A shared model-call policy resolves backend-specific input/output budgets and semantic compression. A conservative prompt governor packs complete context units and repacks on provider context errors. Ingest becomes a Markdown-aware evidence map/reduce pipeline whose synthesis emits complete creates or hash-guarded section patches; Query, Chat, Lint, Format, and Vision receive preservation-aware budget adapters. A shared lifecycle emits human model states while preserving log-only diagnostics, and destructive Re-init transactionally removes and recreates the complete target domain tree. `index.jsonl` remains structured storage and never crosses a prompt boundary.
 
 **Tech Stack:** TypeScript, OpenAI-compatible chat API, Claude CLI adapter, Zod, Obsidian plugin API, JSONL domain storage, Node test runner through `tsx`, ESLint, esbuild.
 
@@ -67,6 +83,8 @@
 | R14 Backend Boundaries | Tasks 1, 3, 11, 16 |
 | R15 Documentation and Acceptance | Task 17 |
 | R16 Bounded Non-Ingest Operations | Tasks 11-15, 17 |
+| R17 Human-Readable Model Progress | Tasks 18-20, 22 |
+| R18 Complete Destructive Re-init Wipe | Tasks 21-22 |
 
 ## Phase 1: Shared Policy and Prompt Governance
 
@@ -2357,9 +2375,535 @@ git commit -m "docs: document bounded ingest controls"
 
 Invoke `$check-chain result docs/superpowers/plans/2026-07-16-bounded-ingest-model-controls-plan.md`. Resolve every confirmed code-review finding, rerun affected checks, update the final result report, and close the task only when the result verdict is `OK`.
 
+## Phase 6: Live Replay Hardening
+
+### Task 18: Add the Shared Human-Readable LLM Lifecycle and Sidebar Renderer
+
+**Requirements:** R17
+
+**Files:**
+- Create: `src/llm-lifecycle.ts`
+- Create: `tests/llm-lifecycle.test.ts`
+- Create: `tests/view-llm-lifecycle.test.ts`
+- Modify: `src/types.ts`
+- Modify: `src/view.ts`
+- Modify: `src/i18n.ts`
+- Modify: `src/styles.css`
+- Modify: `src/controller.ts`
+- Modify: `tests/settings-model-controls.test.ts`
+
+- [ ] **Step 1: Write failing lifecycle state-machine tests**
+
+Define fixtures that require one stable lifecycle ID, ordered phases, one terminal phase,
+and retry close/reopen behavior:
+
+```ts
+const phases: LlmLifecyclePhase[] = [
+  "preparing", "sent", "waiting", "producing",
+  "validating", "applying", "completed",
+];
+const state = phases.reduce(
+  (current, phase) => reduceLlmLifecycle(current, lifecycleEvent("call-1", phase)),
+  emptyLlmLifecycleState(),
+);
+assert.equal(state.calls["call-1"].phase, "completed");
+assert.throws(
+  () => reduceLlmLifecycle(state, lifecycleEvent("call-1", "waiting")),
+  /terminal lifecycle/i,
+);
+```
+
+Add separate cases for `retrying`, `failed`, `cancelled`, and a second lifecycle ID after
+retry. Require human state/action labels to contain none of these hostile technical values:
+
+```ts
+const hidden = ["ingest.synthesize", "stream", "attempt=3", "32768", "provider secret"];
+for (const marker of hidden) assert.equal(renderedHumanText.includes(marker), false);
+```
+
+- [ ] **Step 2: Run the lifecycle tests and confirm RED**
+
+```bash
+node --import tsx --test tests/llm-lifecycle.test.ts tests/view-llm-lifecycle.test.ts
+```
+
+Expected: FAIL because `llm_lifecycle`, reducer, and human renderer do not exist.
+
+- [ ] **Step 3: Add the typed lifecycle event and pure reducer**
+
+Add exact contracts:
+
+```ts
+export type LlmLifecyclePhase =
+  | "preparing" | "sent" | "waiting" | "producing"
+  | "validating" | "applying"
+  | "completed" | "retrying" | "failed" | "cancelled";
+
+export type LlmLifecycleAction =
+  | "bootstrap_domain" | "extract_source_facts" | "reduce_source_evidence"
+  | "synthesize_wiki_pages" | "select_relevant_pages" | "answer_question"
+  | "check_wiki_quality" | "apply_lint_fixes" | "format_note"
+  | "analyze_attachments";
+
+export interface LlmLifecycleDiagnostics {
+  callSite?: StructuredCallSite;
+  transport?: "stream" | "non-stream" | "claude";
+  attempt?: number;
+  configuredInputBudget?: number;
+  effectiveInputBudget?: number;
+}
+```
+
+Extend `RunEvent` with:
+
+```ts
+{
+  kind: "llm_lifecycle";
+  id: string;
+  action: LlmLifecycleAction;
+  phase: LlmLifecyclePhase;
+  atMs: number;
+  diagnostics?: LlmLifecycleDiagnostics;
+}
+```
+
+`src/llm-lifecycle.ts` must export the pure reducer, terminal guard, lifecycle-event
+factory, and a pure `humanLifecycleText(event, labels)` that consumes only `action` and
+`phase`. Diagnostics must never enter the human renderer.
+
+- [ ] **Step 4: Render one in-place lifecycle scale in the sidebar**
+
+In `WikiView.appendEvent`, route `llm_lifecycle` before generic `tool_use` rendering.
+Create one row per lifecycle ID with all lifecycle phases, mark completed/current/pending
+states, and update the waiting duration from the view's existing local timer. Do not emit
+timer events. Remove `startWaiting()` from unrelated `tool_result`; start/stop waiting only
+from lifecycle `waiting`/later phases.
+
+Keep the existing expandable reasoning block. `assistant_text{isReasoning:true}` updates
+that block while lifecycle `producing` remains the active state. Suppress the old
+Evidence mapping/reduction model-tool rows once their call sites emit lifecycle events.
+Generic filesystem/domain tool rows remain unchanged.
+
+- [ ] **Step 5: Add EN/RU/ES labels and minimal styles**
+
+Add shape-identical locale keys for every phase and action. Russian labels include:
+
+```ts
+llmPreparing: "Подготавливаем запрос",
+llmSent: "Запрос передан модели",
+llmWaiting: "Ожидаем ответ модели",
+llmProducing: "Модель формирует ответ",
+llmValidating: "Проверяем ответ",
+llmApplying: "Применяем результат",
+llmCompleted: "Готово",
+llmRetrying: "Повторяем запрос",
+llmFailed: "Ошибка",
+llmCancelled: "Отменено",
+```
+
+Use CSS state classes only for current/completed/failed/pending presentation. Do not add a
+second progress panel or expose diagnostics in DOM attributes.
+
+- [ ] **Step 6: Preserve technical diagnostics in logs only**
+
+`controller.logEvent` continues serializing the complete lifecycle event to `agent.jsonl`.
+`collectStep` must not convert lifecycle events into history `tool_use` text. Before a
+lifecycle phase following reasoning, flush the existing buffered reasoning record so log
+ordering remains deterministic.
+
+- [ ] **Step 7: Verify lifecycle, locale, and view contracts**
+
+```bash
+node --import tsx --test tests/llm-lifecycle.test.ts tests/view-llm-lifecycle.test.ts tests/settings-model-controls.test.ts
+npx tsc --noEmit --pretty false
+npm run lint
+```
+
+Expected: lifecycle sequence tests PASS; EN/RU/ES shapes match; rendered text contains no
+technical markers; TypeScript passes; ESLint has zero errors.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add src/llm-lifecycle.ts src/types.ts src/view.ts src/i18n.ts src/styles.css src/controller.ts tests/llm-lifecycle.test.ts tests/view-llm-lifecycle.test.ts tests/settings-model-controls.test.ts
+git commit -m "feat(progress): show human model lifecycle"
+```
+
+### Task 19: Instrument Native Model Calls and Use Non-Stream Background Transport
+
+**Requirements:** R17
+
+**Files:**
+- Modify: `src/phases/structured-output.ts`
+- Modify: `src/phases/llm-utils.ts`
+- Modify: `src/phases/parse-with-retry.ts`
+- Modify: `src/prompt-budget.ts`
+- Modify: `src/phases/init.ts`
+- Modify: `src/phases/ingest-evidence.ts`
+- Modify: `src/phases/ingest-synthesis.ts`
+- Modify: `src/phases/lint.ts`
+- Modify: `src/phases/lint-chat.ts`
+- Modify: `src/phases/query.ts`
+- Modify: `src/phases/query-answer.ts`
+- Modify: `src/phases/chat.ts`
+- Modify: `src/phases/format.ts`
+- Modify: `src/phases/attachment-analyzer.ts`
+- Modify: `src/agent-runner.ts`
+- Modify: `tests/structured-output.test.ts`
+- Modify: `tests/ingest-evidence.test.ts`
+- Modify: `tests/ingest-bounded.test.ts`
+- Modify: `tests/lint-budget.test.ts`
+- Modify: `tests/query-budget.test.ts`
+- Modify: `tests/format-budget.test.ts`
+- Modify: `tests/vision-budget.test.ts`
+- Modify: `tests/init-force-retry.test.ts`
+
+- [ ] **Step 1: Write failing structured-runner lifecycle tests**
+
+Require the exact streamed runner sequence:
+
+```ts
+assert.deepEqual(lifecyclePhases(events), [
+  "preparing", "sent", "waiting", "producing",
+  "validating",
+]);
+```
+
+An empty role/usage chunk must not produce `producing`; first non-empty reasoning/content
+must. Non-stream completion must emit prepare/sent/wait, preserve provider
+`reasoning`/`reasoning_content`, then validate and return. Response-format fallback,
+structured repair, and context repack must close with `retrying` before a new lifecycle
+ID. Operation integration tests append `applying` and `completed` after the runner returns.
+Abort must close with `cancelled`; validation exhaustion with `failed`.
+
+- [ ] **Step 2: Write failing operation transport tests**
+
+Capture request parameters and require:
+
+| Call family | Required transport |
+|---|---|
+| Init bootstrap/evidence/reduce | `stream:false` |
+| Ingest synthesis/regeneration | `stream:false` |
+| Lint batch/config/lint-chat patch | `stream:false` |
+| Query seed/link repair | `stream:false` |
+| Vision attachment/PDF batch | `stream:false` |
+| Chat, Query answer, Format output | `stream:true` |
+
+For every family, assert an ordered lifecycle and the expected human action key.
+
+- [ ] **Step 3: Run focused tests and confirm RED**
+
+```bash
+node --import tsx --test tests/structured-output.test.ts tests/ingest-evidence.test.ts tests/ingest-bounded.test.ts tests/lint-budget.test.ts tests/query-budget.test.ts tests/format-budget.test.ts tests/vision-budget.test.ts tests/init-force-retry.test.ts
+```
+
+Expected: FAIL on missing lifecycle events and streaming Ingest synthesis/Lint calls.
+
+- [ ] **Step 4: Instrument the shared structured runner**
+
+Add a required lifecycle descriptor to `RunStructuredArgs`:
+
+```ts
+lifecycle: {
+  id: string;
+  action: LlmLifecycleAction;
+}
+```
+
+Emit `preparing` before parameter construction, `sent` immediately before invoking the
+client, `waiting` after invocation starts, and `producing` only on the first non-empty
+reasoning/content chunk. Emit `validating` before profile parsing/Zod validation. On a
+valid response, return control with the lifecycle still non-terminal; the operation call
+site then emits `applying` and `completed` at its actual render/mutation boundary. Retry
+paths emit `retrying`; terminal exceptions emit `failed` or `cancelled`.
+`runStructuredStreaming` forwards lifecycle events live through its existing queue.
+
+Add a non-stream reasoning extractor:
+
+```ts
+export function completionReasoning(message: unknown): string {
+  const value = message as { reasoning?: unknown; reasoning_content?: unknown };
+  return typeof value.reasoning === "string" ? value.reasoning
+    : typeof value.reasoning_content === "string" ? value.reasoning_content
+    : "";
+}
+```
+
+- [ ] **Step 5: Convert atomic background calls to non-stream**
+
+Set `transport: "non-stream"` in both Ingest synthesis paths, Lint batch/config/chat-patch,
+Query seed/link-repair, and all existing atomic structured background calls. Keep the
+current direct non-stream Evidence and Init bootstrap behavior. Route lifecycle events
+through `RunEventBridge` where Promise-based helpers previously buffered or discarded
+events.
+
+Do not change Chat, primary Query answer, or Format to non-stream. Their direct SSE loops
+emit `sent`/`waiting` before await, `producing` on first non-empty reasoning/content, and
+`validating`/`applying`/terminal at their existing boundaries.
+
+- [ ] **Step 6: Replace technical Evidence tool rows**
+
+Delete `startEvidenceOperation`/`finishEvidenceOperation` tool-event emission. Map and
+reduce use the shared actions `extract_source_facts` and `reduce_source_evidence`.
+Context repack/structured repair use lifecycle `retrying`; technical reason and depth stay
+in diagnostics/logs.
+
+- [ ] **Step 7: Instrument Vision and result application**
+
+Each bounded Vision image/PDF batch emits `analyze_attachments` lifecycle around its
+non-stream call. Ingest page writes, Lint patch application, Query answer display, and
+Format preview application emit `applying` immediately before their existing mutation or
+render boundary, then `completed`.
+
+- [ ] **Step 8: Prove lifecycle UI cannot keep a hung call alive**
+
+In `AgentRunner`, do not add `llm_lifecycle` to the idle-reset filter. Add a fake operation
+that emits lifecycle prepare/sent/waiting and then hangs. Assert idle abort occurs at the
+configured deadline. A real reasoning/content `assistant_text` still resets the timer;
+local sidebar waiting ticks create no event.
+
+- [ ] **Step 9: Run focused and full native checks**
+
+```bash
+node --import tsx --test tests/structured-output.test.ts tests/ingest-evidence.test.ts tests/ingest-bounded.test.ts tests/lint-budget.test.ts tests/query-budget.test.ts tests/format-budget.test.ts tests/vision-budget.test.ts tests/init-force-retry.test.ts
+node --import tsx --test tests/*.test.ts
+npx tsc --noEmit --pretty false
+npm run lint
+npm run build
+git diff --check
+```
+
+Expected: focused and full suites pass; background calls are non-stream; interactive calls
+remain SSE; idle deadline is unchanged; TypeScript/build pass; lint has zero errors.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add src/phases/structured-output.ts src/phases/llm-utils.ts src/phases/parse-with-retry.ts src/prompt-budget.ts src/phases/init.ts src/phases/ingest-evidence.ts src/phases/ingest-synthesis.ts src/phases/lint.ts src/phases/lint-chat.ts src/phases/query.ts src/phases/query-answer.ts src/phases/chat.ts src/phases/format.ts src/phases/attachment-analyzer.ts src/agent-runner.ts tests/structured-output.test.ts tests/ingest-evidence.test.ts tests/ingest-bounded.test.ts tests/lint-budget.test.ts tests/query-budget.test.ts tests/format-budget.test.ts tests/vision-budget.test.ts tests/init-force-retry.test.ts
+git commit -m "fix(llm): expose lifecycle and bound background calls"
+```
+
+### Task 20: Preserve Lifecycle and Reasoning Through the Claude Backend
+
+**Requirements:** R17, R14
+
+**Files:**
+- Modify: `src/claude-cli-client.ts`
+- Modify: `src/stream.ts`
+- Modify: `tests/claude-cli-packed-context.test.ts`
+- Modify: `tests/claude-chat-context.test.ts`
+- Modify: `tests/bounded-operations-acceptance.test.ts`
+
+- [ ] **Step 1: Write failing Claude reasoning/lifecycle tests**
+
+Feed a Claude stream containing `thinking` plus final text. Streaming must expose thinking
+as `assistant_text{isReasoning:true}` and transition to `producing`. Non-stream collection
+must retain reasoning separately from content and pass it to the structured runner.
+Lifecycle labels remain backend-independent and contain no CLI command/arguments.
+
+- [ ] **Step 2: Run and confirm RED**
+
+```bash
+node --import tsx --test tests/claude-cli-packed-context.test.ts tests/claude-chat-context.test.ts tests/bounded-operations-acceptance.test.ts
+```
+
+Expected: FAIL because non-stream Claude collection drops reasoning and lifecycle coverage
+is absent.
+
+- [ ] **Step 3: Preserve Claude reasoning without backend-specific UI**
+
+Map Claude thinking blocks to OpenAI-compatible `delta.reasoning` in streaming output.
+Extend `_collect` to concatenate reasoning independently and expose it on the returned
+completion message. Keep lifecycle ownership at the operation/structured-runner boundary;
+the Claude client supplies transport diagnostics only.
+
+- [ ] **Step 4: Verify both backends share human semantics**
+
+```bash
+node --import tsx --test tests/claude-cli-packed-context.test.ts tests/claude-chat-context.test.ts tests/bounded-operations-acceptance.test.ts tests/llm-lifecycle.test.ts
+npx tsc --noEmit --pretty false
+npm run lint
+```
+
+Expected: Claude reasoning survives stream and non-stream paths; native/Claude fixtures use
+the same action/phase labels; technical CLI data appears only in captured diagnostics.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/claude-cli-client.ts src/stream.ts tests/claude-cli-packed-context.test.ts tests/claude-chat-context.test.ts tests/bounded-operations-acceptance.test.ts
+git commit -m "fix(claude): preserve reasoning lifecycle"
+```
+
+### Task 21: Make Full Re-init Delete and Recreate the Complete Domain Tree
+
+**Requirements:** R18
+
+**Files:**
+- Modify: `src/phases/init.ts`
+- Delete: `tests/wipe-domain-preserves-metadata.test.ts`
+- Create: `tests/init-force-domain-wipe.test.ts`
+- Modify: `tests/init-bootstrap-fail-loud.test.ts`
+- Modify: `tests/init-force-retry.test.ts`
+- Modify: `tests/init-ingest-outcome.test.ts`
+
+- [ ] **Step 1: Write failing complete-wipe tests**
+
+Seed a target domain with `metadata.jsonl`, `index.jsonl`, `log.jsonl`, `.tmp`, pages,
+nested entity directories, and empty obsolete directories. Seed another domain and record
+its exact files. Require:
+
+```ts
+const removed = await wipeDomainFolder(vaultTools, "target");
+assert.equal(await vaultTools.exists("!Wiki/target"), false);
+assert.deepEqual(await snapshotTree(vaultTools, "!Wiki/other"), otherBefore);
+assert.ok(removed.includes("!Wiki/target/metadata.jsonl"));
+```
+
+Integration event order must be bootstrap success → one `WipeDomain` → target absence →
+`domain_created` → fresh metadata/index. No old descendant may reappear.
+
+- [ ] **Step 2: Add failing path, rollback, and fail-closed tests**
+
+Reject empty, traversal, slash-containing, `!Wiki`, and foreign-root targets before any
+read/remove. Inject file removal failure, recursive `rmdir` failure, and false-success
+`rmdir` that leaves the root present. Every case must restore exact prior file bytes and
+empty-folder inventory, emit terminal wipe failure, and perform zero source ingest.
+
+- [ ] **Step 3: Run and confirm RED**
+
+```bash
+node --import tsx --test tests/init-force-domain-wipe.test.ts tests/init-bootstrap-fail-loud.test.ts tests/init-force-retry.test.ts tests/init-ingest-outcome.test.ts
+```
+
+Expected: FAIL because metadata and empty folders survive and the old domain is updated
+rather than recreated.
+
+- [ ] **Step 4: Implement a transactional full-tree wipe**
+
+Validate that `wikiFolder` is one safe path segment and that
+`domainWikiFolder(wikiFolder)` is exactly `!Wiki/${wikiFolder}`. Inventory exact file
+images plus every nested folder, including empty folders. Remove all files conditionally,
+including metadata. Call `vaultTools.rmdir(root, true)` and require
+`await vaultTools.exists(root) === false`.
+
+On any failure, recreate the recorded folder tree and restore exact file bytes through the
+existing rollback helpers. If rollback or transaction trust fails, surface that error.
+Do not reuse `removeDomainFolder`; it is best-effort and intentionally swallows errors.
+
+- [ ] **Step 5: Recreate the domain from bootstrap state**
+
+Remove the intermediate empty `domain_updated` event after wipe. Force mode passes the
+prepared bootstrap into `runInitWithSources` as a recreation: emit `domain_created`, create
+fresh metadata/index, then ingest sources. Keep bootstrap and prepared-source rechecks
+before mutation. Preserve the existing one-`WipeDomain` operation-level replay guard.
+
+- [ ] **Step 6: Verify full wipe and regression boundaries**
+
+```bash
+node --import tsx --test tests/init-force-domain-wipe.test.ts tests/init-bootstrap-fail-loud.test.ts tests/init-force-retry.test.ts tests/init-ingest-outcome.test.ts tests/remove-domain-folder.test.ts
+node --import tsx --test tests/*.test.ts
+npx tsc --noEmit --pretty false
+npm run lint
+npm run build
+git diff --check
+```
+
+Expected: target tree is absent before recreation; fresh files appear in correct order;
+other domain is byte-identical; rollback fixtures restore files and empty folders; one
+explicit run emits one wipe; full suite/build pass.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/phases/init.ts tests/init-force-domain-wipe.test.ts tests/init-bootstrap-fail-loud.test.ts tests/init-force-retry.test.ts tests/init-ingest-outcome.test.ts tests/wipe-domain-preserves-metadata.test.ts
+git commit -m "fix(init): fully recreate domain on reinit"
+```
+
+### Task 22: Document, Review, and Replay the Human Lifecycle and Full Wipe
+
+**Requirements:** R15, R17, R18
+
+**Files:**
+- Modify: `README.md`
+- Modify: `docs/README.ru.md`
+- Modify: `docs/rag-quality-recommendations.md`
+- Modify: `scripts/audit-bounded-init-replay.ts`
+- Modify: `tests/audit-bounded-init-replay.test.ts`
+- Modify through iwiki MCP: `architecture/structured-output-runner`
+
+- [ ] **Step 1: Extend the read-only replay auditor**
+
+Require every model request in the selected Init session to have an ordered lifecycle,
+terminal state, and no silent dispatch-to-response gap. Require one `WipeDomain`, no stale
+pre-wipe domain descendant after recreation, 22 successful sources, zero context errors,
+and zero budget violations. Reject technical fields found in persisted human-label fields;
+retain them in lifecycle diagnostics.
+
+- [ ] **Step 2: Write and verify failing auditor fixtures**
+
+Add fixtures for missing `waiting`, missing terminal, lifecycle extending beyond idle
+deadline, two wipes, stale empty directory manifest, and successful full lifecycle.
+
+```bash
+node --import tsx --test tests/audit-bounded-init-replay.test.ts
+```
+
+Expected before auditor changes: FAIL on the new negative fixtures.
+
+- [ ] **Step 3: Update user and architecture documentation**
+
+Document the sidebar lifecycle, expandable reasoning, log-only diagnostics, background
+non-stream vs interactive SSE policy, and full-tree Re-init behavior. Update
+`architecture/structured-output-runner` through iwiki MCP and run `wiki_lint`. Do not claim
+that UI timers are provider heartbeats.
+
+- [ ] **Step 4: Run two-stage code review**
+
+Use one spec-compliance reviewer for R17/R18, then one code-quality reviewer. Resolve every
+confirmed finding with the original implementer, rerun affected tests, and repeat review
+until PASS/APPROVED.
+
+- [ ] **Step 5: Build, install, and run the protected replay**
+
+```bash
+npm run build
+sha256sum dist/main.js
+: "${REPLAY_ROOT:?Set REPLAY_ROOT to the protected replay root created in Task 17 Step 4}"
+RUN_VAULT="$REPLAY_ROOT/run"
+test -d "$RUN_VAULT/.obsidian/plugins/ai-wiki"
+test "$RUN_VAULT" != /home/ikeniborn/Documents/Project/notes/vaults/Work
+case "$RUN_VAULT" in /tmp/ai-wiki-bounded-ingest-replay.*/run) ;; *) exit 1 ;; esac
+cp dist/main.js dist/manifest.json dist/styles.css "$RUN_VAULT/.obsidian/plugins/ai-wiki/"
+```
+
+Fully restart Obsidian, open exactly `$RUN_VAULT`, run Re-init, and monitor
+`$RUN_VAULT/.obsidian/plugins/ai-wiki/agent.jsonl` until terminal success/error. Never
+write the original working vault.
+
+- [ ] **Step 6: Audit and close only on live success**
+
+```bash
+: "${RUN_VAULT:?Set RUN_VAULT from Task 22 Step 5}"
+node --import tsx scripts/audit-bounded-init-replay.ts --vault "$RUN_VAULT" --session latest-init --expected-sources 22
+node --import tsx --test tests/*.test.ts
+npx tsc --noEmit --pretty false
+npm run lint
+npm run build
+git diff --check
+```
+
+Expected: replay audit exits zero; 22/22 sources complete; lifecycle is visible and human;
+no stale domain descendants survive wipe; all local gates and `wiki_lint` pass.
+
+- [ ] **Step 7: Run final chain reconciliation**
+
+Invoke `$check-chain result docs/superpowers/plans/2026-07-16-bounded-ingest-model-controls-plan.md`.
+Close `docs/TODO.md` only when result is `OK`.
+
 ## Final Evidence Checklist
 
-- [ ] Every R1-R16 row maps to passing test or replay evidence.
+- [ ] Every R1-R18 row maps to passing test or replay evidence.
 - [ ] Every prepared request estimate is within its effective input budget.
 - [ ] No serialized vector/raw index record appears in captured prompts.
 - [ ] Oversized source chunk and reducer packet coverage is complete.
@@ -2368,4 +2912,9 @@ Invoke `$check-chain result docs/superpowers/plans/2026-07-16-bounded-ingest-mod
 - [ ] Unchanged chunk embeddings produce zero embedding requests.
 - [ ] Query/Chat, Lint, Format, and Vision preservation invariants pass.
 - [ ] Native Vision Check succeeds/fails read-only; Claude exposes no Check.
+- [ ] Every model-backed operation shows the full human lifecycle; reasoning stays expandable.
+- [ ] Sidebar contains no call site, transport, attempt, budget, or provider diagnostics.
+- [ ] Background structured calls are non-stream; Chat, Query answer, and Format remain SSE.
+- [ ] Waiting timers do not extend the LLM watchdog.
+- [ ] Full Re-init removes the prior domain tree, recreates fresh state, and wipes exactly once.
 - [ ] Full tests, lint, build, diff check, safe replay audit, iwiki update, and `wiki_lint` pass.
