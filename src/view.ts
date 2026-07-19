@@ -1396,6 +1396,10 @@ export class LlmWikiView extends ItemView {
         rafHandle: this.reasoningRafHandle,
       },
       (handle) => window.cancelAnimationFrame(handle),
+      (block, buffer) => {
+        const span = block.querySelector<HTMLElement>(".ai-wiki-reasoning-text");
+        if (span) span.setText(buffer);
+      },
     );
     this.reasoningBlock = reasoning.block;
     this.reasoningBuffer = reasoning.buffer;

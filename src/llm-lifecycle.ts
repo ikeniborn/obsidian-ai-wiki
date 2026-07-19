@@ -300,9 +300,13 @@ export function resetReasoningForLifecycle<Block, Handle>(
   event: Pick<LlmLifecycleEvent, "phase">,
   state: ReasoningRenderState<Block, Handle>,
   cancelAnimationFrame: (handle: Handle) => void,
+  flushPending: (block: Block, buffer: string) => void,
 ): ReasoningRenderState<Block, Handle> {
   if (event.phase !== "preparing") return state;
-  if (state.rafHandle !== null) cancelAnimationFrame(state.rafHandle);
+  if (state.rafHandle !== null) {
+    if (state.block !== null) flushPending(state.block, state.buffer);
+    cancelAnimationFrame(state.rafHandle);
+  }
   return { block: null, buffer: "", rafHandle: null };
 }
 

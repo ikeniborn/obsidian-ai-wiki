@@ -222,18 +222,34 @@ test("retry lifecycle gets its own timer and clearAll cancels every scheduled ti
   assert.equal(scheduler.tasks.size, 0);
 });
 
-test("new preparing lifecycle cancels pending reasoning render and starts a separate context", () => {
+test("new preparing lifecycle flushes pending reasoning before starting a separate block", () => {
   const cancelled: number[] = [];
-  const old = { block: { call: "call-1" }, buffer: "old reasoning", rafHandle: 7 };
+  const order: string[] = [];
+  const oldBlock = { text: "" };
+  const old = { block: oldBlock, buffer: "old reasoning", rafHandle: 7 };
   const reset = resetReasoningForLifecycle(
     lifecycleEvent("call-2", "answer_question", "preparing", 10),
     old,
-    (handle) => cancelled.push(handle),
+    (handle) => {
+      order.push("cancel");
+      cancelled.push(handle);
+    },
+    (block, buffer) => {
+      order.push("flush");
+      block.text = buffer;
+    },
   );
 
+  assert.equal(oldBlock.text, "old reasoning");
+  assert.deepEqual(order, ["flush", "cancel"]);
   assert.deepEqual(cancelled, [7]);
   assert.deepEqual(reset, { block: null, buffer: "", rafHandle: null });
   assert.notEqual(reset, old);
+
+  const newBlock = { text: "" };
+  newBlock.text = "new reasoning";
+  assert.equal(oldBlock.text, "old reasoning");
+  assert.equal(newBlock.text, "new reasoning");
 });
 
 test("suppressed nested Evidence result cannot consume unrelated visible tool result", () => {
