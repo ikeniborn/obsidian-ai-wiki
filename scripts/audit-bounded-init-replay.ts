@@ -124,6 +124,9 @@ const HUMAN_LABEL_FIELDS = new Set([
 ]);
 const TECHNICAL_LABEL_MARKER =
   /\b(?:call[\s_-]*site|transport|attempt|(?:configured|effective|input|output|thinking)[\s_-]*budget|provider|stream|non-stream|claude)\b/i;
+const ATTEMPT_LABEL_MARKER = /\b(?:attempt|retry)\s*(?:#|no\.?|number|:|=)?\s*\d+\b/i;
+const PROVIDER_LABEL_MARKER =
+  /\b(?:anthropic|azure\s+openai|gemini|groq|litellm|ollama|openai|openrouter|xai)\b/i;
 const DEFAULT_IDLE_DEADLINE_MS = 300_000;
 
 interface WipeAudit {
@@ -139,8 +142,58 @@ interface LifecycleAudit {
   failures: string[];
 }
 
+interface LifecycleDescriptor {
+  id: string;
+  callSite: string;
+  transport?: string;
+  attempt?: number;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function containsStandalone(value: string, technical: string): boolean {
+  return new RegExp(
+    `(?:^|[^A-Za-z0-9_.-])${escapeRegExp(technical)}(?:$|[^A-Za-z0-9_.-])`,
+    "i",
+  ).test(value);
+}
+
+function humanLabelContainsTechnical(
+  event: Record<string, unknown>,
+  value: string,
+): boolean {
+  if (
+    TECHNICAL_LABEL_MARKER.test(value)
+    || ATTEMPT_LABEL_MARKER.test(value)
+    || PROVIDER_LABEL_MARKER.test(value)
+  ) return true;
+  for (const callSite of STRUCTURED_CALL_SITES) {
+    if (containsStandalone(value, callSite)) return true;
+  }
+  if (!isRecord(event.diagnostics)) return false;
+  for (const field of ["transport", "provider"]) {
+    const technical = event.diagnostics[field];
+    if (
+      typeof technical === "string"
+      && technical.length > 0
+      && containsStandalone(value, technical)
+    ) return true;
+  }
+  for (const [field, technical] of Object.entries(event.diagnostics)) {
+    if (
+      /(?:budget|tokens?)/i.test(field)
+      && typeof technical === "number"
+      && Number.isFinite(technical)
+      && containsStandalone(value, String(technical))
+    ) return true;
+  }
+  return false;
 }
 
 function inside(root: string, candidate: string): boolean {
@@ -252,6 +305,7 @@ function auditLifecycles(
   idleDeadlineMs: number,
 ): LifecycleAudit {
   const calls = new Map<string, Record<string, unknown>[]>();
+  const lifecycleSequence: Record<string, unknown>[] = [];
   const failures: string[] = [];
   let technicalHumanLabelFields = 0;
 
@@ -264,11 +318,12 @@ function auditLifecycles(
     const events = calls.get(id) ?? [];
     events.push(event);
     calls.set(id, events);
+    lifecycleSequence.push(event);
     for (const [field, value] of Object.entries(event)) {
       if (
         HUMAN_LABEL_FIELDS.has(field)
         && typeof value === "string"
-        && TECHNICAL_LABEL_MARKER.test(value)
+        && humanLabelContainsTechnical(event, value)
       ) {
         technicalHumanLabelFields++;
         failures.push(`lifecycle ${id} technical human label ${field}`);
@@ -276,6 +331,8 @@ function auditLifecycles(
     }
   }
 
+  const descriptors = new Map<string, LifecycleDescriptor>();
+  const unsupportedIds = new Set<string>();
   for (const [id, events] of calls) {
     let expectedIndex = 0;
     let terminalSeen = false;
@@ -306,6 +363,18 @@ function auditLifecycles(
         failures.push(`lifecycle ${id} has invalid phase`);
         continue;
       }
+      if (
+        waitingAtMs !== undefined
+        && phase !== "waiting"
+        && idleDeadlineMs > 0
+      ) {
+        const elapsedMs = atMs - waitingAtMs;
+        if (elapsedMs > idleDeadlineMs) {
+          failures.push(
+            `lifecycle ${id} exceeds idle deadline: ${elapsedMs}ms > ${idleDeadlineMs}ms`,
+          );
+        }
+      }
       if (TERMINAL_LIFECYCLE_PHASES.has(phase)) {
         if (terminalSeen) failures.push(`lifecycle ${id} has multiple terminal phases`);
         terminalSeen = true;
@@ -329,24 +398,126 @@ function auditLifecycles(
         expectedIndex++;
       }
       if (phase === "waiting") waitingAtMs = atMs;
-      if (
-        waitingAtMs !== undefined
-        && phase !== "waiting"
-        && idleDeadlineMs > 0
-      ) {
-        const elapsedMs = atMs - waitingAtMs;
-        if (elapsedMs > idleDeadlineMs) {
-          failures.push(
-            `lifecycle ${id} exceeds idle deadline: ${elapsedMs}ms > ${idleDeadlineMs}ms`,
-          );
-        }
-      }
     }
 
     if (!events.some((event) => event.phase === "waiting")) {
       failures.push(`lifecycle ${id} missing waiting`);
     }
     if (!terminalSeen) failures.push(`lifecycle ${id} missing terminal`);
+
+    const preparing = events.find((event) => event.phase === "preparing");
+    const diagnostics = preparing && isRecord(preparing.diagnostics)
+      ? preparing.diagnostics
+      : undefined;
+    if (
+      !diagnostics
+      || typeof diagnostics.callSite !== "string"
+      || !STRUCTURED_CALL_SITES.has(diagnostics.callSite)
+    ) {
+      unsupportedIds.add(id);
+      continue;
+    }
+    const descriptor: LifecycleDescriptor = {
+      id,
+      callSite: diagnostics.callSite,
+    };
+    if (diagnostics.transport !== undefined) {
+      if (
+        typeof diagnostics.transport !== "string"
+        || !["stream", "non-stream", "claude"].includes(diagnostics.transport)
+      ) {
+        failures.push(`lifecycle ${id} has invalid diagnostics.transport`);
+      } else {
+        descriptor.transport = diagnostics.transport;
+      }
+    }
+    if (diagnostics.attempt !== undefined) {
+      const attempt = diagnostics.attempt;
+      if (!finiteNonnegativeInteger(attempt)) {
+        failures.push(`lifecycle ${id} has invalid diagnostics.attempt`);
+      } else {
+        descriptor.attempt = attempt;
+      }
+    }
+    for (const event of events) {
+      if (!isRecord(event.diagnostics) || event.diagnostics.callSite === undefined) continue;
+      if (event.diagnostics.callSite !== descriptor.callSite) {
+        failures.push(`lifecycle ${id} changed diagnostics.callSite`);
+      }
+      if (
+        descriptor.transport !== undefined
+        && event.diagnostics.transport !== undefined
+        && event.diagnostics.transport !== descriptor.transport
+      ) {
+        failures.push(`lifecycle ${id} changed diagnostics.transport`);
+      }
+    }
+    descriptors.set(id, descriptor);
+  }
+
+  if (unsupportedIds.size > 0) {
+    failures.push(
+      `lifecycle correlation unsupported/inconclusive: ${[...unsupportedIds].join(", ")} missing diagnostics.callSite`,
+    );
+  }
+
+  const promptFamilies = new Set<string>();
+  for (const record of records) {
+    if (
+      isRecord(record.event)
+      && record.event.kind === "prompt_budget"
+      && typeof record.event.callSite === "string"
+      && STRUCTURED_CALL_SITES.has(record.event.callSite)
+    ) {
+      promptFamilies.add(record.event.callSite);
+    }
+  }
+  const lifecycleFamilies = new Set(
+    [...descriptors.values()].map((descriptor) => descriptor.callSite),
+  );
+  for (const callSite of promptFamilies) {
+    if (!lifecycleFamilies.has(callSite)) {
+      failures.push(`missing lifecycle family: ${callSite}`);
+    }
+  }
+  for (const callSite of lifecycleFamilies) {
+    if (!promptFamilies.has(callSite)) {
+      failures.push(`orphan lifecycle family: ${callSite}`);
+    }
+  }
+
+  for (const [index, event] of lifecycleSequence.entries()) {
+    if (event.phase !== "retrying") continue;
+    const next = lifecycleSequence[index + 1];
+    const id = typeof event.id === "string" ? event.id : "<missing-id>";
+    const nextId = next && typeof next.id === "string" ? next.id : undefined;
+    if (!next || next.phase !== "preparing" || !nextId || nextId === id) {
+      failures.push(`lifecycle ${id} retrying must open a fresh lifecycle ID`);
+      continue;
+    }
+    const descriptor = descriptors.get(id);
+    const nextDescriptor = descriptors.get(nextId);
+    if (
+      descriptor
+      && nextDescriptor
+      && descriptor.callSite !== nextDescriptor.callSite
+    ) {
+      failures.push(
+        `lifecycle ${id} retrying changed call family: ${descriptor.callSite} -> ${nextDescriptor.callSite}`,
+      );
+    }
+    if (
+      descriptor?.attempt !== undefined
+      && nextDescriptor?.attempt !== undefined
+      && (
+        nextDescriptor.attempt < descriptor.attempt
+        || nextDescriptor.attempt > descriptor.attempt + 1
+      )
+    ) {
+      failures.push(
+        `lifecycle ${id} retrying has invalid attempt transition: ${descriptor.attempt} -> ${nextDescriptor.attempt}`,
+      );
+    }
   }
 
   return {
@@ -488,7 +659,7 @@ function finiteNonnegative(value: unknown): boolean {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
-function finiteNonnegativeInteger(value: unknown): boolean {
+function finiteNonnegativeInteger(value: unknown): value is number {
   return finiteNonnegative(value) && Number.isInteger(value);
 }
 
@@ -663,11 +834,6 @@ function assertAudit(
   if (summary.budgetViolations > 0) failures.push(`budget violations: ${summary.budgetViolations}`);
   if (summary.failedSourceCompletions > 0) {
     failures.push(`failed source completions: ${summary.failedSourceCompletions}`);
-  }
-  if (summary.lifecycleCalls !== summary.promptBudgetEvents) {
-    failures.push(
-      `model lifecycle calls: ${summary.lifecycleCalls}, prompt_budget events: ${summary.promptBudgetEvents}`,
-    );
   }
   failures.push(...lifecycleFailures);
   if (summary.wipeDomainEvents !== 1) {

@@ -103,16 +103,23 @@ function lifecycleRecords(
   id: string,
   atMs: number,
   session = SESSION,
+  options: {
+    callSite?: string;
+    attempt?: number;
+    phases?: string[];
+    diagnostics?: Record<string, unknown>;
+  } = {},
 ): AgentRecord[] {
   const diagnostics = {
-    callSite: "ingest.evidence-map",
+    callSite: options.callSite ?? "ingest.evidence-map",
     transport: "non-stream",
-    attempt: 1,
+    attempt: options.attempt ?? 0,
     configuredInputBudget: 16_384,
     effectiveInputBudget: 12_288,
     provider: "fixture-provider",
+    ...options.diagnostics,
   };
-  return [
+  return (options.phases ?? [
     "preparing",
     "sent",
     "waiting",
@@ -120,7 +127,7 @@ function lifecycleRecords(
     "validating",
     "applying",
     "completed",
-  ].map((phase, index) => agentRecord({
+  ]).map((phase, index) => agentRecord({
     kind: "llm_lifecycle",
     id,
     action: "extract_source_facts",
@@ -182,7 +189,9 @@ function sessionRecords(options: {
         callSite: index === 0 ? "ingest.evidence-map" : "ingest.synthesize",
         retryReason: index === 0 ? "provider_context_error" : undefined,
       }), session),
-      ...lifecycleRecords(`call-${index}`, 1_000 + index * 100, session),
+      ...lifecycleRecords(`call-${index}`, 1_000 + index * 100, session, {
+        callSite: index === 0 ? "ingest.evidence-map" : "ingest.synthesize",
+      }),
       agentRecord({
         kind: "domain_updated",
         domainId,
@@ -342,14 +351,59 @@ test("full lifecycle, one wipe, and diagnostics-only technical fields pass", asy
   }
 });
 
-test("a prompt-budgeted model request without lifecycle fails the request count", async () => {
-  const records = sessionRecords().filter((record) =>
-    !(record.event.kind === "llm_lifecycle" && record.event.id === "call-1"));
+test("valid structured retry uses a fresh lifecycle ID without requiring global count equality", async () => {
+  const records = sessionRecords({ sources: ["sources/a.md"] });
+  const firstLifecycle = records.findIndex((record) =>
+    record.event.kind === "llm_lifecycle" && record.event.id === "call-0");
+  records.splice(
+    firstLifecycle,
+    7,
+    ...lifecycleRecords("call-0", 1_000, SESSION, {
+      phases: ["preparing", "sent", "waiting", "retrying"],
+    }),
+    ...lifecycleRecords("call-0:retry-1", 1_100, SESSION, {
+      attempt: 1,
+    }),
+  );
+  const value = await fixture({ records });
+  try {
+    const summary = await audit(value, { expectedSources: 1 });
+    assert.equal(summary.lifecycleCalls, 2);
+    assert.equal(summary.promptBudgetEvents, 1);
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("correlation reports both a missing call family and an orphan lifecycle", async () => {
+  const records = sessionRecords();
+  for (const record of records) {
+    if (record.event.kind === "llm_lifecycle" && record.event.id === "call-1") {
+      const diagnostics = record.event.diagnostics as Record<string, unknown>;
+      diagnostics.callSite = "init.bootstrap";
+    }
+  }
   const value = await fixture({ records });
   try {
     await assert.rejects(
       audit(value),
-      /model lifecycle calls: 1, prompt_budget events: 2/i,
+      /missing lifecycle family: ingest\.synthesize.*orphan lifecycle family: init\.bootstrap/i,
+    );
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("legacy lifecycle without diagnostics.callSite is explicitly inconclusive", async () => {
+  const records = sessionRecords();
+  for (const record of records) {
+    if (record.event.kind === "llm_lifecycle") delete record.event.diagnostics;
+  }
+  const value = await fixture({ records });
+  try {
+    await assert.rejects(
+      audit(value),
+      /lifecycle correlation unsupported\/inconclusive.*diagnostics\.callSite/i,
     );
   } finally {
     await value.cleanup();
@@ -404,6 +458,36 @@ test("lifecycle beyond the idle deadline fails with elapsed milliseconds", async
   }
 });
 
+for (const terminal of ["failed", "retrying"]) {
+  test(`delayed ${terminal} terminal phase fails the idle deadline`, async () => {
+    const records = sessionRecords({ sources: ["sources/a.md"] });
+    const firstLifecycle = records.findIndex((record) =>
+      record.event.kind === "llm_lifecycle" && record.event.id === "call-0");
+    const replacement = lifecycleRecords("call-0", 1_000, SESSION, {
+      phases: ["preparing", "sent", "waiting", terminal],
+    });
+    replacement.at(-1)!.event.atMs = 1_002 + IDLE_DEADLINE_MS + 1;
+    if (terminal === "retrying") {
+      replacement.push(
+        agentRecord(promptBudget({ callSite: "ingest.evidence-map" })),
+        ...lifecycleRecords("call-0:retry-1", 1_002 + IDLE_DEADLINE_MS + 2, SESSION, {
+          attempt: 1,
+        }),
+      );
+    }
+    records.splice(firstLifecycle, 7, ...replacement);
+    const value = await fixture({ records });
+    try {
+      await assert.rejects(
+        audit(value, { expectedSources: 1 }),
+        new RegExp(`lifecycle call-0.*idle deadline.*${IDLE_DEADLINE_MS + 1}ms`, "i"),
+      );
+    } finally {
+      await value.cleanup();
+    }
+  });
+}
+
 test("two WipeDomain events fail with the observed count", async () => {
   const records = sessionRecords();
   const wipe = records.find((record) =>
@@ -442,6 +526,79 @@ test("technical fields in persisted human labels fail but diagnostics remain all
     await assert.rejects(
       audit(value),
       /technical lifecycle fields in human labels: 1.*humanLabel/i,
+    );
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("standalone dotted callSite in a human label is rejected", async () => {
+  const records = sessionRecords();
+  const lifecycle = records.find((record) =>
+    record.event.kind === "llm_lifecycle" && record.event.id === "call-0")!;
+  lifecycle.event.phaseLabel = "Extracting with ingest.synthesize";
+  const value = await fixture({ records });
+  try {
+    await assert.rejects(
+      audit(value),
+      /technical lifecycle fields in human labels: 1.*phaseLabel/i,
+    );
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("provider name in a human label is rejected", async () => {
+  const records = sessionRecords();
+  const lifecycle = records.find((record) =>
+    record.event.kind === "llm_lifecycle" && record.event.id === "call-0")!;
+  lifecycle.event.humanLabel = "OpenAI is preparing the request";
+  const value = await fixture({ records });
+  try {
+    await assert.rejects(
+      audit(value),
+      /technical lifecycle fields in human labels: 1.*humanLabel/i,
+    );
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("transport and attempt notation in human labels are rejected", async (t) => {
+  for (const label of ["Using non-stream transport", "Preparing attempt #2"]) {
+    await t.test(label, async () => {
+      const records = sessionRecords();
+      const lifecycle = records.find((record) =>
+        record.event.kind === "llm_lifecycle" && record.event.id === "call-0")!;
+      lifecycle.event.humanLabel = label;
+      const value = await fixture({ records });
+      try {
+        await assert.rejects(
+          audit(value),
+          /technical lifecycle fields in human labels: 1.*humanLabel/i,
+        );
+      } finally {
+        await value.cleanup();
+      }
+    });
+  }
+});
+
+test("bare diagnostic budget value in a human label is rejected without rejecting prose numbers", async () => {
+  const records = sessionRecords();
+  const lifecycles = records.filter((record) =>
+    record.event.kind === "llm_lifecycle" && record.event.id === "call-0");
+  for (const lifecycle of lifecycles) {
+    const diagnostics = lifecycle.event.diagnostics as Record<string, unknown>;
+    diagnostics.configuredInputBudget = 32_768;
+  }
+  lifecycles[0].event.actionLabel = "Preparing 32768";
+  lifecycles[1].event.stateLabel = "Stage 2 of normal processing";
+  const value = await fixture({ records });
+  try {
+    await assert.rejects(
+      audit(value),
+      /technical lifecycle fields in human labels: 1.*actionLabel/i,
     );
   } finally {
     await value.cleanup();
