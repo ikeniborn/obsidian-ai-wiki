@@ -21,6 +21,8 @@ type RmdirMode = "normal" | "throw-after-delete" | "false-success";
 
 class DirectoryAdapter implements VaultAdapter {
   readonly files = new Map<string, string>();
+  readonly binaryFiles = new Map<string, Uint8Array>();
+  readonly binaryPaths = new Set<string>();
   readonly folders = new Set<string>([""]);
   readonly reads: string[] = [];
   readonly removes: string[] = [];
@@ -32,11 +34,17 @@ class DirectoryAdapter implements VaultAdapter {
   constructor(
     files: Record<string, string> = {},
     folders: string[] = [],
+    binaryFiles: Record<string, Uint8Array> = {},
   ) {
     for (const folder of folders) this.addFolder(folder);
     for (const [path, bytes] of Object.entries(files)) {
       this.addFolder(path.split("/").slice(0, -1).join("/"));
       this.files.set(path, bytes);
+    }
+    for (const [path, bytes] of Object.entries(binaryFiles)) {
+      this.addFolder(path.split("/").slice(0, -1).join("/"));
+      this.binaryPaths.add(path);
+      this.binaryFiles.set(path, bytes.slice());
     }
   }
 
@@ -50,6 +58,8 @@ class DirectoryAdapter implements VaultAdapter {
 
   async read(path: string): Promise<string> {
     this.reads.push(path);
+    const binary = this.binaryFiles.get(path);
+    if (binary !== undefined) return new TextDecoder().decode(binary);
     const bytes = this.files.get(path);
     if (bytes === undefined) throw new Error(`ENOENT: ${path}`);
     return bytes;
@@ -57,7 +67,29 @@ class DirectoryAdapter implements VaultAdapter {
 
   async write(path: string, data: string): Promise<void> {
     this.addFolder(path.split("/").slice(0, -1).join("/"));
+    if (this.binaryPaths.has(path)) {
+      this.binaryFiles.set(path, new TextEncoder().encode(data));
+      return;
+    }
     this.files.set(path, data);
+  }
+
+  async readBinary(path: string): Promise<ArrayBuffer> {
+    const binary = this.binaryFiles.get(path);
+    if (binary !== undefined) return binary.slice().buffer;
+    const text = this.files.get(path);
+    if (text === undefined) throw new Error(`ENOENT: ${path}`);
+    return new TextEncoder().encode(text).buffer;
+  }
+
+  async writeBinary(path: string, data: ArrayBuffer): Promise<void> {
+    this.addFolder(path.split("/").slice(0, -1).join("/"));
+    const bytes = new Uint8Array(data.slice(0));
+    if (this.binaryPaths.has(path)) {
+      this.binaryFiles.set(path, bytes);
+      return;
+    }
+    this.files.set(path, new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   }
 
   async append(path: string, data: string): Promise<void> {
@@ -66,7 +98,7 @@ class DirectoryAdapter implements VaultAdapter {
 
   async list(path: string): Promise<{ files: string[]; folders: string[] }> {
     const prefix = path ? `${path}/` : "";
-    const files = [...this.files.keys()]
+    const files = [...new Set([...this.files.keys(), ...this.binaryFiles.keys()])]
       .filter((candidate) => candidate.startsWith(prefix)
         && !candidate.slice(prefix.length).includes("/"))
       .sort();
@@ -79,7 +111,7 @@ class DirectoryAdapter implements VaultAdapter {
   }
 
   async exists(path: string): Promise<boolean> {
-    return this.files.has(path) || this.folders.has(path);
+    return this.files.has(path) || this.binaryFiles.has(path) || this.folders.has(path);
   }
 
   async mkdir(path: string): Promise<void> {
@@ -90,6 +122,7 @@ class DirectoryAdapter implements VaultAdapter {
     this.removes.push(path);
     if (path === this.failRemovePath) throw new Error(`synthetic remove failure: ${path}`);
     this.files.delete(path);
+    this.binaryFiles.delete(path);
   }
 
   async rmdir(path: string, recursive: boolean): Promise<void> {
@@ -98,6 +131,9 @@ class DirectoryAdapter implements VaultAdapter {
     if (this.rmdirMode === "false-success") return;
     for (const file of [...this.files.keys()]) {
       if (file === path || file.startsWith(`${path}/`)) this.files.delete(file);
+    }
+    for (const file of [...this.binaryFiles.keys()]) {
+      if (file === path || file.startsWith(`${path}/`)) this.binaryFiles.delete(file);
     }
     for (const folder of [...this.folders]) {
       if (folder === path || folder.startsWith(`${path}/`)) this.folders.delete(folder);
@@ -127,7 +163,7 @@ function seededAdapter(): DirectoryAdapter {
     "!Wiki/demo/index.jsonl": "INDEX\r\nBYTES",
     "!Wiki/demo/log.jsonl": "LOG\n",
     "!Wiki/demo/concept/old.md": "# Old\n",
-    "!Wiki/demo/tmp/deep/state.bin": "\0STATE",
+    "!Wiki/demo/tmp/deep/zz-fail.txt": "FAIL AFTER BINARY\n",
     "!Wiki/other/metadata.jsonl": "OTHER META\n",
     "!Wiki/other/pages/keep.md": "# Keep\n",
   }, [
@@ -135,7 +171,9 @@ function seededAdapter(): DirectoryAdapter {
     "!Wiki/demo/pages/empty/deeper",
     "!Wiki/demo/obsolete/empty",
     "!Wiki/other/empty",
-  ]);
+  ], {
+    "!Wiki/demo/tmp/deep/state.bin": new Uint8Array([0x00, 0xff, 0xc3, 0x28]),
+  });
 }
 
 function otherSnapshot(adapter: DirectoryAdapter) {
@@ -161,6 +199,7 @@ test("force wipe removes the complete target tree and returns every removed file
     "!Wiki/demo/log.jsonl",
     "!Wiki/demo/metadata.jsonl",
     "!Wiki/demo/tmp/deep/state.bin",
+    "!Wiki/demo/tmp/deep/zz-fail.txt",
   ]);
   assert.equal(await adapter.exists("!Wiki/demo"), false);
   assert.deepEqual(targetSnapshot(adapter), { files: [], folders: [] });
@@ -194,16 +233,33 @@ for (const failure of ["remove", "rmdir", "false-success"] as const) {
 test("force wipe surfaces rollback failure instead of hiding an untrusted restore", async () => {
   const adapter = seededAdapter();
   adapter.rmdirMode = "throw-after-delete";
-  const originalWrite = adapter.write.bind(adapter);
-  adapter.write = async (path, data) => {
+  const originalWriteBinary = adapter.writeBinary.bind(adapter);
+  adapter.writeBinary = async (path, data) => {
     if (path === "!Wiki/demo/metadata.jsonl") throw new Error("synthetic rollback write failure");
-    await originalWrite(path, data);
+    await originalWriteBinary(path, data);
   };
 
   await assert.rejects(
     wipeDomainFolder(new VaultTools(adapter, "/vault"), "demo"),
     /rollback|synthetic rollback write failure/i,
   );
+});
+
+test("force wipe rollback restores arbitrary binary and text files byte exactly", async () => {
+  const adapter = seededAdapter();
+  const binaryPath = "!Wiki/demo/tmp/deep/state.bin";
+  const textPath = "!Wiki/demo/metadata.jsonl";
+  const binaryBefore = new Uint8Array(await adapter.readBinary(binaryPath));
+  const textBefore = new Uint8Array(await adapter.readBinary(textPath));
+  adapter.failRemovePath = "!Wiki/demo/tmp/deep/zz-fail.txt";
+
+  await assert.rejects(
+    wipeDomainFolder(new VaultTools(adapter, "/vault"), "demo"),
+    /synthetic remove failure/,
+  );
+
+  assert.deepEqual(new Uint8Array(await adapter.readBinary(binaryPath)), binaryBefore);
+  assert.deepEqual(new Uint8Array(await adapter.readBinary(textPath)), textBefore);
 });
 
 test("force wipe rejects a traversal entry in adapter inventory before removal", async () => {

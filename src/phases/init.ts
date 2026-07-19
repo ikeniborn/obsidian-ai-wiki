@@ -886,12 +886,16 @@ export async function wipeDomainFolder(
   signal?: AbortSignal,
 ): Promise<string[]> {
   const root = forceDomainRoot(wikiFolder);
+  requireExactByteAdapter(vaultTools);
   const snapshot = await inventoryDomainTree(vaultTools, root);
   const removed = new Set<string>();
   try {
     for (const [path, bytes] of snapshot.files) {
       if (signal?.aborted) throw new Error("force: wipe cancelled");
-      if (!await vaultTools.exists(path) || await vaultTools.read(path) !== bytes) {
+      if (
+        !await vaultTools.exists(path)
+        || !sameBytes(new Uint8Array(await vaultTools.readBinary(path)), bytes)
+      ) {
         throw new Error(`force: wipe target changed before removal: ${path}`);
       }
       try {
@@ -932,8 +936,22 @@ export async function wipeDomainFolder(
 interface DomainTreeSnapshot {
   root: string;
   existed: boolean;
-  files: Map<string, string>;
+  files: Map<string, Uint8Array>;
   folders: string[];
+}
+
+function requireExactByteAdapter(vaultTools: VaultTools): void {
+  if (
+    typeof vaultTools.adapter.readBinary !== "function"
+    || typeof vaultTools.adapter.writeBinary !== "function"
+  ) {
+    throw new Error("force: exact-byte wipe requires adapter readBinary and writeBinary");
+  }
+}
+
+function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
+  return left.byteLength === right.byteLength
+    && left.every((byte, index) => byte === right[index]);
 }
 
 function forceDomainRoot(wikiFolder: string): string {
@@ -982,7 +1000,7 @@ async function inventoryDomainTree(
   if (!await vaultTools.exists(root)) {
     return { root, existed: false, files: new Map(), folders: [] };
   }
-  const files = new Map<string, string>();
+  const files = new Map<string, Uint8Array>();
   const folders: string[] = [];
   const visit = async (folder: string): Promise<void> => {
     folders.push(folder);
@@ -991,7 +1009,7 @@ async function inventoryDomainTree(
     const listedFolders = [...listed.folders].sort(compareCodePoints);
     for (const path of listedFiles) {
       assertDirectDomainChild(root, folder, path);
-      files.set(path, await vaultTools.read(path));
+      files.set(path, new Uint8Array(await vaultTools.readBinary(path)).slice());
     }
     for (const path of listedFolders) {
       assertDirectDomainChild(root, folder, path);
@@ -1020,7 +1038,7 @@ async function restoreDomainTree(
   let firstTrustError: Error | undefined;
   for (const [path, bytes] of current.files) {
     const expected = snapshot.files.get(path);
-    if (expected === undefined || expected !== bytes) {
+    if (expected === undefined || !sameBytes(expected, bytes)) {
       firstTrustError ??= new Error(`rollback trust failure at ${path}`);
     }
   }
@@ -1046,7 +1064,7 @@ async function restoreDomainTree(
       continue;
     }
     try {
-      await vaultTools.write(path, bytes);
+      await vaultTools.writeBinary(path, bytes.slice().buffer);
     } catch (error) {
       firstTrustError ??= error instanceof Error ? error : new Error(String(error));
     }
@@ -1055,7 +1073,10 @@ async function restoreDomainTree(
   if (firstTrustError) throw firstTrustError;
   if (!samePaths(restored.folders, snapshot.folders)
     || restored.files.size !== snapshot.files.size
-    || [...snapshot.files].some(([path, bytes]) => restored.files.get(path) !== bytes)) {
+    || [...snapshot.files].some(([path, bytes]) => {
+      const restoredBytes = restored.files.get(path);
+      return restoredBytes === undefined || !sameBytes(restoredBytes, bytes);
+    })) {
     throw new Error("rollback verification failed: domain tree differs from snapshot");
   }
 }

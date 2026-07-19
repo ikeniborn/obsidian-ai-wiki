@@ -91,6 +91,14 @@ function forceAdapter(onRemove?: (path: string) => void) {
       return value;
     },
     write: async (p: string, v: string) => { files.set(p, v); },
+    readBinary: async (p: string) => {
+      const value = files.get(p);
+      if (value === undefined) throw new Error(`ENOENT: ${p}`);
+      return new TextEncoder().encode(value).buffer;
+    },
+    writeBinary: async (p: string, data: ArrayBuffer) => {
+      files.set(p, new TextDecoder("utf-8", { fatal: true }).decode(data));
+    },
     append: async (p: string, v: string) => { files.set(p, (files.get(p) ?? "") + v); },
     list: async (dir: string) => {
       const prefix = `${dir}/`;
