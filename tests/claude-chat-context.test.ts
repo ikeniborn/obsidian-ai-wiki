@@ -26,6 +26,7 @@ Object.defineProperty(globalThis, "window", {
 });
 
 const { ClaudeCliClient } = await import("../src/claude-cli-client");
+const { Platform } = await import("obsidian");
 const {
   createLlmLifecycle,
   runStructuredStreaming,
@@ -355,6 +356,101 @@ test("pre-aborted non-stream request rejects before spawn and removes temp promp
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+async function withLargeSystemClient<T>(
+  iclaudePath: string,
+  work: (
+    client: InstanceType<typeof ClaudeCliClient>,
+    removed: string[],
+  ) => Promise<T>,
+): Promise<T> {
+  const dir = await mkdtemp(join(tmpdir(), "obsidian-ai-wiki-startup-cleanup-"));
+  const removed: string[] = [];
+  const client = new ClaudeCliClient({
+    iclaudePath,
+    model: "claude-test",
+    requestTimeoutSec: 5,
+    tmpDir: dir,
+    tmpWrite: (path, content) => writeFile(path, content, "utf8"),
+    tmpRemove: (path) => {
+      removed.push(path);
+      if (existsSync(path)) unlinkSync(path);
+    },
+  });
+  try {
+    return await work(client, removed);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+function largeSystemRequest() {
+  return {
+    model: "claude-test",
+    stream: false as const,
+    messages: [
+      { role: "system" as const, content: "s".repeat(262_145) },
+      { role: "user" as const, content: "Answer." },
+    ],
+  };
+}
+
+test("invalid Claude path removes temporary system prompt before spawn", async () => {
+  await withLargeSystemClient("relative-claude", async (client, removed) => {
+    const error = await captureRejection(
+      () => client.chat.completions.create(largeSystemRequest()),
+    );
+
+    assert.equal(error.message, 'iclaudePath must be absolute: "relative-claude"');
+    assert.equal(removed.length, 1);
+    assert.equal(existsSync(removed[0]), false);
+  });
+});
+
+test("mobile Claude rejection removes temporary system prompt without spawning", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "obsidian-ai-wiki-mobile-cleanup-"));
+  const marker = join(dir, "spawned.marker");
+  const executable = join(dir, "claude-mobile-fixture.mjs");
+  await writeFile(executable, [
+    "#!/usr/bin/env node",
+    `await import("node:fs/promises").then((fs) => fs.writeFile(${JSON.stringify(marker)}, "spawned"));`,
+    "",
+  ].join("\n"), "utf8");
+  await chmod(executable, 0o700);
+  const previousDesktop = Platform.isDesktopApp;
+  Platform.isDesktopApp = false;
+  try {
+    await withLargeSystemClient(executable, async (client, removed) => {
+      const error = await captureRejection(
+        () => client.chat.completions.create(largeSystemRequest()),
+      );
+
+      assert.equal(error.message, "Claude CLI backend is desktop-only");
+      assert.equal(existsSync(marker), false);
+      assert.equal(removed.length, 1);
+      assert.equal(existsSync(removed[0]), false);
+    });
+  } finally {
+    Platform.isDesktopApp = previousDesktop;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Claude spawn failure removes temporary system prompt exactly once", async () => {
+  const missingExecutable = join(
+    tmpdir(),
+    `missing-claude-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
+  await withLargeSystemClient(missingExecutable, async (client, removed) => {
+    const error = await captureRejection(
+      () => client.chat.completions.create(largeSystemRequest()),
+    );
+
+    assert.equal(error.message, "Claude CLI process failed to start");
+    assert.equal(removed.length, 1);
+    assert.equal(existsSync(removed[0]), false);
+  });
 });
 
 function nativeNonStreamClient(reasoning: string, content: string): LlmClient {
