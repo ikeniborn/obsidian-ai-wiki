@@ -523,3 +523,24 @@ test("lint prompt describes JSON duplicate deletes without framed output markers
   assert.match(prompt, /"deletes"/);
   assert.match(prompt, /"redirect_to"/);
 });
+
+test("Lint batch/config lifecycle stays validating until render or write boundaries", () => {
+  const source = readFileSync("src/phases/lint.ts", "utf8");
+  const batchRunner = source.slice(
+    source.indexOf("async function runLintBatchWithSplit"),
+    source.indexOf("export async function* runLint"),
+  );
+  assert.equal(batchRunner.includes('lifecycle.action, "applying"'), false);
+  assert.match(batchRunner, /transport: "non-stream"/);
+  assert.match(batchRunner, /createLlmLifecycle\("check_wiki_quality"\)/);
+
+  const write = source.indexOf("await vaultTools.write(path, fixedContent)");
+  const applying = source.lastIndexOf("if (!batchApplying)", write);
+  const updateTool = source.lastIndexOf('name: "Update"', write);
+  assert.ok(updateTool < applying && applying < write);
+
+  const domainUpdate = source.indexOf('kind: "domain_updated"');
+  const configApplying = source.lastIndexOf('"applying"', domainUpdate);
+  const configCompleted = source.indexOf('"completed"', domainUpdate);
+  assert.ok(configApplying < domainUpdate && domainUpdate < configCompleted);
+});

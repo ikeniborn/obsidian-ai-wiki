@@ -115,9 +115,7 @@ interface StructuredLifecycle {
 }
 
 function structuredLifecycle<T>(args: RunStructuredArgs<T>): StructuredLifecycle {
-  // TypeScript callers must provide a descriptor. Keep legacy JavaScript
-  // integrations observable while they migrate to the required contract.
-  const descriptor = args.lifecycle ?? createLlmLifecycle("select_relevant_pages");
+  const descriptor = args.lifecycle;
   let sequence = 0;
   let active = false;
   let currentId = descriptor.id;
@@ -256,6 +254,7 @@ async function streamOnce(
   signal: AbortSignal,
   onEvent: (ev: RunEvent) => void,
   lifecycle: StructuredLifecycle,
+  attempt: number,
 ): Promise<CallResult> {
   const params = buildChatParams(model, messages, opts, true);
   let fullText = "";
@@ -265,11 +264,11 @@ async function streamOnce(
   const requestStartMs = Date.now();
 
   try {
+    lifecycle.phase("sent");
     const request = llm.chat.completions.create(
       { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
       { signal },
     );
-    lifecycle.phase("sent");
     lifecycle.phase("waiting");
     const rawStream = await request;
     const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
@@ -312,30 +311,9 @@ async function streamOnce(
     ) throw e;
     if (isJsonModeError(e)) throw e;
     if (!shouldFallbackStreamToNonStream(e, signal)) throw e;
-    const params2 = buildChatParams(model, messages, opts);
-    const fallbackStartMs = Date.now();
-    const resp = await llm.chat.completions.create(
-      { ...params2, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-      { signal },
-    );
-    if (resp.choices[0]?.finish_reason === "length") {
-      throw new StructuredOutputTruncatedError("length");
-    }
-    return {
-      fullText: resp.choices[0]?.message?.content ?? "",
-      outputTokens: extractUsage(resp) ?? 0,
-      inputTokens: typeof resp.usage?.prompt_tokens === "number"
-        ? resp.usage.prompt_tokens
-        : undefined,
-      statsEvent: resp.usage
-        ? buildLlmCallStatsEvent({
-            inputTokens: resp.usage.prompt_tokens,
-            outputTokens: resp.usage.completion_tokens,
-            ttftMs: Math.max(0, fallbackStartMs - requestStartMs),
-            llmDurationMs: Math.max(1, Date.now() - fallbackStartMs),
-          })
-        : undefined,
-    };
+    lifecycle.close("retrying");
+    lifecycle.begin(attempt);
+    return nonStreamOnce(llm, model, messages, opts, signal, onEvent, lifecycle, attempt);
   }
 }
 
@@ -347,14 +325,15 @@ async function nonStreamOnce(
   signal: AbortSignal,
   onEvent: (ev: RunEvent) => void,
   lifecycle: StructuredLifecycle,
+  attempt: number,
 ): Promise<CallResult> {
   const params = buildChatParams(model, messages, opts);
   const requestStartMs = Date.now();
+  lifecycle.phase("sent");
   const request = llm.chat.completions.create(
     { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
     { signal },
   );
-  lifecycle.phase("sent");
   lifecycle.phase("waiting");
   const response = await request;
   if (
@@ -435,16 +414,16 @@ async function callWithFormatFallback<T>(
 ): Promise<{ result: CallResult; mode: ResponseFormatMode }> {
   let currentMode = mode;
   while (true) {
+    lifecycle.begin(attempt);
     const callOpts: LlmCallOptions = args.profile.kind === "json-zod"
       ? optsForMode(args.opts, currentMode, args.callSite, args.profile.schema)
       : { ...args.opts, jsonMode: false, jsonSchema: undefined };
 
     try {
-      lifecycle.begin(attempt);
       return {
         result: args.transport === "non-stream"
-          ? await nonStreamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle)
-          : await streamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle),
+          ? await nonStreamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle, attempt)
+          : await streamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle, attempt),
         mode: currentMode,
       };
     } catch (e) {

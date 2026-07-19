@@ -6,6 +6,7 @@ import {
   completionReasoning,
   extractStreamDeltas,
   extractUsage,
+  runWithLiveEvents,
   shouldFallbackStreamToNonStream,
   wrapStreamWithStats,
 } from "./llm-utils";
@@ -111,12 +112,12 @@ export async function* answerFromContext(args: {
   const budgetEvents: PromptBudgetEvent[] = [];
   let eligibleChunks: SelectedChunk[] | undefined;
   let answerLifecycle = createLlmLifecycle("answer_question");
-  const lifecycleRetryEvents: RunEvent[] = [];
+  let executionCount = 0;
   yield { kind: "tool_use", name: "Answering", input: {} };
 
   let attempt: AnswerAttempt;
   try {
-    attempt = await runWithContextRepack<PackedAnswerRequest, AnswerAttempt>({
+    attempt = yield* runWithLiveEvents((emit) => runWithContextRepack<PackedAnswerRequest, AnswerAttempt>({
       callSite: "query.answer",
       configuredInputBudget: opts.inputBudgetTokens ?? 16_384,
       outputBudget: opts.maxTokens,
@@ -145,26 +146,26 @@ export async function* answerFromContext(args: {
         };
       },
       execute: async (request) => {
-        if (lifecycleRetryEvents.length > 0) {
+        if (executionCount > 0) {
           answerLifecycle = createLlmLifecycle("answer_question");
         }
+        executionCount += 1;
+        emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing"));
         const params = paramsForPreparedMessages(model, request.messages, opts, true);
-        const lifecycleEvents: RunEvent[] = [
-          lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing"),
-          lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"),
-          lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"),
-        ];
         let streamChunkConsumed = false;
         try {
           const requestStartMs = Date.now();
-          const rawStream = await llm.chat.completions.create(
+          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"));
+          const pending = llm.chat.completions.create(
             { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
             { signal },
           );
+          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
+          const rawStream = await pending;
           const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
           let attemptAnswer = "";
           let attemptOutputTokens = 0;
-          const events: RunEvent[] = [...lifecycleEvents];
+          const events: RunEvent[] = [];
           let producing = false;
           const iterator = stream[Symbol.asyncIterator]();
           while (true) {
@@ -184,13 +185,13 @@ export async function* answerFromContext(args: {
             streamChunkConsumed = true;
             const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
             if (!producing && (reasoning.trim() || content.trim())) {
-              events.push(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "producing"));
+              emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "producing"));
               producing = true;
             }
-            if (reasoning) events.push({ kind: "assistant_text", delta: reasoning, isReasoning: true });
+            if (reasoning) emit({ kind: "assistant_text", delta: reasoning, isReasoning: true });
             if (content) {
               attemptAnswer += content;
-              events.push({ kind: "assistant_text", delta: content });
+              emit({ kind: "assistant_text", delta: content });
             }
             if (tok !== undefined) attemptOutputTokens += tok;
             if (reasoning || content) {
@@ -210,22 +211,28 @@ export async function* answerFromContext(args: {
           ) throw error;
           if (streamChunkConsumed) throw error;
           if (classifyContextError(error) !== null && request.optionalUnits > 0) {
-            lifecycleRetryEvents.push(
-              ...lifecycleEvents,
-              lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"),
-            );
+            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
           }
           rethrowForContextRepack(error, request.optionalUnits);
           if (!shouldFallbackStreamToNonStream(error, signal)) throw error;
+          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
+          answerLifecycle = createLlmLifecycle("answer_question");
+          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing"));
           let response: OpenAI.Chat.ChatCompletion;
           const fallbackStartMs = Date.now();
           try {
             const fallbackParams = paramsForPreparedMessages(model, request.messages, opts, false);
-            response = await llm.chat.completions.create(
+            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"));
+            const pending = llm.chat.completions.create(
               { ...fallbackParams, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
               { signal },
             );
+            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
+            response = await pending;
           } catch (fallbackError) {
+            if (classifyContextError(fallbackError) !== null && request.optionalUnits > 0) {
+              emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
+            }
             rethrowForContextRepack(fallbackError, request.optionalUnits);
             throw fallbackError;
           }
@@ -234,23 +241,17 @@ export async function* answerFromContext(args: {
           const fallbackReasoning = completionReasoning(fallbackMessage);
           const fallbackAnswer = fallbackMessage?.content ?? "";
           const fallbackTokens = extractUsage(response) ?? 0;
+          if (fallbackReasoning.trim() || fallbackAnswer.trim()) {
+            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "producing"));
+          }
+          if (fallbackReasoning) {
+            emit({ kind: "assistant_text", delta: fallbackReasoning, isReasoning: true });
+          }
+          if (fallbackAnswer) emit({ kind: "assistant_text", delta: fallbackAnswer });
           return {
             answer: fallbackAnswer,
             outputTokens: fallbackTokens,
-            events: [
-              ...lifecycleEvents,
-              ...(fallbackReasoning.trim() || fallbackAnswer.trim()
-                ? [
-                    lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "producing"),
-                    ...(fallbackReasoning
-                      ? [{ kind: "assistant_text" as const, delta: fallbackReasoning, isReasoning: true }]
-                      : []),
-                    ...(fallbackAnswer
-                      ? [{ kind: "assistant_text" as const, delta: fallbackAnswer }]
-                      : []),
-                  ]
-                : []),
-            ],
+            events: [],
             selectedChunks: request.selectedChunks,
             streamStats: response.usage
               ? {
@@ -265,9 +266,8 @@ export async function* answerFromContext(args: {
         }
       },
       onEvent: (event) => budgetEvents.push(event),
-    });
+    }));
   } catch (error) {
-    for (const event of lifecycleRetryEvents) yield event;
     for (const event of budgetEvents) yield event;
     if (signal.aborted || (error as Error).name === "AbortError") {
       yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
@@ -279,7 +279,6 @@ export async function* answerFromContext(args: {
   const completionBudgetEvent = attempt.pendingStream
     ? budgetEvents.pop()
     : undefined;
-  for (const event of lifecycleRetryEvents) yield event;
   for (const event of budgetEvents) yield event;
   answer = attempt.answer;
   outputTokens = attempt.outputTokens;
@@ -338,9 +337,7 @@ export async function* answerFromContext(args: {
     return { answer, outputTokens, selectedChunks };
   }
   yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "validating");
-  yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "applying");
-  yield { kind: "tool_result", ok: !!answer, preview: answer ? `${answer.length} chars` : "no response" };
-  yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "completed");
+  let displayedReplacement = false;
 
   if (answer && !signal.aborted) {
     yield { kind: "tool_use", name: "ValidateLinks", input: {} };
@@ -413,6 +410,7 @@ export async function* answerFromContext(args: {
         } catch (e) {
           for (const ev of repairEvents) yield ev;
           if (signal.aborted || (e as Error).name === "AbortError") {
+            yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
             return { answer, outputTokens, selectedChunks };
           }
           // fall through to annotation
@@ -428,8 +426,17 @@ export async function* answerFromContext(args: {
       if (llmFixed) parts.push(`llm-fixed ${llmFixed}`);
       if (stripped.length) parts.push(`annotated ${stripped.length}: ${stripped.join(", ")}`);
       yield { kind: "tool_result", ok: stripped.length === 0, preview: parts.join("; ") };
+      yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "applying");
       yield { kind: "assistant_replace", text: answer };
+      yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "completed");
+      displayedReplacement = true;
     }
+  }
+
+  if (!displayedReplacement) {
+    yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "applying");
+    yield { kind: "tool_result", ok: !!answer, preview: answer ? `${answer.length} chars` : "no response" };
+    yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "completed");
   }
 
   const llmCallStats = streamStats

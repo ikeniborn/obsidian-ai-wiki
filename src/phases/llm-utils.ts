@@ -141,6 +141,37 @@ export function completionReasoning(message: unknown): string {
   return typeof reasoning === "string" ? reasoning : "";
 }
 
+export async function* runWithLiveEvents<T>(
+  work: (emit: (event: RunEvent) => void) => Promise<T>,
+): AsyncGenerator<RunEvent, T> {
+  const queue: RunEvent[] = [];
+  let wake: (() => void) | undefined;
+  let settled = false;
+  let result: T | undefined;
+  let error: unknown;
+  const emit = (event: RunEvent): void => {
+    queue.push(event);
+    wake?.();
+    wake = undefined;
+  };
+  void work(emit)
+    .then((value) => { result = value; })
+    .catch((caught) => { error = caught; })
+    .finally(() => {
+      settled = true;
+      wake?.();
+      wake = undefined;
+    });
+  while (!settled || queue.length > 0) {
+    while (queue.length > 0) yield queue.shift()!;
+    if (!settled) await new Promise<void>((resolve) => { wake = resolve; });
+  }
+  if (error !== undefined) {
+    throw error instanceof Error ? error : new Error(String(error));
+  }
+  return result as T;
+}
+
 export function buildChatParams(
   model: string,
   messages: OpenAI.Chat.ChatCompletionMessageParam[],

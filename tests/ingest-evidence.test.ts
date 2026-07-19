@@ -1105,13 +1105,20 @@ test("evidence progress uses ordered human lifecycle actions with visible retry"
     event.kind === "tool_use"
     && (event.name === "Evidence mapping" || event.name === "Evidence reduction")), false);
   const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
-  assert.ok(lifecycle.some((event) => event.action === "extract_source_facts"));
-  assert.ok(lifecycle.some((event) => event.action === "reduce_source_evidence"));
-  assert.ok(lifecycle.some((event) => event.phase === "retrying"));
-  assert.ok(lifecycle.some((event) =>
-    event.action === "extract_source_facts" && event.phase === "completed"));
-  assert.ok(lifecycle.some((event) =>
-    event.action === "reduce_source_evidence" && event.phase === "completed"));
+  const ids = [...new Set(lifecycle.map((event) => event.id))];
+  assert.ok(ids.length >= 3);
+  assert.equal(lifecycle.some((event) => event.action === "extract_source_facts"), true);
+  assert.equal(lifecycle.some((event) => event.action === "reduce_source_evidence"), true);
+  for (const id of ids) {
+    const calls = lifecycle.filter((event) => event.id === id);
+    assert.deepEqual(
+      calls.map((event) => event.phase),
+      calls.at(-1)?.phase === "retrying"
+        ? ["preparing", "sent", "waiting", "producing", "validating", "retrying"]
+        : ["preparing", "sent", "waiting", "producing", "validating", "applying", "completed"],
+    );
+    assert.equal(new Set(calls.map((event) => event.action)).size, 1);
+  }
   const structuralEvent = events.find((event) =>
     event.kind === "structural_error"
     && event.callSite === "ingest.evidence-map"

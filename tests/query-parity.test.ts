@@ -461,6 +461,111 @@ test("single- and cross-domain Query use the same bounded answer packing behavio
   }
 });
 
+test("Query seed selection and primary answer expose ordered human lifecycle attempts", async () => {
+  const pagePath = "!Wiki/d/concept/wiki_d_failover.md";
+  const requests: Record<string, unknown>[] = [];
+  const llm = {
+    chat: {
+      completions: {
+        create: async (params: unknown) => {
+          const request = params as Record<string, unknown>;
+          requests.push(request);
+          if (request.stream === false) {
+            return {
+              id: "seed-completion",
+              object: "chat.completion",
+              created: 0,
+              model: "mock",
+              choices: [{
+                index: 0,
+                message: {
+                  role: "assistant",
+                  content: JSON.stringify({
+                    reasoning: "The annotated failover page is the relevant source.",
+                    seeds: ["wiki_d_failover"],
+                  }),
+                  refusal: null,
+                },
+                finish_reason: "stop",
+                logprobs: null,
+              }],
+              usage: { prompt_tokens: 20, completion_tokens: 5, total_tokens: 25 },
+            } as OpenAI.Chat.ChatCompletion;
+          }
+          return (async function* () {
+            yield {
+              id: "answer",
+              object: "chat.completion.chunk",
+              created: 0,
+              model: "mock",
+              choices: [{
+                index: 0,
+                delta: { content: "Seed-selected answer." },
+                finish_reason: "stop",
+              }],
+            } as OpenAI.Chat.ChatCompletionChunk;
+          })();
+        },
+      },
+    },
+  } as unknown as LlmClient;
+  const events = await drainEvents(runQuery(
+    ["unmatched-token-zzzx"],
+    false,
+    new VaultTools(memoryAdapter({ [pagePath]: queryPage() }), "/vault"),
+    llm,
+    "mock",
+    [{
+      id: "d",
+      name: "Demo",
+      wiki_folder: "d",
+      source_paths: [],
+      entity_types: [],
+      analyzed_sources: {},
+    }],
+    "/vault",
+    new AbortController().signal,
+    1,
+    { inputBudgetTokens: 6_000, maxTokens: 500 },
+    5,
+    0.9,
+    10,
+    fixedChunkSimilarity([{
+      articleId: "wiki_d_failover",
+      path: pagePath,
+      heading: "## Procedure",
+      body: "Failover procedure requires quorum before recovery.",
+      score: 1,
+      source: "seed",
+      ordinal: 0,
+    }]),
+    0,
+    0,
+    false,
+    60,
+    0,
+    { enabled: false, factor: 0 },
+    {
+      config: normalizeRerankerConfig({ enabled: false, rerankerTopN: 8, contextTopN: 8 }),
+      baseUrl: "",
+      apiKey: "",
+    },
+  ));
+
+  assert.deepEqual(requests.map((request) => request.stream), [false, true]);
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  assert.deepEqual(
+    [...new Set(lifecycle.map((event) => event.id))].map((id) => {
+      const attempt = lifecycle.filter((event) => event.id === id);
+      return [attempt[0]?.action, attempt.map((event) => event.phase)];
+    }),
+    [
+      ["select_relevant_pages", ["preparing", "sent", "waiting", "producing", "validating", "applying", "completed"]],
+      ["answer_question", ["preparing", "sent", "waiting", "producing", "validating", "applying", "completed"]],
+    ],
+  );
+});
+
 test("single- and cross-domain Query keep the post-reranker winner under a one-chunk budget", async () => {
   const rawPath = "!Wiki/d/concept/wiki_d_raw.md";
   const winnerPath = "!Wiki/d/concept/wiki_d_winner.md";

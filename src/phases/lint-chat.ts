@@ -349,10 +349,10 @@ export async function* runLintFixChat(
   const parsed = result.value;
 
   // 4. Apply section patches only
-  yield lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying");
   const authorities = new Map<string, ReplaceSectionAuthority[]>();
   for (const [path, content] of activePages) authorities.set(path, pageAuthorities(path, content));
   const writtenPaths: string[] = [];
+  let applying = false;
   for (const patch of parsed.patches ?? []) {
     yield { kind: "tool_use", name: "Update", input: { path: patch.path } };
     const current = activePages.get(patch.path);
@@ -365,6 +365,10 @@ export async function* runLintFixChat(
       if (!applied.ok) {
         yield { kind: "tool_result", ok: false, preview: applied.reason };
         continue;
+      }
+      if (!applying) {
+        yield lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying");
+        applying = true;
       }
       await vaultTools.write(patch.path, applied.content);
       activePages.set(patch.path, applied.content);
@@ -379,6 +383,9 @@ export async function* runLintFixChat(
       yield { kind: "tool_result", ok: false, preview: (e as Error).message };
       continue;
     }
+  }
+  if (!applying) {
+    yield lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying");
   }
   yield lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "completed");
 

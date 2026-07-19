@@ -779,6 +779,21 @@ test("runIngest deterministically merges equivalent deltas from multiple top-lev
   assert.equal(budgetEvents.length > 0, true);
   assert.equal(budgetEvents.every((event) =>
     event.estimatedInputTokens <= event.effectiveInputBudget), true);
+  const lifecycle = events.filter((event) =>
+    event.kind === "llm_lifecycle" && event.action === "synthesize_wiki_pages");
+  for (const id of new Set(lifecycle.map((event) => event.id))) {
+    assert.deepEqual(
+      lifecycle.filter((event) => event.id === id).map((event) => event.phase),
+      ["preparing", "sent", "waiting", "producing", "validating", "applying", "completed"],
+    );
+  }
+  const firstWriteUse = events.findIndex((event) =>
+    event.kind === "tool_use" && (event.name === "Create" || event.name === "Update"));
+  const firstApplying = events.findIndex((event) =>
+    event.kind === "llm_lifecycle"
+    && event.action === "synthesize_wiki_pages"
+    && event.phase === "applying");
+  assert.ok(firstApplying > firstWriteUse);
 });
 
 test("runIngest rejects conflicting normalized deltas across top-level batches before page writes", async () => {

@@ -21,11 +21,18 @@ const {
   shouldFallbackStreamToNonStream,
 } = await import("../src/phases/llm-utils");
 const {
+  createLlmLifecycle,
   runStructuredWithRetry,
   runStructuredStreaming,
   StructuredValidationError,
   StructuredOutputTruncatedError,
 } = await import("../src/phases/structured-output");
+
+function lifecycleFor(callSite: "query.seeds" | "query.answer") {
+  return createLlmLifecycle(callSite === "query.answer"
+    ? "answer_question"
+    : "select_relevant_pages");
+}
 
 const SmallSchema = z.object({
   value: z.string(),
@@ -115,6 +122,7 @@ test("json-zod valid JSON succeeds without structural error", async () => {
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 1,
     callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal,
     onEvent: (ev) => events.push(ev),
   });
@@ -136,6 +144,7 @@ test("structured transport defaults to streaming", async () => {
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 0,
     callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal,
     onEvent: () => {},
   });
@@ -177,6 +186,7 @@ test("non-stream structured transport makes one direct request", async () => {
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 0,
     callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal,
     onEvent: () => {},
     transport: "non-stream",
@@ -224,6 +234,7 @@ test("non-stream response-format fallback stays non-stream", async () => {
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 0,
     callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal,
     onEvent: (event) => events.push(event),
     transport: "non-stream",
@@ -255,6 +266,7 @@ test("usage-free streams keep prompt usage undefined", async () => {
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 0,
     callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal,
     onEvent: (event) => events.push(event),
   });
@@ -273,6 +285,7 @@ test("an observed zero prompt usage remains zero", async () => {
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 0,
     callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal,
     onEvent: () => {},
   });
@@ -340,6 +353,7 @@ test("non-stream fallback returns prompt usage", async () => {
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 0,
     callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal,
     onEvent: () => {},
   });
@@ -371,6 +385,7 @@ test("HTTP 502 structured failure is not replayed as non-stream", async () => {
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 0,
     callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal,
     onEvent: () => {},
   }), error);
@@ -403,6 +418,7 @@ test("OpenAI connection failures are not replayed as non-stream", async () => {
       profile: { kind: "json-zod", schema: SmallSchema },
       maxRetries: 0,
       callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
       signal: new AbortController().signal,
       onEvent: () => {},
     }), error);
@@ -479,6 +495,7 @@ test("actual OpenAI SSE disconnect after partial content is propagated without r
       profile: { kind: "json-zod", schema: SmallSchema },
       maxRetries: 0,
       callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
       signal: new AbortController().signal,
       onEvent: (event) => events.push(event),
     }), (error: unknown) => {
@@ -524,6 +541,7 @@ test("finish_reason length rejects syntactically valid structured JSON without t
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 0,
     callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal,
     onEvent: () => {},
   }), StructuredOutputTruncatedError);
@@ -546,6 +564,7 @@ test("non-stream length fallback rejects valid JSON after exactly two underlying
   await assert.rejects(runStructuredWithRetry({
     llm, model: "m", baseMessages: [{ role: "user", content: "x" }], opts: {},
     profile: { kind: "json-zod", schema: SmallSchema }, maxRetries: 0, callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal, onEvent: () => {},
   }), StructuredOutputTruncatedError);
   assert.equal(requests, 2);
@@ -584,6 +603,7 @@ test("context deadline errors retain normal stream-to-non-stream fallback", asyn
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 0,
     callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal,
     onEvent: () => {},
   });
@@ -617,6 +637,7 @@ test("context errors bypass identical stream-to-non-stream fallback", async () =
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 0,
     callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal,
     onEvent: () => {},
   }), contextError);
@@ -650,6 +671,7 @@ test("context overflow takes precedence over JSON-mode fallback", async () => {
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 0,
     callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal,
     onEvent: (event) => events.push(event),
   }), contextError);
@@ -687,6 +709,7 @@ test("explicit input-count context errors also bypass transport fallback", async
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 0,
     callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal,
     onEvent: () => {},
   }), contextError);
@@ -706,6 +729,7 @@ test("empty JSON output downgrades response formats and validates recovered JSON
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 2,
     callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal,
     onEvent: (ev) => events.push(ev),
   });
@@ -737,6 +761,7 @@ test("backend json-mode error downgrades and recovers", async () => {
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 1,
     callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal,
     onEvent: (ev) => events.push(ev),
   });
@@ -763,6 +788,7 @@ test("schema retry recovery emits succeeded structural_error event", async () =>
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 1,
     callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal,
     onEvent: (ev) => events.push(ev),
   });
@@ -790,6 +816,7 @@ test("json-zod with jsonMode unset starts with json_schema response_format", asy
     schema: SmallSchema,
     maxRetries: 1,
     callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal,
     onEvent: () => {},
   });
@@ -808,6 +835,7 @@ test("json-zod with jsonMode false sends no response_format", async () => {
     schema: SmallSchema,
     maxRetries: 1,
     callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal,
     onEvent: () => {},
   });
@@ -827,6 +855,7 @@ test("runner emits response-format fallback without hidden client wrapper", asyn
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 1,
     callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal,
     onEvent: (ev) => events.push(ev),
   });
@@ -856,6 +885,7 @@ test("framed-zod parses parseAnswerFrames and validates schema", async () => {
     },
     maxRetries: 1,
     callSite: "query.answer",
+    lifecycle: lifecycleFor("query.answer"),
     signal: new AbortController().signal,
     onEvent: () => {},
   });
@@ -881,6 +911,7 @@ test("framed-zod invalid frames emit frame_parse and throw StructuredValidationE
       },
       maxRetries: 1,
       callSite: "query.answer",
+    lifecycle: lifecycleFor("query.answer"),
       signal: new AbortController().signal,
       onEvent: (ev) => events.push(ev),
     }),
@@ -914,6 +945,7 @@ test("streaming structured call emits reasoning and content deltas live", async 
     llm, model: "m", baseMessages: [{ role: "user", content: "x" }],
     opts: {}, profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 1, callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal, onEvent: (ev) => events.push(ev),
   });
 
@@ -1005,6 +1037,7 @@ test("runStructuredStreaming yields events live and fills the sink", async () =>
     llm, model: "m", baseMessages: [{ role: "user", content: "x" }],
     opts: {}, profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 1, callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal, onEvent: () => {},
   }, sink)) {
     seen.push(ev);
@@ -1026,6 +1059,7 @@ test("runStructuredStreaming keeps missing prompt usage undefined", async () => 
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 0,
     callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
     signal: new AbortController().signal,
     onEvent: () => {},
   }, sink)) { /* drain */ }
@@ -1178,4 +1212,82 @@ test("completionReasoning accepts native and compatibility completion fields", (
   assert.equal(completionReasoning({ reasoning: "native" }), "native");
   assert.equal(completionReasoning({ reasoning_content: "compat" }), "compat");
   assert.equal(completionReasoning({ reasoning: 1, reasoning_content: null }), "");
+});
+
+test("structured lifecycle brackets parameter construction and request invocation", async () => {
+  const order: string[] = [];
+  const opts = {
+    get maxTokens() {
+      order.push("params");
+      return 64;
+    },
+  };
+  const llm = {
+    chat: { completions: { create: () => {
+      order.push("create");
+      return Promise.reject(Object.assign(new Error("immediate failure"), { status: 502 }));
+    } } },
+  } as unknown as LlmClient;
+
+  await assert.rejects(runStructuredWithRetry({
+    llm,
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts,
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    lifecycle: { id: "timing-call", action: "select_relevant_pages" },
+    signal: new AbortController().signal,
+    onEvent: (event) => {
+      if (event.kind === "llm_lifecycle") order.push(event.phase);
+    },
+  }), /immediate failure/);
+
+  assert.deepEqual(order.slice(0, 6), [
+    "preparing",
+    "params",
+    "sent",
+    "create",
+    "waiting",
+    "failed",
+  ]);
+});
+
+test("stream transport fallback closes the old ID before a new non-stream lifecycle", async () => {
+  const events: RunEvent[] = [];
+  let calls = 0;
+  const llm = {
+    chat: { completions: { create: async () => {
+      calls += 1;
+      if (calls === 1) throw new Error("stream unavailable");
+      return {
+        choices: [{
+          finish_reason: "stop",
+          message: { role: "assistant", content: '{"value":"ok"}' },
+        }],
+      };
+    } } },
+  } as unknown as LlmClient;
+
+  await runStructuredWithRetry({
+    llm,
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    lifecycle: { id: "transport-call", action: "select_relevant_pages" },
+    signal: new AbortController().signal,
+    onEvent: (event) => events.push(event),
+  });
+
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  assert.deepEqual(lifecycle.map((event) => event.phase), [
+    "preparing", "sent", "waiting", "retrying",
+    "preparing", "sent", "waiting", "producing", "validating",
+  ]);
+  assert.notEqual(lifecycle[3]?.id, lifecycle[4]?.id);
+  assert.equal(new Set(lifecycle.map((event) => event.id)).size, 2);
 });

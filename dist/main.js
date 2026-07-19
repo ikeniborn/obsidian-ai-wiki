@@ -41958,6 +41958,37 @@ function completionReasoning(message) {
   const reasoning = record.reasoning ?? record.reasoning_content;
   return typeof reasoning === "string" ? reasoning : "";
 }
+async function* runWithLiveEvents(work) {
+  const queue = [];
+  let wake;
+  let settled = false;
+  let result;
+  let error;
+  const emit = (event) => {
+    queue.push(event);
+    wake?.();
+    wake = void 0;
+  };
+  void work(emit).then((value) => {
+    result = value;
+  }).catch((caught) => {
+    error = caught;
+  }).finally(() => {
+    settled = true;
+    wake?.();
+    wake = void 0;
+  });
+  while (!settled || queue.length > 0) {
+    while (queue.length > 0) yield queue.shift();
+    if (!settled) await new Promise((resolve) => {
+      wake = resolve;
+    });
+  }
+  if (error !== void 0) {
+    throw error instanceof Error ? error : new Error(String(error));
+  }
+  return result;
+}
 function buildChatParams(model, messages, opts, stream = false) {
   const msgs = prepareChatMessages(messages, opts);
   if (opts.inputBudgetTokens !== void 0) {
@@ -50841,7 +50872,7 @@ var StructuredOutputTruncatedError = class extends Error {
   finishReason;
 };
 function structuredLifecycle(args) {
-  const descriptor = args.lifecycle ?? createLlmLifecycle("select_relevant_pages");
+  const descriptor = args.lifecycle;
   let sequence = 0;
   let active = false;
   let currentId = descriptor.id;
@@ -50941,7 +50972,7 @@ function repairPrompt(profile, lastText, lastError) {
   }
   return lastError instanceof ZodError ? formatZodFeedback(lastError, lastText) : formatZodFeedback(null, lastText);
 }
-async function streamOnce(llm, model, messages, opts, signal, onEvent, lifecycle) {
+async function streamOnce(llm, model, messages, opts, signal, onEvent, lifecycle, attempt) {
   const params = buildChatParams(model, messages, opts, true);
   let fullText = "";
   let outputTokens = 0;
@@ -50949,11 +50980,11 @@ async function streamOnce(llm, model, messages, opts, signal, onEvent, lifecycle
   let streamChunkConsumed = false;
   const requestStartMs = Date.now();
   try {
+    lifecycle.phase("sent");
     const request = llm.chat.completions.create(
       { ...params, stream: true },
       { signal }
     );
-    lifecycle.phase("sent");
     lifecycle.phase("waiting");
     const rawStream = await request;
     const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
@@ -50989,36 +51020,19 @@ async function streamOnce(llm, model, messages, opts, signal, onEvent, lifecycle
     if (classifyContextError(e) !== null || e instanceof PromptBudgetExceededError || e instanceof StructuredOutputTruncatedError) throw e;
     if (isJsonModeError(e)) throw e;
     if (!shouldFallbackStreamToNonStream(e, signal)) throw e;
-    const params2 = buildChatParams(model, messages, opts);
-    const fallbackStartMs = Date.now();
-    const resp = await llm.chat.completions.create(
-      { ...params2, stream: false },
-      { signal }
-    );
-    if (resp.choices[0]?.finish_reason === "length") {
-      throw new StructuredOutputTruncatedError("length");
-    }
-    return {
-      fullText: resp.choices[0]?.message?.content ?? "",
-      outputTokens: extractUsage(resp) ?? 0,
-      inputTokens: typeof resp.usage?.prompt_tokens === "number" ? resp.usage.prompt_tokens : void 0,
-      statsEvent: resp.usage ? buildLlmCallStatsEvent({
-        inputTokens: resp.usage.prompt_tokens,
-        outputTokens: resp.usage.completion_tokens,
-        ttftMs: Math.max(0, fallbackStartMs - requestStartMs),
-        llmDurationMs: Math.max(1, Date.now() - fallbackStartMs)
-      }) : void 0
-    };
+    lifecycle.close("retrying");
+    lifecycle.begin(attempt);
+    return nonStreamOnce(llm, model, messages, opts, signal, onEvent, lifecycle, attempt);
   }
 }
-async function nonStreamOnce(llm, model, messages, opts, signal, onEvent, lifecycle) {
+async function nonStreamOnce(llm, model, messages, opts, signal, onEvent, lifecycle, attempt) {
   const params = buildChatParams(model, messages, opts);
   const requestStartMs = Date.now();
+  lifecycle.phase("sent");
   const request = llm.chat.completions.create(
     { ...params, stream: false },
     { signal }
   );
-  lifecycle.phase("sent");
   lifecycle.phase("waiting");
   const response = await request;
   if (response && typeof response === "object" && Symbol.asyncIterator in response) {
@@ -51080,11 +51094,11 @@ function classifyError(profile, err) {
 async function callWithFormatFallback(args, messages, mode, attempt, lifecycle) {
   let currentMode = mode;
   while (true) {
+    lifecycle.begin(attempt);
     const callOpts = args.profile.kind === "json-zod" ? optsForMode(args.opts, currentMode, args.callSite, args.profile.schema) : { ...args.opts, jsonMode: false, jsonSchema: void 0 };
     try {
-      lifecycle.begin(attempt);
       return {
-        result: args.transport === "non-stream" ? await nonStreamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle) : await streamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle),
+        result: args.transport === "non-stream" ? await nonStreamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle, attempt) : await streamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle, attempt),
         mode: currentMode
       };
     } catch (e) {
@@ -53062,8 +53076,6 @@ async function executeSynthesisBatch(input, bundles, maxRetries) {
         actions: output.actions,
         pathPolicy: input.pathPolicy
       });
-      input.onEvent(lifecycleEvent(result.result.lifecycle.id, result.result.lifecycle.action, "applying"));
-      input.onEvent(lifecycleEvent(result.result.lifecycle.id, result.result.lifecycle.action, "completed"));
     } catch (error) {
       input.onEvent(lifecycleEvent(result.result.lifecycle.id, result.result.lifecycle.action, "failed"));
       throw new SynthesisBatchValidationError(
@@ -53186,9 +53198,7 @@ async function executeSingleRegenerationRequest(input) {
       transport: "non-stream"
     });
     emitBudget(result.inputTokens);
-    input.onEvent(lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying"));
-    input.onEvent(lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "completed"));
-    return result.value;
+    return { value: result.value, lifecycle: result.lifecycle };
   } catch (error) {
     emitBudget();
     throw error;
@@ -53244,13 +53254,14 @@ async function regenerateConflictedPatch(input) {
   } catch (error) {
     throw conflictError(input, error.message);
   }
-  let output;
+  let regeneration;
   try {
-    output = await executeSingleRegenerationRequest(input);
+    regeneration = await executeSingleRegenerationRequest(input);
   } catch (error) {
     if (error instanceof ConflictRegenerationExhaustedError) throw error;
     throw conflictError(input, error instanceof StructuredValidationError ? error.lastError.message : error.message);
   }
+  const output = regeneration.value;
   try {
     validateSynthesisCoverage([input.entityKey], output);
     validateSynthesisActions({
@@ -53261,13 +53272,16 @@ async function regenerateConflictedPatch(input) {
       pathPolicy: input.pathPolicy
     });
   } catch (error) {
+    input.onEvent(lifecycleEvent(regeneration.lifecycle.id, regeneration.lifecycle.action, "failed"));
     throw conflictError(input, error.message);
   }
   if (output.skips.length !== 0 || output.actions.length !== 1) {
+    input.onEvent(lifecycleEvent(regeneration.lifecycle.id, regeneration.lifecycle.action, "failed"));
     throw conflictError(input, "regeneration must return exactly one action and no skip");
   }
   const action = output.actions[0];
   if (action.kind !== "patch" || action.entityKey !== input.entityKey || action.path !== input.targetPath || action.expectedPageHash !== input.pageHash) {
+    input.onEvent(lifecycleEvent(regeneration.lifecycle.id, regeneration.lifecycle.action, "failed"));
     throw conflictError(input, "regeneration returned a different entity, path, or page hash");
   }
   return action;
@@ -53634,11 +53648,18 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   const startedAt = Date.now();
   const policy = modelPolicy(opts);
   const eventBridge = new RunEventBridge();
+  const pendingSynthesisLifecycles = /* @__PURE__ */ new Map();
   let outputTokens = 0;
   let deferredSourcePathAdded;
   let deferredLog;
   const captureEvent = (event) => {
     if (event.kind === "llm_call_stats") outputTokens += event.outputTokens;
+    if (event.kind === "llm_lifecycle" && event.action === "synthesize_wiki_pages") {
+      if (event.phase === "validating") pendingSynthesisLifecycles.set(event.id, event);
+      if (["completed", "retrying", "failed", "cancelled"].includes(event.phase)) {
+        pendingSynthesisLifecycles.delete(event.id);
+      }
+    }
     eventBridge.push(event);
   };
   let pagePaths;
@@ -54162,6 +54183,8 @@ ${action.content}`,
   const updated = [];
   const deleted = [];
   const logEntries = [];
+  const synthesisLifecycles = [...pendingSynthesisLifecycles.values()];
+  let synthesisApplying = false;
   for (const [path5, value] of prepared) {
     yield { kind: "tool_use", name: value.existing === null ? "Create" : "Update", input: { path: path5 } };
     try {
@@ -54178,6 +54201,12 @@ ${action.content}`,
           throw new Error(`update conflict: page changed after patch preparation ${path5}`);
         }
       }
+      if (!synthesisApplying) {
+        for (const lifecycle of synthesisLifecycles) {
+          yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
+        }
+        synthesisApplying = true;
+      }
       if (vaultTools instanceof TransactionVaultTools) {
         await vaultTools.writeIfCurrent(
           path5,
@@ -54188,6 +54217,9 @@ ${action.content}`,
         await vaultTools.write(path5, value.content);
       }
     } catch (error) {
+      for (const lifecycle of synthesisLifecycles) {
+        yield lifecycleEvent(lifecycle.id, lifecycle.action, "failed");
+      }
       const message = `ingest: page write failed for ${path5} \u2014 ${error.message}`;
       yield { kind: "tool_result", ok: false, preview: message };
       yield { kind: "error", message };
@@ -54207,6 +54239,14 @@ ${action.content}`,
         statusTo: parseWikiStatus(value.content)
       });
     }
+  }
+  if (!synthesisApplying) {
+    for (const lifecycle of synthesisLifecycles) {
+      yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
+    }
+  }
+  for (const lifecycle of synthesisLifecycles) {
+    yield lifecycleEvent(lifecycle.id, lifecycle.action, "completed");
   }
   const deleteThreshold = opts.mergeDeleteWarnThreshold ?? 5;
   if (pendingDuplicateDeletes.size > deleteThreshold) {
@@ -55204,11 +55244,11 @@ async function* answerFromContext(args) {
   const budgetEvents = [];
   let eligibleChunks;
   let answerLifecycle = createLlmLifecycle("answer_question");
-  const lifecycleRetryEvents = [];
+  let executionCount = 0;
   yield { kind: "tool_use", name: "Answering", input: {} };
   let attempt;
   try {
-    attempt = await runWithContextRepack({
+    attempt = yield* runWithLiveEvents((emit) => runWithContextRepack({
       callSite: "query.answer",
       configuredInputBudget: opts.inputBudgetTokens ?? 16384,
       outputBudget: opts.maxTokens,
@@ -55235,26 +55275,26 @@ async function* answerFromContext(args) {
         };
       },
       execute: async (request) => {
-        if (lifecycleRetryEvents.length > 0) {
+        if (executionCount > 0) {
           answerLifecycle = createLlmLifecycle("answer_question");
         }
+        executionCount += 1;
+        emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing"));
         const params = paramsForPreparedMessages(model, request.messages, opts, true);
-        const lifecycleEvents = [
-          lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing"),
-          lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"),
-          lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting")
-        ];
         let streamChunkConsumed = false;
         try {
           const requestStartMs = Date.now();
-          const rawStream = await llm.chat.completions.create(
+          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"));
+          const pending = llm.chat.completions.create(
             { ...params, stream: true },
             { signal }
           );
+          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
+          const rawStream = await pending;
           const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
           let attemptAnswer = "";
           let attemptOutputTokens = 0;
-          const events = [...lifecycleEvents];
+          const events = [];
           let producing = false;
           const iterator = stream[Symbol.asyncIterator]();
           while (true) {
@@ -55274,13 +55314,13 @@ async function* answerFromContext(args) {
             streamChunkConsumed = true;
             const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
             if (!producing && (reasoning.trim() || content.trim())) {
-              events.push(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "producing"));
+              emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "producing"));
               producing = true;
             }
-            if (reasoning) events.push({ kind: "assistant_text", delta: reasoning, isReasoning: true });
+            if (reasoning) emit({ kind: "assistant_text", delta: reasoning, isReasoning: true });
             if (content) {
               attemptAnswer += content;
-              events.push({ kind: "assistant_text", delta: content });
+              emit({ kind: "assistant_text", delta: content });
             }
             if (tok !== void 0) attemptOutputTokens += tok;
             if (reasoning || content) {
@@ -55297,22 +55337,28 @@ async function* answerFromContext(args) {
           if (signal.aborted || error.name === "AbortError") throw error;
           if (streamChunkConsumed) throw error;
           if (classifyContextError(error) !== null && request.optionalUnits > 0) {
-            lifecycleRetryEvents.push(
-              ...lifecycleEvents,
-              lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying")
-            );
+            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
           }
           rethrowForContextRepack(error, request.optionalUnits);
           if (!shouldFallbackStreamToNonStream(error, signal)) throw error;
+          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
+          answerLifecycle = createLlmLifecycle("answer_question");
+          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing"));
           let response;
           const fallbackStartMs = Date.now();
           try {
             const fallbackParams = paramsForPreparedMessages(model, request.messages, opts, false);
-            response = await llm.chat.completions.create(
+            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"));
+            const pending = llm.chat.completions.create(
               { ...fallbackParams, stream: false },
               { signal }
             );
+            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
+            response = await pending;
           } catch (fallbackError) {
+            if (classifyContextError(fallbackError) !== null && request.optionalUnits > 0) {
+              emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
+            }
             rethrowForContextRepack(fallbackError, request.optionalUnits);
             throw fallbackError;
           }
@@ -55321,17 +55367,17 @@ async function* answerFromContext(args) {
           const fallbackReasoning = completionReasoning(fallbackMessage);
           const fallbackAnswer = fallbackMessage?.content ?? "";
           const fallbackTokens = extractUsage(response) ?? 0;
+          if (fallbackReasoning.trim() || fallbackAnswer.trim()) {
+            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "producing"));
+          }
+          if (fallbackReasoning) {
+            emit({ kind: "assistant_text", delta: fallbackReasoning, isReasoning: true });
+          }
+          if (fallbackAnswer) emit({ kind: "assistant_text", delta: fallbackAnswer });
           return {
             answer: fallbackAnswer,
             outputTokens: fallbackTokens,
-            events: [
-              ...lifecycleEvents,
-              ...fallbackReasoning.trim() || fallbackAnswer.trim() ? [
-                lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "producing"),
-                ...fallbackReasoning ? [{ kind: "assistant_text", delta: fallbackReasoning, isReasoning: true }] : [],
-                ...fallbackAnswer ? [{ kind: "assistant_text", delta: fallbackAnswer }] : []
-              ] : []
-            ],
+            events: [],
             selectedChunks: request.selectedChunks,
             streamStats: response.usage ? {
               inputTokens: response.usage.prompt_tokens,
@@ -55344,9 +55390,8 @@ async function* answerFromContext(args) {
         }
       },
       onEvent: (event) => budgetEvents.push(event)
-    });
+    }));
   } catch (error) {
-    for (const event of lifecycleRetryEvents) yield event;
     for (const event of budgetEvents) yield event;
     if (signal.aborted || error.name === "AbortError") {
       yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
@@ -55356,7 +55401,6 @@ async function* answerFromContext(args) {
     throw error;
   }
   const completionBudgetEvent = attempt.pendingStream ? budgetEvents.pop() : void 0;
-  for (const event of lifecycleRetryEvents) yield event;
   for (const event of budgetEvents) yield event;
   answer = attempt.answer;
   outputTokens = attempt.outputTokens;
@@ -55414,9 +55458,7 @@ async function* answerFromContext(args) {
     return { answer, outputTokens, selectedChunks };
   }
   yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "validating");
-  yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "applying");
-  yield { kind: "tool_result", ok: !!answer, preview: answer ? `${answer.length} chars` : "no response" };
-  yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "completed");
+  let displayedReplacement = false;
   if (answer && !signal.aborted) {
     yield { kind: "tool_use", name: "ValidateLinks", input: {} };
     const knownStems = new Set(selectedChunks.map((chunk) => chunk.articleId));
@@ -55484,6 +55526,7 @@ ${answer}` }
         } catch (e) {
           for (const ev of repairEvents) yield ev;
           if (signal.aborted || e.name === "AbortError") {
+            yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
             return { answer, outputTokens, selectedChunks };
           }
         }
@@ -55497,8 +55540,16 @@ ${answer}` }
       if (llmFixed) parts.push(`llm-fixed ${llmFixed}`);
       if (stripped.length) parts.push(`annotated ${stripped.length}: ${stripped.join(", ")}`);
       yield { kind: "tool_result", ok: stripped.length === 0, preview: parts.join("; ") };
+      yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "applying");
       yield { kind: "assistant_replace", text: answer };
+      yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "completed");
+      displayedReplacement = true;
     }
+  }
+  if (!displayedReplacement) {
+    yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "applying");
+    yield { kind: "tool_result", ok: !!answer, preview: answer ? `${answer.length} chars` : "no response" };
+    yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "completed");
   }
   const llmCallStats = streamStats ? buildLlmCallStatsEvent(streamStats) : void 0;
   if (llmCallStats && !deferLlmCallStats) yield llmCallStats;
@@ -56671,9 +56722,12 @@ async function runLintBatchWithSplit(args) {
           args.onEvent(lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "failed"));
           throw error;
         }
-        args.onEvent(lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "applying"));
-        args.onEvent(lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "completed"));
-        return { output, outputTokens: r.outputTokens, inputTokens: r.inputTokens };
+        return {
+          output,
+          outputTokens: r.outputTokens,
+          inputTokens: r.inputTokens,
+          lifecycles: [r.lifecycle]
+        };
       },
       onEvent: args.onEvent
     });
@@ -56691,7 +56745,8 @@ async function runLintBatchWithSplit(args) {
         patches: [...left.output.patches, ...right.output.patches],
         deletes: [...left.output.deletes, ...right.output.deletes]
       },
-      outputTokens: left.outputTokens + right.outputTokens
+      outputTokens: left.outputTokens + right.outputTokens,
+      lifecycles: [...left.lifecycles, ...right.lifecycles]
     };
   }
 }
@@ -56805,6 +56860,8 @@ ${schemaContent}` : ""
       validateLintCoverage(lintPages, workItems);
       const batches = packLintWorkBatches(workItems, domain.name, systemContent, opts.inputBudgetTokens ?? 16384);
       const batchOutputs = [];
+      const batchLifecycles = [];
+      let batchApplying = false;
       for (let i = 0; i < batches.length; i++) {
         if (signal.aborted) return;
         const batch = batches[i];
@@ -56826,6 +56883,7 @@ ${schemaContent}` : ""
           });
           outputTokens += result.outputTokens;
           batchOutputs.push(result.output);
+          batchLifecycles.push(...result.lifecycles);
           yield { kind: "tool_result", ok: true, preview: `${result.output.findings.length} findings, ${result.output.patches.length} patches` };
         } catch (e) {
           if (signal.aborted || e.name === "AbortError") return;
@@ -56838,10 +56896,20 @@ ${schemaContent}` : ""
       const allBatchFindings = batchOutputs.map((output) => output.findings);
       mergedFindings = mergeLintFindings([mergedFindings, ...allBatchFindings]);
       const findingsReport = compactFindingReport(mergedFindings);
+      const allPatches = batchOutputs.flatMap((output) => output.patches);
+      if (allPatches.length === 0) {
+        for (const lifecycle of batchLifecycles) {
+          yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
+        }
+      }
       yield { kind: "assistant_text", delta: findingsReport };
+      if (allPatches.length === 0) {
+        for (const lifecycle of batchLifecycles) {
+          yield lifecycleEvent(lifecycle.id, lifecycle.action, "completed");
+        }
+      }
       reportParts.push(`### ${domain.id} lint findings
 ${findingsReport}`);
-      const allPatches = batchOutputs.flatMap((output) => output.patches);
       const patchPaths = new Set(allPatches.map((patch2) => patch2.path));
       if (allPatches.length > 0) {
         const previewContents = /* @__PURE__ */ new Map();
@@ -56872,6 +56940,12 @@ ${findingsReport}`);
             const originalContent = pages.get(path5) ?? "";
             const wikiStems = new Set([...pages.keys()].map((p) => p.split("/").pop().replace(/\.md$/, "")));
             const fixedContent = validateWikiSources(fixed, originalContent, knownStems, titleMap, wikiStems);
+            if (!batchApplying) {
+              for (const lifecycle of batchLifecycles) {
+                yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
+              }
+              batchApplying = true;
+            }
             await vaultTools.write(path5, fixedContent);
             writtenPaths.push(path5);
             pages.set(path5, fixedContent);
@@ -56882,6 +56956,14 @@ ${findingsReport}`);
           } catch (e) {
             yield { kind: "tool_result", ok: false, preview: e.message };
           }
+        }
+        if (!batchApplying) {
+          for (const lifecycle of batchLifecycles) {
+            yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
+          }
+        }
+        for (const lifecycle of batchLifecycles) {
+          yield lifecycleEvent(lifecycle.id, lifecycle.action, "completed");
         }
         reportParts.push(`#### \u0418\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E: ${allPatches.length} patch(es)`);
       }
@@ -57248,11 +57330,11 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
   let chatLifecycle = createLlmLifecycle(
     opts.semanticCompression?.operation === "query" ? "answer_question" : "apply_lint_fixes"
   );
-  const lifecycleRetryEvents = [];
+  let executionCount = 0;
   yield { kind: "tool_use", name: "Responding", input: {} };
   let attempt;
   try {
-    attempt = await runWithContextRepack({
+    attempt = yield* runWithLiveEvents((emit) => runWithContextRepack({
       callSite: opts.semanticCompression?.operation === "query" ? "query.answer" : "lint-chat.fix",
       configuredInputBudget: opts.inputBudgetTokens ?? 16384,
       outputBudget: opts.maxTokens,
@@ -57278,28 +57360,28 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
         };
       },
       execute: async (request) => {
-        if (lifecycleRetryEvents.length > 0) {
+        if (executionCount > 0) {
           chatLifecycle = createLlmLifecycle(
             opts.semanticCompression?.operation === "query" ? "answer_question" : "apply_lint_fixes"
           );
         }
+        executionCount += 1;
+        emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing"));
         const params = paramsForPreparedMessages2(model, request.messages, opts, true);
-        const lifecycleEvents = [
-          lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing"),
-          lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"),
-          lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting")
-        ];
         let streamChunkConsumed = false;
         try {
           const requestStartMs = Date.now();
-          const rawStream = await llm.chat.completions.create(
+          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"));
+          const pending = llm.chat.completions.create(
             { ...params, stream: true },
             { signal }
           );
+          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"));
+          const rawStream = await pending;
           const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
           let attemptText = "";
           let attemptOutputTokens = 0;
-          const events = [...lifecycleEvents];
+          const events = [];
           let producing = false;
           const iterator = stream[Symbol.asyncIterator]();
           while (true) {
@@ -57318,13 +57400,13 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
             streamChunkConsumed = true;
             const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
             if (!producing && (reasoning.trim() || content.trim())) {
-              events.push(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "producing"));
+              emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "producing"));
               producing = true;
             }
-            if (reasoning) events.push({ kind: "assistant_text", delta: reasoning, isReasoning: true });
+            if (reasoning) emit({ kind: "assistant_text", delta: reasoning, isReasoning: true });
             if (content) {
               attemptText += content;
-              events.push({ kind: "assistant_text", delta: content });
+              emit({ kind: "assistant_text", delta: content });
             }
             if (tok !== void 0) attemptOutputTokens += tok;
             if (reasoning || content) {
@@ -57340,22 +57422,30 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
           if (signal.aborted || error.name === "AbortError") throw error;
           if (streamChunkConsumed) throw error;
           if (classifyContextError(error) !== null && request.optionalUnits > 0) {
-            lifecycleRetryEvents.push(
-              ...lifecycleEvents,
-              lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying")
-            );
+            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"));
           }
           rethrowForContextRepack2(error, request.optionalUnits);
           if (!shouldFallbackStreamToNonStream(error, signal)) throw error;
+          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"));
+          chatLifecycle = createLlmLifecycle(
+            opts.semanticCompression?.operation === "query" ? "answer_question" : "apply_lint_fixes"
+          );
+          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing"));
           let response;
           const fallbackStartMs = Date.now();
           try {
             const fallbackParams = paramsForPreparedMessages2(model, request.messages, opts, false);
-            response = await llm.chat.completions.create(
+            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"));
+            const pending = llm.chat.completions.create(
               { ...fallbackParams, stream: false },
               { signal }
             );
+            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"));
+            response = await pending;
           } catch (fallbackError) {
+            if (classifyContextError(fallbackError) !== null && request.optionalUnits > 0) {
+              emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"));
+            }
             rethrowForContextRepack2(fallbackError, request.optionalUnits);
             throw fallbackError;
           }
@@ -57364,17 +57454,17 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
           const fallbackReasoning = completionReasoning(fallbackMessage);
           const fallbackText = fallbackMessage?.content ?? "";
           const fallbackTokens = extractUsage(response) ?? 0;
+          if (fallbackReasoning.trim() || fallbackText.trim()) {
+            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "producing"));
+          }
+          if (fallbackReasoning) {
+            emit({ kind: "assistant_text", delta: fallbackReasoning, isReasoning: true });
+          }
+          if (fallbackText) emit({ kind: "assistant_text", delta: fallbackText });
           return {
             text: fallbackText,
             outputTokens: fallbackTokens,
-            events: [
-              ...lifecycleEvents,
-              ...fallbackReasoning.trim() || fallbackText.trim() ? [
-                lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "producing"),
-                ...fallbackReasoning ? [{ kind: "assistant_text", delta: fallbackReasoning, isReasoning: true }] : [],
-                ...fallbackText ? [{ kind: "assistant_text", delta: fallbackText }] : []
-              ] : []
-            ],
+            events: [],
             streamStats: response.usage ? {
               inputTokens: response.usage.prompt_tokens,
               outputTokens: fallbackTokens,
@@ -57386,9 +57476,8 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
         }
       },
       onEvent: (event) => budgetEvents.push(event)
-    });
+    }));
   } catch (error) {
-    for (const event of lifecycleRetryEvents) yield event;
     for (const event of budgetEvents) yield event;
     if (signal.aborted || error.name === "AbortError") {
       yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "cancelled");
@@ -57398,7 +57487,6 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
     throw error;
   }
   const completionBudgetEvent = attempt.pendingStream ? budgetEvents.pop() : void 0;
-  for (const event of lifecycleRetryEvents) yield event;
   for (const event of budgetEvents) yield event;
   fullText = attempt.text;
   outputTokens = attempt.outputTokens;
@@ -57765,10 +57853,10 @@ ${schemaContent}` : ""
   }
   for (const ev of pwtEvents) yield ev;
   const parsed = result.value;
-  yield lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying");
   const authorities = /* @__PURE__ */ new Map();
   for (const [path5, content] of activePages) authorities.set(path5, pageAuthorities(path5, content));
   const writtenPaths = [];
+  let applying = false;
   for (const patch of parsed.patches ?? []) {
     yield { kind: "tool_use", name: "Update", input: { path: patch.path } };
     const current = activePages.get(patch.path);
@@ -57781,6 +57869,10 @@ ${schemaContent}` : ""
       if (!applied.ok) {
         yield { kind: "tool_result", ok: false, preview: applied.reason };
         continue;
+      }
+      if (!applying) {
+        yield lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying");
+        applying = true;
       }
       await vaultTools.write(patch.path, applied.content);
       activePages.set(patch.path, applied.content);
@@ -57795,6 +57887,9 @@ ${schemaContent}` : ""
       yield { kind: "tool_result", ok: false, preview: e.message };
       continue;
     }
+  }
+  if (!applying) {
+    yield lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying");
   }
   yield lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "completed");
   yield {
@@ -59588,9 +59683,16 @@ ${tagRegistryBlock}` : ""}`;
   let outputTokens = 0;
   let lastInputTokens;
   let activeFormatLifecycle = null;
+  const closeActiveFormatLifecycle = (phase) => {
+    const current = activeFormatLifecycle;
+    if (!current) return null;
+    activeFormatLifecycle = null;
+    return lifecycleEvent(current.id, current.action, phase);
+  };
   async function* callOnce(p, fallback = { allowContextFallback: true }) {
     if (activeFormatLifecycle) {
-      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "applying");
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "completed");
     }
     activeFormatLifecycle = createLlmLifecycle("format_note");
     yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing");
@@ -59649,13 +59751,19 @@ ${tagRegistryBlock}` : ""}`;
         activeFormatLifecycle = null;
         throw e;
       }
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+      activeFormatLifecycle = createLlmLifecycle("format_note");
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing");
       const fallbackStartMs = Date.now();
       let resp;
       try {
-        resp = await llm.chat.completions.create(
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
+        const pending = llm.chat.completions.create(
           { ...p, stream: false },
           { signal }
         );
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
+        resp = await pending;
       } catch (fallbackError) {
         yield lifecycleEvent(
           activeFormatLifecycle.id,
@@ -59819,11 +59927,6 @@ The previous segment attempt failed: ${retryHint}. Return the same segment again
     }
     const parsedSegment = parseFormatSegmentOutput(text);
     if (parsedSegment.data && parsedSegment.data.segmentId === segment.id && !parsedSegment.truncated) {
-      if (activeFormatLifecycle) {
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "applying");
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "completed");
-        activeFormatLifecycle = null;
-      }
       yield { kind: "tool_result", ok: true, preview: `${segment.id}: ${parsedSegment.data.formatted.length} chars` };
       return parsedSegment.data;
     }
@@ -59831,6 +59934,10 @@ The previous segment attempt failed: ${retryHint}. Return the same segment again
     if (shouldSplit) {
       const children = splitFormatSegment(segment, Math.max(1, Math.floor(maxMarkdownChars / 2)));
       if (children.length > 1) {
+        if (activeFormatLifecycle) {
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+          activeFormatLifecycle = null;
+        }
         yield { kind: "tool_result", ok: false, preview: `${segment.id}: response truncated \u2014 splitting` };
         const childOutputs = [];
         for (const child of children) childOutputs.push(yield* formatSegmentRecursive(child, Math.max(1, Math.floor(maxMarkdownChars / 2)), sourceChunks));
@@ -59848,6 +59955,10 @@ The previous segment attempt failed: ${retryHint}. Return the same segment again
     }
     const hint = parsedSegment.data && parsedSegment.data.segmentId !== segment.id ? `segment id mismatch: expected ${segment.id}, got ${parsedSegment.data.segmentId}` : parsedSegment.hint;
     const retryParams = buildSegmentParams(segment, hint);
+    if (activeFormatLifecycle) {
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+      activeFormatLifecycle = null;
+    }
     yield { kind: "tool_result", ok: false, preview: `${segment.id}: invalid sentinel \u2014 retrying` };
     yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath, segment: segment.id, retry: 1 } };
     let retryText;
@@ -59860,19 +59971,12 @@ The previous segment attempt failed: ${retryHint}. Return the same segment again
     yield emitSegmentBudgetEvent(segment, retryParams, sourceChunks);
     const retryParsed = parseFormatSegmentOutput(retryText);
     if (retryParsed.data && retryParsed.data.segmentId === segment.id && !retryParsed.truncated) {
-      if (activeFormatLifecycle) {
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "applying");
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "completed");
-        activeFormatLifecycle = null;
-      }
       yield { kind: "tool_result", ok: true, preview: `${segment.id}: ${retryParsed.data.formatted.length} chars` };
       return retryParsed.data;
     }
     const retryHint = retryParsed.data && retryParsed.data.segmentId !== segment.id ? `segment id mismatch: expected ${segment.id}, got ${retryParsed.data.segmentId}` : retryParsed.hint;
-    if (activeFormatLifecycle) {
-      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
-      activeFormatLifecycle = null;
-    }
+    const failedEvent = closeActiveFormatLifecycle("failed");
+    if (failedEvent) yield failedEvent;
     throw new Error(`Format: segment ${segment.id} failed: ${retryHint || hint}`);
   }
   let fullText = "";
@@ -59937,7 +60041,11 @@ The previous segment attempt failed: ${retryHint}. Return the same segment again
       parsed = yield* runSegmentedFormatting();
       if (!parsed) return;
     }
-    if (signal.aborted) return;
+    if (signal.aborted) {
+      const cancelledEvent = closeActiveFormatLifecycle("cancelled");
+      if (cancelledEvent) yield cancelledEvent;
+      return;
+    }
     if (!segmented) {
       let parsedResult = parseFormatOutput(fullText, visionDescriptions.size > 0);
       parsed = parsedResult.data;
@@ -59952,12 +60060,16 @@ The previous segment attempt failed: ${retryHint}. Return the same segment again
       }
       const truncated = !parsed && lastFinishReason === "length";
       if (!parsed && truncated) {
+        const failedEvent = closeActiveFormatLifecycle("failed");
+        if (failedEvent) yield failedEvent;
         yield { kind: "tool_result", ok: false, preview: "response truncated" };
         yield { kind: "error", message: progress.outputTruncated(truncationHint(backend, progress)) };
         yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || void 0 };
         return;
       }
       if (!parsed) {
+        const retryEvent = closeActiveFormatLifecycle("retrying");
+        if (retryEvent) yield retryEvent;
         yield { kind: "tool_result", ok: false, preview: "invalid sentinel \u2014 retrying" };
         yield { kind: "assistant_text", delta: progress.sentinelInvalidRetry };
         const zodHint = parsedResult.hint;
@@ -59971,7 +60083,11 @@ The previous attempt failed: ${zodHint}. Fix it and return again using the marke
         const retryParams = buildChatParams(model, retryMessages, formatOpts, true);
         yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
         fullText = yield* callOnce(retryParams);
-        if (signal.aborted) return;
+        if (signal.aborted) {
+          const cancelledEvent = closeActiveFormatLifecycle("cancelled");
+          if (cancelledEvent) yield cancelledEvent;
+          return;
+        }
         parsedResult = parseFormatOutput(fullText, visionDescriptions.size > 0);
         parsed = parsedResult.data;
         if (parsedResult.truncated) {
@@ -59987,6 +60103,8 @@ The previous attempt failed: ${zodHint}. Fix it and return again using the marke
       if (!parsed) {
         const retryTruncated = lastFinishReason === "length";
         const msg = retryTruncated ? progress.outputTruncatedAfterRetry(truncationHint(backend, progress)) : progress.sentinelInvalidAfterRetry;
+        const failedEvent = closeActiveFormatLifecycle("failed");
+        if (failedEvent) yield failedEvent;
         yield { kind: "tool_result", ok: false, preview: msg };
         yield { kind: "error", message: msg };
         yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || void 0 };
@@ -60055,6 +60173,8 @@ The previous attempt failed: ${zodHint}. Fix it and return again using the marke
   try {
     await vaultTools.write(tempPath, finalFormatted);
   } catch (e) {
+    const failedEvent = closeActiveFormatLifecycle("failed");
+    if (failedEvent) yield failedEvent;
     yield { kind: "error", message: progress.writeFailed(e.message) };
     return;
   }

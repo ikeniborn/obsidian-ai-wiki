@@ -433,6 +433,25 @@ test("format creates no temp preview or source write when a segment response fai
   assert.deepEqual(adapter.writes, []);
   assert.equal(adapter.files.get("notes/source.md"), original);
   assert.ok(events.some((event) => event.kind === "error" && /segment/i.test(event.message)));
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  assert.equal(lifecycle.at(-1)?.phase, "failed");
+});
+
+test("Format preview write failure closes the validated request as failed", async () => {
+  const original = "# Source\n\nBody";
+  const adapter = new MemoryAdapter({ "notes/source.md": original });
+  adapter.write = async () => {
+    throw new Error("write denied");
+  };
+  const { events } = await collectFormatEvents(
+    original,
+    llmWithResponder(() => frame("- report", "# Formatted\n\nBody"), []),
+    10_000,
+    adapter,
+  );
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  assert.equal(lifecycle.at(-1)?.phase, "failed");
+  assert.equal(events.some((event) => event.kind === "format_preview"), false);
 });
 
 test("format retries a malformed complete segment frame once with correction context", async () => {
@@ -896,8 +915,20 @@ test("segmented format emits format.segment prompt-budget telemetry and aggregat
   const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
   assert.ok(lifecycle.length > 0);
   assert.ok(lifecycle.every((event) => event.action === "format_note"));
-  assert.equal(lifecycle.at(-2)?.phase, "applying");
-  assert.equal(lifecycle.at(-1)?.phase, "completed");
+  const previewIndex = events.findIndex((event) => event.kind === "format_preview");
+  assert.ok(previewIndex > 0);
+  assert.equal(events[previewIndex - 1]?.kind, "llm_lifecycle");
+  assert.equal(events[previewIndex - 1]?.kind === "llm_lifecycle"
+    ? events[previewIndex - 1].phase
+    : "", "applying");
+  assert.equal(events[previewIndex + 1]?.kind, "llm_lifecycle");
+  assert.equal(events[previewIndex + 1]?.kind === "llm_lifecycle"
+    ? events[previewIndex + 1].phase
+    : "", "completed");
+  for (const id of new Set(lifecycle.map((event) => event.id))) {
+    const phases = lifecycle.filter((event) => event.id === id).map((event) => event.phase);
+    assert.equal(["completed", "retrying", "failed", "cancelled"].includes(phases.at(-1) ?? ""), true);
+  }
 
   const statsEvents = events.filter((event) => event.kind === "llm_call_stats");
   assert.equal(statsEvents.length, seenParams.length);

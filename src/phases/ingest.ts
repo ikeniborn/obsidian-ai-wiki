@@ -99,6 +99,7 @@ import type { SynthesisAction, SynthesisOutput } from "./zod-schemas";
 import { routeAndValidatePages } from "./entity-routing";
 import { PageSimilarityService, type ExtractedEntity } from "../page-similarity";
 import { RunEventBridge } from "../run-event-bridge";
+import { lifecycleEvent } from "../llm-lifecycle";
 
 function parseWikiStatus(content: string): string {
   const match = /^---\n[\s\S]*?^status:[ \t]*(.+)$/m.exec(content);
@@ -477,6 +478,7 @@ export async function* runIngest(
   const startedAt = Date.now();
   const policy = modelPolicy(opts);
   const eventBridge = new RunEventBridge();
+  const pendingSynthesisLifecycles = new Map<string, Extract<RunEvent, { kind: "llm_lifecycle" }>>();
   let outputTokens = 0;
   let deferredSourcePathAdded: { domainId: string; path: string } | undefined;
   let deferredLog: {
@@ -486,6 +488,12 @@ export async function* runIngest(
   } | undefined;
   const captureEvent = (event: RunEvent): void => {
     if (event.kind === "llm_call_stats") outputTokens += event.outputTokens;
+    if (event.kind === "llm_lifecycle" && event.action === "synthesize_wiki_pages") {
+      if (event.phase === "validating") pendingSynthesisLifecycles.set(event.id, event);
+      if (["completed", "retrying", "failed", "cancelled"].includes(event.phase)) {
+        pendingSynthesisLifecycles.delete(event.id);
+      }
+    }
     eventBridge.push(event);
   };
 
@@ -1039,6 +1047,8 @@ export async function* runIngest(
   const updated: string[] = [];
   const deleted: string[] = [];
   const logEntries: IngestLogEntry[] = [];
+  const synthesisLifecycles = [...pendingSynthesisLifecycles.values()];
+  let synthesisApplying = false;
   for (const [path, value] of prepared) {
     yield { kind: "tool_use", name: value.existing === null ? "Create" : "Update", input: { path } };
     try {
@@ -1055,6 +1065,12 @@ export async function* runIngest(
           throw new Error(`update conflict: page changed after patch preparation ${path}`);
         }
       }
+      if (!synthesisApplying) {
+        for (const lifecycle of synthesisLifecycles) {
+          yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
+        }
+        synthesisApplying = true;
+      }
       if (vaultTools instanceof TransactionVaultTools) {
         await vaultTools.writeIfCurrent(
           path,
@@ -1065,6 +1081,9 @@ export async function* runIngest(
         await vaultTools.write(path, value.content);
       }
     } catch (error) {
+      for (const lifecycle of synthesisLifecycles) {
+        yield lifecycleEvent(lifecycle.id, lifecycle.action, "failed");
+      }
       const message = `ingest: page write failed for ${path} — ${(error as Error).message}`;
       yield { kind: "tool_result", ok: false, preview: message };
       yield { kind: "error", message };
@@ -1084,6 +1103,14 @@ export async function* runIngest(
         statusTo: parseWikiStatus(value.content),
       });
     }
+  }
+  if (!synthesisApplying) {
+    for (const lifecycle of synthesisLifecycles) {
+      yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
+    }
+  }
+  for (const lifecycle of synthesisLifecycles) {
+    yield lifecycleEvent(lifecycle.id, lifecycle.action, "completed");
   }
 
   const deleteThreshold = opts.mergeDeleteWarnThreshold ?? 5;

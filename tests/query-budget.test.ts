@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import test from "node:test";
 import type OpenAI from "openai";
@@ -499,6 +500,12 @@ test("answerFromContext rebuilds non-stream fallback params and preserves AbortS
   assert.equal(result.outputTokens, 7);
   assert.equal(result.llmCallStats?.inputTokens, 444);
   assert.equal(result.llmCallStats?.outputTokens, 7);
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  assert.deepEqual(lifecycle.map((event) => event.phase), [
+    "preparing", "sent", "waiting", "retrying",
+    "preparing", "sent", "waiting", "producing", "validating", "applying", "completed",
+  ]);
+  assert.notEqual(lifecycle[3]?.id, lifecycle[4]?.id);
 });
 
 test("runLintChat rebuilds non-stream fallback params and preserves AbortSignal", async () => {
@@ -530,6 +537,156 @@ test("runLintChat rebuilds non-stream fallback params and preserves AbortSignal"
   const result = events.find((event) => event.kind === "result");
   assert.ok(result && result.kind === "result");
   assert.equal(result.outputTokens, 7);
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  assert.deepEqual(lifecycle.map((event) => event.phase), [
+    "preparing", "sent", "waiting", "retrying",
+    "preparing", "sent", "waiting", "producing", "validating", "applying", "completed",
+  ]);
+  assert.notEqual(lifecycle[3]?.id, lifecycle[4]?.id);
+});
+
+test("Query and Chat yield preparing sent waiting before a pending request resolves", async () => {
+  for (const makeGenerator of [
+    (llm: LlmClient) => answerFromContext({
+      llm,
+      model: "mock",
+      opts: { inputBudgetTokens: 10_000 },
+      signal: new AbortController().signal,
+      systemPrompt: "Live lifecycle query.",
+      question: "question",
+      chunks: [],
+      wikiLinkValidationRetries: 0,
+    }),
+    (llm: LlmClient) => runLintChat(
+      llm,
+      "mock",
+      undefined,
+      new AbortController().signal,
+      { inputBudgetTokens: 10_000 },
+      "",
+      [{ role: "user", content: "instruction" }],
+      "Live lifecycle chat.",
+    ),
+  ]) {
+    const release = deferred();
+    const llm = {
+      chat: { completions: { create: async () => {
+        await release.promise;
+        return successfulStream("ok");
+      } } },
+    } as unknown as LlmClient;
+    const generator = makeGenerator(llm);
+    const phases: string[] = [];
+    while (phases.length < 3) {
+      const next = await Promise.race([
+        generator.next(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("lifecycle buffered behind request")), 50)),
+      ]);
+      assert.equal(next.done, false);
+      if (!next.done && next.value.kind === "llm_lifecycle") phases.push(next.value.phase);
+    }
+    assert.deepEqual(phases, ["preparing", "sent", "waiting"]);
+    release.resolve();
+    await drainRemaining(generator);
+  }
+});
+
+test("immediate Query and Chat failures emit waiting before failed", async () => {
+  for (const makeGenerator of [
+    (llm: LlmClient) => answerFromContext({
+      llm,
+      model: "mock",
+      opts: { inputBudgetTokens: 10_000 },
+      signal: new AbortController().signal,
+      systemPrompt: "Failure lifecycle query.",
+      question: "question",
+      chunks: [],
+      wikiLinkValidationRetries: 0,
+    }),
+    (llm: LlmClient) => runLintChat(
+      llm,
+      "mock",
+      undefined,
+      new AbortController().signal,
+      { inputBudgetTokens: 10_000 },
+      "",
+      [{ role: "user", content: "instruction" }],
+      "Failure lifecycle chat.",
+    ),
+  ]) {
+    const immediate = Object.assign(new Error("immediate"), { status: 502 });
+    const llm = {
+      chat: { completions: { create: () => Promise.reject(immediate) } },
+    } as unknown as LlmClient;
+    const phases: string[] = [];
+    try {
+      for await (const event of makeGenerator(llm)) {
+        if (event.kind === "llm_lifecycle") phases.push(event.phase);
+      }
+    } catch {
+      // Expected.
+    }
+    assert.deepEqual(phases, ["preparing", "sent", "waiting", "failed"]);
+  }
+});
+
+test("Query repair completes its request before primary lifecycle applies final assistant replacement", async () => {
+  let calls = 0;
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      calls += 1;
+      if ((params as { stream?: boolean }).stream === true) {
+        return successfulStream("Answer with [[wiki_missing]].");
+      }
+      return completion([
+        "<<<ANSWER>>>",
+        "Answer with [[wiki_d_0]].",
+        "<<<CITATIONS>>>",
+        "- wiki_d_0",
+        "<<<END>>>",
+      ].join("\n"));
+    } } },
+  } as unknown as LlmClient;
+  const { events } = await drainGenerator(answerFromContext({
+    llm,
+    model: "mock",
+    opts: { inputBudgetTokens: 10_000 },
+    signal: new AbortController().signal,
+    systemPrompt: "Repair lifecycle query.",
+    question: "question",
+    chunks: [selectedChunk(0, 1)],
+    wikiLinkValidationRetries: 1,
+  }));
+
+  assert.equal(calls, 2);
+  const replaceIndex = events.findIndex((event) => event.kind === "assistant_replace");
+  assert.ok(replaceIndex > 0);
+  assert.equal(events[replaceIndex - 1]?.kind, "llm_lifecycle");
+  assert.equal(events[replaceIndex - 1]?.kind === "llm_lifecycle"
+    ? events[replaceIndex - 1].phase
+    : "", "applying");
+  assert.equal(events[replaceIndex + 1]?.kind, "llm_lifecycle");
+  assert.equal(events[replaceIndex + 1]?.kind === "llm_lifecycle"
+    ? events[replaceIndex + 1].phase
+    : "", "completed");
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  const ids = [...new Set(lifecycle.map((event) => event.id))];
+  assert.equal(ids.length, 2);
+  for (const id of ids) {
+    const phases = lifecycle.filter((event) => event.id === id).map((event) => event.phase);
+    assert.deepEqual(phases, [
+      "preparing", "sent", "waiting", "producing", "validating", "applying", "completed",
+    ]);
+  }
+});
+
+test("Query seed and link-repair calls use non-stream human lifecycle actions", () => {
+  const seedSource = readFileSync("src/phases/query.ts", "utf8");
+  const answerSource = readFileSync("src/phases/query-answer.ts", "utf8");
+  assert.match(seedSource, /createLlmLifecycle\("select_relevant_pages"\)/);
+  assert.match(seedSource, /callSite: "query\.seeds"[\s\S]*?transport: "non-stream"/);
+  assert.match(answerSource, /callSite: "query\.answer"[\s\S]*?createLlmLifecycle\("answer_question"\)[\s\S]*?transport: "non-stream"/);
 });
 
 test("HTTP 502 Query failure is sent exactly once", async () => {

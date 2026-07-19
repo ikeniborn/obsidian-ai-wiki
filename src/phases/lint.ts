@@ -231,7 +231,11 @@ async function runLintBatchWithSplit(args: {
   opts: LlmCallOptions;
   signal: AbortSignal;
   onEvent: (event: RunEvent) => void;
-}): Promise<{ output: LintBatchOutput; outputTokens: number }> {
+}): Promise<{
+  output: LintBatchOutput;
+  outputTokens: number;
+  lifecycles: ReturnType<typeof createLlmLifecycle>[];
+}> {
   try {
     const result = await runWithContextRepack({
       callSite: "lint.batch",
@@ -304,9 +308,12 @@ async function runLintBatchWithSplit(args: {
           args.onEvent(lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "failed"));
           throw error;
         }
-        args.onEvent(lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "applying"));
-        args.onEvent(lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "completed"));
-        return { output, outputTokens: r.outputTokens, inputTokens: r.inputTokens };
+        return {
+          output,
+          outputTokens: r.outputTokens,
+          inputTokens: r.inputTokens,
+          lifecycles: [r.lifecycle],
+        };
       },
       onEvent: args.onEvent,
     });
@@ -328,6 +335,7 @@ async function runLintBatchWithSplit(args: {
         deletes: [...left.output.deletes, ...right.output.deletes],
       },
       outputTokens: left.outputTokens + right.outputTokens,
+      lifecycles: [...left.lifecycles, ...right.lifecycles],
     };
   }
 }
@@ -472,6 +480,8 @@ export async function* runLint(
       validateLintCoverage(lintPages, workItems);
       const batches = packLintWorkBatches(workItems, domain.name, systemContent, opts.inputBudgetTokens ?? 16_384);
       const batchOutputs: LintBatchOutput[] = [];
+      const batchLifecycles: ReturnType<typeof createLlmLifecycle>[] = [];
+      let batchApplying = false;
 
       for (let i = 0; i < batches.length; i++) {
         if (signal.aborted) return;
@@ -494,6 +504,7 @@ export async function* runLint(
           });
           outputTokens += result.outputTokens;
           batchOutputs.push(result.output);
+          batchLifecycles.push(...result.lifecycles);
           yield { kind: "tool_result", ok: true, preview: `${result.output.findings.length} findings, ${result.output.patches.length} patches` };
         } catch (e) {
           if (signal.aborted || (e as Error).name === "AbortError") return;
@@ -507,10 +518,20 @@ export async function* runLint(
       const allBatchFindings = batchOutputs.map((output) => output.findings);
       mergedFindings = mergeLintFindings([mergedFindings, ...allBatchFindings]);
       const findingsReport = compactFindingReport(mergedFindings);
+      const allPatches = batchOutputs.flatMap((output) => output.patches);
+      if (allPatches.length === 0) {
+        for (const lifecycle of batchLifecycles) {
+          yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
+        }
+      }
       yield { kind: "assistant_text", delta: findingsReport };
+      if (allPatches.length === 0) {
+        for (const lifecycle of batchLifecycles) {
+          yield lifecycleEvent(lifecycle.id, lifecycle.action, "completed");
+        }
+      }
       reportParts.push(`### ${domain.id} lint findings\n${findingsReport}`);
 
-      const allPatches = batchOutputs.flatMap((output) => output.patches);
       const patchPaths = new Set(allPatches.map((patch) => patch.path));
       if (allPatches.length > 0) {
         const previewContents = new Map<string, string>();
@@ -541,6 +562,12 @@ export async function* runLint(
             const originalContent = pages.get(path) ?? "";
             const wikiStems = new Set([...pages.keys()].map(p => p.split("/").pop()!.replace(/\.md$/, "")));
             const fixedContent = validateWikiSources(fixed, originalContent, knownStems, titleMap, wikiStems);
+            if (!batchApplying) {
+              for (const lifecycle of batchLifecycles) {
+                yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
+              }
+              batchApplying = true;
+            }
             await vaultTools.write(path, fixedContent);
             writtenPaths.push(path);
             pages.set(path, fixedContent);
@@ -551,6 +578,14 @@ export async function* runLint(
           } catch (e) {
             yield { kind: "tool_result", ok: false, preview: (e as Error).message };
           }
+        }
+        if (!batchApplying) {
+          for (const lifecycle of batchLifecycles) {
+            yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
+          }
+        }
+        for (const lifecycle of batchLifecycles) {
+          yield lifecycleEvent(lifecycle.id, lifecycle.action, "completed");
         }
         reportParts.push(`#### Исправлено: ${allPatches.length} patch(es)`);
       }

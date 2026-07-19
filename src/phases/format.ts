@@ -352,13 +352,22 @@ export async function* runFormat(
   let outputTokens = 0;
   let lastInputTokens: number | undefined;
   let activeFormatLifecycle: ReturnType<typeof createLlmLifecycle> | null = null;
+  const closeActiveFormatLifecycle = (
+    phase: "retrying" | "failed" | "cancelled",
+  ): RunEvent | null => {
+    const current = activeFormatLifecycle;
+    if (!current) return null;
+    activeFormatLifecycle = null;
+    return lifecycleEvent(current.id, current.action, phase);
+  };
 
   async function* callOnce(
     p: Record<string, unknown>,
     fallback: { allowContextFallback: boolean } = { allowContextFallback: true },
   ): AsyncGenerator<RunEvent, string> {
     if (activeFormatLifecycle) {
-      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "applying");
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "completed");
     }
     activeFormatLifecycle = createLlmLifecycle("format_note");
     yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing");
@@ -414,13 +423,19 @@ export async function* runFormat(
         activeFormatLifecycle = null;
         throw e;
       }
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+      activeFormatLifecycle = createLlmLifecycle("format_note");
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing");
       const fallbackStartMs = Date.now();
       let resp: OpenAI.Chat.ChatCompletion;
       try {
-        resp = await llm.chat.completions.create(
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
+        const pending = llm.chat.completions.create(
           { ...p, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
           { signal },
         );
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
+        resp = await pending;
       } catch (fallbackError) {
         yield lifecycleEvent(
           activeFormatLifecycle.id,
@@ -611,11 +626,6 @@ export async function* runFormat(
     }
     const parsedSegment = parseFormatSegmentOutput(text);
     if (parsedSegment.data && parsedSegment.data.segmentId === segment.id && !parsedSegment.truncated) {
-      if (activeFormatLifecycle) {
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "applying");
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "completed");
-        activeFormatLifecycle = null;
-      }
       yield { kind: "tool_result", ok: true, preview: `${segment.id}: ${parsedSegment.data.formatted.length} chars` };
       return parsedSegment.data;
     }
@@ -624,6 +634,10 @@ export async function* runFormat(
     if (shouldSplit) {
       const children = splitFormatSegment(segment, Math.max(1, Math.floor(maxMarkdownChars / 2)));
       if (children.length > 1) {
+        if (activeFormatLifecycle) {
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+          activeFormatLifecycle = null;
+        }
         yield { kind: "tool_result", ok: false, preview: `${segment.id}: response truncated — splitting` };
         const childOutputs = [];
         for (const child of children) childOutputs.push(yield* formatSegmentRecursive(child, Math.max(1, Math.floor(maxMarkdownChars / 2)), sourceChunks));
@@ -645,6 +659,10 @@ export async function* runFormat(
       : parsedSegment.hint;
 
     const retryParams = buildSegmentParams(segment, hint);
+    if (activeFormatLifecycle) {
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+      activeFormatLifecycle = null;
+    }
     yield { kind: "tool_result", ok: false, preview: `${segment.id}: invalid sentinel — retrying` };
     yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath, segment: segment.id, retry: 1 } };
     let retryText: string;
@@ -657,21 +675,14 @@ export async function* runFormat(
     yield emitSegmentBudgetEvent(segment, retryParams, sourceChunks);
     const retryParsed = parseFormatSegmentOutput(retryText);
     if (retryParsed.data && retryParsed.data.segmentId === segment.id && !retryParsed.truncated) {
-      if (activeFormatLifecycle) {
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "applying");
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "completed");
-        activeFormatLifecycle = null;
-      }
       yield { kind: "tool_result", ok: true, preview: `${segment.id}: ${retryParsed.data.formatted.length} chars` };
       return retryParsed.data;
     }
     const retryHint = retryParsed.data && retryParsed.data.segmentId !== segment.id
       ? `segment id mismatch: expected ${segment.id}, got ${retryParsed.data.segmentId}`
       : retryParsed.hint;
-    if (activeFormatLifecycle) {
-      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
-      activeFormatLifecycle = null;
-    }
+    const failedEvent = closeActiveFormatLifecycle("failed");
+    if (failedEvent) yield failedEvent;
     throw new Error(`Format: segment ${segment.id} failed: ${retryHint || hint}`);
   }
 
@@ -740,7 +751,11 @@ export async function* runFormat(
       parsed = yield* runSegmentedFormatting();
       if (!parsed) return;
     }
-    if (signal.aborted) return;
+    if (signal.aborted) {
+      const cancelledEvent = closeActiveFormatLifecycle("cancelled");
+      if (cancelledEvent) yield cancelledEvent;
+      return;
+    }
 
     if (!segmented) {
       let parsedResult = parseFormatOutput(fullText, visionDescriptions.size > 0);
@@ -757,6 +772,8 @@ export async function* runFormat(
 
       const truncated = !parsed && lastFinishReason === "length";
       if (!parsed && truncated) {
+        const failedEvent = closeActiveFormatLifecycle("failed");
+        if (failedEvent) yield failedEvent;
         yield { kind: "tool_result", ok: false, preview: "response truncated" };
         yield { kind: "error", message: progress.outputTruncated(truncationHint(backend, progress)) };
         yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
@@ -764,6 +781,8 @@ export async function* runFormat(
       }
 
       if (!parsed) {
+        const retryEvent = closeActiveFormatLifecycle("retrying");
+        if (retryEvent) yield retryEvent;
         yield { kind: "tool_result", ok: false, preview: "invalid sentinel — retrying" };
         yield { kind: "assistant_text", delta: progress.sentinelInvalidRetry };
         const zodHint = parsedResult.hint;
@@ -775,7 +794,11 @@ export async function* runFormat(
         const retryParams = buildChatParams(model, retryMessages, formatOpts, true);
         yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
         fullText = yield* callOnce(retryParams);
-        if (signal.aborted) return;
+        if (signal.aborted) {
+          const cancelledEvent = closeActiveFormatLifecycle("cancelled");
+          if (cancelledEvent) yield cancelledEvent;
+          return;
+        }
         parsedResult = parseFormatOutput(fullText, visionDescriptions.size > 0);
         parsed = parsedResult.data;
         if (parsedResult.truncated) {
@@ -793,6 +816,8 @@ export async function* runFormat(
         const msg = retryTruncated
           ? progress.outputTruncatedAfterRetry(truncationHint(backend, progress))
           : progress.sentinelInvalidAfterRetry;
+        const failedEvent = closeActiveFormatLifecycle("failed");
+        if (failedEvent) yield failedEvent;
         yield { kind: "tool_result", ok: false, preview: msg };
         yield { kind: "error", message: msg };
         yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
@@ -874,6 +899,8 @@ export async function* runFormat(
   try {
     await vaultTools.write(tempPath, finalFormatted);
   } catch (e) {
+    const failedEvent = closeActiveFormatLifecycle("failed");
+    if (failedEvent) yield failedEvent;
     yield { kind: "error", message: progress.writeFailed((e as Error).message) };
     return;
   }

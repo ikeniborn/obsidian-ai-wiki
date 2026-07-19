@@ -805,18 +805,20 @@ async function exerciseLintAndLintChat(): Promise<void> {
               repairInstruction: "Keep the finding bounded.",
             }));
             findingTexts.push(...findings.map((finding) => finding.text));
-            return streamJson({
+            const output = {
               coveredWorkIds: items.map((item) => item.id),
               findings,
               patches: [],
               deletes: [],
-            });
+            };
+            return typed.stream === false ? completionJson(output) : streamJson(output);
           }
-          return streamJson({
+          const output = {
             reasoning: "Keep current config.",
             entity_types: domain().entity_types,
             language_notes: "",
-          });
+          };
+          return typed.stream === false ? completionJson(output) : streamJson(output);
         },
       },
     },
@@ -855,6 +857,30 @@ async function exerciseLintAndLintChat(): Promise<void> {
   }
   assert.ok(events.some((event) =>
     event.kind === "prompt_budget" && event.callSite === "lint.batch"));
+  const lintLifecycle = events.filter((event) =>
+    event.kind === "llm_lifecycle" && event.action === "check_wiki_quality");
+  assert.ok(lintLifecycle.length > 0);
+  let successfulBatchCount = 0;
+  for (const id of new Set(lintLifecycle.map((event) => event.id))) {
+    const attempt = lintLifecycle.filter((event) => event.id === id);
+    const phases = attempt.map((event) => event.phase);
+    const callSite = attempt[0]?.diagnostics?.callSite;
+    if (callSite === "lint.patch") {
+      assert.deepEqual(
+        phases,
+        ["preparing", "sent", "waiting", "producing", "validating", "applying", "completed"],
+      );
+      continue;
+    }
+    if (phases.at(-1) === "completed") successfulBatchCount += 1;
+    assert.deepEqual(
+      phases,
+      phases.at(-1) === "failed"
+        ? ["preparing", "failed"]
+        : ["preparing", "sent", "waiting", "producing", "validating", "applying", "completed"],
+    );
+  }
+  assert.ok(successfulBatchCount > 0);
 
   const chatPaths = [...pages.keys()].slice(0, 5);
   const reportLines = chatPaths.map((path, index) =>

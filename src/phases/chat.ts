@@ -7,6 +7,7 @@ import {
   completionReasoning,
   extractStreamDeltas,
   extractUsage,
+  runWithLiveEvents,
   shouldFallbackStreamToNonStream,
   wrapStreamWithStats,
 } from "./llm-utils";
@@ -96,12 +97,12 @@ export async function* runLintChat(
       ? "answer_question"
       : "apply_lint_fixes",
   );
-  const lifecycleRetryEvents: RunEvent[] = [];
+  let executionCount = 0;
 
   yield { kind: "tool_use", name: "Responding", input: {} };
   let attempt: ChatAttempt;
   try {
-    attempt = await runWithContextRepack<PackedChatRequest, ChatAttempt>({
+    attempt = yield* runWithLiveEvents((emit) => runWithContextRepack<PackedChatRequest, ChatAttempt>({
       callSite: opts.semanticCompression?.operation === "query"
         ? "query.answer"
         : "lint-chat.fix",
@@ -131,30 +132,30 @@ export async function* runLintChat(
         };
       },
       execute: async (request) => {
-        if (lifecycleRetryEvents.length > 0) {
+        if (executionCount > 0) {
           chatLifecycle = createLlmLifecycle(
             opts.semanticCompression?.operation === "query"
               ? "answer_question"
               : "apply_lint_fixes",
           );
         }
+        executionCount += 1;
+        emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing"));
         const params = paramsForPreparedMessages(model, request.messages, opts, true);
-        const lifecycleEvents: RunEvent[] = [
-          lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing"),
-          lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"),
-          lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"),
-        ];
         let streamChunkConsumed = false;
         try {
           const requestStartMs = Date.now();
-          const rawStream = await llm.chat.completions.create(
+          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"));
+          const pending = llm.chat.completions.create(
             { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
             { signal },
           );
+          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"));
+          const rawStream = await pending;
           const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
           let attemptText = "";
           let attemptOutputTokens = 0;
-          const events: RunEvent[] = [...lifecycleEvents];
+          const events: RunEvent[] = [];
           let producing = false;
           const iterator = stream[Symbol.asyncIterator]();
           while (true) {
@@ -173,13 +174,13 @@ export async function* runLintChat(
             streamChunkConsumed = true;
             const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
             if (!producing && (reasoning.trim() || content.trim())) {
-              events.push(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "producing"));
+              emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "producing"));
               producing = true;
             }
-            if (reasoning) events.push({ kind: "assistant_text", delta: reasoning, isReasoning: true });
+            if (reasoning) emit({ kind: "assistant_text", delta: reasoning, isReasoning: true });
             if (content) {
               attemptText += content;
-              events.push({ kind: "assistant_text", delta: content });
+              emit({ kind: "assistant_text", delta: content });
             }
             if (tok !== undefined) attemptOutputTokens += tok;
             if (reasoning || content) {
@@ -198,22 +199,32 @@ export async function* runLintChat(
           ) throw error;
           if (streamChunkConsumed) throw error;
           if (classifyContextError(error) !== null && request.optionalUnits > 0) {
-            lifecycleRetryEvents.push(
-              ...lifecycleEvents,
-              lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"),
-            );
+            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"));
           }
           rethrowForContextRepack(error, request.optionalUnits);
           if (!shouldFallbackStreamToNonStream(error, signal)) throw error;
+          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"));
+          chatLifecycle = createLlmLifecycle(
+            opts.semanticCompression?.operation === "query"
+              ? "answer_question"
+              : "apply_lint_fixes",
+          );
+          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing"));
           let response: OpenAI.Chat.ChatCompletion;
           const fallbackStartMs = Date.now();
           try {
             const fallbackParams = paramsForPreparedMessages(model, request.messages, opts, false);
-            response = await llm.chat.completions.create(
+            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"));
+            const pending = llm.chat.completions.create(
               { ...fallbackParams, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
               { signal },
             );
+            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"));
+            response = await pending;
           } catch (fallbackError) {
+            if (classifyContextError(fallbackError) !== null && request.optionalUnits > 0) {
+              emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"));
+            }
             rethrowForContextRepack(fallbackError, request.optionalUnits);
             throw fallbackError;
           }
@@ -222,23 +233,17 @@ export async function* runLintChat(
           const fallbackReasoning = completionReasoning(fallbackMessage);
           const fallbackText = fallbackMessage?.content ?? "";
           const fallbackTokens = extractUsage(response) ?? 0;
+          if (fallbackReasoning.trim() || fallbackText.trim()) {
+            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "producing"));
+          }
+          if (fallbackReasoning) {
+            emit({ kind: "assistant_text", delta: fallbackReasoning, isReasoning: true });
+          }
+          if (fallbackText) emit({ kind: "assistant_text", delta: fallbackText });
           return {
             text: fallbackText,
             outputTokens: fallbackTokens,
-            events: [
-              ...lifecycleEvents,
-              ...(fallbackReasoning.trim() || fallbackText.trim()
-                ? [
-                    lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "producing"),
-                    ...(fallbackReasoning
-                      ? [{ kind: "assistant_text" as const, delta: fallbackReasoning, isReasoning: true }]
-                      : []),
-                    ...(fallbackText
-                      ? [{ kind: "assistant_text" as const, delta: fallbackText }]
-                      : []),
-                  ]
-                : []),
-            ],
+            events: [],
             streamStats: response.usage
               ? {
                   inputTokens: response.usage.prompt_tokens,
@@ -252,9 +257,8 @@ export async function* runLintChat(
         }
       },
       onEvent: (event) => budgetEvents.push(event),
-    });
+    }));
   } catch (error) {
-    for (const event of lifecycleRetryEvents) yield event;
     for (const event of budgetEvents) yield event;
     if (signal.aborted || (error as Error).name === "AbortError") {
       yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "cancelled");
@@ -266,7 +270,6 @@ export async function* runLintChat(
   const completionBudgetEvent = attempt.pendingStream
     ? budgetEvents.pop()
     : undefined;
-  for (const event of lifecycleRetryEvents) yield event;
   for (const event of budgetEvents) yield event;
   fullText = attempt.text;
   outputTokens = attempt.outputTokens;

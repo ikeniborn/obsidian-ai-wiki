@@ -707,8 +707,6 @@ async function executeSynthesisBatch(
         actions: output.actions,
         pathPolicy: input.pathPolicy,
       });
-      input.onEvent(lifecycleEvent(result.result.lifecycle.id, result.result.lifecycle.action, "applying"));
-      input.onEvent(lifecycleEvent(result.result.lifecycle.id, result.result.lifecycle.action, "completed"));
     } catch (error) {
       input.onEvent(lifecycleEvent(result.result.lifecycle.id, result.result.lifecycle.action, "failed"));
       throw new SynthesisBatchValidationError(
@@ -770,7 +768,10 @@ function validateFreshRegenerationContext(input: ConflictRegenerationInput): voi
   }
 }
 
-async function executeSingleRegenerationRequest(input: ConflictRegenerationInput): Promise<SynthesisOutput> {
+async function executeSingleRegenerationRequest(input: ConflictRegenerationInput): Promise<{
+  value: SynthesisOutput;
+  lifecycle: ReturnType<typeof createLlmLifecycle>;
+}> {
   const opts = {
     ...boundedOptions(input.opts, input.policy, input.policy.inputBudgetTokens),
     jsonMode: false as const,
@@ -842,9 +843,7 @@ async function executeSingleRegenerationRequest(input: ConflictRegenerationInput
       transport: "non-stream",
     });
     emitBudget(result.inputTokens);
-    input.onEvent(lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying"));
-    input.onEvent(lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "completed"));
-    return result.value;
+    return { value: result.value, lifecycle: result.lifecycle };
   } catch (error) {
     emitBudget();
     throw error;
@@ -915,13 +914,14 @@ export async function regenerateConflictedPatch(input: ConflictRegenerationInput
   } catch (error) {
     throw conflictError(input, (error as Error).message);
   }
-  let output: SynthesisOutput;
+  let regeneration: Awaited<ReturnType<typeof executeSingleRegenerationRequest>>;
   try {
-    output = await executeSingleRegenerationRequest(input);
+    regeneration = await executeSingleRegenerationRequest(input);
   } catch (error) {
     if (error instanceof ConflictRegenerationExhaustedError) throw error;
     throw conflictError(input, error instanceof StructuredValidationError ? error.lastError.message : (error as Error).message);
   }
+  const output = regeneration.value;
   try {
     validateSynthesisCoverage([input.entityKey], output);
     validateSynthesisActions({
@@ -932,9 +932,11 @@ export async function regenerateConflictedPatch(input: ConflictRegenerationInput
       pathPolicy: input.pathPolicy,
     });
   } catch (error) {
+    input.onEvent(lifecycleEvent(regeneration.lifecycle.id, regeneration.lifecycle.action, "failed"));
     throw conflictError(input, (error as Error).message);
   }
   if (output.skips.length !== 0 || output.actions.length !== 1) {
+    input.onEvent(lifecycleEvent(regeneration.lifecycle.id, regeneration.lifecycle.action, "failed"));
     throw conflictError(input, "regeneration must return exactly one action and no skip");
   }
   const action = output.actions[0];
@@ -942,6 +944,7 @@ export async function regenerateConflictedPatch(input: ConflictRegenerationInput
     || action.entityKey !== input.entityKey
     || action.path !== input.targetPath
     || action.expectedPageHash !== input.pageHash) {
+    input.onEvent(lifecycleEvent(regeneration.lifecycle.id, regeneration.lifecycle.action, "failed"));
     throw conflictError(input, "regeneration returned a different entity, path, or page hash");
   }
   return action;
