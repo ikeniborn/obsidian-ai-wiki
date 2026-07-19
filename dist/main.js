@@ -31139,6 +31139,10 @@ var VaultTools = class {
   async rmdir(vaultPath, recursive) {
     await this.adapter.rmdir?.(vaultPath, recursive);
   }
+  async rename(from, to) {
+    if (!this.adapter.rename) throw new Error("rename not supported by this adapter");
+    await this.adapter.rename(from, to);
+  }
   async removeSubfolders(vaultDir) {
     const exists = await this.adapter.exists(vaultDir);
     if (!exists) return;
@@ -58873,15 +58877,52 @@ async function* runIncrementalReinit(domainId, changedFiles, vaultTools, llm, mo
     text: `Domain "${domainId}": re-ingested ${doneCount} of ${changedFiles.length} changed source(s).`
   };
 }
-async function wipeDomainFolder(vaultTools, wikiFolder, signal) {
+async function wipeDomainFolder(vaultTools, wikiFolder, signal, options = {}) {
   const root = forceDomainRoot(wikiFolder);
-  requireExactByteAdapter(vaultTools);
-  const snapshot = await inventoryDomainTree(vaultTools, root);
+  requireTransactionalWipeAdapter(vaultTools);
+  const snapshotByteLimit = options.snapshotByteLimit ?? FORCE_WIPE_SNAPSHOT_BYTE_LIMIT;
+  if (!Number.isSafeInteger(snapshotByteLimit) || snapshotByteLimit < 0) {
+    throw new Error("force: invalid snapshot byte limit");
+  }
+  const rootExists = await checkedExists(vaultTools, root, signal);
+  if (!rootExists) return [];
+  const quarantine = await chooseQuarantinePath(vaultTools, signal);
   const removed = /* @__PURE__ */ new Set();
+  let renameAttempted = false;
+  let snapshot;
   try {
+    throwIfWipeAborted(signal);
+    let renameError;
+    renameAttempted = true;
+    try {
+      await vaultTools.rename(root, quarantine);
+    } catch (error) {
+      renameError = error instanceof Error ? error : new Error(String(error));
+    }
+    const rootAfterRename = await vaultTools.exists(root);
+    const quarantineAfterRename = await vaultTools.exists(quarantine);
+    if (renameError && rootAfterRename && !quarantineAfterRename) throw renameError;
+    if (rootAfterRename || !quarantineAfterRename) {
+      throw new Error(
+        `force: quarantine rename trust failure: root=${rootAfterRename} quarantine=${quarantineAfterRename}`
+      );
+    }
+    if (renameError) throw renameError;
+    throwIfWipeAborted(signal);
+    snapshot = await inventoryDomainTree(
+      vaultTools,
+      quarantine,
+      signal,
+      snapshotByteLimit
+    );
+    if (!snapshot.existed) {
+      throw new Error("force: quarantine disappeared before inventory");
+    }
+    await requireOriginalRootAbsent(vaultTools, root, signal);
     for (const [path5, bytes] of snapshot.files) {
-      if (signal?.aborted) throw new Error("force: wipe cancelled");
-      if (!await vaultTools.exists(path5) || !sameBytes(new Uint8Array(await vaultTools.readBinary(path5)), bytes)) {
+      throwIfWipeAborted(signal);
+      await requireOriginalRootAbsent(vaultTools, root, signal);
+      if (!await checkedExists(vaultTools, path5, signal) || !sameBytes(new Uint8Array(await checkedReadBinary(vaultTools, path5, signal)), bytes)) {
         throw new Error(`force: wipe target changed before removal: ${path5}`);
       }
       try {
@@ -58890,25 +58931,33 @@ async function wipeDomainFolder(vaultTools, wikiFolder, signal) {
         if (!await vaultTools.exists(path5)) removed.add(path5);
         throw error;
       }
-      if (await vaultTools.exists(path5)) {
+      const remainsAfterRemoval = await vaultTools.exists(path5);
+      if (!remainsAfterRemoval) removed.add(path5);
+      throwIfWipeAborted(signal);
+      if (remainsAfterRemoval) {
         throw new Error(`force: removal did not remove ${path5}`);
       }
-      removed.add(path5);
-      if (signal?.aborted) throw new Error("force: wipe cancelled");
+      await requireOriginalRootAbsent(vaultTools, root, signal);
     }
-    if (signal?.aborted) throw new Error("force: wipe cancelled");
-    const emptied = await inventoryDomainTree(vaultTools, root);
+    throwIfWipeAborted(signal);
+    await requireOriginalRootAbsent(vaultTools, root, signal);
+    const emptied = await inventoryDomainTree(vaultTools, quarantine, signal, snapshotByteLimit);
     if (emptied.files.size > 0 || !samePaths(emptied.folders, snapshot.folders)) {
       throw new Error("force: final inventory changed before recursive removal");
     }
-    await vaultTools.rmdir(root, true);
-    if (await vaultTools.exists(root)) {
-      throw new Error(`force: recursive rmdir did not remove ${root}; target still exists`);
+    await requireOriginalRootAbsent(vaultTools, root, signal);
+    throwIfWipeAborted(signal);
+    await vaultTools.rmdir(quarantine, true);
+    throwIfWipeAborted(signal);
+    if (await checkedExists(vaultTools, quarantine, signal)) {
+      throw new Error(`force: recursive rmdir did not remove ${quarantine}; quarantine still exists`);
     }
-    if (signal?.aborted) throw new Error("force: wipe cancelled");
+    await requireOriginalRootAbsent(vaultTools, root, signal);
+    throwIfWipeAborted(signal);
   } catch (error) {
+    if (!renameAttempted) throw error;
     try {
-      await restoreDomainTree(vaultTools, snapshot, removed);
+      await rollbackQuarantinedDomain(vaultTools, root, quarantine, snapshot, removed);
     } catch (rollbackError) {
       throw new Error(
         `force: wipe failed (${error.message}); rollback failed \u2014 ${rollbackError.message}`
@@ -58916,12 +58965,51 @@ async function wipeDomainFolder(vaultTools, wikiFolder, signal) {
     }
     throw error;
   }
-  return [...snapshot.files.keys()];
+  return [...snapshot.files.keys()].map((path5) => originalPathFromQuarantine(path5, quarantine, root));
 }
-function requireExactByteAdapter(vaultTools) {
-  if (typeof vaultTools.adapter.readBinary !== "function" || typeof vaultTools.adapter.writeBinary !== "function") {
-    throw new Error("force: exact-byte wipe requires adapter readBinary and writeBinary");
+var FORCE_WIPE_SNAPSHOT_BYTE_LIMIT = 256 * 1024 * 1024;
+function requireTransactionalWipeAdapter(vaultTools) {
+  if (typeof vaultTools.adapter.readBinary !== "function" || typeof vaultTools.adapter.writeBinary !== "function" || typeof vaultTools.adapter.rename !== "function") {
+    throw new Error(
+      "force: transactional wipe requires adapter readBinary, writeBinary, and rename"
+    );
   }
+}
+var quarantineSequence = 0;
+async function chooseQuarantinePath(vaultTools, signal) {
+  const runToken = `${Date.now().toString(36)}-${(quarantineSequence++).toString(36)}`;
+  for (let attempt = 0; attempt < 64; attempt++) {
+    throwIfWipeAborted(signal);
+    const candidate = `${WIKI_ROOT}/.ai-wiki-reinit-quarantine-${runToken}-${attempt.toString(36)}`;
+    if (!await checkedExists(vaultTools, candidate, signal)) return candidate;
+  }
+  throw new Error("force: unable to allocate unique quarantine path");
+}
+function throwIfWipeAborted(signal) {
+  if (signal?.aborted) throw new Error("force: wipe cancelled");
+}
+async function checkedExists(vaultTools, path5, signal) {
+  throwIfWipeAborted(signal);
+  const exists = await vaultTools.exists(path5);
+  throwIfWipeAborted(signal);
+  return exists;
+}
+async function checkedReadBinary(vaultTools, path5, signal) {
+  throwIfWipeAborted(signal);
+  const bytes = await vaultTools.readBinary(path5);
+  throwIfWipeAborted(signal);
+  return bytes;
+}
+async function requireOriginalRootAbsent(vaultTools, root, signal) {
+  if (await checkedExists(vaultTools, root, signal)) {
+    throw new Error(`force: original root unexpectedly exists during quarantine wipe: ${root}`);
+  }
+}
+function originalPathFromQuarantine(path5, quarantine, root) {
+  if (!path5.startsWith(`${quarantine}/`)) {
+    throw new Error(`force: untrusted quarantine result path ${path5}`);
+  }
+  return `${root}${path5.slice(quarantine.length)}`;
 }
 function sameBytes(left, right) {
   return left.byteLength === right.byteLength && left.every((byte, index) => byte === right[index]);
@@ -58947,24 +59035,45 @@ function assertDirectDomainChild(root, parent, path5) {
     throw new Error(`force: untrusted domain inventory path ${path5}`);
   }
 }
-async function inventoryDomainTree(vaultTools, root) {
-  if (!await vaultTools.exists(root)) {
-    return { root, existed: false, files: /* @__PURE__ */ new Map(), folders: [] };
+async function inventoryDomainTree(vaultTools, root, signal, snapshotByteLimit = FORCE_WIPE_SNAPSHOT_BYTE_LIMIT) {
+  if (!await checkedExists(vaultTools, root, signal)) {
+    return {
+      root,
+      existed: false,
+      files: /* @__PURE__ */ new Map(),
+      folders: [],
+      byteLimit: snapshotByteLimit
+    };
   }
   const files = /* @__PURE__ */ new Map();
   const folders = [];
+  let snapshotBytes = 0;
   const visit = async (folder) => {
+    throwIfWipeAborted(signal);
     folders.push(folder);
+    throwIfWipeAborted(signal);
     const listed = await vaultTools.adapter.list(folder);
+    throwIfWipeAborted(signal);
     const listedFiles = [...listed.files].sort(compareCodePoints5);
     const listedFolders = [...listed.folders].sort(compareCodePoints5);
     for (const path5 of listedFiles) {
+      throwIfWipeAborted(signal);
       assertDirectDomainChild(root, folder, path5);
-      files.set(path5, new Uint8Array(await vaultTools.readBinary(path5)).slice());
+      const buffer = await checkedReadBinary(vaultTools, path5, signal);
+      snapshotBytes += buffer.byteLength;
+      if (snapshotBytes > snapshotByteLimit) {
+        throw new Error(
+          `force: snapshot byte limit exceeded (${snapshotBytes} > ${snapshotByteLimit})`
+        );
+      }
+      files.set(path5, new Uint8Array(buffer).slice());
+      throwIfWipeAborted(signal);
     }
     for (const path5 of listedFolders) {
+      throwIfWipeAborted(signal);
       assertDirectDomainChild(root, folder, path5);
       await visit(path5);
+      throwIfWipeAborted(signal);
     }
   };
   await visit(root);
@@ -58972,14 +59081,20 @@ async function inventoryDomainTree(vaultTools, root) {
     root,
     existed: true,
     files: new Map([...files].sort(([left], [right]) => compareCodePoints5(left, right))),
-    folders: folders.sort(compareCodePoints5)
+    folders: folders.sort(compareCodePoints5),
+    byteLimit: snapshotByteLimit
   };
 }
 function samePaths(left, right) {
   return left.length === right.length && left.every((path5, index) => path5 === right[index]);
 }
 async function restoreDomainTree(vaultTools, snapshot, removed) {
-  const current = await inventoryDomainTree(vaultTools, snapshot.root);
+  const current = await inventoryDomainTree(
+    vaultTools,
+    snapshot.root,
+    void 0,
+    snapshot.byteLimit
+  );
   let firstTrustError;
   for (const [path5, bytes] of current.files) {
     const expected = snapshot.files.get(path5);
@@ -59014,13 +59129,51 @@ async function restoreDomainTree(vaultTools, snapshot, removed) {
       firstTrustError ??= error instanceof Error ? error : new Error(String(error));
     }
   }
-  const restored = await inventoryDomainTree(vaultTools, snapshot.root);
+  const restored = await inventoryDomainTree(
+    vaultTools,
+    snapshot.root,
+    void 0,
+    snapshot.byteLimit
+  );
   if (firstTrustError) throw firstTrustError;
   if (!samePaths(restored.folders, snapshot.folders) || restored.files.size !== snapshot.files.size || [...snapshot.files].some(([path5, bytes]) => {
     const restoredBytes = restored.files.get(path5);
     return restoredBytes === void 0 || !sameBytes(restoredBytes, bytes);
   })) {
     throw new Error("rollback verification failed: domain tree differs from snapshot");
+  }
+}
+async function rollbackQuarantinedDomain(vaultTools, root, quarantine, snapshot, removed) {
+  if (snapshot) {
+    await restoreDomainTree(vaultTools, snapshot, removed);
+  } else {
+    const rootExists = await vaultTools.exists(root);
+    const quarantineExists = await vaultTools.exists(quarantine);
+    if (rootExists && !quarantineExists) return;
+    if (!quarantineExists) {
+      throw new Error(`rollback trust failure: quarantine missing at ${quarantine}`);
+    }
+    if (rootExists) {
+      throw new Error(
+        `rollback trust failure: original root unexpectedly exists; preserved with quarantine ${quarantine}`
+      );
+    }
+  }
+  if (await vaultTools.exists(root)) {
+    throw new Error(
+      `rollback trust failure: original root unexpectedly exists; preserved with quarantine ${quarantine}`
+    );
+  }
+  if (!await vaultTools.exists(quarantine)) {
+    throw new Error(`rollback trust failure: quarantine missing at ${quarantine}`);
+  }
+  await vaultTools.rename(quarantine, root);
+  const rootRestored = await vaultTools.exists(root);
+  const quarantineRemoved = !await vaultTools.exists(quarantine);
+  if (!rootRestored || !quarantineRemoved) {
+    throw new Error(
+      `rollback verification failed after quarantine rename: root=${rootRestored} quarantineAbsent=${quarantineRemoved}`
+    );
   }
 }
 async function ensureRootFiles(vaultTools, wikiRoot) {

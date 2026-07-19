@@ -119,7 +119,23 @@ function forceAdapter(onRemove?: (path: string) => void) {
       files.delete(p);
       onRemove?.(p);
     },
-    rename: async () => {},
+    rmdir: async (p: string, recursive: boolean) => {
+      assert.equal(recursive, true);
+      for (const path of [...files.keys()]) {
+        if (path === p || path.startsWith(`${p}/`)) files.delete(path);
+      }
+    },
+    rename: async (from: string, to: string) => {
+      if ([...files.keys()].some((path) => path === to || path.startsWith(`${to}/`))) {
+        throw new Error(`EEXIST: ${to}`);
+      }
+      const entries = [...files].filter(([path]) => path === from || path.startsWith(`${from}/`));
+      if (entries.length === 0) throw new Error(`ENOENT: ${from}`);
+      for (const [path, value] of entries) {
+        files.delete(path);
+        files.set(`${to}${path.slice(from.length)}`, value);
+      }
+    },
   };
 }
 
@@ -251,7 +267,7 @@ test("force init performs one validated bootstrap call before wipe", async () =>
   const controller = new AbortController();
   const order: string[] = [];
   const rawAdapter = forceAdapter((path) => {
-    if (path === "!Wiki/demo/concept/existing.md") {
+    if (path.endsWith("/concept/existing.md")) {
       order.push("wipe");
       controller.abort();
     }
@@ -370,7 +386,7 @@ test("force wipe rolls back exact bytes when a service-file removal fails", asyn
   const before = new Map(rawAdapter.files);
   const originalRemove = rawAdapter.remove;
   rawAdapter.remove = async (path: string) => {
-    if (path === logPath) throw new Error("EACCES: locked log");
+    if (path.endsWith("/log.jsonl")) throw new Error("EACCES: locked log");
     await originalRemove(path);
   };
   const events: RunEvent[] = [];
@@ -407,7 +423,7 @@ test("force wipe restores prior trusted removals when a later removal is a no-op
   const before = new Map(rawAdapter.files);
   const originalRemove = rawAdapter.remove;
   rawAdapter.remove = async (path: string) => {
-    if (path === indexPath) return;
+    if (path.endsWith("/index.jsonl")) return;
     await originalRemove(path);
   };
   const events: RunEvent[] = [];
@@ -435,7 +451,7 @@ test("force wipe restores prior trusted removals but never guesses a third-state
   rawAdapter.files.set(indexPath, "INDEX BEFORE\n");
   const originalRemove = rawAdapter.remove;
   rawAdapter.remove = async (path: string) => {
-    if (path === indexPath) {
+    if (path.endsWith("/index.jsonl")) {
       rawAdapter.files.set(path, "INDEX THIRD STATE\n");
       throw new Error("synthetic partial index remove");
     }
@@ -454,11 +470,10 @@ test("force wipe restores prior trusted removals but never guesses a third-state
     { structuredRetries: 0 },
   )) events.push(event);
 
-  assert.equal(
-    rawAdapter.files.get("!Wiki/demo/concept/existing.md"),
-    "# Existing\n\nMust survive failed preflight.",
-  );
-  assert.equal(rawAdapter.files.get(indexPath), "INDEX THIRD STATE\n");
+  const quarantineIndex = [...rawAdapter.files.keys()]
+    .find((path) => path.endsWith("/index.jsonl"));
+  assert.equal(rawAdapter.files.has("!Wiki/demo/concept/existing.md"), false);
+  assert.equal(rawAdapter.files.get(quarantineIndex ?? ""), "INDEX THIRD STATE\n");
   assert.equal(events.some((event) => event.kind === "domain_updated"), false);
 });
 
@@ -469,8 +484,8 @@ test("force conditional remove preserves a file changed after its external guard
   const originalExists = rawAdapter.exists;
   let pageExistsCalls = 0;
   rawAdapter.exists = async (path: string) => {
-    if (path === pagePath && ++pageExistsCalls === 2) {
-      rawAdapter.files.set(pagePath, concurrent);
+    if (path.endsWith("/concept/existing.md") && ++pageExistsCalls === 2) {
+      rawAdapter.files.set(path, concurrent);
     }
     return originalExists(path);
   };
@@ -487,7 +502,10 @@ test("force conditional remove preserves a file changed after its external guard
     { structuredRetries: 0 },
   )) events.push(event);
 
-  assert.equal(rawAdapter.files.get(pagePath), concurrent);
+  const quarantinedPage = [...rawAdapter.files.keys()]
+    .find((path) => path.endsWith("/concept/existing.md"));
+  assert.equal(rawAdapter.files.has(pagePath), false);
+  assert.equal(rawAdapter.files.get(quarantinedPage ?? ""), concurrent);
   assert.equal(events.some((event) => event.kind === "domain_updated"), false);
   assert.equal(events.some((event) =>
     event.kind === "tool_result" && event.ok === false && /rollback trust failure/i.test(event.preview ?? "")), true);
@@ -498,9 +516,12 @@ test("force wipe rolls back planned removals when final inventory finds a concur
   const concurrentPath = "!Wiki/demo/concept/concurrent.md";
   let created = false;
   rawAdapter = forceAdapter((path) => {
-    if (!created && path === "!Wiki/demo/concept/existing.md") {
+    if (!created && path.endsWith("/concept/existing.md")) {
       created = true;
-      rawAdapter.files.set(concurrentPath, "# Concurrent file\n");
+      rawAdapter.files.set(
+        `${path.slice(0, -"/existing.md".length)}/concurrent.md`,
+        "# Concurrent file\n",
+      );
     }
   });
   const events: RunEvent[] = [];
@@ -516,11 +537,17 @@ test("force wipe rolls back planned removals when final inventory finds a concur
     { structuredRetries: 0 },
   )) events.push(event);
 
+  const quarantinedExisting = [...rawAdapter.files.keys()]
+    .find((path) => path.endsWith("/concept/existing.md"));
+  const quarantinedConcurrent = [...rawAdapter.files.keys()]
+    .find((path) => path.endsWith("/concept/concurrent.md"));
+  assert.equal(rawAdapter.files.has("!Wiki/demo/concept/existing.md"), false);
   assert.equal(
-    rawAdapter.files.get("!Wiki/demo/concept/existing.md"),
+    rawAdapter.files.get(quarantinedExisting ?? ""),
     "# Existing\n\nMust survive failed preflight.",
   );
-  assert.equal(rawAdapter.files.get(concurrentPath), "# Concurrent file\n");
+  assert.equal(rawAdapter.files.has(concurrentPath), false);
+  assert.equal(rawAdapter.files.get(quarantinedConcurrent ?? ""), "# Concurrent file\n");
   assert.equal(events.some((event) => event.kind === "domain_updated"), false);
   assert.equal(events.some((event) =>
     event.kind === "tool_result" && event.ok === false && /final inventory/i.test(event.preview ?? "")), true);

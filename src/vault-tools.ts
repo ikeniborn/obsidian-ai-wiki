@@ -9,6 +9,7 @@ export interface VaultAdapter {
   rmdir?(path: string, recursive: boolean): Promise<void>;
   readBinary?(path: string): Promise<ArrayBuffer>;
   writeBinary?(path: string, data: ArrayBuffer): Promise<void>;
+  rename?(from: string, to: string): Promise<void>;
   /** Resolve an Obsidian wiki-link to a vault-relative path; null if not found. */
   resolveLink?(linkpath: string, sourcePath: string): string | null;
   /** Render an Excalidraw file (by resolved vault path) to a base64 PNG; null if unavailable. */
@@ -222,6 +223,11 @@ export class VaultTools {
 
   async rmdir(vaultPath: string, recursive: boolean): Promise<void> {
     await this.adapter.rmdir?.(vaultPath, recursive);
+  }
+
+  async rename(from: string, to: string): Promise<void> {
+    if (!this.adapter.rename) throw new Error("rename not supported by this adapter");
+    await this.adapter.rename(from, to);
   }
 
   async removeSubfolders(vaultDir: string): Promise<void> {
