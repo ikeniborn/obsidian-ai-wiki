@@ -17,7 +17,9 @@ register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 const { runInit, wipeDomainFolder } = await import("../src/phases/init");
 const { VaultTools } = await import("../src/vault-tools");
 
-type RmdirMode = "normal" | "throw-after-delete" | "false-success";
+type RmdirMode = "normal" | "throw-after-delete" | "throw-after-root-delete" | "false-success";
+type RenameMode = "normal" | "copy-source" | "clobber";
+type AdapterStat = { type: "file" | "folder"; ctime: number; mtime: number; size: number };
 
 class DirectoryAdapter implements VaultAdapter {
   readonly files = new Map<string, string>();
@@ -27,10 +29,18 @@ class DirectoryAdapter implements VaultAdapter {
   readonly reads: string[] = [];
   readonly removes: string[] = [];
   readonly rmdirs: string[] = [];
+  readonly rmdirRecursive: boolean[] = [];
   readonly renames: Array<[string, string]> = [];
+  readonly mkdirs: string[] = [];
+  readonly binaryReads: string[] = [];
+  readonly stats: string[] = [];
   failRemovePath?: string;
   failRename?: (from: string, to: string) => Error | undefined;
+  statOverride?: (path: string, stat: AdapterStat | null) => AdapterStat | null;
+  renameMode: RenameMode = "normal";
   rmdirMode: RmdirMode = "normal";
+  beforeRename?: (from: string, to: string) => void;
+  afterMkdir?: (path: string) => void;
   afterReadBinary?: (path: string) => void;
   afterRemove?: (path: string) => void;
   beforeRmdir?: (path: string) => void;
@@ -80,6 +90,7 @@ class DirectoryAdapter implements VaultAdapter {
   }
 
   async readBinary(path: string): Promise<ArrayBuffer> {
+    this.binaryReads.push(path);
     const binary = this.binaryFiles.get(path);
     if (binary !== undefined) {
       const result = binary.slice().buffer;
@@ -100,7 +111,12 @@ class DirectoryAdapter implements VaultAdapter {
       this.binaryFiles.set(path, bytes);
       return;
     }
-    this.files.set(path, new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    try {
+      this.files.set(path, new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    } catch {
+      this.binaryPaths.add(path);
+      this.binaryFiles.set(path, bytes);
+    }
   }
 
   async append(path: string, data: string): Promise<void> {
@@ -125,8 +141,30 @@ class DirectoryAdapter implements VaultAdapter {
     return this.files.has(path) || this.binaryFiles.has(path) || this.folders.has(path);
   }
 
+  async stat(path: string): Promise<AdapterStat | null> {
+    this.stats.push(path);
+    let result: AdapterStat | null = null;
+    const binary = this.binaryFiles.get(path);
+    const text = this.files.get(path);
+    if (binary !== undefined) {
+      result = { type: "file", ctime: 0, mtime: 0, size: binary.byteLength };
+    } else if (text !== undefined) {
+      result = {
+        type: "file",
+        ctime: 0,
+        mtime: 0,
+        size: new TextEncoder().encode(text).byteLength,
+      };
+    } else if (this.folders.has(path)) {
+      result = { type: "folder", ctime: 0, mtime: 0, size: 0 };
+    }
+    return this.statOverride ? this.statOverride(path, result) : result;
+  }
+
   async mkdir(path: string): Promise<void> {
+    this.mkdirs.push(path);
     this.addFolder(path);
+    this.afterMkdir?.(path);
   }
 
   async remove(path: string): Promise<void> {
@@ -139,9 +177,23 @@ class DirectoryAdapter implements VaultAdapter {
 
   async rmdir(path: string, recursive: boolean): Promise<void> {
     this.rmdirs.push(path);
-    assert.equal(recursive, true);
+    this.rmdirRecursive.push(recursive);
     this.beforeRmdir?.(path);
     if (this.rmdirMode === "false-success") return;
+    if (!recursive) {
+      const hasChild = [...this.files.keys(), ...this.binaryFiles.keys(), ...this.folders]
+        .some((candidate) => candidate.startsWith(`${path}/`));
+      if (hasChild) throw new Error(`ENOTEMPTY: ${path}`);
+      this.folders.delete(path);
+      if (
+        this.rmdirMode === "throw-after-delete"
+        || (this.rmdirMode === "throw-after-root-delete" && path.endsWith("/domain"))
+      ) {
+        throw new Error("synthetic non-recursive rmdir failure");
+      }
+      this.afterRmdir?.();
+      return;
+    }
     for (const file of [...this.files.keys()]) {
       if (file === path || file.startsWith(`${path}/`)) this.files.delete(file);
     }
@@ -159,10 +211,22 @@ class DirectoryAdapter implements VaultAdapter {
 
   async rename(from: string, to: string): Promise<void> {
     this.renames.push([from, to]);
+    this.beforeRename?.(from, to);
     const failure = this.failRename?.(from, to);
     if (failure) throw failure;
-    if (await this.exists(to)) throw new Error(`EEXIST: ${to}`);
+    if (await this.exists(to) && this.renameMode !== "clobber") throw new Error(`EEXIST: ${to}`);
     if (!await this.exists(from)) throw new Error(`ENOENT: ${from}`);
+    if (this.renameMode === "clobber") {
+      for (const path of [...this.files.keys()]) {
+        if (path === to || path.startsWith(`${to}/`)) this.files.delete(path);
+      }
+      for (const path of [...this.binaryFiles.keys()]) {
+        if (path === to || path.startsWith(`${to}/`)) this.binaryFiles.delete(path);
+      }
+      for (const path of [...this.folders]) {
+        if (path === to || path.startsWith(`${to}/`)) this.folders.delete(path);
+      }
+    }
     const move = (path: string): string => path === from
       ? to
       : path.startsWith(`${from}/`)
@@ -171,25 +235,25 @@ class DirectoryAdapter implements VaultAdapter {
     for (const [path, value] of [...this.files]) {
       const moved = move(path);
       if (moved === path) continue;
-      this.files.delete(path);
+      if (this.renameMode !== "copy-source") this.files.delete(path);
       this.files.set(moved, value);
     }
     for (const [path, value] of [...this.binaryFiles]) {
       const moved = move(path);
       if (moved === path) continue;
-      this.binaryFiles.delete(path);
+      if (this.renameMode !== "copy-source") this.binaryFiles.delete(path);
       this.binaryFiles.set(moved, value);
     }
     for (const path of [...this.binaryPaths]) {
       const moved = move(path);
       if (moved === path) continue;
-      this.binaryPaths.delete(path);
+      if (this.renameMode !== "copy-source") this.binaryPaths.delete(path);
       this.binaryPaths.add(moved);
     }
     for (const path of [...this.folders]) {
       const moved = move(path);
       if (moved === path) continue;
-      this.folders.delete(path);
+      if (this.renameMode !== "copy-source") this.folders.delete(path);
       this.folders.add(moved);
     }
     if (this.failRemovePath) this.failRemovePath = move(this.failRemovePath);
@@ -268,11 +332,19 @@ test("force wipe removes the complete target tree and returns every removed file
   assert.equal(await adapter.exists("!Wiki/demo"), false);
   assert.deepEqual(targetSnapshot(adapter), { files: [], binaryFiles: [], folders: [] });
   assert.deepEqual(otherSnapshot(adapter), unrelatedBefore);
-  assert.equal(adapter.renames.length, 1);
   assert.equal(adapter.renames[0]?.[0], "!Wiki/demo");
-  assert.match(adapter.renames[0]?.[1] ?? "", /^!Wiki\/\.ai-wiki-reinit-quarantine-/);
-  assert.deepEqual(adapter.rmdirs, [adapter.renames[0]?.[1]]);
-  assert.equal(await adapter.exists(adapter.renames[0]?.[1] ?? ""), false);
+  assert.match(adapter.renames[0]?.[1] ?? "", /^!Wiki\/\.ai-wiki-reinit-txn-[^/]+\/domain$/);
+  const transaction = (adapter.renames[0]?.[1] ?? "").slice(0, -"/domain".length);
+  assert.equal(adapter.renames.slice(1).length, removed.length);
+  assert.equal(
+    adapter.renames.slice(1).every(([from, to]) =>
+      from.startsWith(`${transaction}/domain/`) && to.startsWith(`${transaction}/trash/`)),
+    true,
+  );
+  assert.equal(adapter.removes.every((path) => path.startsWith(`${transaction}/trash/`)), true);
+  assert.equal(adapter.rmdirRecursive.every((recursive) => recursive === false), true);
+  assert.equal(adapter.rmdirs.at(-1), transaction);
+  assert.equal(await adapter.exists(transaction), false);
 });
 
 for (const failure of ["remove", "rmdir", "false-success"] as const) {
@@ -289,16 +361,221 @@ for (const failure of ["remove", "rmdir", "false-success"] as const) {
       failure === "remove"
         ? /synthetic remove failure/
         : failure === "rmdir"
-          ? /synthetic recursive rmdir failure/
+          ? /synthetic .*rmdir failure/
           : /still exists|did not remove/i,
     );
 
     assert.deepEqual(targetSnapshot(adapter), targetBefore);
     assert.deepEqual(otherSnapshot(adapter), unrelatedBefore);
-    assert.equal(adapter.renames.length, 2);
-    assert.deepEqual(adapter.renames[1], [adapter.renames[0]?.[1], "!Wiki/demo"]);
+    assert.deepEqual(adapter.renames.at(-1), [adapter.renames[0]?.[1], "!Wiki/demo"]);
   });
 }
+
+test("force wipe rebuilds and restores the tree when quarantined root rmdir throws after deletion", async () => {
+  const adapter = seededAdapter();
+  const before = targetSnapshot(adapter);
+  adapter.rmdirMode = "throw-after-root-delete";
+
+  await assert.rejects(
+    wipeDomainFolder(new VaultTools(adapter, "/vault"), "demo"),
+    /synthetic non-recursive rmdir failure/,
+  );
+
+  assert.deepEqual(targetSnapshot(adapter), before);
+  assert.equal(adapter.rmdirRecursive.every((recursive) => recursive === false), true);
+});
+
+test("force wipe preflights stat sizes before any binary read or file destruction", async () => {
+  const adapter = seededAdapter();
+  const before = targetSnapshot(adapter);
+  adapter.statOverride = (path, stat) => path.endsWith("/metadata.jsonl") && stat
+    ? { ...stat, size: 1024 }
+    : stat;
+
+  await assert.rejects(
+    wipeDomainFolder(
+      new VaultTools(adapter, "/vault"),
+      "demo",
+      undefined,
+      { snapshotByteLimit: 100 },
+    ),
+    /snapshot.*limit|stat.*size/i,
+  );
+
+  assert.deepEqual(adapter.binaryReads, []);
+  assert.deepEqual(adapter.removes, []);
+  assert.equal(
+    adapter.renames.some(([from]) => from.includes("/domain/")),
+    false,
+  );
+  assert.deepEqual(targetSnapshot(adapter), before);
+});
+
+for (const invalidSize of [null, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+  test(`force wipe rejects invalid file stat size ${String(invalidSize)} before binary reads`, async () => {
+    const adapter = seededAdapter();
+    adapter.statOverride = (path, stat) => {
+      if (!path.endsWith("/metadata.jsonl")) return stat;
+      if (invalidSize === null) return null;
+      return stat ? { ...stat, size: invalidSize } : stat;
+    };
+
+    await assert.rejects(
+      wipeDomainFolder(new VaultTools(adapter, "/vault"), "demo"),
+      /stat|size/i,
+    );
+
+    assert.deepEqual(adapter.binaryReads, []);
+    assert.deepEqual(adapter.removes, []);
+  });
+}
+
+test("force wipe rejects a post-stat byte-size change before file destruction", async () => {
+  const adapter = seededAdapter();
+  adapter.statOverride = (path, stat) => path.endsWith("/metadata.jsonl") && stat
+    ? { ...stat, size: stat.size - 1 }
+    : stat;
+
+  await assert.rejects(
+    wipeDomainFolder(new VaultTools(adapter, "/vault"), "demo"),
+    /changed|stat|size/i,
+  );
+
+  assert.deepEqual(adapter.removes, []);
+  assert.equal(
+    adapter.renames.some(([from]) => from.includes("/domain/")),
+    false,
+  );
+});
+
+test("force wipe rejects non-atomic rename behavior before destructive actions", async () => {
+  const adapter = seededAdapter();
+  adapter.renameMode = "copy-source";
+
+  await assert.rejects(
+    wipeDomainFolder(new VaultTools(adapter, "/vault"), "demo"),
+    /rename|atomic|trust/i,
+  );
+
+  assert.equal(await adapter.exists("!Wiki/demo"), true);
+  assert.deepEqual(adapter.removes, []);
+});
+
+test("force wipe refuses a non-empty transaction destination even with a clobbering adapter", async () => {
+  const adapter = seededAdapter();
+  let transaction = "";
+  adapter.renameMode = "clobber";
+  adapter.afterMkdir = (path) => {
+    if (!transaction && /^!Wiki\/\.ai-wiki-reinit-txn-/.test(path)) {
+      transaction = path;
+      void adapter.write(`${path}/domain/preexisting.md`, "DO NOT CLOBBER");
+    }
+  };
+
+  await assert.rejects(
+    wipeDomainFolder(new VaultTools(adapter, "/vault"), "demo"),
+    /transaction|empty|destination|trust/i,
+  );
+
+  assert.equal(adapter.files.get(`${transaction}/domain/preexisting.md`), "DO NOT CLOBBER");
+  assert.equal(await adapter.exists("!Wiki/demo"), true);
+  assert.equal(adapter.renames.some(([from]) => from === "!Wiki/demo"), false);
+  assert.deepEqual(adapter.removes, []);
+});
+
+test("force wipe skips a colliding transaction parent and preserves it", async () => {
+  const adapter = seededAdapter();
+  const originalExists = adapter.exists.bind(adapter);
+  let collisionPath = "";
+  adapter.exists = async (path) => {
+    if (!collisionPath && /^!Wiki\/\.ai-wiki-reinit-txn-/.test(path)) {
+      collisionPath = path;
+      await adapter.mkdir(path);
+      await adapter.write(`${path}/owner.txt`, "OTHER TRANSACTION");
+      return true;
+    }
+    return originalExists(path);
+  };
+
+  await wipeDomainFolder(new VaultTools(adapter, "/vault"), "demo");
+
+  const chosenTransaction = (adapter.renames[0]?.[1] ?? "").slice(0, -"/domain".length);
+  assert.notEqual(chosenTransaction, collisionPath);
+  assert.equal(adapter.files.get(`${collisionPath}/owner.txt`), "OTHER TRANSACTION");
+  assert.equal(await adapter.exists(chosenTransaction), false);
+});
+
+test("force wipe detects original quarantined file recreation during tombstone removal", async () => {
+  const adapter = seededAdapter();
+  let recreatedPath = "";
+  adapter.afterRemove = (tombstone) => {
+    if (recreatedPath || !tombstone.includes("/trash/")) return;
+    recreatedPath = adapter.renames.find(([, to]) => to === tombstone)?.[0] ?? "";
+    void adapter.write(recreatedPath, "CONCURRENT RECREATION");
+  };
+
+  await assert.rejects(
+    wipeDomainFolder(new VaultTools(adapter, "/vault"), "demo"),
+    /not empty|unexpected|trust|rollback/i,
+  );
+
+  assert.equal(adapter.files.get(recreatedPath), "CONCURRENT RECREATION");
+  assert.equal(await adapter.exists("!Wiki/demo"), false);
+  assert.equal(adapter.rmdirRecursive.every((recursive) => recursive === false), true);
+});
+
+test("force wipe preserves a new child created before non-recursive folder removal", async () => {
+  const adapter = seededAdapter();
+  let concurrentPath = "";
+  adapter.beforeRmdir = (path) => {
+    if (concurrentPath || !path.includes("/domain/")) return;
+    concurrentPath = `${path}/concurrent.md`;
+    void adapter.write(concurrentPath, "NEW CHILD");
+  };
+
+  await assert.rejects(
+    wipeDomainFolder(new VaultTools(adapter, "/vault"), "demo"),
+    /not empty|unexpected|trust|rollback/i,
+  );
+
+  assert.equal(adapter.files.get(concurrentPath), "NEW CHILD");
+  assert.equal(adapter.rmdirRecursive.every((recursive) => recursive === false), true);
+  assert.equal(await adapter.exists("!Wiki/demo"), false);
+});
+
+test("force wipe serializes concurrent runs for the same original root and releases the lock", async () => {
+  const firstAdapter = seededAdapter();
+  const secondAdapter = seededAdapter();
+  let releaseRead!: () => void;
+  let enteredRead!: () => void;
+  const readGate = new Promise<void>((resolve) => { releaseRead = resolve; });
+  const readEntered = new Promise<void>((resolve) => { enteredRead = resolve; });
+  const originalReadBinary = firstAdapter.readBinary.bind(firstAdapter);
+  let blocked = false;
+  firstAdapter.readBinary = async (path) => {
+    if (!blocked) {
+      blocked = true;
+      enteredRead();
+      await readGate;
+    }
+    return originalReadBinary(path);
+  };
+
+  const first = wipeDomainFolder(new VaultTools(firstAdapter, "/vault"), "demo");
+  await readEntered;
+  let secondError: unknown;
+  try {
+    await wipeDomainFolder(new VaultTools(secondAdapter, "/vault"), "demo");
+  } catch (error) {
+    secondError = error;
+  } finally {
+    releaseRead();
+  }
+  await first;
+
+  assert.match(String((secondError as Error | undefined)?.message ?? ""), /already.*progress|locked/i);
+  await wipeDomainFolder(new VaultTools(secondAdapter, "/vault"), "demo");
+});
 
 test("force wipe rejects an adapter without rename before vault access", async () => {
   const adapter = seededAdapter();
@@ -329,10 +606,14 @@ test("force wipe preserves the original tree when quarantine rename fails", asyn
 
   assert.deepEqual(targetSnapshot(adapter), before);
   assert.deepEqual(adapter.removes, []);
-  assert.deepEqual(adapter.rmdirs, []);
+  assert.equal(adapter.rmdirRecursive.every((recursive) => recursive === false), true);
+  assert.equal(
+    [...adapter.folders].some((path) => /^!Wiki\/\.ai-wiki-reinit-txn-/.test(path)),
+    false,
+  );
 });
 
-test("force wipe rolls quarantine back when post-rename verification fails", async () => {
+test("force wipe rolls transaction back when post-rename verification fails", async () => {
   const adapter = seededAdapter();
   const before = targetSnapshot(adapter);
   const originalRename = adapter.rename.bind(adapter);
@@ -358,34 +639,14 @@ test("force wipe rolls quarantine back when post-rename verification fails", asy
 
   assert.deepEqual(targetSnapshot(adapter), before);
   assert.equal(
-    [...adapter.folders].some((path) => /^!Wiki\/\.ai-wiki-reinit-quarantine-/.test(path)),
+    [...adapter.folders].some((path) => /^!Wiki\/\.ai-wiki-reinit-txn-/.test(path)),
     false,
   );
   assert.deepEqual(adapter.removes, []);
-  assert.deepEqual(adapter.rmdirs, []);
+  assert.equal(adapter.rmdirRecursive.every((recursive) => recursive === false), true);
 });
 
-test("force wipe skips a colliding quarantine sibling and leaves it untouched", async () => {
-  const adapter = seededAdapter();
-  const originalExists = adapter.exists.bind(adapter);
-  let collisionPath = "";
-  adapter.exists = async (path) => {
-    if (!collisionPath && /^!Wiki\/\.ai-wiki-reinit-quarantine-/.test(path)) {
-      collisionPath = path;
-      await adapter.mkdir(path);
-      return true;
-    }
-    return originalExists(path);
-  };
-
-  await wipeDomainFolder(new VaultTools(adapter, "/vault"), "demo");
-
-  assert.notEqual(adapter.renames[0]?.[1], collisionPath);
-  assert.equal(await originalExists(collisionPath), true);
-  assert.equal(await adapter.exists(adapter.renames[0]?.[1] ?? ""), false);
-});
-
-test("force wipe preserves a new original-root file created during quarantine deletion", async () => {
+test("force wipe preserves a new original-root file created during transaction deletion", async () => {
   const adapter = seededAdapter();
   const originalBefore = relativeTreeSnapshot(adapter);
   adapter.afterRemove = () => {
@@ -399,12 +660,12 @@ test("force wipe preserves a new original-root file created during quarantine de
   );
 
   assert.equal(adapter.files.get("!Wiki/demo/concurrent.md"), "NEW DURING REMOVE");
-  const quarantine = adapter.renames[0]?.[1] ?? "";
-  assert.equal(await adapter.exists(quarantine), true);
-  assert.deepEqual(relativeTreeSnapshot(adapter, quarantine), originalBefore);
+  const quarantinedRoot = adapter.renames[0]?.[1] ?? "";
+  assert.equal(await adapter.exists(quarantinedRoot), true);
+  assert.deepEqual(relativeTreeSnapshot(adapter, quarantinedRoot), originalBefore);
 });
 
-test("force wipe never recursively deletes a new original root created before quarantine rmdir", async () => {
+test("force wipe never recursively deletes a new original root created before directory removal", async () => {
   const adapter = seededAdapter();
   const originalBefore = relativeTreeSnapshot(adapter);
   adapter.beforeRmdir = () => {
@@ -418,12 +679,14 @@ test("force wipe never recursively deletes a new original root created before qu
   );
 
   assert.equal(adapter.files.get("!Wiki/demo/concurrent.md"), "NEW BEFORE RMDIR");
-  assert.match(adapter.rmdirs[0] ?? "", /^!Wiki\/\.ai-wiki-reinit-quarantine-/);
+  const quarantinedRoot = adapter.renames[0]?.[1] ?? "";
+  assert.match(quarantinedRoot, /^!Wiki\/\.ai-wiki-reinit-txn-[^/]+\/domain$/);
   assert.notEqual(adapter.rmdirs[0], "!Wiki/demo");
-  assert.deepEqual(relativeTreeSnapshot(adapter, adapter.rmdirs[0] ?? ""), originalBefore);
+  assert.deepEqual(relativeTreeSnapshot(adapter, quarantinedRoot), originalBefore);
+  assert.equal(adapter.rmdirRecursive.every((recursive) => recursive === false), true);
 });
 
-test("force wipe surfaces rollback rename failure and preserves the quarantine", async () => {
+test("force wipe surfaces rollback rename failure and preserves the transaction", async () => {
   const adapter = seededAdapter();
   adapter.failRemovePath = "!Wiki/demo/log.jsonl";
   adapter.failRename = (_from, to) => to === "!Wiki/demo"
@@ -435,12 +698,12 @@ test("force wipe surfaces rollback rename failure and preserves the quarantine",
     /rollback.*synthetic rollback rename failure/i,
   );
 
-  const quarantine = adapter.renames[0]?.[1] ?? "";
+  const quarantinedRoot = adapter.renames[0]?.[1] ?? "";
   assert.equal(await adapter.exists("!Wiki/demo"), false);
-  assert.equal(await adapter.exists(quarantine), true);
+  assert.equal(await adapter.exists(quarantinedRoot), true);
 });
 
-test("force wipe aborts during snapshot read and renames the untouched quarantine back", async () => {
+test("force wipe aborts during snapshot read and renames the untouched transaction back", async () => {
   const adapter = seededAdapter();
   adapter.binaryFiles.set(
     "!Wiki/demo/tmp/deep/state.bin",
@@ -460,11 +723,11 @@ test("force wipe aborts during snapshot read and renames the untouched quarantin
 
   assert.deepEqual(targetSnapshot(adapter), before);
   assert.deepEqual(adapter.removes, []);
-  assert.deepEqual(adapter.rmdirs, []);
+  assert.equal(adapter.rmdirRecursive.every((recursive) => recursive === false), true);
   assert.equal(adapter.renames.length, 2);
 });
 
-test("force wipe rolls quarantine back before deletion when snapshot byte limit is exceeded", async () => {
+test("force wipe rolls transaction back before deletion when snapshot byte limit is exceeded", async () => {
   const adapter = seededAdapter();
   const before = targetSnapshot(adapter);
 
@@ -480,7 +743,7 @@ test("force wipe rolls quarantine back before deletion when snapshot byte limit 
 
   assert.deepEqual(targetSnapshot(adapter), before);
   assert.deepEqual(adapter.removes, []);
-  assert.deepEqual(adapter.rmdirs, []);
+  assert.equal(adapter.rmdirRecursive.every((recursive) => recursive === false), true);
   assert.equal(adapter.renames.length, 2);
 });
 
@@ -498,7 +761,7 @@ test("force wipe applies the snapshot byte ceiling during rollback inventory", a
   adapter.afterRemove = (path) => {
     if (injected) return;
     injected = true;
-    const quarantine = path.slice(0, path.indexOf("/", "!Wiki/".length));
+    const quarantine = adapter.renames[0]?.[1] ?? "";
     for (const suffix of ["zz-extra-a.bin", "zz-extra-b.bin"]) {
       const extraPath = `${quarantine}/${suffix}`;
       adapter.binaryPaths.add(extraPath);
@@ -518,7 +781,7 @@ test("force wipe applies the snapshot byte ceiling during rollback inventory", a
     /rollback|snapshot byte limit/i,
   );
 
-  assert.equal(rollbackReads.some((path) => path.endsWith("/zz-extra-a.bin")), true);
+  assert.equal(rollbackReads.some((path) => path.endsWith("/zz-extra-a.bin")), false);
   assert.equal(rollbackReads.some((path) => path.endsWith("/zz-extra-b.bin")), false);
   assert.equal(await adapter.exists("!Wiki/demo"), false);
   assert.equal(await adapter.exists(adapter.renames[0]?.[1] ?? ""), true);
@@ -561,7 +824,7 @@ test("force wipe rejects a traversal entry in adapter inventory before removal",
   const originalList = adapter.list.bind(adapter);
   adapter.list = async (path) => {
     const listed = await originalList(path);
-    return /^!Wiki\/\.ai-wiki-reinit-quarantine-/.test(path)
+    return /^!Wiki\/\.ai-wiki-reinit-txn-[^/]+\/domain(?:\/|$)/.test(path)
       ? { ...listed, folders: [...listed.folders, `${path}/../other`] }
       : listed;
   };
@@ -572,10 +835,10 @@ test("force wipe rejects a traversal entry in adapter inventory before removal",
   );
 
   assert.deepEqual(adapter.removes, []);
-  assert.deepEqual(adapter.rmdirs, []);
+  assert.equal(adapter.rmdirRecursive.every((recursive) => recursive === false), true);
 });
 
-test("force wipe rolls back when cancellation arrives during recursive rmdir", async () => {
+test("force wipe rolls back when cancellation arrives during non-recursive rmdir", async () => {
   const adapter = seededAdapter();
   const before = targetSnapshot(adapter);
   const controller = new AbortController();

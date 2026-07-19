@@ -82,50 +82,89 @@ function forceAdapter(onRemove?: (path: string) => void) {
     ["src/a.md", "# Source\n\nAlpha source content."],
     ["!Wiki/demo/concept/existing.md", "# Existing\n\nMust survive failed preflight."],
   ]);
+  const folders = new Set<string>(["", "src", "!Wiki", "!Wiki/demo", "!Wiki/demo/concept"]);
+  const renames: Array<[string, string]> = [];
+  const addFolder = (path: string) => {
+    const segments = path.split("/").filter(Boolean);
+    for (let index = 1; index <= segments.length; index++) {
+      folders.add(segments.slice(0, index).join("/"));
+    }
+  };
   return {
     files,
+    folders,
+    renames,
     removed: [] as string[],
     read: async (p: string) => {
       const value = files.get(p);
       if (value === undefined) throw new Error(`ENOENT: ${p}`);
       return value;
     },
-    write: async (p: string, v: string) => { files.set(p, v); },
+    write: async (p: string, v: string) => {
+      addFolder(p.split("/").slice(0, -1).join("/"));
+      files.set(p, v);
+    },
     readBinary: async (p: string) => {
       const value = files.get(p);
       if (value === undefined) throw new Error(`ENOENT: ${p}`);
       return new TextEncoder().encode(value).buffer;
     },
     writeBinary: async (p: string, data: ArrayBuffer) => {
+      addFolder(p.split("/").slice(0, -1).join("/"));
       files.set(p, new TextDecoder("utf-8", { fatal: true }).decode(data));
     },
     append: async (p: string, v: string) => { files.set(p, (files.get(p) ?? "") + v); },
     list: async (dir: string) => {
       const prefix = `${dir}/`;
       const directFiles: string[] = [];
-      const folders = new Set<string>();
+      const directFolders = new Set<string>();
       for (const path of files.keys()) {
         if (!path.startsWith(prefix)) continue;
         const rest = path.slice(prefix.length);
         const slash = rest.indexOf("/");
         if (slash < 0) directFiles.push(path);
-        else folders.add(`${dir}/${rest.slice(0, slash)}`);
+        else directFolders.add(`${dir}/${rest.slice(0, slash)}`);
       }
-      return { files: directFiles, folders: [...folders] };
+      for (const path of folders) {
+        if (!path.startsWith(prefix)) continue;
+        const rest = path.slice(prefix.length);
+        if (rest && !rest.includes("/")) directFolders.add(path);
+      }
+      return { files: directFiles, folders: [...directFolders] };
     },
-    exists: async (p: string) => files.has(p) || [...files.keys()].some((path) => path.startsWith(`${p}/`)),
-    mkdir: async () => {},
+    exists: async (p: string) => files.has(p) || folders.has(p),
+    stat: async (p: string) => {
+      const value = files.get(p);
+      if (value !== undefined) {
+        return {
+          type: "file" as const,
+          ctime: 0,
+          mtime: 0,
+          size: new TextEncoder().encode(value).byteLength,
+        };
+      }
+      return folders.has(p)
+        ? { type: "folder" as const, ctime: 0, mtime: 0, size: 0 }
+        : null;
+    },
+    mkdir: async (p: string) => { addFolder(p); },
     remove: async (p: string) => {
       files.delete(p);
-      onRemove?.(p);
+      const original = renames.find(([, destination]) => destination === p)?.[0] ?? p;
+      onRemove?.(original);
     },
     rmdir: async (p: string, recursive: boolean) => {
-      assert.equal(recursive, true);
-      for (const path of [...files.keys()]) {
-        if (path === p || path.startsWith(`${p}/`)) files.delete(path);
+      assert.equal(recursive, false);
+      if (
+        [...files.keys()].some((path) => path.startsWith(`${p}/`))
+        || [...folders].some((path) => path.startsWith(`${p}/`))
+      ) {
+        throw new Error(`ENOTEMPTY: ${p}`);
       }
+      folders.delete(p);
     },
     rename: async (from: string, to: string) => {
+      renames.push([from, to]);
       if ([...files.keys()].some((path) => path === to || path.startsWith(`${to}/`))) {
         throw new Error(`EEXIST: ${to}`);
       }
@@ -134,6 +173,11 @@ function forceAdapter(onRemove?: (path: string) => void) {
       for (const [path, value] of entries) {
         files.delete(path);
         files.set(`${to}${path.slice(from.length)}`, value);
+      }
+      const movedFolders = [...folders].filter((path) => path === from || path.startsWith(`${from}/`));
+      for (const path of movedFolders) {
+        folders.delete(path);
+        folders.add(`${to}${path.slice(from.length)}`);
       }
     },
   };
@@ -386,7 +430,8 @@ test("force wipe rolls back exact bytes when a service-file removal fails", asyn
   const before = new Map(rawAdapter.files);
   const originalRemove = rawAdapter.remove;
   rawAdapter.remove = async (path: string) => {
-    if (path.endsWith("/log.jsonl")) throw new Error("EACCES: locked log");
+    const original = rawAdapter.renames.find(([, destination]) => destination === path)?.[0] ?? path;
+    if (original.endsWith("/log.jsonl")) throw new Error("EACCES: locked log");
     await originalRemove(path);
   };
   const events: RunEvent[] = [];
@@ -423,7 +468,8 @@ test("force wipe restores prior trusted removals when a later removal is a no-op
   const before = new Map(rawAdapter.files);
   const originalRemove = rawAdapter.remove;
   rawAdapter.remove = async (path: string) => {
-    if (path.endsWith("/index.jsonl")) return;
+    const original = rawAdapter.renames.find(([, destination]) => destination === path)?.[0] ?? path;
+    if (original.endsWith("/index.jsonl")) return;
     await originalRemove(path);
   };
   const events: RunEvent[] = [];
@@ -451,7 +497,8 @@ test("force wipe restores prior trusted removals but never guesses a third-state
   rawAdapter.files.set(indexPath, "INDEX BEFORE\n");
   const originalRemove = rawAdapter.remove;
   rawAdapter.remove = async (path: string) => {
-    if (path.endsWith("/index.jsonl")) {
+    const original = rawAdapter.renames.find(([, destination]) => destination === path)?.[0] ?? path;
+    if (original.endsWith("/index.jsonl")) {
       rawAdapter.files.set(path, "INDEX THIRD STATE\n");
       throw new Error("synthetic partial index remove");
     }
@@ -511,7 +558,7 @@ test("force conditional remove preserves a file changed after its external guard
     event.kind === "tool_result" && event.ok === false && /rollback trust failure/i.test(event.preview ?? "")), true);
 });
 
-test("force wipe rolls back planned removals when final inventory finds a concurrent file", async () => {
+test("force wipe preserves a concurrent quarantined child found by non-recursive removal", async () => {
   let rawAdapter!: ReturnType<typeof forceAdapter>;
   const concurrentPath = "!Wiki/demo/concept/concurrent.md";
   let created = false;
@@ -550,7 +597,9 @@ test("force wipe rolls back planned removals when final inventory finds a concur
   assert.equal(rawAdapter.files.get(quarantinedConcurrent ?? ""), "# Concurrent file\n");
   assert.equal(events.some((event) => event.kind === "domain_updated"), false);
   assert.equal(events.some((event) =>
-    event.kind === "tool_result" && event.ok === false && /final inventory/i.test(event.preview ?? "")), true);
+    event.kind === "tool_result"
+      && event.ok === false
+      && /not empty|unexpected|rollback trust/i.test(event.preview ?? "")), true);
 });
 
 test("force cancellation after the first removal rolls back exact bytes before domain reset", async () => {
