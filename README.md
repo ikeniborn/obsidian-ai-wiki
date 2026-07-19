@@ -25,7 +25,7 @@ AI Wiki reads your notes and maintains a structured knowledge base (wiki) alongs
 | **Lint** | Reviews wiki pages for gaps, outdated content, and broken links; shows a report in the sidebar |
 | **Fix** | After Lint — send an instruction in the sidebar chat to apply corrections |
 | **Init** | Sets up a new knowledge area (domain) with the folder structure and index files |
-| **Re-init** | Wipes and rebuilds a domain from scratch — useful after major source changes |
+| **Re-init** | Removes and recreates the complete domain tree, including metadata and empty folders, then rebuilds it from sources |
 | **Format** | Cleans up any open markdown note (outside the wiki): headings, tables, frontmatter, image captions. Shows a preview before applying. Invariant: never adds or removes facts — only improves clarity. When the note belongs to a configured domain, tags are reused from that domain's existing tag vocabulary |
 | **Chat** | Interactive follow-up in the sidebar after Query or Lint |
 | **Export OKF** | Serialize a domain into a Google [Open Knowledge Format](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing/) bundle — a folder of markdown with OKF frontmatter, a generated `index.md`/`log.md`, and standard `[text](link.md)` links — for sharing with external AI agents and tools. Desktop only |
@@ -158,7 +158,7 @@ The sidebar is the main interface for AI Wiki. Open it via the ribbon (🧠 icon
 - Domain selector — choose which domain to work with
 - **↻** refresh the domain list
 - **📁+** manage source folders (add or remove)
-- **♻** re-init: wipe all wiki pages and rebuild from sources
+- **♻** full re-init: remove and recreate the complete domain tree, then rebuild from sources
 - 📜 open the domain log file
 - 🗒 open the domain index file
 - **Ingest** — process the currently open note
@@ -166,6 +166,27 @@ The sidebar is the main interface for AI Wiki. Open it via the ribbon (🧠 icon
 - **Format** — clean up the currently open note's formatting
 
 **Query** — type a question and click **Ask**. The answer appears in the sidebar with wiki cross-links. Use the **Chat** section below the result to refine or follow up.
+
+### Model progress and Re-init
+
+Each model request uses one human-readable sidebar lifecycle: **Preparing request → Request
+sent to model → Waiting for model response → Model is producing a response → Validating
+response → Applying result → Completed** (or a terminal retry, failure, or cancellation).
+Reasoning remains available in its expandable block. Call sites, transport details,
+attempts, budgets, and provider data stay in `agent.jsonl`, not sidebar labels. The waiting
+timer shows UI elapsed time; it is not a provider heartbeat and does not extend the idle
+deadline.
+
+Background structured work—Init bootstrap, evidence map/reduce, Ingest synthesis, and
+bounded Lint batches—uses atomic non-stream responses. Interactive Chat, the Query answer,
+and Format use SSE so reasoning or answer text can appear as it arrives.
+
+Full Re-init validates bootstrap output and source snapshots before mutation, then removes
+the entire `!Wiki/<domain>` tree exactly once: pages, metadata, indexes, logs, temporary
+content, nested type folders, and obsolete empty directories. It recreates fresh metadata
+and index state before ingest. A deletion or concurrent-write conflict aborts source ingest;
+the transaction restores the prior snapshot when safe and never overwrites a concurrently
+recreated domain tree.
 
 ---
 
