@@ -482,6 +482,8 @@ export async function* runLint(
       const batchOutputs: LintBatchOutput[] = [];
       const batchLifecycles: ReturnType<typeof createLlmLifecycle>[] = [];
       let batchApplying = false;
+      let batchWriteSucceeded = false;
+      let batchWriteFailed = false;
 
       for (let i = 0; i < batches.length; i++) {
         if (signal.aborted) return;
@@ -574,18 +576,19 @@ export async function* runLint(
             const record = pageIndexRecordFromMarkdown(wikiVaultPath, path, fixedContent);
             annotations.set(record.articleId, record.description);
             await upsertPageIndex(vaultTools, wikiVaultPath, record);
+            batchWriteSucceeded = true;
             yield { kind: "tool_result", ok: true };
           } catch (e) {
+            batchWriteFailed = true;
             yield { kind: "tool_result", ok: false, preview: (e as Error).message };
           }
         }
-        if (!batchApplying) {
-          for (const lifecycle of batchLifecycles) {
-            yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
-          }
-        }
         for (const lifecycle of batchLifecycles) {
-          yield lifecycleEvent(lifecycle.id, lifecycle.action, "completed");
+          yield lifecycleEvent(
+            lifecycle.id,
+            lifecycle.action,
+            batchWriteFailed || !batchWriteSucceeded ? "failed" : "completed",
+          );
         }
         reportParts.push(`#### Исправлено: ${allPatches.length} patch(es)`);
       }

@@ -162,7 +162,10 @@ function domain(): DomainEntry {
   };
 }
 
-async function runMultiBatchDeltaCase(conflicting: boolean): Promise<{
+async function runMultiBatchDeltaCase(
+  conflicting: boolean,
+  mismatchedRoute: boolean = false,
+): Promise<{
   adapter: MemoryAdapter;
   events: RunEvent[];
   outcome: IngestOutcome;
@@ -211,7 +214,7 @@ async function runMultiBatchDeltaCase(conflicting: boolean): Promise<{
           actions: entityKeys.map((entityKey) => ({
             kind: "create",
             entityKey,
-            path: `!Wiki/demo/concept/wiki_demo_${entityKey}.md`,
+            path: `!Wiki/demo/concept/wiki_demo_${mismatchedRoute ? `wrong_${entityKey}` : entityKey}.md`,
             annotation: `${entityKey} concept.`,
             content: [
               "---",
@@ -817,6 +820,37 @@ test("runIngest rejects conflicting normalized deltas across top-level batches b
   assert.equal(budgetEvents.length > 0, true);
   assert.equal(budgetEvents.every((event) =>
     event.estimatedInputTokens <= event.effectiveInputBudget), true);
+  const lifecycle = events.filter((event) =>
+    event.kind === "llm_lifecycle" && event.action === "synthesize_wiki_pages");
+  for (const id of new Set(lifecycle.map((event) => event.id))) {
+    const phases = lifecycle.filter((event) => event.id === id).map((event) => event.phase);
+    assert.deepEqual(phases, [
+      "preparing", "sent", "waiting", "producing", "validating", "failed",
+    ]);
+    assert.equal(phases.filter((phase) => phase === "failed").length, 1);
+  }
+});
+
+test("runIngest closes validated synthesis lifecycles on strict routing rejection", async () => {
+  const { adapter, events, outcome } = await runMultiBatchDeltaCase(false, true);
+
+  assert.equal(outcome.ok, false, JSON.stringify(outcome));
+  if (!outcome.ok) {
+    assert.equal(outcome.stage, "patch");
+    assert.match(outcome.message, /strict type routing/);
+  }
+  assert.equal(adapter.writes.some((path) => path.match(/wiki_demo_wrong_/)), false);
+  const lifecycle = events.filter((event) =>
+    event.kind === "llm_lifecycle" && event.action === "synthesize_wiki_pages");
+  assert.ok(lifecycle.length > 0);
+  for (const id of new Set(lifecycle.map((event) => event.id))) {
+    const phases = lifecycle.filter((event) => event.id === id).map((event) => event.phase);
+    assert.deepEqual(phases, [
+      "preparing", "sent", "waiting", "producing", "validating", "failed",
+    ]);
+    assert.equal(phases.filter((phase) =>
+      ["completed", "failed", "cancelled"].includes(phase)).length, 1);
+  }
 });
 
 test("dedup retargets a new draft to a guarded canonical-page patch", async () => {

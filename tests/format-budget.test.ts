@@ -196,6 +196,20 @@ async function collectFormatEvents(
   return { events, adapter };
 }
 
+function assertFormatLifecycleIntegrity(events: RunEvent[]): void {
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  for (const id of new Set(lifecycle.map((event) => event.id))) {
+    const phases = lifecycle.filter((event) => event.id === id).map((event) => event.phase);
+    if (phases.at(-1) === "completed") {
+      assert.deepEqual(phases, [
+        "preparing", "sent", "waiting", "producing", "validating", "applying", "completed",
+      ]);
+    }
+    assert.equal(phases.filter((phase) =>
+      ["completed", "retrying", "failed", "cancelled"].includes(phase)).length, 1);
+  }
+}
+
 test("Format generic pre-chunk incompatibility falls back once with AbortSignal", async () => {
   const seenParams: Record<string, unknown>[] = [];
   const seenSignals: Array<AbortSignal | undefined> = [];
@@ -209,7 +223,7 @@ test("Format generic pre-chunk incompatibility falls back once with AbortSignal"
     "Keep this line.",
   ].join("\n");
 
-  const { adapter } = await collectFormatEvents(
+  const { adapter, events } = await collectFormatEvents(
     original,
     llmWithCreate((params) => {
       if (params.stream !== false) throw new Error("stream transport unavailable");
@@ -231,6 +245,7 @@ test("Format generic pre-chunk incompatibility falls back once with AbortSignal"
   }
   assert.ok(seenSignals.every((seenSignal) => seenSignal === signal));
   assert.equal(adapter.writes.length, 1);
+  assertFormatLifecycleIntegrity(events);
 });
 
 test("Format HTTP 502 failure is sent exactly once", async () => {
@@ -435,6 +450,7 @@ test("format creates no temp preview or source write when a segment response fai
   assert.ok(events.some((event) => event.kind === "error" && /segment/i.test(event.message)));
   const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
   assert.equal(lifecycle.at(-1)?.phase, "failed");
+  assertFormatLifecycleIntegrity(events);
 });
 
 test("Format preview write failure closes the validated request as failed", async () => {
@@ -451,7 +467,48 @@ test("Format preview write failure closes the validated request as failed", asyn
   );
   const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
   assert.equal(lifecycle.at(-1)?.phase, "failed");
+  assertFormatLifecycleIntegrity(events);
   assert.equal(events.some((event) => event.kind === "format_preview"), false);
+});
+
+test("Format synchronous streaming invocation failure emits sent before failed without waiting", async () => {
+  const error = Object.assign(new Error("sync create failed"), { status: 502 });
+  const llm = {
+    chat: {
+      completions: {
+        create: () => {
+          throw error;
+        },
+      },
+    },
+  } as unknown as LlmClient;
+  const events: RunEvent[] = [];
+
+  await assert.rejects(async () => {
+    for await (const event of runFormat(
+      ["notes/source.md"],
+      new VaultTools(new MemoryAdapter({ "notes/source.md": "# Source\n\nBody" }), "/vault"),
+      llm,
+      "m",
+      false,
+      [],
+      new AbortController().signal,
+      { inputBudgetTokens: 10_000 },
+    )) {
+      events.push(event);
+    }
+  }, error);
+
+  assert.deepEqual(
+    events
+      .filter((event) => event.kind === "llm_lifecycle")
+      .map((event) => event.kind === "llm_lifecycle" ? [event.action, event.phase] : []),
+    [
+      ["format_note", "preparing"],
+      ["format_note", "sent"],
+      ["format_note", "failed"],
+    ],
+  );
 });
 
 test("format retries a malformed complete segment frame once with correction context", async () => {
@@ -927,8 +984,11 @@ test("segmented format emits format.segment prompt-budget telemetry and aggregat
     : "", "completed");
   for (const id of new Set(lifecycle.map((event) => event.id))) {
     const phases = lifecycle.filter((event) => event.id === id).map((event) => event.phase);
-    assert.equal(["completed", "retrying", "failed", "cancelled"].includes(phases.at(-1) ?? ""), true);
+    assert.deepEqual(phases, [
+      "preparing", "sent", "waiting", "producing", "validating", "applying", "completed",
+    ]);
   }
+  assertFormatLifecycleIntegrity(events);
 
   const statsEvents = events.filter((event) => event.kind === "llm_call_stats");
   assert.equal(statsEvents.length, seenParams.length);

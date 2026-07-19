@@ -377,11 +377,11 @@ export async function* runFormat(
     const requestStartMs = Date.now();
     let streamChunkConsumed = false;
     try {
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
       const request = llm.chat.completions.create(
         { ...p, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
         { signal },
       );
-      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
       yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
       const rawStream = await request;
       const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);

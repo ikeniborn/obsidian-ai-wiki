@@ -21,6 +21,15 @@ import {
   type LintFinding,
 } from "../src/phases/lint-batches";
 
+const pathBrowserifyLoader = `
+export async function resolve(specifier, context, nextResolve) {
+  if (specifier === "path-browserify") {
+    return { url: "node:path", shortCircuit: true };
+  }
+  return nextResolve(specifier, context);
+}
+`;
+register(`data:text/javascript,${encodeURIComponent(pathBrowserifyLoader)}`);
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 
 class MemoryAdapter implements VaultAdapter {
@@ -524,7 +533,189 @@ test("lint prompt describes JSON duplicate deletes without framed output markers
   assert.match(prompt, /"redirect_to"/);
 });
 
-test("Lint batch/config lifecycle stays validating until render or write boundaries", () => {
+function lifecycleAttempts(
+  events: RunEvent[],
+  callSite: string,
+): Array<{ action: string; phases: string[] }> {
+  const ids = new Set(events.filter((event) =>
+    event.kind === "llm_lifecycle" && event.diagnostics?.callSite === callSite));
+  const lifecycleIds = new Set([...ids].map((event) => event.kind === "llm_lifecycle" ? event.id : ""));
+  const lifecycle = events.filter((event) =>
+    event.kind === "llm_lifecycle" && lifecycleIds.has(event.id));
+  return [...lifecycleIds].map((id) => {
+    const attempt = lifecycle.filter((event) => event.kind === "llm_lifecycle" && event.id === id);
+    return {
+      action: attempt[0]?.kind === "llm_lifecycle" ? attempt[0].action : "",
+      phases: attempt.map((event) => event.kind === "llm_lifecycle" ? event.phase : ""),
+    };
+  });
+}
+
+function lintPatch(path: string, content: string) {
+  const inspected = inspectPatchablePage(content);
+  const facts = inspected.sections.find((section) => section.heading === "## Facts");
+  assert.ok(facts);
+  return {
+    kind: "patch" as const,
+    path,
+    expectedPageHash: inspected.pageHash,
+    sections: [{
+      operation: "append" as const,
+      heading: facts.heading,
+      expectedSectionHash: facts.hash,
+      content: "Lifecycle mutation fix.",
+    }],
+  };
+}
+
+function lintOperationLlm(path: string, content: string): LlmClient {
+  const patch = lintPatch(path, content);
+  return {
+    chat: {
+      completions: {
+        create: async (params: unknown) => {
+          const user = ((params as {
+            messages?: Array<{ content?: unknown }>;
+          }).messages ?? []).find((message) =>
+            typeof message.content === "string"
+            && message.content.startsWith("Submitted lint work items:"));
+          const match = typeof user?.content === "string"
+            ? user.content.match(/Submitted lint work items:\n([\s\S]*?)\n\nOptional related sections:/)
+            : null;
+          const output = match
+            ? (() => {
+                const items = JSON.parse(match[1]) as Array<{
+                  id: string;
+                  heading: string;
+                }>;
+                return {
+                  coveredWorkIds: items.map((item) => item.id),
+                  findings: [],
+                  patches: [patch],
+                  deletes: [],
+                };
+              })()
+            : {
+                reasoning: "Keep config.",
+                entity_types: [],
+                language_notes: "",
+              };
+          return jsonLlm(JSON.stringify(output)).chat.completions.create(params as never);
+        },
+      },
+    },
+  } as unknown as LlmClient;
+}
+
+test("Lint batch/config lifecycle completes only after a successful patch write", async () => {
+  const { runLint } = await import("../src/phases/lint");
+  const { VaultTools } = await import("../src/vault-tools");
+  const path = "!Wiki/d/concept/wiki_d_alpha.md";
+  const content = "---\ntype: concept\ndescription: Alpha.\nresource: [source]\n---\n# Alpha\n\n## Facts\nOld fact.\n";
+  const adapter = new MemoryAdapter(new Map([[path, content]]));
+  const llm = lintOperationLlm(path, content);
+
+  const events = await collectEvents(runLint(
+    ["d"],
+    new VaultTools(adapter, "/vault"),
+    llm,
+    "m",
+    [{ id: "d", name: "Demo", wiki_folder: "d", entity_types: [], language_notes: "" } as DomainEntry],
+    "/vault",
+    new AbortController().signal,
+    0,
+    { inputBudgetTokens: 24_000, maxTokens: 2_000, structuredRetries: 0 },
+  ));
+
+  assert.match(adapter.files.get(path) ?? "", /Lifecycle mutation fix/, JSON.stringify(events));
+  assert.deepEqual(lifecycleAttempts(events, "lint.batch"), [{
+    action: "check_wiki_quality",
+    phases: ["preparing", "sent", "waiting", "producing", "validating", "applying", "completed"],
+  }]);
+  assert.deepEqual(lifecycleAttempts(events, "lint.patch"), [{
+    action: "check_wiki_quality",
+    phases: ["preparing", "sent", "waiting", "producing", "validating", "applying", "completed"],
+  }]);
+});
+
+test("Lint batch lifecycle fails exactly once when patch write throws", async () => {
+  const { runLint } = await import("../src/phases/lint");
+  const { VaultTools } = await import("../src/vault-tools");
+  const path = "!Wiki/d/concept/wiki_d_alpha.md";
+  const content = "---\ntype: concept\ndescription: Alpha.\nresource: [source]\n---\n# Alpha\n\n## Facts\nOld fact.\n";
+  const adapter = new MemoryAdapter(new Map([[path, content]]));
+  adapter.write = async (writePath, data) => {
+    if (writePath === path) throw new Error("lint write denied");
+    adapter.writes.push(writePath);
+    adapter.files.set(writePath, data);
+  };
+  const llm = lintOperationLlm(path, content);
+
+  const events = await collectEvents(runLint(
+    ["d"],
+    new VaultTools(adapter, "/vault"),
+    llm,
+    "m",
+    [{ id: "d", name: "Demo", wiki_folder: "d", entity_types: [], language_notes: "" } as DomainEntry],
+    "/vault",
+    new AbortController().signal,
+    0,
+    { inputBudgetTokens: 24_000, maxTokens: 2_000, structuredRetries: 0 },
+  ));
+
+  assert.deepEqual(lifecycleAttempts(events, "lint.batch"), [{
+    action: "check_wiki_quality",
+    phases: ["preparing", "sent", "waiting", "producing", "validating", "applying", "failed"],
+  }], JSON.stringify(events));
+  const batchAttempts = lifecycleAttempts(events, "lint.batch");
+  assert.equal(batchAttempts.flatMap((attempt) => attempt.phases).filter((phase) =>
+    ["completed", "failed", "cancelled"].includes(phase)).length, 1);
+});
+
+test("Lint-chat mutation lifecycle completes on write and fails on write exception", async () => {
+  const { VaultTools } = await import("../src/vault-tools");
+  const { runLintFixChat } = await import("../src/phases/lint-chat");
+  const path = "!Wiki/d/concept/wiki_d_alpha.md";
+  const content = "# Alpha\n\n## Facts\nOld fact.\n";
+  for (const writeFails of [false, true]) {
+    const adapter = new MemoryAdapter(new Map([[path, content]]));
+    if (writeFails) {
+      adapter.write = async () => {
+        throw new Error("lint-chat write denied");
+      };
+    }
+    const events = await collectEvents(runLintFixChat(
+      {
+        operation: "lint-chat",
+        context: `- [warning] ${path} :: ## Facts :: stale :: Old fact`,
+        chatMessages: [{ role: "user", content: "Fix wiki_d_alpha" }],
+      } as RunRequest,
+      new VaultTools(adapter, ""),
+      "",
+      { id: "d", name: "Demo", wiki_folder: "d", entity_types: [], language_notes: "" } as DomainEntry,
+      jsonLlm(JSON.stringify({ summary: "fixed", patches: [lintPatch(path, content)] })),
+      "m",
+      { inputBudgetTokens: 10_000, structuredRetries: 0 },
+      new AbortController().signal,
+    ));
+    assert.deepEqual(
+      events
+        .filter((event) => event.kind === "llm_lifecycle")
+        .map((event) => event.kind === "llm_lifecycle" ? [event.action, event.phase] : []),
+      [
+        ["apply_lint_fixes", "preparing"],
+        ["apply_lint_fixes", "sent"],
+        ["apply_lint_fixes", "waiting"],
+        ["apply_lint_fixes", "producing"],
+        ["apply_lint_fixes", "validating"],
+        ["apply_lint_fixes", "applying"],
+        ["apply_lint_fixes", writeFails ? "failed" : "completed"],
+      ],
+    );
+  }
+});
+
+test("Lint transport and applying boundaries remain explicit", () => {
   const source = readFileSync("src/phases/lint.ts", "utf8");
   const batchRunner = source.slice(
     source.indexOf("async function runLintBatchWithSplit"),

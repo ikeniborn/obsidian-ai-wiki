@@ -479,6 +479,8 @@ export async function* runIngest(
   const policy = modelPolicy(opts);
   const eventBridge = new RunEventBridge();
   const pendingSynthesisLifecycles = new Map<string, Extract<RunEvent, { kind: "llm_lifecycle" }>>();
+  let synthesisPageMutated = false;
+  let synthesisLifecycleCompleted = false;
   let outputTokens = 0;
   let deferredSourcePathAdded: { domainId: string; path: string } | undefined;
   let deferredLog: {
@@ -496,7 +498,16 @@ export async function* runIngest(
     }
     eventBridge.push(event);
   };
+  const finalizeSynthesisLifecycles = (
+    phase: "completed" | "failed" | "cancelled",
+  ): RunEvent[] => {
+    const events = [...pendingSynthesisLifecycles.values()].map((lifecycle) =>
+      lifecycleEvent(lifecycle.id, lifecycle.action, phase));
+    pendingSynthesisLifecycles.clear();
+    return events;
+  };
 
+  try {
   let pagePaths: string[];
   let pageRecords: PageIndexRecord[];
   try {
@@ -1080,10 +1091,8 @@ export async function* runIngest(
       } else {
         await vaultTools.write(path, value.content);
       }
+      synthesisPageMutated = true;
     } catch (error) {
-      for (const lifecycle of synthesisLifecycles) {
-        yield lifecycleEvent(lifecycle.id, lifecycle.action, "failed");
-      }
       const message = `ingest: page write failed for ${path} — ${(error as Error).message}`;
       yield { kind: "tool_result", ok: false, preview: message };
       yield { kind: "error", message };
@@ -1103,14 +1112,6 @@ export async function* runIngest(
         statusTo: parseWikiStatus(value.content),
       });
     }
-  }
-  if (!synthesisApplying) {
-    for (const lifecycle of synthesisLifecycles) {
-      yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
-    }
-  }
-  for (const lifecycle of synthesisLifecycles) {
-    yield lifecycleEvent(lifecycle.id, lifecycle.action, "completed");
   }
 
   const deleteThreshold = opts.mergeDeleteWarnThreshold ?? 5;
@@ -1341,6 +1342,12 @@ export async function* runIngest(
   }
 
   const delta = synthesis.entity_types_delta;
+  for (const event of finalizeSynthesisLifecycles(
+    synthesisPageMutated ? "completed" : "failed",
+  )) {
+    yield event;
+  }
+  synthesisLifecycleCompleted = true;
   const domainPatch = delta?.length
     ? { entity_types: mergeEntityTypes(domain.entity_types ?? [], delta) }
     : undefined;
@@ -1398,6 +1405,13 @@ export async function* runIngest(
           })!,
         }),
   };
+  } finally {
+    if (!synthesisLifecycleCompleted) {
+      for (const event of finalizeSynthesisLifecycles(signal.aborted ? "cancelled" : "failed")) {
+        yield event;
+      }
+    }
+  }
 }
 
 function buildIngestSummary(

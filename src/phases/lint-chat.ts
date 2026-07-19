@@ -353,7 +353,10 @@ export async function* runLintFixChat(
   for (const [path, content] of activePages) authorities.set(path, pageAuthorities(path, content));
   const writtenPaths: string[] = [];
   let applying = false;
-  for (const patch of parsed.patches ?? []) {
+  let writeSucceeded = false;
+  let writeFailed = false;
+  const patches = parsed.patches ?? [];
+  for (const patch of patches) {
     yield { kind: "tool_use", name: "Update", input: { path: patch.path } };
     const current = activePages.get(patch.path);
     if (!activePaths.includes(patch.path) || current === undefined) {
@@ -379,15 +382,21 @@ export async function* runLintFixChat(
         wikiVaultPath,
         pageIndexRecordFromMarkdown(wikiVaultPath, patch.path, applied.content),
       );
+      writeSucceeded = true;
     } catch (e) {
+      writeFailed = true;
       yield { kind: "tool_result", ok: false, preview: (e as Error).message };
       continue;
     }
   }
-  if (!applying) {
+  if (!applying && patches.length === 0) {
     yield lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying");
   }
-  yield lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "completed");
+  yield lifecycleEvent(
+    result.lifecycle.id,
+    result.lifecycle.action,
+    writeFailed || (patches.length > 0 && !writeSucceeded) ? "failed" : "completed",
+  );
 
   // 5. Emit result
   yield {
