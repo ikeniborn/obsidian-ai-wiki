@@ -43,6 +43,36 @@ export interface LlmLifecycleScale {
   }>;
 }
 
+export interface LlmLifecycleDomNode {
+  empty(): void;
+  createDiv(arg?: string | { cls?: string; text?: string }): LlmLifecycleDomNode;
+  createSpan(arg?: string | { cls?: string; text?: string }): LlmLifecycleDomNode;
+  setText(text: string): void;
+}
+
+export interface LlmLifecycleTimerScheduler<Handle> {
+  now(): number;
+  setTimeout(callback: () => void, delayMs: number): Handle;
+  clearTimeout(handle: Handle): void;
+}
+
+interface WaitingTimer<Handle> {
+  startedAt: number;
+  elapsedMs: number;
+  handle: Handle | null;
+}
+
+export interface ReasoningRenderState<Block, Handle> {
+  block: Block | null;
+  buffer: string;
+  rafHandle: Handle | null;
+}
+
+export interface ToolRenderFrame<Step> {
+  step: Step | null;
+  startedAt: number;
+}
+
 const ORDERED_PHASES = [
   "preparing",
   "sent",
@@ -182,6 +212,114 @@ export function lifecycleScale(
     state: terminalState,
   });
   return { action: labels.actions[event.action], items };
+}
+
+export function renderLifecycleScale(
+  root: LlmLifecycleDomNode,
+  scale: LlmLifecycleScale,
+): void {
+  root.empty();
+  root.createDiv({ cls: "ai-wiki-llm-action", text: scale.action });
+  const phases = root.createDiv("ai-wiki-llm-phases");
+  for (const item of scale.items) {
+    const phase = phases.createDiv(
+      `ai-wiki-llm-phase ai-wiki-llm-phase--${item.state}`,
+    );
+    phase.createSpan({ cls: "ai-wiki-llm-phase-marker", text: "•" });
+    phase.createSpan({ cls: "ai-wiki-llm-phase-text", text: item.text });
+  }
+}
+
+export class LlmLifecycleWaitingTimers<Handle> {
+  private readonly timers = new Map<string, WaitingTimer<Handle>>();
+
+  constructor(
+    private readonly scheduler: LlmLifecycleTimerScheduler<Handle>,
+    private readonly onTick: (id: string) => void = () => {},
+    private readonly tickMs = 100,
+  ) {}
+
+  start(id: string): void {
+    const previous = this.timers.get(id);
+    if (previous?.handle !== null && previous?.handle !== undefined) {
+      this.scheduler.clearTimeout(previous.handle);
+    }
+    this.timers.set(id, {
+      startedAt: this.scheduler.now(),
+      elapsedMs: 0,
+      handle: null,
+    });
+    this.schedule(id);
+  }
+
+  stop(id: string): void {
+    const timer = this.timers.get(id);
+    if (!timer || timer.handle === null) return;
+    timer.elapsedMs = this.scheduler.now() - timer.startedAt;
+    this.scheduler.clearTimeout(timer.handle);
+    timer.handle = null;
+  }
+
+  elapsedMs(id: string): number | undefined {
+    const timer = this.timers.get(id);
+    if (!timer) return undefined;
+    return timer.handle === null
+      ? timer.elapsedMs
+      : this.scheduler.now() - timer.startedAt;
+  }
+
+  activeCount(): number {
+    let count = 0;
+    for (const timer of this.timers.values()) {
+      if (timer.handle !== null) count++;
+    }
+    return count;
+  }
+
+  clearAll(): void {
+    for (const timer of this.timers.values()) {
+      if (timer.handle !== null) this.scheduler.clearTimeout(timer.handle);
+    }
+    this.timers.clear();
+  }
+
+  private schedule(id: string): void {
+    const timer = this.timers.get(id);
+    if (!timer) return;
+    timer.handle = this.scheduler.setTimeout(() => {
+      const current = this.timers.get(id);
+      if (!current || current.handle === null) return;
+      current.elapsedMs = this.scheduler.now() - current.startedAt;
+      this.onTick(id);
+      this.schedule(id);
+    }, this.tickMs);
+  }
+}
+
+export function resetReasoningForLifecycle<Block, Handle>(
+  event: Pick<LlmLifecycleEvent, "phase">,
+  state: ReasoningRenderState<Block, Handle>,
+  cancelAnimationFrame: (handle: Handle) => void,
+): ReasoningRenderState<Block, Handle> {
+  if (event.phase !== "preparing") return state;
+  if (state.rafHandle !== null) cancelAnimationFrame(state.rafHandle);
+  return { block: null, buffer: "", rafHandle: null };
+}
+
+export function pushToolRenderFrame<Step>(
+  frames: readonly ToolRenderFrame<Step>[],
+  frame: ToolRenderFrame<Step>,
+): ToolRenderFrame<Step>[] {
+  return [...frames, frame];
+}
+
+export function popToolRenderFrame<Step>(
+  frames: readonly ToolRenderFrame<Step>[],
+): { frames: ToolRenderFrame<Step>[]; frame: ToolRenderFrame<Step> | undefined } {
+  return {
+    frames: frames.slice(0, -1),
+    frame: frames.at(-1),
+  };
 }
 
 export function shouldSuppressLegacyLlmTool(

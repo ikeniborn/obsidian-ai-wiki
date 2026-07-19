@@ -14,10 +14,16 @@ import { OPERATION_AXES, type Rating } from "./eval-log";
 import {
   emptyLlmLifecycleState,
   lifecycleScale,
+  LlmLifecycleWaitingTimers,
+  popToolRenderFrame,
+  pushToolRenderFrame,
   reduceLlmLifecycle,
+  renderLifecycleScale,
+  resetReasoningForLifecycle,
   shouldSuppressLegacyLlmTool,
   type LlmLifecycleEvent,
   type LlmLifecycleState,
+  type ToolRenderFrame,
 } from "./llm-lifecycle";
 
 import { collectMdInPaths, walkFolder } from "./utils/vault-walk";
@@ -149,17 +155,21 @@ export class LlmWikiView extends ItemView {
   private progressDone = 0;
   private progressPhaseEl: HTMLElement | null = null;
   private tickHandle: number | null = null;
-  private currentToolStep: HTMLElement | null = null;
-  private suppressNextToolResult = false;
-  private currentToolStartedAt = 0;
+  private toolRenderFrames: ToolRenderFrame<HTMLElement>[] = [];
   private reasoningBlock: HTMLElement | null = null;
   private reasoningBuffer = "";
   private reasoningRafHandle: number | null = null;
   private llmLifecycleState: LlmLifecycleState = emptyLlmLifecycleState();
   private llmLifecycleRows = new Map<string, HTMLElement>();
-  private waitingDurationEl: HTMLElement | null = null;
-  private waitingTickHandle: number | null = null;
-  private waitingStartedAt = 0;
+  private llmLifecycleEvents = new Map<string, LlmLifecycleEvent>();
+  private llmWaitingTimers = new LlmLifecycleWaitingTimers<number>(
+    {
+      now: () => Date.now(),
+      setTimeout: (callback, delayMs) => window.setTimeout(callback, delayMs),
+      clearTimeout: (handle) => window.clearTimeout(handle),
+    },
+    (id) => this.refreshLlmLifecycle(id),
+  );
   private liveStatusSection: HTMLElement | null = null;
   private liveStatusIconEl: HTMLElement | null = null;
   private liveStatusTextEl: HTMLElement | null = null;
@@ -283,7 +293,7 @@ export class LlmWikiView extends ItemView {
   async onClose(): Promise<void> {
     if (this.tickHandle !== null) window.clearTimeout(this.tickHandle);
     if (this.chatTickHandle !== null) window.clearTimeout(this.chatTickHandle);
-    this.stopWaiting();
+    this.llmWaitingTimers.clearAll();
     if (this.reasoningRafHandle !== null) {
       window.cancelAnimationFrame(this.reasoningRafHandle);
       this.reasoningRafHandle = null;
@@ -611,6 +621,7 @@ export class LlmWikiView extends ItemView {
   }
 
   setRunning(operation: WikiOperation, args: string[]): void {
+    this.llmWaitingTimers.clearAll();
     this.state = "running";
     this.stepsEl.empty();
     this.finalEl.empty();
@@ -649,10 +660,10 @@ export class LlmWikiView extends ItemView {
     this.progressPhaseEl = null;
     this.progressTotal = 0;
     this.progressDone = 0;
-    this.currentToolStep = null;
-    this.suppressNextToolResult = false;
+    this.toolRenderFrames = [];
     this.llmLifecycleState = emptyLlmLifecycleState();
     this.llmLifecycleRows.clear();
+    this.llmLifecycleEvents.clear();
     this.reasoningBlock = null;
     this.reasoningBuffer = "";
     if (this.reasoningRafHandle !== null) {
@@ -666,7 +677,6 @@ export class LlmWikiView extends ItemView {
     this.progressToggle.setText("▼");
     this.updateMetrics();
     if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
-    this.stopWaiting();
     this.liveStatusSection?.removeClass("ai-wiki-hidden");
     this.liveStatusIconEl?.setText("");
     this.liveStatusTextEl?.setText("");
@@ -777,11 +787,10 @@ export class LlmWikiView extends ItemView {
       return;
     }
     if (ev.kind === "tool_use" && shouldSuppressLegacyLlmTool(ev.name, this.llmLifecycleState)) {
-      this.suppressNextToolResult = true;
-      return;
-    }
-    if (ev.kind === "tool_result" && this.suppressNextToolResult) {
-      this.suppressNextToolResult = false;
+      this.toolRenderFrames = pushToolRenderFrame(this.toolRenderFrames, {
+        step: null,
+        startedAt: Date.now(),
+      });
       return;
     }
     if (ev.kind !== "assistant_text") this.stepCount++;
@@ -800,24 +809,28 @@ export class LlmWikiView extends ItemView {
       const summary = summariseInput(ev.input);
       if (summary) head.createSpan({ cls: "ai-wiki-step-arg" }).setText(summary);
       head.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
-      this.currentToolStep = step;
-      this.currentToolStartedAt = Date.now();
+      this.toolRenderFrames = pushToolRenderFrame(this.toolRenderFrames, {
+        step,
+        startedAt: Date.now(),
+      });
       this.scrollSteps();
       this.liveStatusIconEl?.setText("🔧");
       this.liveStatusTextEl?.setText(`${ev.name}  ${summariseInput(ev.input)}`);
     } else if (ev.kind === "tool_result") {
-      const step = this.currentToolStep;
+      const popped = popToolRenderFrame(this.toolRenderFrames);
+      this.toolRenderFrames = popped.frames;
+      const frame = popped.frame;
+      const step = frame?.step;
       if (step) {
         const head = step.querySelector(".ai-wiki-step-head");
         head?.addClass(ev.ok ? "ok" : "err");
-        const dur = ((Date.now() - this.currentToolStartedAt) / 1000).toFixed(1);
+        const dur = ((Date.now() - frame.startedAt) / 1000).toFixed(1);
         const t = step.querySelector(".ai-wiki-step-time");
         if (t) t.setText(`${dur}s`);
         if (ev.preview) {
           const p = step.createDiv("ai-wiki-step-preview");
           p.setText(truncate(ev.preview.replace(/\s+/g, " "), PREVIEW_INLINE));
         }
-        this.currentToolStep = null;
       }
     } else if (ev.kind === "ask_user") {
       const el = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step--ask");
@@ -1126,6 +1139,11 @@ export class LlmWikiView extends ItemView {
   }
 
   async finish(entry: RunHistoryEntry): Promise<void> {
+    for (const id of this.llmLifecycleEvents.keys()) {
+      this.llmWaitingTimers.stop(id);
+      this.refreshLlmLifecycle(id);
+    }
+    this.llmWaitingTimers.clearAll();
     this.state = entry.status;
     this.statusEl.setText(this.statusLabel(entry));
     this.cancelBtn.disabled = true;
@@ -1368,34 +1386,29 @@ export class LlmWikiView extends ItemView {
   }
 
   private renderLlmLifecycle(ev: LlmLifecycleEvent): void {
+    // RunEvent delivery is serialized; reasoning belongs to the most recent
+    // lifecycle that entered preparing because assistant_text has no call ID.
+    const reasoning = resetReasoningForLifecycle(
+      ev,
+      {
+        block: this.reasoningBlock,
+        buffer: this.reasoningBuffer,
+        rafHandle: this.reasoningRafHandle,
+      },
+      (handle) => window.cancelAnimationFrame(handle),
+    );
+    this.reasoningBlock = reasoning.block;
+    this.reasoningBuffer = reasoning.buffer;
+    this.reasoningRafHandle = reasoning.rafHandle;
     this.llmLifecycleState = reduceLlmLifecycle(this.llmLifecycleState, ev);
+    this.llmLifecycleEvents.set(ev.id, ev);
     let row = this.llmLifecycleRows.get(ev.id);
     if (!row) {
       row = this.stepsEl.createDiv("ai-wiki-step ai-wiki-llm-lifecycle");
       this.llmLifecycleRows.set(ev.id, row);
     }
-    row.empty();
-    const labels = i18nFor(resolveLang(this.plugin.settings.outputLanguage)).llmLifecycle;
-    const call = this.llmLifecycleState.calls[ev.id];
-    const scale = lifecycleScale(
-      ev,
-      labels,
-      ev.phase === "waiting" ? 0 : undefined,
-      call.progressPhase,
-    );
-    row.createDiv({ cls: "ai-wiki-llm-action", text: scale.action });
-    const phases = row.createDiv("ai-wiki-llm-phases");
-    let waitingText: HTMLElement | null = null;
-    for (const item of scale.items) {
-      const phase = phases.createDiv(
-        `ai-wiki-llm-phase ai-wiki-llm-phase--${item.state}`,
-      );
-      phase.createSpan({ cls: "ai-wiki-llm-phase-marker", text: "•" });
-      const text = phase.createSpan({ cls: "ai-wiki-llm-phase-text", text: item.text });
-      if (item.key === "waiting") waitingText = text;
-    }
-    if (ev.phase === "waiting" && waitingText) {
-      this.startWaiting(waitingText);
+    if (ev.phase === "waiting") {
+      this.llmWaitingTimers.start(ev.id);
     } else if (
       ev.phase === "producing"
       || ev.phase === "validating"
@@ -1405,36 +1418,30 @@ export class LlmWikiView extends ItemView {
       || ev.phase === "failed"
       || ev.phase === "cancelled"
     ) {
-      this.stopWaiting();
+      this.llmWaitingTimers.stop(ev.id);
     }
+    this.refreshLlmLifecycle(ev.id);
+    const labels = i18nFor(resolveLang(this.plugin.settings.outputLanguage)).llmLifecycle;
+    const scale = lifecycleScale(ev, labels);
     this.liveStatusIconEl?.setText("✦");
     this.liveStatusTextEl?.setText(scale.action);
     this.scrollSteps();
   }
 
-  private startWaiting(durationEl: HTMLElement): void {
-    this.stopWaiting();
-    this.waitingStartedAt = Date.now();
-    this.waitingDurationEl = durationEl;
-    this.scheduleWaitingTick();
-  }
-
-  private stopWaiting(): void {
-    if (this.waitingTickHandle !== null) {
-      window.clearTimeout(this.waitingTickHandle);
-      this.waitingTickHandle = null;
-    }
-    this.waitingDurationEl = null;
-  }
-
-  private scheduleWaitingTick(): void {
-    this.waitingTickHandle = window.setTimeout(() => {
-      if (!this.waitingDurationEl) return;
-      const s = ((Date.now() - this.waitingStartedAt) / 1000).toFixed(1);
-      const labels = i18nFor(resolveLang(this.plugin.settings.outputLanguage)).llmLifecycle;
-      this.waitingDurationEl.setText(`${labels.phases.waiting} · ${s}s`);
-      this.scheduleWaitingTick();
-    }, 100);
+  private refreshLlmLifecycle(id: string): void {
+    const ev = this.llmLifecycleEvents.get(id);
+    const row = this.llmLifecycleRows.get(id);
+    const call = this.llmLifecycleState.calls[id];
+    if (!ev || !row || !call) return;
+    const labels = i18nFor(resolveLang(this.plugin.settings.outputLanguage)).llmLifecycle;
+    const scale = lifecycleScale(
+      ev,
+      labels,
+      this.llmWaitingTimers.elapsedMs(id),
+      call.progressPhase,
+    );
+    renderLifecycleScale(row, scale);
+    this.scrollSteps();
   }
 
   private statusLabel(entry: RunHistoryEntry): string {
