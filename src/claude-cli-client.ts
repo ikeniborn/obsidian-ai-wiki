@@ -214,29 +214,32 @@ export class ClaudeCliClient implements LlmClient {
 
     let id = 0;
     let buf = "";
+    const processLine = (line: string) => {
+      const ev = parseStreamLine(line);
+      if (ev?.kind === "system" && ev.sessionId) {
+        this.lastSessionId = ev.sessionId;
+      }
+      if (ev?.kind === "assistant_text") {
+        const delta: Record<string, unknown> = ev.isReasoning
+          ? { reasoning: ev.delta }
+          : { content: ev.delta };
+        queue.push({
+          id: `cc-${++id}`,
+          object: "chat.completion.chunk",
+          model: this.cfg.model || "claude",
+          created: 0,
+          choices: [{ index: 0, delta: delta, finish_reason: null }],
+        });
+        wake();
+      }
+    };
     child.stdout.on("data", (chunk: Buffer) => {
       buf += chunk.toString("utf8");
       let nl: number;
       while ((nl = buf.indexOf("\n")) !== -1) {
         const line = buf.slice(0, nl);
         buf = buf.slice(nl + 1);
-        const ev = parseStreamLine(line);
-        if (ev?.kind === "system" && ev.sessionId) {
-          this.lastSessionId = ev.sessionId;
-        }
-        if (ev?.kind === "assistant_text") {
-          const delta: Record<string, unknown> = ev.isReasoning
-            ? { reasoning: ev.delta }
-            : { content: ev.delta };
-          queue.push({
-            id: `cc-${++id}`,
-            object: "chat.completion.chunk",
-            model: this.cfg.model || "claude",
-            created: 0,
-            choices: [{ index: 0, delta: delta, finish_reason: null }],
-          });
-          wake();
-        }
+        processLine(line);
       }
     });
 
@@ -254,9 +257,9 @@ export class ClaudeCliClient implements LlmClient {
       }
       // Flush partial last line (no trailing \n — edge case on some environments)
       if (buf.trim()) {
-        const ev = parseStreamLine(buf.trim());
-        if (ev?.kind === "system" && ev.sessionId) this.lastSessionId = ev.sessionId;
+        processLine(buf.trim());
       }
+      while (queue.length > 0) yield queue.shift()!;
       const stderr = () => Buffer.concat(stderrChunks).toString("utf8").trim();
       if (spawnError) throw new Error(`claude spawn failed: ${(spawnError as Error).message}${stderr() ? `\n${stderr()}` : ""}`);
       if (signal?.aborted) return;

@@ -26,7 +26,7 @@ Object.defineProperty(globalThis, "window", {
 const { ClaudeCliClient } = await import("../src/claude-cli-client");
 const {
   createLlmLifecycle,
-  runStructuredWithRetry,
+  runStructuredStreaming,
 } = await import("../src/phases/structured-output");
 const { humanLifecycleText } = await import("../src/llm-lifecycle");
 
@@ -67,10 +67,11 @@ function assistantLine(block: Record<string, unknown>): string {
 async function withClaudeCli<T>(
   lines: string[],
   work: (client: InstanceType<typeof ClaudeCliClient>) => Promise<T>,
+  trailingNewline = true,
 ): Promise<T> {
   const dir = await mkdtemp(join(tmpdir(), "obsidian-ai-wiki-claude-"));
   const executable = join(dir, "claude-fixture.mjs");
-  const payload = `${lines.join("\n")}\n`;
+  const payload = `${lines.join("\n")}${trailingNewline ? "\n" : ""}`;
   await writeFile(
     executable,
     `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(payload)});\n`,
@@ -103,6 +104,7 @@ function request(stream: boolean) {
 test("Claude streaming exposes thinking and final text as separate OpenAI deltas", async () => {
   await withClaudeCli([
     assistantLine({ type: "thinking", thinking: "Inspect context." }),
+    assistantLine({ type: "redacted_thinking", data: "opaque-redacted-stream" }),
     assistantLine({ type: "text", text: "Final answer." }),
   ], async (client) => {
     const response = await client.chat.completions.create(request(true));
@@ -113,13 +115,15 @@ test("Claude streaming exposes thinking and final text as separate OpenAI deltas
 
     assert.equal(deltas.map((delta) => delta.reasoning ?? "").join(""), "Inspect context.");
     assert.equal(deltas.map((delta) => delta.content ?? "").join(""), "Final answer.");
-  });
+    assert.equal(JSON.stringify(deltas).includes("opaque-redacted-stream"), false);
+  }, false);
 });
 
 test("Claude non-stream completion retains reasoning separately from content", async () => {
   await withClaudeCli([
-    assistantLine({ type: "thinking", thinking: "Check evidence." }),
     assistantLine({ type: "text", text: "Separate final." }),
+    assistantLine({ type: "redacted_thinking", data: "opaque-redacted-completion" }),
+    assistantLine({ type: "thinking", thinking: "Check evidence." }),
   ], async (client) => {
     const response = await client.chat.completions.create(request(false));
     const message = (
@@ -129,29 +133,32 @@ test("Claude non-stream completion retains reasoning separately from content", a
     assert.equal(message.reasoning, "Check evidence.");
     assert.equal(message.content, "Separate final.");
     assert.equal(String(message.content).includes("Check evidence."), false);
-  });
+    assert.equal(JSON.stringify(message).includes("opaque-redacted-completion"), false);
+  }, false);
 });
 
-function nativeClient(reasoning: string, content: string): LlmClient {
+function nativeNonStreamClient(reasoning: string, content: string): LlmClient {
   return {
     chat: {
       completions: {
-        create: async () => (async function* () {
-          yield {
-            id: "reasoning",
-            object: "chat.completion.chunk",
-            created: 0,
-            model: "native-test",
-            choices: [{ index: 0, delta: { reasoning }, finish_reason: null }],
-          };
-          yield {
-            id: "content",
-            object: "chat.completion.chunk",
-            created: 0,
-            model: "native-test",
-            choices: [{ index: 0, delta: { content }, finish_reason: "stop" }],
-          };
-        })(),
+        create: async () => ({
+          id: "completion",
+          object: "chat.completion",
+          created: 0,
+          model: "native-test",
+          choices: [{
+            index: 0,
+            message: {
+              role: "assistant",
+              content,
+              refusal: null,
+              reasoning,
+            },
+            finish_reason: "stop",
+            logprobs: null,
+          }],
+          usage: { prompt_tokens: 2, completion_tokens: 3, total_tokens: 5 },
+        }),
       },
     },
   } as unknown as LlmClient;
@@ -159,7 +166,8 @@ function nativeClient(reasoning: string, content: string): LlmClient {
 
 async function structuredEvents(llm: LlmClient): Promise<RunEvent[]> {
   const events: RunEvent[] = [];
-  await runStructuredWithRetry({
+  const sink: { value?: { value: string } } = {};
+  for await (const event of runStructuredStreaming({
     llm,
     model: "fixture",
     baseMessages: [{ role: "user", content: "Return value." }],
@@ -169,14 +177,20 @@ async function structuredEvents(llm: LlmClient): Promise<RunEvent[]> {
     callSite: "query.answer",
     lifecycle: createLlmLifecycle("answer_question"),
     signal: new AbortController().signal,
-    onEvent: (event) => events.push(event),
-  });
+    onEvent: () => {},
+    transport: "non-stream",
+  }, sink)) {
+    events.push(event);
+  }
+  assert.deepEqual(sink.value, { value: "ok" });
   return events;
 }
 
-test("native and Claude transports share lifecycle human semantics and isolate diagnostics", async () => {
+test("native and Claude non-stream runners share lifecycle human semantics and isolate diagnostics", async () => {
   const finalJson = JSON.stringify({ value: "ok" });
-  const nativeEvents = await structuredEvents(nativeClient("Native thought.", finalJson));
+  const nativeEvents = await structuredEvents(
+    nativeNonStreamClient("Native thought.", finalJson),
+  );
   const claudeEvents = await withClaudeCli([
     assistantLine({ type: "thinking", thinking: "Claude thought." }),
     assistantLine({ type: "text", text: finalJson }),
@@ -193,6 +207,10 @@ test("native and Claude transports share lifecycle human semantics and isolate d
   }));
 
   assert.deepEqual(semanticShape(claudeEvents), semanticShape(nativeEvents));
+  assert.deepEqual(
+    lifecycle(claudeEvents).map((event) => event.phase),
+    ["preparing", "sent", "waiting", "producing", "validating"],
+  );
   assert.ok(claudeEvents.some((event) =>
     event.kind === "assistant_text"
     && event.isReasoning === true
@@ -208,6 +226,6 @@ test("native and Claude transports share lifecycle human semantics and isolate d
         : ["callSite", "transport"],
     );
     assert.equal(event.diagnostics?.callSite, "query.answer");
-    assert.equal(event.diagnostics?.transport, "stream");
+    assert.equal(event.diagnostics?.transport, "non-stream");
   }
 });
