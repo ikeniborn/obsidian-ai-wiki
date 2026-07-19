@@ -37,31 +37,54 @@ const SOURCE_MARKER = "SECRET_SOURCE_MARKER";
 const IDLE_DEADLINE_MS = 300_000;
 const OLD_MANIFEST_FILE = "obsolete-old.md";
 const OLD_MANIFEST_CONTENT = "old domain content";
-const WIPE_HASH_ALGORITHM = "sha256-v1";
+const WIPE_HASH_ALGORITHM = "sha256-v2";
 
 function sha256(bytes: Uint8Array | string): string {
   return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 }
 
 function canonicalEntries(entries: Array<{ path: string; hash?: string }>): Buffer {
-  const parts: Buffer[] = [];
-  const count = Buffer.alloc(4);
-  count.writeUInt32BE(entries.length);
-  parts.push(count);
+  const parts: Buffer[] = [uint32(entries.length)];
   for (const entry of entries) {
-    for (const value of [entry.path, entry.hash] as const) {
-      if (value === undefined) {
-        parts.push(Buffer.from([0]));
-        continue;
-      }
-      const bytes = Buffer.from(value, "utf8");
-      const length = Buffer.alloc(5);
-      length[0] = 1;
-      length.writeUInt32BE(bytes.length, 1);
-      parts.push(length, bytes);
-    }
+    parts.push(prefixed(entry.path));
+    parts.push(entry.hash === undefined
+      ? Buffer.from([0])
+      : Buffer.concat([Buffer.from([1]), prefixed(entry.hash)]));
   }
   return Buffer.concat(parts);
+}
+
+function uint32(value: number): Buffer {
+  const result = Buffer.alloc(4);
+  result.writeUInt32BE(value);
+  return result;
+}
+
+function prefixed(value: string): Buffer {
+  const bytes = Buffer.from(value, "utf8");
+  return Buffer.concat([uint32(bytes.length), bytes]);
+}
+
+function manifestRoot(
+  chunks: Array<{ chunkIndex: number; chunkCount: number; entries: unknown[]; chunkHash: string }>,
+  totalCount: number,
+): string {
+  let root = sha256(Buffer.concat([
+    prefixed("iwiki-wipe-manifest-sha256-v2"),
+    uint32(totalCount),
+    uint32(chunks.length),
+  ]));
+  for (const chunk of chunks) {
+    root = sha256(Buffer.concat([
+      prefixed("iwiki-wipe-manifest-sha256-v2-step"),
+      prefixed(root),
+      uint32(chunk.chunkIndex),
+      uint32(chunk.chunkCount),
+      uint32(chunk.entries.length),
+      prefixed(chunk.chunkHash),
+    ]));
+  }
+  return root;
 }
 const SCRIPT_PATH = fileURLToPath(
   new URL("../scripts/audit-bounded-init-replay.ts", import.meta.url),
@@ -188,10 +211,9 @@ function wipeTelemetry(
 ): AgentRecord[] {
   const transactionId = `wipe-${session}`;
   const chunkCount = entries.length === 0 ? 0 : Math.ceil(entries.length / 100);
-  const manifestHash = sha256(canonicalEntries(entries));
-  const chunks = Array.from({ length: chunkCount }, (_, chunkIndex) => {
+  const chunkEvents = Array.from({ length: chunkCount }, (_, chunkIndex) => {
     const chunkEntries = entries.slice(chunkIndex * 100, (chunkIndex + 1) * 100);
-    return agentRecord({
+    return {
       kind: "wipe_manifest_chunk",
       domainId,
       transactionId,
@@ -200,10 +222,11 @@ function wipeTelemetry(
       hashAlgorithm: WIPE_HASH_ALGORITHM,
       entries: chunkEntries,
       chunkHash: sha256(canonicalEntries(chunkEntries)),
-    }, session);
+    };
   });
+  const manifestHash = manifestRoot(chunkEvents, entries.length);
   return [
-    ...chunks,
+    ...chunkEvents.map((event) => agentRecord(event, session)),
     agentRecord({
       kind: "wipe_complete",
       domainId,
@@ -942,16 +965,31 @@ test("wipe manifest rejects missing, duplicate, reordered, and tampered chunks",
   }
 });
 
-test("wipe proof schema requires sha256-v1 and rejects legacy FNV hashes", async () => {
+test("wipe proof schema rejects sha256-v1 live proofs", async () => {
   const records = sessionRecords();
   const complete = records.find((record) => record.event.kind === "wipe_complete")!;
-  complete.event.hashAlgorithm = "fnv1a-v1";
-  complete.event.manifestHash = "fnv1a:00000000";
+  complete.event.hashAlgorithm = "sha256-v1";
   const value = await fixture({ records });
   try {
     await assert.rejects(
       audit(value),
       /wipe_complete marker is invalid|hash algorithm/i,
+    );
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("auditor rejects ill-formed UTF-16 manifest paths before hashing", async () => {
+  const records = sessionRecords();
+  const chunk = records.find((record) => record.event.kind === "wipe_manifest_chunk")!;
+  const entries = chunk.event.entries as Array<Record<string, unknown>>;
+  entries[0].path = `bad-\uD800-path.md`;
+  const value = await fixture({ records });
+  try {
+    await assert.rejects(
+      audit(value),
+      /manifest path.*ill-formed UTF-16/i,
     );
   } finally {
     await value.cleanup();
@@ -1355,6 +1393,16 @@ test("wipe chunk duplicate validation is linear and does not rescan indexes", as
   );
   assert.doesNotMatch(auditWipeSource, /\.indexOf\(/);
   assert.match(auditWipeSource, /Set<number>/);
+});
+
+test("wipe proof audit hashes one bounded chunk at a time without full-manifest joins", async () => {
+  const source = await readFile(SCRIPT_PATH, "utf8");
+  const auditWipeSource = source.slice(
+    source.indexOf("function auditWipe"),
+    source.indexOf("function auditLifecycles"),
+  );
+  assert.doesNotMatch(auditWipeSource, /canonicalWipeEntries|JSON\.stringify\(entries\)/);
+  assert.match(auditWipeSource, /advanceWipeManifestRoot/);
 });
 
 test("latest-init selection works after a large unrelated prefix", async () => {

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import test from "node:test";
 import type { DomainEntry } from "../src/domain";
@@ -50,8 +51,9 @@ test("wipe manifest producer chunks thousands of paths into bounded log events",
   assert.equal(chunks.length, 50);
   assert.ok(chunks.every((event) =>
     event.entries.length <= 100
-    && event.hashAlgorithm === "sha256-v1"
+    && event.hashAlgorithm === "sha256-v2"
     && /^sha256:[0-9a-f]{64}$/.test(event.chunkHash)
+    && Buffer.byteLength(JSON.stringify(event), "utf8") <= 256 * 1024
     && Buffer.byteLength(JSON.stringify({
       ts: "2026-07-20T00:00:00.000Z",
       session: "session-id",
@@ -63,7 +65,8 @@ test("wipe manifest producer chunks thousands of paths into bounded log events",
     }), "utf8") <= 1_048_576));
   assert.ok(complete?.kind === "wipe_complete");
   assert.equal(complete.totalCount, 5_000);
-  assert.equal(complete.hashAlgorithm, "sha256-v1");
+  assert.equal(complete.hashAlgorithm, "sha256-v2");
+  assert.notEqual(complete.manifestHash, `sha256:${"0".repeat(64)}`);
   assert.equal(Object.hasOwn(complete, "removedPaths"), false);
 });
 
@@ -97,8 +100,81 @@ test("wipe manifest chunking adapts to near-boundary Unicode paths with logger e
       model: "provider/model",
       event,
     });
+    assert.ok(Buffer.byteLength(JSON.stringify(event), "utf8") <= 256 * 1024);
     assert.ok(Buffer.byteLength(line, "utf8") <= 1_048_576);
   }
+});
+
+test("wipe identifiers reject pathological values before vault I/O", async () => {
+  const huge = "d".repeat(1_100_000);
+  for (const [wikiFolder, telemetryDomainId] of [
+    [huge, "domain"],
+    ["demo", huge],
+  ]) {
+    const adapter = seededAdapter();
+    await assert.rejects(
+      wipeDomainFolderWithManifest(
+        new VaultTools(adapter, "/vault"),
+        wikiFolder,
+        undefined,
+        { telemetryDomainId },
+      ),
+      /identifier.*255 UTF-8 bytes/i,
+    );
+    assert.equal(adapter.renames.length, 0);
+    assert.equal(adapter.stats.length, 0);
+  }
+});
+
+test("maximal valid domain and empty manifest complete event stay prevalidated and bounded", async () => {
+  const domainId = "d".repeat(255);
+  const adapter = new DirectoryAdapter();
+  const manifest = await wipeDomainFolderWithManifest(
+    new VaultTools(adapter, "/vault"),
+    "demo",
+    undefined,
+    { telemetryDomainId: domainId },
+  );
+  const plan = manifest as typeof manifest & { telemetryComplete?: RunEvent };
+  assert.ok(plan.telemetryComplete?.kind === "wipe_complete");
+  assert.equal(plan.telemetryComplete.hashAlgorithm, "sha256-v2");
+  assert.ok(Buffer.byteLength(JSON.stringify(plan.telemetryComplete), "utf8") <= 256 * 1024);
+  const events = await wipeManifestEvents(domainId, manifest, 123);
+  assert.equal(events.length, 1);
+  assert.ok(Buffer.byteLength(JSON.stringify(events[0]), "utf8") <= 256 * 1024);
+});
+
+test("wipe proof rejects lone surrogates and preserves valid surrogate pairs exactly", async () => {
+  const module = await import("../src/wipe-proof");
+  const validate = (module as unknown as {
+    assertWellFormedWipeString?: (value: string, label: string) => void;
+  }).assertWellFormedWipeString;
+  assert.equal(typeof validate, "function");
+  for (const invalid of ["\uD800", "\uD801", "\uDC00"]) {
+    assert.throws(() => validate!(invalid, "manifest path"), /ill-formed UTF-16/i);
+    await assert.rejects(
+      wipeManifestEvents("domain", {
+        transactionId: "transaction",
+        removedPaths: [`bad-${invalid}.md`],
+        removedFileHashes: {},
+        manifestHash: `sha256:${"0".repeat(64)}`,
+      }),
+      /manifest path.*ill-formed UTF-16/i,
+    );
+  }
+  assert.doesNotThrow(() => validate!("\uD83D\uDE00", "manifest path"));
+  const validEvents = await wipeManifestEvents("domain", {
+    transactionId: "transaction",
+    removedPaths: ["valid-\uD83D\uDE00.md"],
+    removedFileHashes: {},
+    manifestHash: `sha256:${"0".repeat(64)}`,
+  });
+  assert.equal(
+    validEvents[0]?.kind === "wipe_manifest_chunk"
+      ? validEvents[0].entries[0]?.path
+      : undefined,
+    "valid-\uD83D\uDE00.md",
+  );
 });
 
 test("wipe SHA-256 proof distinguishes a known FNV-1a collision", async () => {
@@ -420,6 +496,13 @@ test("unencodable telemetry is rejected and rolled back before any file deletion
   );
   assert.equal(await adapter.exists(longPath), true);
   assert.equal(adapter.removes.length, 0);
+});
+
+test("wipe snapshot hashing is sequential and manifest proof never joins all entries", () => {
+  const source = readFileSync(new URL("../src/phases/init.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /Promise\.all\(\[\.\.\.snapshot\.files\]/);
+  assert.doesNotMatch(source, /canonicalWipeEntries|JSON\.stringify\(entries\)/);
+  assert.match(source, /advanceWipeManifestRoot/);
 });
 
 test("force wipe removes the complete target tree and returns every removed file", async () => {

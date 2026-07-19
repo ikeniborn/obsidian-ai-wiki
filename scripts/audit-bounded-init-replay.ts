@@ -7,9 +7,15 @@ import { pathToFileURL } from "node:url";
 import { JsonlParseError } from "../src/jsonl";
 import { classifyContextError } from "../src/prompt-budget";
 import {
+  advanceWipeManifestRoot,
+  assertBoundedWipeIdentifier,
+  assertWellFormedWipeString,
+  initialWipeManifestRoot,
+  WIPE_EVENT_MAX_BYTES,
   WIPE_HASH_ALGORITHM,
+  WIPE_LOG_LINE_MAX_BYTES,
   validWipeProofHash,
-  wipeEntriesHash,
+  wipeChunkHash,
 } from "../src/wipe-proof";
 import {
   chunkRecordId,
@@ -137,7 +143,7 @@ const TECHNICAL_LABEL_MARKER =
 const ATTEMPT_LABEL_MARKER = /\b(?:attempt|retry)\s*(?:#|no\.?|number|:|=)?\s*\d+\b/i;
 const PROVIDER_LABEL_MARKER =
   /\b(?:anthropic|azure\s+openai|gemini|groq|litellm|ollama|openai|openrouter|xai)\b/i;
-const MAX_JSONL_LINE_BYTES = 1_048_576;
+const MAX_JSONL_LINE_BYTES = WIPE_LOG_LINE_MAX_BYTES;
 
 interface WipeAudit {
   count: number;
@@ -318,6 +324,7 @@ async function selectSession(agentPath: string, requested: string): Promise<{
   if (typeof session !== "string" || session.length === 0) {
     throw new Error("selected Init sessions: 0");
   }
+  assertBoundedWipeIdentifier(session, "replay session");
   const records: AgentLogRecord[] = [];
   for await (const record of jsonlRecords<AgentLogRecord>(agentPath)) {
     if (record.op === "init" && record.session === session) records.push(record);
@@ -342,6 +349,7 @@ function safeWikiFolder(value: unknown): string {
   ) {
     throw new Error("unsafe wiki_folder");
   }
+  assertBoundedWipeIdentifier(withoutPrefix, "wipe wikiFolder");
   return `!Wiki/${withoutPrefix}`;
 }
 
@@ -403,6 +411,11 @@ async function auditWipe(records: AgentLogRecord[], expectedFolder: string): Pro
   ) {
     throw new Error("wipe_complete marker is invalid or not paired after WipeDomain");
   }
+  assertBoundedWipeIdentifier(complete.domainId, "wipe domainId");
+  assertBoundedWipeIdentifier(complete.transactionId, "wipe transaction");
+  if (Buffer.byteLength(JSON.stringify(complete), "utf8") > WIPE_EVENT_MAX_BYTES) {
+    throw new Error("wipe_complete exceeds telemetry payload limit");
+  }
   const rawChunkIndexes = new Set<number>();
   let duplicateChunkIndex: number | undefined;
   for (const recordIndex of chunkIndexes) {
@@ -421,6 +434,10 @@ async function auditWipe(records: AgentLogRecord[], expectedFolder: string): Pro
   }
   const seenChunkIndexes = new Set<number>();
   const entries: Array<{ path: string; hash?: string }> = [];
+  let manifestRoot = await initialWipeManifestRoot(
+    complete.totalCount,
+    complete.chunkCount,
+  );
   for (const [expectedIndex, recordIndex] of chunkIndexes.entries()) {
     const chunk = records[recordIndex].event;
     if (!isRecord(chunk)) throw new Error(`wipe manifest chunk ${expectedIndex} is invalid`);
@@ -453,6 +470,9 @@ async function auditWipe(records: AgentLogRecord[], expectedFolder: string): Pro
     if (Buffer.byteLength(JSON.stringify(chunk), "utf8") > MAX_JSONL_LINE_BYTES) {
       throw new Error(`wipe manifest chunk ${chunk.chunkIndex} exceeds JSONL line limit`);
     }
+    if (Buffer.byteLength(JSON.stringify(chunk), "utf8") > WIPE_EVENT_MAX_BYTES) {
+      throw new Error(`wipe manifest chunk ${chunk.chunkIndex} exceeds telemetry payload limit`);
+    }
     const chunkEntries: Array<{ path: string; hash?: string }> = [];
     for (const entry of chunk.entries) {
       if (
@@ -463,17 +483,24 @@ async function auditWipe(records: AgentLogRecord[], expectedFolder: string): Pro
       ) {
         throw new Error(`wipe manifest chunk ${chunk.chunkIndex} has invalid entry`);
       }
+      assertWellFormedWipeString(entry.path, "manifest path");
       chunkEntries.push(entry as { path: string; hash?: string });
     }
-    if (chunk.chunkHash !== await wipeEntriesHash(chunkEntries)) {
+    if (chunk.chunkHash !== await wipeChunkHash(chunkEntries)) {
       throw new Error(`wipe manifest chunk ${chunk.chunkIndex} hash mismatch`);
     }
+    manifestRoot = await advanceWipeManifestRoot(manifestRoot, {
+      chunkIndex: chunk.chunkIndex,
+      chunkCount: chunk.chunkCount,
+      entryCount: chunkEntries.length,
+      chunkHash: chunk.chunkHash,
+    });
     entries.push(...chunkEntries);
   }
   if (entries.length !== complete.totalCount) {
     throw new Error(`wipe manifest paths: ${entries.length}, expected: ${complete.totalCount}`);
   }
-  if (complete.manifestHash !== await wipeEntriesHash(entries)) {
+  if (complete.manifestHash !== manifestRoot) {
     throw new Error("wipe manifest hash mismatch");
   }
   const removedPaths = entries.map((entry) => entry.path);

@@ -49,6 +49,20 @@ test("native OpenAI transport uses the configured LLM idle timeout", () => {
   assert.match(source, /timeout:\s*requestTimeoutMs/);
 });
 
+test("agent logger bounds backend and model envelope fields before serialization", () => {
+  const source = readFileSync(new URL("../src/controller.ts", import.meta.url), "utf8");
+  const start = source.indexOf("private async logEvent");
+  const logEvent = source.slice(
+    start,
+    source.indexOf("private async dispatch(", start),
+  );
+
+  assert.match(logEvent, /boundAgentLogField\(this\._currentLogMeta\?\.backend/);
+  assert.match(logEvent, /boundAgentLogField\(this\._currentLogMeta\?\.model/);
+  assert.match(logEvent, /AGENT_LOG_LINE_MAX_BYTES/);
+  assert.match(logEvent, /encoded.*byte|byteLength|TextEncoder/i);
+});
+
 test("native client selects mobile, proxy, and direct desktop transports", () => {
   assert.equal(
     typeof transport.selectNativeFetch,

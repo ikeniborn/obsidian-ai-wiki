@@ -33,6 +33,22 @@ import { domainWikiFolder, domainIndexPath, domainLogPath } from "./wiki-path";
 import { collectPageDescriptions, parseWikiIndexJsonl } from "./wiki-index-jsonl";
 import { buildOkfBundle } from "./okf-export";
 import { writeOkfBundle } from "./okf-export-fs";
+import {
+  assertBoundedWipeIdentifier,
+  WIPE_LOG_LINE_MAX_BYTES,
+} from "./wipe-proof";
+
+const AGENT_LOG_LINE_MAX_BYTES = WIPE_LOG_LINE_MAX_BYTES;
+
+export function boundAgentLogField(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  try {
+    assertBoundedWipeIdentifier(value, "agent log envelope field");
+    return value;
+  } catch {
+    return "[invalid]";
+  }
+}
 import { restoreSourceFrontmatter } from "./utils/raw-frontmatter";
 import { graphCache } from "./wiki-graph-cache";
 import { collectMdInPaths, parseWikiSources } from "./utils/vault-walk";
@@ -738,13 +754,17 @@ export class WikiController {
     try {
       const appendLine = async (record: unknown): Promise<void> => {
         const line = JSON.stringify(record) + "\n";
+        const encodedByteLength = new TextEncoder().encode(line).length;
+        if (encodedByteLength > AGENT_LOG_LINE_MAX_BYTES) {
+          throw new Error(`agent log line exceeds ${AGENT_LOG_LINE_MAX_BYTES} bytes`);
+        }
         if (await adapter.exists(path)) await adapter.append(path, line);
         else await adapter.write(path, line);
       };
       const envelope = {
         session: sessionId, op, domainId,
-        backend: this._currentLogMeta?.backend,
-        model: this._currentLogMeta?.model,
+        backend: boundAgentLogField(this._currentLogMeta?.backend),
+        model: boundAgentLogField(this._currentLogMeta?.model),
       };
 
       // Flush accumulated reasoning as one line, stamped with the current call index,

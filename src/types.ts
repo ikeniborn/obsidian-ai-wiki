@@ -169,7 +169,7 @@ export type RunEvent =
       transactionId: string;
       chunkIndex: number;
       chunkCount: number;
-      hashAlgorithm: "sha256-v1";
+      hashAlgorithm: "sha256-v2";
       entries: Array<{ path: string; hash?: string }>;
       chunkHash: string;
     }
@@ -179,7 +179,7 @@ export type RunEvent =
       transactionId: string;
       chunkCount: number;
       totalCount: number;
-      hashAlgorithm: "sha256-v1";
+      hashAlgorithm: "sha256-v2";
       manifestHash: string;
       atMs: number;
     }

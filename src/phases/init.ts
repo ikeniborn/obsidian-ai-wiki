@@ -30,8 +30,14 @@ import {
 import { prepareChatMessages } from "./llm-utils";
 import { RunEventBridge } from "../run-event-bridge";
 import {
+  advanceWipeManifestRoot,
+  assertBoundedWipeIdentifier,
+  assertWellFormedWipeString,
+  initialWipeManifestRoot,
+  WIPE_EVENT_MAX_BYTES,
   WIPE_HASH_ALGORITHM,
-  wipeEntriesHash,
+  WIPE_LOG_LINE_MAX_BYTES,
+  wipeChunkHash,
   wipeProofHash,
   type WipeManifestEntry,
 } from "../wipe-proof";
@@ -921,13 +927,14 @@ export interface WipeDomainManifest {
   removedFileHashes: Record<string, string>;
   manifestHash: string;
   telemetryEvents?: Array<Extract<RunEvent, { kind: "wipe_manifest_chunk" }>>;
+  telemetryComplete?: Extract<RunEvent, { kind: "wipe_complete" }>;
 }
 
 const WIPE_MANIFEST_CHUNK_PATHS = 100;
-export const WIPE_MANIFEST_LINE_MAX_BYTES = 1_048_576;
-export const WIPE_MANIFEST_ENVELOPE_RESERVE_BYTES = 8 * 1024;
-export const WIPE_MANIFEST_EVENT_MAX_BYTES =
-  WIPE_MANIFEST_LINE_MAX_BYTES - WIPE_MANIFEST_ENVELOPE_RESERVE_BYTES;
+export const WIPE_MANIFEST_LINE_MAX_BYTES = WIPE_LOG_LINE_MAX_BYTES;
+export const WIPE_MANIFEST_EVENT_MAX_BYTES = WIPE_EVENT_MAX_BYTES;
+export const WIPE_MANIFEST_ENVELOPE_RESERVE_BYTES =
+  WIPE_MANIFEST_LINE_MAX_BYTES - WIPE_MANIFEST_EVENT_MAX_BYTES;
 
 function encodedBytes(value: unknown): number {
   return new TextEncoder().encode(JSON.stringify(value)).length;
@@ -949,7 +956,13 @@ async function planWipeManifestChunks(
   domainId: string,
   transactionId: string,
   entries: WipeManifestEntry[],
-): Promise<Array<Extract<RunEvent, { kind: "wipe_manifest_chunk" }>>> {
+): Promise<{
+  chunks: Array<Extract<RunEvent, { kind: "wipe_manifest_chunk" }>>;
+  complete: Extract<RunEvent, { kind: "wipe_complete" }>;
+}> {
+  assertBoundedWipeIdentifier(domainId, "wipe domainId");
+  assertBoundedWipeIdentifier(transactionId, "wipe transaction");
+  for (const entry of entries) assertWellFormedWipeString(entry.path, "manifest path");
   const groups: WipeManifestEntry[][] = [];
   let current: WipeManifestEntry[] = [];
   for (const entry of entries) {
@@ -982,25 +995,52 @@ async function planWipeManifestChunks(
     }
   }
   if (current.length > 0) groups.push(current);
-  const chunks = await Promise.all(groups.map(async (chunkEntries, chunkIndex) => ({
-    kind: "wipe_manifest_chunk" as const,
-    domainId,
-    transactionId,
-    chunkIndex,
-    chunkCount: groups.length,
-    hashAlgorithm: WIPE_HASH_ALGORITHM,
-    entries: chunkEntries,
-    chunkHash: await wipeEntriesHash(chunkEntries),
-  })));
-  for (const chunk of chunks) {
+  const chunks: Array<Extract<RunEvent, { kind: "wipe_manifest_chunk" }>> = [];
+  for (const [chunkIndex, chunkEntries] of groups.entries()) {
+    const chunk: Extract<RunEvent, { kind: "wipe_manifest_chunk" }> = {
+      kind: "wipe_manifest_chunk",
+      domainId,
+      transactionId,
+      chunkIndex,
+      chunkCount: groups.length,
+      hashAlgorithm: WIPE_HASH_ALGORITHM,
+      entries: chunkEntries,
+      chunkHash: await wipeChunkHash(chunkEntries),
+    };
     if (
       encodedBytes(chunk) > WIPE_MANIFEST_EVENT_MAX_BYTES
       || encodedBytes(representativeAgentEnvelope(chunk)) > WIPE_MANIFEST_LINE_MAX_BYTES
     ) {
       throw new Error("force: wipe manifest chunk exceeds telemetry payload limit");
     }
+    chunks.push(chunk);
   }
-  return chunks;
+  let manifestHash = await initialWipeManifestRoot(entries.length, chunks.length);
+  for (const chunk of chunks) {
+    manifestHash = await advanceWipeManifestRoot(manifestHash, {
+      chunkIndex: chunk.chunkIndex,
+      chunkCount: chunk.chunkCount,
+      entryCount: chunk.entries.length,
+      chunkHash: chunk.chunkHash,
+    });
+  }
+  const complete: Extract<RunEvent, { kind: "wipe_complete" }> = {
+    kind: "wipe_complete",
+    domainId,
+    transactionId,
+    chunkCount: chunks.length,
+    totalCount: entries.length,
+    hashAlgorithm: WIPE_HASH_ALGORITHM,
+    manifestHash,
+    atMs: Number.MAX_SAFE_INTEGER,
+  };
+  if (
+    encodedBytes(complete) > WIPE_MANIFEST_EVENT_MAX_BYTES
+    || encodedBytes(representativeAgentEnvelope(complete)) > WIPE_MANIFEST_LINE_MAX_BYTES
+  ) {
+    throw new Error("force: wipe_complete exceeds telemetry payload limit");
+  }
+  return { chunks, complete };
 }
 
 export async function wipeManifestEvents(
@@ -1014,18 +1054,13 @@ export async function wipeManifestEvents(
       ? {}
       : { hash: manifest.removedFileHashes[path] }),
   }));
-  const chunks = manifest.telemetryEvents
-    ?? await planWipeManifestChunks(domainId, manifest.transactionId, entries);
+  const planned = manifest.telemetryEvents && manifest.telemetryComplete
+    ? { chunks: manifest.telemetryEvents, complete: manifest.telemetryComplete }
+    : await planWipeManifestChunks(domainId, manifest.transactionId, entries);
   return [
-    ...chunks,
+    ...planned.chunks,
     {
-      kind: "wipe_complete",
-      domainId,
-      transactionId: manifest.transactionId,
-      chunkCount: chunks.length,
-      totalCount: entries.length,
-      hashAlgorithm: WIPE_HASH_ALGORITHM,
-      manifestHash: manifest.manifestHash,
+      ...planned.complete,
       atMs,
     },
   ];
@@ -1037,6 +1072,11 @@ export async function wipeDomainFolderWithManifest(
   signal?: AbortSignal,
   options: ForceWipeOptions = {},
 ): Promise<WipeDomainManifest> {
+  assertBoundedWipeIdentifier(wikiFolder, "wipe wikiFolder");
+  assertBoundedWipeIdentifier(
+    options.telemetryDomainId ?? wikiFolder,
+    "wipe domainId",
+  );
   const root = forceDomainRoot(wikiFolder);
   requireTransactionalWipeAdapter(vaultTools);
   const snapshotByteLimit = options.snapshotByteLimit ?? FORCE_WIPE_SNAPSHOT_BYTE_LIMIT;
@@ -1080,12 +1120,18 @@ async function wipeDomainFolderLocked(
     const removedPaths: string[] = [];
     const removedFileHashes: Record<string, string> = {};
     const transactionId = `wipe-empty-${Date.now().toString(36)}`;
+    const telemetry = await planWipeManifestChunks(
+      telemetryDomainId,
+      transactionId,
+      [],
+    );
     return {
       transactionId,
       removedPaths,
       removedFileHashes,
-      manifestHash: await wipeEntriesHash([]),
-      telemetryEvents: await planWipeManifestChunks(telemetryDomainId, transactionId, []),
+      manifestHash: telemetry.complete.manifestHash,
+      telemetryEvents: telemetry.chunks,
+      telemetryComplete: telemetry.complete,
     };
   }
 
@@ -1215,14 +1261,14 @@ async function prepareWipeDomainManifest(
   domainId: string,
 ): Promise<WipeDomainManifest> {
   const removedFileHashes: Record<string, string> = {};
-  await Promise.all([...snapshot.files].map(async ([quarantinedPath, bytes]) => {
+  for (const [quarantinedPath, bytes] of snapshot.files) {
     const originalPath = originalPathFromQuarantine(
       quarantinedPath,
       quarantinedRoot,
       root,
     );
     removedFileHashes[originalPath.slice(root.length + 1)] = await wipeProofHash(bytes);
-  }));
+  }
   const removedPaths = [
     ...Object.keys(removedFileHashes),
     ...snapshot.folders
@@ -1240,12 +1286,14 @@ async function prepareWipeDomainManifest(
     path,
     ...(removedFileHashes[path] === undefined ? {} : { hash: removedFileHashes[path] }),
   }));
+  const telemetry = await planWipeManifestChunks(domainId, transactionId, entries);
   return {
     transactionId,
     removedPaths,
     removedFileHashes,
-    manifestHash: await wipeEntriesHash(entries),
-    telemetryEvents: await planWipeManifestChunks(domainId, transactionId, entries),
+    manifestHash: telemetry.complete.manifestHash,
+    telemetryEvents: telemetry.chunks,
+    telemetryComplete: telemetry.complete,
   };
 }
 
