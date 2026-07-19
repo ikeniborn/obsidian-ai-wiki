@@ -29538,8 +29538,7 @@ var ClaudeCliClient = class {
     const model = params.model || this.cfg.model;
     const { requestTimeoutSec } = this.cfg;
     const LARGE_THRESHOLD = 262144;
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const tmpFiles = [];
+    let deferredSystemPrompt;
     const isResume = Boolean(this.cfg.resumeSessionId);
     const args = [];
     args.push("--");
@@ -29548,54 +29547,56 @@ var ClaudeCliClient = class {
     if (isResume) {
       args.push("--resume", this.cfg.resumeSessionId);
     }
-    try {
-      const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
-      if (isLargeUser) {
-        throw new Error(
-          `Claude CLI user prompt exceeds ${LARGE_THRESHOLD} bytes; no role-preserving large-input transport is available`
-        );
-      }
-      args.push("-p", userText);
-      args.push("--output-format", "stream-json", "--verbose");
-      args.push("--disable-slash-commands");
-      args.push("--dangerously-skip-permissions");
-      if (this.cfg.allowedTools) args.push("--tools", this.cfg.allowedTools);
-      if (!isResume && systemContent) {
-        const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
-        if (isLargeSys) {
-          const tmpSysFile = (0, import_path_browserify2.join)(this.cfg.tmpDir, `ai-wiki-sys-${id}.txt`);
-          await this.cfg.tmpWrite(tmpSysFile, systemContent);
-          tmpFiles.push(tmpSysFile);
-          args.push("--system-prompt-file", tmpSysFile);
-        } else {
-          args.push("--system-prompt", systemContent);
-        }
-      }
-    } catch (err) {
-      cleanupTmpFiles(this.cfg, tmpFiles);
-      throw err;
+    const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
+    if (isLargeUser) {
+      throw new Error(
+        `Claude CLI user prompt exceeds ${LARGE_THRESHOLD} bytes; no role-preserving large-input transport is available`
+      );
     }
-    if (opts?.signal?.aborted) {
-      cleanupTmpFiles(this.cfg, tmpFiles);
-      throw abortError();
+    args.push("-p", userText);
+    args.push("--output-format", "stream-json", "--verbose");
+    args.push("--disable-slash-commands");
+    args.push("--dangerously-skip-permissions");
+    if (this.cfg.allowedTools) args.push("--tools", this.cfg.allowedTools);
+    if (!isResume && systemContent) {
+      const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
+      if (isLargeSys) {
+        deferredSystemPrompt = systemContent;
+      } else {
+        args.push("--system-prompt", systemContent);
+      }
     }
+    if (opts?.signal?.aborted) throw abortError();
     if (params.stream) {
-      return this._makeIterable(args, opts?.signal, requestTimeoutSec, tmpFiles);
+      return this._makeIterable(args, opts?.signal, requestTimeoutSec, deferredSystemPrompt);
     }
-    return this._collect(args, opts?.signal, requestTimeoutSec, tmpFiles);
+    return this._collect(args, opts?.signal, requestTimeoutSec, deferredSystemPrompt);
   }
-  _makeIterable(args, signal, timeoutSec, tmpFiles) {
-    return { [Symbol.asyncIterator]: () => this._generate(args, signal, timeoutSec, tmpFiles) };
+  _makeIterable(args, signal, timeoutSec, deferredSystemPrompt) {
+    return {
+      [Symbol.asyncIterator]: () => this._generate(args, signal, timeoutSec, deferredSystemPrompt)
+    };
   }
-  async *_generate(args, signal, timeoutSec, tmpFiles) {
+  async *_generate(args, signal, timeoutSec, deferredSystemPrompt) {
+    const runArgs = [...args];
+    const tmpFiles = [];
     let spawnedChildForCleanup;
     let childCleanupStarted = false;
     try {
+      if (signal?.aborted) throw abortError();
+      if (deferredSystemPrompt !== void 0) {
+        const id2 = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const tmpSysFile = (0, import_path_browserify2.join)(this.cfg.tmpDir, `ai-wiki-sys-${id2}.txt`);
+        tmpFiles.push(tmpSysFile);
+        await this.cfg.tmpWrite(tmpSysFile, deferredSystemPrompt);
+        runArgs.push("--system-prompt-file", tmpSysFile);
+        if (signal?.aborted) throw abortError();
+      }
       validateIclaudePath(this.cfg.iclaudePath);
       if (!import_obsidian3.Platform.isDesktopApp) throw new Error("Claude CLI backend is desktop-only");
       if (signal?.aborted) throw abortError();
       const { spawn } = await import("node:child_process");
-      const child = spawn(this.cfg.iclaudePath, args, {
+      const child = spawn(this.cfg.iclaudePath, runArgs, {
         stdio: ["ignore", "pipe", "pipe"],
         cwd: this.cfg.cwd || void 0
       });
@@ -29793,10 +29794,15 @@ var ClaudeCliClient = class {
       }
     }
   }
-  async _collect(args, signal, timeoutSec, tmpFiles) {
+  async _collect(args, signal, timeoutSec, deferredSystemPrompt) {
     let text = "";
     let reasoning = "";
-    for await (const chunk of this._generate(args, signal, timeoutSec, tmpFiles)) {
+    for await (const chunk of this._generate(
+      args,
+      signal,
+      timeoutSec,
+      deferredSystemPrompt
+    )) {
       const delta = chunk.choices[0]?.delta;
       text += delta?.content ?? "";
       reasoning += delta?.reasoning ?? delta?.reasoning_content ?? "";

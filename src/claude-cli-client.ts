@@ -145,8 +145,7 @@ export class ClaudeCliClient implements LlmClient {
     const { requestTimeoutSec } = this.cfg;
 
     const LARGE_THRESHOLD = 262_144;
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const tmpFiles: string[] = [];
+    let deferredSystemPrompt: string | undefined;
 
     const isResume = Boolean(this.cfg.resumeSessionId);
     const args: string[] = [];
@@ -160,77 +159,80 @@ export class ClaudeCliClient implements LlmClient {
       args.push("--resume", this.cfg.resumeSessionId!);
     }
 
-    try {
-      const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
-      if (isLargeUser) {
-        throw new Error(
-          `Claude CLI user prompt exceeds ${LARGE_THRESHOLD} bytes; ` +
-          "no role-preserving large-input transport is available",
-        );
+    const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
+    if (isLargeUser) {
+      throw new Error(
+        `Claude CLI user prompt exceeds ${LARGE_THRESHOLD} bytes; ` +
+        "no role-preserving large-input transport is available",
+      );
+    }
+    args.push("-p", userText);
+
+    args.push("--output-format", "stream-json", "--verbose");
+    args.push("--disable-slash-commands");
+    args.push("--dangerously-skip-permissions");
+
+    if (this.cfg.allowedTools) args.push("--tools", this.cfg.allowedTools);
+
+    // При resume системный промпт уже хранится в сессии claude —
+    // повторная передача может перезаписать исходный контекст операции.
+    if (!isResume && systemContent) {
+      const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
+      if (isLargeSys) {
+        deferredSystemPrompt = systemContent;
+      } else {
+        args.push("--system-prompt", systemContent);
       }
-      args.push("-p", userText);
-
-      args.push("--output-format", "stream-json", "--verbose");
-      args.push("--disable-slash-commands");
-      args.push("--dangerously-skip-permissions");
-
-      if (this.cfg.allowedTools) args.push("--tools", this.cfg.allowedTools);
-
-      // При resume системный промпт уже хранится в сессии claude —
-      // повторная передача может перезаписать исходный контекст операции.
-      if (!isResume && systemContent) {
-        const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
-        if (isLargeSys) {
-          const tmpSysFile = join(this.cfg.tmpDir, `ai-wiki-sys-${id}.txt`);
-          await this.cfg.tmpWrite(tmpSysFile, systemContent);
-          tmpFiles.push(tmpSysFile);
-          args.push("--system-prompt-file", tmpSysFile);
-        } else {
-          args.push("--system-prompt", systemContent);
-        }
-      }
-    } catch (err) {
-      cleanupTmpFiles(this.cfg, tmpFiles);
-      throw err;
     }
 
-    if (opts?.signal?.aborted) {
-      cleanupTmpFiles(this.cfg, tmpFiles);
-      throw abortError();
-    }
+    if (opts?.signal?.aborted) throw abortError();
     if ((params as { stream?: boolean }).stream) {
-      return this._makeIterable(args, opts?.signal, requestTimeoutSec, tmpFiles);
+      return this._makeIterable(args, opts?.signal, requestTimeoutSec, deferredSystemPrompt);
     }
-    return this._collect(args, opts?.signal, requestTimeoutSec, tmpFiles);
+    return this._collect(args, opts?.signal, requestTimeoutSec, deferredSystemPrompt);
   }
 
   private _makeIterable(
     args: string[],
     signal: AbortSignal | undefined,
     timeoutSec: number,
-    tmpFiles: string[],
+    deferredSystemPrompt: string | undefined,
   ): AsyncIterable<OpenAI.Chat.ChatCompletionChunk> {
-    return { [Symbol.asyncIterator]: () => this._generate(args, signal, timeoutSec, tmpFiles) };
+    return {
+      [Symbol.asyncIterator]: () =>
+        this._generate(args, signal, timeoutSec, deferredSystemPrompt),
+    };
   }
 
   private async *_generate(
     args: string[],
     signal: AbortSignal | undefined,
     timeoutSec: number,
-    tmpFiles: string[],
+    deferredSystemPrompt: string | undefined,
   ): AsyncGenerator<OpenAI.Chat.ChatCompletionChunk> {
+    const runArgs = [...args];
+    const tmpFiles: string[] = [];
     let spawnedChildForCleanup:
       | ReturnType<(typeof import("node:child_process"))["spawn"]>
       | undefined;
     let childCleanupStarted = false;
     try {
+      if (signal?.aborted) throw abortError();
+      if (deferredSystemPrompt !== undefined) {
+        const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const tmpSysFile = join(this.cfg.tmpDir, `ai-wiki-sys-${id}.txt`);
+        tmpFiles.push(tmpSysFile);
+        await this.cfg.tmpWrite(tmpSysFile, deferredSystemPrompt);
+        runArgs.push("--system-prompt-file", tmpSysFile);
+        if (signal?.aborted) throw abortError();
+      }
       validateIclaudePath(this.cfg.iclaudePath);
       if (!Platform.isDesktopApp) throw new Error("Claude CLI backend is desktop-only");
       if (signal?.aborted) throw abortError();
       // Lazily loaded so the Node builtin never executes on mobile, where this
       // code path is unreachable but the module would still fail to load.
       const { spawn } = await import("node:child_process");
-      const child = spawn(this.cfg.iclaudePath, args, {
+      const child = spawn(this.cfg.iclaudePath, runArgs, {
         stdio: ["ignore", "pipe", "pipe"],
         cwd: this.cfg.cwd || undefined,
       });
@@ -438,11 +440,16 @@ export class ClaudeCliClient implements LlmClient {
     args: string[],
     signal: AbortSignal | undefined,
     timeoutSec: number,
-    tmpFiles: string[],
+    deferredSystemPrompt: string | undefined,
   ): Promise<OpenAI.Chat.ChatCompletion> {
     let text = "";
     let reasoning = "";
-    for await (const chunk of this._generate(args, signal, timeoutSec, tmpFiles)) {
+    for await (const chunk of this._generate(
+      args,
+      signal,
+      timeoutSec,
+      deferredSystemPrompt,
+    )) {
       const delta = chunk.choices[0]?.delta as {
         content?: string;
         reasoning?: string;

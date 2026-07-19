@@ -314,10 +314,11 @@ test("large sensitive stderr is bounded and absent from thrown errors", async ()
   });
 });
 
-test("pre-aborted non-stream request rejects before spawn and removes temp prompt", async () => {
+test("pre-aborted non-stream request creates no temporary prompt or child", async () => {
   const dir = await mkdtemp(join(tmpdir(), "obsidian-ai-wiki-pre-abort-"));
   const marker = join(dir, "spawned.marker");
   const executable = join(dir, "claude-pre-abort.mjs");
+  const writes: string[] = [];
   const removed: string[] = [];
   await writeFile(executable, [
     "#!/usr/bin/env node",
@@ -330,7 +331,10 @@ test("pre-aborted non-stream request rejects before spawn and removes temp promp
     model: "claude-test",
     requestTimeoutSec: 5,
     tmpDir: dir,
-    tmpWrite: (path, content) => writeFile(path, content, "utf8"),
+    tmpWrite: async (path, content) => {
+      writes.push(path);
+      await writeFile(path, content, "utf8");
+    },
     tmpRemove: (path) => {
       removed.push(path);
       if (existsSync(path)) unlinkSync(path);
@@ -351,6 +355,176 @@ test("pre-aborted non-stream request rejects before spawn and removes temp promp
     );
     assert.equal(error.name, "AbortError");
     assert.equal(existsSync(marker), false);
+    assert.deepEqual(writes, []);
+    assert.deepEqual(removed, []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("aborted unstarted Claude stream creates no temporary prompt or child", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "obsidian-ai-wiki-unstarted-stream-"));
+  const marker = join(dir, "spawned.marker");
+  const executable = join(dir, "claude-unstarted-stream.mjs");
+  const writes: string[] = [];
+  const removed: string[] = [];
+  await writeFile(executable, [
+    "#!/usr/bin/env node",
+    `await import("node:fs/promises").then((fs) => fs.writeFile(${JSON.stringify(marker)}, "spawned"));`,
+    "",
+  ].join("\n"), "utf8");
+  await chmod(executable, 0o700);
+  const client = new ClaudeCliClient({
+    iclaudePath: executable,
+    model: "claude-test",
+    requestTimeoutSec: 5,
+    tmpDir: dir,
+    tmpWrite: async (path, content) => {
+      writes.push(path);
+      await writeFile(path, content, "utf8");
+    },
+    tmpRemove: (path) => {
+      removed.push(path);
+      if (existsSync(path)) unlinkSync(path);
+    },
+  });
+  const controller = new AbortController();
+  try {
+    await client.chat.completions.create({
+      ...largeSystemRequest(),
+      stream: true,
+    }, { signal: controller.signal });
+    controller.abort("never-started");
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+
+    assert.deepEqual(writes, []);
+    assert.deepEqual(removed, []);
+    assert.equal(existsSync(marker), false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("first-next abort removes lazily created prompt before spawning", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "obsidian-ai-wiki-first-next-abort-"));
+  const marker = join(dir, "spawned.marker");
+  const executable = join(dir, "claude-first-next-abort.mjs");
+  const writes: string[] = [];
+  const removed: string[] = [];
+  let signalWriteStarted: (() => void) | undefined;
+  const writeStarted = new Promise<void>((resolve) => {
+    signalWriteStarted = resolve;
+  });
+  let releaseWrite: (() => void) | undefined;
+  const writeReleased = new Promise<void>((resolve) => {
+    releaseWrite = resolve;
+  });
+  await writeFile(executable, [
+    "#!/usr/bin/env node",
+    `await import("node:fs/promises").then((fs) => fs.writeFile(${JSON.stringify(marker)}, "spawned"));`,
+    "",
+  ].join("\n"), "utf8");
+  await chmod(executable, 0o700);
+  const client = new ClaudeCliClient({
+    iclaudePath: executable,
+    model: "claude-test",
+    requestTimeoutSec: 5,
+    tmpDir: dir,
+    tmpWrite: async (path, content) => {
+      writes.push(path);
+      await writeFile(path, content, "utf8");
+      signalWriteStarted?.();
+      await writeReleased;
+    },
+    tmpRemove: (path) => {
+      removed.push(path);
+      if (existsSync(path)) unlinkSync(path);
+    },
+  });
+  const controller = new AbortController();
+  const createPromise = client.chat.completions.create({
+    ...largeSystemRequest(),
+    stream: true,
+  }, { signal: controller.signal });
+  try {
+    const firstAction = await Promise.race([
+      createPromise.then(() => "created" as const),
+      writeStarted.then(() => "write-started" as const),
+    ]);
+    assert.equal(firstAction, "created");
+
+    const response = await createPromise;
+    const iterator = (
+      response as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>
+    )[Symbol.asyncIterator]();
+    const firstNext = iterator.next();
+    await writeStarted;
+    controller.abort("during-lazy-write");
+    releaseWrite?.();
+
+    const error = await captureRejection(() => firstNext);
+    assert.equal(error.name, "AbortError");
+    assert.equal(writes.length, 1);
+    assert.equal(removed.length, 1);
+    assert.equal(removed[0], writes[0]);
+    assert.equal(existsSync(writes[0]), false);
+    assert.equal(existsSync(marker), false);
+  } finally {
+    releaseWrite?.();
+    await createPromise.catch(() => undefined);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("started Claude stream receives deferred system file and unchanged user prompt", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "obsidian-ai-wiki-lazy-context-"));
+  const executable = join(dir, "claude-lazy-context.mjs");
+  const systemMarker = "LAZY_SYSTEM_CONTEXT_MARKER";
+  const userPrompt = "EXACT_LAZY_STREAM_USER";
+  const removed: string[] = [];
+  await writeFile(executable, [
+    "#!/usr/bin/env node",
+    'const fs = await import("node:fs/promises");',
+    'const fileIndex = process.argv.indexOf("--system-prompt-file");',
+    'const promptIndex = process.argv.indexOf("-p");',
+    "if (fileIndex < 0 || process.argv.includes('--system-prompt')) process.exit(7);",
+    `if (process.argv[promptIndex + 1] !== ${JSON.stringify(userPrompt)}) process.exit(8);`,
+    "const system = await fs.readFile(process.argv[fileIndex + 1], 'utf8');",
+    `if (!system.startsWith(${JSON.stringify(systemMarker)})) process.exit(9);`,
+    `process.stdout.write(${JSON.stringify(
+      `${assistantLine({ type: "text", text: "lazy-context-ok" })}\n`,
+    )});`,
+    "",
+  ].join("\n"), "utf8");
+  await chmod(executable, 0o700);
+  const client = new ClaudeCliClient({
+    iclaudePath: executable,
+    model: "claude-test",
+    requestTimeoutSec: 5,
+    tmpDir: dir,
+    tmpWrite: (path, content) => writeFile(path, content, "utf8"),
+    tmpRemove: (path) => {
+      removed.push(path);
+      if (existsSync(path)) unlinkSync(path);
+    },
+  });
+  try {
+    const response = await client.chat.completions.create({
+      model: "claude-test",
+      stream: true,
+      messages: [
+        { role: "system", content: `${systemMarker}${"s".repeat(262_145)}` },
+        { role: "user", content: userPrompt },
+      ],
+    });
+    const chunks: OpenAI.Chat.ChatCompletionChunk[] = [];
+    for await (const chunk of response as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>) {
+      chunks.push(chunk);
+    }
+
+    assert.equal(chunks.map((chunk) =>
+      (chunk.choices[0]?.delta as { content?: string })?.content ?? ""
+    ).join(""), "lazy-context-ok");
     assert.equal(removed.length, 1);
     assert.equal(existsSync(removed[0]), false);
   } finally {
