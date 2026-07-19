@@ -203,6 +203,7 @@ async function* prepareDomainBootstrap(
       callSite: "init.bootstrap",
       signal,
       onEvent: () => {},
+      transport: "non-stream",
     }, sink)) {
       yield event;
     }

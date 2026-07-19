@@ -23,6 +23,27 @@ function usageChunk() {
 function chunk(content: string) {
   return { id: "c", object: "chat.completion.chunk", created: 0, model: "m", choices: [{ index: 0, delta: { content }, finish_reason: null }] };
 }
+function mockResponse(params: unknown, content: string) {
+  if ((params as { stream?: boolean }).stream === false) {
+    return {
+      id: "completion",
+      object: "chat.completion",
+      created: 0,
+      model: "m",
+      choices: [{
+        index: 0,
+        finish_reason: "stop",
+        message: { role: "assistant", content, refusal: null },
+        logprobs: null,
+      }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    };
+  }
+  return (async function* () {
+    yield chunk(content);
+    yield usageChunk();
+  })();
+}
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void;
   const promise = new Promise<void>((done) => { resolve = done; });
@@ -31,14 +52,14 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 // Bootstrap always returns non-JSON so structured parse fails on every retry.
 function brokenBootstrapLlm(): LlmClient {
   return {
-    chat: { completions: { create: async () => (async function* () { yield chunk("not json at all"); yield usageChunk(); })() } },
+    chat: { completions: { create: async (params: unknown) => mockResponse(params, "not json at all") } },
   } as unknown as LlmClient;
 }
 // Bootstrap returns a valid domain with an empty entity_types list (allowed).
 function emptyTypesBootstrapLlm(): LlmClient {
   const body = JSON.stringify({ reasoning: "", id: "demo", name: "Demo", wiki_folder: "demo", entity_types: [], language_notes: "" });
   return {
-    chat: { completions: { create: async () => (async function* () { yield chunk(body); yield usageChunk(); })() } },
+    chat: { completions: { create: async (params: unknown) => mockResponse(params, body) } },
   } as unknown as LlmClient;
 }
 function adapter() {
@@ -103,19 +124,13 @@ function forceBootstrapLlm(
       const prompt = JSON.stringify(params);
       const chunkId = prompt.match(/CHUNK_ID ([^\s\\"]+)/)?.[1];
       if (chunkId) {
-        return (async function* () {
-          yield chunk(JSON.stringify({
+        return mockResponse(params, JSON.stringify({
             packets: [],
             noEvidence: [{ chunkId, reason: "No domain evidence." }],
           }));
-          yield usageChunk();
-        })();
       }
       onBootstrap?.();
-      return (async function* () {
-        yield chunk(bootstrapBody);
-        yield usageChunk();
-      })();
+      return mockResponse(params, bootstrapBody);
     } } },
   } as unknown as LlmClient;
 }
@@ -578,20 +593,15 @@ test("bootstrap mapper events are yielded while delayed evidence preparation is 
       const prompt = JSON.stringify(params);
       const chunkId = prompt.match(/CHUNK_ID ([^\s\\"]+)/)?.[1];
       if (!chunkId) {
-        return (async function* () {
-          yield chunk(validBootstrap);
-          yield usageChunk();
-        })();
+        return mockResponse(params, validBootstrap);
       }
-      return (async function* () {
-        await gate.promise;
-        yield chunk(JSON.stringify({
+      await gate.promise;
+      const response = mockResponse(params, JSON.stringify({
           packets: [],
           noEvidence: [{ chunkId, reason: "No domain evidence." }],
         }));
-        yield usageChunk();
-        mapperComplete = true;
-      })();
+      mapperComplete = true;
+      return response;
     } } },
   } as unknown as LlmClient;
   const generator = runInitWithSources(
@@ -623,8 +633,9 @@ test("bootstrap mapper events are yielded while delayed evidence preparation is 
     const next = await generator.next();
     assert.equal(next.done, false);
     if (!next.done
-      && next.value.kind === "prompt_budget"
-      && next.value.callSite === "init.bootstrap-map") {
+      && next.value.kind === "tool_use"
+      && next.value.name === "Evidence mapping"
+      && (next.value.input as { callSite?: string }).callSite === "init.bootstrap-map") {
       clearTimeout(timer);
       assert.equal(timedOut, false, "bootstrap mapper event was buffered until helper completion");
       assert.equal(mapperComplete, false);
@@ -666,17 +677,14 @@ test("init bootstrap prompt never includes a large raw structured index", async 
         mapperRequests++;
         const chunkId = prompt.match(/CHUNK_ID ([^\s\\"]+)/)?.[1];
         assert.ok(chunkId);
-        return (async function* () {
-          yield chunk(JSON.stringify({
+        return mockResponse(params, JSON.stringify({
             packets: [],
             noEvidence: [{ chunkId, reason: "No bootstrap evidence." }],
           }));
-          yield usageChunk();
-        })();
       }
       bootstrapRequests++;
       assert.match(prompt, /bootstrapEvidence/);
-      return (async function* () { yield chunk(body); yield usageChunk(); })();
+      return mockResponse(params, body);
     } } },
   } as unknown as LlmClient;
   const existing = {
@@ -748,6 +756,59 @@ test("successful bootstrap with empty entity_types does not stop init", async ()
   assert.ok(events.some((e) => e.kind === "result" && /Dry run/i.test(e.text)));
 });
 
+test("successful init bootstrap uses one direct non-stream request", async () => {
+  const rawAdapter = adapter();
+  rawAdapter.files.set("src/a.md", "# Source\n\nAlpha source content.");
+  const bootstrapRequests: Array<{ stream?: boolean }> = [];
+  const bootstrapBody = JSON.stringify({
+    reasoning: "",
+    id: "demo",
+    name: "Demo",
+    wiki_folder: "demo",
+    entity_types: [],
+    language_notes: "",
+  });
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      const request = params as { stream?: boolean };
+      const prompt = JSON.stringify(params);
+      const chunkId = prompt.match(/CHUNK_ID ([^\s\\"]+)/)?.[1];
+      if (chunkId) {
+        return mockResponse(params, JSON.stringify({
+          packets: [],
+          noEvidence: [{ chunkId, reason: "No bootstrap evidence." }],
+        }));
+      }
+      bootstrapRequests.push(request);
+      return mockResponse(params, bootstrapBody);
+    } } },
+  } as unknown as LlmClient;
+  const events: RunEvent[] = [];
+
+  for await (const event of runInitWithSources(
+    "demo",
+    ["src"],
+    true,
+    new VaultTools(rawAdapter, "/vault"),
+    llm,
+    "m",
+    [],
+    "Vault",
+    new AbortController().signal,
+    { structuredRetries: 0 },
+    undefined,
+    false,
+    undefined,
+  )) {
+    events.push(event);
+  }
+
+  assert.equal(events.some((event) => event.kind === "result" && /Dry run/i.test(event.text)), true);
+  assert.equal(bootstrapRequests.length, 1);
+  assert.deepEqual(bootstrapRequests.map((request) => request.stream), [false]);
+  assert.equal(bootstrapRequests.some((request) => request.stream === true), false);
+});
+
 test("oversized first source maps every bootstrap chunk and keeps every request in budget", async () => {
   const rawAdapter = adapter();
   const source = Array.from(
@@ -773,7 +834,7 @@ test("oversized first source maps every bootstrap chunk and keeps every request 
       const body = chunkId
         ? JSON.stringify({ packets: [], noEvidence: [{ chunkId, reason: "No domain evidence." }] })
         : domainBody;
-      return (async function* () { yield chunk(body); yield usageChunk(); })();
+      return mockResponse(params, body);
     } } },
   } as unknown as LlmClient;
   const events: RunEvent[] = [];
@@ -868,8 +929,7 @@ test("bootstrap evidence packing reserves system and schema overhead from the sa
       const prompt = JSON.stringify(params);
       const chunkId = prompt.match(/CHUNK_ID ([^\s\\"]+)/)?.[1];
       if (chunkId) {
-        return (async function* () {
-          yield chunk(JSON.stringify({
+        return mockResponse(params, JSON.stringify({
             packets: [{
               id: `packet-${chunkId}`,
               chunkId,
@@ -881,12 +941,9 @@ test("bootstrap evidence packing reserves system and schema overhead from the sa
             }],
             noEvidence: [],
           }));
-          yield usageChunk();
-        })();
       }
       bootstrapRequests++;
-      return (async function* () {
-        yield chunk(JSON.stringify({
+      return mockResponse(params, JSON.stringify({
           reasoning: "",
           id: "demo",
           name: "Demo",
@@ -894,8 +951,6 @@ test("bootstrap evidence packing reserves system and schema overhead from the sa
           entity_types: [],
           language_notes: "",
         }));
-        yield usageChunk();
-      })();
     } } },
   } as unknown as LlmClient;
   const events: RunEvent[] = [];

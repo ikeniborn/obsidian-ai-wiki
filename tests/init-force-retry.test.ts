@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { register } from "node:module";
+import { readFileSync } from "node:fs";
+import { createRequire, register } from "node:module";
+import { setTimeout as nodeSetTimeout } from "node:timers";
 import test from "node:test";
 
 import { DEFAULT_SETTINGS, type LlmWikiPluginSettings, type RunEvent } from "../src/types";
@@ -16,6 +18,9 @@ export async function resolve(specifier, context, nextResolve) {
 
 register(`data:text/javascript,${encodeURIComponent(pathBrowserifyLoader)}`);
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
+
+(globalThis as typeof globalThis & { require: NodeJS.Require }).require =
+  createRequire(import.meta.url);
 
 const { AgentRunner } = await import("../src/agent-runner");
 
@@ -49,6 +54,215 @@ function settings(): LlmWikiPluginSettings {
     llmIdleRetries: 1,
   };
 }
+
+test("desktop idle timers use Electron-compatible synchronous require", () => {
+  const source = readFileSync(new URL("../src/agent-runner.ts", import.meta.url), "utf8");
+
+  assert.doesNotMatch(source, /await\s+import\(["']node:timers["']\)/);
+  assert.match(source, /require\(["']node:timers["']\)/);
+});
+
+test("desktop idle watchdog falls back to process.getBuiltinModule in Node ESM", async () => {
+  const idleSettings = settings();
+  idleSettings.llmIdleRetries = 0;
+  const runner = new AgentRunner(
+    { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
+    idleSettings,
+    new VaultTools(adapter(), "/vault"),
+    "Vault",
+    [],
+  );
+  let enteredRunOperation!: () => void;
+  const runOperationEntered = new Promise<void>((resolve) => {
+    enteredRunOperation = resolve;
+  });
+  (runner as unknown as {
+    runOperation: (req: { signal: AbortSignal }) => AsyncGenerator<RunEvent>;
+  }).runOperation = async function* (req) {
+    enteredRunOperation();
+    await new Promise<void>((_, reject) => {
+      req.signal.addEventListener(
+        "abort",
+        () => reject(new DOMException("Request was aborted", "AbortError")),
+        { once: true },
+      );
+    });
+  };
+
+  const runtime = globalThis as typeof globalThis & { require?: NodeJS.Require };
+  const originalRequire = runtime.require;
+  const originalSetTimeout = window.setTimeout;
+  delete runtime.require;
+  window.setTimeout = (() => 1) as typeof window.setTimeout;
+  try {
+    const operation = (async () => {
+      try {
+        for await (const _event of runner.run({
+          operation: "init",
+          args: ["demo"],
+          cwd: "/vault",
+          signal: new AbortController().signal,
+          timeoutMs: 0,
+        })) {
+          // Wait for the semantic idle watchdog.
+        }
+        return "resolved";
+      } catch (error) {
+        return error instanceof Error ? error.name : "unknown-error";
+      }
+    })();
+    const outcome = await Promise.race([
+      operation,
+      (async () => {
+        await runOperationEntered;
+        return new Promise<string>((resolve) => nodeSetTimeout(() => resolve("still-pending"), 250));
+      })(),
+    ]);
+
+    assert.equal(outcome, "AbortError");
+  } finally {
+    runtime.require = originalRequire;
+    window.setTimeout = originalSetTimeout;
+  }
+});
+
+test("mobile idle timers do not evaluate desktop require", async () => {
+  const runner = new AgentRunner(
+    { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
+    settings(),
+    new VaultTools(adapter(), "/vault"),
+    "Vault",
+    [],
+    undefined,
+    true,
+  );
+  (runner as unknown as {
+    runOperation: () => AsyncGenerator<RunEvent>;
+  }).runOperation = async function* () {
+    yield { kind: "result", durationMs: 1, text: "ok" };
+  };
+
+  const runtime = globalThis as typeof globalThis & { require: NodeJS.Require };
+  const originalRequire = runtime.require;
+  let requireCalls = 0;
+  runtime.require = (() => {
+    requireCalls++;
+    throw new Error("desktop require evaluated on mobile");
+  }) as NodeJS.Require;
+  try {
+    for await (const _event of runner.run({
+      operation: "query",
+      args: ["hello"],
+      cwd: "/vault",
+      signal: new AbortController().signal,
+      timeoutMs: 0,
+    })) {
+      // Drain the mobile operation.
+    }
+  } finally {
+    runtime.require = originalRequire;
+  }
+
+  assert.equal(requireCalls, 0);
+});
+
+test("streaming idle abort does not depend on Electron renderer timers", async () => {
+  const idleSettings = settings();
+  idleSettings.llmIdleRetries = 0;
+  const runner = new AgentRunner(
+    { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
+    idleSettings,
+    new VaultTools(adapter(), "/vault"),
+    "Vault",
+    [],
+  );
+  let enteredRunOperation!: () => void;
+  const runOperationEntered = new Promise<void>((resolve) => {
+    enteredRunOperation = resolve;
+  });
+  (runner as unknown as {
+    runOperation: (req: { signal: AbortSignal }) => AsyncGenerator<RunEvent>;
+  }).runOperation = async function* (req) {
+    enteredRunOperation();
+    await new Promise<void>((_, reject) => {
+      req.signal.addEventListener(
+        "abort",
+        () => reject(new DOMException("Request was aborted", "AbortError")),
+        { once: true },
+      );
+    });
+  };
+
+  const originalSetTimeout = window.setTimeout;
+  window.setTimeout = (() => 1) as typeof window.setTimeout;
+  try {
+    const operation = (async () => {
+      try {
+        for await (const _event of runner.run({
+          operation: "init",
+          args: ["demo"],
+          cwd: "/vault",
+          signal: new AbortController().signal,
+          timeoutMs: 0,
+        })) {
+          // Wait for the semantic idle watchdog.
+        }
+        return "resolved";
+      } catch (error) {
+        return error instanceof Error ? error.name : "unknown-error";
+      }
+    })();
+    await runOperationEntered;
+    const outcome = await Promise.race([
+      operation,
+      new Promise<string>((resolve) => nodeSetTimeout(() => resolve("still-pending"), 250)),
+    ]);
+
+    assert.equal(outcome, "AbortError");
+  } finally {
+    window.setTimeout = originalSetTimeout;
+  }
+});
+
+test("consumer return clears the active idle timer without aborting later", async () => {
+  const idleSettings = settings();
+  idleSettings.llmIdleTimeoutSec = 0.02;
+  idleSettings.llmIdleRetries = 0;
+  const runner = new AgentRunner(
+    { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
+    idleSettings,
+    new VaultTools(adapter(), "/vault"),
+    "Vault",
+    [],
+  );
+  let operationSignal: AbortSignal | undefined;
+  let aborts = 0;
+  (runner as unknown as {
+    runOperation: (req: { signal: AbortSignal }) => AsyncGenerator<RunEvent>;
+  }).runOperation = async function* (req) {
+    operationSignal = req.signal;
+    req.signal.addEventListener("abort", () => { aborts++; }, { once: true });
+    yield { kind: "tool_use", name: "ConsumerCloseProbe", input: {} };
+  };
+
+  const iterator = runner.run({
+    operation: "init",
+    args: ["demo"],
+    cwd: "/vault",
+    signal: new AbortController().signal,
+    timeoutMs: 0,
+  });
+  while (true) {
+    const next = await iterator.next();
+    assert.equal(next.done, false);
+    if (next.value.kind === "tool_use" && next.value.name === "ConsumerCloseProbe") break;
+  }
+  await iterator.return(undefined as never);
+  await new Promise<void>((resolve) => nodeSetTimeout(resolve, 100));
+
+  assert.equal(operationSignal?.aborted, false);
+  assert.equal(aborts, 0);
+});
 
 test("operation-level idle retry does not replay WipeDomain after destructive prelude", async () => {
   const runner = new AgentRunner(

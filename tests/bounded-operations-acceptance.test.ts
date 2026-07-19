@@ -23,6 +23,7 @@ import type {
   ChunkIndexRecord,
   PageIndexRecord,
 } from "../src/wiki-index-jsonl";
+import { mockChatResponse } from "./openai-mock-response";
 
 const pathBrowserifyLoader = `
 export async function resolve(specifier, context, nextResolve) {
@@ -520,7 +521,7 @@ async function exerciseRawIndexBoundary(): Promise<void> {
           if (prompt.includes("CHUNK_ID ")) {
             const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
             assert.ok(chunkId);
-            return streamJson({
+            return mockChatResponse(params, JSON.stringify({
               packets: [{
                 id: "p1",
                 chunkId,
@@ -532,7 +533,7 @@ async function exerciseRawIndexBoundary(): Promise<void> {
                 sourceAnchor: `${sourcePath}:1`,
               }],
               noEvidence: [],
-            });
+            }));
           }
           if (prompt.includes("Entity bundle: entity-alpha")) {
             return streamJson({
@@ -649,10 +650,10 @@ async function exerciseEvidenceThroughSynthesis(): Promise<void> {
             const messages = typed.messages as OpenAI.Chat.ChatCompletionMessageParam[];
             evidenceRequests.push(messages);
             if (isReducerRequest(messages)) {
-              return streamJson(reducedEvidence(reducerInput(messages)));
+              return mockChatResponse(params, JSON.stringify(reducedEvidence(reducerInput(messages))));
             }
             const meta = mapperMeta(messages);
-            return streamJson({
+            return mockChatResponse(params, JSON.stringify({
               packets: Array.from({ length: 12 }, (_, packetIndex) => ({
                 id: `p${meta.ordinal}-${packetIndex}`,
                 chunkId: meta.id,
@@ -664,7 +665,7 @@ async function exerciseEvidenceThroughSynthesis(): Promise<void> {
                 sourceAnchor: `${meta.id}:1`,
               })),
               noEvidence: [],
-            });
+            }));
           },
         },
       },

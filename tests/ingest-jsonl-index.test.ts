@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { register } from "node:module";
 import test from "node:test";
 import type { IngestOutcome, LlmClient, RunEvent } from "../src/types";
+import { mockChatResponse } from "./openai-mock-response";
 
 const pathBrowserifyLoader = `
 export async function resolve(specifier, context, nextResolve) {
@@ -148,7 +149,7 @@ test("chunk-only renamed page gets a typed description before real Jaccard candi
             skips: [],
             entity_types_delta: [],
           });
-      return (async function* () { yield contentChunk(output); yield usageChunk(); })();
+      return mockChatResponse(params, output, { promptTokens: 1, completionTokens: 1 });
     } } },
   } as unknown as LlmClient;
   const similarity = new PageSimilarityService({ mode: "jaccard", topK: 5 });
@@ -259,7 +260,7 @@ test("stale valid page description is reconciled from Markdown before candidate 
             skips: [],
             entity_types_delta: [],
           });
-      return (async function* () { yield contentChunk(output); yield usageChunk(); })();
+      return mockChatResponse(params, output, { promptTokens: 1, completionTokens: 1 });
     } } },
   } as unknown as LlmClient;
   const domain = {
@@ -330,8 +331,7 @@ test("renamed existing page patch keeps authoritative path and fresh page-record
       if (prompt.includes("CHUNK_ID ")) {
         const chunkId = prompt.match(/CHUNK_ID ([^\s\\"]+)/)?.[1];
         assert.ok(chunkId);
-        return (async function* () {
-          yield contentChunk(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
             packets: [{
               id: `packet-${chunkId}`,
               chunkId,
@@ -343,13 +343,10 @@ test("renamed existing page patch keeps authoritative path and fresh page-record
               sourceAnchor: `${sourcePath}:1`,
             }],
             noEvidence: [],
-          }));
-          yield usageChunk();
-        })();
+          }), { promptTokens: 1, completionTokens: 1 });
       }
       assert.match(prompt, /Existing renamed alias facts/);
-      return (async function* () {
-        yield contentChunk(JSON.stringify({
+      return mockChatResponse(params, JSON.stringify({
           reasoning: "Patch the authoritative renamed page.",
           actions: [{
             kind: "patch",
@@ -366,9 +363,7 @@ test("renamed existing page patch keeps authoritative path and fresh page-record
           }],
           skips: [],
           entity_types_delta: [],
-        }));
-        yield usageChunk();
-      })();
+        }), { promptTokens: 1, completionTokens: 1 });
     } } },
   } as unknown as LlmClient;
   const domain = {
@@ -439,7 +434,7 @@ test("ingest returns a context failure for an unreadable exact target without re
     chat: { completions: { create: async (params: unknown) => {
       const prompt = JSON.stringify(params);
       assert.match(prompt, /CHUNK_ID /);
-      return (async function* () { yield contentChunk(mapperOutput(prompt)); yield usageChunk(); })();
+      return mockChatResponse(params, mapperOutput(prompt), { promptTokens: 1, completionTokens: 1 });
     } } },
   } as unknown as LlmClient;
   const domain = {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { register } from "node:module";
 import test from "node:test";
 import type OpenAI from "openai";
+import { APIConnectionError } from "openai";
 import type { LlmCallOptions, LlmClient, RunEvent } from "../src/types";
 import { VaultTools, type VaultAdapter } from "../src/vault-tools";
 
@@ -148,16 +149,22 @@ function llmWithResponder(
 }
 
 function llmWithCreate(
-  create: (params: Record<string, unknown>, callIndex: number) => AsyncIterable<OpenAI.Chat.ChatCompletionChunk> | OpenAI.Chat.ChatCompletion | Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk> | OpenAI.Chat.ChatCompletion>,
+  create: (
+    params: Record<string, unknown>,
+    callIndex: number,
+    callOpts?: { signal?: AbortSignal },
+  ) => AsyncIterable<OpenAI.Chat.ChatCompletionChunk> | OpenAI.Chat.ChatCompletion | Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk> | OpenAI.Chat.ChatCompletion>,
   seenParams: Record<string, unknown>[],
+  seenSignals?: Array<AbortSignal | undefined>,
 ): LlmClient {
   return {
     chat: {
       completions: {
-        create: async (params: unknown) => {
+        create: async (params: unknown, callOpts?: { signal?: AbortSignal }) => {
           const typed = params as Record<string, unknown>;
           seenParams.push(typed);
-          return create(typed, seenParams.length - 1);
+          seenSignals?.push(callOpts?.signal);
+          return create(typed, seenParams.length - 1, callOpts);
         },
       },
     },
@@ -171,6 +178,7 @@ async function collectFormatEvents(
   adapter = new MemoryAdapter({ "notes/source.md": source }),
   extraOpts: LlmCallOptions = {},
   hasVision = false,
+  signal = new AbortController().signal,
 ) {
   const events: RunEvent[] = [];
   for await (const event of runFormat(
@@ -180,13 +188,122 @@ async function collectFormatEvents(
     "m",
     hasVision,
     [],
-    new AbortController().signal,
+    signal,
     { inputBudgetTokens, ...extraOpts },
   )) {
     events.push(event);
   }
   return { events, adapter };
 }
+
+test("Format generic pre-chunk incompatibility falls back once with AbortSignal", async () => {
+  const seenParams: Record<string, unknown>[] = [];
+  const seenSignals: Array<AbortSignal | undefined> = [];
+  const signal = new AbortController().signal;
+  const original = [
+    "---",
+    "tags: [fallback]",
+    "---",
+    "# Generic fallback",
+    "",
+    "Keep this line.",
+  ].join("\n");
+
+  const { adapter } = await collectFormatEvents(
+    original,
+    llmWithCreate((params) => {
+      if (params.stream !== false) throw new Error("stream transport unavailable");
+      return nonStreamResponse(frame("- fallback", original));
+    }, seenParams, seenSignals),
+    20_000,
+    undefined,
+    {},
+    false,
+    signal,
+  );
+
+  assert.ok(seenParams.length >= 2 && seenParams.length % 2 === 0);
+  for (let index = 0; index < seenParams.length; index += 2) {
+    assert.deepEqual(
+      seenParams.slice(index, index + 2).map((params) => params.stream),
+      [true, false],
+    );
+  }
+  assert.ok(seenSignals.every((seenSignal) => seenSignal === signal));
+  assert.equal(adapter.writes.length, 1);
+});
+
+test("Format HTTP 502 failure is sent exactly once", async () => {
+  const seenParams: Record<string, unknown>[] = [];
+  const error = Object.assign(new Error("Bad Gateway"), { status: 502 });
+
+  await assert.rejects(collectFormatEvents(
+    "# HTTP failure",
+    llmWithCreate(() => {
+      throw error;
+    }, seenParams),
+    20_000,
+  ), error);
+
+  assert.equal(seenParams.length, 1);
+});
+
+test("Format OpenAI connection failure is sent exactly once", async () => {
+  const seenParams: Record<string, unknown>[] = [];
+  const error = new APIConnectionError({ message: "Connection failed" });
+
+  await assert.rejects(collectFormatEvents(
+    "# Connection failure",
+    llmWithCreate(() => {
+      throw error;
+    }, seenParams),
+    20_000,
+  ), error);
+
+  assert.equal(seenParams.length, 1);
+});
+
+test("Format partial stream failure is propagated without replay", async () => {
+  const seenParams: Record<string, unknown>[] = [];
+  const error = new Error("stream transport unavailable");
+
+  await assert.rejects(collectFormatEvents(
+    "# Partial failure",
+    llmWithCreate((params) => {
+      if (params.stream === false) {
+        return nonStreamResponse(frame("- replayed", "# Must not be written"));
+      }
+      return (async function* () {
+        yield chunk("<<<REPORT>>>\n- partial");
+        throw error;
+      })();
+    }, seenParams),
+    20_000,
+  ), error);
+
+  assert.equal(seenParams.length, 1);
+});
+
+test("Format abort does not trigger non-stream fallback", async () => {
+  const seenParams: Record<string, unknown>[] = [];
+  const controller = new AbortController();
+
+  const { adapter } = await collectFormatEvents(
+    "# Abort",
+    llmWithCreate(() => {
+      controller.abort();
+      throw new DOMException("aborted", "AbortError");
+    }, seenParams),
+    20_000,
+    undefined,
+    {},
+    false,
+    controller.signal,
+  );
+
+  assert.equal(seenParams.length, 1);
+  assert.deepEqual(adapter.writes, []);
+});
 
 test("format keeps whole-file behavior when prepared input fits budget", async () => {
   const seenParams: Record<string, unknown>[] = [];

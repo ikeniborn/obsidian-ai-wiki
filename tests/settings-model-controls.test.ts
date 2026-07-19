@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import test from "node:test";
 
@@ -15,6 +16,45 @@ import { runNativeVisionModelCheck } from "../src/vision-probe";
 
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 const { i18nFor } = await import("../src/i18n");
+const settingsSource = readFileSync(new URL("../src/settings.ts", import.meta.url), "utf8");
+
+function assertSourceOrder(source: string, markers: readonly string[]): void {
+  let previous = -1;
+  for (const marker of markers) {
+    const position = source.indexOf(marker, previous + 1);
+    assert.notEqual(position, -1, `missing settings layout marker: ${marker}`);
+    assert.ok(position > previous, `settings layout marker is out of order: ${marker}`);
+    previous = position;
+  }
+}
+
+function sourceBlock(
+  source: string,
+  marker: string,
+  from = 0,
+): { start: number; end: number; body: string } {
+  const start = source.indexOf(marker, from);
+  assert.notEqual(start, -1, `missing settings block marker: ${marker}`);
+  const open = source.indexOf("{", start + marker.length - 1);
+  assert.notEqual(open, -1, `missing opening brace after: ${marker}`);
+  let depth = 0;
+  for (let index = open; index < source.length; index++) {
+    if (source[index] === "{") depth++;
+    if (source[index] === "}") depth--;
+    if (depth === 0) {
+      return { start, end: index + 1, body: source.slice(open + 1, index) };
+    }
+  }
+  assert.fail(`missing closing brace after: ${marker}`);
+}
+
+function assertSingleHeading(source: string): void {
+  assert.equal(
+    source.match(/\.setHeading\(\)/g)?.length ?? 0,
+    1,
+    "chat-model controls must not be split by an intervening heading",
+  );
+}
 
 test("old settings gain model controls without changing output budgets", () => {
   const settings = structuredClone(DEFAULT_SETTINGS);
@@ -119,6 +159,93 @@ test("render-plan executor consumes every descriptor branch exactly", () => {
     }
     assert.deepEqual(rendered(plan.vision.fields), plan.vision.fields);
   }
+});
+
+test("native chat-model block stays localized and structurally valid in both modes", () => {
+  const start = settingsSource.indexOf(
+    "new Setting(containerEl).setName(T.settings.h3_backendConnection).setHeading();",
+  );
+  const end = settingsSource.indexOf(
+    "new Setting(containerEl).setName(T.settings.h3_semanticSearch).setHeading();",
+    start,
+  );
+  assert.ok(start >= 0 && end > start);
+  const native = settingsSource.slice(start, end);
+  const heading = native.indexOf(".setName(T.settings.h3_defaultChatModel)");
+  const perOperation = native.indexOf(
+    ".setName(T.settings.perOperation_name).setHeading()",
+  );
+  assert.ok(heading >= 0 && perOperation > heading);
+  assertSingleHeading(native.slice(heading, perOperation));
+
+  const falseOnly = sourceBlock(native, "if (!s.nativeAgent.perOperation) {");
+  assert.ok(heading < falseOnly.start, "heading must render when perOperation is true");
+  assert.match(falseOnly.body, /\.setName\(T\.settings\.model_name\)/);
+  assert.match(falseOnly.body, /\.setName\("Thinking budget tokens"\)/);
+  assert.doesNotMatch(falseOnly.body, /modelControls\.globalFields/);
+
+  const policy = native.indexOf("modelControls.globalFields,", falseOnly.end);
+  assert.ok(policy > falseOnly.end, "fallback policy must render when perOperation is true");
+  const temperatureOnly = sourceBlock(
+    native,
+    "if (!s.nativeAgent.perOperation) {",
+    falseOnly.end,
+  );
+  assert.ok(temperatureOnly.start > policy);
+  assert.match(temperatureOnly.body, /\.setName\(T\.settings\.temperature_name\)/);
+
+  assertSourceOrder(native, [
+    ".setName(T.settings.baseUrl_name)",
+    ".setName(T.settings.apiKey_name)",
+    ".setName(T.settings.h3_defaultChatModel)",
+    ".setName(T.settings.model_name)",
+    '.setName("Thinking budget tokens")',
+    "modelControls.globalFields,",
+    ".setName(T.settings.temperature_name)",
+    ".setName(T.settings.perOperation_name).setHeading()",
+    "if (s.nativeAgent.perOperation) {",
+  ]);
+});
+
+test("Claude chat-model block stays localized and structurally valid in both modes", () => {
+  const start = settingsSource.indexOf(
+    'if (eff.backend === "claude-agent" && !Platform.isMobile) {',
+  );
+  const end = settingsSource.indexOf(
+    "new Setting(containerEl).setName(T.settings.h3_backendConnection).setHeading();",
+    start,
+  );
+  assert.ok(start >= 0 && end > start);
+  const claude = settingsSource.slice(start, end);
+  const heading = claude.indexOf(".setName(T.settings.h3_defaultChatModel)");
+  const perOperation = claude.indexOf("if (s.claudeAgent.perOperation) {");
+  assert.ok(heading >= 0 && perOperation > heading);
+  assertSingleHeading(claude.slice(heading, perOperation));
+
+  const falseOnly = sourceBlock(claude, "if (!s.claudeAgent.perOperation) {");
+  assert.ok(heading < falseOnly.start, "heading must render when perOperation is true");
+  assert.match(falseOnly.body, /\.setName\(T\.settings\.model_name\)/);
+  assert.doesNotMatch(falseOnly.body, /modelControls\.globalFields|Effort level/);
+
+  const policy = claude.indexOf("modelControls.globalFields,", falseOnly.end);
+  const effort = claude.indexOf('.setName("Effort level")', policy);
+  assert.ok(policy > falseOnly.end, "fallback policy must render when perOperation is true");
+  assert.ok(effort > policy && effort < perOperation, "fallback effort must stay in the chat-model block");
+
+  assertSourceOrder(claude, [
+    ".setName(T.settings.iclaudePath_name)",
+    ".setName(T.settings.allowedTools_name)",
+    ".setName(T.settings.h3_defaultChatModel)",
+    ".setName(T.settings.model_name)",
+    "modelControls.globalFields,",
+    '.setName("Effort level")',
+    ".setName(T.settings.perOperation_name)",
+    "if (s.claudeAgent.perOperation) {",
+  ]);
+});
+
+test("settings source contains no hardcoded global model heading", () => {
+  assert.doesNotMatch(settingsSource, /Global model defaults/);
 });
 
 test("Vision Check sends unsaved typed model without mutating persisted settings or vault", async () => {

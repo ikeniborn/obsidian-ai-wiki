@@ -188,7 +188,7 @@ function capturingLlm(
           const request = params as Record<string, unknown>;
           requests.push(request);
           if (failStreaming && request.stream === true) {
-            throw new Error("socket disconnected");
+            throw new Error("stream transport unavailable");
           }
           if (failStreaming) {
             return {

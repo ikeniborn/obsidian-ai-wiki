@@ -29,7 +29,26 @@ import type { BoilerplateDemotionConfig } from "./boilerplate-demotion";
 import { normalizeRerankerConfig } from "./reranker";
 import { resolveModelCallPolicy } from "./model-call-policy";
 
+declare const require: NodeJS.Require;
+
 const DISABLED_BOILERPLATE_DEMOTION: BoilerplateDemotionConfig = { enabled: false, factor: 0 };
+
+type NodeTimers = typeof import("node:timers");
+
+function loadDesktopTimers(): NodeTimers {
+  // eslint-disable-next-line import/no-nodejs-modules -- Electron exposes Node builtins through require.
+  if (typeof require === "function") return require("node:timers") as NodeTimers;
+
+  const getBuiltinModule = (process as NodeJS.Process & {
+    getBuiltinModule?: (id: string) => unknown;
+  }).getBuiltinModule;
+  if (typeof getBuiltinModule === "function") {
+    const timers = getBuiltinModule("node:timers") ?? getBuiltinModule("timers");
+    if (timers) return timers;
+  }
+
+  throw new Error("Desktop idle watchdog requires access to the Node.js timers module");
+}
 
 export function resolveFollowUpPolicyOperation(parent: WikiOperation): OpKey {
   return parent === "query" ? "query" : "lint";
@@ -234,6 +253,15 @@ export class AgentRunner {
     const similarity = this.buildSimilarity();
     const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1000;
     const maxRetries = this.settings.llmIdleRetries ?? 3;
+    const desktopTimers = this.isMobile ? null : loadDesktopTimers();
+    type IdleTimer = number | NodeJS.Timeout;
+    const scheduleIdleAbort = (callback: () => void): IdleTimer => desktopTimers
+      ? desktopTimers.setTimeout(callback, idleTimeoutMs)
+      : window.setTimeout(callback, idleTimeoutMs);
+    const clearIdleAbort = (timer: IdleTimer): void => {
+      if (desktopTimers) desktopTimers.clearTimeout(timer as NodeJS.Timeout);
+      else window.clearTimeout(timer as number);
+    };
     let attempt = 0;
     let destructivePreludeSeen = false;
     let visibleAssistantTextSeen = false;
@@ -264,13 +292,13 @@ export class AgentRunner {
       const combined = idleTimeoutMs > 0
         ? signalAny([req.signal, idleCtrl.signal])
         : req.signal;
-      let idleTimer: number | null =
-        idleTimeoutMs > 0 ? window.setTimeout(() => idleCtrl.abort(), idleTimeoutMs) : null;
+      let idleTimer: IdleTimer | null =
+        idleTimeoutMs > 0 ? scheduleIdleAbort(() => idleCtrl.abort()) : null;
 
       const resetTimer = () => {
         if (!idleTimer) return;
-        window.clearTimeout(idleTimer);
-        idleTimer = window.setTimeout(() => idleCtrl.abort(), idleTimeoutMs);
+        clearIdleAbort(idleTimer);
+        idleTimer = scheduleIdleAbort(() => idleCtrl.abort());
       };
 
       let finalResultText = "";
@@ -307,7 +335,6 @@ export class AgentRunner {
           }
           yield ev;
         }
-        if (idleTimer) window.clearTimeout(idleTimer);
         // Phases swallow AbortError silently (return instead of throw).
         // Detect silent idle abort by checking if idleCtrl fired but user didn't cancel.
         if (idleCtrl.signal.aborted && !req.signal.aborted) {
@@ -344,7 +371,6 @@ export class AgentRunner {
         }
         return;
       } catch (err) {
-        if (idleTimer) window.clearTimeout(idleTimer);
         const isIdleAbort = !req.signal.aborted && (err as Error).name === "AbortError";
         if (isIdleAbort && attempt < maxRetries) {
           if (visibleAssistantTextSeen) throw err;
@@ -355,6 +381,11 @@ export class AgentRunner {
           continue;
         }
         throw err;
+      } finally {
+        if (idleTimer) {
+          clearIdleAbort(idleTimer);
+          idleTimer = null;
+        }
       }
     }
     } finally {

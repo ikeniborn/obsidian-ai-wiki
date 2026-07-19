@@ -7,6 +7,7 @@ import type { DomainEntry } from "../src/domain";
 import type { LlmClient, RunEvent } from "../src/types";
 import type { VaultAdapter } from "../src/vault-tools";
 import type { ChunkIndexRecord, PageIndexRecord } from "../src/wiki-index-jsonl";
+import { mockChatResponse } from "./openai-mock-response";
 
 const pathBrowserifyLoader = `
 export async function resolve(specifier, context, nextResolve) {
@@ -432,7 +433,7 @@ test("failed multi-source rebuild rolls back durable state and a second run can 
         if (failMapper) throw new Error("synthetic rebuild failure");
         const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
         assert.ok(chunkId);
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           packets: [{
             id: `packet-${chunkId}`,
             chunkId,
@@ -447,7 +448,7 @@ test("failed multi-source rebuild rolls back durable state and a second run can 
         }));
       }
       if (prompt.includes("Entity bundle: entity-shared")) {
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           reasoning: "Rebuild shared page from remaining source.",
           actions: [{
             kind: "create",
@@ -2537,7 +2538,7 @@ function transactionalRebuildSetup(failSecond: boolean): {
         const key = isFirst ? "first" : "second";
         const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
         assert.ok(chunkId);
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           packets: [{
             id: `packet-${key}`,
             chunkId,
@@ -2557,7 +2558,7 @@ function transactionalRebuildSetup(failSecond: boolean): {
         const key = isFirst ? "first" : "second";
         const path = isFirst ? firstPath : secondPath;
         const resource = isFirst ? "a" : "b";
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           reasoning: `Create ${key}.`,
           actions: [{
             kind: "create",

@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
 import { register } from "node:module";
 import test from "node:test";
-import type OpenAI from "openai";
+import OpenAI from "openai";
+import {
+  APIConnectionError,
+  APIConnectionTimeoutError,
+} from "openai";
+import { fetch as undiciFetch } from "undici";
 import { z } from "zod";
 import type { LlmClient, RunEvent } from "../src/types";
 import { parseAnswerFrames } from "../src/phases/framed-output";
@@ -9,7 +15,10 @@ import { parseAnswerFrames } from "../src/phases/framed-output";
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 
 const { parseWithRetry } = await import("../src/phases/parse-with-retry");
-const { computeSpeedText } = await import("../src/phases/llm-utils");
+const {
+  computeSpeedText,
+  shouldFallbackStreamToNonStream,
+} = await import("../src/phases/llm-utils");
 const {
   runStructuredWithRetry,
   runStructuredStreaming,
@@ -115,6 +124,126 @@ test("json-zod valid JSON succeeds without structural error", async () => {
   assert.equal(events.some((ev) => ev.kind === "llm_call_stats"), true);
 });
 
+test("structured transport defaults to streaming", async () => {
+  const requests: Array<Record<string, unknown>> = [];
+
+  await runStructuredWithRetry({
+    llm: llmFromAttempts(['{"value":"ok"}'], requests),
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].stream, true);
+});
+
+test("non-stream structured transport makes one direct request", async () => {
+  const requests: Array<Record<string, unknown>> = [];
+  const llm = {
+    chat: {
+      completions: {
+        create: async (params: Record<string, unknown>) => {
+          requests.push(params);
+          return {
+            id: "completion",
+            object: "chat.completion",
+            created: 0,
+            model: "m",
+            choices: [{
+              index: 0,
+              finish_reason: "stop",
+              message: { role: "assistant", content: '{"value":"ok"}', refusal: null },
+              logprobs: null,
+            }],
+            usage: { prompt_tokens: 2, completion_tokens: 3, total_tokens: 5 },
+          };
+        },
+      },
+    },
+  } as unknown as LlmClient;
+
+  const result = await runStructuredWithRetry({
+    llm,
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    signal: new AbortController().signal,
+    onEvent: () => {},
+    transport: "non-stream",
+  });
+
+  assert.equal(result.value.value, "ok");
+  assert.equal(result.inputTokens, 2);
+  assert.equal(result.outputTokens, 3);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].stream, false);
+});
+
+test("non-stream response-format fallback stays non-stream", async () => {
+  const requests: Array<Record<string, unknown>> = [];
+  const events: RunEvent[] = [];
+  const llm = {
+    chat: {
+      completions: {
+        create: async (params: Record<string, unknown>) => {
+          requests.push(params);
+          if (requests.length === 1) throw jsonModeError();
+          return {
+            id: "completion",
+            object: "chat.completion",
+            created: 0,
+            model: "m",
+            choices: [{
+              index: 0,
+              finish_reason: "stop",
+              message: { role: "assistant", content: '{"value":"fallback"}', refusal: null },
+              logprobs: null,
+            }],
+            usage: { prompt_tokens: 2, completion_tokens: 3, total_tokens: 5 },
+          };
+        },
+      },
+    },
+  } as unknown as LlmClient;
+
+  const result = await runStructuredWithRetry({
+    llm,
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    signal: new AbortController().signal,
+    onEvent: (event) => events.push(event),
+    transport: "non-stream",
+  });
+
+  assert.equal(result.value.value, "fallback");
+  assert.equal(requests.length, 2);
+  assert.ok(requests.every((request) => request.stream === false));
+  assert.equal(
+    (requests[0].response_format as { type?: string }).type,
+    "json_schema",
+  );
+  assert.equal(
+    (requests[1].response_format as { type?: string }).type,
+    "json_object",
+  );
+  assert.ok(events.some((event) =>
+    event.kind === "structural_error"
+    && event.errorType === "response_format_fallback"));
+});
+
 test("usage-free streams keep prompt usage undefined", async () => {
   const events: RunEvent[] = [];
   const result = await runStructuredWithRetry({
@@ -217,6 +346,159 @@ test("non-stream fallback returns prompt usage", async () => {
   assert.equal(requests, 2);
   assert.equal(result.value.value, "fallback");
   assert.equal(result.inputTokens, 11);
+});
+
+test("HTTP 502 structured failure is not replayed as non-stream", async () => {
+  let requests = 0;
+  const error = Object.assign(new Error("Bad Gateway"), { status: 502 });
+  const llm = {
+    chat: {
+      completions: {
+        create: async () => {
+          requests += 1;
+          throw error;
+        },
+      },
+    },
+  } as unknown as LlmClient;
+
+  await assert.rejects(runStructuredWithRetry({
+    llm,
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  }), error);
+
+  assert.equal(requests, 1);
+});
+
+test("OpenAI connection failures are not replayed as non-stream", async () => {
+  for (const error of [
+    new APIConnectionError({ message: "Connection failed" }),
+    new APIConnectionTimeoutError({ message: "Connection timed out" }),
+  ]) {
+    let requests = 0;
+    const llm = {
+      chat: {
+        completions: {
+          create: async () => {
+            requests += 1;
+            throw error;
+          },
+        },
+      },
+    } as unknown as LlmClient;
+
+    await assert.rejects(runStructuredWithRetry({
+      llm,
+      model: "m",
+      baseMessages: [{ role: "user", content: "x" }],
+      opts: {},
+      profile: { kind: "json-zod", schema: SmallSchema },
+      maxRetries: 0,
+      callSite: "query.seeds",
+      signal: new AbortController().signal,
+      onEvent: () => {},
+    }), error);
+
+    assert.equal(requests, 1, error.constructor.name);
+  }
+});
+
+test("body-read transport failures are not eligible for non-stream fallback", () => {
+  const undiciSocket = Object.assign(new Error("other side closed"), {
+    name: "SocketError",
+    code: "UND_ERR_SOCKET",
+  });
+  const cases: Error[] = [
+    new TypeError("terminated", { cause: undiciSocket }),
+    new TypeError("fetch failed"),
+    Object.assign(new Error("headers timeout"), { code: "UND_ERR_HEADERS_TIMEOUT" }),
+    Object.assign(new Error("connection reset"), { code: "ECONNRESET" }),
+    Object.assign(new Error("broken pipe"), { code: "EPIPE" }),
+    new Error("socket disconnected"),
+  ];
+
+  for (const error of cases) {
+    assert.equal(
+      shouldFallbackStreamToNonStream(error),
+      false,
+      `${error.name}: ${error.message}`,
+    );
+  }
+  assert.equal(
+    shouldFallbackStreamToNonStream(new Error("stream transport unavailable")),
+    true,
+  );
+});
+
+test("actual OpenAI SSE disconnect after partial content is propagated without replay", async () => {
+  let requests = 0;
+  const server = createServer((_request, response) => {
+    requests += 1;
+    response.writeHead(200, { "content-type": "text/event-stream" });
+    response.write(`data: ${JSON.stringify({
+      id: "partial",
+      object: "chat.completion.chunk",
+      created: 0,
+      model: "m",
+      choices: [{
+        index: 0,
+        delta: { content: '{"value":"partial' },
+        finish_reason: null,
+      }],
+    })}\n\n`);
+    setImmediate(() => response.socket?.destroy());
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  const events: RunEvent[] = [];
+  const client = new OpenAI({
+    apiKey: "test",
+    baseURL: `http://127.0.0.1:${address.port}/v1`,
+    maxRetries: 0,
+    fetch: undiciFetch as unknown as typeof fetch,
+  });
+
+  try {
+    await assert.rejects(runStructuredWithRetry({
+      llm: client as unknown as LlmClient,
+      model: "m",
+      baseMessages: [{ role: "user", content: "x" }],
+      opts: {},
+      profile: { kind: "json-zod", schema: SmallSchema },
+      maxRetries: 0,
+      callSite: "query.seeds",
+      signal: new AbortController().signal,
+      onEvent: (event) => events.push(event),
+    }), (error: unknown) => {
+      assert.ok(error instanceof TypeError);
+      assert.match(error.message, /terminated|fetch failed/i);
+      assert.equal((error.cause as { code?: string } | undefined)?.code, "UND_ERR_SOCKET");
+      return true;
+    });
+    assert.equal(requests, 1);
+    assert.equal(
+      events.some((event) =>
+        event.kind === "assistant_text"
+        && event.delta === '{"value":"partial'),
+      true,
+    );
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+    });
+  }
 });
 
 test("finish_reason length rejects syntactically valid structured JSON without transport fallback", async () => {
@@ -643,6 +925,59 @@ test("streaming structured call emits reasoning and content deltas live", async 
     events.some((ev) => ev.kind === "assistant_text" && !ev.isReasoning && ev.delta.includes('"value"')),
     true,
   );
+});
+
+test("streaming structured call aborts a pending iterator and closes it without waiting", async () => {
+  const controller = new AbortController();
+  let nextStarted!: () => void;
+  const pendingNext = new Promise<void>((resolve) => {
+    nextStarted = resolve;
+  });
+  let returnCalls = 0;
+  const iterator: AsyncIterator<OpenAI.Chat.ChatCompletionChunk> = {
+    next: () => {
+      nextStarted();
+      return new Promise<IteratorResult<OpenAI.Chat.ChatCompletionChunk>>(() => {});
+    },
+    return: () => {
+      returnCalls++;
+      return new Promise<IteratorResult<OpenAI.Chat.ChatCompletionChunk>>(() => {});
+    },
+  };
+  const llm = {
+    chat: {
+      completions: {
+        create: async () => ({
+          [Symbol.asyncIterator]: () => iterator,
+        }),
+      },
+    },
+  } as unknown as LlmClient;
+
+  const operation = runStructuredWithRetry({
+    llm,
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    signal: controller.signal,
+    onEvent: () => {},
+  }).then(
+    () => "resolved",
+    (error: unknown) => error instanceof Error ? error.name : "unknown-error",
+  );
+
+  await pendingNext;
+  controller.abort();
+  const outcome = await Promise.race([
+    operation,
+    new Promise<string>((resolve) => setTimeout(() => resolve("still-pending"), 100)),
+  ]);
+
+  assert.equal(outcome, "AbortError");
+  assert.equal(returnCalls, 1);
 });
 
 test("runStructuredStreaming yields events live and fills the sink", async () => {

@@ -595,6 +595,19 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           return b;
         });
 
+      new Setting(containerEl)
+        .setName(T.settings.allowedTools_name)
+        .setDesc(T.settings.allowedTools_desc)
+        .addText((t) =>
+          t.setPlaceholder("Bash,read,write")
+            .setValue(eff.claudeAgent.allowedTools)
+            .onChange(async (v) => { s.claudeAgent.allowedTools = v.trim(); await this.plugin.saveSettings(); }),
+        );
+
+      new Setting(containerEl)
+        .setName(T.settings.h3_defaultChatModel)
+        .setHeading();
+
       if (!s.claudeAgent.perOperation) {
         new Setting(containerEl)
           .setName(T.settings.model_name)
@@ -618,15 +631,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         },
         false,
       );
-
-      new Setting(containerEl)
-        .setName(T.settings.allowedTools_name)
-        .setDesc(T.settings.allowedTools_desc)
-        .addText((t) =>
-          t.setPlaceholder("Bash,read,write")
-            .setValue(eff.claudeAgent.allowedTools)
-            .onChange(async (v) => { s.claudeAgent.allowedTools = v.trim(); await this.plugin.saveSettings(); }),
-        );
 
       new Setting(containerEl)
         .setName("Effort level")
@@ -714,24 +718,11 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             .onChange(async (v) => { await this.patchLocalNativeApiKey(v.trim()); }),
         );
 
-      addPolicyControls(
-        modelControls.globalFields,
-        {
-          inputBudgetTokens: s.nativeAgent.inputBudgetTokens,
-          maxTokens: s.nativeAgent.maxTokens,
-          compressionProfile: s.nativeAgent.compressionProfile,
-        },
-        {
-          inputBudgetTokens: (next) => { s.nativeAgent.inputBudgetTokens = next; },
-          maxTokens: (next) => { s.nativeAgent.maxTokens = next; },
-          compressionProfile: (next) => { s.nativeAgent.compressionProfile = next ?? "balanced"; },
-        },
-        false,
-      );
+      new Setting(containerEl)
+        .setName(T.settings.h3_defaultChatModel)
+        .setHeading();
 
       if (!s.nativeAgent.perOperation) {
-        new Setting(containerEl).setName(T.settings.h3_defaultChatModel).setHeading();
-
         this.addModelControl(
           new Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native),
           eff.nativeAgent.model,
@@ -752,7 +743,24 @@ export class LlmWikiSettingTab extends PluginSettingTab {
                 await this.plugin.saveSettings();
               })
           );
+      }
 
+      addPolicyControls(
+        modelControls.globalFields,
+        {
+          inputBudgetTokens: s.nativeAgent.inputBudgetTokens,
+          maxTokens: s.nativeAgent.maxTokens,
+          compressionProfile: s.nativeAgent.compressionProfile,
+        },
+        {
+          inputBudgetTokens: (next) => { s.nativeAgent.inputBudgetTokens = next; },
+          maxTokens: (next) => { s.nativeAgent.maxTokens = next; },
+          compressionProfile: (next) => { s.nativeAgent.compressionProfile = next ?? "balanced"; },
+        },
+        false,
+      );
+
+      if (!s.nativeAgent.perOperation) {
         new Setting(containerEl)
           .setName(T.settings.temperature_name)
           .setDesc(T.settings.temperature_desc)

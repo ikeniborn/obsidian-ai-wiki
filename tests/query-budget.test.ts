@@ -106,8 +106,24 @@ function transportFailureThenCompletion(calls: CapturedCall[]): LlmClient {
             params: params as Record<string, unknown>,
             signal: callOpts?.signal,
           });
-          if (calls.length === 1) throw new Error("socket disconnected");
+          if (calls.length === 1) throw new Error("stream transport unavailable");
           return completion("fallback answer");
+        },
+      },
+    },
+  } as unknown as LlmClient;
+}
+
+function repeatedFailure(error: Error, calls: CapturedCall[]): LlmClient {
+  return {
+    chat: {
+      completions: {
+        create: async (params: unknown, callOpts?: { signal?: AbortSignal }) => {
+          calls.push({
+            params: params as Record<string, unknown>,
+            signal: callOpts?.signal,
+          });
+          throw error;
         },
       },
     },
@@ -516,6 +532,42 @@ test("runLintChat rebuilds non-stream fallback params and preserves AbortSignal"
   assert.equal(result.outputTokens, 7);
 });
 
+test("HTTP 502 Query failure is sent exactly once", async () => {
+  const calls: CapturedCall[] = [];
+  const error = Object.assign(new Error("Bad Gateway"), { status: 502 });
+
+  await assert.rejects(async () => drainGenerator(answerFromContext({
+    llm: repeatedFailure(error, calls),
+    model: "mock",
+    opts: { inputBudgetTokens: 10_000 },
+    signal: new AbortController().signal,
+    systemPrompt: "Query HTTP failure contract.",
+    question: "Current HTTP failure question",
+    chunks: [],
+    wikiLinkValidationRetries: 0,
+  })), error);
+
+  assert.equal(calls.length, 1);
+});
+
+test("HTTP 502 Chat failure is sent exactly once", async () => {
+  const calls: CapturedCall[] = [];
+  const error = Object.assign(new Error("Bad Gateway"), { status: 502 });
+
+  await assert.rejects(async () => drainGenerator(runLintChat(
+    repeatedFailure(error, calls),
+    "mock",
+    undefined,
+    new AbortController().signal,
+    { inputBudgetTokens: 10_000 },
+    "",
+    [{ role: "user", content: "Current HTTP failure chat instruction" }],
+    "Chat HTTP failure contract",
+  )), error);
+
+  assert.equal(calls.length, 1);
+});
+
 test("mobile Query fallback reaches the inner client without stream options and with AbortSignal", async () => {
   const calls: CapturedCall[] = [];
   const signal = new AbortController().signal;
@@ -731,6 +783,40 @@ test("answerFromContext does not repack a context error after a visible delta", 
   );
 });
 
+test("answerFromContext does not fallback after an invisible stream chunk", async () => {
+  let calls = 0;
+  const error = new Error("late query transport failure after invisible chunk");
+  const llm = {
+    chat: {
+      completions: {
+        create: async (params: unknown) => {
+          calls++;
+          if ((params as { stream?: boolean }).stream === false) {
+            return completion("QUERY_FALLBACK_MUST_NOT_RUN");
+          }
+          return (async function* () {
+            yield usageChunk();
+            throw error;
+          })();
+        },
+      },
+    },
+  } as unknown as LlmClient;
+
+  await assert.rejects(async () => drainGenerator(answerFromContext({
+    llm,
+    model: "mock",
+    opts: { inputBudgetTokens: 10_000 },
+    signal: new AbortController().signal,
+    systemPrompt: "Invisible Query chunk contract.",
+    question: "Invisible Query chunk question",
+    chunks: [],
+    wikiLinkValidationRetries: 0,
+  })), error);
+
+  assert.equal(calls, 1);
+});
+
 test("runLintChat does not fall back or replay after a visible delta", async () => {
   const events: RunEvent[] = [];
   let calls = 0;
@@ -777,6 +863,40 @@ test("runLintChat does not fall back or replay after a visible delta", async () 
       event.kind === "assistant_text" && event.delta === "CHAT_FALLBACK_MUST_NOT_RUN"),
     false,
   );
+});
+
+test("runLintChat does not fallback after an invisible stream chunk", async () => {
+  let calls = 0;
+  const error = new Error("late chat transport failure after invisible chunk");
+  const llm = {
+    chat: {
+      completions: {
+        create: async (params: unknown) => {
+          calls++;
+          if ((params as { stream?: boolean }).stream === false) {
+            return completion("CHAT_FALLBACK_MUST_NOT_RUN");
+          }
+          return (async function* () {
+            yield usageChunk();
+            throw error;
+          })();
+        },
+      },
+    },
+  } as unknown as LlmClient;
+
+  await assert.rejects(async () => drainGenerator(runLintChat(
+    llm,
+    "mock",
+    undefined,
+    new AbortController().signal,
+    { inputBudgetTokens: 10_000 },
+    "",
+    [{ role: "user", content: "Invisible Chat chunk instruction" }],
+    "Invisible Chat chunk contract",
+  )), error);
+
+  assert.equal(calls, 1);
 });
 
 test("answerFromContext repacks complete chunks below provider boundaries and keeps the question", async () => {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { register } from "node:module";
 import test from "node:test";
 import type { LlmClient, RunEvent } from "../src/types";
+import { mockChatResponse } from "./openai-mock-response";
 
 const pathBrowserifyLoader = `
 export async function resolve(specifier, context, nextResolve) {
@@ -41,7 +42,7 @@ function entitiesLlm(): LlmClient {
         }],
         noEvidence: [],
       });
-      return (async function* () { yield chunk(body); yield usageChunk(); })();
+      return mockChatResponse(params, body, { promptTokens: 1, completionTokens: 1 });
     } } },
   } as unknown as LlmClient;
 }

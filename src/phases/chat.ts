@@ -1,7 +1,14 @@
 import type OpenAI from "openai";
 import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient, ChatMessage } from "../types";
-import { buildChatParams, extractStreamDeltas, extractUsage, wrapStreamWithStats, buildLlmCallStatsEvent } from "./llm-utils";
+import {
+  buildChatParams,
+  buildLlmCallStatsEvent,
+  extractStreamDeltas,
+  extractUsage,
+  shouldFallbackStreamToNonStream,
+  wrapStreamWithStats,
+} from "./llm-utils";
 import chatTemplate from "../../prompts/chat.md";
 import { render } from "./template";
 import { promptVersionOf } from "../prompt-version";
@@ -116,13 +123,14 @@ export async function* runLintChat(
       },
       execute: async (request) => {
         const params = paramsForPreparedMessages(model, request.messages, opts, true);
+        let streamChunkConsumed = false;
         try {
           const requestStartMs = Date.now();
           const rawStream = await llm.chat.completions.create(
             { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
             { signal },
           );
-          const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs);
+          const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
           let attemptText = "";
           let attemptOutputTokens = 0;
           const events: RunEvent[] = [];
@@ -140,6 +148,7 @@ export async function* runLintChat(
               };
             }
             const chunk = next.value;
+            streamChunkConsumed = true;
             const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
             if (reasoning) events.push({ kind: "assistant_text", delta: reasoning, isReasoning: true });
             if (content) {
@@ -161,7 +170,9 @@ export async function* runLintChat(
             signal.aborted
             || (error as Error).name === "AbortError"
           ) throw error;
+          if (streamChunkConsumed) throw error;
           rethrowForContextRepack(error, request.optionalUnits);
+          if (!shouldFallbackStreamToNonStream(error, signal)) throw error;
           let response: OpenAI.Chat.ChatCompletion;
           const fallbackStartMs = Date.now();
           try {

@@ -20,7 +20,7 @@ AI Wiki reads your notes and maintains a structured knowledge base (wiki) alongs
 
 | Feature | What it does |
 |---|---|
-| **Ingest** | Reads an open note, extracts key topics (people, tools, processes, terms), creates or updates wiki pages. Tags are standardized: pages reuse the domain's existing tag vocabulary, carry their entity-type tag, and the set of thematic tag categories is bounded per domain |
+| **Ingest** | Reads an open note, extracts key topics (people, tools, processes, terms), creates pages or updates existing pages with guarded section patches. Oversized Markdown is processed as bounded chunks with complete evidence coverage. Tags are standardized: pages reuse the domain's existing tag vocabulary, carry their entity-type tag, and the set of thematic tag categories is bounded per domain |
 | **Query** | Answers a question using your wiki as context; results shown in the sidebar with cross-links |
 | **Lint** | Reviews wiki pages for gaps, outdated content, and broken links; shows a report in the sidebar |
 | **Fix** | After Lint — send an instruction in the sidebar chat to apply corrections |
@@ -93,7 +93,9 @@ Settings → AI Wiki:
 | API Key | `ollama` |
 | Model | `llama3.2` |
 | Temperature | `0.2` |
-| Max tokens | `4096` |
+| Input budget tokens | `16384` |
+| Output budget tokens | `4096` |
+| Semantic compression | `Balanced` |
 
 ### 5. Create a knowledge area (domain)
 
@@ -208,9 +210,14 @@ List of created domains with **Edit** / **Delete** buttons. Domain map is stored
 |---|---|---|
 | Path to Claude Code | Full absolute path to `iclaude.sh` / `iclaude` / `claude` | — |
 | Model | Preset (`opus`/`sonnet`/`haiku`) or explicit ID (`claude-sonnet-4-6`). Shown when per-operation is off | claude default |
+| Input budget tokens | Maximum estimated size of the packed prompt. This is configured explicitly; the plugin does not discover the model's context window | `16384` |
+| Semantic compression | Prompt-density profile (`Maximum`/`Balanced`/`Minimum`) with operation-specific preservation rules | `Balanced` |
 | Allowed tools | Comma-separated list passed to `--tools`. Empty = no restriction | `Read,Edit,Write,Glob,Grep` |
-| Per-operation models | When on, configure model per operation (ingest/query/lint/init/format) | off |
+| Per-operation models | When on, configure model, input budget, compression, and effort per operation (ingest/query/lint/init/format). Format has an input budget but no semantic-compression control | off |
 | Per-operation: Model | Model for the specific operation | — |
+
+Claude output limits are owned by the external Claude CLI configuration. AI Wiki bounds
+and packs Claude input, but does not send or expose a plugin-owned Claude output budget.
 
 ### Native Agent
 
@@ -218,10 +225,55 @@ List of created domains with **Edit** / **Delete** buttons. Domain map is stored
 |---|---|---|
 | Base URL | OpenAI-compatible endpoint. Ollama: `http://localhost:11434/v1` | `http://localhost:11434/v1` |
 | API key | `ollama` for Ollama; `sk-...` for OpenAI | `ollama` |
+| Input budget tokens | Maximum estimated size of the packed prompt. This is configured explicitly; the plugin does not discover the model's context window | `16384` |
+| Output budget tokens | Response cap sent through the existing `maxTokens`/API `max_tokens` setting | `4096` |
+| Semantic compression | Prompt-density profile (`Maximum`/`Balanced`/`Minimum`) with operation-specific preservation rules | `Balanced` |
 | Model | Model name (`llama3.2`, `mistral`, `gpt-4o`, …). Shown when per-operation is off | `llama3.2` |
+| Thinking budget tokens | Separate native model reasoning allowance; `0` or empty disables it. It does not increase the input budget | off |
 | Temperature | `0.0`–`1.0`. Low values (`0.1`–`0.3`) give more precise, factual answers | `0.2` |
-| Per-operation models | When on, configure `model`/`maxTokens`/`temperature` per operation | off |
+| Per-operation models | When on, configure model, input/output budgets, compression, thinking budget, and temperature per operation. Format keeps numeric budgets but has no semantic-compression control | off |
 | Output repair retries | Retries for invalid JSON or invalid framed output after Zod validation (0–3). Higher = more reliable on weaker models | `1` |
+
+### Vision
+
+| Setting | Description | Default |
+|---|---|---|
+| Enable image analysis | Analyze supported images and PDF pages during Format | off |
+| Semantic compression | Vision-specific override; preserves OCR, objects, relationships, layout, page identity, and uncertainty | Use global |
+| Vision model | Multimodal model used for image analysis | — |
+| Vision Check | Native Agent only: sends one real, tiny 1×1 inline PNG request with a short prompt and a 16-token output cap. Reports success/failure without changing settings or vault files. Claude Agent exposes no Check | — |
+
+### Bounded processing and storage
+
+These controls cover different parts of a call: **Input budget tokens** bound the prepared
+request, **Output budget tokens** cap the generated response, and **Thinking budget
+tokens** separately allow native-model reasoning when the provider supports it. Native
+Agent owns all three controls; Claude input is governed by AI Wiki while Claude output
+remains CLI-owned.
+
+The input budget governs the complete prepared request, including system/schema
+instructions—not just note text. When content does not fit, AI Wiki packs complete context
+units and uses operation-specific batching or splitting instead of silently truncating
+required content. Provider context errors can trigger a smaller repack. The configured
+budget remains explicit; AI Wiki does not automatically discover a model's context
+window.
+
+Ingest splits oversized Markdown at stable section, paragraph, line-window, and fenced-code
+boundaries. Bounded map calls produce source-anchored evidence; reduction calls preserve
+coverage before synthesis. New pages are complete documents. Existing pages receive
+page/section-hash-guarded `add`, `append`, or `replace` patches, so untouched sections are
+preserved and stale content is not overwritten.
+
+`index.jsonl` is structured storage: `page` records hold retrieval metadata, while `chunk`
+records hold embedding metadata and vectors. Serialized vectors and raw index records never
+enter model prompts; prompt builders project only the selected evidence, Markdown sections,
+and allowlisted metadata they need. Unchanged chunk embeddings are reused when their
+embedding-text hash, model, and dimensions still match.
+
+Small sources keep the short path. Oversized sources, pages, histories, notes, or PDFs can
+require extra bounded model calls, increasing latency and provider cost in exchange for
+complete processing within the configured input budget. Vision Check is also a real
+provider request and may incur a small charge.
 
 ### Proxy (native-agent only)
 
@@ -275,6 +327,7 @@ Real-world measurements from a homelab inference server running **`deepseek-v4-f
 - **Model** — smaller/quantized models are faster; larger models produce better wiki quality
 - **Inference server** — a local GPU is fastest; cloud APIs add network latency
 - **Domain size** — Init and Lint time grows linearly with the number of files
+- **Oversized inputs** — bounded map/reduce, batching, and segmentation add calls to preserve complete coverage
 
 ---
 

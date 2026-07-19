@@ -8,7 +8,14 @@ import type {
 } from "../types";
 import type { FormatProgress } from "../i18n";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas, extractUsage, wrapStreamWithStats, buildLlmCallStatsEvent } from "./llm-utils";
+import {
+  buildChatParams,
+  buildLlmCallStatsEvent,
+  extractStreamDeltas,
+  extractUsage,
+  shouldFallbackStreamToNonStream,
+  wrapStreamWithStats,
+} from "./llm-utils";
 import { classifyContextError, createPromptBudgetEvent, estimatePreparedMessages, PromptBudgetExceededError } from "../prompt-budget";
 import formatTemplate from "../../prompts/format.md";
 import formatSegmentTemplate from "../../prompts/format-segment.md";
@@ -350,13 +357,15 @@ export async function* runFormat(
     lastFinishReason = null;
     lastInputTokens = undefined;
     const requestStartMs = Date.now();
+    let streamChunkConsumed = false;
     try {
       const rawStream = await llm.chat.completions.create(
         { ...p, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
         { signal },
       );
-      const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs);
+      const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
       for await (const chunk of stream) {
+        streamChunkConsumed = true;
         const { reasoning, content, outputTokens: tok, inputTokens: inTok } = extractStreamDeltas(chunk);
         if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
         if (content) { acc += content; yield { kind: "assistant_text", delta: content }; }
@@ -369,10 +378,13 @@ export async function* runFormat(
       if (callStats) yield buildLlmCallStatsEvent(callStats);
     } catch (e) {
       if (signal.aborted || (e as Error).name === "AbortError") return acc;
+      if (streamChunkConsumed) throw e;
       if (!fallback.allowContextFallback && classifyContextError(e) !== null) throw e;
+      if (!shouldFallbackStreamToNonStream(e, signal)) throw e;
       const fallbackStartMs = Date.now();
       const resp = await llm.chat.completions.create(
         { ...p, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+        { signal },
       );
       acc = resp.choices[0]?.message?.content ?? "";
       const completionTokens = extractUsage(resp);

@@ -17,6 +17,7 @@ import {
   extractUsage,
   isJsonModeError,
   parseStructured,
+  shouldFallbackStreamToNonStream,
   wrapStreamWithStats,
 } from "./llm-utils";
 import { render } from "./template";
@@ -68,6 +69,7 @@ export interface RunStructuredArgs<T> {
   callSite: StructuredCallSite;
   signal: AbortSignal;
   onEvent: (ev: RunEvent) => void;
+  transport?: "stream" | "non-stream";
 }
 
 export interface RunStructuredResult<T> {
@@ -188,6 +190,7 @@ async function streamOnce(
   let fullText = "";
   let outputTokens = 0;
   let finishReason: string | null | undefined;
+  let streamChunkConsumed = false;
 
   try {
     const requestStartMs = Date.now();
@@ -195,8 +198,9 @@ async function streamOnce(
       { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
       { signal },
     );
-    const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs);
+    const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
     for await (const chunk of stream) {
+      streamChunkConsumed = true;
       const reason = chunk.choices[0]?.finish_reason;
       if (reason !== undefined) finishReason = reason;
       const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
@@ -221,12 +225,14 @@ async function streamOnce(
       signal.aborted
       || (e as Error).name === "AbortError"
     ) throw e;
+    if (streamChunkConsumed) throw e;
     if (
       classifyContextError(e) !== null
       || e instanceof PromptBudgetExceededError
       || e instanceof StructuredOutputTruncatedError
     ) throw e;
     if (isJsonModeError(e)) throw e;
+    if (!shouldFallbackStreamToNonStream(e, signal)) throw e;
     const params2 = buildChatParams(model, messages, opts);
     const resp = await llm.chat.completions.create(
       { ...params2, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
@@ -243,6 +249,31 @@ async function streamOnce(
         : undefined,
     };
   }
+}
+
+async function nonStreamOnce(
+  llm: LlmClient,
+  model: string,
+  messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  opts: LlmCallOptions,
+  signal: AbortSignal,
+): Promise<CallResult> {
+  const params = buildChatParams(model, messages, opts);
+  const response = await llm.chat.completions.create(
+    { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+    { signal },
+  );
+  if (response.choices[0]?.finish_reason === "length") {
+    throw new StructuredOutputTruncatedError("length");
+  }
+  return {
+    fullText: response.choices[0]?.message?.content ?? "",
+    outputTokens: extractUsage(response) ?? 0,
+    inputTokens: typeof response.usage?.prompt_tokens === "number"
+      ? response.usage.prompt_tokens
+      : undefined,
+    finishReason: response.choices[0]?.finish_reason,
+  };
 }
 
 function parseAndValidate<T>(profile: StructuredProfile<T>, fullText: string): T {
@@ -274,7 +305,9 @@ async function callWithFormatFallback<T>(
 
     try {
       return {
-        result: await streamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent),
+        result: args.transport === "non-stream"
+          ? await nonStreamOnce(args.llm, args.model, messages, callOpts, args.signal)
+          : await streamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent),
         mode: currentMode,
       };
     } catch (e) {

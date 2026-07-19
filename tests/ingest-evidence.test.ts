@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import test from "node:test";
 import type OpenAI from "openai";
@@ -83,6 +84,34 @@ test("public coverage validation rejects non-normalized entity keys", () => {
     && /normalized entity key/i.test(error.message));
 });
 
+test("evidence prompts state the exact fail-closed entity key grammar", () => {
+  const mapPrompt = readFileSync(
+    new URL("../prompts/ingest-evidence-map.md", import.meta.url),
+    "utf8",
+  );
+  const reducePrompt = readFileSync(
+    new URL("../prompts/ingest-evidence-reduce.md", import.meta.url),
+    "utf8",
+  );
+  const pattern = "^[a-z0-9]+(?:[_-][a-z0-9]+)*$";
+
+  assert.equal(mapPrompt.includes(pattern), true);
+  assert.match(mapPrompt, /lowercase ASCII letters.*digits.*underscore.*hyphen/is);
+  assert.match(mapPrompt, /`proxy\.pac`.*`proxy-pac`/s);
+  assert.equal(reducePrompt.includes(pattern), true);
+  assert.match(reducePrompt, /same.*entityKey/is);
+});
+
+test("invalid entity key diagnostic gives the exact grammar and a conversion example", () => {
+  assert.throws(() => buildEvidenceCoverage(
+    ["c1"],
+    [{ ...packet("p1", "c1"), entityKey: "proxy.pac" }],
+    [],
+  ), (error: unknown) => error instanceof EvidenceCoverageError
+    && error.message.includes("^[a-z0-9]+(?:[_-][a-z0-9]+)*$")
+    && /proxy\.pac.*proxy-pac/i.test(error.message));
+});
+
 test("invalid entity keys and out-of-chunk-local one-based ranges fail", () => {
   assert.throws(() => validateEvidenceMap({
     chunk: { id: "c1", startLine: 10, endLine: 20 },
@@ -123,6 +152,20 @@ test("packet schema and runtime reject empty facts and source ranges", () => {
     packets: [{ ...packet("p1", "c1"), exactSourceRanges: [] }],
     noEvidence: [],
   }, "line"), EvidenceCoverageError);
+});
+
+test("public evidence schemas keep rejecting null entity types", () => {
+  const packetWithNullType = { ...packet("p1", "c1"), entityType: null };
+  assert.equal(EvidencePacketSchema.safeParse(packetWithNullType).success, false);
+  assert.equal(EntityEvidenceSchema.safeParse({
+    entityKey: "postgresql",
+    entityType: null,
+    packetIds: ["p1"],
+    facts: ["fact"],
+    exactSourceRanges: [{ startLine: 1, endLine: 1 }],
+    exactSource: [{ startLine: 1, endLine: 1, text: "source" }],
+    links: [],
+  }).success, false);
 });
 
 test("entity evidence schema and runtime reject impossible empty aggregates", () => {
@@ -217,7 +260,12 @@ function mockRuntime(
     chat: {
       completions: {
         create: async (params: unknown) => {
-          const messages = (params as { messages: OpenAI.Chat.ChatCompletionMessageParam[] }).messages;
+          const request = params as {
+            messages: OpenAI.Chat.ChatCompletionMessageParam[];
+            stream?: boolean;
+            max_tokens?: unknown;
+          };
+          const messages = request.messages;
           requests.push(messages);
           requestParams.push(params as Record<string, unknown>);
           probe?.start();
@@ -225,12 +273,27 @@ function mockRuntime(
             await new Promise((resolve) => setTimeout(resolve, probe === undefined ? 0 : 1));
             const outputValue = respond(messages);
             const output = JSON.stringify(outputValue);
-            const maxTokens = (params as { max_tokens?: unknown }).max_tokens;
+            const maxTokens = request.max_tokens;
             if (typeof maxTokens === "number") {
               assert.ok(
                 mockOutputBytes(outputValue) <= maxTokens,
                 `mock output ${mockOutputBytes(outputValue)} exceeded request max_tokens ${maxTokens}`,
               );
+            }
+            if (request.stream === false) {
+              return {
+                id: "evidence-completion",
+                object: "chat.completion",
+                created: 0,
+                model: "mock",
+                choices: [{
+                  index: 0,
+                  finish_reason: "stop",
+                  message: { role: "assistant", content: output, refusal: null },
+                  logprobs: null,
+                }],
+                usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+              };
             }
             return (async function* () {
               yield chunk(output);
@@ -274,6 +337,20 @@ function requestHash(messages: OpenAI.Chat.ChatCompletionMessageParam[]): string
 
 function isReducerRequest(messages: OpenAI.Chat.ChatCompletionMessageParam[]): boolean {
   return allMessageText(messages).includes("REDUCE_EVIDENCE");
+}
+
+function assertClosedToolLifecycles(events: RunEvent[]): void {
+  let open = false;
+  for (const event of events) {
+    if (event.kind === "tool_use") {
+      assert.equal(open, false, `tool lifecycle reopened before result: ${event.name}`);
+      open = true;
+    } else if (event.kind === "tool_result") {
+      assert.equal(open, true, "tool_result emitted without tool_use");
+      open = false;
+    }
+  }
+  assert.equal(open, false, "tool lifecycle left open");
 }
 
 function reducerInput(messages: OpenAI.Chat.ChatCompletionMessageParam[]): Array<Record<string, unknown>> {
@@ -397,6 +474,47 @@ test("normal source accepts mapper entityType from configured types", async () =
   assert.match(allMessageText(requests[0]), /CONFIGURED_ENTITY_TYPES tool/);
 });
 
+test("mapper wire normalization does not weaken the configured type allowlist", async () => {
+  const runtime = mockRuntime((messages) => ({
+    packets: [validMapperPacket(messages, 0, "service")],
+    noEvidence: [],
+  }), []);
+  runtime.configuredEntityTypes = ["tool"];
+
+  await assert.rejects(
+    prepareSourceEvidence("PostgreSQL source", "demo", evidencePolicy(), runtime),
+    (error: unknown) => error instanceof EvidenceCoverageError
+      && /unknown configured entity type.*service/i.test(error.message),
+  );
+});
+
+test("mapper wire null becomes an omitted entity type when no types are configured", async () => {
+  const runtime = mockRuntime((messages) => {
+    const mapped = validMapperPacket(messages, 0, null);
+    mapped.entityType = null;
+    return { packets: [mapped], noEvidence: [] };
+  }, []);
+  runtime.configuredEntityTypes = [];
+
+  const result = await prepareSourceEvidence("PostgreSQL source", "demo", evidencePolicy(), runtime);
+
+  assert.equal(result[0].entityType, undefined);
+  assert.equal("entityType" in result[0], false);
+});
+
+test("configured mapper wire null stays missing and uses existing single-type inference", async () => {
+  const runtime = mockRuntime((messages) => {
+    const mapped = validMapperPacket(messages, 0, null);
+    mapped.entityType = null;
+    return { packets: [mapped], noEvidence: [] };
+  }, []);
+  runtime.configuredEntityTypes = ["tool"];
+
+  const result = await prepareSourceEvidence("PostgreSQL source", "demo", evidencePolicy(), runtime);
+
+  assert.equal(result[0].entityType, "tool");
+});
+
 test("chunk planner treats undefined configured types as no configured types", () => {
   const source = Array.from({ length: 46 }, (_, index) => `line-${index + 1}-postgresql`).join("\n");
   const policy = evidencePolicy();
@@ -439,7 +557,10 @@ test("source orchestration maps complete chunks and recursively reduces whole pa
 
   const budgetEvents = events.filter((event) => event.kind === "prompt_budget");
   assert.equal(budgetEvents.length, requests.length, "one prompt_budget event per actual request");
-  assert.equal(events.length, budgetEvents.length, "only count-only prompt diagnostics may escape");
+  assert.ok(events.every((event) =>
+    event.kind === "prompt_budget"
+    || event.kind === "tool_use"
+    || event.kind === "tool_result"));
   const telemetry = JSON.stringify(budgetEvents);
   for (const forbidden of ["PostgreSQL details", "fact-", "postgresql.org"]) {
     assert.equal(telemetry.includes(forbidden), false, `telemetry leaked ${forbidden}`);
@@ -472,6 +593,48 @@ test("source orchestration maps complete chunks and recursively reduces whole pa
     const coveredIds = batches.flatMap((batch) => batch.flatMap((unit) => Array.isArray(unit.packetIds) ? unit.packetIds : [unit.id]));
     assert.deepEqual(coveredIds, expectedPacketIds, `depth ${depth} must partition whole packets exactly once`);
   }
+});
+
+test("reducer wire null becomes omitted when the expected entity type is undefined", async () => {
+  const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
+  const runtime = mockRuntime((messages) => {
+    if (isReducerRequest(messages)) {
+      return { ...validReduced(reducerInput(messages)), entityType: null };
+    }
+    return { packets: repeatedMapperPackets(messages, 12, null), noEvidence: [] };
+  }, [], requests);
+  runtime.configuredEntityTypes = [];
+
+  const source = Array.from(
+    { length: 500 },
+    (_, index) => `wire null reducer ${index + 1} PostgreSQL details`,
+  ).join("\n");
+  const result = await prepareSourceEvidence(source, "demo", realisticReducerPolicy(), runtime);
+
+  assert.ok(requests.some(isReducerRequest));
+  assert.equal(result[0].entityType, undefined);
+  assert.equal("entityType" in result[0], false);
+});
+
+test("reducer wire null is rejected when the expected entity type is configured", async () => {
+  const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
+  const runtime = mockRuntime((messages) => {
+    if (isReducerRequest(messages)) {
+      return { ...validReduced(reducerInput(messages)), entityType: null };
+    }
+    return { packets: repeatedMapperPackets(messages), noEvidence: [] };
+  }, [], requests);
+  runtime.configuredEntityTypes = ["tool"];
+
+  const source = Array.from(
+    { length: 500 },
+    (_, index) => `configured reducer ${index + 1} PostgreSQL details`,
+  ).join("\n");
+  await assert.rejects(
+    prepareSourceEvidence(source, "demo", realisticReducerPolicy(), runtime),
+    EvidenceReducerError,
+  );
+  assert.ok(requests.some(isReducerRequest));
 });
 
 test("exact prepared mapper sizing bounds every captured request", async () => {
@@ -767,7 +930,11 @@ test("bootstrap derives bounded candidate, theme, and language evidence from val
   }
   const budgetEvents = events.filter((event) => event.kind === "prompt_budget");
   assert.equal(budgetEvents.length, requests.length);
-  assert.equal(events.length, budgetEvents.length);
+  assert.ok(events.every((event) =>
+    event.kind === "prompt_budget"
+    || event.kind === "tool_use"
+    || event.kind === "tool_result"
+    || event.kind === "structural_error"));
   for (let index = 0; index < requests.length; index++) {
     const event = budgetEvents[index];
     assert.equal(event.kind, "prompt_budget");
@@ -874,6 +1041,108 @@ test("all evidence requests use the policy output cap and reject conflicting max
   await prepareSourceEvidence("one source line", "demo", policy, runtime);
   assert.ok(params.length > 0);
   assert.ok(params.every((request) => request.max_tokens === policy.outputBudgetTokens));
+});
+
+test("evidence mapper and reducer use direct non-stream requests", async () => {
+  const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
+  const params: Array<Record<string, unknown>> = [];
+  const runtime = mockRuntime((messages) => isReducerRequest(messages)
+    ? validReduced(reducerInput(messages))
+    : { packets: repeatedMapperPackets(messages, 24), noEvidence: [] }, [], requests, params);
+  const source = Array.from({ length: 500 }, (_, index) => `non-stream evidence ${index + 1}`).join("\n");
+
+  await prepareSourceEvidence(
+    source,
+    "demo",
+    { ...realisticReducerPolicy(), outputBudgetTokens: 7_000 },
+    runtime,
+  );
+
+  assert.ok(params.some((request) => isReducerRequest(
+    request.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+  )));
+  assert.ok(params.some((request) => !isReducerRequest(
+    request.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+  )));
+  assert.ok(params.every((request) => request.stream === false));
+});
+
+test("evidence progress uses closed mapping and reduction tool lifecycles with visible retry", async () => {
+  const events: RunEvent[] = [];
+  let mapperAttempts = 0;
+  const hostileEntityType = "HOSTILE_ENTITY_TYPE_DO_NOT_FORWARD";
+  const hostilePacketId = "HOSTILE_PACKET_ID_DO_NOT_FORWARD";
+  const hostileSource = "HOSTILE_SOURCE_PHRASE_DO_NOT_FORWARD";
+  const runtime = mockRuntime((messages) => {
+    if (isReducerRequest(messages)) return validReduced(reducerInput(messages));
+    mapperAttempts += 1;
+    if (mapperAttempts === 1) {
+      return {
+        packets: [{
+          ...validMapperPacket(messages),
+          id: hostilePacketId,
+          entityType: hostileEntityType,
+        }],
+        noEvidence: [],
+      };
+    }
+    return { packets: repeatedMapperPackets(messages, 24), noEvidence: [] };
+  }, events);
+  const source = Array.from({ length: 500 }, (_, index) => `${hostileSource} ${index + 1}`).join("\n");
+
+  await prepareSourceEvidence(
+    source,
+    "demo",
+    { ...realisticReducerPolicy(), outputBudgetTokens: 7_000 },
+    runtime,
+  );
+
+  const toolNames = events
+    .filter((event): event is Extract<RunEvent, { kind: "tool_use" }> => event.kind === "tool_use")
+    .map((event) => event.name);
+  assert.ok(toolNames.filter((name) => name === "Evidence mapping").length >= 2);
+  assert.ok(toolNames.includes("Evidence reduction"));
+  assertClosedToolLifecycles(events);
+  const structuralEvent = events.find((event) =>
+    event.kind === "structural_error"
+    && event.callSite === "ingest.evidence-map"
+    && event.errorType === "schema_validate"
+    && event.message === "Structured output validation event");
+  assert.ok(structuralEvent?.kind === "structural_error");
+  assert.equal(structuralEvent.retryAttempt, 0);
+  assert.equal(structuralEvent.succeeded, false);
+  const diagnostics = JSON.stringify(events);
+  for (const hostile of [hostileEntityType, hostilePacketId, hostileSource, "\"packets\""]) {
+    assert.equal(diagnostics.includes(hostile), false, `diagnostics leaked ${hostile}`);
+  }
+  assert.equal(events.some((event) =>
+    event.kind === "assistant_text"
+    || event.kind === "assistant_replace"), false);
+});
+
+test("evidence mapper error closes the active tool lifecycle", async () => {
+  const events: RunEvent[] = [];
+  const runtime = mockRuntime((messages) => ({
+    packets: [{
+      ...validMapperPacket(messages),
+      entityType: "HOSTILE_ERROR_ENTITY_TYPE",
+    }],
+    noEvidence: [],
+  }), events);
+
+  await assert.rejects(
+    prepareSourceEvidence("HOSTILE_ERROR_SOURCE", "demo", evidencePolicy(), runtime),
+    EvidenceCoverageError,
+  );
+
+  assertClosedToolLifecycles(events);
+  const toolResults = events.filter(
+    (event): event is Extract<RunEvent, { kind: "tool_result" }> => event.kind === "tool_result",
+  );
+  assert.equal(toolResults.at(-1)?.ok, false);
+  const diagnostics = JSON.stringify(events);
+  assert.equal(diagnostics.includes("HOSTILE_ERROR_ENTITY_TYPE"), false);
+  assert.equal(diagnostics.includes("HOSTILE_ERROR_SOURCE"), false);
 });
 
 test("packet IDs are chunk-local, namespaced deterministically, and duplicate locals fail", async () => {
@@ -1074,6 +1343,14 @@ test("mapper context recovery rechunks into smaller complete child requests", as
   assert.equal(mapperEvents.length, mapperRequests.length);
   assert.ok(mapperEvents.filter((event) => event.retryReason === "provider_context_error").length <= 3);
   assert.ok(mapperEvents.some((event) => event.retryReason === "provider_context_error"));
+  assert.ok(events.some((event) =>
+    event.kind === "tool_use"
+    && event.name === "Evidence context repack"));
+  assert.ok(events.some((event) =>
+    event.kind === "tool_result"
+    && event.ok
+    && event.preview === "retry scheduled"));
+  assertClosedToolLifecycles(events);
 });
 
 test("reducer context recovery repartitions whole units into smaller requests", async () => {

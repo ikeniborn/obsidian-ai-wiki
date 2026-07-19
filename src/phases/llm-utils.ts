@@ -1,6 +1,14 @@
 import type OpenAI from "openai";
+import {
+  APIConnectionError,
+  APIUserAbortError,
+} from "openai";
 import type { LlmCallOptions, RunEvent } from "../types";
-import { estimatePreparedMessages, PromptBudgetExceededError } from "../prompt-budget";
+import {
+  classifyContextError,
+  estimatePreparedMessages,
+  PromptBudgetExceededError,
+} from "../prompt-budget";
 import { compressionInstruction } from "../semantic-compression";
 import baseContract from "../../prompts/base.md";
 import { jsonrepair } from "jsonrepair";
@@ -158,6 +166,9 @@ export function buildChatParams(
     delete params.response_format;
     delete params.temperature;
     delete params.top_p;
+  } else {
+    params.reasoning_effort = "none";
+    params.extra_body = { reasoning_effort: "none" };
   }
 
   return params;
@@ -245,6 +256,55 @@ export function isJsonModeError(e: unknown): boolean {
   return JSON_MODE_KEYWORDS.some((kw) => msg.includes(kw));
 }
 
+export function shouldFallbackStreamToNonStream(
+  error: unknown,
+  signal?: AbortSignal,
+): boolean {
+  if (signal?.aborted) return false;
+  if (error instanceof APIUserAbortError || error instanceof APIConnectionError) {
+    return false;
+  }
+  if (error instanceof Error && error.name === "AbortError") return false;
+  if (isTransportFailure(error)) return false;
+  if (error && typeof error === "object") {
+    const status = (error as { status?: unknown }).status;
+    if (typeof status === "number" && Number.isFinite(status)) return false;
+  }
+  if (classifyContextError(error) !== null) return false;
+  return true;
+}
+
+function isTransportFailure(error: unknown): boolean {
+  const seen = new Set<object>();
+  let current = error;
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    const typed = current as {
+      cause?: unknown;
+      code?: unknown;
+      message?: unknown;
+      name?: unknown;
+    };
+    const code = typeof typed.code === "string" ? typed.code.toUpperCase() : "";
+    if (
+      code.startsWith("UND_ERR_")
+      || code.startsWith("ECONN")
+      || ["EPIPE", "ETIMEDOUT", "ENETUNREACH", "EHOSTUNREACH", "ENOTFOUND", "EAI_AGAIN"]
+        .includes(code)
+    ) {
+      return true;
+    }
+    const name = typeof typed.name === "string" ? typed.name : "";
+    const message = typeof typed.message === "string" ? typed.message : "";
+    if (current instanceof TypeError && /^(terminated|fetch failed)$/i.test(message.trim())) {
+      return true;
+    }
+    if (/socket/i.test(name) || /socket/i.test(message)) return true;
+    current = typed.cause;
+  }
+  return false;
+}
+
 function injectSystemPrompt(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   systemPrompt: string,
@@ -274,9 +334,51 @@ export interface LlmStreamStats {
   llmDurationMs: number;
 }
 
+type ClosableAsyncIterator<T> = AsyncIterator<T> & {
+  cancel?: () => unknown;
+};
+
+function streamAbortError(): DOMException {
+  return new DOMException("The operation was aborted", "AbortError");
+}
+
+function closeStreamIterator<T>(iterator: ClosableAsyncIterator<T>): void {
+  const close = typeof iterator.return === "function"
+    ? () => iterator.return?.()
+    : typeof iterator.cancel === "function"
+      ? () => iterator.cancel?.()
+      : undefined;
+  if (!close) return;
+  try {
+    void Promise.resolve(close()).catch(() => {});
+  } catch {
+    // Best-effort close must not mask the abort.
+  }
+}
+
+async function nextStreamChunk<T>(
+  iterator: ClosableAsyncIterator<T>,
+  signal: AbortSignal,
+): Promise<IteratorResult<T>> {
+  if (signal.aborted) throw streamAbortError();
+
+  let rejectAbort!: (error: DOMException) => void;
+  const aborted = new Promise<never>((_, reject) => {
+    rejectAbort = reject;
+  });
+  const onAbort = () => rejectAbort(streamAbortError());
+  signal.addEventListener("abort", onAbort, { once: true });
+  try {
+    return await Promise.race([iterator.next(), aborted]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+}
+
 export function wrapStreamWithStats(
   stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>,
   requestStartMs: number,
+  signal: AbortSignal,
 ): {
   stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
   getStats(this: void): LlmStreamStats | undefined;
@@ -289,19 +391,31 @@ export function wrapStreamWithStats(
   let yielded = false;
 
   async function* wrapped(): AsyncIterable<OpenAI.Chat.ChatCompletionChunk> {
-    for await (const chunk of stream) {
-      if (!yielded) {
-        ttftMs = Date.now() - requestStartMs;
-        firstChunkMs = Date.now();
-        yielded = true;
+    const iterator = stream[Symbol.asyncIterator]() as ClosableAsyncIterator<OpenAI.Chat.ChatCompletionChunk>;
+    let completed = false;
+    try {
+      while (true) {
+        const next = await nextStreamChunk(iterator, signal);
+        if (next.done) {
+          completed = true;
+          break;
+        }
+        const chunk = next.value;
+        if (!yielded) {
+          ttftMs = Date.now() - requestStartMs;
+          firstChunkMs = Date.now();
+          yielded = true;
+        }
+        const { outputTokens: tok, inputTokens: inTok } = extractStreamDeltas(chunk);
+        if (tok !== undefined) outputTokens = tok;
+        if (inTok !== undefined) inputTokens = inTok;
+        yield chunk;
       }
-      const { outputTokens: tok, inputTokens: inTok } = extractStreamDeltas(chunk);
-      if (tok !== undefined) outputTokens = tok;
-      if (inTok !== undefined) inputTokens = inTok;
-      yield chunk;
-    }
-    if (yielded && firstChunkMs !== undefined) {
-      llmDurationMs = Date.now() - firstChunkMs;
+      if (yielded && firstChunkMs !== undefined) {
+        llmDurationMs = Date.now() - firstChunkMs;
+      }
+    } finally {
+      if (!completed) closeStreamIterator(iterator);
     }
   }
 

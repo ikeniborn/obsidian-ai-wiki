@@ -8,6 +8,7 @@ import { hashSource } from "../src/incremental-sources";
 import type { PageSimilarityService } from "../src/page-similarity";
 import type { IngestOutcome, LlmClient, RunEvent } from "../src/types";
 import type { VaultAdapter } from "../src/vault-tools";
+import { mockChatResponse } from "./openai-mock-response";
 
 const pathBrowserifyLoader = `
 export async function resolve(specifier, context, nextResolve) {
@@ -107,7 +108,7 @@ function capturingLlm(prompts: string[]): LlmClient {
       if (prompt.includes("CHUNK_ID ")) {
         const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
         assert.ok(chunkId);
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           packets: [{
             id: `packet-${chunkId}`,
             chunkId,
@@ -122,7 +123,7 @@ function capturingLlm(prompts: string[]): LlmClient {
         }));
       }
       if (prompt.includes("Entity bundle: entity-alpha")) {
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           reasoning: "Existing page already covers the evidence.",
           actions: [],
           skips: [{ entityKey: "alpha", reason: "No change required." }],
@@ -199,13 +200,13 @@ async function runMultiBatchDeltaCase(conflicting: boolean): Promise<{
             sourceAnchor: `${sourcePath}:${match[1]}`,
           }];
         });
-        return streamText(JSON.stringify({ packets, noEvidence: [] }));
+        return mockChatResponse(params, JSON.stringify({ packets, noEvidence: [] }));
       }
       const entityKeys = ["alpha", "beta"].filter((key) =>
         prompt.includes(`Entity bundle: entity-${key}`));
       if (entityKeys.length > 0) {
         synthesisPrompts.push(prompt);
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           reasoning: `Create ${entityKeys.join(", ")}.`,
           actions: entityKeys.map((entityKey) => ({
             kind: "create",
@@ -299,7 +300,7 @@ async function runPageWriteRace(kind: "create" | "patch"): Promise<{
       if (prompt.includes("CHUNK_ID ")) {
         const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
         assert.ok(chunkId);
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           packets: [{
             id: `packet-${chunkId}`,
             chunkId,
@@ -317,7 +318,7 @@ async function runPageWriteRace(kind: "create" | "patch"): Promise<{
         const pageHash = prompt.match(/"pageHash":\s*"([^"]+)"/)?.[1];
         const sectionHash = prompt.match(/"sectionHash":\s*"([^"]+)"/)?.[1];
         assert.ok(pageHash && sectionHash);
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           reasoning: "Patch prepared snapshot.",
           actions: [{
             kind: "patch",
@@ -335,7 +336,7 @@ async function runPageWriteRace(kind: "create" | "patch"): Promise<{
           entity_types_delta: [],
         }));
       }
-      return streamText(JSON.stringify({
+      return mockChatResponse(params, JSON.stringify({
         reasoning: "Create prepared path.",
         actions: [{
           kind: "create",
@@ -398,7 +399,7 @@ async function runInventoryFailure(failingPath: "src" | ""): Promise<{
       if (prompt.includes("CHUNK_ID ")) {
         const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
         assert.ok(chunkId);
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           packets: [{
             id: `packet-${chunkId}`,
             chunkId,
@@ -412,7 +413,7 @@ async function runInventoryFailure(failingPath: "src" | ""): Promise<{
           noEvidence: [],
         }));
       }
-      return streamText(JSON.stringify({
+      return mockChatResponse(params, JSON.stringify({
         reasoning: "Create inventory page.",
         actions: [{
           kind: "create",
@@ -587,7 +588,7 @@ async function runCanonicalKnowledgeCase(
       if (prompt.includes("CHUNK_ID ")) {
         const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
         assert.ok(chunkId);
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           packets: [{
             id: `packet-${chunkId}`,
             chunkId,
@@ -605,7 +606,7 @@ async function runCanonicalKnowledgeCase(
         const pageHash = prompt.match(/Fresh page hash: ([^\s]+)/)?.[1];
         const sectionHash = prompt.match(/"sectionHash": "([^"]+)"/)?.[1];
         assert.ok(pageHash && sectionHash);
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           reasoning: "Merge incoming evidence.",
           actions: [{
             kind: "patch",
@@ -623,7 +624,7 @@ async function runCanonicalKnowledgeCase(
           entity_types_delta: [],
         }));
       }
-      return streamText(JSON.stringify({
+      return mockChatResponse(params, JSON.stringify({
         reasoning: "Draft merge candidate.",
         actions: [{
           kind: "create",
@@ -882,7 +883,7 @@ test("dedup retargets a new draft to a guarded canonical-page patch", async () =
       if (prompt.includes("CHUNK_ID ")) {
         const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
         assert.ok(chunkId);
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           packets: [{
             id: `packet-${chunkId}`,
             chunkId,
@@ -901,7 +902,7 @@ test("dedup retargets a new draft to a guarded canonical-page patch", async () =
         const sectionHash = prompt.match(/"sectionHash": "([^"]+)"/)?.[1];
         const ordinal = Number(prompt.match(/"sectionOrdinal": (\d+)/)?.[1]);
         assert.ok(pageHash && sectionHash && Number.isInteger(ordinal));
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           reasoning: "Merge into canonical page.",
           actions: [{
             kind: "patch",
@@ -920,7 +921,7 @@ test("dedup retargets a new draft to a guarded canonical-page patch", async () =
         }));
       }
       if (prompt.includes("Entity bundle: entity-duplicate")) {
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           reasoning: "Draft a new page.",
           actions: [{
             kind: "create",
@@ -1062,7 +1063,7 @@ test("canonical duplicate deletion fails closed when duplicate content changes a
       if (prompt.includes("CHUNK_ID ")) {
         const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
         assert.ok(chunkId);
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           packets: [{
             id: `packet-${chunkId}`,
             chunkId,
@@ -1080,7 +1081,7 @@ test("canonical duplicate deletion fails closed when duplicate content changes a
         const pageHash = prompt.match(/Fresh page hash: ([^\s]+)/)?.[1];
         const sectionHash = prompt.match(/"sectionHash": "([^"]+)"/)?.[1];
         assert.ok(pageHash && sectionHash);
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           reasoning: "Merge into canonical page.",
           actions: [{
             kind: "patch",
@@ -1098,7 +1099,7 @@ test("canonical duplicate deletion fails closed when duplicate content changes a
           entity_types_delta: [],
         }));
       }
-      return streamText(JSON.stringify({
+      return mockChatResponse(params, JSON.stringify({
         reasoning: "Draft a duplicate page.",
         actions: [{
           kind: "create",
@@ -1313,7 +1314,7 @@ test("retry after a post-write embedding failure completes pending vectors and b
       if (prompt.includes("CHUNK_ID ")) {
         const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
         assert.ok(chunkId);
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           packets: [{
             id: `packet-${chunkId}`,
             chunkId,
@@ -1329,7 +1330,7 @@ test("retry after a post-write embedding failure completes pending vectors and b
       }
       if (prompt.includes("Entity bundle: entity-retry")) {
         synthesisCalls++;
-        return streamText(JSON.stringify(synthesisCalls === 1 ? {
+        return mockChatResponse(params, JSON.stringify(synthesisCalls === 1 ? {
           reasoning: "Create the retry page.",
           actions: [{
             kind: "create",
@@ -1490,7 +1491,7 @@ test("concurrent source body edit before backlink commit fails without overwriti
       if (prompt.includes("CHUNK_ID ")) {
         const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
         assert.ok(chunkId);
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           packets: [{
             id: `packet-${chunkId}`,
             chunkId,
@@ -1504,7 +1505,7 @@ test("concurrent source body edit before backlink commit fails without overwriti
           noEvidence: [],
         }));
       }
-      return streamText(JSON.stringify({
+      return mockChatResponse(params, JSON.stringify({
         reasoning: "Create concurrent source page.",
         actions: [{
           kind: "create",
@@ -1610,7 +1611,7 @@ test("post-embedding page provenance controls final source wiki_articles", async
       if (prompt.includes("CHUNK_ID ")) {
         const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
         assert.ok(chunkId);
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           packets: [{
             id: `packet-${chunkId}`,
             chunkId,
@@ -1624,7 +1625,7 @@ test("post-embedding page provenance controls final source wiki_articles", async
           noEvidence: [],
         }));
       }
-      return streamText(JSON.stringify({
+      return mockChatResponse(params, JSON.stringify({
         reasoning: "Create provenance page.",
         actions: [{
           kind: "create",
@@ -1768,9 +1769,8 @@ test("mapper telemetry and synthesis content are yielded before delayed helpers 
       if (prompt.includes("CHUNK_ID ")) {
         const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
         assert.ok(chunkId);
-        return (async function* () {
-          await mapperGate.promise;
-          yield* streamText(JSON.stringify({
+        await mapperGate.promise;
+        const response = mockChatResponse(params, JSON.stringify({
             packets: [{
               id: `packet-${chunkId}`,
               chunkId,
@@ -1783,8 +1783,8 @@ test("mapper telemetry and synthesis content are yielded before delayed helpers 
             }],
             noEvidence: [],
           }));
-          mapperComplete = true;
-        })();
+        mapperComplete = true;
+        return response;
       }
       return (async function* () {
         const output = JSON.stringify({
@@ -1841,7 +1841,9 @@ test("mapper telemetry and synthesis content are yielded before delayed helpers 
 
   await expectLive(
     "ingest.evidence-map",
-    (event) => event.kind === "prompt_budget" && event.callSite === "ingest.evidence-map",
+    (event) => event.kind === "tool_use"
+      && event.name === "Evidence mapping"
+      && (event.input as { callSite?: string }).callSite === "ingest.evidence-map",
     mapperGate.resolve,
     () => mapperComplete,
   );
@@ -1883,7 +1885,7 @@ test("ordinary guarded patch unions old and current source provenance", async ()
       if (prompt.includes("CHUNK_ID ")) {
         const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
         assert.ok(chunkId);
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           packets: [{
             id: `packet-${chunkId}`,
             chunkId,
@@ -1900,7 +1902,7 @@ test("ordinary guarded patch unions old and current source provenance", async ()
       const pageHash = prompt.match(/"pageHash":\s*"([^"]+)"/)?.[1];
       const sectionHash = prompt.match(/"sectionHash":\s*"([^"]+)"/)?.[1];
       assert.ok(pageHash && sectionHash);
-      return streamText(JSON.stringify({
+      return mockChatResponse(params, JSON.stringify({
         reasoning: "Append the new fact.",
         actions: [{
           kind: "patch",
@@ -1979,7 +1981,7 @@ test("failed canonical merge never deletes a duplicate candidate", async () => {
       if (prompt.includes("CHUNK_ID ")) {
         const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
         assert.ok(chunkId);
-        return streamText(JSON.stringify({
+        return mockChatResponse(params, JSON.stringify({
           packets: [{
             id: `packet-${chunkId}`,
             chunkId,
@@ -1996,7 +1998,7 @@ test("failed canonical merge never deletes a duplicate candidate", async () => {
       if (prompt.includes("Regenerate exactly one guarded patch")) {
         throw new Error("synthetic canonical merge failure");
       }
-      return streamText(JSON.stringify({
+      return mockChatResponse(params, JSON.stringify({
         reasoning: "Draft incoming page.",
         actions: [{
           kind: "create",

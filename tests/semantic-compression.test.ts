@@ -61,3 +61,13 @@ test("semantic compression is appended once after other system sections through 
   assert.deepEqual(messages, original);
   assert.equal(firstSystem.name, "original-system");
 });
+
+test("zero or absent thinking budget explicitly disables reasoning", () => {
+  const messages = [{ role: "user" as const, content: "Answer this" }];
+
+  for (const opts of [{}, { thinkingBudgetTokens: 0 }]) {
+    const params = buildChatParams("model", messages, opts);
+    assert.equal(params.reasoning_effort, "none");
+    assert.deepEqual(params.extra_body, { reasoning_effort: "none" });
+  }
+});

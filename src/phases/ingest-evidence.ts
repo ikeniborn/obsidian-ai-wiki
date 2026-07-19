@@ -100,7 +100,10 @@ const ENTITY_KEY_RE = /^[a-z0-9]+(?:[_-][a-z0-9]+)*$/;
 
 function assertEntityKey(key: string): void {
   if (!ENTITY_KEY_RE.test(key)) {
-    throw new EvidenceCoverageError(`Invalid normalized entity key "${key}"`);
+    throw new EvidenceCoverageError(
+      `Invalid normalized entity key "${key}"; expected ^[a-z0-9]+(?:[_-][a-z0-9]+)*$ `
+      + `(example conversion: "proxy.pac" -> "proxy-pac")`,
+    );
   }
 }
 
@@ -432,8 +435,34 @@ function addSchemaIssue(ctx: z.RefinementCtx, message: string): void {
   ctx.addIssue({ code: z.ZodIssueCode.custom, message });
 }
 
+const EvidencePacketWireSchema = EvidencePacketSchema.extend({
+  entityType: EvidencePacketSchema.shape.entityType.nullable()
+    .transform((entityType) => entityType ?? undefined),
+}).transform((packet): EvidencePacket => {
+  const { entityType, ...withoutEntityType } = packet;
+  return entityType === undefined ? withoutEntityType : { ...withoutEntityType, entityType };
+});
+
+const EvidenceMapperWireOutputSchema = EvidenceMapperOutputSchema.extend({
+  packets: z.array(EvidencePacketWireSchema),
+});
+
+const UntypedEntityEvidenceWireSchema = EntityEvidenceSchema.extend({
+  entityType: EntityEvidenceSchema.shape.entityType.nullable()
+    .transform((entityType) => entityType ?? undefined),
+}).transform((evidence): EntityEvidence => {
+  const { entityType, ...withoutEntityType } = evidence;
+  return entityType === undefined ? withoutEntityType : { ...withoutEntityType, entityType };
+});
+
+function structuredWireSchema<T>(
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
+): z.ZodSchema<T> {
+  return schema as unknown as z.ZodSchema<T>;
+}
+
 function mapperSchemaFor(chunk: SourceChunk, mode: EvidenceMappingMode) {
-  return EvidenceMapperOutputSchema.superRefine((value, ctx) => {
+  return structuredWireSchema(EvidenceMapperWireOutputSchema.superRefine((value, ctx) => {
     try {
       buildEvidenceCoverage([chunk.id], value.packets, value.noEvidence);
       for (const packet of value.packets) {
@@ -451,15 +480,18 @@ function mapperSchemaFor(chunk: SourceChunk, mode: EvidenceMappingMode) {
     } catch (error) {
       addSchemaIssue(ctx, error instanceof Error ? error.message : "Invalid evidence map");
     }
-  });
+  }));
 }
 
 function reducerSchemaFor(expected: EntityEvidence) {
-  return EntityEvidenceSchema.superRefine((value, ctx) => {
+  const wireSchema = expected.entityType === undefined
+    ? UntypedEntityEvidenceWireSchema
+    : EntityEvidenceSchema;
+  return structuredWireSchema(wireSchema.superRefine((value, ctx) => {
     try { assertReducedEntity(expected, value); } catch (error) {
       addSchemaIssue(ctx, error instanceof Error ? error.message : "Invalid reduced evidence");
     }
-  });
+  }));
 }
 
 function assertReducedEntity(expected: EntityEvidence, actual: EntityEvidence): void {
@@ -570,6 +602,7 @@ function estimateStructuredRequest(
 
 async function runBoundedStructuredWithRetry<T>(
   args: RunStructuredArgs<T>,
+  onRetry?: (attempt: number) => void,
 ): Promise<RunStructuredResult<T>> {
   let messages = args.baseMessages;
   for (let attempt = 0; attempt <= args.maxRetries; attempt++) {
@@ -588,10 +621,59 @@ async function runBoundedStructuredWithRetry<T>(
           error.lastError,
         );
       }
+      onRetry?.(attempt + 1);
       messages = structuredRepairMessages(args.baseMessages);
     }
   }
   throw new Error("unreachable bounded structured retry state");
+}
+
+type EvidenceProgressCallSite =
+  | "ingest.evidence-map"
+  | "init.bootstrap-map"
+  | "ingest.evidence-reduce";
+
+function evidenceOperationName(callSite: EvidenceProgressCallSite): string {
+  return callSite === "ingest.evidence-reduce" ? "Evidence reduction" : "Evidence mapping";
+}
+
+function startEvidenceOperation(
+  runtime: EvidenceRuntime,
+  callSite: EvidenceProgressCallSite,
+  attempt: number,
+  reason: "initial" | "structured_retry" = "initial",
+): void {
+  runtime.onEvent?.({
+    kind: "tool_use",
+    name: evidenceOperationName(callSite),
+    input: { callSite, attempt, reason },
+  });
+}
+
+function finishEvidenceOperation(
+  runtime: EvidenceRuntime,
+  ok: boolean,
+  preview: "completed" | "failed" | "retrying",
+): void {
+  runtime.onEvent?.({ kind: "tool_result", ok, preview });
+}
+
+function forwardEvidenceStructuredEvent(
+  runtime: EvidenceRuntime,
+  event: RunEvent,
+): void {
+  if (event.kind === "structural_error") {
+    runtime.onEvent?.({
+      ...event,
+      message: "Structured output validation event",
+    });
+  } else if (
+    event.kind === "rule_fired"
+    || event.kind === "llm_call_stats"
+    || event.kind === "prompt_budget"
+  ) {
+    runtime.onEvent?.(event);
+  }
 }
 
 function taskLlmOptions(
@@ -731,55 +813,74 @@ function llmWithRequestTelemetry(
   runtime: EvidenceRuntime,
   metadata: RequestTelemetry,
 ): LlmClient {
-  const create = runtime.llm.chat.completions.create.bind(runtime.llm.chat.completions);
+  const completions = runtime.llm.chat.completions;
+  function createWithTelemetry(
+    params: OpenAI.Chat.ChatCompletionCreateParamsStreaming,
+    requestOpts?: { signal?: AbortSignal },
+  ): Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk>>;
+  function createWithTelemetry(
+    params: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+    requestOpts?: { signal?: AbortSignal },
+  ): Promise<OpenAI.Chat.ChatCompletion>;
+  async function createWithTelemetry(
+    params:
+      | OpenAI.Chat.ChatCompletionCreateParamsStreaming
+      | OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+    requestOpts?: { signal?: AbortSignal },
+  ): Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk> | OpenAI.Chat.ChatCompletion> {
+    const estimatedInputTokens = estimatePreparedMessages(params.messages);
+    if (estimatedInputTokens > metadata.effectiveInputBudget) {
+      throw new PromptBudgetExceededError(
+        metadata.effectiveInputBudget,
+        estimatedInputTokens,
+        [],
+      );
+    }
+    const emitTelemetry = () => runtime.onEvent?.(createPromptBudgetEvent({
+      callSite: metadata.callSite,
+      configuredInputBudget: metadata.configuredInputBudget,
+      effectiveInputBudget: metadata.effectiveInputBudget,
+      estimatedInputTokens,
+      outputBudget: metadata.outputBudget,
+      compressionProfile: metadata.compressionProfile,
+      contextUnits: metadata.contextUnits,
+      sourceChunks: metadata.sourceChunks,
+      reductionDepth: metadata.reductionDepth,
+    }));
+    const response = params.stream
+      ? await completions.create(params, requestOpts)
+      : await completions.create(params, requestOpts);
+    emitTelemetry();
+    return response;
+  }
   return {
     chat: {
       completions: {
-        create: async (params: OpenAI.Chat.ChatCompletionCreateParamsStreaming, requestOpts?: { signal?: AbortSignal }) => {
-          const estimatedInputTokens = estimatePreparedMessages(params.messages);
-          if (estimatedInputTokens > metadata.effectiveInputBudget) {
-            throw new PromptBudgetExceededError(
-              metadata.effectiveInputBudget,
-              estimatedInputTokens,
-              [],
-            );
-          }
-          const event = () => runtime.onEvent?.(createPromptBudgetEvent({
-            callSite: metadata.callSite,
-            configuredInputBudget: metadata.configuredInputBudget,
-            effectiveInputBudget: metadata.effectiveInputBudget,
-            estimatedInputTokens,
-            outputBudget: metadata.outputBudget,
-            compressionProfile: metadata.compressionProfile,
-            contextUnits: metadata.contextUnits,
-            sourceChunks: metadata.sourceChunks,
-            reductionDepth: metadata.reductionDepth,
-          }));
-          try {
-            const response = await create(params, requestOpts);
-            event();
-            return response;
-          } catch (error) {
-            if (classifyContextError(error) !== null) {
-              runtime.onEvent?.(createPromptBudgetEvent({
-                callSite: metadata.callSite,
-                configuredInputBudget: metadata.configuredInputBudget,
-                effectiveInputBudget: metadata.effectiveInputBudget,
-                estimatedInputTokens,
-                outputBudget: metadata.outputBudget,
-                compressionProfile: metadata.compressionProfile,
-                contextUnits: metadata.contextUnits,
-                sourceChunks: metadata.sourceChunks,
-                reductionDepth: metadata.reductionDepth,
-                retryReason: "provider_context_error",
-              }));
-            }
-            throw error;
-          }
-        },
+        create: createWithTelemetry,
       },
     },
-  } as LlmClient;
+  };
+}
+
+function forwardContextRepackProgress(
+  runtime: EvidenceRuntime,
+  event: Extract<RunEvent, { kind: "prompt_budget" }>,
+): void {
+  if (event.retryReason === undefined) return;
+  runtime.onEvent?.(event);
+  runtime.onEvent?.({
+    kind: "tool_use",
+    name: "Evidence context repack",
+    input: {
+      callSite: event.callSite,
+      retryReason: event.retryReason,
+      effectiveInputBudget: event.effectiveInputBudget,
+      contextUnits: event.contextUnits,
+      sourceChunks: event.sourceChunks,
+      reductionDepth: event.reductionDepth,
+    },
+  });
+  runtime.onEvent?.({ kind: "tool_result", ok: true, preview: "retry scheduled" });
 }
 
 async function mapChunk(
@@ -794,6 +895,7 @@ async function mapChunk(
   const configuredBudget = policy.inputBudgetTokens;
   const mapCallSite = runtime.mapCallSite ?? "ingest.evidence-map";
   const opts = { ...(runtime.opts ?? {}), inputBudgetTokens: configuredBudget };
+  startEvidenceOperation(runtime, mapCallSite, 0);
   try {
     const messages = messagesForMapper(mapPrompt, chunk, domainId, mode, source);
     const mapperOpts = taskLlmOptions(opts, policy, configuredBudget);
@@ -801,7 +903,10 @@ async function mapChunk(
     if (estimatedInputTokens > configuredBudget) {
       throw new PromptBudgetExceededError(configuredBudget, estimatedInputTokens, []);
     }
-    const result = await runBoundedStructuredWithRetry({
+    const result = await runBoundedStructuredWithRetry<{
+      packets: EvidencePacket[];
+      noEvidence: NoEvidence[];
+    }>({
       llm: llmWithRequestTelemetry(runtime, {
         callSite: mapCallSite,
         configuredInputBudget: configuredBudget,
@@ -819,11 +924,18 @@ async function mapChunk(
       maxRetries: policy.mapperRetries ?? 1,
       callSite: mapCallSite,
       signal: runtime.signal ?? new AbortController().signal,
-      onEvent: () => {},
+      onEvent: (event) => forwardEvidenceStructuredEvent(runtime, event),
+      transport: "non-stream",
+    }, (attempt) => {
+      finishEvidenceOperation(runtime, false, "retrying");
+      startEvidenceOperation(runtime, mapCallSite, attempt, "structured_retry");
     });
-    return validateEvidenceMap({ chunk, packets: result.value.packets, noEvidence: result.value.noEvidence }, source)
+    const mapped = validateEvidenceMap({ chunk, packets: result.value.packets, noEvidence: result.value.noEvidence }, source)
       .map((packet) => ({ ...packet, id: `${chunk.id}:${packet.id}` }));
+    finishEvidenceOperation(runtime, true, "completed");
+    return mapped;
   } catch (error) {
+    finishEvidenceOperation(runtime, false, "failed");
     if (error instanceof EvidenceCoverageError) throw error;
     if (classifyContextError(error) !== null) throw error;
     throw new EvidenceCoverageError(
@@ -959,7 +1071,7 @@ async function mapChunksWithContextRepack(
       }
       return { chunks, packets, noEvidence };
     },
-    onEvent: () => {},
+    onEvent: (event) => forwardContextRepackProgress(runtime, event),
   });
 }
 
@@ -1012,6 +1124,7 @@ async function reduceBatchOnce(
 ): Promise<EntityEvidence> {
   const expected = evidenceFromUnits(units);
   const configuredBudget = policy.inputBudgetTokens;
+  startEvidenceOperation(runtime, "ingest.evidence-reduce", 0);
   try {
     const messages = messagesForReducer(units);
     const reducerOpts = taskLlmOptions(runtime.opts ?? {}, policy, reducerBudget);
@@ -1019,7 +1132,7 @@ async function reduceBatchOnce(
     if (estimatedInputTokens > reducerBudget) {
       throw new PromptBudgetExceededError(reducerBudget, estimatedInputTokens, []);
     }
-    const response = await runBoundedStructuredWithRetry({
+    const response = await runBoundedStructuredWithRetry<EntityEvidence>({
       llm: llmWithRequestTelemetry(runtime, {
         callSite: "ingest.evidence-reduce",
         configuredInputBudget: configuredBudget,
@@ -1037,14 +1150,20 @@ async function reduceBatchOnce(
       maxRetries: policy.reducerRetries ?? 1,
       callSite: "ingest.evidence-reduce",
       signal: runtime.signal ?? new AbortController().signal,
-      onEvent: () => {},
+      onEvent: (event) => forwardEvidenceStructuredEvent(runtime, event),
+      transport: "non-stream",
+    }, (attempt) => {
+      finishEvidenceOperation(runtime, false, "retrying");
+      startEvidenceOperation(runtime, "ingest.evidence-reduce", attempt, "structured_retry");
     });
     assertReducedEntity(expected, response.value);
     if (JSON.stringify(response.value).length >= JSON.stringify(units).length) {
       throw new EvidenceReducerError(`Reducer non-progress at depth ${depth}`);
     }
+    finishEvidenceOperation(runtime, true, "completed");
     return response.value;
   } catch (error) {
+    finishEvidenceOperation(runtime, false, "failed");
     if (error instanceof EvidenceReducerError) throw error;
     if (classifyContextError(error) !== null) throw error;
     throw new EvidenceReducerError(
@@ -1123,7 +1242,7 @@ async function reduceBatch(
       }
       return reduced;
     },
-    onEvent: () => {},
+    onEvent: (event) => forwardContextRepackProgress(runtime, event),
   });
 }
 

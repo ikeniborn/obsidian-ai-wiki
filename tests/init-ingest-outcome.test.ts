@@ -8,6 +8,7 @@ import { hashSource } from "../src/incremental-sources";
 import type { PageSimilarityService } from "../src/page-similarity";
 import type { LlmClient, RunEvent } from "../src/types";
 import type { VaultAdapter } from "../src/vault-tools";
+import { mockChatResponse } from "./openai-mock-response";
 
 const pathBrowserifyLoader = `
 export async function resolve(specifier, context, nextResolve) {
@@ -156,7 +157,7 @@ function llmFor(mode: FailureCase, adapter: MemoryAdapter): LlmClient {
       const prompt = promptText(params);
       if (prompt.includes("CHUNK_ID ")) {
         if (mode === "llm") throw new Error("synthetic mapper transport failure");
-        return streamText(mapperOutput(prompt, mode));
+        return mockChatResponse(params, mapperOutput(prompt, mode));
       }
       if (prompt.includes("Regenerate exactly one guarded patch")) {
         throw new Error("synthetic conflict regeneration failure");

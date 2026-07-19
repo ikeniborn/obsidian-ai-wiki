@@ -2,7 +2,7 @@
 
 Контекст: плагин использует graph BFS (Query) + агентный Grep/Glob (Claude Agent). Поверх добавлен similarity-слой. Граф вики = индекс и для BFS, и для seed-выбора. Рекомендации — состыковать два сигнала и держать граф здоровым.
 
-Текущий storage: каждый домен хранит `metadata.jsonl`, `index.jsonl` и `log.jsonl` прямо в `!Wiki/<domain>/`. `index.jsonl` содержит `page` records для description-seed stage и `chunk` records для clean section vectors; отдельный `_embeddings.json` не используется как runtime source of truth.
+Текущий storage: каждый домен хранит `metadata.jsonl`, `index.jsonl` и `log.jsonl` прямо в `!Wiki/<domain>/`. `index.jsonl` содержит `page` records для description-seed stage и `chunk` records для clean section vectors; отдельный `_embeddings.json` не используется как runtime source of truth. Это граница структурированного storage: сериализованный `index.jsonl`, массивы векторов и сырые records никогда не входят в LLM-промты. Prompt builders проецируют только выбранные evidence, Markdown-секции и разрешённые метаданные.
 
 ---
 
@@ -25,6 +25,13 @@
 Структура строится один раз, влияет на всё дальше.
 
 - Per-operation models: большая модель на построение (Ingest/Init), дешёвая на Query.
+
+### Ограниченный Ingest без потери evidence
+
+- Input budget — явный лимит оценочного размера полного подготовленного промта, а не автоматически обнаруженный context window модели.
+- Большой Markdown делится по границам секций, абзацев, окон строк и fenced-code блоков. Map-вызовы извлекают source-anchored evidence, reduce-вызовы сохраняют покрытие всех чанков и пакетов.
+- Новые страницы создаются целиком; существующие меняются только патчами секций `add` / `append` / `replace` с хешами страницы и секции. Нетронутые секции сохраняются, stale patch не перезаписывает новое содержимое.
+- Oversized source требует дополнительных bounded calls и поэтому может быть медленнее и дороже. Компромисс — полная обработка вместо обрезания или oversized one-shot request.
 
 ---
 
@@ -57,7 +64,7 @@ flowchart TD
         EX --> DD{similarity к<br/>существующим?}
         DD -->|высокий cosine| UP[Обновить страницу]
         DD -->|низкий| NW[Новая страница<br/>+ кросс-ссылки]
-        UP --> EMB[Эмбеддинг<br/>mtime + hash]
+        UP --> EMB[Эмбеддинг<br/>hash reuse]
         NW --> EMB
         EMB --> IDX[(index.jsonl<br/>page + chunk vectors<br/>+ граф из body links)]
     end
@@ -71,7 +78,7 @@ flowchart TD
         BFS --> UN
         UN --> RRF[RRF fusion<br/>k≈60]
         RRF --> RR[rerank<br/>cross-encoder]
-        RR --> CTX[контекст в LLM<br/>под ~6800 tok]
+        RR --> CTX[контекст в LLM<br/>в input budget]
         CTX --> ANS[Ответ + цитаты]
     end
 
@@ -83,8 +90,8 @@ flowchart TD
 
 ## Tier 3 — гигиена и настройка
 
-- **Инкрементальность векторов** — обновлять `chunk` records в `index.jsonl` на тех же `bodyHash + embedTextHash + model + dimensions`, что и страницу. Удалена страница → удалены её `page`/`chunk` records. Иначе similarity отдаёт устаревшие seeds.
-- **Бюджет токенов** — Query ~6800 input/вызов. vector top-k держать 5–8, BFS depth 1, rerank ужимает под бюджет. Без cap контекст переполняется.
+- **Инкрементальность векторов** — переиспользовать `chunk` vector, пока совпадают `embedTextHash + model + dimensions`; `bodyHash` связывает records с текущим телом страницы и защищает commit от stale refresh. Удалена страница → удалены её `page`/`chunk` records. Иначе similarity отдаёт устаревшие seeds.
+- **Бюджет токенов** — Query упаковывает целые citation-bearing chunks в явно настроенный input budget. vector top-k держать 5–8, BFS depth 1, rerank ужимает под бюджет. Плагин не определяет context window модели автоматически.
 - **User prompt на плотные кросс-ссылки** в Ingest — прямо кормит BFS.
 - **Temperature 0.1–0.3**, structured output retries вверх на слабых локальных моделях.
 

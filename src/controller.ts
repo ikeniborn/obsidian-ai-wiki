@@ -10,7 +10,14 @@ import { VaultTools, type VaultAdapter } from "./vault-tools";
 import { arrayBufferToBase64, stripImageDataUriPrefix } from "./phases/attachment-analyzer";
 import { ClaudeCliClient } from "./claude-cli-client";
 import OpenAI from "openai";
-import { createProxyFetch, parseNoProxy, shouldBypass, maskProxyUrl } from "./proxy";
+import {
+  createDirectDesktopFetch,
+  createProxyFetch,
+  maskProxyUrl,
+  parseNoProxy,
+  selectNativeFetch,
+  shouldBypass,
+} from "./proxy";
 import { mobileFetch } from "./mobile-fetch";
 import { wrapMobileNoStream } from "./mobile-llm-wrap";
 import { i18n } from "./i18n";
@@ -688,12 +695,21 @@ export class WikiController {
         }
       }
 
+      const requestTimeoutMs = s.llmIdleTimeoutSec * 1000;
+      const nativeFetch = selectNativeFetch({
+        isMobile: Platform.isMobile,
+        mobileFetch,
+        proxyFetch,
+        directDesktopFetch: () => createDirectDesktopFetch(requestTimeoutMs),
+        requestTimeoutMs,
+      });
       const openaiClient = new OpenAI({
         baseURL: s.nativeAgent.baseUrl,
         apiKey: s.nativeAgent.apiKey,
-        timeout: timeoutSec > 0 ? timeoutSec * 1000 : undefined,
+        timeout: requestTimeoutMs,
+        maxRetries: 0,
         dangerouslyAllowBrowser: true,
-        fetch: Platform.isMobile ? mobileFetch : (proxyFetch ?? undefined),
+        fetch: nativeFetch,
       });
       llm = Platform.isMobile
         ? wrapMobileNoStream(openaiClient)
