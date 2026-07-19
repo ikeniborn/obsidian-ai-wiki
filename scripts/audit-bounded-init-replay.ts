@@ -1,11 +1,16 @@
 #!/usr/bin/env node
 import { createReadStream } from "node:fs";
+import { createHash } from "node:crypto";
 import { lstat, readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { JsonlParseError } from "../src/jsonl";
-import { contentHash } from "../src/content-hash";
 import { classifyContextError } from "../src/prompt-budget";
+import {
+  WIPE_HASH_ALGORITHM,
+  validWipeProofHash,
+  wipeEntriesHash,
+} from "../src/wipe-proof";
 import {
   chunkRecordId,
   isChunkIndexRecord,
@@ -340,7 +345,7 @@ function safeWikiFolder(value: unknown): string {
   return `!Wiki/${withoutPrefix}`;
 }
 
-function auditWipe(records: AgentLogRecord[], expectedFolder: string): WipeAudit {
+async function auditWipe(records: AgentLogRecord[], expectedFolder: string): Promise<WipeAudit> {
   const wipeIndexes = records.flatMap((record, index) =>
     isRecord(record.event)
     && record.event.kind === "tool_use"
@@ -393,19 +398,19 @@ function auditWipe(records: AgentLogRecord[], expectedFolder: string): WipeAudit
     || complete.transactionId.length === 0
     || !finiteNonnegativeInteger(complete.chunkCount)
     || !finiteNonnegativeInteger(complete.totalCount)
-    || typeof complete.manifestHash !== "string"
-    || !/^fnv1a:[0-9a-f]{8}$/.test(complete.manifestHash)
+    || complete.hashAlgorithm !== WIPE_HASH_ALGORITHM
+    || !validWipeProofHash(complete.manifestHash)
   ) {
     throw new Error("wipe_complete marker is invalid or not paired after WipeDomain");
   }
-  const rawChunkIndexes = chunkIndexes.map((recordIndex) => {
+  const rawChunkIndexes = new Set<number>();
+  let duplicateChunkIndex: number | undefined;
+  for (const recordIndex of chunkIndexes) {
     const event = records[recordIndex].event;
-    return isRecord(event) && finiteNonnegativeInteger(event.chunkIndex)
-      ? event.chunkIndex
-      : undefined;
-  });
-  const duplicateChunkIndex = rawChunkIndexes.find((value, index) =>
-    value !== undefined && rawChunkIndexes.indexOf(value) !== index);
+    if (!isRecord(event) || !finiteNonnegativeInteger(event.chunkIndex)) continue;
+    if (rawChunkIndexes.has(event.chunkIndex)) duplicateChunkIndex ??= event.chunkIndex;
+    rawChunkIndexes.add(event.chunkIndex);
+  }
   if (duplicateChunkIndex !== undefined) {
     throw new Error(`duplicate wipe manifest chunk index: ${duplicateChunkIndex}`);
   }
@@ -427,9 +432,11 @@ function auditWipe(records: AgentLogRecord[], expectedFolder: string): WipeAudit
       || chunk.domainId !== complete.domainId
       || chunk.transactionId !== complete.transactionId
       || chunk.chunkCount !== complete.chunkCount
+      || chunk.hashAlgorithm !== WIPE_HASH_ALGORITHM
       || !Array.isArray(chunk.entries)
       || chunk.entries.length > 100
       || typeof chunk.chunkHash !== "string"
+      || !validWipeProofHash(chunk.chunkHash)
     ) {
       throw new Error(`wipe manifest chunk ${expectedIndex} is invalid`);
     }
@@ -446,25 +453,27 @@ function auditWipe(records: AgentLogRecord[], expectedFolder: string): WipeAudit
     if (Buffer.byteLength(JSON.stringify(chunk), "utf8") > MAX_JSONL_LINE_BYTES) {
       throw new Error(`wipe manifest chunk ${chunk.chunkIndex} exceeds JSONL line limit`);
     }
-    if (chunk.chunkHash !== contentHash(JSON.stringify(chunk.entries))) {
-      throw new Error(`wipe manifest chunk ${chunk.chunkIndex} hash mismatch`);
-    }
+    const chunkEntries: Array<{ path: string; hash?: string }> = [];
     for (const entry of chunk.entries) {
       if (
         !isRecord(entry)
         || typeof entry.path !== "string"
         || (entry.hash !== undefined
-          && (typeof entry.hash !== "string" || !/^fnv1a:[0-9a-f]{8}$/.test(entry.hash)))
+          && !validWipeProofHash(entry.hash))
       ) {
         throw new Error(`wipe manifest chunk ${chunk.chunkIndex} has invalid entry`);
       }
-      entries.push(entry as { path: string; hash?: string });
+      chunkEntries.push(entry as { path: string; hash?: string });
     }
+    if (chunk.chunkHash !== await wipeEntriesHash(chunkEntries)) {
+      throw new Error(`wipe manifest chunk ${chunk.chunkIndex} hash mismatch`);
+    }
+    entries.push(...chunkEntries);
   }
   if (entries.length !== complete.totalCount) {
     throw new Error(`wipe manifest paths: ${entries.length}, expected: ${complete.totalCount}`);
   }
-  if (complete.manifestHash !== contentHash(JSON.stringify(entries))) {
+  if (complete.manifestHash !== await wipeEntriesHash(entries)) {
     throw new Error("wipe manifest hash mismatch");
   }
   const removedPaths = entries.map((entry) => entry.path);
@@ -906,14 +915,11 @@ function safeManifestPath(value: string): string {
 }
 
 async function hashFile(filePath: string): Promise<string> {
-  let hash = 0x811c9dc5;
+  const hash = createHash("sha256");
   for await (const chunk of createReadStream(filePath)) {
-    for (const byte of chunk as Buffer) {
-      hash ^= byte;
-      hash = Math.imul(hash, 0x01000193);
-    }
+    hash.update(chunk as Buffer);
   }
-  return `fnv1a:${(hash >>> 0).toString(16).padStart(8, "0")}`;
+  return `sha256:${hash.digest("hex")}`;
 }
 
 interface StaleManifestFs {
@@ -947,7 +953,9 @@ export async function findStaleWipeManifestDescendants(
       throw new Error(`unsafe domain symlink: ${relative}`);
     }
     if (directory) {
-      if (info.isDirectory() && (await fs.readdir(absolute)).length === 0) {
+      if (!info.isDirectory()) {
+        stale.push(relative);
+      } else if ((await fs.readdir(absolute)).length === 0) {
         stale.push(relative);
       }
       continue;
@@ -1239,7 +1247,7 @@ export async function auditBoundedInitReplay(
   );
   const indexPath = await locateDomainIndex(vaultRoot, selected.records);
   const expectedFolder = path.relative(vaultRoot, path.dirname(indexPath)).split(path.sep).join("/");
-  const wipe = auditWipe(selected.records, expectedFolder);
+  const wipe = await auditWipe(selected.records, expectedFolder);
   const lifecycle = auditLifecycles(
     selected.records,
     sessionAudit.idleTimeoutMs,

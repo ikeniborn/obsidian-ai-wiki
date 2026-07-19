@@ -42792,6 +42792,9 @@ function parseWikiSources(content) {
 
 // src/view.ts
 var AI_WIKI_VIEW_TYPE = "ai-wiki-view";
+function isTelemetryOnlyRunEvent(event) {
+  return event.kind === "run_config" || event.kind === "wipe_manifest_chunk" || event.kind === "wipe_complete";
+}
 function formatGraphStatsLines(ev, agentLogEnabled) {
   if (!agentLogEnabled) {
     const preview = ev.seeds.slice(0, 3).join(", ");
@@ -43404,6 +43407,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     }
   }
   appendEvent(ev) {
+    if (isTelemetryOnlyRunEvent(ev)) return;
     if (this.mobileWaitingEl) {
       this.mobileWaitingEl.remove();
       this.mobileWaitingEl = null;
@@ -58292,6 +58296,44 @@ ${schemaContent}` : ""
 // prompts/init.md
 var init_default = 'You are an architect of a wiki knowledge base. Generate a domain entry for domain-map.json.\nReturn ONLY valid JSON of the following structure:\n{\n  "id": "{{domain_id}}",\n  "name": "Human-readable name",\n  "wiki_folder": "{{domain_id}}",\n  "source_paths": [],\n  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"processes"}],\n  "language_notes": ""\n}\n{{schema_block}}\n\nInclude the `reasoning` field first in the JSON response: a step-by-step rationale for the chosen domain structure.\n\n## Output JSON Example\n\n{\n  "reasoning": "Analyzed the sources. Identified entities: Process, ServiceContract, Customer.",\n  "id": "{{domain_id}}",\n  "name": "Telecom Operations",\n  "wiki_folder": "{{domain_id}}",\n  "entity_types": [\n    {\n      "type": "Process",\n      "description": "A business process or workflow step",\n      "extraction_cues": ["BPMN", "workflow", "process"],\n      "min_mentions_for_page": 1,\n      "wiki_subfolder": "processes"\n    }\n  ],\n  "language_notes": "Mix of Russian/English; preserve the original spelling of product names."\n}\n\n## Wiki Page Conventions\n\nWiki pages use the `tags` field in the frontmatter: hierarchical tags (category/subcategory, lowercase, separated by `/`, no `#`). During ingest the LLM reuses tags from existing pages and creates new ones following the same scheme.\n\nwiki_subfolder RULE: one word, no slashes, no domain_id.\nNot allowed: "os/network", "os_network". Allowed: "network", "processes", "protocols".\n';
 
+// src/wipe-proof.ts
+var WIPE_HASH_ALGORITHM = "sha256-v1";
+function lengthPrefix(bytes) {
+  const result = new Uint8Array(5 + bytes.length);
+  result[0] = 1;
+  new DataView(result.buffer).setUint32(1, bytes.length);
+  result.set(bytes, 5);
+  return result;
+}
+function canonicalWipeEntries(entries) {
+  const encoder3 = new TextEncoder();
+  const parts = [];
+  const count = new Uint8Array(4);
+  new DataView(count.buffer).setUint32(0, entries.length);
+  parts.push(count);
+  for (const entry of entries) {
+    parts.push(lengthPrefix(encoder3.encode(entry.path)));
+    parts.push(entry.hash === void 0 ? new Uint8Array([0]) : lengthPrefix(encoder3.encode(entry.hash)));
+  }
+  const size = parts.reduce((total, part) => total + part.length, 0);
+  const result = new Uint8Array(size);
+  let offset = 0;
+  for (const part of parts) {
+    result.set(part, offset);
+    offset += part.length;
+  }
+  return result;
+}
+async function wipeProofHash(bytes) {
+  const input = new Uint8Array(bytes.byteLength);
+  input.set(bytes);
+  const digest = await crypto.subtle.digest("SHA-256", input);
+  return `sha256:${Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+}
+async function wipeEntriesHash(entries) {
+  return wipeProofHash(canonicalWipeEntries(entries));
+}
+
 // src/phases/init.ts
 async function* forwardIngest(generator, onDomainUpdate) {
   while (true) {
@@ -58610,14 +58652,15 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
       wipeManifest = await wipeDomainFolderWithManifest(
         vaultTools,
         existing.wiki_folder,
-        signal
+        signal,
+        { telemetryDomainId: domainId }
       );
     } catch (error) {
       yield { kind: "tool_result", ok: false, preview: error.message };
       yield { kind: "error", message: `force: wipe failed \u2014 ${error.message}` };
       return;
     }
-    for (const event of wipeManifestEvents(domainId, wipeManifest)) yield event;
+    for (const event of await wipeManifestEvents(domainId, wipeManifest)) yield event;
     yield { kind: "tool_result", ok: true };
     yield {
       kind: "assistant_text",
@@ -59018,30 +59061,76 @@ async function* runIncrementalReinit(domainId, changedFiles, vaultTools, llm, mo
   };
 }
 var WIPE_MANIFEST_CHUNK_PATHS = 100;
-var WIPE_MANIFEST_MAX_EVENT_BYTES = 1048576;
-function wipeManifestEvents(domainId, manifest, atMs = Date.now()) {
+var WIPE_MANIFEST_LINE_MAX_BYTES = 1048576;
+var WIPE_MANIFEST_ENVELOPE_RESERVE_BYTES = 8 * 1024;
+var WIPE_MANIFEST_EVENT_MAX_BYTES = WIPE_MANIFEST_LINE_MAX_BYTES - WIPE_MANIFEST_ENVELOPE_RESERVE_BYTES;
+function encodedBytes(value) {
+  return new TextEncoder().encode(JSON.stringify(value)).length;
+}
+function representativeAgentEnvelope(event) {
+  return {
+    ts: "9999-12-31T23:59:59.999Z",
+    session: "session-id",
+    op: "init",
+    domainId: "domain-id",
+    backend: "openai-compatible",
+    model: "provider/model",
+    event
+  };
+}
+async function planWipeManifestChunks(domainId, transactionId, entries) {
+  const groups = [];
+  let current = [];
+  for (const entry of entries) {
+    const candidate = [...current, entry];
+    const representative = {
+      kind: "wipe_manifest_chunk",
+      domainId,
+      transactionId,
+      chunkIndex: Number.MAX_SAFE_INTEGER,
+      chunkCount: Number.MAX_SAFE_INTEGER,
+      hashAlgorithm: WIPE_HASH_ALGORITHM,
+      entries: candidate,
+      chunkHash: `sha256:${"f".repeat(64)}`
+    };
+    if (candidate.length > WIPE_MANIFEST_CHUNK_PATHS || encodedBytes(representative) > WIPE_MANIFEST_EVENT_MAX_BYTES) {
+      if (current.length === 0) {
+        throw new Error("force: wipe manifest entry exceeds telemetry payload limit");
+      }
+      groups.push(current);
+      current = [entry];
+      const single = { ...representative, entries: current };
+      if (encodedBytes(single) > WIPE_MANIFEST_EVENT_MAX_BYTES) {
+        throw new Error("force: wipe manifest entry exceeds telemetry payload limit");
+      }
+    } else {
+      current = candidate;
+    }
+  }
+  if (current.length > 0) groups.push(current);
+  const chunks = await Promise.all(groups.map(async (chunkEntries, chunkIndex) => ({
+    kind: "wipe_manifest_chunk",
+    domainId,
+    transactionId,
+    chunkIndex,
+    chunkCount: groups.length,
+    hashAlgorithm: WIPE_HASH_ALGORITHM,
+    entries: chunkEntries,
+    chunkHash: await wipeEntriesHash(chunkEntries)
+  })));
+  for (const chunk of chunks) {
+    if (encodedBytes(chunk) > WIPE_MANIFEST_EVENT_MAX_BYTES || encodedBytes(representativeAgentEnvelope(chunk)) > WIPE_MANIFEST_LINE_MAX_BYTES) {
+      throw new Error("force: wipe manifest chunk exceeds telemetry payload limit");
+    }
+  }
+  return chunks;
+}
+async function wipeManifestEvents(domainId, manifest, atMs = Date.now()) {
   const entries = manifest.removedPaths.map((path5) => ({
     path: path5,
     ...manifest.removedFileHashes[path5] === void 0 ? {} : { hash: manifest.removedFileHashes[path5] }
   }));
-  const groups = [];
-  for (let index = 0; index < entries.length; index += WIPE_MANIFEST_CHUNK_PATHS) {
-    groups.push(entries.slice(index, index + WIPE_MANIFEST_CHUNK_PATHS));
-  }
-  const chunks = groups.map((chunkEntries, chunkIndex) => ({
-    kind: "wipe_manifest_chunk",
-    domainId,
-    transactionId: manifest.transactionId,
-    chunkIndex,
-    chunkCount: groups.length,
-    entries: chunkEntries,
-    chunkHash: contentHash(JSON.stringify(chunkEntries))
-  }));
-  for (const chunk of chunks) {
-    if (chunk.entries.length > WIPE_MANIFEST_CHUNK_PATHS || Buffer.byteLength(JSON.stringify(chunk), "utf8") > WIPE_MANIFEST_MAX_EVENT_BYTES) {
-      throw new Error("force: wipe manifest chunk exceeds telemetry line limit");
-    }
-  }
+  const chunks = manifest.telemetryEvents ?? await planWipeManifestChunks(domainId, manifest.transactionId, entries);
   return [
     ...chunks,
     {
@@ -59050,6 +59139,7 @@ function wipeManifestEvents(domainId, manifest, atMs = Date.now()) {
       transactionId: manifest.transactionId,
       chunkCount: chunks.length,
       totalCount: entries.length,
+      hashAlgorithm: WIPE_HASH_ALGORITHM,
       manifestHash: manifest.manifestHash,
       atMs
     }
@@ -59073,21 +59163,24 @@ async function wipeDomainFolderWithManifest(vaultTools, wikiFolder, signal, opti
       root,
       signal,
       snapshotByteLimit,
-      fileByteLimit
+      fileByteLimit,
+      options.telemetryDomainId ?? wikiFolder
     );
   } finally {
     activeDomainWipes.delete(root);
   }
 }
-async function wipeDomainFolderLocked(vaultTools, root, signal, snapshotByteLimit, fileByteLimit) {
+async function wipeDomainFolderLocked(vaultTools, root, signal, snapshotByteLimit, fileByteLimit, telemetryDomainId) {
   if (!await checkedExists(vaultTools, root, signal)) {
-    const removedPaths2 = [];
-    const removedFileHashes2 = {};
+    const removedPaths = [];
+    const removedFileHashes = {};
+    const transactionId = `wipe-empty-${Date.now().toString(36)}`;
     return {
-      transactionId: `wipe-empty-${Date.now().toString(36)}`,
-      removedPaths: removedPaths2,
-      removedFileHashes: removedFileHashes2,
-      manifestHash: contentHash(JSON.stringify([]))
+      transactionId,
+      removedPaths,
+      removedFileHashes,
+      manifestHash: await wipeEntriesHash([]),
+      telemetryEvents: await planWipeManifestChunks(telemetryDomainId, transactionId, [])
     };
   }
   const transaction = await createWipeTransaction(vaultTools, signal);
@@ -59095,6 +59188,7 @@ async function wipeDomainFolderLocked(vaultTools, root, signal, snapshotByteLimi
   const removed = /* @__PURE__ */ new Set();
   let rootRenameAttempted = false;
   let snapshot;
+  let preparedManifest;
   try {
     await requireEmptyDirectory(vaultTools, transaction, signal, "new transaction");
     if (await checkedExists(vaultTools, quarantinedRoot, signal)) {
@@ -59135,6 +59229,13 @@ async function wipeDomainFolderLocked(vaultTools, root, signal, snapshotByteLimi
       throw new Error("force: quarantined domain disappeared before inventory");
     }
     await requireOriginalRootAbsent(vaultTools, root, signal);
+    preparedManifest = await prepareWipeDomainManifest(
+      snapshot,
+      quarantinedRoot,
+      root,
+      transaction.slice(transaction.lastIndexOf("/") + 1),
+      telemetryDomainId
+    );
     for (const [path5, bytes] of snapshot.files) {
       throwIfWipeAborted(signal);
       await requireOriginalRootAbsent(vaultTools, root, signal);
@@ -59185,15 +59286,19 @@ async function wipeDomainFolderLocked(vaultTools, root, signal, snapshotByteLimi
     }
     throw error;
   }
+  if (!preparedManifest) throw new Error("force: wipe manifest was not prepared");
+  return preparedManifest;
+}
+async function prepareWipeDomainManifest(snapshot, quarantinedRoot, root, transactionId, domainId) {
   const removedFileHashes = {};
-  for (const [quarantinedPath, bytes] of snapshot.files) {
+  await Promise.all([...snapshot.files].map(async ([quarantinedPath, bytes]) => {
     const originalPath = originalPathFromQuarantine(
       quarantinedPath,
       quarantinedRoot,
       root
     );
-    removedFileHashes[originalPath.slice(root.length + 1)] = hashBytes(bytes);
-  }
+    removedFileHashes[originalPath.slice(root.length + 1)] = await wipeProofHash(bytes);
+  }));
   const removedPaths = [
     ...Object.keys(removedFileHashes),
     ...snapshot.folders.filter((folder) => folder !== quarantinedRoot).map((folder) => {
@@ -59205,24 +59310,17 @@ async function wipeDomainFolderLocked(vaultTools, root, signal, snapshotByteLimi
       return `${originalPath.slice(root.length + 1)}/`;
     })
   ].sort(compareCodePoints5);
-  const manifestEntries = removedPaths.map((path5) => ({
+  const entries = removedPaths.map((path5) => ({
     path: path5,
     ...removedFileHashes[path5] === void 0 ? {} : { hash: removedFileHashes[path5] }
   }));
   return {
-    transactionId: transaction.slice(transaction.lastIndexOf("/") + 1),
+    transactionId,
     removedPaths,
     removedFileHashes,
-    manifestHash: contentHash(JSON.stringify(manifestEntries))
+    manifestHash: await wipeEntriesHash(entries),
+    telemetryEvents: await planWipeManifestChunks(domainId, transactionId, entries)
   };
-}
-function hashBytes(bytes) {
-  let hash = 2166136261;
-  for (const byte of bytes) {
-    hash ^= byte;
-    hash = Math.imul(hash, 16777619);
-  }
-  return `fnv1a:${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 var FORCE_WIPE_SNAPSHOT_BYTE_LIMIT = 128 * 1024 * 1024;
 var FORCE_WIPE_FILE_BYTE_LIMIT = 32 * 1024 * 1024;

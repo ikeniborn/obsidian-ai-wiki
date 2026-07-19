@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   mkdir,
   mkdtemp,
@@ -15,7 +16,6 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { auditBoundedInitReplay } from "../scripts/audit-bounded-init-replay";
-import { contentHash } from "../src/content-hash";
 import { createPromptBudgetEvent } from "../src/prompt-budget";
 
 interface AgentRecord {
@@ -37,6 +37,32 @@ const SOURCE_MARKER = "SECRET_SOURCE_MARKER";
 const IDLE_DEADLINE_MS = 300_000;
 const OLD_MANIFEST_FILE = "obsolete-old.md";
 const OLD_MANIFEST_CONTENT = "old domain content";
+const WIPE_HASH_ALGORITHM = "sha256-v1";
+
+function sha256(bytes: Uint8Array | string): string {
+  return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+}
+
+function canonicalEntries(entries: Array<{ path: string; hash?: string }>): Buffer {
+  const parts: Buffer[] = [];
+  const count = Buffer.alloc(4);
+  count.writeUInt32BE(entries.length);
+  parts.push(count);
+  for (const entry of entries) {
+    for (const value of [entry.path, entry.hash] as const) {
+      if (value === undefined) {
+        parts.push(Buffer.from([0]));
+        continue;
+      }
+      const bytes = Buffer.from(value, "utf8");
+      const length = Buffer.alloc(5);
+      length[0] = 1;
+      length.writeUInt32BE(bytes.length, 1);
+      parts.push(length, bytes);
+    }
+  }
+  return Buffer.concat(parts);
+}
 const SCRIPT_PATH = fileURLToPath(
   new URL("../scripts/audit-bounded-init-replay.ts", import.meta.url),
 );
@@ -156,13 +182,13 @@ function wipeTelemetry(
   domainId: string,
   session: string,
   entries: Array<{ path: string; hash?: string }> = [
-    { path: OLD_MANIFEST_FILE, hash: contentHash(OLD_MANIFEST_CONTENT) },
+    { path: OLD_MANIFEST_FILE, hash: sha256(OLD_MANIFEST_CONTENT) },
     { path: "obsolete-empty/" },
   ],
 ): AgentRecord[] {
   const transactionId = `wipe-${session}`;
   const chunkCount = entries.length === 0 ? 0 : Math.ceil(entries.length / 100);
-  const manifestHash = contentHash(JSON.stringify(entries));
+  const manifestHash = sha256(canonicalEntries(entries));
   const chunks = Array.from({ length: chunkCount }, (_, chunkIndex) => {
     const chunkEntries = entries.slice(chunkIndex * 100, (chunkIndex + 1) * 100);
     return agentRecord({
@@ -171,8 +197,9 @@ function wipeTelemetry(
       transactionId,
       chunkIndex,
       chunkCount,
+      hashAlgorithm: WIPE_HASH_ALGORITHM,
       entries: chunkEntries,
-      chunkHash: contentHash(JSON.stringify(chunkEntries)),
+      chunkHash: sha256(canonicalEntries(chunkEntries)),
     }, session);
   });
   return [
@@ -183,6 +210,7 @@ function wipeTelemetry(
       transactionId,
       chunkCount,
       totalCount: entries.length,
+      hashAlgorithm: WIPE_HASH_ALGORITHM,
       manifestHash,
       atMs: Number(session),
     }, session),
@@ -824,7 +852,7 @@ test("missing and duplicate wipe_complete markers fail pairing", async (t) => {
 test("chunked wipe manifest accepts thousands of paths within the JSONL line limit", async () => {
   const entries = Array.from({ length: 2_500 }, (_, index) => ({
     path: `obsolete/type-${Math.floor(index / 100)}/page-${index}.md`,
-    hash: contentHash(`old-${index}`),
+    hash: sha256(`old-${index}`),
   }));
   const records = sessionRecords();
   const telemetry = wipeTelemetry("domain-id", SESSION, entries);
@@ -856,7 +884,7 @@ test("chunked wipe manifest accepts thousands of paths within the JSONL line lim
 test("wipe manifest rejects missing, duplicate, reordered, and tampered chunks", async (t) => {
   const entries = Array.from({ length: 150 }, (_, index) => ({
     path: `obsolete/page-${index}.md`,
-    hash: contentHash(`old-${index}`),
+    hash: sha256(`old-${index}`),
   }));
   for (const [name, mutate, expected] of [
     [
@@ -914,6 +942,22 @@ test("wipe manifest rejects missing, duplicate, reordered, and tampered chunks",
   }
 });
 
+test("wipe proof schema requires sha256-v1 and rejects legacy FNV hashes", async () => {
+  const records = sessionRecords();
+  const complete = records.find((record) => record.event.kind === "wipe_complete")!;
+  complete.event.hashAlgorithm = "fnv1a-v1";
+  complete.event.manifestHash = "fnv1a:00000000";
+  const value = await fixture({ records });
+  try {
+    await assert.rejects(
+      audit(value),
+      /wipe_complete marker is invalid|hash algorithm/i,
+    );
+  } finally {
+    await value.cleanup();
+  }
+});
+
 test("pre-wipe file surviving with fresh mtime fails by manifest identity", async () => {
   const value = await fixture();
   const staleFile = path.join(
@@ -940,6 +984,20 @@ test("stale pre-wipe empty directory manifest fails with its relative path", asy
   try {
     await mkdir(staleDir);
     await utimes(staleDir, new Date(), new Date());
+    await assert.rejects(
+      audit(value),
+      /stale pre-wipe descendants: 1.*obsolete-empty\//i,
+    );
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("stale directory manifest rejects a recreated file at the directory path", async () => {
+  const value = await fixture();
+  try {
+    const mismatchedPath = path.join(value.root, "!Wiki", "replay-folder", "obsolete-empty");
+    await writeFile(mismatchedPath, "not a directory", "utf8");
     await assert.rejects(
       audit(value),
       /stale pre-wipe descendants: 1.*obsolete-empty\//i,
@@ -1274,10 +1332,10 @@ test("stale manifest proof ignores only ENOENT and surfaces other lstat failures
   assert.equal(typeof findStale, "function");
   const denied = Object.assign(new Error("permission denied"), { code: "EACCES" });
   await assert.rejects(
-    findStale!("/vault/domain", [{ path: "old.md", hash: "fnv1a:00000000" }], {
+    findStale!("/vault/domain", [{ path: "old.md", hash: `sha256:${"0".repeat(64)}` }], {
       lstat: async () => { throw denied; },
       readdir: async () => [],
-      hashFile: async () => "fnv1a:00000000",
+      hashFile: async () => `sha256:${"0".repeat(64)}`,
     }),
     /permission denied/i,
   );
@@ -1287,6 +1345,16 @@ test("lifecycle budget correlation builds one requestId map without records.find
   const source = await readFile(SCRIPT_PATH, "utf8");
   assert.match(source, /budgetByRequestId/);
   assert.doesNotMatch(source, /const budget = records\.find/);
+});
+
+test("wipe chunk duplicate validation is linear and does not rescan indexes", async () => {
+  const source = await readFile(SCRIPT_PATH, "utf8");
+  const auditWipeSource = source.slice(
+    source.indexOf("function auditWipe"),
+    source.indexOf("function auditLifecycles"),
+  );
+  assert.doesNotMatch(auditWipeSource, /\.indexOf\(/);
+  assert.match(auditWipeSource, /Set<number>/);
 });
 
 test("latest-init selection works after a large unrelated prefix", async () => {

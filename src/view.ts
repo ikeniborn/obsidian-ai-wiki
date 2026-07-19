@@ -31,6 +31,12 @@ export { collectMdInPaths, walkFolder };
 
 export const AI_WIKI_VIEW_TYPE = "ai-wiki-view";
 
+export function isTelemetryOnlyRunEvent(event: RunEvent): boolean {
+  return event.kind === "run_config"
+    || event.kind === "wipe_manifest_chunk"
+    || event.kind === "wipe_complete";
+}
+
 export function formatGraphStatsLines(
   ev: Extract<RunEvent, { kind: "graph_stats" }>,
   agentLogEnabled: boolean,
@@ -690,6 +696,7 @@ export class LlmWikiView extends ItemView {
   }
 
   appendEvent(ev: RunEvent): void {
+    if (isTelemetryOnlyRunEvent(ev)) return;
     if (this.mobileWaitingEl) {
       this.mobileWaitingEl.remove();
       this.mobileWaitingEl = null;

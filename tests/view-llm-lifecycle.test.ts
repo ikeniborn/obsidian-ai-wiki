@@ -306,6 +306,27 @@ test("view routes lifecycle before tools and no longer starts waiting from tool_
   assert.match(appendEvent, /popToolRenderFrame/);
 });
 
+test("view drops telemetry-only events before waiting, step, or DOM mutation", () => {
+  const source = readFileSync(new URL("../src/view.ts", import.meta.url), "utf8");
+  const appendEvent = source.slice(
+    source.indexOf("appendEvent(ev: RunEvent): void"),
+    source.indexOf("private renderQueryStats"),
+  );
+  const telemetryReturn = appendEvent.indexOf("isTelemetryOnlyRunEvent(ev)");
+  const waitingMutation = appendEvent.indexOf("this.mobileWaitingEl");
+  const stepMutation = appendEvent.indexOf("this.stepCount++");
+  const domMutation = appendEvent.indexOf("this.stepsEl.createDiv");
+
+  assert.ok(telemetryReturn >= 0);
+  assert.ok(telemetryReturn < waitingMutation);
+  assert.ok(telemetryReturn < stepMutation);
+  assert.ok(telemetryReturn < domMutation);
+  assert.match(
+    source,
+    /run_config.*wipe_manifest_chunk.*wipe_complete/s,
+  );
+});
+
 test("view clears all lifecycle timers at reset, finish, and close", () => {
   const source = readFileSync(new URL("../src/view.ts", import.meta.url), "utf8");
   for (const [start, end] of [
