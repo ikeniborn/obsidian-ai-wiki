@@ -339,6 +339,13 @@ export interface RunWithContextRepackArgs<TBuild, TResult> {
   onEvent: (event: PromptBudgetEvent) => void;
 }
 
+export class ContextRepackSuppressedError extends Error {
+  constructor(readonly original: unknown) {
+    super("Context repack suppressed after stream output");
+    this.name = "ContextRepackSuppressedError";
+  }
+}
+
 function resultInputTokens(result: unknown): number | undefined {
   if (!isRecord(result)) return undefined;
   return typeof result.inputTokens === "number" ? result.inputTokens : undefined;
@@ -378,7 +385,8 @@ export async function runWithContextRepack<TBuild, TResult>(
     }
 
     const error = outcome.error;
-    const details = classifyContextError(error);
+    const repackSuppressed = error instanceof ContextRepackSuppressedError;
+    const details = repackSuppressed ? null : classifyContextError(error);
     const preflight = error instanceof PromptBudgetExceededError;
     const retryReason = preflight
       ? "preflight_budget_exceeded"
@@ -401,6 +409,7 @@ export async function runWithContextRepack<TBuild, TResult>(
       retryReason,
     }));
 
+    if (repackSuppressed) throw error.original;
     if (
       retryReason === undefined
       || attempt === MAX_CONTEXT_REPACKS

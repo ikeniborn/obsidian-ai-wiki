@@ -899,6 +899,97 @@ test("runLintChat yields the first visible delta before the provider stream comp
   assert.equal(event.delta, "CHAT_LIVE_FIRST");
 });
 
+test("Query and Chat retain provider cancellation ownership through a hanging stream tail", async () => {
+  for (const kind of ["query", "chat"] as const) {
+    const tailRequested = deferred();
+    const iteratorClosed = deferred();
+    let providerSignal: AbortSignal | undefined;
+    let nextCalls = 0;
+    const stream = {
+      [Symbol.asyncIterator]() {
+        return {
+          next(): Promise<IteratorResult<OpenAI.Chat.ChatCompletionChunk>> {
+            nextCalls += 1;
+            if (nextCalls === 1) {
+              return Promise.resolve({ done: false, value: streamChunk(`${kind.toUpperCase()}_FIRST`) });
+            }
+            tailRequested.resolve();
+            return new Promise<IteratorResult<OpenAI.Chat.ChatCompletionChunk>>(() => {});
+          },
+          return(): Promise<IteratorResult<OpenAI.Chat.ChatCompletionChunk>> {
+            iteratorClosed.resolve();
+            return Promise.resolve({ done: true, value: undefined });
+          },
+        };
+      },
+    };
+    const llm = {
+      chat: {
+        completions: {
+          create: async (
+            _params: unknown,
+            callOpts?: { signal?: AbortSignal },
+          ) => {
+            providerSignal = callOpts?.signal;
+            return stream;
+          },
+        },
+      },
+    } as unknown as LlmClient;
+    const controller = new AbortController();
+    const generator: AsyncGenerator<RunEvent, unknown> = kind === "query"
+      ? answerFromContext({
+          llm,
+          model: "mock",
+          opts: { inputBudgetTokens: 10_000 },
+          signal: controller.signal,
+          systemPrompt: "Owned Query stream.",
+          question: "Owned Query question",
+          chunks: [],
+          wikiLinkValidationRetries: 0,
+        })
+      : runLintChat(
+          llm,
+          "mock",
+          undefined,
+          controller.signal,
+          { inputBudgetTokens: 10_000 },
+          "",
+          [{ role: "user", content: "Owned Chat instruction" }],
+          "Owned Chat stream",
+        );
+    const events: RunEvent[] = [];
+    while (true) {
+      const next = await nextWithOverallTimeout(generator, `${kind} first delta`);
+      assert.equal(next.done, false);
+      if (next.done) break;
+      events.push(next.value);
+      if (next.value.kind === "assistant_text") break;
+    }
+    const draining = (async () => {
+      for await (const event of generator) events.push(event);
+    })();
+    await tailRequested.promise;
+    controller.abort();
+    await Promise.race([
+      draining,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`${kind} tail did not cancel promptly`)), 2_000)),
+    ]);
+    await Promise.race([
+      iteratorClosed.promise,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`${kind} iterator was not disposed`)), 2_000)),
+    ]);
+
+    assert.equal(providerSignal?.aborted, true, `${kind} provider signal must remain owned`);
+    const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+    assert.equal(lifecycle.at(-1)?.phase, "cancelled", JSON.stringify(events));
+    assert.equal(lifecycle.filter((event) =>
+      ["completed", "failed", "cancelled"].includes(event.phase)).length, 1);
+  }
+});
+
 test("live Query preserves prompt usage, output usage, and result semantics", async () => {
   const llm = {
     chat: {

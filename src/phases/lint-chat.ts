@@ -381,11 +381,16 @@ export async function* runLintFixChat(
   let applying = false;
   let writeSucceeded = false;
   let writeFailed = false;
+  let stoppedWithPendingPatches = false;
   const patches = parsed.patches ?? [];
   try {
-    for (const patch of patches) {
+    for (let patchIndex = 0; patchIndex < patches.length; patchIndex++) {
+      const patch = patches[patchIndex];
       if (signal.aborted) {
-        if (writeSucceeded || writeFailed) break;
+        if (writeSucceeded || writeFailed) {
+          stoppedWithPendingPatches = true;
+          break;
+        }
         signal.throwIfAborted();
       }
       yield { kind: "tool_use", name: "Update", input: { path: patch.path } };
@@ -416,11 +421,17 @@ export async function* runLintFixChat(
         );
         writeSucceeded = true;
         yield { kind: "tool_result", ok: true };
-        if (signal.aborted) break;
+        if (signal.aborted && patchIndex + 1 < patches.length) {
+          stoppedWithPendingPatches = true;
+          break;
+        }
       } catch (e) {
         writeFailed = true;
         yield { kind: "tool_result", ok: false, preview: (e as Error).message };
-        if (signal.aborted) break;
+        if (signal.aborted && patchIndex + 1 < patches.length) {
+          stoppedWithPendingPatches = true;
+          break;
+        }
         continue;
       }
     }
@@ -430,9 +441,17 @@ export async function* runLintFixChat(
     }
     if (!writeSucceeded && !writeFailed) signal.throwIfAborted();
     const terminal = closePendingLifecycle(
-      writeFailed || (patches.length > 0 && !writeSucceeded) ? "failed" : "completed",
+      stoppedWithPendingPatches
+        ? "cancelled"
+        : writeFailed || (patches.length > 0 && !writeSucceeded)
+          ? "failed"
+          : "completed",
     );
     if (terminal) yield terminal;
+    if (stoppedWithPendingPatches) {
+      yield { kind: "result", durationMs: Date.now() - start, text: "" };
+      return;
+    }
   } catch (e) {
     const terminal = closePendingLifecycle(
       signal.aborted || (e as Error).name === "AbortError" ? "cancelled" : "failed",

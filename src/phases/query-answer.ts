@@ -19,6 +19,7 @@ import { resolveLink } from "./link-resolver";
 import type { SelectedChunk } from "../page-similarity";
 import {
   classifyContextError,
+  ContextRepackSuppressedError,
   PromptBudgetExceededError,
   runWithContextRepack,
   type PromptBudgetEvent,
@@ -35,10 +36,6 @@ interface AnswerAttempt {
   answer: string;
   outputTokens: number;
   selectedChunks: SelectedChunk[];
-  pendingStream?: {
-    iterator: AsyncIterator<OpenAI.Chat.ChatCompletionChunk>;
-    getStats(): import("./llm-utils").LlmStreamStats | undefined;
-  };
   streamStats?: import("./llm-utils").LlmStreamStats;
   inputTokens?: number;
 }
@@ -165,20 +162,7 @@ export async function* answerFromContext(args: {
           let attemptAnswer = "";
           let attemptOutputTokens = 0;
           let producing = false;
-          const iterator = stream[Symbol.asyncIterator]();
-          while (true) {
-            const next = await iterator.next();
-            if (next.done) {
-              const stats = getStats();
-              return {
-                answer: attemptAnswer,
-                outputTokens: attemptOutputTokens,
-                selectedChunks: request.selectedChunks,
-                streamStats: stats,
-                inputTokens: stats?.inputTokens,
-              };
-            }
-            const chunk = next.value;
+          for await (const chunk of stream) {
             streamChunkConsumed = true;
             const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
             if (!producing && (reasoning.trim() || content.trim())) {
@@ -191,21 +175,21 @@ export async function* answerFromContext(args: {
               emit({ kind: "assistant_text", delta: content });
             }
             if (tok !== undefined) attemptOutputTokens += tok;
-            if (reasoning || content) {
-              return {
-                answer: attemptAnswer,
-                outputTokens: attemptOutputTokens,
-                selectedChunks: request.selectedChunks,
-                pendingStream: { iterator, getStats },
-              };
-            }
           }
+          const stats = getStats();
+          return {
+            answer: attemptAnswer,
+            outputTokens: attemptOutputTokens,
+            selectedChunks: request.selectedChunks,
+            streamStats: stats,
+            inputTokens: stats?.inputTokens,
+          };
         } catch (error) {
           if (
             operationSignal.aborted
             || (error as Error).name === "AbortError"
           ) throw error;
-          if (streamChunkConsumed) throw error;
+          if (streamChunkConsumed) throw new ContextRepackSuppressedError(error);
           if (classifyContextError(error) !== null && request.optionalUnits > 0) {
             emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
           }
@@ -272,58 +256,11 @@ export async function* answerFromContext(args: {
     yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "failed");
     throw error;
   }
-  const completionBudgetEvent = attempt.pendingStream
-    ? budgetEvents.pop()
-    : undefined;
   for (const event of budgetEvents) yield event;
   answer = attempt.answer;
   outputTokens = attempt.outputTokens;
   streamStats = attempt.streamStats;
   selectedChunks = attempt.selectedChunks;
-  if (attempt.pendingStream) {
-    let streamCompleted = false;
-    let streamAborted = false;
-    let streamFailure: { error: unknown } | undefined;
-    try {
-      while (true) {
-        const next = await attempt.pendingStream.iterator.next();
-        if (next.done) {
-          streamCompleted = true;
-          break;
-        }
-        const { reasoning, content, outputTokens: tok } = extractStreamDeltas(next.value);
-        if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
-        if (content) {
-          answer += content;
-          yield { kind: "assistant_text", delta: content };
-        }
-        if (tok !== undefined) outputTokens += tok;
-      }
-      streamStats = attempt.pendingStream.getStats();
-    } catch (error) {
-      if (signal.aborted || (error as Error).name === "AbortError") {
-        streamAborted = true;
-      } else {
-        streamFailure = { error };
-      }
-    } finally {
-      if (!streamCompleted) await attempt.pendingStream.iterator.return?.();
-    }
-    if (completionBudgetEvent) {
-      if (streamStats?.inputTokens !== undefined) {
-        completionBudgetEvent.actualInputTokens = streamStats.inputTokens;
-      }
-      yield completionBudgetEvent;
-    }
-    if (streamAborted) {
-      yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
-      return { answer, outputTokens, selectedChunks };
-    }
-    if (streamFailure) {
-      yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "failed");
-      throw streamFailure.error;
-    }
-  }
 
   if (signal.aborted) {
     yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
