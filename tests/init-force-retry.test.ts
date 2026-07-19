@@ -283,7 +283,7 @@ test("operation-level idle retry does not replay WipeDomain after destructive pr
 
   (runner as unknown as { runOperation: () => AsyncGenerator<RunEvent> }).runOperation = async function* () {
     calls++;
-    yield { kind: "tool_use", name: "WipeDomain", input: { folder: "demo" } };
+    yield { kind: "tool_use", name: "WipeDomain", input: { folder: "!Wiki/demo" } };
     await new Promise<void>((resolve) => setTimeout(resolve, 30));
   };
 
@@ -302,6 +302,10 @@ test("operation-level idle retry does not replay WipeDomain after destructive pr
 
   assert.equal(calls, 1);
   assert.equal(events.filter((ev) => ev.kind === "tool_use" && ev.name === "WipeDomain").length, 1);
+  assert.deepEqual(
+    events.find((ev) => ev.kind === "tool_use" && ev.name === "WipeDomain"),
+    { kind: "tool_use", name: "WipeDomain", input: { folder: "!Wiki/demo" } },
+  );
 });
 
 test("caught idle AbortError does not replay WipeDomain after destructive prelude", async () => {
@@ -323,7 +327,7 @@ test("caught idle AbortError does not replay WipeDomain after destructive prelud
 
   (runner as unknown as { runOperation: (req: { signal: AbortSignal }) => AsyncGenerator<RunEvent> }).runOperation = async function* (req) {
     calls++;
-    yield { kind: "tool_use", name: "WipeDomain", input: { folder: "demo" } };
+    yield { kind: "tool_use", name: "WipeDomain", input: { folder: "!Wiki/demo" } };
     await new Promise<void>((_, reject) => {
       req.signal.addEventListener(
         "abort",

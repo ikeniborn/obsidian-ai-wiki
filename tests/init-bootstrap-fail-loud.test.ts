@@ -418,7 +418,7 @@ test("force wipe restores prior trusted removals when a later removal is a no-op
   assert.deepEqual(rawAdapter.files, before);
   assert.equal(events.some((event) => event.kind === "domain_updated"), false);
   assert.equal(events.some((event) =>
-    event.kind === "tool_result" && event.ok === false && /verification/i.test(event.preview ?? "")), true);
+    event.kind === "tool_result" && event.ok === false && /did not remove/i.test(event.preview ?? "")), true);
 });
 
 test("force wipe restores prior trusted removals but never guesses a third-state rollback", async () => {
@@ -482,7 +482,7 @@ test("force conditional remove preserves a file changed after its external guard
   assert.equal(rawAdapter.files.get(pagePath), concurrent);
   assert.equal(events.some((event) => event.kind === "domain_updated"), false);
   assert.equal(events.some((event) =>
-    event.kind === "tool_result" && event.ok === false && /transaction conflict/i.test(event.preview ?? "")), true);
+    event.kind === "tool_result" && event.ok === false && /rollback trust failure/i.test(event.preview ?? "")), true);
 });
 
 test("force wipe rolls back planned removals when final inventory finds a concurrent file", async () => {

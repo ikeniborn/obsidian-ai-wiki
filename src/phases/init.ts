@@ -10,7 +10,13 @@ import initTemplate from "../../prompts/init.md";
 import { render } from "./template";
 import { wikiSections } from "./llm-utils";
 import { runIngest } from "./ingest";
-import { domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainMetadataPath } from "../wiki-path";
+import {
+  WIKI_ROOT,
+  domainIndexPath,
+  domainWikiFolder,
+  sanitizeWikiFolder,
+  sanitizeWikiSubfolder,
+} from "../wiki-path";
 import type { PageSimilarityService } from "../page-similarity";
 import { readPageDescriptions } from "../wiki-index-store";
 import { i18nFor, resolveLang } from "../i18n";
@@ -24,13 +30,6 @@ import {
 } from "../prompt-budget";
 import { prepareChatMessages } from "./llm-utils";
 import { RunEventBridge } from "../run-event-bridge";
-import {
-  fileImage,
-  readFileImage,
-  rollbackFileMutations,
-  sameFileImage,
-  TransactionVaultTools,
-} from "../file-transaction";
 
 async function* forwardIngest(
   generator: AsyncGenerator<RunEvent, IngestOutcome>,
@@ -327,6 +326,12 @@ export async function* runInit(
       yield { kind: "error", message: "force: dry-run not supported" };
       return;
     }
+    try {
+      forceDomainRoot(existing.wiki_folder);
+    } catch (error) {
+      yield { kind: "error", message: `force: invalid wiki folder — ${(error as Error).message}` };
+      return;
+    }
     const effectiveSources = sourcePaths.length ? sourcePaths : (existing.source_paths ?? []);
     if (!effectiveSources.length) {
       yield { kind: "error", message: "force: no sources to re-analyze" };
@@ -383,7 +388,11 @@ export async function* runInit(
     preparedBootstrap.preparedSources = preparedSources;
 
     yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).initProgress.reinitWiping(domainWikiFolder(existing.wiki_folder)) };
-    yield { kind: "tool_use", name: "WipeDomain", input: { folder: existing.wiki_folder } };
+    yield {
+      kind: "tool_use",
+      name: "WipeDomain",
+      input: { folder: forceDomainRoot(existing.wiki_folder) },
+    };
     if (signal.aborted) {
       yield { kind: "tool_result", ok: false, preview: "force: cancelled before wipe" };
       return;
@@ -417,17 +426,23 @@ export async function* runInit(
       yield { kind: "error", message: `force: wipe failed — ${(error as Error).message}` };
       return;
     }
-    existing.entity_types = [];
-    existing.analyzed_sources = {};
-    yield {
-      kind: "domain_updated", domainId,
-      patch: { entity_types: [], analyzed_sources: {} },
-    };
     yield { kind: "tool_result", ok: true };
     yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).initProgress.removedFiles(wiped.length) };
 
     yield* runInitWithSources(
-      domainId, effectiveSources, false, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, true, similarity,
+      domainId,
+      effectiveSources,
+      false,
+      vaultTools,
+      llm,
+      model,
+      domains.filter((domain) => domain.id !== domainId),
+      vaultName,
+      signal,
+      opts,
+      onFileError,
+      true,
+      similarity,
       preparedBootstrap,
     );
     return;
@@ -520,11 +535,36 @@ export async function* runInitWithSources(
     return;
   }
 
-  const initialDomainRoot = existing ? domainWikiFolder(existing.wiki_folder) : wikiRootGuess;
+  const initialDomainRoot = existing
+    ? domainWikiFolder(existing.wiki_folder)
+    : preparedBootstrap
+      ? domainWikiFolder(preparedBootstrap.entry.wiki_folder)
+      : wikiRootGuess;
   let annotationsCache = await readPageDescriptions(vaultTools, initialDomainRoot);
 
   let currentDomain: DomainEntry | null = existing ?? null;
+  let bootstrapApplied = false;
   let successfulFiles = 0;
+
+  if (force && preparedBootstrap && !existing) {
+    const entry = preparedBootstrap.entry;
+    currentDomain = {
+      id: domainId,
+      name: entry.name,
+      wiki_folder: entry.wiki_folder,
+      entity_types: entry.entity_types,
+      language_notes: entry.language_notes,
+      source_paths: sourcePaths,
+      analyzed_sources: {},
+      analyzed_sources_v2: true,
+    };
+    outputTokens += preparedBootstrap.outputTokens;
+    yield { kind: "tool_use", name: "SaveDomain", input: { id: domainId } };
+    yield { kind: "domain_created", entry: currentDomain };
+    yield { kind: "tool_result", ok: true };
+    await vaultTools.write(domainIndexPath(domainWikiFolder(currentDomain.wiki_folder)), "");
+    bootstrapApplied = true;
+  }
 
   for (let i = 0; i < toAnalyze.length; i++) {
     if (signal.aborted) return;
@@ -545,7 +585,7 @@ export async function* runInitWithSources(
     yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).initProgress.fileChars(file, fileContent.length) };
 
     // --- Step 1: Analyze ---
-    if (i === 0 && !isResuming) {
+    if (i === 0 && !isResuming && !bootstrapApplied) {
       let bootstrapResult = preparedBootstrap;
       if (bootstrapResult) {
         if (bootstrapResult.sourceFile !== file || bootstrapResult.sourceContent !== fileContent) {
@@ -845,58 +885,179 @@ export async function wipeDomainFolder(
   wikiFolder: string,
   signal?: AbortSignal,
 ): Promise<string[]> {
-  const root = domainWikiFolder(wikiFolder);
-  // Preserve metadata.jsonl — it is the domain's registry identity. A force
-  // reinit resets its contents (entity_types/analyzed_sources) via later
-  // domain_updated events, but deleting the file drops the domain from the
-  // registry mid-run, so those events (re-loaded against a domain-less registry)
-  // are silently discarded and the metadata is never rewritten. index.jsonl and
-  // log.jsonl are content — they are removed and rebuilt by the re-ingest.
-  const metaPath = domainMetadataPath(root);
-  const files = (await vaultTools.listFiles(root))
-    .filter((path) => path !== metaPath)
-    .sort(compareCodePoints);
-  const planned = new Map<string, ReturnType<typeof fileImage>>();
-  for (const path of files) {
-    planned.set(path, fileImage(await vaultTools.read(path)));
-  }
-  const transaction = new TransactionVaultTools(vaultTools);
+  const root = forceDomainRoot(wikiFolder);
+  const snapshot = await inventoryDomainTree(vaultTools, root);
+  const removed = new Set<string>();
   try {
-    for (const path of files) {
+    for (const [path, bytes] of snapshot.files) {
       if (signal?.aborted) throw new Error("force: wipe cancelled");
-      const expected = planned.get(path)!;
-      if (!sameFileImage(await readFileImage(vaultTools, path), expected)) {
+      if (!await vaultTools.exists(path) || await vaultTools.read(path) !== bytes) {
         throw new Error(`force: wipe target changed before removal: ${path}`);
       }
-      await transaction.removeIfCurrent(path, expected);
+      try {
+        await vaultTools.remove(path);
+      } catch (error) {
+        if (!await vaultTools.exists(path)) removed.add(path);
+        throw error;
+      }
+      if (await vaultTools.exists(path)) {
+        throw new Error(`force: removal did not remove ${path}`);
+      }
+      removed.add(path);
       if (signal?.aborted) throw new Error("force: wipe cancelled");
     }
     if (signal?.aborted) throw new Error("force: wipe cancelled");
-    const unexpected = (await vaultTools.listFiles(root))
-      .filter((path) => path !== metaPath)
-      .sort(compareCodePoints);
-    if (unexpected.length > 0) {
-      throw new Error(`force: final inventory contains unexpected files: ${unexpected.join(", ")}`);
+    const emptied = await inventoryDomainTree(vaultTools, root);
+    if (emptied.files.size > 0 || !samePaths(emptied.folders, snapshot.folders)) {
+      throw new Error("force: final inventory changed before recursive removal");
+    }
+    await vaultTools.rmdir(root, true);
+    if (await vaultTools.exists(root)) {
+      throw new Error(`force: recursive rmdir did not remove ${root}; target still exists`);
     }
     if (signal?.aborted) throw new Error("force: wipe cancelled");
   } catch (error) {
-    let rollbackError: unknown;
     try {
-      await rollbackFileMutations(vaultTools, transaction.mutations);
-    } catch (caught) {
-      rollbackError = caught;
-    }
-    if (rollbackError !== undefined) {
-      throw rollbackError instanceof Error
-        ? rollbackError
-        : new Error(String(rollbackError));
-    }
-    if (!transaction.manifestComplete) {
-      throw new Error(`force: wipe transaction manifest is untrustworthy — ${(error as Error).message}`);
+      await restoreDomainTree(vaultTools, snapshot, removed);
+    } catch (rollbackError) {
+      throw new Error(
+        `force: wipe failed (${(error as Error).message}); rollback failed — ${(rollbackError as Error).message}`,
+      );
     }
     throw error;
   }
-  return files;
+  return [...snapshot.files.keys()];
+}
+
+interface DomainTreeSnapshot {
+  root: string;
+  existed: boolean;
+  files: Map<string, string>;
+  folders: string[];
+}
+
+function forceDomainRoot(wikiFolder: string): string {
+  if (
+    typeof wikiFolder !== "string"
+    || wikiFolder.length === 0
+    || wikiFolder !== wikiFolder.trim()
+    || wikiFolder === "."
+    || wikiFolder === ".."
+    || wikiFolder === WIKI_ROOT
+    || wikiFolder.includes("/")
+    || wikiFolder.includes("\\")
+    || Array.from(wikiFolder).some((character) => {
+      const codePoint = character.codePointAt(0) ?? 0;
+      return codePoint <= 0x1f || codePoint === 0x7f;
+    })
+  ) {
+    throw new Error(`unsafe wikiFolder ${JSON.stringify(wikiFolder)}`);
+  }
+  const root = domainWikiFolder(wikiFolder);
+  if (root !== `${WIKI_ROOT}/${wikiFolder}`) {
+    throw new Error(`unsafe derived domain root ${JSON.stringify(root)}`);
+  }
+  return root;
+}
+
+function assertDirectDomainChild(root: string, parent: string, path: string): void {
+  const parentPrefix = `${parent}/`;
+  const child = path.startsWith(parentPrefix) ? path.slice(parentPrefix.length) : "";
+  const segments = path.split("/");
+  if (
+    !path.startsWith(`${root}/`)
+    || child.length === 0
+    || child.includes("/")
+    || path.includes("\\")
+    || segments.some((segment) => segment.length === 0 || segment === "." || segment === "..")
+  ) {
+    throw new Error(`force: untrusted domain inventory path ${path}`);
+  }
+}
+
+async function inventoryDomainTree(
+  vaultTools: VaultTools,
+  root: string,
+): Promise<DomainTreeSnapshot> {
+  if (!await vaultTools.exists(root)) {
+    return { root, existed: false, files: new Map(), folders: [] };
+  }
+  const files = new Map<string, string>();
+  const folders: string[] = [];
+  const visit = async (folder: string): Promise<void> => {
+    folders.push(folder);
+    const listed = await vaultTools.adapter.list(folder);
+    const listedFiles = [...listed.files].sort(compareCodePoints);
+    const listedFolders = [...listed.folders].sort(compareCodePoints);
+    for (const path of listedFiles) {
+      assertDirectDomainChild(root, folder, path);
+      files.set(path, await vaultTools.read(path));
+    }
+    for (const path of listedFolders) {
+      assertDirectDomainChild(root, folder, path);
+      await visit(path);
+    }
+  };
+  await visit(root);
+  return {
+    root,
+    existed: true,
+    files: new Map([...files].sort(([left], [right]) => compareCodePoints(left, right))),
+    folders: folders.sort(compareCodePoints),
+  };
+}
+
+function samePaths(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((path, index) => path === right[index]);
+}
+
+async function restoreDomainTree(
+  vaultTools: VaultTools,
+  snapshot: DomainTreeSnapshot,
+  removed: Set<string>,
+): Promise<void> {
+  const current = await inventoryDomainTree(vaultTools, snapshot.root);
+  let firstTrustError: Error | undefined;
+  for (const [path, bytes] of current.files) {
+    const expected = snapshot.files.get(path);
+    if (expected === undefined || expected !== bytes) {
+      firstTrustError ??= new Error(`rollback trust failure at ${path}`);
+    }
+  }
+  for (const folder of current.folders) {
+    if (!snapshot.folders.includes(folder)) {
+      firstTrustError ??= new Error(`rollback trust failure at unexpected folder ${folder}`);
+    }
+  }
+  if (!snapshot.existed) {
+    if (current.existed) throw new Error(`rollback trust failure: ${snapshot.root} unexpectedly exists`);
+    return;
+  }
+  for (const folder of [...snapshot.folders].sort(
+    (left, right) => left.split("/").length - right.split("/").length || compareCodePoints(left, right),
+  )) {
+    if (!await vaultTools.exists(folder)) await vaultTools.mkdir(folder);
+  }
+  for (const [path, bytes] of snapshot.files) {
+    const currentBytes = current.files.get(path);
+    if (currentBytes !== undefined) continue;
+    if (!removed.has(path) && current.existed) {
+      firstTrustError ??= new Error(`rollback trust failure at missing unremoved file ${path}`);
+      continue;
+    }
+    try {
+      await vaultTools.write(path, bytes);
+    } catch (error) {
+      firstTrustError ??= error instanceof Error ? error : new Error(String(error));
+    }
+  }
+  const restored = await inventoryDomainTree(vaultTools, snapshot.root);
+  if (firstTrustError) throw firstTrustError;
+  if (!samePaths(restored.folders, snapshot.folders)
+    || restored.files.size !== snapshot.files.size
+    || [...snapshot.files].some(([path, bytes]) => restored.files.get(path) !== bytes)) {
+    throw new Error("rollback verification failed: domain tree differs from snapshot");
+  }
 }
 
 async function ensureRootFiles(vaultTools: VaultTools, wikiRoot: string): Promise<void> {

@@ -277,6 +277,8 @@ test("init summary counts only successful source outcomes", async () => {
 test("init records a successful source hash exactly once", async () => {
   const events = await runCase("success");
   const patches = analyzedPatches(events).filter((patch) => SOURCE_PATH in patch);
+  assert.equal(events.filter((event) =>
+    event.kind === "tool_use" && event.name === "UpdateDomain").length, 1);
   assert.equal(patches.length, 1);
   assert.equal(patches[0][SOURCE_PATH], hashSource(SOURCE));
   assert.equal(events.filter((event) => event.kind === "file_done" && event.file === SOURCE_PATH).length, 1);
