@@ -6,6 +6,7 @@ export class RunEventBridge {
   private wake: (() => void) | undefined;
   private closed = false;
   private forwarding = false;
+  private abandoned = false;
 
   push(event: RunEvent): void {
     if (this.closed) return;
@@ -18,6 +19,7 @@ export class RunEventBridge {
     work: Promise<T>,
     onCancel?: () => void,
   ): AsyncGenerator<RunEvent, T> {
+    if (this.abandoned) throw new Error("event bridge was abandoned");
     if (this.forwarding) throw new Error("event bridge already forwarding");
     this.forwarding = true;
     this.closed = false;
@@ -39,7 +41,7 @@ export class RunEventBridge {
       },
     );
 
-    let completed = false;
+    let drained = false;
     try {
       while (settlement === undefined || this.cursor < this.queue.length) {
         if (this.cursor < this.queue.length) {
@@ -50,16 +52,44 @@ export class RunEventBridge {
         await new Promise<void>((resolve) => { this.wake = resolve; });
       }
       if (!settlement) throw new Error("event bridge settled without a result");
-      if (!settlement.ok) throw settlement.error;
-      completed = true;
+      drained = true;
+      if (!settlement.ok) {
+        if (settlement.error === undefined) {
+          throw new Error("Live event work rejected without an error value");
+        }
+        throw settlement.error instanceof Error
+          ? settlement.error
+          : new Error(String(settlement.error));
+      }
       return settlement.value;
     } finally {
-      this.closed = !completed;
+      if (!drained) this.abandoned = true;
+      this.closed = this.abandoned;
       this.queue.length = 0;
       this.cursor = 0;
       this.wake = undefined;
       this.forwarding = false;
-      if (!completed) onCancel?.();
+      if (!drained) onCancel?.();
+    }
+  }
+
+  async *forwardAbortable<T>(
+    callerSignal: AbortSignal,
+    work: (signal: AbortSignal) => Promise<T>,
+  ): AsyncGenerator<RunEvent, T> {
+    if (this.abandoned) throw new Error("event bridge was abandoned");
+    const controller = new AbortController();
+    const abortProvider = (): void => controller.abort();
+    if (callerSignal.aborted) {
+      controller.abort();
+    } else {
+      callerSignal.addEventListener("abort", abortProvider, { once: true });
+    }
+    const operation = Promise.resolve().then(() => work(controller.signal));
+    try {
+      return yield* this.forward(operation, abortProvider);
+    } finally {
+      callerSignal.removeEventListener("abort", abortProvider);
     }
   }
 }

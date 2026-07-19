@@ -41847,6 +41847,88 @@ function atEndOfBlockComment(text, i) {
   return text[i] === "*" && text[i + 1] === "/";
 }
 
+// src/run-event-bridge.ts
+var RunEventBridge = class {
+  queue = [];
+  cursor = 0;
+  wake;
+  closed = false;
+  forwarding = false;
+  abandoned = false;
+  push(event) {
+    if (this.closed) return;
+    this.queue.push(event);
+    this.wake?.();
+    this.wake = void 0;
+  }
+  async *forward(work, onCancel) {
+    if (this.abandoned) throw new Error("event bridge was abandoned");
+    if (this.forwarding) throw new Error("event bridge already forwarding");
+    this.forwarding = true;
+    this.closed = false;
+    this.cursor = 0;
+    let settlement;
+    void work.then(
+      (value) => {
+        settlement = { ok: true, value };
+        this.wake?.();
+        this.wake = void 0;
+      },
+      (error) => {
+        settlement = { ok: false, error };
+        this.wake?.();
+        this.wake = void 0;
+      }
+    );
+    let drained = false;
+    try {
+      while (settlement === void 0 || this.cursor < this.queue.length) {
+        if (this.cursor < this.queue.length) {
+          yield this.queue[this.cursor++];
+          continue;
+        }
+        if (settlement !== void 0) break;
+        await new Promise((resolve) => {
+          this.wake = resolve;
+        });
+      }
+      if (!settlement) throw new Error("event bridge settled without a result");
+      drained = true;
+      if (!settlement.ok) {
+        if (settlement.error === void 0) {
+          throw new Error("Live event work rejected without an error value");
+        }
+        throw settlement.error instanceof Error ? settlement.error : new Error(String(settlement.error));
+      }
+      return settlement.value;
+    } finally {
+      if (!drained) this.abandoned = true;
+      this.closed = this.abandoned;
+      this.queue.length = 0;
+      this.cursor = 0;
+      this.wake = void 0;
+      this.forwarding = false;
+      if (!drained) onCancel?.();
+    }
+  }
+  async *forwardAbortable(callerSignal, work) {
+    if (this.abandoned) throw new Error("event bridge was abandoned");
+    const controller = new AbortController();
+    const abortProvider = () => controller.abort();
+    if (callerSignal.aborted) {
+      controller.abort();
+    } else {
+      callerSignal.addEventListener("abort", abortProvider, { once: true });
+    }
+    const operation = Promise.resolve().then(() => work(controller.signal));
+    try {
+      return yield* this.forward(operation, abortProvider);
+    } finally {
+      callerSignal.removeEventListener("abort", abortProvider);
+    }
+  }
+};
+
 // src/phases/llm-utils.ts
 function langInstruction(lang) {
   switch (lang) {
@@ -41958,41 +42040,12 @@ function completionReasoning(message) {
   if (typeof record.reasoning === "string") return record.reasoning;
   return typeof record.reasoning_content === "string" ? record.reasoning_content : "";
 }
-async function* runWithLiveEvents(work) {
-  const queue = [];
-  let cursor = 0;
-  let wake;
-  let settlement;
-  const emit = (event) => {
-    queue.push(event);
-    wake?.();
-    wake = void 0;
-  };
-  void work(emit).then(
-    (value) => {
-      settlement = { ok: true, value };
-    },
-    (error) => {
-      settlement = { ok: false, error };
-    }
-  ).finally(() => {
-    wake?.();
-    wake = void 0;
-  });
-  while (settlement === void 0 || cursor < queue.length) {
-    while (cursor < queue.length) yield queue[cursor++];
-    if (settlement === void 0) await new Promise((resolve) => {
-      wake = resolve;
-    });
-  }
-  if (!settlement) throw new Error("live event work settled without an outcome");
-  if (!settlement.ok) {
-    if (settlement.error === void 0) {
-      throw new Error("Live event work rejected without an error value");
-    }
-    throw settlement.error instanceof Error ? settlement.error : new Error(String(settlement.error));
-  }
-  return settlement.value;
+async function* runWithLiveEvents(work, callerSignal) {
+  const bridge = new RunEventBridge();
+  return yield* bridge.forwardAbortable(
+    callerSignal,
+    (signal) => work((event) => bridge.push(event), signal)
+  );
 }
 function buildChatParams(model, messages, opts, stream = false) {
   const msgs = prepareChatMessages(messages, opts);
@@ -50815,64 +50868,6 @@ var zodToJsonSchema = (schema, options) => {
   return combined;
 };
 
-// src/run-event-bridge.ts
-var RunEventBridge = class {
-  queue = [];
-  cursor = 0;
-  wake;
-  closed = false;
-  forwarding = false;
-  push(event) {
-    if (this.closed) return;
-    this.queue.push(event);
-    this.wake?.();
-    this.wake = void 0;
-  }
-  async *forward(work, onCancel) {
-    if (this.forwarding) throw new Error("event bridge already forwarding");
-    this.forwarding = true;
-    this.closed = false;
-    this.cursor = 0;
-    let settlement;
-    void work.then(
-      (value) => {
-        settlement = { ok: true, value };
-        this.wake?.();
-        this.wake = void 0;
-      },
-      (error) => {
-        settlement = { ok: false, error };
-        this.wake?.();
-        this.wake = void 0;
-      }
-    );
-    let completed = false;
-    try {
-      while (settlement === void 0 || this.cursor < this.queue.length) {
-        if (this.cursor < this.queue.length) {
-          yield this.queue[this.cursor++];
-          continue;
-        }
-        if (settlement !== void 0) break;
-        await new Promise((resolve) => {
-          this.wake = resolve;
-        });
-      }
-      if (!settlement) throw new Error("event bridge settled without a result");
-      if (!settlement.ok) throw settlement.error;
-      completed = true;
-      return settlement.value;
-    } finally {
-      this.closed = !completed;
-      this.queue.length = 0;
-      this.cursor = 0;
-      this.wake = void 0;
-      this.forwarding = false;
-      if (!completed) onCancel?.();
-    }
-  }
-};
-
 // src/structural-error-counter.ts
 var Counter = class {
   stats = { failed: 0, retried: 0, ok: 0 };
@@ -53714,7 +53709,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     };
     let evidence;
     try {
-      evidence = yield* eventBridge.forward(prepareSourceEvidence(sourceContent, domain.id, {
+      evidence = yield* eventBridge.forwardAbortable(signal, (operationSignal) => prepareSourceEvidence(sourceContent, domain.id, {
         inputBudgetTokens: policy.inputBudgetTokens,
         outputBudgetTokens: policy.outputBudgetTokens,
         compressionProfile: policy.compression,
@@ -53724,7 +53719,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
         llm,
         model,
         opts,
-        signal,
+        signal: operationSignal,
         configuredEntityTypes: (domain.entity_types ?? []).map((entityType) => entityType.type),
         onEvent: captureEvent
       }));
@@ -53876,7 +53871,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
       const outputs = [];
       try {
         for (const batch of batches) {
-          const output = yield* eventBridge.forward(synthesizeEntityBatch({
+          const output = yield* eventBridge.forwardAbortable(signal, (operationSignal) => synthesizeEntityBatch({
             bundles: batch,
             existingPaths: existingPathSet,
             existingPageHashes,
@@ -53890,7 +53885,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
             model,
             policy,
             opts,
-            signal,
+            signal: operationSignal,
             onEvent: captureEvent
           }));
           signal.throwIfAborted();
@@ -54040,7 +54035,7 @@ ${action.content}`,
                 linkSectionPurpose: "duplicate-merge"
               });
               const inspected = inspectPatchablePage(fresh);
-              effectiveAction = yield* eventBridge.forward(regenerateConflictedPatch({
+              effectiveAction = yield* eventBridge.forwardAbortable(signal, (operationSignal) => regenerateConflictedPatch({
                 entityKey: action.entityKey,
                 evidence: entity,
                 targetPath,
@@ -54055,7 +54050,7 @@ ${action.content}`,
                 model,
                 policy,
                 opts,
-                signal,
+                signal: operationSignal,
                 onEvent: captureEvent
               }));
               signal.throwIfAborted();
@@ -54129,7 +54124,7 @@ ${action.content}`,
               opts
             });
             const inspected = inspectPatchablePage(fresh);
-            effectiveAction = yield* eventBridge.forward(regenerateConflictedPatch({
+            effectiveAction = yield* eventBridge.forwardAbortable(signal, (operationSignal) => regenerateConflictedPatch({
               entityKey: action.entityKey,
               evidence: entity,
               targetPath: action.path,
@@ -54144,7 +54139,7 @@ ${action.content}`,
               model,
               policy,
               opts,
-              signal,
+              signal: operationSignal,
               onEvent: captureEvent
             }));
             signal.throwIfAborted();
@@ -55288,7 +55283,7 @@ async function* answerFromContext(args) {
   yield { kind: "tool_use", name: "Answering", input: {} };
   let attempt;
   try {
-    attempt = yield* runWithLiveEvents((emit) => runWithContextRepack({
+    attempt = yield* runWithLiveEvents((emit, operationSignal) => runWithContextRepack({
       callSite: "query.answer",
       configuredInputBudget: opts.inputBudgetTokens ?? 16384,
       outputBudget: opts.maxTokens,
@@ -55327,11 +55322,11 @@ async function* answerFromContext(args) {
           emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"));
           const pending = llm.chat.completions.create(
             { ...params, stream: true },
-            { signal }
+            { signal: operationSignal }
           );
           emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
           const rawStream = await pending;
-          const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
+          const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, operationSignal);
           let attemptAnswer = "";
           let attemptOutputTokens = 0;
           let producing = false;
@@ -55371,13 +55366,13 @@ async function* answerFromContext(args) {
             }
           }
         } catch (error) {
-          if (signal.aborted || error.name === "AbortError") throw error;
+          if (operationSignal.aborted || error.name === "AbortError") throw error;
           if (streamChunkConsumed) throw error;
           if (classifyContextError(error) !== null && request.optionalUnits > 0) {
             emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
           }
           rethrowForContextRepack(error, request.optionalUnits);
-          if (!shouldFallbackStreamToNonStream(error, signal)) throw error;
+          if (!shouldFallbackStreamToNonStream(error, operationSignal)) throw error;
           emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
           answerLifecycle = createLlmLifecycle("answer_question");
           emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing"));
@@ -55388,7 +55383,7 @@ async function* answerFromContext(args) {
             emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"));
             const pending = llm.chat.completions.create(
               { ...fallbackParams, stream: false },
-              { signal }
+              { signal: operationSignal }
             );
             emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
             response = await pending;
@@ -55426,7 +55421,7 @@ async function* answerFromContext(args) {
         }
       },
       onEvent: (event) => budgetEvents.push(event)
-    }));
+    }), signal);
     signal.throwIfAborted();
   } catch (error) {
     for (const event of budgetEvents) yield event;
@@ -55534,7 +55529,7 @@ ${answer}` }
         ];
         try {
           const schema = makeQueryAnswerSchema(knownStems);
-          const r = yield* runWithLiveEvents((emit) => runStructuredWithRetry({
+          const r = yield* runWithLiveEvents((emit, operationSignal) => runStructuredWithRetry({
             llm,
             model,
             baseMessages,
@@ -55543,10 +55538,10 @@ ${answer}` }
             maxRetries: wikiLinkValidationRetries,
             callSite: "query.answer",
             lifecycle: createLlmLifecycle("answer_question"),
-            signal,
+            signal: operationSignal,
             onEvent: emit,
             transport: "non-stream"
-          }));
+          }), signal);
           if (signal.aborted) {
             yield lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "cancelled");
             yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
@@ -55694,16 +55689,16 @@ async function* retrieveDomainCandidates(domain, question, vaultTools, similarit
     const allAnnotatedIds = [...indexAnnotations.keys()];
     yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allAnnotatedIds.length } };
     const seedOpts = { ...llmSeedFallback.opts, thinkingBudgetTokens: void 0 };
-    const seedRes = yield* runWithLiveEvents((emit) => llmSelectSeeds(
+    const seedRes = yield* runWithLiveEvents((emit, operationSignal) => llmSelectSeeds(
       question,
       indexAnnotations,
       allAnnotatedIds,
       llmSeedFallback.llm,
       llmSeedFallback.model,
       seedOpts,
-      signal,
+      operationSignal,
       emit
-    ));
+    ), signal);
     if (signal.aborted) {
       if (seedRes.lifecycle) {
         yield lifecycleEvent(seedRes.lifecycle.id, seedRes.lifecycle.action, "cancelled");
@@ -56971,7 +56966,7 @@ ${schemaContent}` : ""
           yield { kind: "info_text", icon: "\u{1F50D}", summary: `Checking batch ${i + 1}/${batches.length}: ${batch.length} work item(s)` };
           yield { kind: "tool_use", name: "Analysing wiki", input: { batch: i + 1, workItems: batch.length } };
           try {
-            const result = yield* runWithLiveEvents((emit) => runLintBatchWithSplit({
+            const result = yield* runWithLiveEvents((emit, operationSignal) => runLintBatchWithSplit({
               items: batch,
               pages,
               domainName: domain.name,
@@ -56980,12 +56975,12 @@ ${schemaContent}` : ""
               llm,
               model,
               opts,
-              signal,
+              signal: operationSignal,
               onEvent: (event) => {
                 trackBatchLifecycle(event);
                 emit(event);
               }
-            }));
+            }), signal);
             outputTokens += result.outputTokens;
             batchOutputs.push(result.output);
             batchLifecycles.push(...result.lifecycles);
@@ -57145,7 +57140,7 @@ ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
       if (signal.aborted) return;
       yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).lintProgress.actualizing(domain.id) };
       yield { kind: "tool_use", name: "Updating config", input: {} };
-      const patchRes = yield* runWithLiveEvents((emit) => actualizeDomainConfig(domain, mergedFindings, llm, model, opts, signal, emit));
+      const patchRes = yield* runWithLiveEvents((emit, operationSignal) => actualizeDomainConfig(domain, mergedFindings, llm, model, opts, operationSignal, emit), signal);
       if (signal.aborted) {
         if (patchRes.lifecycle) {
           yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "cancelled");
@@ -57466,7 +57461,7 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
   yield { kind: "tool_use", name: "Responding", input: {} };
   let attempt;
   try {
-    attempt = yield* runWithLiveEvents((emit) => runWithContextRepack({
+    attempt = yield* runWithLiveEvents((emit, operationSignal) => runWithContextRepack({
       callSite: opts.semanticCompression?.operation === "query" ? "query.answer" : "lint-chat.fix",
       configuredInputBudget: opts.inputBudgetTokens ?? 16384,
       outputBudget: opts.maxTokens,
@@ -57506,11 +57501,11 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
           emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"));
           const pending = llm.chat.completions.create(
             { ...params, stream: true },
-            { signal }
+            { signal: operationSignal }
           );
           emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"));
           const rawStream = await pending;
-          const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
+          const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, operationSignal);
           let attemptText = "";
           let attemptOutputTokens = 0;
           let producing = false;
@@ -57548,13 +57543,13 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
             }
           }
         } catch (error) {
-          if (signal.aborted || error.name === "AbortError") throw error;
+          if (operationSignal.aborted || error.name === "AbortError") throw error;
           if (streamChunkConsumed) throw error;
           if (classifyContextError(error) !== null && request.optionalUnits > 0) {
             emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"));
           }
           rethrowForContextRepack2(error, request.optionalUnits);
-          if (!shouldFallbackStreamToNonStream(error, signal)) throw error;
+          if (!shouldFallbackStreamToNonStream(error, operationSignal)) throw error;
           emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"));
           chatLifecycle = createLlmLifecycle(
             opts.semanticCompression?.operation === "query" ? "answer_question" : "apply_lint_fixes"
@@ -57567,7 +57562,7 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
             emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"));
             const pending = llm.chat.completions.create(
               { ...fallbackParams, stream: false },
-              { signal }
+              { signal: operationSignal }
             );
             emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"));
             response = await pending;
@@ -57604,7 +57599,7 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
         }
       },
       onEvent: (event) => budgetEvents.push(event)
-    }));
+    }), signal);
     signal.throwIfAborted();
   } catch (error) {
     for (const event of budgetEvents) yield event;
@@ -57945,7 +57940,7 @@ ${schemaContent}` : ""
     return event;
   };
   try {
-    result = yield* runWithLiveEvents((emit) => {
+    result = yield* runWithLiveEvents((emit, operationSignal) => {
       const forward = (event) => {
         trackLifecycle(event);
         emit(event);
@@ -57982,7 +57977,7 @@ ${schemaContent}` : ""
             maxRetries: opts.structuredRetries ?? 1,
             callSite: "lint-chat.patch",
             lifecycle: createLlmLifecycle("apply_lint_fixes"),
-            signal,
+            signal: operationSignal,
             onEvent: forward,
             transport: "non-stream",
             contextErrorsRetry: true
@@ -57996,7 +57991,7 @@ ${schemaContent}` : ""
         },
         onEvent: forward
       });
-    });
+    }, signal);
     pendingLifecycle ??= result.lifecycle;
     signal.throwIfAborted();
     yield { kind: "tool_result", ok: true, preview: `${result.value.patches?.length ?? 0} patch(es)` };
@@ -58020,7 +58015,10 @@ ${schemaContent}` : ""
   const patches = parsed.patches ?? [];
   try {
     for (const patch of patches) {
-      signal.throwIfAborted();
+      if (signal.aborted) {
+        if (writeSucceeded || writeFailed) break;
+        signal.throwIfAborted();
+      }
       yield { kind: "tool_use", name: "Update", input: { path: patch.path } };
       const current = activePages.get(patch.path);
       if (!activePaths.includes(patch.path) || current === void 0) {
@@ -58040,22 +58038,20 @@ ${schemaContent}` : ""
         }
         signal.throwIfAborted();
         await vaultTools.write(patch.path, applied.content);
-        signal.throwIfAborted();
         activePages.set(patch.path, applied.content);
-        signal.throwIfAborted();
         writtenPaths.push(patch.path);
-        yield { kind: "tool_result", ok: true };
-        signal.throwIfAborted();
         await upsertPageIndex(
           vaultTools,
           wikiVaultPath,
           pageIndexRecordFromMarkdown(wikiVaultPath, patch.path, applied.content)
         );
         writeSucceeded = true;
+        yield { kind: "tool_result", ok: true };
+        if (signal.aborted) break;
       } catch (e) {
-        if (signal.aborted || e.name === "AbortError") throw e;
         writeFailed = true;
         yield { kind: "tool_result", ok: false, preview: e.message };
+        if (signal.aborted) break;
         continue;
       }
     }
@@ -58063,7 +58059,7 @@ ${schemaContent}` : ""
       signal.throwIfAborted();
       yield lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying");
     }
-    signal.throwIfAborted();
+    if (!writeSucceeded && !writeFailed) signal.throwIfAborted();
     const terminal = closePendingLifecycle(
       writeFailed || patches.length > 0 && !writeSucceeded ? "failed" : "completed"
     );
@@ -58161,7 +58157,7 @@ ${schemaContent}` : ""
   const bootstrapEvents = new RunEventBridge();
   let bootstrapEvidence;
   try {
-    bootstrapEvidence = yield* bootstrapEvents.forward(prepareBootstrapEvidence(sourceContent, domainId, {
+    bootstrapEvidence = yield* bootstrapEvents.forwardAbortable(signal, (operationSignal) => prepareBootstrapEvidence(sourceContent, domainId, {
       inputBudgetTokens,
       outputBudgetTokens,
       compressionProfile: compressionProfile2,
@@ -58172,7 +58168,7 @@ ${schemaContent}` : ""
       llm,
       model,
       opts,
-      signal,
+      signal: operationSignal,
       onEvent: (event) => bootstrapEvents.push(event),
       configuredEntityTypes: [],
       mapCallSite: "init.bootstrap-map"

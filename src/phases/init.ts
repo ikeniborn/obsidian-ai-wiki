@@ -128,7 +128,8 @@ async function* prepareDomainBootstrap(
   const bootstrapEvents = new RunEventBridge();
   let bootstrapEvidence: BootstrapEvidence;
   try {
-    bootstrapEvidence = yield* bootstrapEvents.forward(prepareBootstrapEvidence(sourceContent, domainId, {
+    bootstrapEvidence = yield* bootstrapEvents.forwardAbortable(signal, (operationSignal) =>
+      prepareBootstrapEvidence(sourceContent, domainId, {
       inputBudgetTokens,
       outputBudgetTokens,
       compressionProfile,
@@ -139,7 +140,7 @@ async function* prepareDomainBootstrap(
       llm,
       model,
       opts,
-      signal,
+      signal: operationSignal,
       onEvent: (event) => bootstrapEvents.push(event),
       configuredEntityTypes: [],
       mapCallSite: "init.bootstrap-map",

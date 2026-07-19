@@ -116,7 +116,7 @@ export async function* answerFromContext(args: {
 
   let attempt: AnswerAttempt;
   try {
-    attempt = yield* runWithLiveEvents((emit) => runWithContextRepack<PackedAnswerRequest, AnswerAttempt>({
+    attempt = yield* runWithLiveEvents((emit, operationSignal) => runWithContextRepack<PackedAnswerRequest, AnswerAttempt>({
       callSite: "query.answer",
       configuredInputBudget: opts.inputBudgetTokens ?? 16_384,
       outputBudget: opts.maxTokens,
@@ -157,11 +157,11 @@ export async function* answerFromContext(args: {
           emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"));
           const pending = llm.chat.completions.create(
             { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-            { signal },
+            { signal: operationSignal },
           );
           emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
           const rawStream = await pending;
-          const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
+          const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, operationSignal);
           let attemptAnswer = "";
           let attemptOutputTokens = 0;
           let producing = false;
@@ -202,7 +202,7 @@ export async function* answerFromContext(args: {
           }
         } catch (error) {
           if (
-            signal.aborted
+            operationSignal.aborted
             || (error as Error).name === "AbortError"
           ) throw error;
           if (streamChunkConsumed) throw error;
@@ -210,7 +210,7 @@ export async function* answerFromContext(args: {
             emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
           }
           rethrowForContextRepack(error, request.optionalUnits);
-          if (!shouldFallbackStreamToNonStream(error, signal)) throw error;
+          if (!shouldFallbackStreamToNonStream(error, operationSignal)) throw error;
           emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
           answerLifecycle = createLlmLifecycle("answer_question");
           emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing"));
@@ -221,7 +221,7 @@ export async function* answerFromContext(args: {
             emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"));
             const pending = llm.chat.completions.create(
               { ...fallbackParams, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-              { signal },
+              { signal: operationSignal },
             );
             emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
             response = await pending;
@@ -261,7 +261,7 @@ export async function* answerFromContext(args: {
         }
       },
       onEvent: (event) => budgetEvents.push(event),
-    }));
+    }), signal);
     signal.throwIfAborted();
   } catch (error) {
     for (const event of budgetEvents) yield event;
@@ -379,17 +379,17 @@ export async function* answerFromContext(args: {
         ];
         try {
           const schema = makeQueryAnswerSchema(knownStems);
-          const r = yield* runWithLiveEvents((emit) => runStructuredWithRetry({
+          const r = yield* runWithLiveEvents((emit, operationSignal) => runStructuredWithRetry({
             llm, model, baseMessages,
             opts: { ...opts, jsonMode: false, thinkingBudgetTokens: undefined },
             profile: queryAnswerProfile(schema),
             maxRetries: wikiLinkValidationRetries,
             callSite: "query.answer",
             lifecycle: createLlmLifecycle("answer_question"),
-            signal,
+            signal: operationSignal,
             onEvent: emit,
             transport: "non-stream",
-          }));
+          }), signal);
           if (signal.aborted) {
             yield lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "cancelled");
             yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");

@@ -538,7 +538,8 @@ export async function* runIngest(
 
   let evidence: EntityEvidence[];
   try {
-    evidence = yield* eventBridge.forward(prepareSourceEvidence(sourceContent, domain.id, {
+    evidence = yield* eventBridge.forwardAbortable(signal, (operationSignal) =>
+      prepareSourceEvidence(sourceContent, domain.id, {
       inputBudgetTokens: policy.inputBudgetTokens,
       outputBudgetTokens: policy.outputBudgetTokens,
       compressionProfile: policy.compression,
@@ -548,7 +549,7 @@ export async function* runIngest(
       llm,
       model,
       opts,
-      signal,
+      signal: operationSignal,
       configuredEntityTypes: (domain.entity_types ?? []).map((entityType) => entityType.type),
       onEvent: captureEvent,
     }));
@@ -706,7 +707,8 @@ export async function* runIngest(
     const outputs: SynthesisOutput[] = [];
     try {
       for (const batch of batches) {
-        const output = yield* eventBridge.forward(synthesizeEntityBatch({
+        const output = yield* eventBridge.forwardAbortable(signal, (operationSignal) =>
+          synthesizeEntityBatch({
           bundles: batch,
           existingPaths: existingPathSet,
           existingPageHashes,
@@ -720,7 +722,7 @@ export async function* runIngest(
           model,
           policy,
           opts,
-          signal,
+          signal: operationSignal,
           onEvent: captureEvent,
         }));
         signal.throwIfAborted();
@@ -885,7 +887,8 @@ export async function* runIngest(
               linkSectionPurpose: "duplicate-merge",
             });
             const inspected = inspectPatchablePage(fresh);
-            effectiveAction = yield* eventBridge.forward(regenerateConflictedPatch({
+            effectiveAction = yield* eventBridge.forwardAbortable(signal, (operationSignal) =>
+              regenerateConflictedPatch({
               entityKey: action.entityKey,
               evidence: entity,
               targetPath,
@@ -900,7 +903,7 @@ export async function* runIngest(
               model,
               policy,
               opts,
-              signal,
+              signal: operationSignal,
               onEvent: captureEvent,
             }));
             signal.throwIfAborted();
@@ -978,7 +981,8 @@ export async function* runIngest(
             opts,
           });
           const inspected = inspectPatchablePage(fresh);
-          effectiveAction = yield* eventBridge.forward(regenerateConflictedPatch({
+          effectiveAction = yield* eventBridge.forwardAbortable(signal, (operationSignal) =>
+            regenerateConflictedPatch({
             entityKey: action.entityKey,
             evidence: entity,
             targetPath: action.path,
@@ -993,7 +997,7 @@ export async function* runIngest(
             model,
             policy,
             opts,
-            signal,
+            signal: operationSignal,
             onEvent: captureEvent,
           }));
           signal.throwIfAborted();

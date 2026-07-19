@@ -1028,6 +1028,77 @@ test("Lint-chat abort after validating cancels once and performs no mutation", a
     ["completed", "failed", "cancelled"].includes(event.phase)).length, 1);
 });
 
+test("Lint-chat restores page/index consistency before observing abort during committed write", async () => {
+  const { VaultTools } = await import("../src/vault-tools");
+  const { runLintFixChat } = await import("../src/phases/lint-chat");
+  const alphaPath = "!Wiki/d/concept/wiki_d_alpha.md";
+  const betaPath = "!Wiki/d/concept/wiki_d_beta.md";
+  const alphaContent = "# Alpha\n\n## Facts\nOld alpha fact.\n";
+  const betaContent = "# Beta\n\n## Facts\nOld beta fact.\n";
+  const adapter = new MemoryAdapter(new Map([
+    [alphaPath, alphaContent],
+    [betaPath, betaContent],
+  ]));
+  const writeCommitted = deferred();
+  const releaseWrite = deferred();
+  const baseWrite = adapter.write.bind(adapter);
+  adapter.write = async (path, data) => {
+    await baseWrite(path, data);
+    if (path === alphaPath) {
+      writeCommitted.resolve();
+      await releaseWrite.promise;
+    }
+  };
+  const controller = new AbortController();
+  const generator = runLintFixChat(
+    {
+      operation: "lint-chat",
+      context: [
+        `- [warning] ${alphaPath} :: ## Facts :: stale :: Old alpha fact`,
+        `- [warning] ${betaPath} :: ## Facts :: stale :: Old beta fact`,
+      ].join("\n"),
+      chatMessages: [{ role: "user", content: "Fix wiki_d_alpha and wiki_d_beta" }],
+    } as RunRequest,
+    new VaultTools(adapter, ""),
+    "",
+    { id: "d", name: "Demo", wiki_folder: "d", entity_types: [], language_notes: "" } as DomainEntry,
+    jsonLlm(JSON.stringify({
+      summary: "fixed",
+      patches: [
+        lintPatch(alphaPath, alphaContent),
+        lintPatch(betaPath, betaContent),
+      ],
+    })),
+    "m",
+    { inputBudgetTokens: 10_000, structuredRetries: 0 },
+    controller.signal,
+  );
+  const events: RunEvent[] = [];
+  const collecting = (async () => {
+    for await (const event of generator) events.push(event);
+  })();
+
+  await Promise.race([
+    writeCommitted.promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("first lint-chat write did not start")), 2_000)),
+  ]);
+  controller.abort();
+  releaseWrite.resolve();
+  await collecting;
+
+  assert.match(adapter.files.get(alphaPath) ?? "", /Lifecycle mutation fix/);
+  assert.equal(adapter.files.get(betaPath), betaContent);
+  assert.match(adapter.files.get("!Wiki/d/index.jsonl") ?? "", /wiki_d_alpha/);
+  assert.equal(adapter.writes.includes(betaPath), false, "abort must prevent the next patch write");
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  assert.deepEqual(lifecycle.map((event) => event.phase), [
+    "preparing", "sent", "waiting", "producing", "validating", "applying", "completed",
+  ], JSON.stringify(events));
+  assert.equal(lifecycle.filter((event) =>
+    ["completed", "failed", "cancelled"].includes(event.phase)).length, 1);
+});
+
 test("Lint transport and applying boundaries remain explicit", () => {
   const source = readFileSync("src/phases/lint.ts", "utf8");
   const batchRunner = source.slice(

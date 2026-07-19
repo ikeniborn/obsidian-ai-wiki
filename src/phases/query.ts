@@ -165,7 +165,7 @@ export async function* retrieveDomainCandidates(
     const allAnnotatedIds = [...indexAnnotations.keys()];
     yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allAnnotatedIds.length } };
     const seedOpts = { ...llmSeedFallback.opts, thinkingBudgetTokens: undefined };
-    const seedRes = yield* runWithLiveEvents((emit) =>
+    const seedRes = yield* runWithLiveEvents((emit, operationSignal) =>
       llmSelectSeeds(
         question,
         indexAnnotations,
@@ -173,9 +173,9 @@ export async function* retrieveDomainCandidates(
         llmSeedFallback.llm,
         llmSeedFallback.model,
         seedOpts,
-        signal,
+        operationSignal,
         emit,
-      ));
+      ), signal);
     if (signal.aborted) {
       if (seedRes.lifecycle) {
         yield lifecycleEvent(seedRes.lifecycle.id, seedRes.lifecycle.action, "cancelled");

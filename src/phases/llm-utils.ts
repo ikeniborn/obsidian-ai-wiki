@@ -13,6 +13,7 @@ import { compressionInstruction } from "../semantic-compression";
 import baseContract from "../../prompts/base.md";
 import { jsonrepair } from "jsonrepair";
 import { resolveLang, resolveReasoningLang } from "../i18n";
+import { RunEventBridge } from "../run-event-bridge";
 
 /** Maps a concrete output language to a reply directive for the system prompt. */
 export function langInstruction(lang: "ru" | "en" | "es"): string {
@@ -142,43 +143,17 @@ export function completionReasoning(message: unknown): string {
 }
 
 export async function* runWithLiveEvents<T>(
-  work: (emit: (event: RunEvent) => void) => Promise<T>,
+  work: (
+    emit: (event: RunEvent) => void,
+    signal: AbortSignal,
+  ) => Promise<T>,
+  callerSignal: AbortSignal,
 ): AsyncGenerator<RunEvent, T> {
-  const queue: RunEvent[] = [];
-  let cursor = 0;
-  let wake: (() => void) | undefined;
-  let settlement:
-    | { ok: true; value: T }
-    | { ok: false; error: unknown }
-    | undefined;
-  const emit = (event: RunEvent): void => {
-    queue.push(event);
-    wake?.();
-    wake = undefined;
-  };
-  void work(emit)
-    .then(
-      (value) => { settlement = { ok: true, value }; },
-      (error: unknown) => { settlement = { ok: false, error }; },
-    )
-    .finally(() => {
-      wake?.();
-      wake = undefined;
-    });
-  while (settlement === undefined || cursor < queue.length) {
-    while (cursor < queue.length) yield queue[cursor++];
-    if (settlement === undefined) await new Promise<void>((resolve) => { wake = resolve; });
-  }
-  if (!settlement) throw new Error("live event work settled without an outcome");
-  if (!settlement.ok) {
-    if (settlement.error === undefined) {
-      throw new Error("Live event work rejected without an error value");
-    }
-    throw settlement.error instanceof Error
-      ? settlement.error
-      : new Error(String(settlement.error));
-  }
-  return settlement.value;
+  const bridge = new RunEventBridge();
+  return yield* bridge.forwardAbortable(
+    callerSignal,
+    (signal) => work((event) => bridge.push(event), signal),
+  );
 }
 
 export function buildChatParams(

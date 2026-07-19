@@ -1201,12 +1201,88 @@ test("runStructuredStreaming aborts background work when the consumer returns", 
 });
 
 test("runWithLiveEvents preserves an undefined rejection as an error", async () => {
-  const generator = runWithLiveEvents(async () => Promise.reject(undefined));
+  const generator = runWithLiveEvents(
+    async () => Promise.reject(undefined),
+    new AbortController().signal,
+  );
   await assert.rejects(async () => {
     for await (const _event of generator) {
       assert.fail("undefined rejection must not emit events");
     }
   }, /Live event work rejected without an error value/);
+});
+
+test("runWithLiveEvents aborts abandoned work and rejects late queue reuse", async () => {
+  const caller = new AbortController();
+  const providerAborted = deferred<void>();
+  let localSignal: AbortSignal | undefined;
+  const generator = runWithLiveEvents(
+    async (emit, operationSignal) => {
+      localSignal = operationSignal;
+      emit({
+        kind: "llm_lifecycle",
+        id: "live-abandonment",
+        action: "select_relevant_pages",
+        phase: "preparing",
+      });
+      return await new Promise<never>((_resolve, reject) => {
+        operationSignal.addEventListener("abort", () => {
+          for (let i = 0; i < 100_000; i++) {
+            emit({
+              kind: "llm_lifecycle",
+              id: `late-${i}`,
+              action: "select_relevant_pages",
+              phase: "waiting",
+            });
+          }
+          providerAborted.resolve();
+          reject(undefined);
+        }, { once: true });
+      });
+    },
+    caller.signal,
+  );
+
+  const first = await generator.next();
+  assert.equal(first.done, false);
+  assert.equal(first.value.kind, "llm_lifecycle");
+  await generator.return();
+  await Promise.race([
+    providerAborted.promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("abandoned live work was not aborted")), 2_000)),
+  ]);
+  await Promise.resolve();
+
+  assert.equal(localSignal?.aborted, true);
+  assert.equal(caller.signal.aborted, false, "cleanup must not abort the caller signal");
+  assert.deepEqual(await generator.next(), { done: true, value: undefined });
+
+  const { RunEventBridge } = await import("../src/run-event-bridge");
+  const bridge = new RunEventBridge();
+  const blocked = deferred<void>();
+  const forwarding = bridge.forward(blocked.promise);
+  bridge.push({
+    kind: "llm_lifecycle",
+    id: "bridge-abandonment",
+    action: "select_relevant_pages",
+    phase: "preparing",
+  });
+  assert.equal((await forwarding.next()).done, false);
+  await forwarding.return();
+  for (let i = 0; i < 100_000; i++) {
+    bridge.push({
+      kind: "llm_lifecycle",
+      id: `bridge-late-${i}`,
+      action: "select_relevant_pages",
+      phase: "waiting",
+    });
+  }
+  await assert.rejects(
+    bridge.forward(Promise.resolve("must-not-reopen")).next(),
+    /abandoned/,
+  );
+  blocked.resolve();
 });
 
 test("structured streaming emits the ordered nonterminal lifecycle on first visible model output", async () => {

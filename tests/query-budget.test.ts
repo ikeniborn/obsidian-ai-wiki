@@ -135,7 +135,11 @@ function assertCleanFallback(calls: CapturedCall[], signal: AbortSignal): void {
   assert.equal(calls.length, 2);
   assert.equal(calls[1].params.stream, false);
   assert.equal("stream_options" in calls[1].params, false);
-  assert.equal(calls[1].signal, signal);
+  assert.ok(calls[0].signal);
+  assert.equal(calls[1].signal, calls[0].signal);
+  assert.notEqual(calls[1].signal, signal);
+  assert.equal(calls[1].signal?.aborted, false);
+  assert.equal(signal.aborted, false);
 }
 
 function deferred(): { promise: Promise<void>; resolve(): void } {
@@ -494,7 +498,7 @@ test("answerFromContext does not resend a required-only prompt after a context e
   assert.equal(requests.length, 1, "required-only Query request must not be resent identically");
 });
 
-test("answerFromContext rebuilds non-stream fallback params and preserves AbortSignal", async () => {
+test("answerFromContext rebuilds non-stream fallback params with one composed AbortSignal", async () => {
   const calls: CapturedCall[] = [];
   const signal = new AbortController().signal;
 
@@ -512,7 +516,7 @@ test("answerFromContext rebuilds non-stream fallback params and preserves AbortS
   assert.equal(result.answer, "fallback answer");
   assert.equal(calls[0].params.stream, true);
   assert.deepEqual(calls[0].params.stream_options, { include_usage: true });
-  assert.equal(calls[0].signal, signal);
+  assert.notEqual(calls[0].signal, signal);
   assertCleanFallback(calls, signal);
   const budget = events.find((event) => event.kind === "prompt_budget");
   assert.ok(budget && budget.kind === "prompt_budget");
@@ -532,7 +536,7 @@ test("answerFromContext rebuilds non-stream fallback params and preserves AbortS
   assert.notEqual(lifecycle[3]?.id, lifecycle[4]?.id);
 });
 
-test("runLintChat rebuilds non-stream fallback params and preserves AbortSignal", async () => {
+test("runLintChat rebuilds non-stream fallback params with one composed AbortSignal", async () => {
   const calls: CapturedCall[] = [];
   const signal = new AbortController().signal;
 
@@ -549,7 +553,7 @@ test("runLintChat rebuilds non-stream fallback params and preserves AbortSignal"
 
   assert.equal(calls[0].params.stream, true);
   assert.deepEqual(calls[0].params.stream_options, { include_usage: true });
-  assert.equal(calls[0].signal, signal);
+  assert.notEqual(calls[0].signal, signal);
   assertCleanFallback(calls, signal);
   const budget = events.find((event) => event.kind === "prompt_budget");
   assert.ok(budget && budget.kind === "prompt_budget");
@@ -766,7 +770,7 @@ test("HTTP 502 Chat failure is sent exactly once", async () => {
   assert.equal(calls.length, 1);
 });
 
-test("mobile Query fallback reaches the inner client without stream options and with AbortSignal", async () => {
+test("mobile Query fallback reaches the inner client without stream options and with composed AbortSignal", async () => {
   const calls: CapturedCall[] = [];
   const signal = new AbortController().signal;
   const mobileLlm = wrapMobileNoStream(transportFailureThenCompletion(calls));
@@ -785,7 +789,7 @@ test("mobile Query fallback reaches the inner client without stream options and 
   assert.equal(result.answer, "fallback answer");
   assert.equal(calls[0].params.stream, false);
   assert.equal("stream_options" in calls[0].params, false);
-  assert.equal(calls[0].signal, signal);
+  assert.notEqual(calls[0].signal, signal);
   assertCleanFallback(calls, signal);
 });
 

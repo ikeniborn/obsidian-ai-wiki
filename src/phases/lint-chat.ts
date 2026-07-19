@@ -307,7 +307,7 @@ export async function* runLintFixChat(
     return event;
   };
   try {
-    result = yield* runWithLiveEvents((emit) => {
+    result = yield* runWithLiveEvents((emit, operationSignal) => {
       const forward = (event: RunEvent): void => {
         trackLifecycle(event);
         emit(event);
@@ -344,7 +344,7 @@ export async function* runLintFixChat(
             maxRetries: opts.structuredRetries ?? 1,
             callSite: "lint-chat.patch",
             lifecycle: createLlmLifecycle("apply_lint_fixes"),
-            signal,
+            signal: operationSignal,
             onEvent: forward,
             transport: "non-stream",
             contextErrorsRetry: true,
@@ -358,7 +358,7 @@ export async function* runLintFixChat(
         },
         onEvent: forward,
       });
-    });
+    }, signal);
     pendingLifecycle ??= result.lifecycle;
     signal.throwIfAborted();
     yield { kind: "tool_result", ok: true, preview: `${result.value.patches?.length ?? 0} patch(es)` };
@@ -384,7 +384,10 @@ export async function* runLintFixChat(
   const patches = parsed.patches ?? [];
   try {
     for (const patch of patches) {
-      signal.throwIfAborted();
+      if (signal.aborted) {
+        if (writeSucceeded || writeFailed) break;
+        signal.throwIfAborted();
+      }
       yield { kind: "tool_use", name: "Update", input: { path: patch.path } };
       const current = activePages.get(patch.path);
       if (!activePaths.includes(patch.path) || current === undefined) {
@@ -404,22 +407,20 @@ export async function* runLintFixChat(
         }
         signal.throwIfAborted();
         await vaultTools.write(patch.path, applied.content);
-        signal.throwIfAborted();
         activePages.set(patch.path, applied.content);
-        signal.throwIfAborted();
         writtenPaths.push(patch.path);
-        yield { kind: "tool_result", ok: true };
-        signal.throwIfAborted();
         await upsertPageIndex(
           vaultTools,
           wikiVaultPath,
           pageIndexRecordFromMarkdown(wikiVaultPath, patch.path, applied.content),
         );
         writeSucceeded = true;
+        yield { kind: "tool_result", ok: true };
+        if (signal.aborted) break;
       } catch (e) {
-        if (signal.aborted || (e as Error).name === "AbortError") throw e;
         writeFailed = true;
         yield { kind: "tool_result", ok: false, preview: (e as Error).message };
+        if (signal.aborted) break;
         continue;
       }
     }
@@ -427,7 +428,7 @@ export async function* runLintFixChat(
       signal.throwIfAborted();
       yield lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying");
     }
-    signal.throwIfAborted();
+    if (!writeSucceeded && !writeFailed) signal.throwIfAborted();
     const terminal = closePendingLifecycle(
       writeFailed || (patches.length > 0 && !writeSucceeded) ? "failed" : "completed",
     );

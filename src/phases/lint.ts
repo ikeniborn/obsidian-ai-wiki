@@ -509,7 +509,7 @@ export async function* runLint(
           yield { kind: "info_text", icon: "🔍", summary: `Checking batch ${i + 1}/${batches.length}: ${batch.length} work item(s)` };
           yield { kind: "tool_use", name: "Analysing wiki", input: { batch: i + 1, workItems: batch.length } };
           try {
-            const result = yield* runWithLiveEvents((emit) => runLintBatchWithSplit({
+            const result = yield* runWithLiveEvents((emit, operationSignal) => runLintBatchWithSplit({
               items: batch,
               pages,
               domainName: domain.name,
@@ -518,12 +518,12 @@ export async function* runLint(
               llm,
               model,
               opts,
-              signal,
+              signal: operationSignal,
               onEvent: (event) => {
                 trackBatchLifecycle(event);
                 emit(event);
               },
-            }));
+            }), signal);
             outputTokens += result.outputTokens;
             batchOutputs.push(result.output);
             batchLifecycles.push(...result.lifecycles);
@@ -700,8 +700,8 @@ export async function* runLint(
     // actualizeDomainConfig (runs once after loop)
     yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).lintProgress.actualizing(domain.id) };
     yield { kind: "tool_use", name: "Updating config", input: {} };
-    const patchRes = yield* runWithLiveEvents((emit) =>
-      actualizeDomainConfig(domain, mergedFindings, llm, model, opts, signal, emit));
+    const patchRes = yield* runWithLiveEvents((emit, operationSignal) =>
+      actualizeDomainConfig(domain, mergedFindings, llm, model, opts, operationSignal, emit), signal);
     if (signal.aborted) {
       if (patchRes.lifecycle) {
         yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "cancelled");
