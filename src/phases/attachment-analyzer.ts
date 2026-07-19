@@ -224,11 +224,13 @@ async function callVisionLlm(
   const estimatedInputTokens = estimatePreparedMessages(
     params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
   );
+  let providerDispatched = false;
   let response: OpenAI.Chat.ChatCompletion;
   try {
     signal.throwIfAborted();
     options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "sent"));
     options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "waiting"));
+    providerDispatched = true;
     const request = llm.chat.completions.create(
       { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
       { signal },
@@ -244,22 +246,35 @@ async function callVisionLlm(
           ? "retrying"
           : "failed",
     ));
-    options.onEvent?.(createPromptBudgetEvent({
-      requestId: lifecycle.id,
-      callSite: "vision.analysis",
-      configuredInputBudget: options.inputBudgetTokens,
-      effectiveInputBudget,
-      estimatedInputTokens,
-      outputBudget: options.maxTokens,
-      compressionProfile: options.compressionProfile,
-      contextUnits: pages.length,
-      retryReason: classifyContextError(error) === null
-        ? undefined
-        : "provider_context_error",
-    }));
+    if (providerDispatched) {
+      options.onEvent?.(createPromptBudgetEvent({
+        requestId: lifecycle.id,
+        callSite: "vision.analysis",
+        configuredInputBudget: options.inputBudgetTokens,
+        effectiveInputBudget,
+        estimatedInputTokens,
+        outputBudget: options.maxTokens,
+        compressionProfile: options.compressionProfile,
+        contextUnits: pages.length,
+        retryReason: classifyContextError(error) === null
+          ? undefined
+          : "provider_context_error",
+      }));
+    }
     throw error;
   }
 
+  options.onEvent?.(createPromptBudgetEvent({
+    requestId: lifecycle.id,
+    callSite: "vision.analysis",
+    configuredInputBudget: options.inputBudgetTokens,
+    effectiveInputBudget,
+    estimatedInputTokens,
+    actualInputTokens: response.usage?.prompt_tokens,
+    outputBudget: options.maxTokens,
+    compressionProfile: options.compressionProfile,
+    contextUnits: pages.length,
+  }));
   if (signal.aborted) {
     options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "cancelled"));
     signal.throwIfAborted();
@@ -274,17 +289,6 @@ async function callVisionLlm(
     options.onEvent?.({ kind: "assistant_text", delta: reasoning, isReasoning: true });
   }
   options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "validating"));
-  options.onEvent?.(createPromptBudgetEvent({
-    requestId: lifecycle.id,
-    callSite: "vision.analysis",
-    configuredInputBudget: options.inputBudgetTokens,
-    effectiveInputBudget,
-    estimatedInputTokens,
-    actualInputTokens: response.usage?.prompt_tokens,
-    outputBudget: options.maxTokens,
-    compressionProfile: options.compressionProfile,
-    contextUnits: pages.length,
-  }));
   let records: VisionRecognitionRecord[];
   try {
     const parsed = VisionRecognitionBatchSchema.parse(parseStructured(content));

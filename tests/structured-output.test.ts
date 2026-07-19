@@ -1148,9 +1148,17 @@ test("structured non-stream abort after transport completion closes cancelled wi
   });
 
   await assert.rejects(operation, { name: "AbortError" });
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
   assert.deepEqual(
-    events.filter((event) => event.kind === "llm_lifecycle").map((event) => event.phase),
+    lifecycle.map((event) => event.phase),
     ["preparing", "sent", "waiting", "cancelled"],
+  );
+  const budgets = events.filter((event) => event.kind === "prompt_budget");
+  assert.equal(budgets.length, 1);
+  assert.equal(budgets[0].requestId, "post-transport-abort");
+  assert.equal(
+    lifecycle.find((event) => event.phase === "cancelled")?.id,
+    budgets[0].requestId,
   );
 });
 

@@ -873,6 +873,7 @@ test("PDF abort after load or render stops all remaining work with no descriptio
 
 test("PDF abort after a batch response prevents every remaining request and description", async () => {
   const controller = new AbortController();
+  const events: RunEvent[] = [];
   let calls = 0;
   const llm = {
     chat: {
@@ -894,7 +895,10 @@ test("PDF abort after a batch response prevents every remaining request and desc
       controller.signal,
       "en",
       "en",
-      { inputBudgetTokens: 10_000 },
+      {
+        inputBudgetTokens: 10_000,
+        onEvent: (event) => events.push(event),
+      },
       {
         loadPdf: async () => ({
           numPages: 3,
@@ -908,6 +912,14 @@ test("PDF abort after a batch response prevents every remaining request and desc
     (error: unknown) => (error as Error).name === "AbortError",
   );
   assert.equal(calls, 1);
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  const budgets = events.filter((event) => event.kind === "prompt_budget");
+  assert.equal(budgets.length, 1);
+  assert.equal(budgets[0].actualInputTokens, 123);
+  assert.equal(
+    lifecycle.find((event) => event.phase === "cancelled")?.id,
+    budgets[0].requestId,
+  );
 });
 
 test("PDF abort during lower render prevents the resize transport retry", async () => {

@@ -417,7 +417,6 @@ async function nonStreamOnce(
       contextUnits: messages.length,
     }));
   };
-  signal.throwIfAborted();
   if (
     response
     && typeof response === "object"
@@ -428,27 +427,32 @@ async function nonStreamOnce(
     let inputTokens: number | undefined;
     let finishReason: string | null | undefined;
     let producing = false;
-    for await (const chunk of response as unknown as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>) {
-      const reason = chunk.choices[0]?.finish_reason;
-      if (reason !== undefined) finishReason = reason;
-      const deltas = extractStreamDeltas(chunk);
-      if (!producing && (deltas.reasoning.trim() || deltas.content.trim())) {
-        lifecycle.phase("producing");
-        producing = true;
+    try {
+      signal.throwIfAborted();
+      for await (const chunk of response as unknown as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>) {
+        const reason = chunk.choices[0]?.finish_reason;
+        if (reason !== undefined) finishReason = reason;
+        const deltas = extractStreamDeltas(chunk);
+        if (!producing && (deltas.reasoning.trim() || deltas.content.trim())) {
+          lifecycle.phase("producing");
+          producing = true;
+        }
+        if (deltas.reasoning) {
+          onEvent({ kind: "assistant_text", delta: deltas.reasoning, isReasoning: true });
+        }
+        fullText += deltas.content;
+        if (deltas.outputTokens !== undefined) outputTokens += deltas.outputTokens;
+        if (deltas.inputTokens !== undefined) inputTokens = deltas.inputTokens;
       }
-      if (deltas.reasoning) {
-        onEvent({ kind: "assistant_text", delta: deltas.reasoning, isReasoning: true });
-      }
-      fullText += deltas.content;
-      if (deltas.outputTokens !== undefined) outputTokens += deltas.outputTokens;
-      if (deltas.inputTokens !== undefined) inputTokens = deltas.inputTokens;
+      signal.throwIfAborted();
+      if (finishReason === "length") throw new StructuredOutputTruncatedError("length");
+      return { fullText, outputTokens, inputTokens, finishReason };
+    } finally {
+      emitBudget(inputTokens);
     }
-    signal.throwIfAborted();
-    if (finishReason === "length") throw new StructuredOutputTruncatedError("length");
-    emitBudget(inputTokens);
-    return { fullText, outputTokens, inputTokens, finishReason };
   }
   emitBudget(response.usage?.prompt_tokens);
+  signal.throwIfAborted();
   if (response.choices[0]?.finish_reason === "length") {
     throw new StructuredOutputTruncatedError("length");
   }

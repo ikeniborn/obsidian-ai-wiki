@@ -51340,34 +51340,38 @@ async function nonStreamOnce(llm, model, messages, opts, signal, onEvent, lifecy
       contextUnits: messages.length
     }));
   };
-  signal.throwIfAborted();
   if (response && typeof response === "object" && Symbol.asyncIterator in response) {
     let fullText2 = "";
     let outputTokens = 0;
     let inputTokens;
     let finishReason;
     let producing = false;
-    for await (const chunk of response) {
-      const reason = chunk.choices[0]?.finish_reason;
-      if (reason !== void 0) finishReason = reason;
-      const deltas = extractStreamDeltas(chunk);
-      if (!producing && (deltas.reasoning.trim() || deltas.content.trim())) {
-        lifecycle.phase("producing");
-        producing = true;
+    try {
+      signal.throwIfAborted();
+      for await (const chunk of response) {
+        const reason = chunk.choices[0]?.finish_reason;
+        if (reason !== void 0) finishReason = reason;
+        const deltas = extractStreamDeltas(chunk);
+        if (!producing && (deltas.reasoning.trim() || deltas.content.trim())) {
+          lifecycle.phase("producing");
+          producing = true;
+        }
+        if (deltas.reasoning) {
+          onEvent({ kind: "assistant_text", delta: deltas.reasoning, isReasoning: true });
+        }
+        fullText2 += deltas.content;
+        if (deltas.outputTokens !== void 0) outputTokens += deltas.outputTokens;
+        if (deltas.inputTokens !== void 0) inputTokens = deltas.inputTokens;
       }
-      if (deltas.reasoning) {
-        onEvent({ kind: "assistant_text", delta: deltas.reasoning, isReasoning: true });
-      }
-      fullText2 += deltas.content;
-      if (deltas.outputTokens !== void 0) outputTokens += deltas.outputTokens;
-      if (deltas.inputTokens !== void 0) inputTokens = deltas.inputTokens;
+      signal.throwIfAborted();
+      if (finishReason === "length") throw new StructuredOutputTruncatedError("length");
+      return { fullText: fullText2, outputTokens, inputTokens, finishReason };
+    } finally {
+      emitBudget(inputTokens);
     }
-    signal.throwIfAborted();
-    if (finishReason === "length") throw new StructuredOutputTruncatedError("length");
-    emitBudget(inputTokens);
-    return { fullText: fullText2, outputTokens, inputTokens, finishReason };
   }
   emitBudget(response.usage?.prompt_tokens);
+  signal.throwIfAborted();
   if (response.choices[0]?.finish_reason === "length") {
     throw new StructuredOutputTruncatedError("length");
   }
@@ -59708,11 +59712,13 @@ async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, 
   const estimatedInputTokens = estimatePreparedMessages(
     params.messages
   );
+  let providerDispatched = false;
   let response;
   try {
     signal.throwIfAborted();
     options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "sent"));
     options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "waiting"));
+    providerDispatched = true;
     const request = llm.chat.completions.create(
       { ...params, stream: false },
       { signal }
@@ -59724,19 +59730,32 @@ async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, 
       lifecycle.action,
       signal.aborted || error.name === "AbortError" ? "cancelled" : classifyContextError(error) !== null ? "retrying" : "failed"
     ));
-    options.onEvent?.(createPromptBudgetEvent({
-      requestId: lifecycle.id,
-      callSite: "vision.analysis",
-      configuredInputBudget: options.inputBudgetTokens,
-      effectiveInputBudget,
-      estimatedInputTokens,
-      outputBudget: options.maxTokens,
-      compressionProfile: options.compressionProfile,
-      contextUnits: pages.length,
-      retryReason: classifyContextError(error) === null ? void 0 : "provider_context_error"
-    }));
+    if (providerDispatched) {
+      options.onEvent?.(createPromptBudgetEvent({
+        requestId: lifecycle.id,
+        callSite: "vision.analysis",
+        configuredInputBudget: options.inputBudgetTokens,
+        effectiveInputBudget,
+        estimatedInputTokens,
+        outputBudget: options.maxTokens,
+        compressionProfile: options.compressionProfile,
+        contextUnits: pages.length,
+        retryReason: classifyContextError(error) === null ? void 0 : "provider_context_error"
+      }));
+    }
     throw error;
   }
+  options.onEvent?.(createPromptBudgetEvent({
+    requestId: lifecycle.id,
+    callSite: "vision.analysis",
+    configuredInputBudget: options.inputBudgetTokens,
+    effectiveInputBudget,
+    estimatedInputTokens,
+    actualInputTokens: response.usage?.prompt_tokens,
+    outputBudget: options.maxTokens,
+    compressionProfile: options.compressionProfile,
+    contextUnits: pages.length
+  }));
   if (signal.aborted) {
     options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "cancelled"));
     signal.throwIfAborted();
@@ -59751,17 +59770,6 @@ async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, 
     options.onEvent?.({ kind: "assistant_text", delta: reasoning, isReasoning: true });
   }
   options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "validating"));
-  options.onEvent?.(createPromptBudgetEvent({
-    requestId: lifecycle.id,
-    callSite: "vision.analysis",
-    configuredInputBudget: options.inputBudgetTokens,
-    effectiveInputBudget,
-    estimatedInputTokens,
-    actualInputTokens: response.usage?.prompt_tokens,
-    outputBudget: options.maxTokens,
-    compressionProfile: options.compressionProfile,
-    contextUnits: pages.length
-  }));
   let records;
   try {
     const parsed = VisionRecognitionBatchSchema.parse(parseStructured(content));
