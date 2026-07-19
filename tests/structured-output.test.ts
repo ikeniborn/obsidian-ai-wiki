@@ -16,6 +16,7 @@ register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 
 const { parseWithRetry } = await import("../src/phases/parse-with-retry");
 const {
+  completionReasoning,
   computeSpeedText,
   shouldFallbackStreamToNonStream,
 } = await import("../src/phases/llm-utils");
@@ -929,6 +930,7 @@ test("streaming structured call emits reasoning and content deltas live", async 
 
 test("streaming structured call aborts a pending iterator and closes it without waiting", async () => {
   const controller = new AbortController();
+  const events: RunEvent[] = [];
   let nextStarted!: () => void;
   const pendingNext = new Promise<void>((resolve) => {
     nextStarted = resolve;
@@ -962,8 +964,9 @@ test("streaming structured call aborts a pending iterator and closes it without 
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 0,
     callSite: "query.seeds",
+    lifecycle: { id: "aborted-call", action: "select_relevant_pages" },
     signal: controller.signal,
-    onEvent: () => {},
+    onEvent: (event) => events.push(event),
   }).then(
     () => "resolved",
     (error: unknown) => error instanceof Error ? error.name : "unknown-error",
@@ -978,6 +981,13 @@ test("streaming structured call aborts a pending iterator and closes it without 
 
   assert.equal(outcome, "AbortError");
   assert.equal(returnCalls, 1);
+  assert.equal(
+    events.some((event) =>
+      event.kind === "llm_lifecycle"
+      && event.id === "aborted-call"
+      && event.phase === "cancelled"),
+    true,
+  );
 });
 
 test("runStructuredStreaming yields events live and fills the sink", async () => {
@@ -1026,13 +1036,146 @@ test("runStructuredStreaming keeps missing prompt usage undefined", async () => 
 
 test("runStructuredStreaming propagates a structured failure", async () => {
   const sink: { value?: unknown } = {};
+  const events: RunEvent[] = [];
   await assert.rejects(async () => {
-    for await (const _ev of runStructuredStreaming({
+    for await (const event of runStructuredStreaming({
       llm: llmFromAttempts(["bad", "still bad"]),
       model: "m", baseMessages: [{ role: "user", content: "x" }],
       opts: {}, profile: { kind: "framed-zod", schema: AnswerSchema, parse: parseAnswerFrames, repairInstruction: "x" },
       maxRetries: 1, callSite: "query.answer",
+      lifecycle: { id: "failed-call", action: "answer_question" },
       signal: new AbortController().signal, onEvent: () => {},
-    }, sink)) { /* drain */ }
+    }, sink)) {
+      events.push(event);
+    }
   }, StructuredValidationError);
+  assert.equal(
+    events.some((event) =>
+      event.kind === "llm_lifecycle"
+      && event.action === "answer_question"
+      && event.phase === "failed"),
+    true,
+  );
+});
+
+test("structured streaming emits the ordered nonterminal lifecycle on first visible model output", async () => {
+  const sink: { value?: { value: string } } = {};
+  const events: RunEvent[] = [];
+  const roleOnly = {
+    ...chunk(""),
+    choices: [{ index: 0, delta: { role: "assistant" }, finish_reason: null }],
+  } as OpenAI.Chat.ChatCompletionChunk;
+
+  for await (const event of runStructuredStreaming({
+    llm: llmFromChunks([
+      roleOnly,
+      usageChunk(),
+      reasoningChunk(""),
+      reasoningChunk("thinking"),
+      chunk('{"value":"ok"}'),
+    ]),
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    lifecycle: { id: "structured-call", action: "select_relevant_pages" },
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  }, sink)) {
+    events.push(event);
+  }
+
+  assert.equal(sink.value?.value, "ok");
+  assert.deepEqual(
+    events
+      .filter((event) => event.kind === "llm_lifecycle")
+      .map((event) => event.kind === "llm_lifecycle" ? event.phase : ""),
+    ["preparing", "sent", "waiting", "producing", "validating"],
+  );
+  assert.ok(events
+    .filter((event) => event.kind === "llm_lifecycle")
+    .every((event) =>
+      event.kind === "llm_lifecycle"
+      && event.id === "structured-call"
+      && event.action === "select_relevant_pages"));
+});
+
+test("non-stream structured completion exposes reasoning before validation", async () => {
+  const events: RunEvent[] = [];
+  const llm = {
+    chat: {
+      completions: {
+        create: async () => ({
+          choices: [{
+            finish_reason: "stop",
+            message: {
+              role: "assistant",
+              content: '{"value":"ok"}',
+              reasoning_content: "compat reasoning",
+            },
+          }],
+          usage: { prompt_tokens: 2, completion_tokens: 3, total_tokens: 5 },
+        }),
+      },
+    },
+  } as unknown as LlmClient;
+
+  const result = await runStructuredWithRetry({
+    llm,
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    lifecycle: { id: "non-stream-call", action: "select_relevant_pages" },
+    signal: new AbortController().signal,
+    onEvent: (event) => events.push(event),
+    transport: "non-stream",
+  });
+
+  assert.equal(result.value.value, "ok");
+  assert.deepEqual(
+    events
+      .filter((event) => event.kind === "llm_lifecycle")
+      .map((event) => event.kind === "llm_lifecycle" ? event.phase : ""),
+    ["preparing", "sent", "waiting", "producing", "validating"],
+  );
+  assert.ok(events.some((event) =>
+    event.kind === "assistant_text"
+    && event.isReasoning
+    && event.delta === "compat reasoning"));
+});
+
+test("structured repair closes the old lifecycle before opening a new ID", async () => {
+  const events: RunEvent[] = [];
+
+  const result = await runStructuredWithRetry({
+    llm: llmFromAttempts(["not json", '{"value":"ok"}']),
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 1,
+    callSite: "query.seeds",
+    lifecycle: { id: "repair-call", action: "select_relevant_pages" },
+    signal: new AbortController().signal,
+    onEvent: (event) => events.push(event),
+  });
+
+  assert.equal(result.value.value, "ok");
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  const firstRetry = lifecycle.findIndex((event) => event.phase === "retrying");
+  assert.ok(firstRetry >= 0);
+  assert.equal(lifecycle[firstRetry + 1]?.phase, "preparing");
+  assert.notEqual(lifecycle[firstRetry]?.id, lifecycle[firstRetry + 1]?.id);
+  assert.ok(lifecycle.every((event) => event.action === "select_relevant_pages"));
+});
+
+test("completionReasoning accepts native and compatibility completion fields", () => {
+  assert.equal(completionReasoning({ reasoning: "native" }), "native");
+  assert.equal(completionReasoning({ reasoning_content: "compat" }), "compat");
+  assert.equal(completionReasoning({ reasoning: 1, reasoning_content: null }), "");
 });

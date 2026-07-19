@@ -366,13 +366,13 @@ test("native raster Vision uses bounded prepared structured messages and rejects
     ) <= 20_000,
   );
   assert.match(JSON.stringify(seen[0].messages), /maximum semantic compression/i);
-  assert.equal(events.length, 1);
-  assert.equal(events[0].kind, "prompt_budget");
-  if (events[0].kind === "prompt_budget") {
-    assert.equal(events[0].callSite, "vision.analysis");
-    assert.equal(events[0].outputBudget, 321);
-    assert.equal(events[0].compressionProfile, "maximum");
-    assert.equal(events[0].actualInputTokens, 123);
+  const budgetEvent = events.find((event) => event.kind === "prompt_budget");
+  assert.ok(budgetEvent);
+  if (budgetEvent?.kind === "prompt_budget") {
+    assert.equal(budgetEvent.callSite, "vision.analysis");
+    assert.equal(budgetEvent.outputBudget, 321);
+    assert.equal(budgetEvent.compressionProfile, "maximum");
+    assert.equal(budgetEvent.actualInputTokens, 123);
   }
   assert.doesNotMatch(JSON.stringify(events), /AQID|visible text|box contains text/);
 });
@@ -990,8 +990,23 @@ test("analyzeAttachments forwards bounded Vision options to every native call", 
   );
 
   assert.equal(seen[0].max_tokens, 456);
+  assert.equal(seen[0].stream, false);
   assert.match(JSON.stringify(seen[0].messages), /minimum semantic compression/i);
   assert.equal(events.some((event) => event.kind === "prompt_budget"), true);
+  assert.deepEqual(
+    events
+      .filter((event) => event.kind === "llm_lifecycle")
+      .map((event) => event.kind === "llm_lifecycle" ? [event.action, event.phase] : []),
+    [
+      ["analyze_attachments", "preparing"],
+      ["analyze_attachments", "sent"],
+      ["analyze_attachments", "waiting"],
+      ["analyze_attachments", "producing"],
+      ["analyze_attachments", "validating"],
+      ["analyze_attachments", "applying"],
+      ["analyze_attachments", "completed"],
+    ],
+  );
 });
 
 test("Excalidraw uses one media unit with bounded profile and output cap", async () => {

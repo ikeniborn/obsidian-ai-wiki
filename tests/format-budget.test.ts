@@ -893,6 +893,11 @@ test("segmented format emits format.segment prompt-budget telemetry and aggregat
   assert.ok(budgetEvents.every((event) => event.estimatedInputTokens <= event.effectiveInputBudget));
   assert.ok(budgetEvents.every((event) => event.outputBudget === 123));
   assert.ok(budgetEvents.every((event) => event.actualInputTokens === 11));
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  assert.ok(lifecycle.length > 0);
+  assert.ok(lifecycle.every((event) => event.action === "format_note"));
+  assert.equal(lifecycle.at(-2)?.phase, "applying");
+  assert.equal(lifecycle.at(-1)?.phase, "completed");
 
   const statsEvents = events.filter((event) => event.kind === "llm_call_stats");
   assert.equal(statsEvents.length, seenParams.length);

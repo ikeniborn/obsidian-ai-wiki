@@ -2,7 +2,8 @@ import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "../domain";
 import type { IngestOutcome, LlmCallOptions, RunEvent, LlmClient, OnFileError } from "../types";
 import { VaultTools } from "../vault-tools";
-import { runStructuredStreaming, type StructuredSink } from "./structured-output";
+import { createLlmLifecycle, runStructuredStreaming, type StructuredSink } from "./structured-output";
+import { lifecycleEvent } from "../llm-lifecycle";
 import { DomainEntrySchema } from "./zod-schemas";
 import schemaTemplate from "../../templates/_wiki_schema.md";
 import initTemplate from "../../prompts/init.md";
@@ -201,6 +202,7 @@ async function* prepareDomainBootstrap(
       profile: { kind: "json-zod", schema: DomainEntrySchema },
       maxRetries: opts.structuredRetries ?? 1,
       callSite: "init.bootstrap",
+      lifecycle: createLlmLifecycle("bootstrap_domain"),
       signal,
       onEvent: () => {},
       transport: "non-stream",
@@ -208,6 +210,8 @@ async function* prepareDomainBootstrap(
       yield event;
     }
     parsed = sink.value!;
+    yield lifecycleEvent(sink.lifecycle!.id, sink.lifecycle!.action, "applying");
+    yield lifecycleEvent(sink.lifecycle!.id, sink.lifecycle!.action, "completed");
     yield { kind: "tool_result", ok: true, preview: `domain: ${parsed.id}` };
     if (sink.fullText) yield { kind: "assistant_text", delta: sink.fullText };
   } catch (error) {

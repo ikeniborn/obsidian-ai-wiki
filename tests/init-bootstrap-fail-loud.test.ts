@@ -633,9 +633,9 @@ test("bootstrap mapper events are yielded while delayed evidence preparation is 
     const next = await generator.next();
     assert.equal(next.done, false);
     if (!next.done
-      && next.value.kind === "tool_use"
-      && next.value.name === "Evidence mapping"
-      && (next.value.input as { callSite?: string }).callSite === "init.bootstrap-map") {
+      && next.value.kind === "llm_lifecycle"
+      && next.value.action === "extract_source_facts"
+      && next.value.phase === "preparing") {
       clearTimeout(timer);
       assert.equal(timedOut, false, "bootstrap mapper event was buffered until helper completion");
       assert.equal(mapperComplete, false);

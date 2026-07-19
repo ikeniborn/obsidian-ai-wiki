@@ -630,6 +630,30 @@ test("answerFromContext yields the first visible delta before the provider strea
 
   assert.equal(beforeRelease, "visible");
   assert.equal(event.delta, "QUERY_LIVE_FIRST");
+  const { events } = await drainGenerator(answerFromContext({
+    llm: { chat: { completions: { create: async () => successfulStream("QUERY_LIFECYCLE") } } } as unknown as LlmClient,
+    model: "mock",
+    opts: { inputBudgetTokens: 10_000 },
+    signal: new AbortController().signal,
+    systemPrompt: "Lifecycle Query contract.",
+    question: "Lifecycle Query question",
+    chunks: [],
+    wikiLinkValidationRetries: 0,
+  }));
+  assert.deepEqual(
+    events
+      .filter((item) => item.kind === "llm_lifecycle")
+      .map((item) => item.kind === "llm_lifecycle" ? [item.action, item.phase] : []),
+    [
+      ["answer_question", "preparing"],
+      ["answer_question", "sent"],
+      ["answer_question", "waiting"],
+      ["answer_question", "producing"],
+      ["answer_question", "validating"],
+      ["answer_question", "applying"],
+      ["answer_question", "completed"],
+    ],
+  );
 });
 
 test("runLintChat yields the first visible delta before the provider stream completes", async () => {
@@ -735,6 +759,22 @@ test("live Chat preserves prompt usage, output usage, and result semantics", asy
   assert.ok(result && result.kind === "result");
   assert.equal(result.text, "CHAT_USAGE_ANSWER");
   assert.equal(result.outputTokens, 5);
+  assert.deepEqual(
+    events
+      .filter((event) => event.kind === "llm_lifecycle")
+      .map((event) => event.kind === "llm_lifecycle"
+        ? [event.action, event.phase]
+        : []),
+    [
+      ["apply_lint_fixes", "preparing"],
+      ["apply_lint_fixes", "sent"],
+      ["apply_lint_fixes", "waiting"],
+      ["apply_lint_fixes", "producing"],
+      ["apply_lint_fixes", "validating"],
+      ["apply_lint_fixes", "applying"],
+      ["apply_lint_fixes", "completed"],
+    ],
+  );
 });
 
 test("answerFromContext does not repack a context error after a visible delta", async () => {

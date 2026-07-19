@@ -5,14 +5,17 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import type {
   LlmCallOptions,
   LlmClient,
+  LlmLifecycleAction,
   RunEvent,
   StructuredCallSite,
 } from "../types";
+import { lifecycleEvent } from "../llm-lifecycle";
 import { classifyContextError, PromptBudgetExceededError } from "../prompt-budget";
 import { structuralErrorCounter } from "../structural-error-counter";
 import {
   buildChatParams,
   buildLlmCallStatsEvent,
+  completionReasoning,
   extractStreamDeltas,
   extractUsage,
   isJsonModeError,
@@ -31,6 +34,18 @@ const repairJson = [
 export type { StructuredCallSite } from "../types";
 
 type ResponseFormatMode = "json_schema" | "json_object" | "none";
+let lifecycleSequence = 0;
+
+export function createLlmLifecycle(action: LlmLifecycleAction): {
+  id: string;
+  action: LlmLifecycleAction;
+} {
+  lifecycleSequence += 1;
+  return {
+    id: `llm-${Date.now().toString(36)}-${lifecycleSequence.toString(36)}`,
+    action,
+  };
+}
 
 export type StructuredProfile<T> =
   | { kind: "json-zod"; schema: z.ZodSchema<T> }
@@ -67,9 +82,12 @@ export interface RunStructuredArgs<T> {
   profile: StructuredProfile<T>;
   maxRetries: number;
   callSite: StructuredCallSite;
+  lifecycle: { id: string; action: LlmLifecycleAction };
   signal: AbortSignal;
   onEvent: (ev: RunEvent) => void;
   transport?: "stream" | "non-stream";
+  validationExhaustionPhase?: "retrying" | "failed";
+  contextErrorsRetry?: boolean;
 }
 
 export interface RunStructuredResult<T> {
@@ -77,6 +95,7 @@ export interface RunStructuredResult<T> {
   outputTokens: number;
   inputTokens?: number;
   fullText: string;
+  lifecycle: { id: string; action: LlmLifecycleAction };
 }
 
 interface CallResult {
@@ -85,6 +104,57 @@ interface CallResult {
   inputTokens?: number;
   statsEvent?: RunEvent;
   finishReason?: string | null;
+}
+
+interface StructuredLifecycle {
+  begin(attempt: number): void;
+  phase(phase: "sent" | "waiting" | "producing" | "validating"): void;
+  close(phase: "retrying" | "failed" | "cancelled"): void;
+  isActive(): boolean;
+  current(): { id: string; action: LlmLifecycleAction };
+}
+
+function structuredLifecycle<T>(args: RunStructuredArgs<T>): StructuredLifecycle {
+  // TypeScript callers must provide a descriptor. Keep legacy JavaScript
+  // integrations observable while they migrate to the required contract.
+  const descriptor = args.lifecycle ?? createLlmLifecycle("select_relevant_pages");
+  let sequence = 0;
+  let active = false;
+  let currentId = descriptor.id;
+  const emit = (
+    phase: Extract<RunEvent, { kind: "llm_lifecycle" }>["phase"],
+    attempt?: number,
+  ) => {
+    args.onEvent(lifecycleEvent(
+      currentId,
+      descriptor.action,
+      phase,
+      Date.now(),
+      {
+        callSite: args.callSite,
+        transport: args.transport ?? "stream",
+        ...(attempt === undefined ? {} : { attempt }),
+      },
+    ));
+  };
+  return {
+    begin(attempt) {
+      currentId = sequence === 0 ? descriptor.id : `${descriptor.id}:retry-${sequence}`;
+      sequence += 1;
+      active = true;
+      emit("preparing", attempt);
+    },
+    phase(phase) {
+      if (active) emit(phase);
+    },
+    close(phase) {
+      if (!active) return;
+      emit(phase);
+      active = false;
+    },
+    isActive: () => active,
+    current: () => ({ id: currentId, action: descriptor.action }),
+  };
 }
 
 function fallbackMode(mode: ResponseFormatMode): ResponseFormatMode | null {
@@ -185,25 +255,34 @@ async function streamOnce(
   opts: LlmCallOptions,
   signal: AbortSignal,
   onEvent: (ev: RunEvent) => void,
+  lifecycle: StructuredLifecycle,
 ): Promise<CallResult> {
   const params = buildChatParams(model, messages, opts, true);
   let fullText = "";
   let outputTokens = 0;
   let finishReason: string | null | undefined;
   let streamChunkConsumed = false;
+  const requestStartMs = Date.now();
 
   try {
-    const requestStartMs = Date.now();
-    const rawStream = await llm.chat.completions.create(
+    const request = llm.chat.completions.create(
       { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
       { signal },
     );
+    lifecycle.phase("sent");
+    lifecycle.phase("waiting");
+    const rawStream = await request;
     const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
+    let producing = false;
     for await (const chunk of stream) {
       streamChunkConsumed = true;
       const reason = chunk.choices[0]?.finish_reason;
       if (reason !== undefined) finishReason = reason;
       const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
+      if (!producing && (reasoning.trim() || content.trim())) {
+        lifecycle.phase("producing");
+        producing = true;
+      }
       if (reasoning) onEvent({ kind: "assistant_text", delta: reasoning, isReasoning: true });
       if (content) {
         fullText += content;
@@ -234,6 +313,7 @@ async function streamOnce(
     if (isJsonModeError(e)) throw e;
     if (!shouldFallbackStreamToNonStream(e, signal)) throw e;
     const params2 = buildChatParams(model, messages, opts);
+    const fallbackStartMs = Date.now();
     const resp = await llm.chat.completions.create(
       { ...params2, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
       { signal },
@@ -247,6 +327,14 @@ async function streamOnce(
       inputTokens: typeof resp.usage?.prompt_tokens === "number"
         ? resp.usage.prompt_tokens
         : undefined,
+      statsEvent: resp.usage
+        ? buildLlmCallStatsEvent({
+            inputTokens: resp.usage.prompt_tokens,
+            outputTokens: resp.usage.completion_tokens,
+            ttftMs: Math.max(0, fallbackStartMs - requestStartMs),
+            llmDurationMs: Math.max(1, Date.now() - fallbackStartMs),
+          })
+        : undefined,
     };
   }
 }
@@ -257,22 +345,69 @@ async function nonStreamOnce(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   opts: LlmCallOptions,
   signal: AbortSignal,
+  onEvent: (ev: RunEvent) => void,
+  lifecycle: StructuredLifecycle,
 ): Promise<CallResult> {
   const params = buildChatParams(model, messages, opts);
-  const response = await llm.chat.completions.create(
+  const requestStartMs = Date.now();
+  const request = llm.chat.completions.create(
     { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
     { signal },
   );
+  lifecycle.phase("sent");
+  lifecycle.phase("waiting");
+  const response = await request;
+  if (
+    response
+    && typeof response === "object"
+    && Symbol.asyncIterator in response
+  ) {
+    let fullText = "";
+    let outputTokens = 0;
+    let inputTokens: number | undefined;
+    let finishReason: string | null | undefined;
+    let producing = false;
+    for await (const chunk of response as unknown as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>) {
+      const reason = chunk.choices[0]?.finish_reason;
+      if (reason !== undefined) finishReason = reason;
+      const deltas = extractStreamDeltas(chunk);
+      if (!producing && (deltas.reasoning.trim() || deltas.content.trim())) {
+        lifecycle.phase("producing");
+        producing = true;
+      }
+      if (deltas.reasoning) {
+        onEvent({ kind: "assistant_text", delta: deltas.reasoning, isReasoning: true });
+      }
+      fullText += deltas.content;
+      if (deltas.outputTokens !== undefined) outputTokens += deltas.outputTokens;
+      if (deltas.inputTokens !== undefined) inputTokens = deltas.inputTokens;
+    }
+    if (finishReason === "length") throw new StructuredOutputTruncatedError("length");
+    return { fullText, outputTokens, inputTokens, finishReason };
+  }
   if (response.choices[0]?.finish_reason === "length") {
     throw new StructuredOutputTruncatedError("length");
   }
+  const message = response.choices[0]?.message;
+  const reasoning = completionReasoning(message);
+  const fullText = message?.content ?? "";
+  if (reasoning.trim() || fullText.trim()) lifecycle.phase("producing");
+  if (reasoning) onEvent({ kind: "assistant_text", delta: reasoning, isReasoning: true });
   return {
-    fullText: response.choices[0]?.message?.content ?? "",
+    fullText,
     outputTokens: extractUsage(response) ?? 0,
     inputTokens: typeof response.usage?.prompt_tokens === "number"
       ? response.usage.prompt_tokens
       : undefined,
     finishReason: response.choices[0]?.finish_reason,
+    statsEvent: response.usage
+      ? buildLlmCallStatsEvent({
+          inputTokens: response.usage.prompt_tokens,
+          outputTokens: response.usage.completion_tokens,
+          ttftMs: Math.max(0, Date.now() - requestStartMs),
+          llmDurationMs: Math.max(1, Date.now() - requestStartMs),
+        })
+      : undefined,
   };
 }
 
@@ -296,6 +431,7 @@ async function callWithFormatFallback<T>(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   mode: ResponseFormatMode,
   attempt: number,
+  lifecycle: StructuredLifecycle,
 ): Promise<{ result: CallResult; mode: ResponseFormatMode }> {
   let currentMode = mode;
   while (true) {
@@ -304,10 +440,11 @@ async function callWithFormatFallback<T>(
       : { ...args.opts, jsonMode: false, jsonSchema: undefined };
 
     try {
+      lifecycle.begin(attempt);
       return {
         result: args.transport === "non-stream"
-          ? await nonStreamOnce(args.llm, args.model, messages, callOpts, args.signal)
-          : await streamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent),
+          ? await nonStreamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle)
+          : await streamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle),
         mode: currentMode,
       };
     } catch (e) {
@@ -318,6 +455,7 @@ async function callWithFormatFallback<T>(
       if (args.profile.kind !== "json-zod" || !isJsonModeError(e)) throw e;
       const next = fallbackMode(currentMode);
       if (!next) throw e;
+      lifecycle.close("retrying");
       emitResponseFormatFallback(args.onEvent, args.callSite, attempt, currentMode, next);
       currentMode = next;
     }
@@ -330,64 +468,92 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
   let mode = initialMode(profile, args.opts);
   let totalTokens = 0;
   let lastError: Error = new Error("no attempts");
+  const lifecycle = structuredLifecycle(args);
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    if (signal.aborted) {
-      const err = new Error("aborted");
-      err.name = "AbortError";
-      throw err;
-    }
-    if (attempt > 0) onEvent({ kind: "rule_fired", ruleId: "parseWithRetry", count: 1 });
+  try {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      if (signal.aborted) {
+        const err = new Error("aborted");
+        err.name = "AbortError";
+        throw err;
+      }
+      if (attempt > 0) onEvent({ kind: "rule_fired", ruleId: "parseWithRetry", count: 1 });
 
-    const call = await callWithFormatFallback(args, messages, mode, attempt);
-    mode = call.mode;
-    const { fullText, outputTokens, inputTokens, statsEvent } = call.result;
-    totalTokens += outputTokens;
-    if (statsEvent) onEvent(statsEvent);
+      const call = await callWithFormatFallback(args, messages, mode, attempt, lifecycle);
+      mode = call.mode;
+      const { fullText, outputTokens, inputTokens, statsEvent } = call.result;
+      totalTokens += outputTokens;
+      if (statsEvent) onEvent(statsEvent);
 
-    if (!fullText.trim()) {
-      lastError = new Error("Empty structured output");
-      emitStructuralError(onEvent, callSite, "empty_output", attempt, null, lastError.message);
-      structuralErrorCounter.record(null, attempt);
+      if (!fullText.trim()) {
+        lastError = new Error("Empty structured output");
+        emitStructuralError(onEvent, callSite, "empty_output", attempt, null, lastError.message);
+        structuralErrorCounter.record(null, attempt);
 
-      const next = profile.kind === "json-zod" ? fallbackMode(mode) : null;
-      if (next) {
-        emitResponseFormatFallback(onEvent, callSite, attempt, mode, next);
-        mode = next;
+        const next = profile.kind === "json-zod" ? fallbackMode(mode) : null;
+        if (next) {
+          emitResponseFormatFallback(onEvent, callSite, attempt, mode, next);
+          mode = next;
+        }
+
+        if (attempt === maxRetries) {
+          lifecycle.close(args.validationExhaustionPhase ?? "failed");
+          throw new StructuredValidationError(callSite, attempt + 1, lastError);
+        }
+        lifecycle.close("retrying");
+        messages = [
+          ...messages,
+          { role: "assistant", content: fullText },
+          { role: "user", content: repairPrompt(profile, fullText, lastError) },
+        ];
+        continue;
       }
 
-      if (attempt === maxRetries) throw new StructuredValidationError(callSite, attempt + 1, lastError);
-      messages = [
-        ...messages,
-        { role: "assistant", content: fullText },
-        { role: "user", content: repairPrompt(profile, fullText, lastError) },
-      ];
-      continue;
-    }
-
-    try {
-      const value = parseAndValidate(profile, fullText);
-      if (attempt > 0) {
-        emitStructuralError(onEvent, callSite, "schema_validate", attempt, true, "retry succeeded");
+      try {
+        lifecycle.phase("validating");
+        const value = parseAndValidate(profile, fullText);
+        if (attempt > 0) {
+          emitStructuralError(onEvent, callSite, "schema_validate", attempt, true, "retry succeeded");
+        }
+        structuralErrorCounter.record(true, attempt);
+        return {
+          value,
+          outputTokens: totalTokens,
+          inputTokens,
+          fullText,
+          lifecycle: lifecycle.current(),
+        };
+      } catch (e) {
+        lastError = e as Error;
+        const isLast = attempt === maxRetries;
+        const errorType = classifyError(profile, lastError);
+        emitStructuralError(onEvent, callSite, errorType, attempt, isLast ? false : null, lastError.message);
+        structuralErrorCounter.record(isLast ? false : null, attempt);
+        if (isLast) {
+          lifecycle.close(args.validationExhaustionPhase ?? "failed");
+          throw new StructuredValidationError(callSite, attempt + 1, lastError);
+        }
+        lifecycle.close("retrying");
+        messages = [
+          ...messages,
+          { role: "assistant", content: fullText },
+          { role: "user", content: repairPrompt(profile, fullText, lastError) },
+        ];
       }
-      structuralErrorCounter.record(true, attempt);
-      return { value, outputTokens: totalTokens, inputTokens, fullText };
-    } catch (e) {
-      lastError = e as Error;
-      const isLast = attempt === maxRetries;
-      const errorType = classifyError(profile, lastError);
-      emitStructuralError(onEvent, callSite, errorType, attempt, isLast ? false : null, lastError.message);
-      structuralErrorCounter.record(isLast ? false : null, attempt);
-      if (isLast) throw new StructuredValidationError(callSite, attempt + 1, lastError);
-      messages = [
-        ...messages,
-        { role: "assistant", content: fullText },
-        { role: "user", content: repairPrompt(profile, fullText, lastError) },
-      ];
     }
+    throw new StructuredValidationError(callSite, maxRetries + 1, lastError);
+  } catch (error) {
+    if (lifecycle.isActive()) {
+      lifecycle.close(
+        signal.aborted || (error as Error).name === "AbortError"
+          ? "cancelled"
+          : args.contextErrorsRetry && classifyContextError(error) !== null
+            ? "retrying"
+          : "failed",
+      );
+    }
+    throw error;
   }
-
-  throw new StructuredValidationError(callSite, maxRetries + 1, lastError);
 }
 
 export interface StructuredSink<T> {
@@ -395,6 +561,7 @@ export interface StructuredSink<T> {
   inputTokens?: number;
   outputTokens?: number;
   fullText?: string;
+  lifecycle?: { id: string; action: LlmLifecycleAction };
 }
 
 /**
@@ -421,6 +588,7 @@ export async function* runStructuredStreaming<T>(
       sink.inputTokens = r.inputTokens;
       sink.outputTokens = r.outputTokens;
       sink.fullText = r.fullText;
+      sink.lifecycle = r.lifecycle;
     })
     .catch((e) => { error = e; })
     .finally(() => { settled = true; wake?.(); });

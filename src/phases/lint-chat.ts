@@ -1,8 +1,9 @@
 import type OpenAI from "openai";
 import type { DomainEntry } from "../domain";
-import type { LlmCallOptions, RunEvent, LlmClient, RunRequest } from "../types";
+import type { LlmCallOptions, LlmClient, LlmLifecycleAction, RunEvent, RunRequest } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { runStructuredWithRetry } from "./structured-output";
+import { createLlmLifecycle, runStructuredWithRetry } from "./structured-output";
+import { lifecycleEvent } from "../llm-lifecycle";
 import { runWithContextRepack, PromptBudgetExceededError } from "../prompt-budget";
 import { applyPagePatch, inspectPatchablePage, type PatchPage, type ReplaceSectionAuthority } from "../section-patches";
 import { LintChatPatchSchema } from "./zod-schemas";
@@ -283,7 +284,11 @@ export async function* runLintFixChat(
   // 3. Structured LLM call
   yield { kind: "tool_use", name: "Applying fixes", input: { pages: String(pages.size) } };
   const pwtEvents: RunEvent[] = [];
-  let result: { value: LintChatPatchResponse; outputTokens: number };
+  let result: {
+    value: LintChatPatchResponse;
+    outputTokens: number;
+    lifecycle: { id: string; action: LlmLifecycleAction };
+  };
   try {
     result = await runWithContextRepack({
       callSite: "lint-chat.patch",
@@ -316,10 +321,18 @@ export async function* runLintFixChat(
           profile: { kind: "json-zod", schema: LintChatPatchSchema },
           maxRetries: opts.structuredRetries ?? 1,
           callSite: "lint-chat.patch",
+          lifecycle: createLlmLifecycle("apply_lint_fixes"),
           signal,
           onEvent: (ev) => pwtEvents.push(ev),
+          transport: "non-stream",
+          contextErrorsRetry: true,
         });
-        return { value: r.value, outputTokens: r.outputTokens, inputTokens: r.inputTokens };
+        return {
+          value: r.value,
+          outputTokens: r.outputTokens,
+          inputTokens: r.inputTokens,
+          lifecycle: r.lifecycle,
+        };
       },
       onEvent: (ev) => pwtEvents.push(ev),
     });
@@ -336,6 +349,7 @@ export async function* runLintFixChat(
   const parsed = result.value;
 
   // 4. Apply section patches only
+  yield lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying");
   const authorities = new Map<string, ReplaceSectionAuthority[]>();
   for (const [path, content] of activePages) authorities.set(path, pageAuthorities(path, content));
   const writtenPaths: string[] = [];
@@ -366,6 +380,7 @@ export async function* runLintFixChat(
       continue;
     }
   }
+  yield lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "completed");
 
   // 5. Emit result
   yield {

@@ -7,6 +7,7 @@ import type {
 } from "../types";
 import {
   buildChatParams,
+  completionReasoning,
   langInstruction,
   parseStructured,
   prepareChatMessages,
@@ -27,6 +28,8 @@ import {
   shrinkInputBudget,
   type ContextErrorDetails,
 } from "../prompt-budget";
+import { createLlmLifecycle } from "./structured-output";
+import { lifecycleEvent } from "../llm-lifecycle";
 import { VisionRecognitionBatchSchema } from "./zod-schemas";
 import {
   batchPdfPages,
@@ -206,7 +209,12 @@ async function callVisionLlm(
   options: ResolvedVisionAnalysisOptions,
   effectiveInputBudget: number = options.inputBudgetTokens,
 ): Promise<VisionRecognitionRecord[]> {
-  signal.throwIfAborted();
+  const lifecycle = createLlmLifecycle("analyze_attachments");
+  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "preparing"));
+  if (signal.aborted) {
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "cancelled"));
+    signal.throwIfAborted();
+  }
   const callOptions = visionCallOptions(
     options,
     language,
@@ -229,6 +237,15 @@ async function callVisionLlm(
         retryReason: "preflight_budget_exceeded",
       }));
     }
+    options.onEvent?.(lifecycleEvent(
+      lifecycle.id,
+      lifecycle.action,
+      signal.aborted || (error as Error).name === "AbortError"
+        ? "cancelled"
+        : error instanceof PromptBudgetExceededError
+          ? "retrying"
+          : "failed",
+    ));
     throw error;
   }
 
@@ -238,11 +255,23 @@ async function callVisionLlm(
   let response: OpenAI.Chat.ChatCompletion;
   try {
     signal.throwIfAborted();
-    response = await llm.chat.completions.create(
+    const request = llm.chat.completions.create(
       { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
       { signal },
     );
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "sent"));
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "waiting"));
+    response = await request;
   } catch (error) {
+    options.onEvent?.(lifecycleEvent(
+      lifecycle.id,
+      lifecycle.action,
+      signal.aborted || (error as Error).name === "AbortError"
+        ? "cancelled"
+        : classifyContextError(error) !== null
+          ? "retrying"
+          : "failed",
+    ));
     options.onEvent?.(createPromptBudgetEvent({
       callSite: "vision.analysis",
       configuredInputBudget: options.inputBudgetTokens,
@@ -258,7 +287,20 @@ async function callVisionLlm(
     throw error;
   }
 
-  signal.throwIfAborted();
+  if (signal.aborted) {
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "cancelled"));
+    signal.throwIfAborted();
+  }
+  const message = response.choices[0]?.message;
+  const reasoning = completionReasoning(message);
+  const content = message?.content ?? "";
+  if (reasoning.trim() || content.trim()) {
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "producing"));
+  }
+  if (reasoning) {
+    options.onEvent?.({ kind: "assistant_text", delta: reasoning, isReasoning: true });
+  }
+  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "validating"));
   options.onEvent?.(createPromptBudgetEvent({
     callSite: "vision.analysis",
     configuredInputBudget: options.inputBudgetTokens,
@@ -269,10 +311,17 @@ async function callVisionLlm(
     compressionProfile: options.compressionProfile,
     contextUnits: pages.length,
   }));
-  const parsed = VisionRecognitionBatchSchema.parse(
-    parseStructured(response.choices[0]?.message?.content ?? ""),
-  );
-  return validateRecognitionCoverage(parsed.records, pages.map((page) => page.pageId));
+  let records: VisionRecognitionRecord[];
+  try {
+    const parsed = VisionRecognitionBatchSchema.parse(parseStructured(content));
+    records = validateRecognitionCoverage(parsed.records, pages.map((page) => page.pageId));
+  } catch (error) {
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "failed"));
+    throw error;
+  }
+  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "applying"));
+  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "completed"));
+  return records;
 }
 
 function imageSystem(language: OutputLanguage): string {

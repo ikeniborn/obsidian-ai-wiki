@@ -96,6 +96,15 @@ function jsonLlm(output: string, seen: Record<string, unknown>[] = []): LlmClien
       completions: {
         create: async (params: unknown) => {
           seen.push(params as Record<string, unknown>);
+          if ((params as { stream?: boolean }).stream === false) {
+            return {
+              choices: [{
+                finish_reason: "stop",
+                message: { role: "assistant", content: output },
+              }],
+              usage: { prompt_tokens: 10, completion_tokens: 3, total_tokens: 13 },
+            };
+          }
           return (async function* () {
             yield chunk(output);
             yield usageChunk();
@@ -401,7 +410,24 @@ test("lint-chat lexical selection ignores unrelated paths present only in the fu
   assert.equal(adapter.reads.filter((path) => path.endsWith(".md")).length, 1);
   assert.equal(adapter.reads.some((path) => path.endsWith("wiki_d_page_7.md")), true);
   assert.ok(seen.length > 0);
+  assert.equal(seen.every((request) => request.stream === false), true);
   assert.ok(estimatePreparedMessages((seen[0].messages ?? []) as OpenAI.Chat.ChatCompletionMessageParam[]) <= 10_000);
+  assert.deepEqual(
+    events
+      .filter((event) => event.kind === "llm_lifecycle")
+      .map((event) => event.kind === "llm_lifecycle"
+        ? [event.action, event.phase]
+        : []),
+    [
+      ["apply_lint_fixes", "preparing"],
+      ["apply_lint_fixes", "sent"],
+      ["apply_lint_fixes", "waiting"],
+      ["apply_lint_fixes", "producing"],
+      ["apply_lint_fixes", "validating"],
+      ["apply_lint_fixes", "applying"],
+      ["apply_lint_fixes", "completed"],
+    ],
+  );
   assert.equal(events.some((event) => event.kind === "result" && event.text === "ok"), true);
 });
 

@@ -41952,6 +41952,12 @@ function extractUsage(resp) {
   const tok = resp.usage?.completion_tokens;
   return typeof tok === "number" ? tok : void 0;
 }
+function completionReasoning(message) {
+  if (message === null || typeof message !== "object") return "";
+  const record = message;
+  const reasoning = record.reasoning ?? record.reasoning_content;
+  return typeof reasoning === "string" ? reasoning : "";
+}
 function buildChatParams(model, messages, opts, stream = false) {
   const msgs = prepareChatMessages(messages, opts);
   if (opts.inputBudgetTokens !== void 0) {
@@ -42316,6 +42322,16 @@ function emptyLlmLifecycleState() {
 }
 function isTerminalLlmLifecyclePhase(phase) {
   return TERMINAL_PHASES.has(phase);
+}
+function lifecycleEvent(id, action, phase, atMs = Date.now(), diagnostics) {
+  return {
+    kind: "llm_lifecycle",
+    id,
+    action,
+    phase,
+    atMs,
+    ...diagnostics ? { diagnostics } : {}
+  };
 }
 function reduceLlmLifecycle(state, event) {
   const current = state.calls[event.id];
@@ -50796,6 +50812,14 @@ var repairJson = [
   "",
   "Return ONLY a single valid JSON object matching the schema. No markdown fences, no <think> tags, no commentary."
 ].join("\n");
+var lifecycleSequence = 0;
+function createLlmLifecycle(action) {
+  lifecycleSequence += 1;
+  return {
+    id: `llm-${Date.now().toString(36)}-${lifecycleSequence.toString(36)}`,
+    action
+  };
+}
 var StructuredValidationError = class extends Error {
   constructor(callSite, attempts, lastError) {
     super(`[${callSite}] structural validation failed after ${attempts} attempt(s): ${lastError.message}`);
@@ -50816,6 +50840,43 @@ var StructuredOutputTruncatedError = class extends Error {
   }
   finishReason;
 };
+function structuredLifecycle(args) {
+  const descriptor = args.lifecycle ?? createLlmLifecycle("select_relevant_pages");
+  let sequence = 0;
+  let active = false;
+  let currentId = descriptor.id;
+  const emit = (phase, attempt) => {
+    args.onEvent(lifecycleEvent(
+      currentId,
+      descriptor.action,
+      phase,
+      Date.now(),
+      {
+        callSite: args.callSite,
+        transport: args.transport ?? "stream",
+        ...attempt === void 0 ? {} : { attempt }
+      }
+    ));
+  };
+  return {
+    begin(attempt) {
+      currentId = sequence === 0 ? descriptor.id : `${descriptor.id}:retry-${sequence}`;
+      sequence += 1;
+      active = true;
+      emit("preparing", attempt);
+    },
+    phase(phase) {
+      if (active) emit(phase);
+    },
+    close(phase) {
+      if (!active) return;
+      emit(phase);
+      active = false;
+    },
+    isActive: () => active,
+    current: () => ({ id: currentId, action: descriptor.action })
+  };
+}
 function fallbackMode(mode) {
   if (mode === "json_schema") return "json_object";
   if (mode === "json_object") return "none";
@@ -50880,24 +50941,32 @@ function repairPrompt(profile, lastText, lastError) {
   }
   return lastError instanceof ZodError ? formatZodFeedback(lastError, lastText) : formatZodFeedback(null, lastText);
 }
-async function streamOnce(llm, model, messages, opts, signal, onEvent) {
+async function streamOnce(llm, model, messages, opts, signal, onEvent, lifecycle) {
   const params = buildChatParams(model, messages, opts, true);
   let fullText = "";
   let outputTokens = 0;
   let finishReason;
   let streamChunkConsumed = false;
+  const requestStartMs = Date.now();
   try {
-    const requestStartMs = Date.now();
-    const rawStream = await llm.chat.completions.create(
+    const request = llm.chat.completions.create(
       { ...params, stream: true },
       { signal }
     );
+    lifecycle.phase("sent");
+    lifecycle.phase("waiting");
+    const rawStream = await request;
     const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
+    let producing = false;
     for await (const chunk of stream) {
       streamChunkConsumed = true;
       const reason = chunk.choices[0]?.finish_reason;
       if (reason !== void 0) finishReason = reason;
       const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
+      if (!producing && (reasoning.trim() || content.trim())) {
+        lifecycle.phase("producing");
+        producing = true;
+      }
       if (reasoning) onEvent({ kind: "assistant_text", delta: reasoning, isReasoning: true });
       if (content) {
         fullText += content;
@@ -50921,6 +50990,7 @@ async function streamOnce(llm, model, messages, opts, signal, onEvent) {
     if (isJsonModeError(e)) throw e;
     if (!shouldFallbackStreamToNonStream(e, signal)) throw e;
     const params2 = buildChatParams(model, messages, opts);
+    const fallbackStartMs = Date.now();
     const resp = await llm.chat.completions.create(
       { ...params2, stream: false },
       { signal }
@@ -50931,24 +51001,69 @@ async function streamOnce(llm, model, messages, opts, signal, onEvent) {
     return {
       fullText: resp.choices[0]?.message?.content ?? "",
       outputTokens: extractUsage(resp) ?? 0,
-      inputTokens: typeof resp.usage?.prompt_tokens === "number" ? resp.usage.prompt_tokens : void 0
+      inputTokens: typeof resp.usage?.prompt_tokens === "number" ? resp.usage.prompt_tokens : void 0,
+      statsEvent: resp.usage ? buildLlmCallStatsEvent({
+        inputTokens: resp.usage.prompt_tokens,
+        outputTokens: resp.usage.completion_tokens,
+        ttftMs: Math.max(0, fallbackStartMs - requestStartMs),
+        llmDurationMs: Math.max(1, Date.now() - fallbackStartMs)
+      }) : void 0
     };
   }
 }
-async function nonStreamOnce(llm, model, messages, opts, signal) {
+async function nonStreamOnce(llm, model, messages, opts, signal, onEvent, lifecycle) {
   const params = buildChatParams(model, messages, opts);
-  const response = await llm.chat.completions.create(
+  const requestStartMs = Date.now();
+  const request = llm.chat.completions.create(
     { ...params, stream: false },
     { signal }
   );
+  lifecycle.phase("sent");
+  lifecycle.phase("waiting");
+  const response = await request;
+  if (response && typeof response === "object" && Symbol.asyncIterator in response) {
+    let fullText2 = "";
+    let outputTokens = 0;
+    let inputTokens;
+    let finishReason;
+    let producing = false;
+    for await (const chunk of response) {
+      const reason = chunk.choices[0]?.finish_reason;
+      if (reason !== void 0) finishReason = reason;
+      const deltas = extractStreamDeltas(chunk);
+      if (!producing && (deltas.reasoning.trim() || deltas.content.trim())) {
+        lifecycle.phase("producing");
+        producing = true;
+      }
+      if (deltas.reasoning) {
+        onEvent({ kind: "assistant_text", delta: deltas.reasoning, isReasoning: true });
+      }
+      fullText2 += deltas.content;
+      if (deltas.outputTokens !== void 0) outputTokens += deltas.outputTokens;
+      if (deltas.inputTokens !== void 0) inputTokens = deltas.inputTokens;
+    }
+    if (finishReason === "length") throw new StructuredOutputTruncatedError("length");
+    return { fullText: fullText2, outputTokens, inputTokens, finishReason };
+  }
   if (response.choices[0]?.finish_reason === "length") {
     throw new StructuredOutputTruncatedError("length");
   }
+  const message = response.choices[0]?.message;
+  const reasoning = completionReasoning(message);
+  const fullText = message?.content ?? "";
+  if (reasoning.trim() || fullText.trim()) lifecycle.phase("producing");
+  if (reasoning) onEvent({ kind: "assistant_text", delta: reasoning, isReasoning: true });
   return {
-    fullText: response.choices[0]?.message?.content ?? "",
+    fullText,
     outputTokens: extractUsage(response) ?? 0,
     inputTokens: typeof response.usage?.prompt_tokens === "number" ? response.usage.prompt_tokens : void 0,
-    finishReason: response.choices[0]?.finish_reason
+    finishReason: response.choices[0]?.finish_reason,
+    statsEvent: response.usage ? buildLlmCallStatsEvent({
+      inputTokens: response.usage.prompt_tokens,
+      outputTokens: response.usage.completion_tokens,
+      ttftMs: Math.max(0, Date.now() - requestStartMs),
+      llmDurationMs: Math.max(1, Date.now() - requestStartMs)
+    }) : void 0
   };
 }
 function parseAndValidate(profile, fullText) {
@@ -50962,13 +51077,14 @@ function classifyError(profile, err) {
   if (err instanceof ZodError) return "schema_validate";
   return "json_parse";
 }
-async function callWithFormatFallback(args, messages, mode, attempt) {
+async function callWithFormatFallback(args, messages, mode, attempt, lifecycle) {
   let currentMode = mode;
   while (true) {
     const callOpts = args.profile.kind === "json-zod" ? optsForMode(args.opts, currentMode, args.callSite, args.profile.schema) : { ...args.opts, jsonMode: false, jsonSchema: void 0 };
     try {
+      lifecycle.begin(attempt);
       return {
-        result: args.transport === "non-stream" ? await nonStreamOnce(args.llm, args.model, messages, callOpts, args.signal) : await streamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent),
+        result: args.transport === "non-stream" ? await nonStreamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle) : await streamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle),
         mode: currentMode
       };
     } catch (e) {
@@ -50976,6 +51092,7 @@ async function callWithFormatFallback(args, messages, mode, attempt) {
       if (args.profile.kind !== "json-zod" || !isJsonModeError(e)) throw e;
       const next = fallbackMode(currentMode);
       if (!next) throw e;
+      lifecycle.close("retrying");
       emitResponseFormatFallback(args.onEvent, args.callSite, attempt, currentMode, next);
       currentMode = next;
     }
@@ -50987,57 +51104,82 @@ async function runStructuredWithRetry(args) {
   let mode = initialMode(profile, args.opts);
   let totalTokens = 0;
   let lastError = new Error("no attempts");
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    if (signal.aborted) {
-      const err = new Error("aborted");
-      err.name = "AbortError";
-      throw err;
-    }
-    if (attempt > 0) onEvent({ kind: "rule_fired", ruleId: "parseWithRetry", count: 1 });
-    const call = await callWithFormatFallback(args, messages, mode, attempt);
-    mode = call.mode;
-    const { fullText, outputTokens, inputTokens, statsEvent } = call.result;
-    totalTokens += outputTokens;
-    if (statsEvent) onEvent(statsEvent);
-    if (!fullText.trim()) {
-      lastError = new Error("Empty structured output");
-      emitStructuralError(onEvent, callSite, "empty_output", attempt, null, lastError.message);
-      structuralErrorCounter.record(null, attempt);
-      const next = profile.kind === "json-zod" ? fallbackMode(mode) : null;
-      if (next) {
-        emitResponseFormatFallback(onEvent, callSite, attempt, mode, next);
-        mode = next;
+  const lifecycle = structuredLifecycle(args);
+  try {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      if (signal.aborted) {
+        const err = new Error("aborted");
+        err.name = "AbortError";
+        throw err;
       }
-      if (attempt === maxRetries) throw new StructuredValidationError(callSite, attempt + 1, lastError);
-      messages = [
-        ...messages,
-        { role: "assistant", content: fullText },
-        { role: "user", content: repairPrompt(profile, fullText, lastError) }
-      ];
-      continue;
-    }
-    try {
-      const value = parseAndValidate(profile, fullText);
-      if (attempt > 0) {
-        emitStructuralError(onEvent, callSite, "schema_validate", attempt, true, "retry succeeded");
+      if (attempt > 0) onEvent({ kind: "rule_fired", ruleId: "parseWithRetry", count: 1 });
+      const call = await callWithFormatFallback(args, messages, mode, attempt, lifecycle);
+      mode = call.mode;
+      const { fullText, outputTokens, inputTokens, statsEvent } = call.result;
+      totalTokens += outputTokens;
+      if (statsEvent) onEvent(statsEvent);
+      if (!fullText.trim()) {
+        lastError = new Error("Empty structured output");
+        emitStructuralError(onEvent, callSite, "empty_output", attempt, null, lastError.message);
+        structuralErrorCounter.record(null, attempt);
+        const next = profile.kind === "json-zod" ? fallbackMode(mode) : null;
+        if (next) {
+          emitResponseFormatFallback(onEvent, callSite, attempt, mode, next);
+          mode = next;
+        }
+        if (attempt === maxRetries) {
+          lifecycle.close(args.validationExhaustionPhase ?? "failed");
+          throw new StructuredValidationError(callSite, attempt + 1, lastError);
+        }
+        lifecycle.close("retrying");
+        messages = [
+          ...messages,
+          { role: "assistant", content: fullText },
+          { role: "user", content: repairPrompt(profile, fullText, lastError) }
+        ];
+        continue;
       }
-      structuralErrorCounter.record(true, attempt);
-      return { value, outputTokens: totalTokens, inputTokens, fullText };
-    } catch (e) {
-      lastError = e;
-      const isLast = attempt === maxRetries;
-      const errorType = classifyError(profile, lastError);
-      emitStructuralError(onEvent, callSite, errorType, attempt, isLast ? false : null, lastError.message);
-      structuralErrorCounter.record(isLast ? false : null, attempt);
-      if (isLast) throw new StructuredValidationError(callSite, attempt + 1, lastError);
-      messages = [
-        ...messages,
-        { role: "assistant", content: fullText },
-        { role: "user", content: repairPrompt(profile, fullText, lastError) }
-      ];
+      try {
+        lifecycle.phase("validating");
+        const value = parseAndValidate(profile, fullText);
+        if (attempt > 0) {
+          emitStructuralError(onEvent, callSite, "schema_validate", attempt, true, "retry succeeded");
+        }
+        structuralErrorCounter.record(true, attempt);
+        return {
+          value,
+          outputTokens: totalTokens,
+          inputTokens,
+          fullText,
+          lifecycle: lifecycle.current()
+        };
+      } catch (e) {
+        lastError = e;
+        const isLast = attempt === maxRetries;
+        const errorType = classifyError(profile, lastError);
+        emitStructuralError(onEvent, callSite, errorType, attempt, isLast ? false : null, lastError.message);
+        structuralErrorCounter.record(isLast ? false : null, attempt);
+        if (isLast) {
+          lifecycle.close(args.validationExhaustionPhase ?? "failed");
+          throw new StructuredValidationError(callSite, attempt + 1, lastError);
+        }
+        lifecycle.close("retrying");
+        messages = [
+          ...messages,
+          { role: "assistant", content: fullText },
+          { role: "user", content: repairPrompt(profile, fullText, lastError) }
+        ];
+      }
     }
+    throw new StructuredValidationError(callSite, maxRetries + 1, lastError);
+  } catch (error) {
+    if (lifecycle.isActive()) {
+      lifecycle.close(
+        signal.aborted || error.name === "AbortError" ? "cancelled" : args.contextErrorsRetry && classifyContextError(error) !== null ? "retrying" : "failed"
+      );
+    }
+    throw error;
   }
-  throw new StructuredValidationError(callSite, maxRetries + 1, lastError);
 }
 async function* runStructuredStreaming(args, sink) {
   const queue = [];
@@ -51053,6 +51195,7 @@ async function* runStructuredStreaming(args, sink) {
     sink.inputTokens = r.inputTokens;
     sink.outputTokens = r.outputTokens;
     sink.fullText = r.fullText;
+    sink.lifecycle = r.lifecycle;
   }).catch((e) => {
     error = e;
   }).finally(() => {
@@ -51766,14 +51909,16 @@ function estimateStructuredRequest(messages, opts, retries) {
   if (retries <= 0) return base;
   return Math.max(base, estimateLlmMessages(structuredRepairMessages(messages), opts));
 }
-async function runBoundedStructuredWithRetry(args, onRetry) {
+async function runBoundedStructuredWithRetry(args) {
   let messages = args.baseMessages;
   for (let attempt = 0; attempt <= args.maxRetries; attempt++) {
     try {
       return await runStructuredWithRetry({
         ...args,
         baseMessages: messages,
-        maxRetries: 0
+        maxRetries: 0,
+        lifecycle: attempt === 0 ? args.lifecycle : { ...args.lifecycle, id: `${args.lifecycle.id}:bounded-${attempt}` },
+        validationExhaustionPhase: attempt === args.maxRetries ? "failed" : "retrying"
       });
     } catch (error) {
       if (!(error instanceof StructuredValidationError)) throw error;
@@ -51784,24 +51929,10 @@ async function runBoundedStructuredWithRetry(args, onRetry) {
           error.lastError
         );
       }
-      onRetry?.(attempt + 1);
       messages = structuredRepairMessages(args.baseMessages);
     }
   }
   throw new Error("unreachable bounded structured retry state");
-}
-function evidenceOperationName(callSite) {
-  return callSite === "ingest.evidence-reduce" ? "Evidence reduction" : "Evidence mapping";
-}
-function startEvidenceOperation(runtime, callSite, attempt, reason = "initial") {
-  runtime.onEvent?.({
-    kind: "tool_use",
-    name: evidenceOperationName(callSite),
-    input: { callSite, attempt, reason }
-  });
-}
-function finishEvidenceOperation(runtime, ok, preview) {
-  runtime.onEvent?.({ kind: "tool_result", ok, preview });
 }
 function forwardEvidenceStructuredEvent(runtime, event) {
   if (event.kind === "structural_error") {
@@ -51809,7 +51940,7 @@ function forwardEvidenceStructuredEvent(runtime, event) {
       ...event,
       message: "Structured output validation event"
     });
-  } else if (event.kind === "rule_fired" || event.kind === "llm_call_stats" || event.kind === "prompt_budget") {
+  } else if (event.kind === "llm_lifecycle" || event.kind === "assistant_text" || event.kind === "rule_fired" || event.kind === "llm_call_stats" || event.kind === "prompt_budget") {
     runtime.onEvent?.(event);
   }
 }
@@ -51958,7 +52089,6 @@ async function mapChunk(source, domainId, chunk, totalChunks, policy, runtime, m
   const configuredBudget = policy.inputBudgetTokens;
   const mapCallSite = runtime.mapCallSite ?? "ingest.evidence-map";
   const opts = { ...runtime.opts ?? {}, inputBudgetTokens: configuredBudget };
-  startEvidenceOperation(runtime, mapCallSite, 0);
   try {
     const messages = messagesForMapper(ingest_evidence_map_default, chunk, domainId, mode, source);
     const mapperOpts = taskLlmOptions(opts, policy, configuredBudget);
@@ -51983,18 +52113,26 @@ async function mapChunk(source, domainId, chunk, totalChunks, policy, runtime, m
       profile: { kind: "json-zod", schema: mapperSchemaFor(chunk, mode) },
       maxRetries: policy.mapperRetries ?? 1,
       callSite: mapCallSite,
+      lifecycle: createLlmLifecycle("extract_source_facts"),
       signal: runtime.signal ?? new AbortController().signal,
       onEvent: (event) => forwardEvidenceStructuredEvent(runtime, event),
-      transport: "non-stream"
-    }, (attempt) => {
-      finishEvidenceOperation(runtime, false, "retrying");
-      startEvidenceOperation(runtime, mapCallSite, attempt, "structured_retry");
+      transport: "non-stream",
+      contextErrorsRetry: true
     });
-    const mapped = validateEvidenceMap({ chunk, packets: result.value.packets, noEvidence: result.value.noEvidence }, source).map((packet) => ({ ...packet, id: `${chunk.id}:${packet.id}` }));
-    finishEvidenceOperation(runtime, true, "completed");
+    let mapped;
+    try {
+      mapped = validateEvidenceMap(
+        { chunk, packets: result.value.packets, noEvidence: result.value.noEvidence },
+        source
+      ).map((packet) => ({ ...packet, id: `${chunk.id}:${packet.id}` }));
+    } catch (error) {
+      runtime.onEvent?.(lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "failed"));
+      throw error;
+    }
+    runtime.onEvent?.(lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying"));
+    runtime.onEvent?.(lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "completed"));
     return mapped;
   } catch (error) {
-    finishEvidenceOperation(runtime, false, "failed");
     if (error instanceof EvidenceCoverageError) throw error;
     if (classifyContextError(error) !== null) throw error;
     throw new EvidenceCoverageError(
@@ -52151,7 +52289,6 @@ function partitionUnits(units, budget, opts, retries, onEstimate, maxBatchUnits)
 async function reduceBatchOnce(units, totalChunks, depth, reducerBudget, policy, runtime) {
   const expected = evidenceFromUnits(units);
   const configuredBudget = policy.inputBudgetTokens;
-  startEvidenceOperation(runtime, "ingest.evidence-reduce", 0);
   try {
     const messages = messagesForReducer(units);
     const reducerOpts = taskLlmOptions(runtime.opts ?? {}, policy, reducerBudget);
@@ -52176,21 +52313,25 @@ async function reduceBatchOnce(units, totalChunks, depth, reducerBudget, policy,
       profile: { kind: "json-zod", schema: reducerSchemaFor(expected) },
       maxRetries: policy.reducerRetries ?? 1,
       callSite: "ingest.evidence-reduce",
+      lifecycle: createLlmLifecycle("reduce_source_evidence"),
       signal: runtime.signal ?? new AbortController().signal,
       onEvent: (event) => forwardEvidenceStructuredEvent(runtime, event),
-      transport: "non-stream"
-    }, (attempt) => {
-      finishEvidenceOperation(runtime, false, "retrying");
-      startEvidenceOperation(runtime, "ingest.evidence-reduce", attempt, "structured_retry");
+      transport: "non-stream",
+      contextErrorsRetry: true
     });
-    assertReducedEntity(expected, response.value);
-    if (JSON.stringify(response.value).length >= JSON.stringify(units).length) {
-      throw new EvidenceReducerError(`Reducer non-progress at depth ${depth}`);
+    try {
+      assertReducedEntity(expected, response.value);
+      if (JSON.stringify(response.value).length >= JSON.stringify(units).length) {
+        throw new EvidenceReducerError(`Reducer non-progress at depth ${depth}`);
+      }
+    } catch (error) {
+      runtime.onEvent?.(lifecycleEvent(response.lifecycle.id, response.lifecycle.action, "failed"));
+      throw error;
     }
-    finishEvidenceOperation(runtime, true, "completed");
+    runtime.onEvent?.(lifecycleEvent(response.lifecycle.id, response.lifecycle.action, "applying"));
+    runtime.onEvent?.(lifecycleEvent(response.lifecycle.id, response.lifecycle.action, "completed"));
     return response.value;
   } catch (error) {
-    finishEvidenceOperation(runtime, false, "failed");
     if (error instanceof EvidenceReducerError) throw error;
     if (classifyContextError(error) !== null) throw error;
     throw new EvidenceReducerError(
@@ -52893,8 +53034,11 @@ async function executeSynthesisBatch(input, bundles, maxRetries) {
           profile: { kind: "json-zod", schema: SynthesisOutputSchema },
           maxRetries,
           callSite: "ingest.synthesize",
+          lifecycle: createLlmLifecycle("synthesize_wiki_pages"),
           signal: input.signal,
-          onEvent: input.onEvent
+          onEvent: input.onEvent,
+          transport: "non-stream",
+          contextErrorsRetry: true
         });
         return { result, request, inputTokens: result.inputTokens };
       } catch (error) {
@@ -52918,7 +53062,10 @@ async function executeSynthesisBatch(input, bundles, maxRetries) {
         actions: output.actions,
         pathPolicy: input.pathPolicy
       });
+      input.onEvent(lifecycleEvent(result.result.lifecycle.id, result.result.lifecycle.action, "applying"));
+      input.onEvent(lifecycleEvent(result.result.lifecycle.id, result.result.lifecycle.action, "completed"));
     } catch (error) {
+      input.onEvent(lifecycleEvent(result.result.lifecycle.id, result.result.lifecycle.action, "failed"));
       throw new SynthesisBatchValidationError(
         bundles.map((bundle) => bundle.entityKey),
         error
@@ -53033,10 +53180,14 @@ async function executeSingleRegenerationRequest(input) {
       profile: { kind: "json-zod", schema: SynthesisOutputSchema },
       maxRetries: 0,
       callSite: "ingest.synthesize",
+      lifecycle: createLlmLifecycle("synthesize_wiki_pages"),
       signal: input.signal,
-      onEvent: input.onEvent
+      onEvent: input.onEvent,
+      transport: "non-stream"
     });
     emitBudget(result.inputTokens);
+    input.onEvent(lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying"));
+    input.onEvent(lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "completed"));
     return result.value;
   } catch (error) {
     emitBudget();
@@ -54368,8 +54519,10 @@ async function parseWithRetry(args) {
     profile: { kind: "json-zod", schema: args.schema },
     maxRetries: args.maxRetries,
     callSite: args.callSite,
+    lifecycle: args.lifecycle,
     signal: args.signal,
-    onEvent: args.onEvent
+    onEvent: args.onEvent,
+    transport: args.transport
   });
 }
 
@@ -55050,6 +55203,8 @@ async function* answerFromContext(args) {
   let selectedChunks = [];
   const budgetEvents = [];
   let eligibleChunks;
+  let answerLifecycle = createLlmLifecycle("answer_question");
+  const lifecycleRetryEvents = [];
   yield { kind: "tool_use", name: "Answering", input: {} };
   let attempt;
   try {
@@ -55080,7 +55235,15 @@ async function* answerFromContext(args) {
         };
       },
       execute: async (request) => {
+        if (lifecycleRetryEvents.length > 0) {
+          answerLifecycle = createLlmLifecycle("answer_question");
+        }
         const params = paramsForPreparedMessages(model, request.messages, opts, true);
+        const lifecycleEvents = [
+          lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing"),
+          lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"),
+          lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting")
+        ];
         let streamChunkConsumed = false;
         try {
           const requestStartMs = Date.now();
@@ -55091,7 +55254,8 @@ async function* answerFromContext(args) {
           const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
           let attemptAnswer = "";
           let attemptOutputTokens = 0;
-          const events = [];
+          const events = [...lifecycleEvents];
+          let producing = false;
           const iterator = stream[Symbol.asyncIterator]();
           while (true) {
             const next = await iterator.next();
@@ -55109,6 +55273,10 @@ async function* answerFromContext(args) {
             const chunk = next.value;
             streamChunkConsumed = true;
             const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
+            if (!producing && (reasoning.trim() || content.trim())) {
+              events.push(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "producing"));
+              producing = true;
+            }
             if (reasoning) events.push({ kind: "assistant_text", delta: reasoning, isReasoning: true });
             if (content) {
               attemptAnswer += content;
@@ -55128,6 +55296,12 @@ async function* answerFromContext(args) {
         } catch (error) {
           if (signal.aborted || error.name === "AbortError") throw error;
           if (streamChunkConsumed) throw error;
+          if (classifyContextError(error) !== null && request.optionalUnits > 0) {
+            lifecycleRetryEvents.push(
+              ...lifecycleEvents,
+              lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying")
+            );
+          }
           rethrowForContextRepack(error, request.optionalUnits);
           if (!shouldFallbackStreamToNonStream(error, signal)) throw error;
           let response;
@@ -55143,12 +55317,21 @@ async function* answerFromContext(args) {
             throw fallbackError;
           }
           const fallbackDurationMs = Date.now() - fallbackStartMs;
-          const fallbackAnswer = response.choices[0]?.message?.content ?? "";
+          const fallbackMessage = response.choices[0]?.message;
+          const fallbackReasoning = completionReasoning(fallbackMessage);
+          const fallbackAnswer = fallbackMessage?.content ?? "";
           const fallbackTokens = extractUsage(response) ?? 0;
           return {
             answer: fallbackAnswer,
             outputTokens: fallbackTokens,
-            events: fallbackAnswer ? [{ kind: "assistant_text", delta: fallbackAnswer }] : [],
+            events: [
+              ...lifecycleEvents,
+              ...fallbackReasoning.trim() || fallbackAnswer.trim() ? [
+                lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "producing"),
+                ...fallbackReasoning ? [{ kind: "assistant_text", delta: fallbackReasoning, isReasoning: true }] : [],
+                ...fallbackAnswer ? [{ kind: "assistant_text", delta: fallbackAnswer }] : []
+              ] : []
+            ],
             selectedChunks: request.selectedChunks,
             streamStats: response.usage ? {
               inputTokens: response.usage.prompt_tokens,
@@ -55163,13 +55346,17 @@ async function* answerFromContext(args) {
       onEvent: (event) => budgetEvents.push(event)
     });
   } catch (error) {
+    for (const event of lifecycleRetryEvents) yield event;
     for (const event of budgetEvents) yield event;
     if (signal.aborted || error.name === "AbortError") {
+      yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
       return { answer: "", outputTokens, selectedChunks };
     }
+    yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "failed");
     throw error;
   }
   const completionBudgetEvent = attempt.pendingStream ? budgetEvents.pop() : void 0;
+  for (const event of lifecycleRetryEvents) yield event;
   for (const event of budgetEvents) yield event;
   answer = attempt.answer;
   outputTokens = attempt.outputTokens;
@@ -55211,13 +55398,25 @@ async function* answerFromContext(args) {
       }
       yield completionBudgetEvent;
     }
-    if (streamAborted) return { answer, outputTokens, selectedChunks };
-    if (streamFailure) throw streamFailure.error;
+    if (streamAborted) {
+      yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
+      return { answer, outputTokens, selectedChunks };
+    }
+    if (streamFailure) {
+      yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "failed");
+      throw streamFailure.error;
+    }
   } else {
     for (const event of attempt.events) yield event;
   }
-  if (signal.aborted) return { answer, outputTokens, selectedChunks };
+  if (signal.aborted) {
+    yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
+    return { answer, outputTokens, selectedChunks };
+  }
+  yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "validating");
+  yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "applying");
   yield { kind: "tool_result", ok: !!answer, preview: answer ? `${answer.length} chars` : "no response" };
+  yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "completed");
   if (answer && !signal.aborted) {
     yield { kind: "tool_use", name: "ValidateLinks", input: {} };
     const knownStems = new Set(selectedChunks.map((chunk) => chunk.articleId));
@@ -55264,22 +55463,29 @@ ${answer}` }
             profile: queryAnswerProfile(schema),
             maxRetries: wikiLinkValidationRetries,
             callSite: "query.answer",
+            lifecycle: createLlmLifecycle("answer_question"),
             signal,
-            onEvent: (ev) => repairEvents.push(ev)
+            onEvent: (ev) => repairEvents.push(ev),
+            transport: "non-stream"
           });
           for (const ev of repairEvents) yield ev;
           outputTokens += r.outputTokens;
           const stillBroken = findBrokenLinks(extractAnswerLinks(r.value.answer_markdown), knownStems);
           if (stillBroken.length === 0) {
+            yield lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "applying");
             answer = r.value.answer_markdown;
+            yield lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "completed");
             llmFixed = stripped.length;
             stripped.length = 0;
+          } else {
+            yield lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "applying");
+            yield lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "completed");
           }
         } catch (e) {
+          for (const ev of repairEvents) yield ev;
           if (signal.aborted || e.name === "AbortError") {
             return { answer, outputTokens, selectedChunks };
           }
-          for (const ev of repairEvents) yield ev;
         }
       }
       if (stripped.length > 0) {
@@ -55372,9 +55578,16 @@ async function* retrieveDomainCandidates(domain, question, vaultTools, similarit
     yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allAnnotatedIds.length } };
     const seedOpts = { ...llmSeedFallback.opts, thinkingBudgetTokens: void 0 };
     const seedRes = await llmSelectSeeds(question, indexAnnotations, allAnnotatedIds, llmSeedFallback.llm, llmSeedFallback.model, seedOpts, signal);
+    for (const event of seedRes.events) yield event;
     seeds = seedRes.seeds;
     seedOutputTokens += seedRes.outputTokens;
+    if (seedRes.lifecycle) {
+      yield lifecycleEvent(seedRes.lifecycle.id, seedRes.lifecycle.action, "applying");
+    }
     yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
+    if (seedRes.lifecycle) {
+      yield lifecycleEvent(seedRes.lifecycle.id, seedRes.lifecycle.action, "completed");
+    }
   }
   if (signal.aborted) return null;
   if (seeds.length === 0) return null;
@@ -55676,6 +55889,7 @@ Pages not yet indexed: ${unindexedIds.join(", ")}` : "",
   const messages = [
     { role: "user", content: prompt }
   ];
+  const events = [];
   try {
     const r = await parseWithRetry({
       llm,
@@ -55685,13 +55899,19 @@ Pages not yet indexed: ${unindexedIds.join(", ")}` : "",
       schema: SeedsSchema,
       maxRetries: opts.structuredRetries ?? 1,
       callSite: "query.seeds",
+      lifecycle: createLlmLifecycle("select_relevant_pages"),
       signal,
-      onEvent: () => {
-      }
+      onEvent: (event) => events.push(event),
+      transport: "non-stream"
     });
-    return { seeds: r.value.seeds, outputTokens: r.outputTokens };
+    return {
+      seeds: r.value.seeds,
+      outputTokens: r.outputTokens,
+      events,
+      lifecycle: r.lifecycle
+    };
   } catch {
-    return { seeds: [], outputTokens: 0 };
+    return { seeds: [], outputTokens: 0, events };
   }
 }
 function buildEntityTypesBlock2(domain) {
@@ -56435,14 +56655,24 @@ async function runLintBatchWithSplit(args) {
           profile: { kind: "json-zod", schema: LintBatchOutputSchema },
           maxRetries: args.opts.structuredRetries ?? 1,
           callSite: "lint.batch",
+          lifecycle: createLlmLifecycle("check_wiki_quality"),
           signal: args.signal,
-          onEvent: args.onEvent
+          onEvent: args.onEvent,
+          transport: "non-stream",
+          contextErrorsRetry: true
         });
         const output = {
           ...r.value,
           deletes: r.value.deletes ?? []
         };
-        validateLintBatchOutput(args.items, args.pages, output);
+        try {
+          validateLintBatchOutput(args.items, args.pages, output);
+        } catch (error) {
+          args.onEvent(lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "failed"));
+          throw error;
+        }
+        args.onEvent(lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "applying"));
+        args.onEvent(lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "completed"));
         return { output, outputTokens: r.outputTokens, inputTokens: r.inputTokens };
       },
       onEvent: args.onEvent
@@ -56725,13 +56955,23 @@ ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
       yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).lintProgress.actualizing(domain.id) };
       yield { kind: "tool_use", name: "Updating config", input: {} };
       const patchRes = await actualizeDomainConfig(domain, mergedFindings, llm, model, opts, signal);
+      for (const event of patchRes.events) yield event;
       yield { kind: "tool_result", ok: true, preview: patchRes.patch ? "config updated" : "no changes" };
       outputTokens += patchRes.outputTokens;
       const patch = patchRes.patch;
       if (patch) {
         const diffReport = computeEntityDiff(domain.entity_types ?? [], patch.entity_types ?? domain.entity_types ?? []);
         reportParts.push(diffReport);
+        if (patchRes.lifecycle) {
+          yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "applying");
+        }
         yield { kind: "domain_updated", domainId: domain.id, patch };
+        if (patchRes.lifecycle) {
+          yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "completed");
+        }
+      } else if (patchRes.lifecycle) {
+        yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "applying");
+        yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "completed");
       }
       if (patch?.entity_types) effectiveEntityTypes = patch.entity_types;
       if (signal.aborted) return;
@@ -56947,16 +57187,23 @@ async function actualizeDomainConfig(domain, findings, llm, model, opts, signal)
       schema: EntityTypesDeltaSchema,
       maxRetries: opts.structuredRetries ?? 1,
       callSite: "lint.patch",
+      lifecycle: createLlmLifecycle("check_wiki_quality"),
       signal,
-      onEvent: (e) => collected.push(e)
+      onEvent: (e) => collected.push(e),
+      transport: "non-stream"
     });
     const parsed = r.value;
     const patch = {};
     if (Array.isArray(parsed.entity_types)) patch.entity_types = parsed.entity_types;
     if (typeof parsed.language_notes === "string") patch.language_notes = parsed.language_notes;
-    return { patch: Object.keys(patch).length > 0 ? patch : null, outputTokens: r.outputTokens };
+    return {
+      patch: Object.keys(patch).length > 0 ? patch : null,
+      outputTokens: r.outputTokens,
+      events: collected,
+      lifecycle: r.lifecycle
+    };
   } catch {
-    return { patch: null, outputTokens: 0 };
+    return { patch: null, outputTokens: 0, events: collected };
   }
 }
 
@@ -56998,6 +57245,10 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
   let streamStats;
   const budgetEvents = [];
   let eligibleOptionalUnitIds;
+  let chatLifecycle = createLlmLifecycle(
+    opts.semanticCompression?.operation === "query" ? "answer_question" : "apply_lint_fixes"
+  );
+  const lifecycleRetryEvents = [];
   yield { kind: "tool_use", name: "Responding", input: {} };
   let attempt;
   try {
@@ -57027,7 +57278,17 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
         };
       },
       execute: async (request) => {
+        if (lifecycleRetryEvents.length > 0) {
+          chatLifecycle = createLlmLifecycle(
+            opts.semanticCompression?.operation === "query" ? "answer_question" : "apply_lint_fixes"
+          );
+        }
         const params = paramsForPreparedMessages2(model, request.messages, opts, true);
+        const lifecycleEvents = [
+          lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing"),
+          lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"),
+          lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting")
+        ];
         let streamChunkConsumed = false;
         try {
           const requestStartMs = Date.now();
@@ -57038,7 +57299,8 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
           const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
           let attemptText = "";
           let attemptOutputTokens = 0;
-          const events = [];
+          const events = [...lifecycleEvents];
+          let producing = false;
           const iterator = stream[Symbol.asyncIterator]();
           while (true) {
             const next = await iterator.next();
@@ -57055,6 +57317,10 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
             const chunk = next.value;
             streamChunkConsumed = true;
             const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
+            if (!producing && (reasoning.trim() || content.trim())) {
+              events.push(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "producing"));
+              producing = true;
+            }
             if (reasoning) events.push({ kind: "assistant_text", delta: reasoning, isReasoning: true });
             if (content) {
               attemptText += content;
@@ -57073,6 +57339,12 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
         } catch (error) {
           if (signal.aborted || error.name === "AbortError") throw error;
           if (streamChunkConsumed) throw error;
+          if (classifyContextError(error) !== null && request.optionalUnits > 0) {
+            lifecycleRetryEvents.push(
+              ...lifecycleEvents,
+              lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying")
+            );
+          }
           rethrowForContextRepack2(error, request.optionalUnits);
           if (!shouldFallbackStreamToNonStream(error, signal)) throw error;
           let response;
@@ -57088,12 +57360,21 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
             throw fallbackError;
           }
           const fallbackDurationMs = Date.now() - fallbackStartMs;
-          const fallbackText = response.choices[0]?.message?.content ?? "";
+          const fallbackMessage = response.choices[0]?.message;
+          const fallbackReasoning = completionReasoning(fallbackMessage);
+          const fallbackText = fallbackMessage?.content ?? "";
           const fallbackTokens = extractUsage(response) ?? 0;
           return {
             text: fallbackText,
             outputTokens: fallbackTokens,
-            events: fallbackText ? [{ kind: "assistant_text", delta: fallbackText }] : [],
+            events: [
+              ...lifecycleEvents,
+              ...fallbackReasoning.trim() || fallbackText.trim() ? [
+                lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "producing"),
+                ...fallbackReasoning ? [{ kind: "assistant_text", delta: fallbackReasoning, isReasoning: true }] : [],
+                ...fallbackText ? [{ kind: "assistant_text", delta: fallbackText }] : []
+              ] : []
+            ],
             streamStats: response.usage ? {
               inputTokens: response.usage.prompt_tokens,
               outputTokens: fallbackTokens,
@@ -57107,11 +57388,17 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
       onEvent: (event) => budgetEvents.push(event)
     });
   } catch (error) {
+    for (const event of lifecycleRetryEvents) yield event;
     for (const event of budgetEvents) yield event;
-    if (signal.aborted || error.name === "AbortError") return;
+    if (signal.aborted || error.name === "AbortError") {
+      yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "cancelled");
+      return;
+    }
+    yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "failed");
     throw error;
   }
   const completionBudgetEvent = attempt.pendingStream ? budgetEvents.pop() : void 0;
+  for (const event of lifecycleRetryEvents) yield event;
   for (const event of budgetEvents) yield event;
   fullText = attempt.text;
   outputTokens = attempt.outputTokens;
@@ -57152,13 +57439,25 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
       }
       yield completionBudgetEvent;
     }
-    if (streamAborted) return;
-    if (streamFailure) throw streamFailure.error;
+    if (streamAborted) {
+      yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "cancelled");
+      return;
+    }
+    if (streamFailure) {
+      yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "failed");
+      throw streamFailure.error;
+    }
   } else {
     for (const event of attempt.events) yield event;
   }
-  if (signal.aborted) return;
+  if (signal.aborted) {
+    yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "cancelled");
+    return;
+  }
+  yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "validating");
+  yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "applying");
   yield { kind: "tool_result", ok: !!fullText, preview: fullText ? `${fullText.length} chars` : "no response" };
+  yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "completed");
   if (streamStats) yield buildLlmCallStatsEvent(streamStats);
   const lastUserMessage = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
   yield {
@@ -57441,10 +57740,18 @@ ${schemaContent}` : ""
           profile: { kind: "json-zod", schema: LintChatPatchSchema },
           maxRetries: opts.structuredRetries ?? 1,
           callSite: "lint-chat.patch",
+          lifecycle: createLlmLifecycle("apply_lint_fixes"),
           signal,
-          onEvent: (ev) => pwtEvents.push(ev)
+          onEvent: (ev) => pwtEvents.push(ev),
+          transport: "non-stream",
+          contextErrorsRetry: true
         });
-        return { value: r.value, outputTokens: r.outputTokens, inputTokens: r.inputTokens };
+        return {
+          value: r.value,
+          outputTokens: r.outputTokens,
+          inputTokens: r.inputTokens,
+          lifecycle: r.lifecycle
+        };
       },
       onEvent: (ev) => pwtEvents.push(ev)
     });
@@ -57458,6 +57765,7 @@ ${schemaContent}` : ""
   }
   for (const ev of pwtEvents) yield ev;
   const parsed = result.value;
+  yield lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying");
   const authorities = /* @__PURE__ */ new Map();
   for (const [path5, content] of activePages) authorities.set(path5, pageAuthorities(path5, content));
   const writtenPaths = [];
@@ -57488,6 +57796,7 @@ ${schemaContent}` : ""
       continue;
     }
   }
+  yield lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "completed");
   yield {
     kind: "eval_meta",
     fields: {
@@ -57625,6 +57934,7 @@ ${schemaContent}` : ""
       profile: { kind: "json-zod", schema: DomainEntrySchema },
       maxRetries: opts.structuredRetries ?? 1,
       callSite: "init.bootstrap",
+      lifecycle: createLlmLifecycle("bootstrap_domain"),
       signal,
       onEvent: () => {
       },
@@ -57633,6 +57943,8 @@ ${schemaContent}` : ""
       yield event;
     }
     parsed = sink.value;
+    yield lifecycleEvent(sink.lifecycle.id, sink.lifecycle.action, "applying");
+    yield lifecycleEvent(sink.lifecycle.id, sink.lifecycle.action, "completed");
     yield { kind: "tool_result", ok: true, preview: `domain: ${parsed.id}` };
     if (sink.fullText) yield { kind: "assistant_text", delta: sink.fullText };
   } catch (error) {
@@ -58428,7 +58740,12 @@ function visionCallOptions(options, language, reasoningLanguage, effectiveInputB
   };
 }
 async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, reasoningLanguage, options, effectiveInputBudget = options.inputBudgetTokens) {
-  signal.throwIfAborted();
+  const lifecycle = createLlmLifecycle("analyze_attachments");
+  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "preparing"));
+  if (signal.aborted) {
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "cancelled"));
+    signal.throwIfAborted();
+  }
   const callOptions = visionCallOptions(
     options,
     language,
@@ -58451,6 +58768,11 @@ async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, 
         retryReason: "preflight_budget_exceeded"
       }));
     }
+    options.onEvent?.(lifecycleEvent(
+      lifecycle.id,
+      lifecycle.action,
+      signal.aborted || error.name === "AbortError" ? "cancelled" : error instanceof PromptBudgetExceededError ? "retrying" : "failed"
+    ));
     throw error;
   }
   const estimatedInputTokens = estimatePreparedMessages(
@@ -58459,11 +58781,19 @@ async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, 
   let response;
   try {
     signal.throwIfAborted();
-    response = await llm.chat.completions.create(
+    const request = llm.chat.completions.create(
       { ...params, stream: false },
       { signal }
     );
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "sent"));
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "waiting"));
+    response = await request;
   } catch (error) {
+    options.onEvent?.(lifecycleEvent(
+      lifecycle.id,
+      lifecycle.action,
+      signal.aborted || error.name === "AbortError" ? "cancelled" : classifyContextError(error) !== null ? "retrying" : "failed"
+    ));
     options.onEvent?.(createPromptBudgetEvent({
       callSite: "vision.analysis",
       configuredInputBudget: options.inputBudgetTokens,
@@ -58476,7 +58806,20 @@ async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, 
     }));
     throw error;
   }
-  signal.throwIfAborted();
+  if (signal.aborted) {
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "cancelled"));
+    signal.throwIfAborted();
+  }
+  const message = response.choices[0]?.message;
+  const reasoning = completionReasoning(message);
+  const content = message?.content ?? "";
+  if (reasoning.trim() || content.trim()) {
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "producing"));
+  }
+  if (reasoning) {
+    options.onEvent?.({ kind: "assistant_text", delta: reasoning, isReasoning: true });
+  }
+  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "validating"));
   options.onEvent?.(createPromptBudgetEvent({
     callSite: "vision.analysis",
     configuredInputBudget: options.inputBudgetTokens,
@@ -58487,10 +58830,17 @@ async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, 
     compressionProfile: options.compressionProfile,
     contextUnits: pages.length
   }));
-  const parsed = VisionRecognitionBatchSchema.parse(
-    parseStructured(response.choices[0]?.message?.content ?? "")
-  );
-  return validateRecognitionCoverage(parsed.records, pages.map((page) => page.pageId));
+  let records;
+  try {
+    const parsed = VisionRecognitionBatchSchema.parse(parseStructured(content));
+    records = validateRecognitionCoverage(parsed.records, pages.map((page) => page.pageId));
+  } catch (error) {
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "failed"));
+    throw error;
+  }
+  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "applying"));
+  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "completed"));
+  return records;
 }
 function imageSystem(language) {
   return render(vision_image_default, { lang: langInstruction(resolveLang(language)) });
@@ -59237,21 +59587,35 @@ ${tagRegistryBlock}` : ""}`;
   let lastFinishReason = null;
   let outputTokens = 0;
   let lastInputTokens;
+  let activeFormatLifecycle = null;
   async function* callOnce(p, fallback = { allowContextFallback: true }) {
+    if (activeFormatLifecycle) {
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+    }
+    activeFormatLifecycle = createLlmLifecycle("format_note");
+    yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing");
     let acc = "";
     lastFinishReason = null;
     lastInputTokens = void 0;
     const requestStartMs = Date.now();
     let streamChunkConsumed = false;
     try {
-      const rawStream = await llm.chat.completions.create(
+      const request = llm.chat.completions.create(
         { ...p, stream: true },
         { signal }
       );
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
+      const rawStream = await request;
       const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
+      let producing = false;
       for await (const chunk of stream) {
         streamChunkConsumed = true;
         const { reasoning, content, outputTokens: tok, inputTokens: inTok } = extractStreamDeltas(chunk);
+        if (!producing && (reasoning.trim() || content.trim())) {
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "producing");
+          producing = true;
+        }
         if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
         if (content) {
           acc += content;
@@ -59265,16 +59629,51 @@ ${tagRegistryBlock}` : ""}`;
       const callStats = getStats();
       if (callStats) yield buildLlmCallStatsEvent(callStats);
     } catch (e) {
-      if (signal.aborted || e.name === "AbortError") return acc;
-      if (streamChunkConsumed) throw e;
-      if (!fallback.allowContextFallback && classifyContextError(e) !== null) throw e;
-      if (!shouldFallbackStreamToNonStream(e, signal)) throw e;
+      if (signal.aborted || e.name === "AbortError") {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "cancelled");
+        activeFormatLifecycle = null;
+        return acc;
+      }
+      if (streamChunkConsumed) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
+        activeFormatLifecycle = null;
+        throw e;
+      }
+      if (!fallback.allowContextFallback && classifyContextError(e) !== null) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+        activeFormatLifecycle = null;
+        throw e;
+      }
+      if (!shouldFallbackStreamToNonStream(e, signal)) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
+        activeFormatLifecycle = null;
+        throw e;
+      }
       const fallbackStartMs = Date.now();
-      const resp = await llm.chat.completions.create(
-        { ...p, stream: false },
-        { signal }
-      );
-      acc = resp.choices[0]?.message?.content ?? "";
+      let resp;
+      try {
+        resp = await llm.chat.completions.create(
+          { ...p, stream: false },
+          { signal }
+        );
+      } catch (fallbackError) {
+        yield lifecycleEvent(
+          activeFormatLifecycle.id,
+          activeFormatLifecycle.action,
+          signal.aborted || fallbackError.name === "AbortError" ? "cancelled" : classifyContextError(fallbackError) !== null ? "retrying" : "failed"
+        );
+        activeFormatLifecycle = null;
+        throw fallbackError;
+      }
+      const fallbackMessage = resp.choices[0]?.message;
+      const fallbackReasoning = completionReasoning(fallbackMessage);
+      acc = fallbackMessage?.content ?? "";
+      if (fallbackReasoning.trim() || acc.trim()) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "producing");
+      }
+      if (fallbackReasoning) {
+        yield { kind: "assistant_text", delta: fallbackReasoning, isReasoning: true };
+      }
       const completionTokens = extractUsage(resp);
       const promptTokens = resp.usage?.prompt_tokens;
       if (completionTokens !== void 0) outputTokens += completionTokens;
@@ -59289,6 +59688,9 @@ ${tagRegistryBlock}` : ""}`;
           llmDurationMs: elapsed
         });
       }
+    }
+    if (activeFormatLifecycle) {
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "validating");
     }
     return acc;
   }
@@ -59409,10 +59811,19 @@ The previous segment attempt failed: ${retryHint}. Return the same segment again
     }
     yield emitSegmentBudgetEvent(segment, params, sourceChunks);
     if (signal.aborted) {
+      if (activeFormatLifecycle) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "cancelled");
+        activeFormatLifecycle = null;
+      }
       return { segmentId: segment.id, report: "aborted", formatted: segment.markdown };
     }
     const parsedSegment = parseFormatSegmentOutput(text);
     if (parsedSegment.data && parsedSegment.data.segmentId === segment.id && !parsedSegment.truncated) {
+      if (activeFormatLifecycle) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "applying");
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "completed");
+        activeFormatLifecycle = null;
+      }
       yield { kind: "tool_result", ok: true, preview: `${segment.id}: ${parsedSegment.data.formatted.length} chars` };
       return parsedSegment.data;
     }
@@ -59428,6 +59839,10 @@ The previous segment attempt failed: ${retryHint}. Return the same segment again
           report: childOutputs.map((output) => output.report).join("\n"),
           formatted: childOutputs.map((output) => output.formatted).join("")
         };
+      }
+      if (activeFormatLifecycle) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
+        activeFormatLifecycle = null;
       }
       throw new Error(`Format: segment ${segment.id} response was truncated and cannot be split further`);
     }
@@ -59445,10 +59860,19 @@ The previous segment attempt failed: ${retryHint}. Return the same segment again
     yield emitSegmentBudgetEvent(segment, retryParams, sourceChunks);
     const retryParsed = parseFormatSegmentOutput(retryText);
     if (retryParsed.data && retryParsed.data.segmentId === segment.id && !retryParsed.truncated) {
+      if (activeFormatLifecycle) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "applying");
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "completed");
+        activeFormatLifecycle = null;
+      }
       yield { kind: "tool_result", ok: true, preview: `${segment.id}: ${retryParsed.data.formatted.length} chars` };
       return retryParsed.data;
     }
     const retryHint = retryParsed.data && retryParsed.data.segmentId !== segment.id ? `segment id mismatch: expected ${segment.id}, got ${retryParsed.data.segmentId}` : retryParsed.hint;
+    if (activeFormatLifecycle) {
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
+      activeFormatLifecycle = null;
+    }
     throw new Error(`Format: segment ${segment.id} failed: ${retryHint || hint}`);
   }
   let fullText = "";
@@ -59641,7 +60065,15 @@ The previous attempt failed: ${zodHint}. Fix it and return again using the marke
     yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "WikiLink warnings", details: wlFix.warnings };
   }
   const missingFinal = missingTokensWithContext(original, finalFormatted);
+  const previewLifecycle = activeFormatLifecycle;
+  if (previewLifecycle) {
+    yield lifecycleEvent(previewLifecycle.id, previewLifecycle.action, "applying");
+  }
   yield { kind: "format_preview", tempPath, report: finalReport, missingTokens: missingFinal, visionCount: visionDescriptions.size };
+  if (previewLifecycle) {
+    yield lifecycleEvent(previewLifecycle.id, previewLifecycle.action, "completed");
+    activeFormatLifecycle = null;
+  }
   const visionOn = visionDescriptions.size > 0;
   yield {
     kind: "eval_meta",

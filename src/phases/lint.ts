@@ -4,7 +4,8 @@ import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { parseWithRetry } from "./parse-with-retry";
-import { runStructuredWithRetry } from "./structured-output";
+import { createLlmLifecycle, runStructuredWithRetry } from "./structured-output";
+import { lifecycleEvent } from "../llm-lifecycle";
 import { runWithContextRepack, classifyContextError, PromptBudgetExceededError } from "../prompt-budget";
 import { applyPagePatch } from "../section-patches";
 import { buildLintBatchMessages, buildLintRelatedSections, buildLintWorkItems, lintReplaceAuthorities, mergeLintFindings, validateLintBatchOutput, validateLintCoverage, type LintBatchOutput, type LintFinding, type LintWorkItem } from "./lint-batches";
@@ -287,14 +288,24 @@ async function runLintBatchWithSplit(args: {
           profile: { kind: "json-zod", schema: LintBatchOutputSchema },
           maxRetries: args.opts.structuredRetries ?? 1,
           callSite: "lint.batch",
+          lifecycle: createLlmLifecycle("check_wiki_quality"),
           signal: args.signal,
           onEvent: args.onEvent,
+          transport: "non-stream",
+          contextErrorsRetry: true,
         });
         const output = {
           ...r.value,
           deletes: r.value.deletes ?? [],
         } as unknown as LintBatchOutput;
-        validateLintBatchOutput(args.items, args.pages, output);
+        try {
+          validateLintBatchOutput(args.items, args.pages, output);
+        } catch (error) {
+          args.onEvent(lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "failed"));
+          throw error;
+        }
+        args.onEvent(lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "applying"));
+        args.onEvent(lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "completed"));
         return { output, outputTokens: r.outputTokens, inputTokens: r.inputTokens };
       },
       onEvent: args.onEvent,
@@ -629,13 +640,23 @@ export async function* runLint(
     yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).lintProgress.actualizing(domain.id) };
     yield { kind: "tool_use", name: "Updating config", input: {} };
     const patchRes = await actualizeDomainConfig(domain, mergedFindings, llm, model, opts, signal);
+    for (const event of patchRes.events) yield event;
     yield { kind: "tool_result", ok: true, preview: patchRes.patch ? "config updated" : "no changes" };
     outputTokens += patchRes.outputTokens;
     const patch = patchRes.patch;
     if (patch) {
       const diffReport = computeEntityDiff(domain.entity_types ?? [], patch.entity_types ?? domain.entity_types ?? []);
       reportParts.push(diffReport);
+      if (patchRes.lifecycle) {
+        yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "applying");
+      }
       yield { kind: "domain_updated", domainId: domain.id, patch };
+      if (patchRes.lifecycle) {
+        yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "completed");
+      }
+    } else if (patchRes.lifecycle) {
+      yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "applying");
+      yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "completed");
     }
     if (patch?.entity_types) effectiveEntityTypes = patch.entity_types;
 
@@ -837,7 +858,12 @@ async function actualizeDomainConfig(
   model: string,
   opts: LlmCallOptions,
   signal: AbortSignal,
-): Promise<{ patch: { entity_types?: EntityType[]; language_notes?: string } | null; outputTokens: number }> {
+): Promise<{
+  patch: { entity_types?: EntityType[]; language_notes?: string } | null;
+  outputTokens: number;
+  events: RunEvent[];
+  lifecycle?: ReturnType<typeof createLlmLifecycle>;
+}> {
   const currentConfig = JSON.stringify({
     entity_types: domain.entity_types ?? [],
     language_notes: domain.language_notes ?? "",
@@ -884,15 +910,22 @@ async function actualizeDomainConfig(
       schema: EntityTypesDeltaSchema,
       maxRetries: opts.structuredRetries ?? 1,
       callSite: "lint.patch",
+      lifecycle: createLlmLifecycle("check_wiki_quality"),
       signal,
       onEvent: (e) => collected.push(e),
+      transport: "non-stream",
     });
     const parsed = r.value;
     const patch: { entity_types?: EntityType[]; language_notes?: string } = {};
     if (Array.isArray(parsed.entity_types)) patch.entity_types = parsed.entity_types;
     if (typeof parsed.language_notes === "string") patch.language_notes = parsed.language_notes;
-    return { patch: Object.keys(patch).length > 0 ? patch : null, outputTokens: r.outputTokens };
+    return {
+      patch: Object.keys(patch).length > 0 ? patch : null,
+      outputTokens: r.outputTokens,
+      events: collected,
+      lifecycle: r.lifecycle,
+    };
   } catch {
-    return { patch: null, outputTokens: 0 };
+    return { patch: null, outputTokens: 0, events: collected };
   }
 }

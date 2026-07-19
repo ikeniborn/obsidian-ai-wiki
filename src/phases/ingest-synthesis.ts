@@ -24,7 +24,8 @@ import {
 } from "../prompt-budget";
 import type { LlmCallOptions, LlmClient, ModelCallPolicy, RunEvent } from "../types";
 import { prepareChatMessages } from "./llm-utils";
-import { runStructuredWithRetry, StructuredOutputTruncatedError, StructuredValidationError } from "./structured-output";
+import { createLlmLifecycle, runStructuredWithRetry, StructuredOutputTruncatedError, StructuredValidationError } from "./structured-output";
+import { lifecycleEvent } from "../llm-lifecycle";
 import synthesisPrompt from "../../prompts/ingest-synthesis.md";
 
 export interface SynthesisCoverage {
@@ -678,8 +679,11 @@ async function executeSynthesisBatch(
           profile: { kind: "json-zod", schema: SynthesisOutputSchema },
           maxRetries,
           callSite: "ingest.synthesize",
+          lifecycle: createLlmLifecycle("synthesize_wiki_pages"),
           signal: input.signal,
           onEvent: input.onEvent,
+          transport: "non-stream",
+          contextErrorsRetry: true,
         });
         return { result, request, inputTokens: result.inputTokens };
       } catch (error) {
@@ -703,7 +707,10 @@ async function executeSynthesisBatch(
         actions: output.actions,
         pathPolicy: input.pathPolicy,
       });
+      input.onEvent(lifecycleEvent(result.result.lifecycle.id, result.result.lifecycle.action, "applying"));
+      input.onEvent(lifecycleEvent(result.result.lifecycle.id, result.result.lifecycle.action, "completed"));
     } catch (error) {
+      input.onEvent(lifecycleEvent(result.result.lifecycle.id, result.result.lifecycle.action, "failed"));
       throw new SynthesisBatchValidationError(
         bundles.map((bundle) => bundle.entityKey),
         error as Error,
@@ -829,10 +836,14 @@ async function executeSingleRegenerationRequest(input: ConflictRegenerationInput
       profile: { kind: "json-zod", schema: SynthesisOutputSchema },
       maxRetries: 0,
       callSite: "ingest.synthesize",
+      lifecycle: createLlmLifecycle("synthesize_wiki_pages"),
       signal: input.signal,
       onEvent: input.onEvent,
+      transport: "non-stream",
     });
     emitBudget(result.inputTokens);
+    input.onEvent(lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying"));
+    input.onEvent(lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "completed"));
     return result.value;
   } catch (error) {
     emitBudget();

@@ -567,3 +567,91 @@ test("agent runner keeps non-policy options while applying resolved model policy
   assert.equal(claudeOpts.inputBudgetTokens, 16_384);
   assert.equal(claudeOpts.maxTokens, undefined);
 });
+
+test("llm lifecycle progress does not reset the semantic idle watchdog", async () => {
+  const idleSettings = settings();
+  idleSettings.llmIdleRetries = 0;
+  const runner = new AgentRunner(
+    { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
+    idleSettings,
+    new VaultTools(adapter(), "/vault"),
+    "Vault",
+    [],
+  );
+  (runner as unknown as {
+    runOperation: (req: { signal: AbortSignal }) => AsyncGenerator<RunEvent>;
+  }).runOperation = async function* (req) {
+    for (const phase of ["preparing", "sent", "waiting"] as const) {
+      yield {
+        kind: "llm_lifecycle",
+        id: "hung-bootstrap",
+        action: "bootstrap_domain",
+        phase,
+        atMs: Date.now(),
+      };
+      await new Promise<void>((resolve) => nodeSetTimeout(resolve, 6));
+    }
+    req.signal.throwIfAborted();
+    await new Promise<void>((_, reject) => {
+      req.signal.addEventListener(
+        "abort",
+        () => reject(new DOMException("Request was aborted", "AbortError")),
+        { once: true },
+      );
+    });
+  };
+
+  const outcome = await Promise.race([
+    (async () => {
+      try {
+        for await (const _event of runner.run({
+          operation: "init",
+          args: ["demo"],
+          cwd: "/vault",
+          signal: new AbortController().signal,
+          timeoutMs: 0,
+        })) {
+          // Drain until watchdog abort.
+        }
+        return "resolved";
+      } catch (error) {
+        return error instanceof Error ? `${error.name}: ${error.message}` : "unknown";
+      }
+    })(),
+    new Promise<string>((resolve) => nodeSetTimeout(() => resolve("still-pending"), 250)),
+  ]);
+  assert.match(outcome, /^AbortError:/);
+});
+
+test("non-empty assistant reasoning resets the semantic idle watchdog", async () => {
+  const idleSettings = settings();
+  idleSettings.llmIdleRetries = 0;
+  const runner = new AgentRunner(
+    { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
+    idleSettings,
+    new VaultTools(adapter(), "/vault"),
+    "Vault",
+    [],
+  );
+  (runner as unknown as {
+    runOperation: () => AsyncGenerator<RunEvent>;
+  }).runOperation = async function* () {
+    for (let index = 0; index < 4; index++) {
+      yield { kind: "assistant_text", delta: `reasoning-${index}`, isReasoning: true };
+      await new Promise<void>((resolve) => nodeSetTimeout(resolve, 6));
+    }
+    yield { kind: "result", durationMs: 1, text: "ok" };
+  };
+
+  const events: RunEvent[] = [];
+  for await (const event of runner.run({
+    operation: "query",
+    args: ["demo"],
+    cwd: "/vault",
+    signal: new AbortController().signal,
+    timeoutMs: 0,
+  })) {
+    events.push(event);
+  }
+  assert.equal(events.some((event) => event.kind === "result" && event.text === "ok"), true);
+});

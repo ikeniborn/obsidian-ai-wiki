@@ -559,6 +559,8 @@ test("source orchestration maps complete chunks and recursively reduces whole pa
   assert.equal(budgetEvents.length, requests.length, "one prompt_budget event per actual request");
   assert.ok(events.every((event) =>
     event.kind === "prompt_budget"
+    || event.kind === "llm_lifecycle"
+    || event.kind === "llm_call_stats"
     || event.kind === "tool_use"
     || event.kind === "tool_result"));
   const telemetry = JSON.stringify(budgetEvents);
@@ -932,6 +934,8 @@ test("bootstrap derives bounded candidate, theme, and language evidence from val
   assert.equal(budgetEvents.length, requests.length);
   assert.ok(events.every((event) =>
     event.kind === "prompt_budget"
+    || event.kind === "llm_lifecycle"
+    || event.kind === "llm_call_stats"
     || event.kind === "tool_use"
     || event.kind === "tool_result"
     || event.kind === "structural_error"));
@@ -1067,7 +1071,7 @@ test("evidence mapper and reducer use direct non-stream requests", async () => {
   assert.ok(params.every((request) => request.stream === false));
 });
 
-test("evidence progress uses closed mapping and reduction tool lifecycles with visible retry", async () => {
+test("evidence progress uses ordered human lifecycle actions with visible retry", async () => {
   const events: RunEvent[] = [];
   let mapperAttempts = 0;
   const hostileEntityType = "HOSTILE_ENTITY_TYPE_DO_NOT_FORWARD";
@@ -1097,12 +1101,17 @@ test("evidence progress uses closed mapping and reduction tool lifecycles with v
     runtime,
   );
 
-  const toolNames = events
-    .filter((event): event is Extract<RunEvent, { kind: "tool_use" }> => event.kind === "tool_use")
-    .map((event) => event.name);
-  assert.ok(toolNames.filter((name) => name === "Evidence mapping").length >= 2);
-  assert.ok(toolNames.includes("Evidence reduction"));
-  assertClosedToolLifecycles(events);
+  assert.equal(events.some((event) =>
+    event.kind === "tool_use"
+    && (event.name === "Evidence mapping" || event.name === "Evidence reduction")), false);
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  assert.ok(lifecycle.some((event) => event.action === "extract_source_facts"));
+  assert.ok(lifecycle.some((event) => event.action === "reduce_source_evidence"));
+  assert.ok(lifecycle.some((event) => event.phase === "retrying"));
+  assert.ok(lifecycle.some((event) =>
+    event.action === "extract_source_facts" && event.phase === "completed"));
+  assert.ok(lifecycle.some((event) =>
+    event.action === "reduce_source_evidence" && event.phase === "completed"));
   const structuralEvent = events.find((event) =>
     event.kind === "structural_error"
     && event.callSite === "ingest.evidence-map"
@@ -1120,7 +1129,7 @@ test("evidence progress uses closed mapping and reduction tool lifecycles with v
     || event.kind === "assistant_replace"), false);
 });
 
-test("evidence mapper error closes the active tool lifecycle", async () => {
+test("evidence mapper error closes the active human lifecycle", async () => {
   const events: RunEvent[] = [];
   const runtime = mockRuntime((messages) => ({
     packets: [{
@@ -1135,11 +1144,9 @@ test("evidence mapper error closes the active tool lifecycle", async () => {
     EvidenceCoverageError,
   );
 
-  assertClosedToolLifecycles(events);
-  const toolResults = events.filter(
-    (event): event is Extract<RunEvent, { kind: "tool_result" }> => event.kind === "tool_result",
-  );
-  assert.equal(toolResults.at(-1)?.ok, false);
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  assert.equal(lifecycle.at(-1)?.action, "extract_source_facts");
+  assert.equal(lifecycle.at(-1)?.phase, "failed");
   const diagnostics = JSON.stringify(events);
   assert.equal(diagnostics.includes("HOSTILE_ERROR_ENTITY_TYPE"), false);
   assert.equal(diagnostics.includes("HOSTILE_ERROR_SOURCE"), false);

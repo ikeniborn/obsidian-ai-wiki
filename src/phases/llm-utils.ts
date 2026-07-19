@@ -133,6 +133,14 @@ export function extractUsage(resp: OpenAI.Chat.ChatCompletion): number | undefin
   return typeof tok === "number" ? tok : undefined;
 }
 
+/** Extract reasoning from native and OpenAI-compatible non-stream messages. */
+export function completionReasoning(message: unknown): string {
+  if (message === null || typeof message !== "object") return "";
+  const record = message as Record<string, unknown>;
+  const reasoning = record.reasoning ?? record.reasoning_content;
+  return typeof reasoning === "string" ? reasoning : "";
+}
+
 export function buildChatParams(
   model: string,
   messages: OpenAI.Chat.ChatCompletionMessageParam[],

@@ -3,6 +3,8 @@ import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { parseWithRetry } from "./parse-with-retry";
+import { createLlmLifecycle } from "./structured-output";
+import { lifecycleEvent } from "../llm-lifecycle";
 import { SeedsSchema } from "./zod-schemas";
 import queryTemplate from "../../prompts/query.md";
 import querySeedsTemplate from "../../prompts/query-seeds.md";
@@ -163,9 +165,16 @@ export async function* retrieveDomainCandidates(
     yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allAnnotatedIds.length } };
     const seedOpts = { ...llmSeedFallback.opts, thinkingBudgetTokens: undefined };
     const seedRes = await llmSelectSeeds(question, indexAnnotations, allAnnotatedIds, llmSeedFallback.llm, llmSeedFallback.model, seedOpts, signal);
+    for (const event of seedRes.events) yield event;
     seeds = seedRes.seeds;
     seedOutputTokens += seedRes.outputTokens;
+    if (seedRes.lifecycle) {
+      yield lifecycleEvent(seedRes.lifecycle.id, seedRes.lifecycle.action, "applying");
+    }
     yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
+    if (seedRes.lifecycle) {
+      yield lifecycleEvent(seedRes.lifecycle.id, seedRes.lifecycle.action, "completed");
+    }
   }
   if (signal.aborted) return null;
 
@@ -469,7 +478,12 @@ async function llmSelectSeeds(
   model: string,
   opts: LlmCallOptions,
   signal: AbortSignal,
-): Promise<{ seeds: string[]; outputTokens: number }> {
+): Promise<{
+  seeds: string[];
+  outputTokens: number;
+  events: RunEvent[];
+  lifecycle?: ReturnType<typeof createLlmLifecycle>;
+}> {
   const example = JSON.stringify({
     reasoning: "PageA matches keyword X; PageB referenced by index.",
     seeds: ["PageA", "PageB"],
@@ -492,18 +506,26 @@ async function llmSelectSeeds(
     { role: "user", content: prompt },
   ];
 
+  const events: RunEvent[] = [];
   try {
     const r = await parseWithRetry({
       llm, model, baseMessages: messages, opts,
       schema: SeedsSchema,
       maxRetries: opts.structuredRetries ?? 1,
       callSite: "query.seeds",
+      lifecycle: createLlmLifecycle("select_relevant_pages"),
       signal,
-      onEvent: () => { /* helper has no yield channel; counter still fires */ },
+      onEvent: (event) => events.push(event),
+      transport: "non-stream",
     });
-    return { seeds: r.value.seeds, outputTokens: r.outputTokens };
+    return {
+      seeds: r.value.seeds,
+      outputTokens: r.outputTokens,
+      events,
+      lifecycle: r.lifecycle,
+    };
   } catch {
-    return { seeds: [], outputTokens: 0 };
+    return { seeds: [], outputTokens: 0, events };
   }
 }
 

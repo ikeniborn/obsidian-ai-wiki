@@ -11,12 +11,15 @@ import type { VaultTools } from "../vault-tools";
 import {
   buildChatParams,
   buildLlmCallStatsEvent,
+  completionReasoning,
   extractStreamDeltas,
   extractUsage,
   shouldFallbackStreamToNonStream,
   wrapStreamWithStats,
 } from "./llm-utils";
 import { classifyContextError, createPromptBudgetEvent, estimatePreparedMessages, PromptBudgetExceededError } from "../prompt-budget";
+import { createLlmLifecycle } from "./structured-output";
+import { lifecycleEvent } from "../llm-lifecycle";
 import formatTemplate from "../../prompts/format.md";
 import formatSegmentTemplate from "../../prompts/format-segment.md";
 import { promptVersionOf, visionPromptVersionOf } from "../prompt-version";
@@ -348,25 +351,39 @@ export async function* runFormat(
   let lastFinishReason: string | null = null;
   let outputTokens = 0;
   let lastInputTokens: number | undefined;
+  let activeFormatLifecycle: ReturnType<typeof createLlmLifecycle> | null = null;
 
   async function* callOnce(
     p: Record<string, unknown>,
     fallback: { allowContextFallback: boolean } = { allowContextFallback: true },
   ): AsyncGenerator<RunEvent, string> {
+    if (activeFormatLifecycle) {
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+    }
+    activeFormatLifecycle = createLlmLifecycle("format_note");
+    yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing");
     let acc = "";
     lastFinishReason = null;
     lastInputTokens = undefined;
     const requestStartMs = Date.now();
     let streamChunkConsumed = false;
     try {
-      const rawStream = await llm.chat.completions.create(
+      const request = llm.chat.completions.create(
         { ...p, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
         { signal },
       );
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
+      const rawStream = await request;
       const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
+      let producing = false;
       for await (const chunk of stream) {
         streamChunkConsumed = true;
         const { reasoning, content, outputTokens: tok, inputTokens: inTok } = extractStreamDeltas(chunk);
+        if (!producing && (reasoning.trim() || content.trim())) {
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "producing");
+          producing = true;
+        }
         if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
         if (content) { acc += content; yield { kind: "assistant_text", delta: content }; }
         if (tok !== undefined) outputTokens += tok;
@@ -377,16 +394,55 @@ export async function* runFormat(
       const callStats = getStats();
       if (callStats) yield buildLlmCallStatsEvent(callStats);
     } catch (e) {
-      if (signal.aborted || (e as Error).name === "AbortError") return acc;
-      if (streamChunkConsumed) throw e;
-      if (!fallback.allowContextFallback && classifyContextError(e) !== null) throw e;
-      if (!shouldFallbackStreamToNonStream(e, signal)) throw e;
+      if (signal.aborted || (e as Error).name === "AbortError") {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "cancelled");
+        activeFormatLifecycle = null;
+        return acc;
+      }
+      if (streamChunkConsumed) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
+        activeFormatLifecycle = null;
+        throw e;
+      }
+      if (!fallback.allowContextFallback && classifyContextError(e) !== null) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+        activeFormatLifecycle = null;
+        throw e;
+      }
+      if (!shouldFallbackStreamToNonStream(e, signal)) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
+        activeFormatLifecycle = null;
+        throw e;
+      }
       const fallbackStartMs = Date.now();
-      const resp = await llm.chat.completions.create(
-        { ...p, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-        { signal },
-      );
-      acc = resp.choices[0]?.message?.content ?? "";
+      let resp: OpenAI.Chat.ChatCompletion;
+      try {
+        resp = await llm.chat.completions.create(
+          { ...p, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+          { signal },
+        );
+      } catch (fallbackError) {
+        yield lifecycleEvent(
+          activeFormatLifecycle.id,
+          activeFormatLifecycle.action,
+          signal.aborted || (fallbackError as Error).name === "AbortError"
+            ? "cancelled"
+            : classifyContextError(fallbackError) !== null
+              ? "retrying"
+              : "failed",
+        );
+        activeFormatLifecycle = null;
+        throw fallbackError;
+      }
+      const fallbackMessage = resp.choices[0]?.message;
+      const fallbackReasoning = completionReasoning(fallbackMessage);
+      acc = fallbackMessage?.content ?? "";
+      if (fallbackReasoning.trim() || acc.trim()) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "producing");
+      }
+      if (fallbackReasoning) {
+        yield { kind: "assistant_text", delta: fallbackReasoning, isReasoning: true };
+      }
       const completionTokens = extractUsage(resp);
       const promptTokens = resp.usage?.prompt_tokens;
       if (completionTokens !== undefined) outputTokens += completionTokens;
@@ -401,6 +457,9 @@ export async function* runFormat(
           llmDurationMs: elapsed,
         });
       }
+    }
+    if (activeFormatLifecycle) {
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "validating");
     }
     return acc;
   }
@@ -544,10 +603,19 @@ export async function* runFormat(
     }
     yield emitSegmentBudgetEvent(segment, params, sourceChunks);
     if (signal.aborted) {
+      if (activeFormatLifecycle) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "cancelled");
+        activeFormatLifecycle = null;
+      }
       return { segmentId: segment.id, report: "aborted", formatted: segment.markdown };
     }
     const parsedSegment = parseFormatSegmentOutput(text);
     if (parsedSegment.data && parsedSegment.data.segmentId === segment.id && !parsedSegment.truncated) {
+      if (activeFormatLifecycle) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "applying");
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "completed");
+        activeFormatLifecycle = null;
+      }
       yield { kind: "tool_result", ok: true, preview: `${segment.id}: ${parsedSegment.data.formatted.length} chars` };
       return parsedSegment.data;
     }
@@ -564,6 +632,10 @@ export async function* runFormat(
           report: childOutputs.map((output) => output.report).join("\n"),
           formatted: childOutputs.map((output) => output.formatted).join(""),
         };
+      }
+      if (activeFormatLifecycle) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
+        activeFormatLifecycle = null;
       }
       throw new Error(`Format: segment ${segment.id} response was truncated and cannot be split further`);
     }
@@ -585,12 +657,21 @@ export async function* runFormat(
     yield emitSegmentBudgetEvent(segment, retryParams, sourceChunks);
     const retryParsed = parseFormatSegmentOutput(retryText);
     if (retryParsed.data && retryParsed.data.segmentId === segment.id && !retryParsed.truncated) {
+      if (activeFormatLifecycle) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "applying");
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "completed");
+        activeFormatLifecycle = null;
+      }
       yield { kind: "tool_result", ok: true, preview: `${segment.id}: ${retryParsed.data.formatted.length} chars` };
       return retryParsed.data;
     }
     const retryHint = retryParsed.data && retryParsed.data.segmentId !== segment.id
       ? `segment id mismatch: expected ${segment.id}, got ${retryParsed.data.segmentId}`
       : retryParsed.hint;
+    if (activeFormatLifecycle) {
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
+      activeFormatLifecycle = null;
+    }
     throw new Error(`Format: segment ${segment.id} failed: ${retryHint || hint}`);
   }
 
@@ -805,7 +886,15 @@ export async function* runFormat(
   }
 
   const missingFinal = missingTokensWithContext(original, finalFormatted);
+  const previewLifecycle = activeFormatLifecycle as ReturnType<typeof createLlmLifecycle> | null;
+  if (previewLifecycle) {
+    yield lifecycleEvent(previewLifecycle.id, previewLifecycle.action, "applying");
+  }
   yield { kind: "format_preview", tempPath, report: finalReport, missingTokens: missingFinal, visionCount: visionDescriptions.size };
+  if (previewLifecycle) {
+    yield lifecycleEvent(previewLifecycle.id, previewLifecycle.action, "completed");
+    activeFormatLifecycle = null;
+  }
   const visionOn = visionDescriptions.size > 0;
   yield {
     kind: "eval_meta",

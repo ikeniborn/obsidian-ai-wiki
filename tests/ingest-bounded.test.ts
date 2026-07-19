@@ -1786,21 +1786,14 @@ test("mapper telemetry and synthesis content are yielded before delayed helpers 
         mapperComplete = true;
         return response;
       }
-      return (async function* () {
-        const output = JSON.stringify({
-          reasoning: "No page needed.",
-          actions: [],
-          skips: [{ entityKey: "live-events", reason: "Fixture skip." }],
-          entity_types_delta: [],
-        });
-        yield {
-          id: "live-content", object: "chat.completion.chunk", created: 0, model: "mock",
-          choices: [{ index: 0, delta: { content: output.slice(0, 1) }, finish_reason: null }],
-        } as OpenAI.Chat.ChatCompletionChunk;
-        await synthesisGate.promise;
-        yield* streamText(output.slice(1));
-        synthesisComplete = true;
-      })();
+      await synthesisGate.promise;
+      synthesisComplete = true;
+      return mockChatResponse(params, JSON.stringify({
+        reasoning: "No page needed.",
+        actions: [],
+        skips: [{ entityKey: "live-events", reason: "Fixture skip." }],
+        entity_types_delta: [],
+      }));
     } } },
   } as unknown as LlmClient;
   const generator = runIngest(
@@ -1841,15 +1834,17 @@ test("mapper telemetry and synthesis content are yielded before delayed helpers 
 
   await expectLive(
     "ingest.evidence-map",
-    (event) => event.kind === "tool_use"
-      && event.name === "Evidence mapping"
-      && (event.input as { callSite?: string }).callSite === "ingest.evidence-map",
+    (event) => event.kind === "llm_lifecycle"
+      && event.action === "extract_source_facts"
+      && event.phase === "waiting",
     mapperGate.resolve,
     () => mapperComplete,
   );
   await expectLive(
     "ingest.synthesize",
-    (event) => event.kind === "assistant_text" && event.delta === "{",
+    (event) => event.kind === "llm_lifecycle"
+      && event.action === "synthesize_wiki_pages"
+      && event.phase === "waiting",
     synthesisGate.resolve,
     () => synthesisComplete,
   );

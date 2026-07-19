@@ -15,11 +15,13 @@ import type {
   RunEvent,
 } from "../types";
 import {
+  createLlmLifecycle,
   runStructuredWithRetry,
   StructuredValidationError,
   type RunStructuredArgs,
   type RunStructuredResult,
 } from "./structured-output";
+import { lifecycleEvent } from "../llm-lifecycle";
 import { prepareChatMessages } from "./llm-utils";
 import mapPrompt from "../../prompts/ingest-evidence-map.md";
 import reducePrompt from "../../prompts/ingest-evidence-reduce.md";
@@ -602,7 +604,6 @@ function estimateStructuredRequest(
 
 async function runBoundedStructuredWithRetry<T>(
   args: RunStructuredArgs<T>,
-  onRetry?: (attempt: number) => void,
 ): Promise<RunStructuredResult<T>> {
   let messages = args.baseMessages;
   for (let attempt = 0; attempt <= args.maxRetries; attempt++) {
@@ -611,6 +612,10 @@ async function runBoundedStructuredWithRetry<T>(
         ...args,
         baseMessages: messages,
         maxRetries: 0,
+        lifecycle: attempt === 0
+          ? args.lifecycle
+          : { ...args.lifecycle, id: `${args.lifecycle.id}:bounded-${attempt}` },
+        validationExhaustionPhase: attempt === args.maxRetries ? "failed" : "retrying",
       });
     } catch (error) {
       if (!(error instanceof StructuredValidationError)) throw error;
@@ -621,41 +626,10 @@ async function runBoundedStructuredWithRetry<T>(
           error.lastError,
         );
       }
-      onRetry?.(attempt + 1);
       messages = structuredRepairMessages(args.baseMessages);
     }
   }
   throw new Error("unreachable bounded structured retry state");
-}
-
-type EvidenceProgressCallSite =
-  | "ingest.evidence-map"
-  | "init.bootstrap-map"
-  | "ingest.evidence-reduce";
-
-function evidenceOperationName(callSite: EvidenceProgressCallSite): string {
-  return callSite === "ingest.evidence-reduce" ? "Evidence reduction" : "Evidence mapping";
-}
-
-function startEvidenceOperation(
-  runtime: EvidenceRuntime,
-  callSite: EvidenceProgressCallSite,
-  attempt: number,
-  reason: "initial" | "structured_retry" = "initial",
-): void {
-  runtime.onEvent?.({
-    kind: "tool_use",
-    name: evidenceOperationName(callSite),
-    input: { callSite, attempt, reason },
-  });
-}
-
-function finishEvidenceOperation(
-  runtime: EvidenceRuntime,
-  ok: boolean,
-  preview: "completed" | "failed" | "retrying",
-): void {
-  runtime.onEvent?.({ kind: "tool_result", ok, preview });
 }
 
 function forwardEvidenceStructuredEvent(
@@ -668,7 +642,9 @@ function forwardEvidenceStructuredEvent(
       message: "Structured output validation event",
     });
   } else if (
-    event.kind === "rule_fired"
+    event.kind === "llm_lifecycle"
+    || event.kind === "assistant_text"
+    || event.kind === "rule_fired"
     || event.kind === "llm_call_stats"
     || event.kind === "prompt_budget"
   ) {
@@ -895,7 +871,6 @@ async function mapChunk(
   const configuredBudget = policy.inputBudgetTokens;
   const mapCallSite = runtime.mapCallSite ?? "ingest.evidence-map";
   const opts = { ...(runtime.opts ?? {}), inputBudgetTokens: configuredBudget };
-  startEvidenceOperation(runtime, mapCallSite, 0);
   try {
     const messages = messagesForMapper(mapPrompt, chunk, domainId, mode, source);
     const mapperOpts = taskLlmOptions(opts, policy, configuredBudget);
@@ -923,19 +898,26 @@ async function mapChunk(
       profile: { kind: "json-zod", schema: mapperSchemaFor(chunk, mode) },
       maxRetries: policy.mapperRetries ?? 1,
       callSite: mapCallSite,
+      lifecycle: createLlmLifecycle("extract_source_facts"),
       signal: runtime.signal ?? new AbortController().signal,
       onEvent: (event) => forwardEvidenceStructuredEvent(runtime, event),
       transport: "non-stream",
-    }, (attempt) => {
-      finishEvidenceOperation(runtime, false, "retrying");
-      startEvidenceOperation(runtime, mapCallSite, attempt, "structured_retry");
+      contextErrorsRetry: true,
     });
-    const mapped = validateEvidenceMap({ chunk, packets: result.value.packets, noEvidence: result.value.noEvidence }, source)
-      .map((packet) => ({ ...packet, id: `${chunk.id}:${packet.id}` }));
-    finishEvidenceOperation(runtime, true, "completed");
+    let mapped: VerifiedEvidencePacket[];
+    try {
+      mapped = validateEvidenceMap(
+        { chunk, packets: result.value.packets, noEvidence: result.value.noEvidence },
+        source,
+      ).map((packet) => ({ ...packet, id: `${chunk.id}:${packet.id}` }));
+    } catch (error) {
+      runtime.onEvent?.(lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "failed"));
+      throw error;
+    }
+    runtime.onEvent?.(lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying"));
+    runtime.onEvent?.(lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "completed"));
     return mapped;
   } catch (error) {
-    finishEvidenceOperation(runtime, false, "failed");
     if (error instanceof EvidenceCoverageError) throw error;
     if (classifyContextError(error) !== null) throw error;
     throw new EvidenceCoverageError(
@@ -1124,7 +1106,6 @@ async function reduceBatchOnce(
 ): Promise<EntityEvidence> {
   const expected = evidenceFromUnits(units);
   const configuredBudget = policy.inputBudgetTokens;
-  startEvidenceOperation(runtime, "ingest.evidence-reduce", 0);
   try {
     const messages = messagesForReducer(units);
     const reducerOpts = taskLlmOptions(runtime.opts ?? {}, policy, reducerBudget);
@@ -1149,21 +1130,25 @@ async function reduceBatchOnce(
       profile: { kind: "json-zod", schema: reducerSchemaFor(expected) },
       maxRetries: policy.reducerRetries ?? 1,
       callSite: "ingest.evidence-reduce",
+      lifecycle: createLlmLifecycle("reduce_source_evidence"),
       signal: runtime.signal ?? new AbortController().signal,
       onEvent: (event) => forwardEvidenceStructuredEvent(runtime, event),
       transport: "non-stream",
-    }, (attempt) => {
-      finishEvidenceOperation(runtime, false, "retrying");
-      startEvidenceOperation(runtime, "ingest.evidence-reduce", attempt, "structured_retry");
+      contextErrorsRetry: true,
     });
-    assertReducedEntity(expected, response.value);
-    if (JSON.stringify(response.value).length >= JSON.stringify(units).length) {
-      throw new EvidenceReducerError(`Reducer non-progress at depth ${depth}`);
+    try {
+      assertReducedEntity(expected, response.value);
+      if (JSON.stringify(response.value).length >= JSON.stringify(units).length) {
+        throw new EvidenceReducerError(`Reducer non-progress at depth ${depth}`);
+      }
+    } catch (error) {
+      runtime.onEvent?.(lifecycleEvent(response.lifecycle.id, response.lifecycle.action, "failed"));
+      throw error;
     }
-    finishEvidenceOperation(runtime, true, "completed");
+    runtime.onEvent?.(lifecycleEvent(response.lifecycle.id, response.lifecycle.action, "applying"));
+    runtime.onEvent?.(lifecycleEvent(response.lifecycle.id, response.lifecycle.action, "completed"));
     return response.value;
   } catch (error) {
-    finishEvidenceOperation(runtime, false, "failed");
     if (error instanceof EvidenceReducerError) throw error;
     if (classifyContextError(error) !== null) throw error;
     throw new EvidenceReducerError(
