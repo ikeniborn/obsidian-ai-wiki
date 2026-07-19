@@ -344,6 +344,7 @@ test("force wipe removes the complete target tree and returns every removed file
   assert.equal(adapter.rmdirRecursive.every((recursive) => recursive === false), true);
   assert.equal(adapter.rmdirs.at(-1), transaction);
   assert.equal(await adapter.exists(transaction), false);
+  assert.equal(await adapter.exists(`${transaction}/recovery`), false);
 });
 
 for (const failure of ["remove", "rmdir", "false-success"] as const) {
@@ -795,6 +796,7 @@ test("force wipe rolls back when cancellation arrives during non-recursive rmdir
 
 test("force wipe preserves and reports an old-root recreation during final transaction rmdir", async () => {
   const adapter = seededAdapter();
+  const originalBefore = relativeTreeSnapshot(adapter);
   let transaction = "";
   adapter.beforeRmdir = (path) => {
     if (!transaction) {
@@ -807,10 +809,16 @@ test("force wipe preserves and reports an old-root recreation during final trans
 
   await assert.rejects(
     wipeDomainFolder(new VaultTools(adapter, "/vault"), "demo"),
-    /trust|original root|unexpectedly exists/i,
+    (error: Error) => {
+      assert.match(error.message, /trust|original root|unexpectedly exists/i);
+      assert.match(error.message, new RegExp(`${transaction}/recovery`));
+      return true;
+    },
   );
 
   assert.equal(adapter.files.get("!Wiki/demo/concurrent.md"), "NEW DURING FINAL RMDIR");
+  assert.deepEqual(relativeTreeSnapshot(adapter, `${transaction}/recovery`), originalBefore);
+  assert.equal(await adapter.exists(transaction), true);
   assert.equal(adapter.rmdirRecursive.every((recursive) => recursive === false), true);
 });
 
@@ -1012,6 +1020,46 @@ test("force init reports terminal wipe failure and starts zero source ingestion"
 
   assert.equal(events.filter((event) => event.kind === "tool_use" && event.name === "WipeDomain").length, 1);
   assert.equal(events.some((event) => event.kind === "error" && /wipe failed/i.test(event.message)), true);
+  assert.equal(events.some((event) => event.kind === "file_start"), false);
+  assert.equal(events.some((event) => event.kind === "domain_created" || event.kind === "domain_updated"), false);
+});
+
+test("force init preserves the old snapshot in recovery after a final teardown conflict", async () => {
+  const adapter = seededAdapter();
+  const originalBefore = relativeTreeSnapshot(adapter);
+  const events: RunEvent[] = [];
+  let transaction = "";
+  adapter.beforeRmdir = (path) => {
+    if (!transaction) {
+      transaction = (adapter.renames[0]?.[1] ?? "").slice(0, -"/domain".length);
+    }
+    if (path === transaction) {
+      void adapter.write("!Wiki/demo/concurrent.md", "NEW DURING FINAL RMDIR");
+    }
+  };
+
+  for await (const event of runInit(
+    ["demo", "--force"],
+    new VaultTools(adapter, "/vault"),
+    bootstrapLlm(),
+    "m",
+    [domain()],
+    "Vault",
+    new AbortController().signal,
+    { structuredRetries: 0 },
+  )) events.push(event);
+
+  const recovery = `${transaction}/recovery`;
+  assert.equal(adapter.files.get("!Wiki/demo/concurrent.md"), "NEW DURING FINAL RMDIR");
+  assert.deepEqual(relativeTreeSnapshot(adapter, recovery), originalBefore);
+  assert.equal(events.filter((event) => event.kind === "tool_use" && event.name === "WipeDomain").length, 1);
+  assert.equal(
+    events.some((event) =>
+      event.kind === "tool_result"
+      && !event.ok
+      && event.preview.includes(recovery)),
+    true,
+  );
   assert.equal(events.some((event) => event.kind === "file_start"), false);
   assert.equal(events.some((event) => event.kind === "domain_created" || event.kind === "domain_updated"), false);
 });

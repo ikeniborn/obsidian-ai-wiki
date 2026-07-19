@@ -59310,9 +59310,61 @@ async function verifyDomainTree(vaultTools, snapshot) {
     }
   }
 }
+function snapshotAtRecoveryPath(snapshot, recoveryRoot) {
+  const recoverPath = (path5) => path5 === snapshot.root ? recoveryRoot : `${recoveryRoot}${path5.slice(snapshot.root.length)}`;
+  return {
+    ...snapshot,
+    root: recoveryRoot,
+    // Re-key paths while retaining the owned snapshot buffers. This adds no
+    // second byte snapshot; verification still reads one file at a time.
+    files: new Map([...snapshot.files].map(([path5, bytes]) => [recoverPath(path5), bytes])),
+    folders: snapshot.folders.map(recoverPath)
+  };
+}
+async function preserveSnapshotInRecovery(vaultTools, transaction, snapshot) {
+  const recoveryRoot = `${transaction}/recovery`;
+  if (await vaultTools.exists(recoveryRoot)) {
+    throw new Error(`rollback trust failure: recovery path already exists at ${recoveryRoot}`);
+  }
+  if (!await vaultTools.exists(transaction)) {
+    try {
+      await vaultTools.mkdir(transaction);
+    } catch (error) {
+      throw new Error(
+        `rollback recovery mkdir failed at ${recoveryRoot}: ${error.message}`
+      );
+    }
+    if (!await vaultTools.exists(transaction)) {
+      throw new Error(`rollback recovery parent was not created for ${recoveryRoot}`);
+    }
+  }
+  await requireEmptyDirectory(
+    vaultTools,
+    transaction,
+    void 0,
+    "rollback recovery transaction"
+  );
+  const recoverySnapshot = snapshotAtRecoveryPath(snapshot, recoveryRoot);
+  await restoreDomainTree(
+    vaultTools,
+    recoverySnapshot,
+    new Set(recoverySnapshot.files.keys())
+  );
+  return recoveryRoot;
+}
 async function rollbackWipeTransaction(vaultTools, root, transaction, quarantinedRoot, rootRenameAttempted, snapshot, removed) {
   const rootExists = await vaultTools.exists(root);
   const quarantinedExists = await vaultTools.exists(quarantinedRoot);
+  if (rootExists && !quarantinedExists && snapshot) {
+    const recoveryRoot = await preserveSnapshotInRecovery(
+      vaultTools,
+      transaction,
+      snapshot
+    );
+    throw new Error(
+      `rollback trust failure: original root unexpectedly exists; old snapshot preserved at recovery path ${recoveryRoot}`
+    );
+  }
   if (!rootRenameAttempted || rootExists && !quarantinedExists) {
     if (await vaultTools.exists(transaction)) {
       const listed = await vaultTools.adapter.list(transaction);
