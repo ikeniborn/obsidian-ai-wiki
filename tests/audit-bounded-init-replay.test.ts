@@ -15,6 +15,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { auditBoundedInitReplay } from "../scripts/audit-bounded-init-replay";
+import { contentHash } from "../src/content-hash";
 import { createPromptBudgetEvent } from "../src/prompt-budget";
 
 interface AgentRecord {
@@ -34,6 +35,8 @@ interface Fixture {
 const SESSION = "200";
 const SOURCE_MARKER = "SECRET_SOURCE_MARKER";
 const IDLE_DEADLINE_MS = 300_000;
+const OLD_MANIFEST_FILE = "obsolete-old.md";
+const OLD_MANIFEST_CONTENT = "old domain content";
 const SCRIPT_PATH = fileURLToPath(
   new URL("../scripts/audit-bounded-init-replay.ts", import.meta.url),
 );
@@ -159,14 +162,30 @@ function sessionRecords(options: {
   const domainId = options.domainId ?? "domain-id";
   const wikiFolder = options.wikiFolder ?? "replay-folder";
   const sources = options.sources ?? ["sources/a.md", "sources/b.md"];
+  const removedPaths = [OLD_MANIFEST_FILE, "obsolete-empty/"];
+  const removedFileHashes = {
+    [OLD_MANIFEST_FILE]: contentHash(OLD_MANIFEST_CONTENT),
+  };
   const records = [
     agentRecord({ kind: "system", message: "start op=init" }, session),
+    agentRecord({ kind: "run_config", llmIdleTimeoutMs: IDLE_DEADLINE_MS }, session),
     agentRecord({
       kind: "tool_use",
       name: "WipeDomain",
       input: { folder: `!Wiki/${wikiFolder}` },
     }, session),
     agentRecord({ kind: "tool_result", ok: true }, session),
+    agentRecord({
+      kind: "wipe_complete",
+      domainId,
+      removedPaths,
+      removedFileHashes,
+      manifestHash: contentHash(JSON.stringify({
+        removedPaths,
+        removedFileHashes,
+      })),
+      atMs: Number(session),
+    }, session),
     agentRecord({
       kind: "domain_created",
       entry: {
@@ -250,11 +269,15 @@ async function fixture(options: {
 async function audit(value: Fixture, options: {
   session?: string;
   expectedSources?: number;
+  idleTimeoutMs?: number;
 } = {}) {
   return auditBoundedInitReplay({
     vault: value.root,
     session: options.session ?? "latest-init",
     expectedSources: options.expectedSources ?? 2,
+    ...(options.idleTimeoutMs === undefined
+      ? {}
+      : { idleTimeoutMs: options.idleTimeoutMs }),
   });
 }
 
@@ -312,7 +335,9 @@ test("success uses domain_created wiki_folder when domainId differs and other do
       lifecycleCalls: 2,
       invalidLifecycleCalls: 0,
       wipeDomainEvents: 1,
+      wipeCompleteEvents: 1,
       stalePreWipeDescendants: 0,
+      systemFinishEvents: 1,
       technicalHumanLabelFields: 0,
       pageRecords: 2,
       chunkRecords: 2,
@@ -348,6 +373,168 @@ test("full lifecycle, one wipe, and diagnostics-only technical fields pass", asy
     assert.equal(summary.lifecycleCalls, 22);
     assert.equal(summary.wipeDomainEvents, 1);
     assert.deepEqual(after, before);
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("selected Init requires exactly one successful system finish", async (t) => {
+  for (const [name, mutate, expected] of [
+    [
+      "missing",
+      (records: AgentRecord[]) => records.filter((record) =>
+        !(record.event.kind === "system"
+          && String(record.event.message).startsWith("finish status="))),
+      /system finish events: 0, expected: 1/i,
+    ],
+    [
+      "duplicate",
+      (records: AgentRecord[]) => {
+        const finish = records.at(-1)!;
+        return [...records, structuredClone(finish)];
+      },
+      /system finish events: 2, expected: 1/i,
+    ],
+    ...(["error", "cancelled"] as const).map((status) => [
+      status,
+      (records: AgentRecord[]) => records.map((record) =>
+        record.event.kind === "system"
+          && String(record.event.message).startsWith("finish status=")
+          ? agentRecord({ kind: "system", message: `finish status=${status}` })
+          : record),
+      new RegExp(`system finish status: ${status}`, "i"),
+    ]),
+  ] as Array<[
+    string,
+    (records: AgentRecord[]) => AgentRecord[],
+    RegExp,
+  ]>) {
+    await t.test(name, async () => {
+      const value = await fixture({ records: mutate(sessionRecords()) });
+      try {
+        await assert.rejects(audit(value), expected);
+      } finally {
+        await value.cleanup();
+      }
+    });
+  }
+});
+
+test("selected Init rejects any error event despite successful file_done records", async () => {
+  const records = sessionRecords();
+  records.splice(records.length - 1, 0, agentRecord({
+    kind: "error",
+    message: "late replay failure",
+  }));
+  const value = await fixture({ records });
+  try {
+    await assert.rejects(audit(value), /session error events: 1/i);
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("selected Init rejects events recorded after its system finish", async () => {
+  const records = sessionRecords();
+  records.push(agentRecord({ kind: "info_text", icon: "·", summary: "late event" }));
+  const value = await fixture({ records });
+  try {
+    await assert.rejects(audit(value), /system finish is not terminal/i);
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("latest Init selects an incomplete newest session and rejects it", async () => {
+  const newest = sessionRecords({ session: "300", sources: ["new.md"] })
+    .filter((record) =>
+      !(record.event.kind === "system"
+        && String(record.event.message).startsWith("finish status=")));
+  const value = await fixture({
+    records: [
+      ...sessionRecords({ session: "100", sources: ["old.md"] }),
+      ...newest,
+    ],
+  });
+  try {
+    await assert.rejects(
+      audit(value, { expectedSources: 1 }),
+      /system finish events: 0, expected: 1/i,
+    );
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("latest Init does not fall back when the newest session is missing start", async () => {
+  const newest = sessionRecords({ session: "300", sources: ["new.md"] })
+    .filter((record) =>
+      !(record.event.kind === "system"
+        && String(record.event.message).startsWith("start op=init")));
+  const value = await fixture({
+    records: [
+      ...sessionRecords({ session: "100", sources: ["old.md"] }),
+      ...newest,
+    ],
+  });
+  try {
+    await assert.rejects(
+      audit(value, { expectedSources: 1 }),
+      /system start events: 0, expected: 1/i,
+    );
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("selected session idle timeout is independent from settings changed after replay", async () => {
+  const records = sessionRecords();
+  const config = records.find((record) => record.event.kind === "run_config")!;
+  config.event.llmIdleTimeoutMs = 1_000;
+  for (const record of records) {
+    if (
+      record.event.kind === "llm_lifecycle"
+      && record.event.id === "call-0"
+      && ["producing", "validating", "applying", "completed"].includes(String(record.event.phase))
+    ) {
+      record.event.atMs = 3_003;
+    }
+  }
+  const value = await fixture({ records });
+  try {
+    await writeFile(
+      path.join(path.dirname(value.agentPath), "data.json"),
+      JSON.stringify({ llmIdleTimeoutSec: 999 }),
+      "utf8",
+    );
+    await assert.rejects(
+      audit(value),
+      /lifecycle call-0 exceeds idle deadline: 2001ms > 1000ms/i,
+    );
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("selected session without run_config is explicitly inconclusive", async () => {
+  const records = sessionRecords().filter((record) => record.event.kind !== "run_config");
+  const value = await fixture({ records });
+  try {
+    await assert.rejects(
+      audit(value),
+      /run_config events: 0, expected: 1.*llmIdleTimeoutMs is missing or invalid/i,
+    );
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("explicit idle timeout override permits auditing a legacy run_config gap", async () => {
+  const records = sessionRecords().filter((record) => record.event.kind !== "run_config");
+  const value = await fixture({ records });
+  try {
+    const summary = await audit(value, { idleTimeoutMs: IDLE_DEADLINE_MS });
+    assert.equal(summary.session, SESSION);
   } finally {
     await value.cleanup();
   }
@@ -543,18 +730,184 @@ test("two WipeDomain events fail with the observed count", async () => {
   }
 });
 
+test("missing and duplicate wipe_complete markers fail pairing", async (t) => {
+  for (const [name, mutate, expected] of [
+    [
+      "missing",
+      (records: AgentRecord[]) => records.filter((record) =>
+        record.event.kind !== "wipe_complete"),
+      /wipe_complete events: 0, expected: 1/i,
+    ],
+    [
+      "duplicate",
+      (records: AgentRecord[]) => {
+        const marker = records.find((record) => record.event.kind === "wipe_complete")!;
+        const index = records.indexOf(marker);
+        return [
+          ...records.slice(0, index + 1),
+          structuredClone(marker),
+          ...records.slice(index + 1),
+        ];
+      },
+      /wipe_complete events: 2, expected: 1/i,
+    ],
+  ] as Array<[
+    string,
+    (records: AgentRecord[]) => AgentRecord[],
+    RegExp,
+  ]>) {
+    await t.test(name, async () => {
+      const value = await fixture({ records: mutate(sessionRecords()) });
+      try {
+        await assert.rejects(audit(value), expected);
+      } finally {
+        await value.cleanup();
+      }
+    });
+  }
+});
+
+test("pre-wipe file surviving with fresh mtime fails by manifest identity", async () => {
+  const value = await fixture();
+  const staleFile = path.join(
+    value.root,
+    "!Wiki",
+    "replay-folder",
+    OLD_MANIFEST_FILE,
+  );
+  try {
+    await writeFile(staleFile, OLD_MANIFEST_CONTENT, "utf8");
+    await utimes(staleFile, new Date(), new Date());
+    await assert.rejects(
+      audit(value),
+      /stale pre-wipe descendants: 1.*obsolete-old\.md/i,
+    );
+  } finally {
+    await value.cleanup();
+  }
+});
+
 test("stale pre-wipe empty directory manifest fails with its relative path", async () => {
   const value = await fixture();
   const staleDir = path.join(value.root, "!Wiki", "replay-folder", "obsolete-empty");
   try {
     await mkdir(staleDir);
-    await utimes(staleDir, 0.1, 0.1);
+    await utimes(staleDir, new Date(), new Date());
     await assert.rejects(
       audit(value),
       /stale pre-wipe descendants: 1.*obsolete-empty\//i,
     );
   } finally {
     await value.cleanup();
+  }
+});
+
+test("preparing lifecycle diagnostics require known callSite, transport, and attempt", async (t) => {
+  for (const [name, mutate, expected] of [
+    [
+      "missing transport",
+      (diagnostics: Record<string, unknown>) => {
+        delete diagnostics.transport;
+      },
+      /lifecycle call-0 missing diagnostics\.transport/i,
+    ],
+    [
+      "unknown callSite",
+      (diagnostics: Record<string, unknown>) => {
+        diagnostics.callSite = "unknown.call";
+      },
+      /lifecycle call-0 has invalid diagnostics\.callSite/i,
+    ],
+    [
+      "unknown transport",
+      (diagnostics: Record<string, unknown>) => {
+        diagnostics.transport = "websocket";
+      },
+      /lifecycle call-0 has invalid diagnostics\.transport/i,
+    ],
+    [
+      "missing attempt",
+      (diagnostics: Record<string, unknown>) => {
+        delete diagnostics.attempt;
+      },
+      /lifecycle call-0 missing diagnostics\.attempt/i,
+    ],
+  ] as Array<[
+    string,
+    (diagnostics: Record<string, unknown>) => void,
+    RegExp,
+  ]>) {
+    await t.test(name, async () => {
+      const records = sessionRecords();
+      const preparing = records.find((record) =>
+        record.event.kind === "llm_lifecycle"
+        && record.event.id === "call-0"
+        && record.event.phase === "preparing")!;
+      mutate(preparing.event.diagnostics as Record<string, unknown>);
+      const value = await fixture({ records });
+      try {
+        await assert.rejects(audit(value), expected);
+      } finally {
+        await value.cleanup();
+      }
+    });
+  }
+});
+
+test("prompt budget callSite must match its lifecycle diagnostics", async () => {
+  const records = sessionRecords();
+  const budget = records.find((record) =>
+    record.event.kind === "prompt_budget" && record.event.requestId === "call-0")!;
+  budget.event.callSite = "ingest.synthesize";
+  const value = await fixture({ records });
+  try {
+    await assert.rejects(
+      audit(value),
+      /prompt_budget requestId call-0 callSite ingest\.synthesize does not match lifecycle ingest\.evidence-map/i,
+    );
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("retry lifecycle requires stable transport and exactly incremented attempt", async (t) => {
+  for (const [name, retryOptions, expected] of [
+    [
+      "transport",
+      { attempt: 1, diagnostics: { transport: "stream" } },
+      /lifecycle call-0 retrying changed transport: non-stream -> stream/i,
+    ],
+    [
+      "attempt",
+      { attempt: 0 },
+      /lifecycle call-0 retrying has invalid attempt transition: 0 -> 0/i,
+    ],
+  ] as const) {
+    await t.test(name, async () => {
+      const records = sessionRecords({ sources: ["sources/a.md"] });
+      const firstLifecycle = records.findIndex((record) =>
+        record.event.kind === "llm_lifecycle" && record.event.id === "call-0");
+      records.splice(
+        firstLifecycle,
+        7,
+        ...lifecycleRecords("call-0", 1_000, SESSION, {
+          phases: ["preparing", "sent", "waiting", "retrying"],
+        }),
+        ...lifecycleRecords("call-0:retry-1", 1_100, SESSION, retryOptions),
+      );
+      const firstBudget = records.findIndex((record) => record.event.kind === "prompt_budget");
+      records.splice(
+        firstBudget + 1,
+        0,
+        agentRecord(promptBudget({ requestId: "call-0:retry-1" })),
+      );
+      const value = await fixture({ records });
+      try {
+        await assert.rejects(audit(value, { expectedSources: 1 }), expected);
+      } finally {
+        await value.cleanup();
+      }
+    });
   }
 });
 
@@ -746,6 +1099,51 @@ test("malformed index JSONL reports its file and line", async () => {
   });
   try {
     await assert.rejects(audit(value), /index\.jsonl:2:/i);
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("agent and index JSONL are streamed instead of read as whole files", async () => {
+  const source = await readFile(SCRIPT_PATH, "utf8");
+  assert.doesNotMatch(source, /readFile\(agentPath/);
+  assert.doesNotMatch(source, /readFile\(indexPath/);
+  assert.match(source, /createReadStream/);
+});
+
+test("latest-init selection works after a large unrelated prefix", async () => {
+  const prefix = Array.from({ length: 20_000 }, (_, index) =>
+    agentRecord({ kind: "info_text", icon: "·", summary: `old-${index}` }, "100"));
+  const value = await fixture({
+    records: [...prefix, ...sessionRecords()],
+  });
+  try {
+    const summary = await audit(value);
+    assert.equal(summary.session, SESSION);
+    assert.equal(summary.successfulSources, 2);
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("oversized agent JSONL line fails with a clear byte-limit error", async () => {
+  const value = await fixture({
+    agentRaw: `${JSON.stringify({
+      ts: new Date().toISOString(),
+      session: SESSION,
+      op: "init",
+      event: {
+        kind: "info_text",
+        icon: "·",
+        summary: "x".repeat(1_100_000),
+      },
+    })}\n`,
+  });
+  try {
+    await assert.rejects(
+      audit(value),
+      /agent\.jsonl:1: line exceeds 1048576 bytes/i,
+    );
   } finally {
     await value.cleanup();
   }

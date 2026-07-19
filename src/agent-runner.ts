@@ -238,6 +238,8 @@ export class AgentRunner {
       req.operation,
       req.policyOperation,
     );
+    const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1000;
+    yield { kind: "run_config", llmIdleTimeoutMs: idleTimeoutMs };
     const baseUrlHint = this.settings.backend === "native-agent"
       ? ` @ ${this.settings.nativeAgent.baseUrl}`
       : "";
@@ -251,7 +253,6 @@ export class AgentRunner {
       : this.domains;
 
     const similarity = this.buildSimilarity();
-    const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1000;
     const maxRetries = this.settings.llmIdleRetries ?? 3;
     const desktopTimers = this.isMobile ? null : loadDesktopTimers();
     type IdleTimer = number | NodeJS.Timeout;

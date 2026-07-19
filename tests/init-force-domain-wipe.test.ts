@@ -988,6 +988,8 @@ test("force init emits one wipe, proves absence, then creates a fresh domain bef
   const wipeIndexes = events.flatMap((event, index) =>
     event.kind === "tool_use" && event.name === "WipeDomain" ? [index] : []);
   const wipeEvent = events[wipeIndexes[0]];
+  const wipeCompleteIndex = events.findIndex((event) => event.kind === "wipe_complete");
+  const wipeComplete = events[wipeCompleteIndex];
   const createdIndex = events.findIndex((event) => event.kind === "domain_created");
   const firstSourceIndex = events.findIndex((event) => event.kind === "file_start");
   assert.equal(wipeIndexes.length, 1);
@@ -997,6 +999,22 @@ test("force init emits one wipe, proves absence, then creates a fresh domain bef
   );
   assert.equal(absentAtDomainCreate, true);
   assert.equal(freshStorageAtSource, true);
+  assert.ok(wipeCompleteIndex > wipeIndexes[0]);
+  assert.ok(wipeCompleteIndex < createdIndex);
+  assert.equal(
+    wipeComplete?.kind === "wipe_complete" ? wipeComplete.domainId : undefined,
+    "demo",
+  );
+  assert.equal(
+    wipeComplete?.kind === "wipe_complete"
+      ? wipeComplete.removedPaths.includes("concept/old.md")
+      : false,
+    true,
+  );
+  assert.match(
+    wipeComplete?.kind === "wipe_complete" ? wipeComplete.manifestHash : "",
+    /^fnv1a:[0-9a-f]{8}$/,
+  );
   assert.ok(createdIndex > wipeIndexes[0]);
   assert.ok(firstSourceIndex > createdIndex);
   assert.equal(events.slice(wipeIndexes[0], createdIndex).some((event) => event.kind === "domain_updated"), false);

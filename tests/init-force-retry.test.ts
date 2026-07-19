@@ -55,6 +55,34 @@ function settings(): LlmWikiPluginSettings {
   };
 }
 
+test("runner emits effective idle timeout as machine-readable run configuration", async () => {
+  const runner = new AgentRunner(
+    { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
+    settings(),
+    new VaultTools(adapter(), "/vault"),
+    "Vault",
+    [],
+  );
+  (runner as unknown as { runOperation: () => AsyncGenerator<RunEvent> }).runOperation =
+    async function* () {};
+
+  const events: RunEvent[] = [];
+  for await (const event of runner.run({
+    operation: "init",
+    args: ["demo"],
+    cwd: "/vault",
+    signal: new AbortController().signal,
+    timeoutMs: 0,
+  })) {
+    events.push(event);
+  }
+
+  assert.deepEqual(
+    events.find((event) => event.kind === "run_config"),
+    { kind: "run_config", llmIdleTimeoutMs: 10 },
+  );
+});
+
 test("desktop idle timers use Electron-compatible synchronous require", () => {
   const source = readFileSync(new URL("../src/agent-runner.ts", import.meta.url), "utf8");
 

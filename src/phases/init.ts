@@ -29,6 +29,7 @@ import {
 } from "../prompt-budget";
 import { prepareChatMessages } from "./llm-utils";
 import { RunEventBridge } from "../run-event-bridge";
+import { contentHash } from "../content-hash";
 
 async function* forwardIngest(
   generator: AsyncGenerator<RunEvent, IngestOutcome>,
@@ -407,16 +408,31 @@ export async function* runInit(
       yield { kind: "tool_result", ok: false, preview: "force: cancelled before wipe" };
       return;
     }
-    let wiped: string[];
+    let wipeManifest: WipeDomainManifest;
     try {
-      wiped = await wipeDomainFolder(vaultTools, existing.wiki_folder, signal);
+      wipeManifest = await wipeDomainFolderWithManifest(
+        vaultTools,
+        existing.wiki_folder,
+        signal,
+      );
     } catch (error) {
       yield { kind: "tool_result", ok: false, preview: (error as Error).message };
       yield { kind: "error", message: `force: wipe failed — ${(error as Error).message}` };
       return;
     }
+    yield {
+      kind: "wipe_complete",
+      domainId,
+      ...wipeManifest,
+      atMs: Date.now(),
+    };
     yield { kind: "tool_result", ok: true };
-    yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).initProgress.removedFiles(wiped.length) };
+    yield {
+      kind: "assistant_text",
+      delta: i18nFor(resolveLang(opts.outputLanguage)).initProgress.removedFiles(
+        Object.keys(wipeManifest.removedFileHashes).length,
+      ),
+    };
 
     yield* runInitWithSources(
       domainId,
@@ -886,6 +902,30 @@ export async function wipeDomainFolder(
   signal?: AbortSignal,
   options: ForceWipeOptions = {},
 ): Promise<string[]> {
+  const manifest = await wipeDomainFolderWithManifest(
+    vaultTools,
+    wikiFolder,
+    signal,
+    options,
+  );
+  const root = forceDomainRoot(wikiFolder);
+  return Object.keys(manifest.removedFileHashes)
+    .map((relative) => `${root}/${relative}`)
+    .sort(compareCodePoints);
+}
+
+export interface WipeDomainManifest {
+  removedPaths: string[];
+  removedFileHashes: Record<string, string>;
+  manifestHash: string;
+}
+
+export async function wipeDomainFolderWithManifest(
+  vaultTools: VaultTools,
+  wikiFolder: string,
+  signal?: AbortSignal,
+  options: ForceWipeOptions = {},
+): Promise<WipeDomainManifest> {
   const root = forceDomainRoot(wikiFolder);
   requireTransactionalWipeAdapter(vaultTools);
   const snapshotByteLimit = options.snapshotByteLimit ?? FORCE_WIPE_SNAPSHOT_BYTE_LIMIT;
@@ -922,8 +962,19 @@ async function wipeDomainFolderLocked(
   signal: AbortSignal | undefined,
   snapshotByteLimit: number,
   fileByteLimit: number,
-): Promise<string[]> {
-  if (!await checkedExists(vaultTools, root, signal)) return [];
+): Promise<WipeDomainManifest> {
+  if (!await checkedExists(vaultTools, root, signal)) {
+    const removedPaths: string[] = [];
+    const removedFileHashes: Record<string, string> = {};
+    return {
+      removedPaths,
+      removedFileHashes,
+      manifestHash: contentHash(JSON.stringify({
+        removedPaths,
+        removedFileHashes,
+      })),
+    };
+  }
 
   const transaction = await createWipeTransaction(vaultTools, signal);
   const quarantinedRoot = `${transaction}/domain`;
@@ -1031,8 +1082,45 @@ async function wipeDomainFolderLocked(
     }
     throw error;
   }
-  return [...snapshot.files.keys()].map((path) =>
-    originalPathFromQuarantine(path, quarantinedRoot, root));
+  const removedFileHashes: Record<string, string> = {};
+  for (const [quarantinedPath, bytes] of snapshot.files) {
+    const originalPath = originalPathFromQuarantine(
+      quarantinedPath,
+      quarantinedRoot,
+      root,
+    );
+    removedFileHashes[originalPath.slice(root.length + 1)] = hashBytes(bytes);
+  }
+  const removedPaths = [
+    ...Object.keys(removedFileHashes),
+    ...snapshot.folders
+      .filter((folder) => folder !== quarantinedRoot)
+      .map((folder) => {
+        const originalPath = originalPathFromQuarantine(
+          folder,
+          quarantinedRoot,
+          root,
+        );
+        return `${originalPath.slice(root.length + 1)}/`;
+      }),
+  ].sort(compareCodePoints);
+  return {
+    removedPaths,
+    removedFileHashes,
+    manifestHash: contentHash(JSON.stringify({
+      removedPaths,
+      removedFileHashes,
+    })),
+  };
+}
+
+function hashBytes(bytes: Uint8Array): string {
+  let hash = 0x811c9dc5;
+  for (const byte of bytes) {
+    hash ^= byte;
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `fnv1a:${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
 export const FORCE_WIPE_SNAPSHOT_BYTE_LIMIT = 128 * 1024 * 1024;

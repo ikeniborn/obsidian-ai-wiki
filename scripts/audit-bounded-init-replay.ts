@@ -1,15 +1,16 @@
 #!/usr/bin/env node
-import { readFile, readdir, realpath, stat } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { lstat, readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { parseJsonl } from "../src/jsonl";
+import { JsonlParseError } from "../src/jsonl";
+import { contentHash } from "../src/content-hash";
 import { classifyContextError } from "../src/prompt-budget";
 import {
   chunkRecordId,
   isChunkIndexRecord,
   isPageIndexRecord,
   pageRecordId,
-  parseWikiIndexJsonl,
 } from "../src/wiki-index-jsonl";
 
 interface AgentLogRecord {
@@ -24,6 +25,7 @@ export interface AuditBoundedInitReplayOptions {
   vault: string;
   session: string;
   expectedSources: number;
+  idleTimeoutMs?: number;
 }
 
 export interface AuditBoundedInitReplaySummary {
@@ -38,7 +40,9 @@ export interface AuditBoundedInitReplaySummary {
   lifecycleCalls: number;
   invalidLifecycleCalls: number;
   wipeDomainEvents: number;
+  wipeCompleteEvents: number;
   stalePreWipeDescendants: number;
+  systemFinishEvents: number;
   technicalHumanLabelFields: number;
   pageRecords: number;
   chunkRecords: number;
@@ -128,12 +132,14 @@ const TECHNICAL_LABEL_MARKER =
 const ATTEMPT_LABEL_MARKER = /\b(?:attempt|retry)\s*(?:#|no\.?|number|:|=)?\s*\d+\b/i;
 const PROVIDER_LABEL_MARKER =
   /\b(?:anthropic|azure\s+openai|gemini|groq|litellm|ollama|openai|openrouter|xai)\b/i;
-const DEFAULT_IDLE_DEADLINE_MS = 300_000;
+const MAX_JSONL_LINE_BYTES = 1_048_576;
 
 interface WipeAudit {
   count: number;
-  atMs: number;
+  completeCount: number;
   folder: string;
+  removedPaths: string[];
+  removedFileHashes: Record<string, string>;
 }
 
 interface LifecycleAudit {
@@ -150,8 +156,64 @@ interface LifecycleDescriptor {
   attempt?: number;
 }
 
+interface SessionAudit {
+  finishCount: number;
+  finishStatus?: string;
+  errorEvents: number;
+  idleTimeoutMs: number;
+  failures: string[];
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+async function* jsonlRecords<T>(filePath: string): AsyncGenerator<T> {
+  let pending = Buffer.alloc(0);
+  let line = 0;
+  for await (const chunk of createReadStream(filePath)) {
+    pending = Buffer.concat([pending, chunk as Buffer]);
+    let newline = pending.indexOf(0x0a);
+    while (newline >= 0) {
+      line++;
+      const raw = pending.subarray(0, newline);
+      pending = pending.subarray(newline + 1);
+      if (raw.byteLength > MAX_JSONL_LINE_BYTES) {
+        throw new JsonlParseError(
+          filePath,
+          line,
+          new Error(`line exceeds ${MAX_JSONL_LINE_BYTES} bytes`),
+        );
+      }
+      const text = raw.toString("utf8").replace(/\r$/, "").trim();
+      if (text) {
+        try {
+          yield JSON.parse(text) as T;
+        } catch (error) {
+          throw new JsonlParseError(filePath, line, error);
+        }
+      }
+      newline = pending.indexOf(0x0a);
+    }
+    if (pending.byteLength > MAX_JSONL_LINE_BYTES) {
+      throw new JsonlParseError(
+        filePath,
+        line + 1,
+        new Error(`line exceeds ${MAX_JSONL_LINE_BYTES} bytes`),
+      );
+    }
+  }
+  if (pending.byteLength > 0) {
+    line++;
+    const text = pending.toString("utf8").replace(/\r$/, "").trim();
+    if (text) {
+      try {
+        yield JSON.parse(text) as T;
+      } catch (error) {
+        throw new JsonlParseError(filePath, line, error);
+      }
+    }
+  }
 }
 
 function escapeRegExp(value: string): string {
@@ -232,23 +294,33 @@ async function locateAgentLog(vaultRoot: string): Promise<string> {
   return candidates[0];
 }
 
-function selectSession(records: AgentLogRecord[], requested: string): {
+async function selectSession(agentPath: string, requested: string): Promise<{
   session: string;
   records: AgentLogRecord[];
-} {
-  const initRecords = records.filter((record) =>
-    record.op === "init" && typeof record.session === "string");
-  const session = requested === "latest-init"
-    ? initRecords.at(-1)?.session
-    : requested;
+}> {
+  let session: string | undefined = requested;
+  if (requested === "latest-init") {
+    session = undefined;
+    for await (const record of jsonlRecords<AgentLogRecord>(agentPath)) {
+      if (
+        record.op === "init"
+        && typeof record.session === "string"
+      ) {
+        session = record.session;
+      }
+    }
+  }
   if (typeof session !== "string" || session.length === 0) {
     throw new Error("selected Init sessions: 0");
   }
-  const selected = initRecords.filter((record) => record.session === session);
-  if (selected.length === 0) {
+  const records: AgentLogRecord[] = [];
+  for await (const record of jsonlRecords<AgentLogRecord>(agentPath)) {
+    if (record.op === "init" && record.session === session) records.push(record);
+  }
+  if (records.length === 0) {
     throw new Error("selected Init sessions: 0");
   }
-  return { session, records: selected };
+  return { session, records };
 }
 
 function safeWikiFolder(value: unknown): string {
@@ -268,22 +340,27 @@ function safeWikiFolder(value: unknown): string {
   return `!Wiki/${withoutPrefix}`;
 }
 
-function parseRecordTime(value: unknown, context: string): number {
-  if (typeof value !== "string") throw new Error(`${context} timestamp is missing`);
-  const atMs = Date.parse(value);
-  if (!Number.isFinite(atMs)) throw new Error(`${context} timestamp is invalid`);
-  return atMs;
-}
-
 function auditWipe(records: AgentLogRecord[], expectedFolder: string): WipeAudit {
-  const wipes = records.filter((record) =>
+  const wipeIndexes = records.flatMap((record, index) =>
     isRecord(record.event)
     && record.event.kind === "tool_use"
-    && record.event.name === "WipeDomain");
-  if (wipes.length !== 1) {
-    return { count: wipes.length, atMs: Number.NaN, folder: "" };
+    && record.event.name === "WipeDomain"
+      ? [index]
+      : []);
+  const completeIndexes = records.flatMap((record, index) =>
+    isRecord(record.event) && record.event.kind === "wipe_complete"
+      ? [index]
+      : []);
+  if (wipeIndexes.length !== 1 || completeIndexes.length !== 1) {
+    return {
+      count: wipeIndexes.length,
+      completeCount: completeIndexes.length,
+      folder: "",
+      removedPaths: [],
+      removedFileHashes: {},
+    };
   }
-  const wipe = wipes[0];
+  const wipe = records[wipeIndexes[0]];
   if (!isRecord(wipe.event) || !isRecord(wipe.event.input)) {
     throw new Error("WipeDomain input is invalid");
   }
@@ -291,10 +368,55 @@ function auditWipe(records: AgentLogRecord[], expectedFolder: string): WipeAudit
   if (folder !== expectedFolder) {
     throw new Error(`WipeDomain folder: ${folder}, expected: ${expectedFolder}`);
   }
+  const complete = records[completeIndexes[0]].event;
+  const creationIndex = records.findIndex((record) =>
+    isRecord(record.event) && record.event.kind === "domain_created");
+  const createdDomainId = creationIndex >= 0
+    && isRecord(records[creationIndex].event)
+    && isRecord(records[creationIndex].event.entry)
+    && typeof records[creationIndex].event.entry.id === "string"
+      ? records[creationIndex].event.entry.id
+      : undefined;
+  const removedPaths = isRecord(complete) && Array.isArray(complete.removedPaths)
+    ? complete.removedPaths
+    : [];
+  const removedFileHashes = isRecord(complete) && isRecord(complete.removedFileHashes)
+    ? complete.removedFileHashes
+    : {};
+  const removedFiles = removedPaths.filter((entry): entry is string =>
+    typeof entry === "string" && !entry.endsWith("/"));
+  const hashPaths = Object.keys(removedFileHashes);
+  if (
+    completeIndexes[0] <= wipeIndexes[0]
+    || (creationIndex >= 0 && completeIndexes[0] >= creationIndex)
+    || !isRecord(complete)
+    || typeof complete.domainId !== "string"
+    || complete.domainId.length === 0
+    || (createdDomainId !== undefined && complete.domainId !== createdDomainId)
+    || !finiteNonnegative(complete.atMs)
+    || !Array.isArray(complete.removedPaths)
+    || !complete.removedPaths.every((entry) => typeof entry === "string")
+    || !isRecord(complete.removedFileHashes)
+    || !Object.values(complete.removedFileHashes).every((hash) =>
+      typeof hash === "string" && /^fnv1a:[0-9a-f]{8}$/.test(hash))
+    || new Set(complete.removedPaths).size !== complete.removedPaths.length
+    || removedFiles.length !== hashPaths.length
+    || removedFiles.some((removedPath) => !Object.hasOwn(removedFileHashes, removedPath))
+    || typeof complete.manifestHash !== "string"
+    || !/^fnv1a:[0-9a-f]{8}$/.test(complete.manifestHash)
+    || complete.manifestHash !== contentHash(JSON.stringify({
+      removedPaths: complete.removedPaths,
+      removedFileHashes: complete.removedFileHashes,
+    }))
+  ) {
+    throw new Error("wipe_complete marker is invalid or not paired after WipeDomain");
+  }
   return {
     count: 1,
-    atMs: parseRecordTime(wipe.ts, "WipeDomain"),
+    completeCount: 1,
     folder,
+    removedPaths: complete.removedPaths,
+    removedFileHashes: complete.removedFileHashes as Record<string, string>,
   };
 }
 
@@ -425,34 +547,41 @@ function auditLifecycles(
     const diagnostics = preparing && isRecord(preparing.diagnostics)
       ? preparing.diagnostics
       : undefined;
+    if (!diagnostics) {
+      failures.push(`lifecycle ${id} missing preparing diagnostics`);
+      continue;
+    }
+    if (diagnostics.callSite === undefined) {
+      failures.push(`lifecycle ${id} missing diagnostics.callSite`);
+      continue;
+    }
     if (
-      !diagnostics
-      || typeof diagnostics.callSite !== "string"
+      typeof diagnostics.callSite !== "string"
       || !STRUCTURED_CALL_SITES.has(diagnostics.callSite)
     ) {
+      failures.push(`lifecycle ${id} has invalid diagnostics.callSite`);
       continue;
     }
     const descriptor: LifecycleDescriptor = {
       id,
       callSite: diagnostics.callSite,
     };
-    if (diagnostics.transport !== undefined) {
-      if (
-        typeof diagnostics.transport !== "string"
-        || !["stream", "non-stream", "claude"].includes(diagnostics.transport)
-      ) {
-        failures.push(`lifecycle ${id} has invalid diagnostics.transport`);
-      } else {
-        descriptor.transport = diagnostics.transport;
-      }
+    if (diagnostics.transport === undefined) {
+      failures.push(`lifecycle ${id} missing diagnostics.transport`);
+    } else if (
+      typeof diagnostics.transport !== "string"
+      || !["stream", "non-stream", "claude"].includes(diagnostics.transport)
+    ) {
+      failures.push(`lifecycle ${id} has invalid diagnostics.transport`);
+    } else {
+      descriptor.transport = diagnostics.transport;
     }
-    if (diagnostics.attempt !== undefined) {
-      const attempt = diagnostics.attempt;
-      if (!finiteNonnegativeInteger(attempt)) {
-        failures.push(`lifecycle ${id} has invalid diagnostics.attempt`);
-      } else {
-        descriptor.attempt = attempt;
-      }
+    if (diagnostics.attempt === undefined) {
+      failures.push(`lifecycle ${id} missing diagnostics.attempt`);
+    } else if (!finiteNonnegativeInteger(diagnostics.attempt)) {
+      failures.push(`lifecycle ${id} has invalid diagnostics.attempt`);
+    } else {
+      descriptor.attempt = diagnostics.attempt;
     }
     for (const event of events) {
       if (!isRecord(event.diagnostics) || event.diagnostics.callSite === undefined) continue;
@@ -495,6 +624,20 @@ function auditLifecycles(
     if (!calls.has(requestId)) {
       failures.push(`prompt_budget requestId ${requestId} has no lifecycle`);
     }
+    const descriptor = descriptors.get(requestId);
+    const budget = records.find((record) =>
+      isRecord(record.event)
+      && record.event.kind === "prompt_budget"
+      && record.event.requestId === requestId)?.event;
+    if (
+      descriptor
+      && isRecord(budget)
+      && budget.callSite !== descriptor.callSite
+    ) {
+      failures.push(
+        `prompt_budget requestId ${requestId} callSite ${String(budget.callSite)} does not match lifecycle ${descriptor.callSite}`,
+      );
+    }
   }
   for (const id of calls.keys()) {
     if (!promptIds.has(id)) {
@@ -523,12 +666,18 @@ function auditLifecycles(
       );
     }
     if (
+      descriptor?.transport !== undefined
+      && nextDescriptor?.transport !== undefined
+      && descriptor.transport !== nextDescriptor.transport
+    ) {
+      failures.push(
+        `lifecycle ${id} retrying changed transport: ${descriptor.transport} -> ${nextDescriptor.transport}`,
+      );
+    }
+    if (
       descriptor?.attempt !== undefined
       && nextDescriptor?.attempt !== undefined
-      && (
-        nextDescriptor.attempt < descriptor.attempt
-        || nextDescriptor.attempt > descriptor.attempt + 1
-      )
+      && nextDescriptor.attempt !== descriptor.attempt + 1
     ) {
       failures.push(
         `lifecycle ${id} retrying has invalid attempt transition: ${descriptor.attempt} -> ${nextDescriptor.attempt}`,
@@ -620,44 +769,124 @@ async function locateDomainIndex(
   return scanned[0];
 }
 
-async function readIdleDeadlineMs(agentPath: string): Promise<number> {
-  const settingsPath = path.join(path.dirname(agentPath), "data.json");
-  try {
-    const settings = JSON.parse(await readFile(settingsPath, "utf8")) as unknown;
+function auditSelectedSession(
+  records: AgentLogRecord[],
+  idleTimeoutOverride?: number,
+): SessionAudit {
+  const finishes: string[] = [];
+  const finishIndexes: number[] = [];
+  const configs: number[] = [];
+  let startEvents = 0;
+  let errorEvents = 0;
+  for (const [index, record] of records.entries()) {
+    if (!isRecord(record.event)) continue;
+    if (record.event.kind === "error") errorEvents++;
     if (
-      isRecord(settings)
-      && typeof settings.llmIdleTimeoutSec === "number"
-      && Number.isFinite(settings.llmIdleTimeoutSec)
-      && settings.llmIdleTimeoutSec >= 0
+      record.event.kind === "system"
+      && typeof record.event.message === "string"
     ) {
-      return settings.llmIdleTimeoutSec * 1000;
+      if (/^start op=init(?:\s|$)/.test(record.event.message)) startEvents++;
+      const match = /^finish status=([^\s]+)/.exec(record.event.message);
+      if (match) {
+        finishes.push(match[1]);
+        finishIndexes.push(index);
+      }
     }
-  } catch {
-    // Missing or malformed settings use the runtime default.
+    if (record.event.kind === "run_config") {
+      const timeout = record.event.llmIdleTimeoutMs;
+      if (finiteNonnegative(timeout)) configs.push(timeout);
+      else configs.push(Number.NaN);
+    }
   }
-  return DEFAULT_IDLE_DEADLINE_MS;
+  const failures: string[] = [];
+  if (startEvents !== 1) {
+    failures.push(`system start events: ${startEvents}, expected: 1`);
+  }
+  if (finishes.length !== 1) {
+    failures.push(`system finish events: ${finishes.length}, expected: 1`);
+  } else if (!["done", "success"].includes(finishes[0])) {
+    failures.push(`system finish status: ${finishes[0]}, expected: done/success`);
+  } else if (finishIndexes[0] !== records.length - 1) {
+    failures.push("system finish is not terminal");
+  }
+  if (errorEvents > 0) failures.push(`session error events: ${errorEvents}`);
+  if (idleTimeoutOverride === undefined && configs.length !== 1) {
+    failures.push(`run_config events: ${configs.length}, expected: 1`);
+  }
+  const idleTimeoutMs = idleTimeoutOverride ?? configs[0];
+  if (!finiteNonnegative(idleTimeoutMs)) {
+    failures.push("run_config llmIdleTimeoutMs is missing or invalid");
+  }
+  return {
+    finishCount: finishes.length,
+    finishStatus: finishes[0],
+    errorEvents,
+    idleTimeoutMs: finiteNonnegative(idleTimeoutMs) ? idleTimeoutMs : 0,
+    failures,
+  };
+}
+
+function safeManifestPath(value: string): string {
+  const directory = value.endsWith("/");
+  const raw = directory ? value.slice(0, -1) : value;
+  if (
+    !raw
+    || raw.includes("\\")
+    || path.isAbsolute(raw)
+    || raw.split("/").some((part) => !part || part === "." || part === "..")
+  ) {
+    throw new Error(`unsafe wipe manifest path: ${value}`);
+  }
+  return directory ? `${raw}/` : raw;
+}
+
+async function hashFile(filePath: string): Promise<string> {
+  let hash = 0x811c9dc5;
+  for await (const chunk of createReadStream(filePath)) {
+    for (const byte of chunk as Buffer) {
+      hash ^= byte;
+      hash = Math.imul(hash, 0x01000193);
+    }
+  }
+  return `fnv1a:${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
 async function stalePreWipeDescendants(
   domainRoot: string,
-  wipeAtMs: number,
+  wipe: WipeAudit,
 ): Promise<string[]> {
   const stale: string[] = [];
-  async function visit(current: string): Promise<void> {
-    for (const entry of await readdir(current, { withFileTypes: true })) {
-      const absolute = path.join(current, entry.name);
-      const relative = path.relative(domainRoot, absolute).split(path.sep).join("/");
-      if (entry.isSymbolicLink()) {
-        throw new Error(`unsafe domain symlink: ${relative}`);
+  for (const raw of wipe.removedPaths) {
+    const relative = safeManifestPath(raw);
+    const directory = relative.endsWith("/");
+    const absolute = path.join(
+      domainRoot,
+      ...(directory ? relative.slice(0, -1) : relative).split("/"),
+    );
+    let info;
+    try {
+      info = await lstat(absolute);
+    } catch {
+      continue;
+    }
+    if (info.isSymbolicLink()) {
+      throw new Error(`unsafe domain symlink: ${relative}`);
+    }
+    if (directory) {
+      if (info.isDirectory() && (await readdir(absolute)).length === 0) {
+        stale.push(relative);
       }
-      const info = await stat(absolute);
-      if (info.mtimeMs < wipeAtMs) {
-        stale.push(entry.isDirectory() ? `${relative}/` : relative);
-      }
-      if (entry.isDirectory()) await visit(absolute);
+      continue;
+    }
+    if (!info.isFile()) {
+      stale.push(relative);
+      continue;
+    }
+    const expectedHash = wipe.removedFileHashes[relative];
+    if (expectedHash === undefined || await hashFile(absolute) === expectedHash) {
+      stale.push(relative);
     }
   }
-  await visit(domainRoot);
   return stale.sort();
 }
 
@@ -731,6 +960,7 @@ function auditSession(
   expectedSources: number,
   lifecycle: LifecycleAudit,
   wipe: WipeAudit,
+  sessionAudit: SessionAudit,
   staleDescendants: string[],
 ): Omit<AuditBoundedInitReplaySummary, "pageRecords" | "chunkRecords" | "duplicateRecordIds"> {
   const successfulSources = new Set<string>();
@@ -801,23 +1031,40 @@ function auditSession(
     lifecycleCalls: lifecycle.calls,
     invalidLifecycleCalls: lifecycle.invalidCalls,
     wipeDomainEvents: wipe.count,
+    wipeCompleteEvents: wipe.completeCount,
     stalePreWipeDescendants: staleDescendants.length,
+    systemFinishEvents: sessionAudit.finishCount,
     technicalHumanLabelFields: lifecycle.technicalHumanLabelFields,
     leakedPromptFields,
   };
 }
 
-function auditIndex(text: string, indexPath: string): {
+async function auditIndex(indexPath: string): Promise<{
   pageRecords: number;
   chunkRecords: number;
   duplicateRecordIds: number;
-} {
-  const records = parseWikiIndexJsonl(text, indexPath);
+}> {
   const ids = new Set<string>();
   let pageRecords = 0;
   let chunkRecords = 0;
   let duplicateRecordIds = 0;
-  for (const record of records) {
+  for await (const record of jsonlRecords<unknown>(indexPath)) {
+    if (
+      isRecord(record)
+      && record.schemaVersion === 1
+      && record.kind === "page"
+      && !isPageIndexRecord(record)
+    ) {
+      throw new Error(`${indexPath}: invalid current page record`);
+    }
+    if (
+      isRecord(record)
+      && record.schemaVersion === 1
+      && record.kind === "chunk"
+      && !isChunkIndexRecord(record)
+    ) {
+      throw new Error(`${indexPath}: invalid current chunk record`);
+    }
     let id: string | undefined;
     if (isPageIndexRecord(record)) {
       pageRecords++;
@@ -835,6 +1082,7 @@ function auditIndex(text: string, indexPath: string): {
 
 function assertAudit(
   summary: AuditBoundedInitReplaySummary,
+  sessionFailures: string[],
   lifecycleFailures: string[],
   staleDescendants: string[],
 ): void {
@@ -855,9 +1103,13 @@ function assertAudit(
   if (summary.failedSourceCompletions > 0) {
     failures.push(`failed source completions: ${summary.failedSourceCompletions}`);
   }
+  failures.push(...sessionFailures);
   failures.push(...lifecycleFailures);
   if (summary.wipeDomainEvents !== 1) {
     failures.push(`WipeDomain events: ${summary.wipeDomainEvents}, expected: 1`);
+  }
+  if (summary.wipeCompleteEvents !== 1) {
+    failures.push(`wipe_complete events: ${summary.wipeCompleteEvents}, expected: 1`);
   }
   if (summary.stalePreWipeDescendants > 0) {
     failures.push(
@@ -892,20 +1144,20 @@ export async function auditBoundedInitReplay(
   if (!(await stat(vaultRoot)).isDirectory()) throw new Error("vault is not a directory");
 
   const agentPath = await locateAgentLog(vaultRoot);
-  const agentRecords = parseJsonl<AgentLogRecord>(
-    await readFile(agentPath, "utf8"),
-    agentPath,
+  const selected = await selectSession(agentPath, options.session);
+  const sessionAudit = auditSelectedSession(
+    selected.records,
+    options.idleTimeoutMs,
   );
-  const selected = selectSession(agentRecords, options.session);
   const indexPath = await locateDomainIndex(vaultRoot, selected.records);
   const expectedFolder = path.relative(vaultRoot, path.dirname(indexPath)).split(path.sep).join("/");
   const wipe = auditWipe(selected.records, expectedFolder);
   const lifecycle = auditLifecycles(
     selected.records,
-    await readIdleDeadlineMs(agentPath),
+    sessionAudit.idleTimeoutMs,
   );
-  const staleDescendants = wipe.count === 1
-    ? await stalePreWipeDescendants(path.dirname(indexPath), wipe.atMs)
+  const staleDescendants = wipe.count === 1 && wipe.completeCount === 1
+    ? await stalePreWipeDescendants(path.dirname(indexPath), wipe)
     : [];
   const summary: AuditBoundedInitReplaySummary = {
     ...auditSession(
@@ -914,11 +1166,17 @@ export async function auditBoundedInitReplay(
       options.expectedSources,
       lifecycle,
       wipe,
+      sessionAudit,
       staleDescendants,
     ),
-    ...auditIndex(await readFile(indexPath, "utf8"), indexPath),
+    ...await auditIndex(indexPath),
   };
-  assertAudit(summary, lifecycle.failures, staleDescendants);
+  assertAudit(
+    summary,
+    sessionAudit.failures,
+    lifecycle.failures,
+    staleDescendants,
+  );
   return summary;
 }
 
@@ -931,15 +1189,30 @@ async function main(args: string[]): Promise<void> {
   const vault = argumentValue(args, "--vault");
   const session = argumentValue(args, "--session");
   const expectedSourcesText = argumentValue(args, "--expected-sources");
+  const idleTimeoutText = argumentValue(args, "--idle-timeout-ms");
   const expectedSources = expectedSourcesText === undefined
     ? Number.NaN
     : Number(expectedSourcesText);
+  const idleTimeoutMs = idleTimeoutText === undefined
+    ? undefined
+    : Number(idleTimeoutText);
   if (!vault || !session || !Number.isInteger(expectedSources) || expectedSources < 0) {
     throw new Error(
-      "Usage: tsx scripts/audit-bounded-init-replay.ts --vault <copied-vault> --session <id|latest-init> --expected-sources <count>",
+      "Usage: tsx scripts/audit-bounded-init-replay.ts --vault <copied-vault> --session <id|latest-init> --expected-sources <count> [--idle-timeout-ms <ms>]",
     );
   }
-  const summary = await auditBoundedInitReplay({ vault, session, expectedSources });
+  if (
+    idleTimeoutMs !== undefined
+    && (!Number.isFinite(idleTimeoutMs) || idleTimeoutMs < 0)
+  ) {
+    throw new Error("idle timeout override must be a non-negative number");
+  }
+  const summary = await auditBoundedInitReplay({
+    vault,
+    session,
+    expectedSources,
+    ...(idleTimeoutMs === undefined ? {} : { idleTimeoutMs }),
+  });
   console.log(JSON.stringify(summary, null, 2));
 }
 

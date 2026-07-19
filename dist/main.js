@@ -58581,16 +58581,31 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
       yield { kind: "tool_result", ok: false, preview: "force: cancelled before wipe" };
       return;
     }
-    let wiped;
+    let wipeManifest;
     try {
-      wiped = await wipeDomainFolder(vaultTools, existing.wiki_folder, signal);
+      wipeManifest = await wipeDomainFolderWithManifest(
+        vaultTools,
+        existing.wiki_folder,
+        signal
+      );
     } catch (error) {
       yield { kind: "tool_result", ok: false, preview: error.message };
       yield { kind: "error", message: `force: wipe failed \u2014 ${error.message}` };
       return;
     }
+    yield {
+      kind: "wipe_complete",
+      domainId,
+      ...wipeManifest,
+      atMs: Date.now()
+    };
     yield { kind: "tool_result", ok: true };
-    yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).initProgress.removedFiles(wiped.length) };
+    yield {
+      kind: "assistant_text",
+      delta: i18nFor(resolveLang(opts.outputLanguage)).initProgress.removedFiles(
+        Object.keys(wipeManifest.removedFileHashes).length
+      )
+    };
     yield* runInitWithSources(
       domainId,
       effectiveSources2,
@@ -58983,7 +58998,7 @@ async function* runIncrementalReinit(domainId, changedFiles, vaultTools, llm, mo
     text: `Domain "${domainId}": re-ingested ${doneCount} of ${changedFiles.length} changed source(s).`
   };
 }
-async function wipeDomainFolder(vaultTools, wikiFolder, signal, options = {}) {
+async function wipeDomainFolderWithManifest(vaultTools, wikiFolder, signal, options = {}) {
   const root = forceDomainRoot(wikiFolder);
   requireTransactionalWipeAdapter(vaultTools);
   const snapshotByteLimit = options.snapshotByteLimit ?? FORCE_WIPE_SNAPSHOT_BYTE_LIMIT;
@@ -59008,7 +59023,18 @@ async function wipeDomainFolder(vaultTools, wikiFolder, signal, options = {}) {
   }
 }
 async function wipeDomainFolderLocked(vaultTools, root, signal, snapshotByteLimit, fileByteLimit) {
-  if (!await checkedExists(vaultTools, root, signal)) return [];
+  if (!await checkedExists(vaultTools, root, signal)) {
+    const removedPaths2 = [];
+    const removedFileHashes2 = {};
+    return {
+      removedPaths: removedPaths2,
+      removedFileHashes: removedFileHashes2,
+      manifestHash: contentHash(JSON.stringify({
+        removedPaths: removedPaths2,
+        removedFileHashes: removedFileHashes2
+      }))
+    };
+  }
   const transaction = await createWipeTransaction(vaultTools, signal);
   const quarantinedRoot = `${transaction}/domain`;
   const removed = /* @__PURE__ */ new Set();
@@ -59104,7 +59130,42 @@ async function wipeDomainFolderLocked(vaultTools, root, signal, snapshotByteLimi
     }
     throw error;
   }
-  return [...snapshot.files.keys()].map((path5) => originalPathFromQuarantine(path5, quarantinedRoot, root));
+  const removedFileHashes = {};
+  for (const [quarantinedPath, bytes] of snapshot.files) {
+    const originalPath = originalPathFromQuarantine(
+      quarantinedPath,
+      quarantinedRoot,
+      root
+    );
+    removedFileHashes[originalPath.slice(root.length + 1)] = hashBytes(bytes);
+  }
+  const removedPaths = [
+    ...Object.keys(removedFileHashes),
+    ...snapshot.folders.filter((folder) => folder !== quarantinedRoot).map((folder) => {
+      const originalPath = originalPathFromQuarantine(
+        folder,
+        quarantinedRoot,
+        root
+      );
+      return `${originalPath.slice(root.length + 1)}/`;
+    })
+  ].sort(compareCodePoints5);
+  return {
+    removedPaths,
+    removedFileHashes,
+    manifestHash: contentHash(JSON.stringify({
+      removedPaths,
+      removedFileHashes
+    }))
+  };
+}
+function hashBytes(bytes) {
+  let hash = 2166136261;
+  for (const byte of bytes) {
+    hash ^= byte;
+    hash = Math.imul(hash, 16777619);
+  }
+  return `fnv1a:${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 var FORCE_WIPE_SNAPSHOT_BYTE_LIMIT = 128 * 1024 * 1024;
 var FORCE_WIPE_FILE_BYTE_LIMIT = 32 * 1024 * 1024;
@@ -62153,13 +62214,14 @@ var AgentRunner = class {
       req.operation,
       req.policyOperation
     );
+    const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1e3;
+    yield { kind: "run_config", llmIdleTimeoutMs: idleTimeoutMs };
     const baseUrlHint = this.settings.backend === "native-agent" ? ` @ ${this.settings.nativeAgent.baseUrl}` : "";
     yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"}${baseUrlHint}` };
     if (req.signal.aborted) return;
     const vaultRoot = req.cwd ?? "";
     const domains = req.domainId && req.domainId !== "*" ? this.domains.filter((d) => d.id === req.domainId) : this.domains;
     const similarity = this.buildSimilarity();
-    const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1e3;
     const maxRetries = this.settings.llmIdleRetries ?? 3;
     const desktopTimers = this.isMobile ? null : loadDesktopTimers();
     const scheduleIdleAbort = (callback) => desktopTimers ? desktopTimers.setTimeout(callback, idleTimeoutMs) : window.setTimeout(callback, idleTimeoutMs);

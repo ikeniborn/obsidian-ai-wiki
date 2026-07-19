@@ -162,6 +162,15 @@ export interface RunRequest {
 
 export type RunEvent =
   | { kind: "system"; message: string; sessionId?: string }
+  | { kind: "run_config"; llmIdleTimeoutMs: number }
+  | {
+      kind: "wipe_complete";
+      domainId: string;
+      removedPaths: string[];
+      removedFileHashes: Record<string, string>;
+      manifestHash: string;
+      atMs: number;
+    }
   | {
       kind: "llm_lifecycle";
       id: string;
