@@ -34,7 +34,6 @@ interface PackedAnswerRequest {
 interface AnswerAttempt {
   answer: string;
   outputTokens: number;
-  events: RunEvent[];
   selectedChunks: SelectedChunk[];
   pendingStream?: {
     iterator: AsyncIterator<OpenAI.Chat.ChatCompletionChunk>;
@@ -165,7 +164,6 @@ export async function* answerFromContext(args: {
           const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
           let attemptAnswer = "";
           let attemptOutputTokens = 0;
-          const events: RunEvent[] = [];
           let producing = false;
           const iterator = stream[Symbol.asyncIterator]();
           while (true) {
@@ -175,7 +173,6 @@ export async function* answerFromContext(args: {
               return {
                 answer: attemptAnswer,
                 outputTokens: attemptOutputTokens,
-                events,
                 selectedChunks: request.selectedChunks,
                 streamStats: stats,
                 inputTokens: stats?.inputTokens,
@@ -198,7 +195,6 @@ export async function* answerFromContext(args: {
               return {
                 answer: attemptAnswer,
                 outputTokens: attemptOutputTokens,
-                events,
                 selectedChunks: request.selectedChunks,
                 pendingStream: { iterator, getStats },
               };
@@ -251,7 +247,6 @@ export async function* answerFromContext(args: {
           return {
             answer: fallbackAnswer,
             outputTokens: fallbackTokens,
-            events: [],
             selectedChunks: request.selectedChunks,
             streamStats: response.usage
               ? {
@@ -267,6 +262,7 @@ export async function* answerFromContext(args: {
       },
       onEvent: (event) => budgetEvents.push(event),
     }));
+    signal.throwIfAborted();
   } catch (error) {
     for (const event of budgetEvents) yield event;
     if (signal.aborted || (error as Error).name === "AbortError") {
@@ -289,7 +285,6 @@ export async function* answerFromContext(args: {
     let streamAborted = false;
     let streamFailure: { error: unknown } | undefined;
     try {
-      for (const event of attempt.events) yield event;
       while (true) {
         const next = await attempt.pendingStream.iterator.next();
         if (next.done) {
@@ -328,8 +323,6 @@ export async function* answerFromContext(args: {
       yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "failed");
       throw streamFailure.error;
     }
-  } else {
-    for (const event of attempt.events) yield event;
   }
 
   if (signal.aborted) {
@@ -337,6 +330,10 @@ export async function* answerFromContext(args: {
     return { answer, outputTokens, selectedChunks };
   }
   yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "validating");
+  if (signal.aborted) {
+    yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
+    return { answer, outputTokens, selectedChunks };
+  }
   let displayedReplacement = false;
 
   if (answer && !signal.aborted) {
@@ -393,10 +390,25 @@ export async function* answerFromContext(args: {
             onEvent: emit,
             transport: "non-stream",
           }));
+          if (signal.aborted) {
+            yield lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "cancelled");
+            yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
+            return { answer, outputTokens, selectedChunks };
+          }
           outputTokens += r.outputTokens;
           const stillBroken = findBrokenLinks(extractAnswerLinks(r.value.answer_markdown), knownStems);
           if (stillBroken.length === 0) {
+            if (signal.aborted) {
+              yield lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "cancelled");
+              yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
+              return { answer, outputTokens, selectedChunks };
+            }
             yield lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "applying");
+            if (signal.aborted) {
+              yield lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "cancelled");
+              yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
+              return { answer, outputTokens, selectedChunks };
+            }
             answer = r.value.answer_markdown;
             yield lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "completed");
             llmFixed = stripped.length;
@@ -423,7 +435,15 @@ export async function* answerFromContext(args: {
       if (llmFixed) parts.push(`llm-fixed ${llmFixed}`);
       if (stripped.length) parts.push(`annotated ${stripped.length}: ${stripped.join(", ")}`);
       yield { kind: "tool_result", ok: stripped.length === 0, preview: parts.join("; ") };
+      if (signal.aborted) {
+        yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
+        return { answer, outputTokens, selectedChunks };
+      }
       yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "applying");
+      if (signal.aborted) {
+        yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
+        return { answer, outputTokens, selectedChunks };
+      }
       yield { kind: "assistant_replace", text: answer };
       yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "completed");
       displayedReplacement = true;
@@ -431,7 +451,15 @@ export async function* answerFromContext(args: {
   }
 
   if (!displayedReplacement) {
+    if (signal.aborted) {
+      yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
+      return { answer, outputTokens, selectedChunks };
+    }
     yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "applying");
+    if (signal.aborted) {
+      yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
+      return { answer, outputTokens, selectedChunks };
+    }
     yield { kind: "tool_result", ok: !!answer, preview: answer ? `${answer.length} chars` : "no response" };
     yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "completed");
   }

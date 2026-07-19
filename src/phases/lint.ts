@@ -702,14 +702,36 @@ export async function* runLint(
     yield { kind: "tool_use", name: "Updating config", input: {} };
     const patchRes = yield* runWithLiveEvents((emit) =>
       actualizeDomainConfig(domain, mergedFindings, llm, model, opts, signal, emit));
+    if (signal.aborted) {
+      if (patchRes.lifecycle) {
+        yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "cancelled");
+      }
+      return;
+    }
     yield { kind: "tool_result", ok: true, preview: patchRes.patch ? "config updated" : "no changes" };
+    if (signal.aborted) {
+      if (patchRes.lifecycle) {
+        yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "cancelled");
+      }
+      return;
+    }
     outputTokens += patchRes.outputTokens;
     const patch = patchRes.patch;
     if (patch) {
       const diffReport = computeEntityDiff(domain.entity_types ?? [], patch.entity_types ?? domain.entity_types ?? []);
       reportParts.push(diffReport);
       if (patchRes.lifecycle) {
+        if (signal.aborted) {
+          yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "cancelled");
+          return;
+        }
         yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "applying");
+      }
+      if (signal.aborted) {
+        if (patchRes.lifecycle) {
+          yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "cancelled");
+        }
+        return;
       }
       yield { kind: "domain_updated", domainId: domain.id, patch };
       if (patchRes.lifecycle) {
@@ -717,6 +739,10 @@ export async function* runLint(
       }
     } else if (patchRes.lifecycle) {
       yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "applying");
+      if (signal.aborted) {
+        yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "cancelled");
+        return;
+      }
       yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "completed");
     }
     if (patch?.entity_types) effectiveEntityTypes = patch.entity_types;

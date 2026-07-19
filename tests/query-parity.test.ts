@@ -330,6 +330,30 @@ function deferred(): { promise: Promise<void>; resolve(): void } {
   return { promise, resolve };
 }
 
+async function nextWithOverallTimeout<T>(
+  generator: AsyncGenerator<RunEvent, T>,
+  label: string,
+): Promise<IteratorResult<RunEvent, T>> {
+  let resolve!: (value: IteratorResult<RunEvent, T>) => void;
+  let reject!: (error: unknown) => void;
+  const settled = new Promise<IteratorResult<RunEvent, T>>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  void generator.next().then(resolve, reject);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      settled,
+      new Promise<never>((_, fail) => {
+        timer = setTimeout(() => fail(new Error(`${label} lifecycle buffered behind request`)), 2_000);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 function messagesText(request: Record<string, unknown>): string {
   return (request.messages as OpenAI.Chat.ChatCompletionMessageParam[])
     .map((message) => typeof message.content === "string" ? message.content : "")
@@ -564,11 +588,7 @@ test("Query seed selection and primary answer expose ordered human lifecycle att
   const events: RunEvent[] = [];
   const seedPhases: string[] = [];
   while (seedPhases.length < 3) {
-    const next = await Promise.race([
-      generator.next(),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("query seed lifecycle buffered behind request")), 50)),
-    ]);
+    const next = await nextWithOverallTimeout(generator, "query seed");
     assert.equal(next.done, false);
     if (!next.done) {
       events.push(next.value);

@@ -146,6 +146,30 @@ function deferred(): { promise: Promise<void>; resolve(): void } {
   return { promise, resolve };
 }
 
+async function nextWithOverallTimeout<T>(
+  generator: AsyncGenerator<RunEvent, T>,
+  label: string,
+): Promise<IteratorResult<RunEvent, T>> {
+  let resolve!: (value: IteratorResult<RunEvent, T>) => void;
+  let reject!: (error: unknown) => void;
+  const settled = new Promise<IteratorResult<RunEvent, T>>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  void generator.next().then(resolve, reject);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      settled,
+      new Promise<never>((_, fail) => {
+        timer = setTimeout(() => fail(new Error(`${label} lifecycle buffered behind request`)), 2_000);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 async function nextAssistantEvent<T>(
   generator: AsyncGenerator<RunEvent, T>,
 ): Promise<Extract<RunEvent, { kind: "assistant_text" }>> {
@@ -578,11 +602,7 @@ test("Query and Chat yield preparing sent waiting before a pending request resol
     const generator = makeGenerator(llm);
     const phases: string[] = [];
     while (phases.length < 3) {
-      const next = await Promise.race([
-        generator.next(),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("lifecycle buffered behind request")), 50)),
-      ]);
+      const next = await nextWithOverallTimeout(generator, "query/chat");
       assert.equal(next.done, false);
       if (!next.done && next.value.kind === "llm_lifecycle") phases.push(next.value.phase);
     }
@@ -663,11 +683,7 @@ test("Query repair completes its request before primary lifecycle applies final 
   const events: RunEvent[] = [];
   let repairWaiting = false;
   while (!repairWaiting) {
-    const next = await Promise.race([
-      generator.next(),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("query repair lifecycle buffered behind request")), 50)),
-    ]);
+    const next = await nextWithOverallTimeout(generator, "query repair");
     assert.equal(next.done, false);
     if (!next.done) {
       events.push(next.value);

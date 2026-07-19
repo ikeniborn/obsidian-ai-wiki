@@ -479,7 +479,6 @@ export async function* runIngest(
   const policy = modelPolicy(opts);
   const eventBridge = new RunEventBridge();
   const pendingSynthesisLifecycles = new Map<string, Extract<RunEvent, { kind: "llm_lifecycle" }>>();
-  let synthesisPageMutated = false;
   let synthesisLifecycleCompleted = false;
   let outputTokens = 0;
   let deferredSourcePathAdded: { domainId: string; path: string } | undefined;
@@ -707,7 +706,7 @@ export async function* runIngest(
     const outputs: SynthesisOutput[] = [];
     try {
       for (const batch of batches) {
-        outputs.push(yield* eventBridge.forward(synthesizeEntityBatch({
+        const output = yield* eventBridge.forward(synthesizeEntityBatch({
           bundles: batch,
           existingPaths: existingPathSet,
           existingPageHashes,
@@ -723,10 +722,15 @@ export async function* runIngest(
           opts,
           signal,
           onEvent: captureEvent,
-        })));
+        }));
+        signal.throwIfAborted();
+        outputs.push(output);
       }
       synthesis = mergeSynthesisBatchOutputs(outputs);
     } catch (error) {
+      if (signal.aborted || (error as Error).name === "AbortError") {
+        return failure("synthesis", "ingest cancelled", sourcePath);
+      }
       const message = `ingest: synthesis failed — ${(error as Error).message}`;
       yield { kind: "error", message };
       yield { kind: "result", durationMs: Date.now() - startedAt, text: "", outputTokens: 0 };
@@ -899,6 +903,7 @@ export async function* runIngest(
               signal,
               onEvent: captureEvent,
             }));
+            signal.throwIfAborted();
             if (effectiveAction.kind !== "patch") {
               throw new ConflictStillStaleError(action.entityKey, new Error("duplicate regeneration did not return a patch"));
             }
@@ -991,6 +996,7 @@ export async function* runIngest(
             signal,
             onEvent: captureEvent,
           }));
+          signal.throwIfAborted();
           if (effectiveAction.kind !== "patch") {
             throw new ConflictStillStaleError(action.entityKey, new Error("regeneration did not return a patch"));
           }
@@ -1061,6 +1067,7 @@ export async function* runIngest(
   const synthesisLifecycles = [...pendingSynthesisLifecycles.values()];
   let synthesisApplying = false;
   for (const [path, value] of prepared) {
+    signal.throwIfAborted();
     yield { kind: "tool_use", name: value.existing === null ? "Create" : "Update", input: { path } };
     try {
       if (value.existing === null) {
@@ -1082,6 +1089,7 @@ export async function* runIngest(
         }
         synthesisApplying = true;
       }
+      signal.throwIfAborted();
       if (vaultTools instanceof TransactionVaultTools) {
         await vaultTools.writeIfCurrent(
           path,
@@ -1091,7 +1099,6 @@ export async function* runIngest(
       } else {
         await vaultTools.write(path, value.content);
       }
-      synthesisPageMutated = true;
     } catch (error) {
       const message = `ingest: page write failed for ${path} — ${(error as Error).message}`;
       yield { kind: "tool_result", ok: false, preview: message };
@@ -1342,9 +1349,12 @@ export async function* runIngest(
   }
 
   const delta = synthesis.entity_types_delta;
-  for (const event of finalizeSynthesisLifecycles(
-    synthesisPageMutated ? "completed" : "failed",
-  )) {
+  if (!synthesisApplying) {
+    for (const lifecycle of synthesisLifecycles) {
+      yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
+    }
+  }
+  for (const event of finalizeSynthesisLifecycles("completed")) {
     yield event;
   }
   synthesisLifecycleCompleted = true;

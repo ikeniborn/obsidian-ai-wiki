@@ -11,6 +11,7 @@ import type {
 } from "../types";
 import { lifecycleEvent } from "../llm-lifecycle";
 import { classifyContextError, PromptBudgetExceededError } from "../prompt-budget";
+import { RunEventBridge } from "../run-event-bridge";
 import { structuralErrorCounter } from "../structural-error-counter";
 import {
   buildChatParams,
@@ -271,6 +272,7 @@ async function streamOnce(
     );
     lifecycle.phase("waiting");
     const rawStream = await request;
+    signal.throwIfAborted();
     const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
     let producing = false;
     for await (const chunk of stream) {
@@ -289,6 +291,7 @@ async function streamOnce(
       }
       if (tok !== undefined) outputTokens = tok;
     }
+    signal.throwIfAborted();
     if (finishReason === "length") throw new StructuredOutputTruncatedError(finishReason);
     const stats = getStats();
     return {
@@ -336,6 +339,7 @@ async function nonStreamOnce(
   );
   lifecycle.phase("waiting");
   const response = await request;
+  signal.throwIfAborted();
   if (
     response
     && typeof response === "object"
@@ -361,6 +365,7 @@ async function nonStreamOnce(
       if (deltas.outputTokens !== undefined) outputTokens += deltas.outputTokens;
       if (deltas.inputTokens !== undefined) inputTokens = deltas.inputTokens;
     }
+    signal.throwIfAborted();
     if (finishReason === "length") throw new StructuredOutputTruncatedError("length");
     return { fullText, outputTokens, inputTokens, finishReason };
   }
@@ -372,6 +377,7 @@ async function nonStreamOnce(
   const fullText = message?.content ?? "";
   if (reasoning.trim() || fullText.trim()) lifecycle.phase("producing");
   if (reasoning) onEvent({ kind: "assistant_text", delta: reasoning, isReasoning: true });
+  signal.throwIfAborted();
   return {
     fullText,
     outputTokens: extractUsage(response) ?? 0,
@@ -459,6 +465,7 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
       if (attempt > 0) onEvent({ kind: "rule_fired", ruleId: "parseWithRetry", count: 1 });
 
       const call = await callWithFormatFallback(args, messages, mode, attempt, lifecycle);
+      signal.throwIfAborted();
       mode = call.mode;
       const { fullText, outputTokens, inputTokens, statsEvent } = call.result;
       totalTokens += outputTokens;
@@ -555,27 +562,25 @@ export async function* runStructuredStreaming<T>(
   args: RunStructuredArgs<T>,
   sink: StructuredSink<T>,
 ): AsyncGenerator<RunEvent> {
-  const queue: RunEvent[] = [];
-  let wake: (() => void) | null = null;
-  let settled = false;
-  let error: unknown = null;
-  const onEvent = (ev: RunEvent) => { queue.push(ev); wake?.(); };
-
-  const p = runStructuredWithRetry({ ...args, onEvent })
-    .then((r) => {
+  const bridge = new RunEventBridge();
+  const requestController = new AbortController();
+  const forwardAbort = () => requestController.abort(args.signal.reason);
+  if (args.signal.aborted) forwardAbort();
+  else args.signal.addEventListener("abort", forwardAbort, { once: true });
+  const work = runStructuredWithRetry({
+    ...args,
+    signal: requestController.signal,
+    onEvent: (event) => bridge.push(event),
+  }).then((r) => {
       sink.value = r.value;
       sink.inputTokens = r.inputTokens;
       sink.outputTokens = r.outputTokens;
       sink.fullText = r.fullText;
       sink.lifecycle = r.lifecycle;
-    })
-    .catch((e) => { error = e; })
-    .finally(() => { settled = true; wake?.(); });
-
-  while (!settled || queue.length) {
-    while (queue.length) yield queue.shift()!;
-    if (!settled) await new Promise<void>((res) => { wake = () => { wake = null; res(); }; });
+    });
+  try {
+    yield* bridge.forward(work, () => requestController.abort());
+  } finally {
+    args.signal.removeEventListener("abort", forwardAbort);
   }
-  await p;
-  if (error) throw error as Error;
 }

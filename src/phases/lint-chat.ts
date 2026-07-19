@@ -288,55 +288,85 @@ export async function* runLintFixChat(
     outputTokens: number;
     lifecycle: { id: string; action: LlmLifecycleAction };
   };
+  let pendingLifecycle: { id: string; action: LlmLifecycleAction } | undefined;
+  const trackLifecycle = (event: RunEvent): void => {
+    if (event.kind !== "llm_lifecycle") return;
+    if (event.phase === "validating") {
+      pendingLifecycle = { id: event.id, action: event.action };
+    } else if (["completed", "failed", "cancelled", "retrying"].includes(event.phase)
+      && pendingLifecycle?.id === event.id) {
+      pendingLifecycle = undefined;
+    }
+  };
+  const closePendingLifecycle = (
+    phase: "completed" | "failed" | "cancelled",
+  ): RunEvent | undefined => {
+    if (!pendingLifecycle) return undefined;
+    const event = lifecycleEvent(pendingLifecycle.id, pendingLifecycle.action, phase);
+    pendingLifecycle = undefined;
+    return event;
+  };
   try {
-    result = yield* runWithLiveEvents((emit) => runWithContextRepack({
-      callSite: "lint-chat.patch",
-      configuredInputBudget: opts.inputBudgetTokens ?? 16_384,
-      outputBudget: opts.maxTokens,
-      compressionProfile: opts.semanticCompression?.profile ?? "balanced",
-      build: (effectiveInputBudget) => {
-        const packed = buildLintChatMessagesWithinBudget(
-          systemContent,
-          olderPairs,
-          lastUser.content,
-          effectiveInputBudget,
-        );
-        const { messages, estimatedInputTokens } = packed;
-        if (estimatedInputTokens > effectiveInputBudget) {
-          throw new PromptBudgetExceededError(effectiveInputBudget, estimatedInputTokens, selectedPaths);
-        }
-        return {
-          value: messages,
-          estimatedInputTokens,
-          contextUnits: activePages.size + packed.contextUnits,
-        };
-      },
-      execute: async (messages) => {
-        const r = await runStructuredWithRetry({
-          llm,
-          model,
-          baseMessages: messages,
-          opts: { ...opts, jsonMode: false, inputBudgetTokens: opts.inputBudgetTokens ?? 16_384 },
-          profile: { kind: "json-zod", schema: LintChatPatchSchema },
-          maxRetries: opts.structuredRetries ?? 1,
-          callSite: "lint-chat.patch",
-          lifecycle: createLlmLifecycle("apply_lint_fixes"),
-          signal,
-          onEvent: emit,
-          transport: "non-stream",
-          contextErrorsRetry: true,
-        });
-        return {
-          value: r.value,
-          outputTokens: r.outputTokens,
-          inputTokens: r.inputTokens,
-          lifecycle: r.lifecycle,
-        };
-      },
-      onEvent: emit,
-    }));
+    result = yield* runWithLiveEvents((emit) => {
+      const forward = (event: RunEvent): void => {
+        trackLifecycle(event);
+        emit(event);
+      };
+      return runWithContextRepack({
+        callSite: "lint-chat.patch",
+        configuredInputBudget: opts.inputBudgetTokens ?? 16_384,
+        outputBudget: opts.maxTokens,
+        compressionProfile: opts.semanticCompression?.profile ?? "balanced",
+        build: (effectiveInputBudget) => {
+          const packed = buildLintChatMessagesWithinBudget(
+            systemContent,
+            olderPairs,
+            lastUser.content,
+            effectiveInputBudget,
+          );
+          const { messages, estimatedInputTokens } = packed;
+          if (estimatedInputTokens > effectiveInputBudget) {
+            throw new PromptBudgetExceededError(effectiveInputBudget, estimatedInputTokens, selectedPaths);
+          }
+          return {
+            value: messages,
+            estimatedInputTokens,
+            contextUnits: activePages.size + packed.contextUnits,
+          };
+        },
+        execute: async (messages) => {
+          const r = await runStructuredWithRetry({
+            llm,
+            model,
+            baseMessages: messages,
+            opts: { ...opts, jsonMode: false, inputBudgetTokens: opts.inputBudgetTokens ?? 16_384 },
+            profile: { kind: "json-zod", schema: LintChatPatchSchema },
+            maxRetries: opts.structuredRetries ?? 1,
+            callSite: "lint-chat.patch",
+            lifecycle: createLlmLifecycle("apply_lint_fixes"),
+            signal,
+            onEvent: forward,
+            transport: "non-stream",
+            contextErrorsRetry: true,
+          });
+          return {
+            value: r.value,
+            outputTokens: r.outputTokens,
+            inputTokens: r.inputTokens,
+            lifecycle: r.lifecycle,
+          };
+        },
+        onEvent: forward,
+      });
+    });
+    pendingLifecycle ??= result.lifecycle;
+    signal.throwIfAborted();
     yield { kind: "tool_result", ok: true, preview: `${result.value.patches?.length ?? 0} patch(es)` };
   } catch (e) {
+    const terminal = closePendingLifecycle(
+      signal.aborted || (e as Error).name === "AbortError" ? "cancelled" : "failed",
+    );
+    if (terminal) yield terminal;
     yield { kind: "tool_result", ok: false, preview: (e as Error).message };
     yield { kind: "error", message: `lint-chat: ${(e as Error).message}` };
     yield { kind: "result", durationMs: Date.now() - start, text: "" };
@@ -352,47 +382,67 @@ export async function* runLintFixChat(
   let writeSucceeded = false;
   let writeFailed = false;
   const patches = parsed.patches ?? [];
-  for (const patch of patches) {
-    yield { kind: "tool_use", name: "Update", input: { path: patch.path } };
-    const current = activePages.get(patch.path);
-    if (!activePaths.includes(patch.path) || current === undefined) {
-      yield { kind: "tool_result", ok: false, preview: `Blocked: path was not selected (${patch.path})` };
-      continue;
-    }
-    try {
-      const applied = applyPagePatch(current, patch as unknown as PatchPage, authorities.get(patch.path) ?? []);
-      if (!applied.ok) {
-        yield { kind: "tool_result", ok: false, preview: applied.reason };
+  try {
+    for (const patch of patches) {
+      signal.throwIfAborted();
+      yield { kind: "tool_use", name: "Update", input: { path: patch.path } };
+      const current = activePages.get(patch.path);
+      if (!activePaths.includes(patch.path) || current === undefined) {
+        yield { kind: "tool_result", ok: false, preview: `Blocked: path was not selected (${patch.path})` };
         continue;
       }
-      if (!applying) {
-        yield lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying");
-        applying = true;
+      try {
+        const applied = applyPagePatch(current, patch as unknown as PatchPage, authorities.get(patch.path) ?? []);
+        if (!applied.ok) {
+          yield { kind: "tool_result", ok: false, preview: applied.reason };
+          continue;
+        }
+        if (!applying) {
+          signal.throwIfAborted();
+          yield lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying");
+          applying = true;
+        }
+        signal.throwIfAborted();
+        await vaultTools.write(patch.path, applied.content);
+        signal.throwIfAborted();
+        activePages.set(patch.path, applied.content);
+        signal.throwIfAborted();
+        writtenPaths.push(patch.path);
+        yield { kind: "tool_result", ok: true };
+        signal.throwIfAborted();
+        await upsertPageIndex(
+          vaultTools,
+          wikiVaultPath,
+          pageIndexRecordFromMarkdown(wikiVaultPath, patch.path, applied.content),
+        );
+        writeSucceeded = true;
+      } catch (e) {
+        if (signal.aborted || (e as Error).name === "AbortError") throw e;
+        writeFailed = true;
+        yield { kind: "tool_result", ok: false, preview: (e as Error).message };
+        continue;
       }
-      await vaultTools.write(patch.path, applied.content);
-      activePages.set(patch.path, applied.content);
-      writtenPaths.push(patch.path);
-      yield { kind: "tool_result", ok: true };
-      await upsertPageIndex(
-        vaultTools,
-        wikiVaultPath,
-        pageIndexRecordFromMarkdown(wikiVaultPath, patch.path, applied.content),
-      );
-      writeSucceeded = true;
-    } catch (e) {
-      writeFailed = true;
-      yield { kind: "tool_result", ok: false, preview: (e as Error).message };
-      continue;
     }
+    if (!applying && patches.length === 0) {
+      signal.throwIfAborted();
+      yield lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying");
+    }
+    signal.throwIfAborted();
+    const terminal = closePendingLifecycle(
+      writeFailed || (patches.length > 0 && !writeSucceeded) ? "failed" : "completed",
+    );
+    if (terminal) yield terminal;
+  } catch (e) {
+    const terminal = closePendingLifecycle(
+      signal.aborted || (e as Error).name === "AbortError" ? "cancelled" : "failed",
+    );
+    if (terminal) yield terminal;
+    if (!signal.aborted && (e as Error).name !== "AbortError") {
+      yield { kind: "error", message: `lint-chat mutation failed: ${(e as Error).message}` };
+    }
+    yield { kind: "result", durationMs: Date.now() - start, text: "" };
+    return;
   }
-  if (!applying && patches.length === 0) {
-    yield lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "applying");
-  }
-  yield lifecycleEvent(
-    result.lifecycle.id,
-    result.lifecycle.action,
-    writeFailed || (patches.length > 0 && !writeSucceeded) ? "failed" : "completed",
-  );
 
   // 5. Emit result
   yield {

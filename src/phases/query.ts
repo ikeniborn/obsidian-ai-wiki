@@ -176,10 +176,24 @@ export async function* retrieveDomainCandidates(
         signal,
         emit,
       ));
+    if (signal.aborted) {
+      if (seedRes.lifecycle) {
+        yield lifecycleEvent(seedRes.lifecycle.id, seedRes.lifecycle.action, "cancelled");
+      }
+      return null;
+    }
+    signal.throwIfAborted();
     seeds = seedRes.seeds;
     seedOutputTokens += seedRes.outputTokens;
     if (seedRes.lifecycle) {
+      signal.throwIfAborted();
       yield lifecycleEvent(seedRes.lifecycle.id, seedRes.lifecycle.action, "applying");
+    }
+    if (signal.aborted) {
+      if (seedRes.lifecycle) {
+        yield lifecycleEvent(seedRes.lifecycle.id, seedRes.lifecycle.action, "cancelled");
+      }
+      return null;
     }
     yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
     if (seedRes.lifecycle) {

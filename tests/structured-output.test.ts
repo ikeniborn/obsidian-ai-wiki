@@ -18,6 +18,7 @@ const { parseWithRetry } = await import("../src/phases/parse-with-retry");
 const {
   completionReasoning,
   computeSpeedText,
+  runWithLiveEvents,
   shouldFallbackStreamToNonStream,
 } = await import("../src/phases/llm-utils");
 const {
@@ -94,6 +95,20 @@ function llmFromAttempts(attempts: Array<string | Error>, seenParams: Record<str
       },
     },
   } as unknown as LlmClient;
+}
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve(value: T): void;
+  reject(error: unknown): void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
 }
 
 function isTestJsonModeError(e: unknown): boolean {
@@ -1090,6 +1105,108 @@ test("runStructuredStreaming propagates a structured failure", async () => {
       && event.phase === "failed"),
     true,
   );
+});
+
+test("structured non-stream abort after transport completion closes cancelled without returning data", async () => {
+  const response = deferred<OpenAI.Chat.ChatCompletion>();
+  const started = deferred<void>();
+  const controller = new AbortController();
+  const events: RunEvent[] = [];
+  const llm = {
+    chat: { completions: { create: () => {
+      started.resolve();
+      return response.promise;
+    } } },
+  } as unknown as LlmClient;
+  const operation = runStructuredWithRetry({
+    llm,
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    lifecycle: { id: "post-transport-abort", action: "select_relevant_pages" },
+    signal: controller.signal,
+    onEvent: (event) => events.push(event),
+    transport: "non-stream",
+  });
+
+  await started.promise;
+  controller.abort();
+  response.resolve({
+    id: "completion",
+    object: "chat.completion",
+    created: 0,
+    model: "m",
+    choices: [{
+      index: 0,
+      message: { role: "assistant", content: '{"value":"must-not-return"}', refusal: null },
+      finish_reason: "stop",
+      logprobs: null,
+    }],
+  });
+
+  await assert.rejects(operation, { name: "AbortError" });
+  assert.deepEqual(
+    events.filter((event) => event.kind === "llm_lifecycle").map((event) => event.phase),
+    ["preparing", "sent", "waiting", "cancelled"],
+  );
+});
+
+test("runStructuredStreaming aborts background work when the consumer returns", async () => {
+  const providerAborted = deferred<void>();
+  const controller = new AbortController();
+  const sink: { value?: { value: string } } = {};
+  const llm = {
+    chat: { completions: { create: (
+      _params: unknown,
+      options?: { signal?: AbortSignal },
+    ) => new Promise<never>((_resolve, reject) => {
+      options?.signal?.addEventListener("abort", () => {
+        providerAborted.resolve();
+        const error = new Error("provider aborted");
+        error.name = "AbortError";
+        reject(error);
+      }, { once: true });
+    }) } },
+  } as unknown as LlmClient;
+  const generator = runStructuredStreaming({
+    llm,
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    lifecycle: { id: "abandoned-consumer", action: "select_relevant_pages" },
+    signal: controller.signal,
+    onEvent: () => {},
+  }, sink);
+
+  const first = await generator.next();
+  assert.equal(first.done, false);
+  assert.equal(first.value.kind, "llm_lifecycle");
+  await generator.return();
+  await Promise.race([
+    providerAborted.promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("background provider was not aborted")), 2_000)),
+  ]);
+  await Promise.resolve();
+
+  assert.equal(controller.signal.aborted, false, "cleanup must not mutate the caller signal");
+  assert.equal(sink.value, undefined);
+  assert.deepEqual(await generator.next(), { done: true, value: undefined });
+});
+
+test("runWithLiveEvents preserves an undefined rejection as an error", async () => {
+  const generator = runWithLiveEvents(async () => Promise.reject(undefined));
+  await assert.rejects(async () => {
+    for await (const _event of generator) {
+      assert.fail("undefined rejection must not emit events");
+    }
+  }, /Live event work rejected without an error value/);
 });
 
 test("structured streaming emits the ordered nonterminal lifecycle on first visible model output", async () => {

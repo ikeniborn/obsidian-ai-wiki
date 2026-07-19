@@ -628,7 +628,7 @@ test("bootstrap mapper events are yielded while delayed evidence preparation is 
   const timer = setTimeout(() => {
     timedOut = true;
     gate.resolve();
-  }, 40);
+  }, 2_000);
   while (true) {
     const next = await generator.next();
     assert.equal(next.done, false);

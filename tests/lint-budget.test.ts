@@ -138,6 +138,30 @@ function deferred(): { promise: Promise<void>; resolve(): void } {
   return { promise, resolve };
 }
 
+async function nextWithOverallTimeout<T>(
+  generator: AsyncGenerator<RunEvent, T>,
+  label: string,
+): Promise<IteratorResult<RunEvent, T>> {
+  let resolve!: (value: IteratorResult<RunEvent, T>) => void;
+  let reject!: (error: unknown) => void;
+  const settled = new Promise<IteratorResult<RunEvent, T>>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  void generator.next().then(resolve, reject);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      settled,
+      new Promise<never>((_, fail) => {
+        timer = setTimeout(() => fail(new Error(`${label} lifecycle buffered behind request`)), 2_000);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 test("normal and oversized pages produce complete work-item coverage", () => {
   const pages = new Map([
     ["!Wiki/d/concept/a.md", "# A\n\n## Facts\nshort"],
@@ -649,11 +673,7 @@ test("Lint batch/config lifecycle completes only after a successful patch write"
   ] as const) {
     const livePhases: string[] = [];
     while (livePhases.length < 3) {
-      const next = await Promise.race([
-        generator.next(),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`${callSite} lifecycle buffered behind request`)), 50)),
-      ]);
+      const next = await nextWithOverallTimeout(generator, callSite);
       assert.equal(next.done, false);
       if (!next.done) {
         events.push(next.value);
@@ -930,11 +950,7 @@ test("Lint-chat yields lifecycle while patch helper is pending and closes reject
   const events: RunEvent[] = [];
   const phases: string[] = [];
   while (phases.length < 3) {
-    const next = await Promise.race([
-      generator.next(),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("lint-chat lifecycle buffered behind request")), 50)),
-    ]);
+    const next = await nextWithOverallTimeout(generator, "lint-chat");
     assert.equal(next.done, false);
     if (!next.done) {
       events.push(next.value);
@@ -954,6 +970,62 @@ test("Lint-chat yields lifecycle while patch helper is pending and closes reject
       .map((event) => event.kind === "llm_lifecycle" ? event.phase : ""),
     ["preparing", "sent", "waiting", "failed"],
   );
+});
+
+test("Lint-chat abort after validating cancels once and performs no mutation", async () => {
+  const { VaultTools } = await import("../src/vault-tools");
+  const { runLintFixChat } = await import("../src/phases/lint-chat");
+  const path = "!Wiki/d/concept/wiki_d_alpha.md";
+  const content = "# Alpha\n\n## Facts\nOld fact.\n";
+  const adapter = new MemoryAdapter(new Map([[path, content]]));
+  const controller = new AbortController();
+  const generator = runLintFixChat(
+    {
+      operation: "lint-chat",
+      context: `- [warning] ${path} :: ## Facts :: stale :: Old fact`,
+      chatMessages: [{ role: "user", content: "Fix wiki_d_alpha" }],
+    } as RunRequest,
+    new VaultTools(adapter, ""),
+    "",
+    { id: "d", name: "Demo", wiki_folder: "d", entity_types: [], language_notes: "" } as DomainEntry,
+    jsonLlm(JSON.stringify({
+      summary: "fixed",
+      patches: [{
+        kind: "patch",
+        path,
+        expectedPageHash: contentHash(content),
+        sections: [{
+          operation: "replace",
+          heading: "## Facts",
+          expectedSectionHash: inspectPatchablePage(content).sections[0]?.hash,
+          content: "New fact.",
+        }],
+      }],
+    })),
+    "m",
+    { inputBudgetTokens: 10_000, structuredRetries: 0 },
+    controller.signal,
+  );
+  const events: RunEvent[] = [];
+  while (true) {
+    const next = await generator.next();
+    assert.equal(next.done, false);
+    if (next.done) break;
+    events.push(next.value);
+    if (next.value.kind === "llm_lifecycle" && next.value.phase === "validating") {
+      controller.abort();
+      break;
+    }
+  }
+  for await (const event of generator) events.push(event);
+
+  assert.deepEqual(adapter.writes, []);
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  assert.deepEqual(lifecycle.map((event) => event.phase), [
+    "preparing", "sent", "waiting", "producing", "validating", "cancelled",
+  ], JSON.stringify(events));
+  assert.equal(lifecycle.filter((event) =>
+    ["completed", "failed", "cancelled"].includes(event.phase)).length, 1);
 });
 
 test("Lint transport and applying boundaries remain explicit", () => {

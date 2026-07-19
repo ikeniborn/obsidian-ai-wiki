@@ -758,6 +758,58 @@ test("bounded ingest never exposes raw chunk vectors and emits in-budget telemet
   assert.equal(budgetEvents.length > 0, true);
   assert.equal(budgetEvents.every((event) =>
     event.estimatedInputTokens <= event.effectiveInputBudget), true);
+  const synthesisLifecycle = events.filter((event) =>
+    event.kind === "llm_lifecycle" && event.action === "synthesize_wiki_pages");
+  assert.equal(new Set(synthesisLifecycle.map((event) => event.id)).size, 1);
+  assert.deepEqual(synthesisLifecycle.map((event) => event.phase), [
+    "preparing", "sent", "waiting", "producing", "validating", "applying", "completed",
+  ]);
+});
+
+test("Ingest abort after synthesis validation cancels once and performs no later write", async () => {
+  const adapter = new MemoryAdapter(new Map([[SOURCE_PATH, "Alpha source fact."]]));
+  const controller = new AbortController();
+  const generator = runIngest(
+    [SOURCE_PATH],
+    new VaultTools(adapter, "/vault"),
+    capturingLlm([]),
+    "mock",
+    [domain()],
+    "/vault",
+    controller.signal,
+    {
+      inputBudgetTokens: 20_000,
+      maxTokens: 1_000,
+      semanticCompression: { profile: "balanced", operation: "ingest" },
+      structuredRetries: 0,
+    },
+    new PageSimilarityService({ mode: "jaccard", topK: 5 }),
+  );
+  const events: RunEvent[] = [];
+  let writesAtAbort = 0;
+  while (true) {
+    const next = await generator.next();
+    assert.equal(next.done, false);
+    if (next.done) break;
+    events.push(next.value);
+    if (next.value.kind === "llm_lifecycle"
+      && next.value.action === "synthesize_wiki_pages"
+      && next.value.phase === "validating") {
+      writesAtAbort = adapter.writes.length;
+      controller.abort();
+      break;
+    }
+  }
+  for await (const event of generator) events.push(event);
+
+  assert.equal(adapter.writes.length, writesAtAbort);
+  const lifecycle = events.filter((event) =>
+    event.kind === "llm_lifecycle" && event.action === "synthesize_wiki_pages");
+  assert.deepEqual(lifecycle.map((event) => event.phase), [
+    "preparing", "sent", "waiting", "producing", "validating", "cancelled",
+  ], JSON.stringify(events));
+  assert.equal(lifecycle.filter((event) =>
+    ["completed", "failed", "cancelled"].includes(event.phase)).length, 1);
 });
 
 test("runIngest deterministically merges equivalent deltas from multiple top-level synthesis batches", async () => {
@@ -1867,7 +1919,7 @@ test("mapper telemetry and synthesis content are yielded before delayed helpers 
     const timer = setTimeout(() => {
       expired = true;
       release();
-    }, 40);
+    }, 2_000);
     while (true) {
       const next = await generator.next();
       assert.equal(next.done, false);

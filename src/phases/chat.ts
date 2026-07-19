@@ -32,7 +32,6 @@ interface PackedChatRequest {
 interface ChatAttempt {
   text: string;
   outputTokens: number;
-  events: RunEvent[];
   pendingStream?: {
     iterator: AsyncIterator<OpenAI.Chat.ChatCompletionChunk>;
     getStats(): import("./llm-utils").LlmStreamStats | undefined;
@@ -155,7 +154,6 @@ export async function* runLintChat(
           const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
           let attemptText = "";
           let attemptOutputTokens = 0;
-          const events: RunEvent[] = [];
           let producing = false;
           const iterator = stream[Symbol.asyncIterator]();
           while (true) {
@@ -165,7 +163,6 @@ export async function* runLintChat(
               return {
                 text: attemptText,
                 outputTokens: attemptOutputTokens,
-                events,
                 streamStats: stats,
                 inputTokens: stats?.inputTokens,
               };
@@ -187,7 +184,6 @@ export async function* runLintChat(
               return {
                 text: attemptText,
                 outputTokens: attemptOutputTokens,
-                events,
                 pendingStream: { iterator, getStats },
               };
             }
@@ -243,7 +239,6 @@ export async function* runLintChat(
           return {
             text: fallbackText,
             outputTokens: fallbackTokens,
-            events: [],
             streamStats: response.usage
               ? {
                   inputTokens: response.usage.prompt_tokens,
@@ -258,6 +253,7 @@ export async function* runLintChat(
       },
       onEvent: (event) => budgetEvents.push(event),
     }));
+    signal.throwIfAborted();
   } catch (error) {
     for (const event of budgetEvents) yield event;
     if (signal.aborted || (error as Error).name === "AbortError") {
@@ -279,7 +275,6 @@ export async function* runLintChat(
     let streamAborted = false;
     let streamFailure: { error: unknown } | undefined;
     try {
-      for (const event of attempt.events) yield event;
       while (true) {
         const next = await attempt.pendingStream.iterator.next();
         if (next.done) {
@@ -318,8 +313,6 @@ export async function* runLintChat(
       yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "failed");
       throw streamFailure.error;
     }
-  } else {
-    for (const event of attempt.events) yield event;
   }
 
   if (signal.aborted) {
@@ -327,7 +320,15 @@ export async function* runLintChat(
     return;
   }
   yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "validating");
+  if (signal.aborted) {
+    yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "cancelled");
+    return;
+  }
   yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "applying");
+  if (signal.aborted) {
+    yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "cancelled");
+    return;
+  }
   yield { kind: "tool_result", ok: !!fullText, preview: fullText ? `${fullText.length} chars` : "no response" };
   yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "completed");
   if (streamStats) yield buildLlmCallStatsEvent(streamStats);

@@ -145,31 +145,40 @@ export async function* runWithLiveEvents<T>(
   work: (emit: (event: RunEvent) => void) => Promise<T>,
 ): AsyncGenerator<RunEvent, T> {
   const queue: RunEvent[] = [];
+  let cursor = 0;
   let wake: (() => void) | undefined;
-  let settled = false;
-  let result: T | undefined;
-  let error: unknown;
+  let settlement:
+    | { ok: true; value: T }
+    | { ok: false; error: unknown }
+    | undefined;
   const emit = (event: RunEvent): void => {
     queue.push(event);
     wake?.();
     wake = undefined;
   };
   void work(emit)
-    .then((value) => { result = value; })
-    .catch((caught) => { error = caught; })
+    .then(
+      (value) => { settlement = { ok: true, value }; },
+      (error: unknown) => { settlement = { ok: false, error }; },
+    )
     .finally(() => {
-      settled = true;
       wake?.();
       wake = undefined;
     });
-  while (!settled || queue.length > 0) {
-    while (queue.length > 0) yield queue.shift()!;
-    if (!settled) await new Promise<void>((resolve) => { wake = resolve; });
+  while (settlement === undefined || cursor < queue.length) {
+    while (cursor < queue.length) yield queue[cursor++];
+    if (settlement === undefined) await new Promise<void>((resolve) => { wake = resolve; });
   }
-  if (error !== undefined) {
-    throw error instanceof Error ? error : new Error(String(error));
+  if (!settlement) throw new Error("live event work settled without an outcome");
+  if (!settlement.ok) {
+    if (settlement.error === undefined) {
+      throw new Error("Live event work rejected without an error value");
+    }
+    throw settlement.error instanceof Error
+      ? settlement.error
+      : new Error(String(settlement.error));
   }
-  return result as T;
+  return settlement.value;
 }
 
 export function buildChatParams(
