@@ -719,7 +719,7 @@ test("PDF context exhaustion never echoes hostile provider prompt, auth, or medi
   );
 });
 
-test("PDF reservation preflight failure emits vision.analysis telemetry before transport", async () => {
+test("PDF reservation preflight failure emits no request telemetry before transport", async () => {
   const events: RunEvent[] = [];
   let calls = 0;
   const llm = {
@@ -760,11 +760,8 @@ test("PDF reservation preflight failure emits vision.analysis telemetry before t
   );
 
   assert.equal(calls, 0);
-  assert.ok(events.some((event) =>
-    event.kind === "prompt_budget"
-    && event.callSite === "vision.analysis"
-    && event.retryReason === "preflight_budget_exceeded"
-    && event.contextUnits === 1));
+  assert.equal(events.some((event) => event.kind === "prompt_budget"), false);
+  assert.equal(events.some((event) => event.kind === "llm_lifecycle"), false);
 });
 
 test("attachment collection never silently drops a failed attachment", async () => {
@@ -1009,7 +1006,7 @@ test("analyzeAttachments forwards bounded Vision options to every native call", 
   );
 });
 
-test("Vision synchronous invocation failure emits sent before failed without waiting", async () => {
+test("Vision synchronous invocation failure emits waiting before failed", async () => {
   const events: RunEvent[] = [];
   const error = new Error("vision sync create failed");
   const llm = {
@@ -1045,7 +1042,7 @@ test("Vision synchronous invocation failure emits sent before failed without wai
     events
       .filter((event) => event.kind === "llm_lifecycle")
       .map((event) => event.kind === "llm_lifecycle" ? event.phase : ""),
-    ["preparing", "sent", "failed"],
+    ["preparing", "sent", "waiting", "failed"],
   );
 });
 

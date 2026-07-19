@@ -238,6 +238,7 @@ async function runLintBatchWithSplit(args: {
 }> {
   try {
     const result = await runWithContextRepack({
+      requestBudgetsEmittedByExecute: true,
       callSite: "lint.batch",
       configuredInputBudget: args.opts.inputBudgetTokens ?? 16_384,
       outputBudget: args.opts.maxTokens,

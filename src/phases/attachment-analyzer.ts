@@ -24,7 +24,6 @@ import {
   classifyContextError,
   createPromptBudgetEvent,
   estimatePreparedMessages,
-  PromptBudgetExceededError,
   shrinkInputBudget,
   type ContextErrorDetails,
 } from "../prompt-budget";
@@ -209,10 +208,7 @@ async function callVisionLlm(
   options: ResolvedVisionAnalysisOptions,
   effectiveInputBudget: number = options.inputBudgetTokens,
 ): Promise<VisionRecognitionRecord[]> {
-  const lifecycle = createLlmLifecycle("analyze_attachments");
-  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "preparing"));
   if (signal.aborted) {
-    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "cancelled"));
     signal.throwIfAborted();
   }
   const callOptions = visionCallOptions(
@@ -221,34 +217,10 @@ async function callVisionLlm(
     reasoningLanguage,
     effectiveInputBudget,
   );
-  let params: Record<string, unknown>;
-  try {
-    params = buildChatParams(model, visionMessages(systemPrompt, pages), callOptions);
-  } catch (error) {
-    if (error instanceof PromptBudgetExceededError) {
-      options.onEvent?.(createPromptBudgetEvent({
-        callSite: "vision.analysis",
-        configuredInputBudget: options.inputBudgetTokens,
-        effectiveInputBudget,
-        estimatedInputTokens: error.estimated,
-        outputBudget: options.maxTokens,
-        compressionProfile: options.compressionProfile,
-        contextUnits: pages.length,
-        retryReason: "preflight_budget_exceeded",
-      }));
-    }
-    options.onEvent?.(lifecycleEvent(
-      lifecycle.id,
-      lifecycle.action,
-      signal.aborted || (error as Error).name === "AbortError"
-        ? "cancelled"
-        : error instanceof PromptBudgetExceededError
-          ? "retrying"
-          : "failed",
-    ));
-    throw error;
-  }
+  const params = buildChatParams(model, visionMessages(systemPrompt, pages), callOptions);
 
+  const lifecycle = createLlmLifecycle("analyze_attachments");
+  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "preparing"));
   const estimatedInputTokens = estimatePreparedMessages(
     params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
   );
@@ -256,11 +228,11 @@ async function callVisionLlm(
   try {
     signal.throwIfAborted();
     options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "sent"));
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "waiting"));
     const request = llm.chat.completions.create(
       { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
       { signal },
     );
-    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "waiting"));
     response = await request;
   } catch (error) {
     options.onEvent?.(lifecycleEvent(
@@ -273,6 +245,7 @@ async function callVisionLlm(
           : "failed",
     ));
     options.onEvent?.(createPromptBudgetEvent({
+      requestId: lifecycle.id,
       callSite: "vision.analysis",
       configuredInputBudget: options.inputBudgetTokens,
       effectiveInputBudget,
@@ -302,6 +275,7 @@ async function callVisionLlm(
   }
   options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "validating"));
   options.onEvent?.(createPromptBudgetEvent({
+    requestId: lifecycle.id,
     callSite: "vision.analysis",
     configuredInputBudget: options.inputBudgetTokens,
     effectiveInputBudget,
@@ -505,18 +479,6 @@ export async function analyzePdf(
         mediaReservationTokens: 4096,
       });
     } catch (error) {
-      if (error instanceof PromptBudgetExceededError) {
-        resolved.onEvent?.(createPromptBudgetEvent({
-          callSite: "vision.analysis",
-          configuredInputBudget: resolved.inputBudgetTokens,
-          effectiveInputBudget,
-          estimatedInputTokens: error.estimated,
-          outputBudget: resolved.maxTokens,
-          compressionProfile: resolved.compressionProfile,
-          contextUnits: pending.length,
-          retryReason: "preflight_budget_exceeded",
-        }));
-      }
       if (originalContextDetails !== undefined) {
         throw visionContextRecoveryError(
           resolved,

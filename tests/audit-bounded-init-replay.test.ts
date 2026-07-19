@@ -52,6 +52,7 @@ function promptBudget(
 ): Record<string, unknown> {
   return {
     ...createPromptBudgetEvent({
+      requestId: "call-0",
       callSite: "ingest.evidence-map",
       configuredInputBudget: 16_384,
       effectiveInputBudget: 12_288,
@@ -186,6 +187,7 @@ function sessionRecords(options: {
         total: sources.length,
       }, session),
       agentRecord(promptBudget({
+        requestId: `call-${index}`,
         callSite: index === 0 ? "ingest.evidence-map" : "ingest.synthesize",
         retryReason: index === 0 ? "provider_context_error" : undefined,
       }), session),
@@ -351,7 +353,7 @@ test("full lifecycle, one wipe, and diagnostics-only technical fields pass", asy
   }
 });
 
-test("valid structured retry uses a fresh lifecycle ID without requiring global count equality", async () => {
+test("valid structured retry has one prompt budget per fresh lifecycle ID", async () => {
   const records = sessionRecords({ sources: ["sources/a.md"] });
   const firstLifecycle = records.findIndex((record) =>
     record.event.kind === "llm_lifecycle" && record.event.id === "call-0");
@@ -365,45 +367,62 @@ test("valid structured retry uses a fresh lifecycle ID without requiring global 
       attempt: 1,
     }),
   );
+  const firstBudget = records.findIndex((record) => record.event.kind === "prompt_budget");
+  records.splice(
+    firstBudget + 1,
+    0,
+    agentRecord(promptBudget({ requestId: "call-0:retry-1" })),
+  );
   const value = await fixture({ records });
   try {
     const summary = await audit(value, { expectedSources: 1 });
     assert.equal(summary.lifecycleCalls, 2);
-    assert.equal(summary.promptBudgetEvents, 1);
+    assert.equal(summary.promptBudgetEvents, 2);
   } finally {
     await value.cleanup();
   }
 });
 
-test("correlation reports both a missing call family and an orphan lifecycle", async () => {
+test("correlation reports a missing lifecycle ID and an orphan lifecycle ID", async () => {
   const records = sessionRecords();
-  for (const record of records) {
-    if (record.event.kind === "llm_lifecycle" && record.event.id === "call-1") {
-      const diagnostics = record.event.diagnostics as Record<string, unknown>;
-      diagnostics.callSite = "init.bootstrap";
-    }
-  }
+  const secondBudget = records.find((record) =>
+    record.event.kind === "prompt_budget" && record.event.requestId === "call-1")!;
+  secondBudget.event.requestId = "missing-call";
   const value = await fixture({ records });
   try {
     await assert.rejects(
       audit(value),
-      /missing lifecycle family: ingest\.synthesize.*orphan lifecycle family: init\.bootstrap/i,
+      /prompt_budget requestId missing-call has no lifecycle.*orphan lifecycle call-1 has no prompt_budget/i,
     );
   } finally {
     await value.cleanup();
   }
 });
 
-test("legacy lifecycle without diagnostics.callSite is explicitly inconclusive", async () => {
+test("legacy prompt budget without requestId is explicitly inconclusive", async () => {
   const records = sessionRecords();
-  for (const record of records) {
-    if (record.event.kind === "llm_lifecycle") delete record.event.diagnostics;
-  }
+  const budget = records.find((record) => record.event.kind === "prompt_budget")!;
+  delete budget.event.requestId;
   const value = await fixture({ records });
   try {
     await assert.rejects(
       audit(value),
-      /lifecycle correlation unsupported\/inconclusive.*diagnostics\.callSite/i,
+      /prompt_budget correlation unsupported\/inconclusive.*missing requestId/i,
+    );
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("duplicate prompt budget requestId is rejected", async () => {
+  const records = sessionRecords();
+  const budget = records.find((record) => record.event.kind === "prompt_budget")!;
+  records.splice(records.indexOf(budget) + 1, 0, structuredClone(budget));
+  const value = await fixture({ records });
+  try {
+    await assert.rejects(
+      audit(value),
+      /prompt_budget requestId call-0 appears 2 times/i,
     );
   } finally {
     await value.cleanup();
@@ -458,6 +477,26 @@ test("lifecycle beyond the idle deadline fails with elapsed milliseconds", async
   }
 });
 
+test("timely producing stops the idle deadline before late validation and completion", async () => {
+  const records = sessionRecords();
+  for (const record of records) {
+    if (
+      record.event.kind === "llm_lifecycle"
+      && record.event.id === "call-0"
+      && ["validating", "applying", "completed"].includes(String(record.event.phase))
+    ) {
+      record.event.atMs = 1_003 + IDLE_DEADLINE_MS + 1;
+    }
+  }
+  const value = await fixture({ records });
+  try {
+    const summary = await audit(value);
+    assert.equal(summary.invalidLifecycleCalls, 0);
+  } finally {
+    await value.cleanup();
+  }
+});
+
 for (const terminal of ["failed", "retrying"]) {
   test(`delayed ${terminal} terminal phase fails the idle deadline`, async () => {
     const records = sessionRecords({ sources: ["sources/a.md"] });
@@ -469,7 +508,10 @@ for (const terminal of ["failed", "retrying"]) {
     replacement.at(-1)!.event.atMs = 1_002 + IDLE_DEADLINE_MS + 1;
     if (terminal === "retrying") {
       replacement.push(
-        agentRecord(promptBudget({ callSite: "ingest.evidence-map" })),
+        agentRecord(promptBudget({
+          requestId: "call-0:retry-1",
+          callSite: "ingest.evidence-map",
+        })),
         ...lifecycleRecords("call-0:retry-1", 1_002 + IDLE_DEADLINE_MS + 2, SESSION, {
           attempt: 1,
         }),
@@ -584,15 +626,14 @@ test("transport and attempt notation in human labels are rejected", async (t) =>
   }
 });
 
-test("bare diagnostic budget value in a human label is rejected without rejecting prose numbers", async () => {
+test("exact session prompt budget value in a human label is rejected without rejecting prose numbers", async () => {
   const records = sessionRecords();
   const lifecycles = records.filter((record) =>
     record.event.kind === "llm_lifecycle" && record.event.id === "call-0");
-  for (const lifecycle of lifecycles) {
-    const diagnostics = lifecycle.event.diagnostics as Record<string, unknown>;
-    diagnostics.configuredInputBudget = 32_768;
-  }
-  lifecycles[0].event.actionLabel = "Preparing 32768";
+  const budget = records.find((record) =>
+    record.event.kind === "prompt_budget" && record.event.requestId === "call-0")!;
+  budget.event.configuredInputBudget = 32_768;
+  lifecycles[0].event.actionLabel = "32768";
   lifecycles[1].event.stateLabel = "Stage 2 of normal processing";
   const value = await fixture({ records });
   try {
@@ -646,6 +687,7 @@ test("failed-source fixture rejects completion after an error", async () => {
 
 test("prompt_budget runtime schema rejects every wrong field type and unsafe number", async (t) => {
   const invalidValues: Array<[string, unknown]> = [
+    ["requestId", ""],
     ["callSite", "secret source content"],
     ["configuredInputBudget", Number.NaN],
     ["effectiveInputBudget", -1],

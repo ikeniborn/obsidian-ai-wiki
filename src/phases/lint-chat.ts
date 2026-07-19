@@ -313,6 +313,7 @@ export async function* runLintFixChat(
         emit(event);
       };
       return runWithContextRepack({
+        requestBudgetsEmittedByExecute: true,
         callSite: "lint-chat.patch",
         configuredInputBudget: opts.inputBudgetTokens ?? 16_384,
         outputBudget: opts.maxTokens,

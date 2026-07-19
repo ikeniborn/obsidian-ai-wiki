@@ -458,14 +458,14 @@ test("single- and cross-domain Query use the same bounded answer packing behavio
 
   const singleBudget = singleEvents.filter((event) => event.kind === "prompt_budget");
   const crossBudget = crossEvents.filter((event) => event.kind === "prompt_budget");
-  assert.equal(singleBudget.length, 1);
-  assert.equal(crossBudget.length, 1);
-  assert.equal(singleBudget[0].callSite, "query.answer");
-  assert.equal(crossBudget[0].callSite, "query.answer");
-  assert.equal(singleBudget[0].compressionProfile, "balanced");
-  assert.equal(crossBudget[0].compressionProfile, "balanced");
-  assert.equal(singleBudget[0].configuredInputBudget, opts.inputBudgetTokens);
-  assert.equal(crossBudget[0].configuredInputBudget, opts.inputBudgetTokens);
+  assert.equal(singleBudget.length, 2);
+  assert.equal(crossBudget.length, 2);
+  assert.ok(singleBudget.every((event) => event.callSite === "query.answer"));
+  assert.ok(crossBudget.every((event) => event.callSite === "query.answer"));
+  assert.ok(singleBudget.every((event) => event.compressionProfile === "balanced"));
+  assert.ok(crossBudget.every((event) => event.compressionProfile === "balanced"));
+  assert.ok(singleBudget.every((event) => event.configuredInputBudget === opts.inputBudgetTokens));
+  assert.ok(crossBudget.every((event) => event.configuredInputBudget === opts.inputBudgetTokens));
   assert.equal(
     singleEvents.some((event) => event.kind === "query_stats" && !event.crossDomain),
     true,

@@ -790,6 +790,7 @@ function llmWithRequestTelemetry(
   metadata: RequestTelemetry,
 ): LlmClient {
   const completions = runtime.llm.chat.completions;
+  let pendingRequestId: string | undefined;
   function createWithTelemetry(
     params: OpenAI.Chat.ChatCompletionCreateParamsStreaming,
     requestOpts?: { signal?: AbortSignal },
@@ -812,24 +813,44 @@ function llmWithRequestTelemetry(
         [],
       );
     }
-    const emitTelemetry = () => runtime.onEvent?.(createPromptBudgetEvent({
-      callSite: metadata.callSite,
-      configuredInputBudget: metadata.configuredInputBudget,
-      effectiveInputBudget: metadata.effectiveInputBudget,
-      estimatedInputTokens,
-      outputBudget: metadata.outputBudget,
-      compressionProfile: metadata.compressionProfile,
-      contextUnits: metadata.contextUnits,
-      sourceChunks: metadata.sourceChunks,
-      reductionDepth: metadata.reductionDepth,
-    }));
-    const response = params.stream
-      ? await completions.create(params, requestOpts)
-      : await completions.create(params, requestOpts);
-    emitTelemetry();
-    return response;
+    const requestId = pendingRequestId;
+    pendingRequestId = undefined;
+    if (!requestId) {
+      throw new Error(`Missing requestId for ${metadata.callSite} prompt budget telemetry`);
+    }
+    let error: unknown;
+    try {
+      return params.stream
+        ? await completions.create(params, requestOpts)
+        : await completions.create(params, requestOpts);
+    } catch (caught) {
+      error = caught;
+      throw caught;
+    } finally {
+      const event = createPromptBudgetEvent({
+        requestId,
+        callSite: metadata.callSite,
+        configuredInputBudget: metadata.configuredInputBudget,
+        effectiveInputBudget: metadata.effectiveInputBudget,
+        estimatedInputTokens,
+        outputBudget: metadata.outputBudget,
+        compressionProfile: metadata.compressionProfile,
+        contextUnits: metadata.contextUnits,
+        sourceChunks: metadata.sourceChunks,
+        reductionDepth: metadata.reductionDepth,
+        retryReason: classifyContextError(error) === null
+          ? undefined
+          : "provider_context_error",
+      });
+      if (event.retryReason === undefined) runtime.onEvent?.(event);
+      else forwardContextRepackProgress(runtime, event);
+    }
   }
   return {
+    emitsPromptBudget: true,
+    beginPromptBudgetRequest: (requestId) => {
+      pendingRequestId = requestId;
+    },
     chat: {
       completions: {
         create: createWithTelemetry,
@@ -973,6 +994,7 @@ async function mapChunksWithContextRepack(
   const configuredTypes = mode.rejectEntityTypes ? [] : [...(mode.allowedEntityTypes ?? [])];
   let failedMapper: (MapperRequestDetails & Pick<SourceChunk, "id" | "startLine" | "endLine">) | undefined;
   return runWithContextRepack({
+    requestBudgetsEmittedByExecute: true,
     callSite: mapCallSite,
     configuredInputBudget: configuredBudget,
     outputBudget: policy.outputBudgetTokens,
@@ -1170,6 +1192,7 @@ async function reduceBatch(
   const retries = policy.reducerRetries ?? 1;
   let failedReducer: { hash: string; units: EvidenceUnit[]; estimatedInputTokens: number } | undefined;
   return runWithContextRepack({
+    requestBudgetsEmittedByExecute: true,
     callSite: "ingest.evidence-reduce",
     configuredInputBudget: configuredBudget,
     outputBudget: policy.outputBudgetTokens,

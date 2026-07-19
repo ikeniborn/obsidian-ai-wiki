@@ -10,7 +10,12 @@ import type {
   StructuredCallSite,
 } from "../types";
 import { lifecycleEvent } from "../llm-lifecycle";
-import { classifyContextError, PromptBudgetExceededError } from "../prompt-budget";
+import {
+  classifyContextError,
+  createPromptBudgetEvent,
+  estimatePreparedMessages,
+  PromptBudgetExceededError,
+} from "../prompt-budget";
 import { RunEventBridge } from "../run-event-bridge";
 import { structuralErrorCounter } from "../structural-error-counter";
 import {
@@ -256,6 +261,7 @@ async function streamOnce(
   onEvent: (ev: RunEvent) => void,
   lifecycle: StructuredLifecycle,
   attempt: number,
+  callSite: StructuredCallSite,
 ): Promise<CallResult> {
   const params = buildChatParams(model, messages, opts, true);
   let fullText = "";
@@ -263,14 +269,18 @@ async function streamOnce(
   let finishReason: string | null | undefined;
   let streamChunkConsumed = false;
   const requestStartMs = Date.now();
+  const requestId = lifecycle.current().id;
+  let inputTokens: number | undefined;
+  let requestError: unknown;
 
   try {
     lifecycle.phase("sent");
+    lifecycle.phase("waiting");
+    llm.beginPromptBudgetRequest?.(requestId);
     const request = llm.chat.completions.create(
       { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
       { signal },
     );
-    lifecycle.phase("waiting");
     const rawStream = await request;
     signal.throwIfAborted();
     const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
@@ -294,6 +304,7 @@ async function streamOnce(
     signal.throwIfAborted();
     if (finishReason === "length") throw new StructuredOutputTruncatedError(finishReason);
     const stats = getStats();
+    inputTokens = stats?.inputTokens;
     return {
       fullText,
       outputTokens,
@@ -302,6 +313,7 @@ async function streamOnce(
       finishReason,
     };
   } catch (e) {
+    requestError = e;
     if (
       signal.aborted
       || (e as Error).name === "AbortError"
@@ -316,7 +328,34 @@ async function streamOnce(
     if (!shouldFallbackStreamToNonStream(e, signal)) throw e;
     lifecycle.close("retrying");
     lifecycle.begin(attempt);
-    return nonStreamOnce(llm, model, messages, opts, signal, onEvent, lifecycle, attempt);
+    return nonStreamOnce(
+      llm,
+      model,
+      messages,
+      opts,
+      signal,
+      onEvent,
+      lifecycle,
+      attempt,
+      callSite,
+    );
+  } finally {
+    if (!llm.emitsPromptBudget) onEvent(createPromptBudgetEvent({
+      requestId,
+      callSite,
+      configuredInputBudget: opts.inputBudgetTokens ?? 16_384,
+      effectiveInputBudget: opts.inputBudgetTokens ?? 16_384,
+      estimatedInputTokens: estimatePreparedMessages(
+        params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+      ),
+      actualInputTokens: inputTokens,
+      outputBudget: opts.maxTokens,
+      compressionProfile: opts.semanticCompression?.profile ?? "balanced",
+      contextUnits: messages.length,
+      retryReason: classifyContextError(requestError) === null
+        ? undefined
+        : "provider_context_error",
+    }));
   }
 }
 
@@ -329,16 +368,55 @@ async function nonStreamOnce(
   onEvent: (ev: RunEvent) => void,
   lifecycle: StructuredLifecycle,
   attempt: number,
+  callSite: StructuredCallSite,
 ): Promise<CallResult> {
   const params = buildChatParams(model, messages, opts);
   const requestStartMs = Date.now();
+  const requestId = lifecycle.current().id;
   lifecycle.phase("sent");
-  const request = llm.chat.completions.create(
-    { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-    { signal },
-  );
-  lifecycle.phase("waiting");
-  const response = await request;
+  let response: OpenAI.Chat.ChatCompletion | AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
+  try {
+    lifecycle.phase("waiting");
+    llm.beginPromptBudgetRequest?.(requestId);
+    const request = llm.chat.completions.create(
+      { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+      { signal },
+    );
+    response = await request;
+  } catch (error) {
+    if (!llm.emitsPromptBudget) onEvent(createPromptBudgetEvent({
+      requestId,
+      callSite,
+      configuredInputBudget: opts.inputBudgetTokens ?? 16_384,
+      effectiveInputBudget: opts.inputBudgetTokens ?? 16_384,
+      estimatedInputTokens: estimatePreparedMessages(
+        params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+      ),
+      outputBudget: opts.maxTokens,
+      compressionProfile: opts.semanticCompression?.profile ?? "balanced",
+      contextUnits: messages.length,
+      retryReason: classifyContextError(error) === null
+        ? undefined
+        : "provider_context_error",
+    }));
+    throw error;
+  }
+  const emitBudget = (actualInputTokens?: number): void => {
+    if (llm.emitsPromptBudget) return;
+    onEvent(createPromptBudgetEvent({
+      requestId,
+      callSite,
+      configuredInputBudget: opts.inputBudgetTokens ?? 16_384,
+      effectiveInputBudget: opts.inputBudgetTokens ?? 16_384,
+      estimatedInputTokens: estimatePreparedMessages(
+        params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+      ),
+      actualInputTokens,
+      outputBudget: opts.maxTokens,
+      compressionProfile: opts.semanticCompression?.profile ?? "balanced",
+      contextUnits: messages.length,
+    }));
+  };
   signal.throwIfAborted();
   if (
     response
@@ -367,8 +445,10 @@ async function nonStreamOnce(
     }
     signal.throwIfAborted();
     if (finishReason === "length") throw new StructuredOutputTruncatedError("length");
+    emitBudget(inputTokens);
     return { fullText, outputTokens, inputTokens, finishReason };
   }
+  emitBudget(response.usage?.prompt_tokens);
   if (response.choices[0]?.finish_reason === "length") {
     throw new StructuredOutputTruncatedError("length");
   }
@@ -428,8 +508,8 @@ async function callWithFormatFallback<T>(
     try {
       return {
         result: args.transport === "non-stream"
-          ? await nonStreamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle, attempt)
-          : await streamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle, attempt),
+          ? await nonStreamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle, attempt, args.callSite)
+          : await streamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle, attempt, args.callSite),
         mode: currentMode,
       };
     } catch (e) {

@@ -187,6 +187,7 @@ export type RunEvent =
     }
   | {
       kind: "prompt_budget";
+      requestId?: string;
       callSite: StructuredCallSite;
       configuredInputBudget: number;
       effectiveInputBudget: number;
@@ -318,6 +319,8 @@ export interface LlmCallOptions {
 
 /** Минимальный интерфейс OpenAI-клиента, используемый фазами. */
 export type LlmClient = {
+  emitsPromptBudget?: boolean;
+  beginPromptBudgetRequest?: (requestId: string) => void;
   chat: {
     completions: {
       create(

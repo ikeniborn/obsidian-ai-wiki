@@ -1399,6 +1399,11 @@ test("structured repair closes the old lifecycle before opening a new ID", async
   assert.equal(lifecycle[firstRetry + 1]?.phase, "preparing");
   assert.notEqual(lifecycle[firstRetry]?.id, lifecycle[firstRetry + 1]?.id);
   assert.ok(lifecycle.every((event) => event.action === "select_relevant_pages"));
+  const requestIds = events
+    .filter((event) => event.kind === "prompt_budget")
+    .map((event) => event.kind === "prompt_budget" ? event.requestId : undefined);
+  assert.deepEqual(requestIds, ["repair-call", "repair-call:retry-1"]);
+  assert.equal(new Set(requestIds).size, requestIds.length);
 });
 
 test("completionReasoning accepts native and compatibility completion fields", () => {
@@ -1442,8 +1447,8 @@ test("structured lifecycle brackets parameter construction and request invocatio
     "preparing",
     "params",
     "sent",
-    "create",
     "waiting",
+    "create",
     "failed",
   ]);
 });
@@ -1484,4 +1489,8 @@ test("stream transport fallback closes the old ID before a new non-stream lifecy
   ]);
   assert.notEqual(lifecycle[3]?.id, lifecycle[4]?.id);
   assert.equal(new Set(lifecycle.map((event) => event.id)).size, 2);
+  const requestIds = events
+    .filter((event) => event.kind === "prompt_budget")
+    .map((event) => event.kind === "prompt_budget" ? event.requestId : undefined);
+  assert.deepEqual(requestIds, ["transport-call", "transport-call:retry-1"]);
 });

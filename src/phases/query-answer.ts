@@ -19,7 +19,9 @@ import { resolveLink } from "./link-resolver";
 import type { SelectedChunk } from "../page-similarity";
 import {
   classifyContextError,
+  createPromptBudgetEvent,
   ContextRepackSuppressedError,
+  estimatePreparedMessages,
   PromptBudgetExceededError,
   runWithContextRepack,
   type PromptBudgetEvent,
@@ -152,11 +154,11 @@ export async function* answerFromContext(args: {
         try {
           const requestStartMs = Date.now();
           emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"));
+          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
           const pending = llm.chat.completions.create(
             { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
             { signal: operationSignal },
           );
-          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
           const rawStream = await pending;
           const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, operationSignal);
           let attemptAnswer = "";
@@ -195,6 +197,19 @@ export async function* answerFromContext(args: {
           }
           rethrowForContextRepack(error, request.optionalUnits);
           if (!shouldFallbackStreamToNonStream(error, operationSignal)) throw error;
+          budgetEvents.push(createPromptBudgetEvent({
+            requestId: answerLifecycle.id,
+            callSite: "query.answer",
+            configuredInputBudget: opts.inputBudgetTokens ?? 16_384,
+            effectiveInputBudget: opts.inputBudgetTokens ?? 16_384,
+            estimatedInputTokens: estimatePreparedMessages(
+              params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+            ),
+            outputBudget: opts.maxTokens,
+            compressionProfile: opts.semanticCompression?.profile ?? "balanced",
+            contextUnits: request.messages.length,
+            sourceChunks: request.selectedChunks.length,
+          }));
           emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
           answerLifecycle = createLlmLifecycle("answer_question");
           emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing"));
@@ -203,11 +218,11 @@ export async function* answerFromContext(args: {
           try {
             const fallbackParams = paramsForPreparedMessages(model, request.messages, opts, false);
             emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"));
+            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
             const pending = llm.chat.completions.create(
               { ...fallbackParams, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
               { signal: operationSignal },
             );
-            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
             response = await pending;
           } catch (fallbackError) {
             if (classifyContextError(fallbackError) !== null && request.optionalUnits > 0) {
@@ -244,6 +259,7 @@ export async function* answerFromContext(args: {
           };
         }
       },
+      requestId: () => answerLifecycle.id,
       onEvent: (event) => budgetEvents.push(event),
     }), signal);
     signal.throwIfAborted();

@@ -57,6 +57,7 @@ const PROMPT_BUDGET_FIELDS = new Set([
   "kind",
   "outputBudget",
   "reductionDepth",
+  "requestId",
   "retryReason",
   "sourceChunks",
 ]);
@@ -167,6 +168,7 @@ function containsStandalone(value: string, technical: string): boolean {
 function humanLabelContainsTechnical(
   event: Record<string, unknown>,
   value: string,
+  budgetValues: ReadonlySet<string>,
 ): boolean {
   if (
     TECHNICAL_LABEL_MARKER.test(value)
@@ -176,22 +178,18 @@ function humanLabelContainsTechnical(
   for (const callSite of STRUCTURED_CALL_SITES) {
     if (containsStandalone(value, callSite)) return true;
   }
-  if (!isRecord(event.diagnostics)) return false;
-  for (const field of ["transport", "provider"]) {
-    const technical = event.diagnostics[field];
-    if (
-      typeof technical === "string"
-      && technical.length > 0
-      && containsStandalone(value, technical)
-    ) return true;
+  if (isRecord(event.diagnostics)) {
+    for (const field of ["transport", "provider"]) {
+      const technical = event.diagnostics[field];
+      if (
+        typeof technical === "string"
+        && technical.length > 0
+        && containsStandalone(value, technical)
+      ) return true;
+    }
   }
-  for (const [field, technical] of Object.entries(event.diagnostics)) {
-    if (
-      /(?:budget|tokens?)/i.test(field)
-      && typeof technical === "number"
-      && Number.isFinite(technical)
-      && containsStandalone(value, String(technical))
-    ) return true;
+  for (const technical of budgetValues) {
+    if (containsStandalone(value, technical)) return true;
   }
   return false;
 }
@@ -308,6 +306,22 @@ function auditLifecycles(
   const lifecycleSequence: Record<string, unknown>[] = [];
   const failures: string[] = [];
   let technicalHumanLabelFields = 0;
+  const budgetValues = new Set<string>();
+  for (const record of records) {
+    if (!isRecord(record.event) || record.event.kind !== "prompt_budget") continue;
+    for (const field of [
+      "configuredInputBudget",
+      "effectiveInputBudget",
+      "estimatedInputTokens",
+      "actualInputTokens",
+      "outputBudget",
+    ]) {
+      const value = record.event[field];
+      if (typeof value === "number" && Number.isFinite(value)) {
+        budgetValues.add(String(value));
+      }
+    }
+  }
 
   for (const record of records) {
     if (!isRecord(record.event) || record.event.kind !== "llm_lifecycle") continue;
@@ -323,7 +337,7 @@ function auditLifecycles(
       if (
         HUMAN_LABEL_FIELDS.has(field)
         && typeof value === "string"
-        && humanLabelContainsTechnical(event, value)
+        && humanLabelContainsTechnical(event, value, budgetValues)
       ) {
         technicalHumanLabelFields++;
         failures.push(`lifecycle ${id} technical human label ${field}`);
@@ -332,11 +346,11 @@ function auditLifecycles(
   }
 
   const descriptors = new Map<string, LifecycleDescriptor>();
-  const unsupportedIds = new Set<string>();
   for (const [id, events] of calls) {
     let expectedIndex = 0;
     let terminalSeen = false;
     let waitingAtMs: number | undefined;
+    let responseSeen = false;
     let previousAtMs = Number.NEGATIVE_INFINITY;
     let action: string | undefined;
 
@@ -365,7 +379,8 @@ function auditLifecycles(
       }
       if (
         waitingAtMs !== undefined
-        && phase !== "waiting"
+        && !responseSeen
+        && (phase === "producing" || TERMINAL_LIFECYCLE_PHASES.has(phase))
         && idleDeadlineMs > 0
       ) {
         const elapsedMs = atMs - waitingAtMs;
@@ -374,6 +389,7 @@ function auditLifecycles(
             `lifecycle ${id} exceeds idle deadline: ${elapsedMs}ms > ${idleDeadlineMs}ms`,
           );
         }
+        responseSeen = true;
       }
       if (TERMINAL_LIFECYCLE_PHASES.has(phase)) {
         if (terminalSeen) failures.push(`lifecycle ${id} has multiple terminal phases`);
@@ -414,7 +430,6 @@ function auditLifecycles(
       || typeof diagnostics.callSite !== "string"
       || !STRUCTURED_CALL_SITES.has(diagnostics.callSite)
     ) {
-      unsupportedIds.add(id);
       continue;
     }
     const descriptor: LifecycleDescriptor = {
@@ -455,34 +470,35 @@ function auditLifecycles(
     descriptors.set(id, descriptor);
   }
 
-  if (unsupportedIds.size > 0) {
-    failures.push(
-      `lifecycle correlation unsupported/inconclusive: ${[...unsupportedIds].join(", ")} missing diagnostics.callSite`,
+  const promptIds = new Map<string, number>();
+  let missingRequestIds = 0;
+  for (const record of records) {
+    if (!isRecord(record.event) || record.event.kind !== "prompt_budget") continue;
+    if (typeof record.event.requestId !== "string" || record.event.requestId.length === 0) {
+      missingRequestIds++;
+      continue;
+    }
+    promptIds.set(
+      record.event.requestId,
+      (promptIds.get(record.event.requestId) ?? 0) + 1,
     );
   }
-
-  const promptFamilies = new Set<string>();
-  for (const record of records) {
-    if (
-      isRecord(record.event)
-      && record.event.kind === "prompt_budget"
-      && typeof record.event.callSite === "string"
-      && STRUCTURED_CALL_SITES.has(record.event.callSite)
-    ) {
-      promptFamilies.add(record.event.callSite);
+  if (missingRequestIds > 0) {
+    failures.push(
+      `prompt_budget correlation unsupported/inconclusive: ${missingRequestIds} event(s) missing requestId`,
+    );
+  }
+  for (const [requestId, count] of promptIds) {
+    if (count !== 1) {
+      failures.push(`prompt_budget requestId ${requestId} appears ${count} times`);
+    }
+    if (!calls.has(requestId)) {
+      failures.push(`prompt_budget requestId ${requestId} has no lifecycle`);
     }
   }
-  const lifecycleFamilies = new Set(
-    [...descriptors.values()].map((descriptor) => descriptor.callSite),
-  );
-  for (const callSite of promptFamilies) {
-    if (!lifecycleFamilies.has(callSite)) {
-      failures.push(`missing lifecycle family: ${callSite}`);
-    }
-  }
-  for (const callSite of lifecycleFamilies) {
-    if (!promptFamilies.has(callSite)) {
-      failures.push(`orphan lifecycle family: ${callSite}`);
+  for (const id of calls.keys()) {
+    if (!promptIds.has(id)) {
+      failures.push(`orphan lifecycle ${id} has no prompt_budget`);
     }
   }
 
@@ -666,6 +682,10 @@ function finiteNonnegativeInteger(value: unknown): value is number {
 function validPromptBudgetEvent(event: Record<string, unknown>): boolean {
   if (event.kind !== "prompt_budget") return false;
   if (Object.keys(event).some((field) => !PROMPT_BUDGET_FIELDS.has(field))) return false;
+  if (
+    event.requestId !== undefined
+    && (typeof event.requestId !== "string" || event.requestId.length === 0)
+  ) return false;
   for (const field of [
     "callSite",
     "configuredInputBudget",

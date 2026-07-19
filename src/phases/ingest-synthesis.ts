@@ -16,7 +16,6 @@ import type { EntityContextBundle, WikiSectionUnit } from "../ingest-context";
 import type { EntityEvidence } from "./ingest-evidence";
 import {
   classifyContextError,
-  createPromptBudgetEvent,
   estimatePreparedMessages,
   PromptBudgetExceededError,
   runWithContextRepack,
@@ -648,6 +647,7 @@ async function executeSynthesisBatch(
 ): Promise<SynthesisOutput> {
   let failedPromptHash: string | undefined;
   return runWithContextRepack({
+    requestBudgetsEmittedByExecute: true,
     callSite: "ingest.synthesize",
     configuredInputBudget: input.policy.inputBudgetTokens,
     outputBudget: input.policy.outputBudgetTokens,
@@ -788,22 +788,6 @@ async function executeSingleRegenerationRequest(input: ConflictRegenerationInput
     );
   }
   let forwardedRequests = 0;
-  let forwardedEstimate: number | undefined;
-  let budgetEventEmitted = false;
-  const emitBudget = (actualInputTokens?: number) => {
-    if (budgetEventEmitted || forwardedEstimate === undefined) return;
-    budgetEventEmitted = true;
-    input.onEvent(createPromptBudgetEvent({
-      callSite: "ingest.synthesize",
-      configuredInputBudget: input.policy.inputBudgetTokens,
-      effectiveInputBudget: input.policy.inputBudgetTokens,
-      estimatedInputTokens: forwardedEstimate,
-      actualInputTokens,
-      outputBudget: input.policy.outputBudgetTokens,
-      compressionProfile: input.policy.compression,
-      contextUnits: 1,
-    }));
-  };
   const guardedCreate = async (
     params: OpenAI.Chat.ChatCompletionCreateParamsStreaming | OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
     requestOptions?: { signal?: AbortSignal },
@@ -815,7 +799,6 @@ async function executeSingleRegenerationRequest(input: ConflictRegenerationInput
       );
     }
     forwardedRequests++;
-    forwardedEstimate = estimatePreparedMessages(params.messages);
     if (params.stream === true) {
       return input.llm.chat.completions.create(params, requestOptions);
     }
@@ -828,26 +811,20 @@ async function executeSingleRegenerationRequest(input: ConflictRegenerationInput
       },
     },
   };
-  try {
-    const result = await runStructuredWithRetry({
-      llm: guardedLlm,
-      model: input.model,
-      baseMessages: messages,
-      opts,
-      profile: { kind: "json-zod", schema: SynthesisOutputSchema },
-      maxRetries: 0,
-      callSite: "ingest.synthesize",
-      lifecycle: createLlmLifecycle("synthesize_wiki_pages"),
-      signal: input.signal,
-      onEvent: input.onEvent,
-      transport: "non-stream",
-    });
-    emitBudget(result.inputTokens);
-    return { value: result.value, lifecycle: result.lifecycle };
-  } catch (error) {
-    emitBudget();
-    throw error;
-  }
+  const result = await runStructuredWithRetry({
+    llm: guardedLlm,
+    model: input.model,
+    baseMessages: messages,
+    opts,
+    profile: { kind: "json-zod", schema: SynthesisOutputSchema },
+    maxRetries: 0,
+    callSite: "ingest.synthesize",
+    lifecycle: createLlmLifecycle("synthesize_wiki_pages"),
+    signal: input.signal,
+    onEvent: input.onEvent,
+    transport: "non-stream",
+  });
+  return { value: result.value, lifecycle: result.lifecycle };
 }
 
 async function synthesizeBundles(

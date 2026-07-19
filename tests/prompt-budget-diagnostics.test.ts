@@ -16,6 +16,7 @@ const approvedFields = [
   "kind",
   "outputBudget",
   "reductionDepth",
+  "requestId",
   "retryReason",
   "sourceChunks",
 ] as const;
@@ -40,6 +41,7 @@ function assertMetadataOnlyPromptBudgetDiagnostics(): void {
     authorization: "Bearer AUTHORIZATION_MARKER_48c1",
   };
   const metadata: PromptBudgetMetadata & typeof markers = {
+    requestId: "request-1",
     kind: "not-an-event-field",
     callSite: "ingest.synthesize",
     configuredInputBudget: 16_384,

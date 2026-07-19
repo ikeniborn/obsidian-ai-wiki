@@ -317,6 +317,7 @@ test("context error classifier rejects quota and output-limit messages", () => {
 test("budget telemetry returns fresh metadata-only events", () => {
   const secret = "SECRET_SOURCE_AND_AUTH_MARKER";
   const metadata = {
+    requestId: "request-1",
     callSite: "ingest.synthesize",
     configuredInputBudget: 16_384,
     effectiveInputBudget: 12_288,
@@ -353,6 +354,7 @@ test("budget telemetry returns fresh metadata-only events", () => {
     "kind",
     "outputBudget",
     "reductionDepth",
+    "requestId",
     "retryReason",
     "sourceChunks",
   ]);
@@ -385,6 +387,7 @@ test("context recovery rebuilds twice at most and emits one event per attempt", 
       }
       return { effectiveInputBudget, inputTokens: 321 };
     },
+    requestId: () => `request-${attempts}`,
     onEvent: (event) => events.push(event),
   });
 
@@ -413,6 +416,7 @@ test("event callback failure is delivered once and is not treated as execution f
       executions += 1;
       return { inputTokens: 8 };
     },
+    requestId: () => "request-1",
     onEvent: () => {
       deliveries += 1;
       throw callbackError;
@@ -440,6 +444,7 @@ test("context recovery stops after the initial call plus two repacks", async () 
       attempts += 1;
       throw Object.assign(new Error("prompt is too long"), { code: "context_length_exceeded" });
     },
+    requestId: () => `request-${attempts}`,
     onEvent: (event) => events.push(event),
   }), /prompt is too long/);
 
@@ -466,6 +471,7 @@ test("context recovery rethrows at budget one without rebuilding at zero", async
       attempts += 1;
       throw contextError;
     },
+    requestId: () => `request-${attempts}`,
     onEvent: () => {},
   }), contextError);
 

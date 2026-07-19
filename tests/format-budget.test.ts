@@ -562,7 +562,7 @@ test("Format preview write failure closes the validated request as failed", asyn
   assert.equal(events.some((event) => event.kind === "format_preview"), false);
 });
 
-test("Format synchronous streaming invocation failure emits sent before failed without waiting", async () => {
+test("Format synchronous streaming invocation failure emits waiting before failed", async () => {
   const error = Object.assign(new Error("sync create failed"), { status: 502 });
   const llm = {
     chat: {
@@ -597,6 +597,7 @@ test("Format synchronous streaming invocation failure emits sent before failed w
     [
       ["format_note", "preparing"],
       ["format_note", "sent"],
+      ["format_note", "waiting"],
       ["format_note", "failed"],
     ],
   );
@@ -1030,8 +1031,13 @@ test("segmented non-stream fallback records prompt usage, completion usage, and 
   const nonStreamCalls = seenParams.filter((params) => params.stream === false).length;
   const budgetEvents = events.filter((event) => event.kind === "prompt_budget");
   assert.ok(nonStreamCalls > 1);
-  assert.equal(budgetEvents.length, nonStreamCalls);
-  assert.ok(budgetEvents.every((event) => event.actualInputTokens === 13));
+  assert.equal(budgetEvents.length, seenParams.length);
+  assert.equal(
+    budgetEvents.filter((event) => event.actualInputTokens === 13).length,
+    nonStreamCalls,
+  );
+  const requestIds = budgetEvents.map((event) => event.requestId);
+  assert.equal(new Set(requestIds).size, requestIds.length);
   const statsEvents = events.filter((event) => event.kind === "llm_call_stats");
   assert.equal(statsEvents.length, nonStreamCalls);
   const result = events.findLast((event) => event.kind === "result");

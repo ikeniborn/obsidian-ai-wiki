@@ -352,6 +352,34 @@ export async function* runFormat(
   let outputTokens = 0;
   let lastInputTokens: number | undefined;
   let activeFormatLifecycle: ReturnType<typeof createLlmLifecycle> | null = null;
+  interface FormatBudgetContext {
+    callSite: "format.output" | "format.segment";
+    contextUnits: number;
+    sourceChunks?: number;
+    reductionDepth?: number;
+  }
+  const formatBudgetEvent = (
+    requestId: string,
+    params: Record<string, unknown>,
+    context: FormatBudgetContext,
+    actualInputTokens?: number,
+    retryReason?: "provider_context_error",
+  ): RunEvent => createPromptBudgetEvent({
+    requestId,
+    callSite: context.callSite,
+    configuredInputBudget: opts.inputBudgetTokens ?? 0,
+    effectiveInputBudget: opts.inputBudgetTokens ?? 0,
+    estimatedInputTokens: estimatePreparedMessages(
+      params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+    ),
+    actualInputTokens,
+    outputBudget: opts.maxTokens,
+    compressionProfile: "balanced",
+    contextUnits: context.contextUnits,
+    sourceChunks: context.sourceChunks,
+    reductionDepth: context.reductionDepth,
+    retryReason,
+  });
   const closeActiveFormatLifecycle = (
     phase: "retrying" | "failed" | "cancelled",
   ): RunEvent | null => {
@@ -364,6 +392,7 @@ export async function* runFormat(
   async function* callOnce(
     p: Record<string, unknown>,
     fallback: { allowContextFallback: boolean } = { allowContextFallback: true },
+    budgetContext: FormatBudgetContext = { callSite: "format.output", contextUnits: 1 },
   ): AsyncGenerator<RunEvent, string> {
     if (activeFormatLifecycle) {
       yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "applying");
@@ -378,11 +407,11 @@ export async function* runFormat(
     let streamChunkConsumed = false;
     try {
       yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
       const request = llm.chat.completions.create(
         { ...p, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
         { signal },
       );
-      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
       const rawStream = await request;
       const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
       let producing = false;
@@ -401,8 +430,21 @@ export async function* runFormat(
         if (fr) lastFinishReason = fr;
       }
       const callStats = getStats();
+      yield formatBudgetEvent(
+        activeFormatLifecycle.id,
+        p,
+        budgetContext,
+        callStats?.inputTokens ?? lastInputTokens,
+      );
       if (callStats) yield buildLlmCallStatsEvent(callStats);
     } catch (e) {
+      yield formatBudgetEvent(
+        activeFormatLifecycle.id,
+        p,
+        budgetContext,
+        undefined,
+        classifyContextError(e) === null ? undefined : "provider_context_error",
+      );
       if (signal.aborted || (e as Error).name === "AbortError") {
         yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "cancelled");
         activeFormatLifecycle = null;
@@ -430,13 +472,22 @@ export async function* runFormat(
       let resp: OpenAI.Chat.ChatCompletion;
       try {
         yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
         const pending = llm.chat.completions.create(
           { ...p, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
           { signal },
         );
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
         resp = await pending;
       } catch (fallbackError) {
+        yield formatBudgetEvent(
+          activeFormatLifecycle.id,
+          p,
+          budgetContext,
+          undefined,
+          classifyContextError(fallbackError) === null
+            ? undefined
+            : "provider_context_error",
+        );
         yield lifecycleEvent(
           activeFormatLifecycle.id,
           activeFormatLifecycle.action,
@@ -462,6 +513,12 @@ export async function* runFormat(
       const promptTokens = resp.usage?.prompt_tokens;
       if (completionTokens !== undefined) outputTokens += completionTokens;
       if (promptTokens !== undefined) lastInputTokens = promptTokens;
+      yield formatBudgetEvent(
+        activeFormatLifecycle.id,
+        p,
+        budgetContext,
+        promptTokens,
+      );
       lastFinishReason = resp.choices[0]?.finish_reason ?? null;
       if (completionTokens !== undefined) {
         const elapsed = Math.max(1, Date.now() - fallbackStartMs);
@@ -512,27 +569,6 @@ export async function* runFormat(
     ];
   }
 
-  function emitSegmentBudgetEvent(
-    segment: FormatSegment,
-    params: Record<string, unknown>,
-    sourceChunks: number,
-    retryReason?: "preflight_budget_exceeded" | "provider_context_error",
-  ): RunEvent {
-    return createPromptBudgetEvent({
-      callSite: "format.segment",
-      configuredInputBudget: opts.inputBudgetTokens ?? 0,
-      effectiveInputBudget: opts.inputBudgetTokens ?? 0,
-      estimatedInputTokens: estimatePreparedMessages(params.messages as OpenAI.Chat.ChatCompletionMessageParam[]),
-      actualInputTokens: retryReason ? undefined : lastInputTokens,
-      outputBudget: opts.maxTokens,
-      compressionProfile: "balanced",
-      contextUnits: 1,
-      sourceChunks,
-      reductionDepth: Math.max(0, segment.id.split("-").length - 2),
-      retryReason,
-    });
-  }
-
   function buildSegmentParams(
     segment: FormatSegment,
     retryHint = "",
@@ -547,18 +583,6 @@ export async function* runFormat(
     maxMarkdownChars: number,
     sourceChunks: number,
   ): AsyncGenerator<RunEvent, import("./zod-schemas").FormatSegmentModelOutput> {
-    yield createPromptBudgetEvent({
-      callSite: "format.segment",
-      configuredInputBudget: opts.inputBudgetTokens ?? 0,
-      effectiveInputBudget: opts.inputBudgetTokens ?? 0,
-      estimatedInputTokens: estimatePreparedMessages(params.messages as OpenAI.Chat.ChatCompletionMessageParam[]),
-      outputBudget: opts.maxTokens,
-      compressionProfile: "balanced",
-      contextUnits: 1,
-      sourceChunks,
-      reductionDepth: Math.max(0, segment.id.split("-").length - 2),
-      retryReason: "provider_context_error",
-    });
     const nextMaxMarkdownChars = Math.max(1, Math.floor(maxMarkdownChars / 2));
     const children = splitFormatSegment(segment, nextMaxMarkdownChars);
     if (children.length <= 1) {
@@ -584,18 +608,6 @@ export async function* runFormat(
       params = buildSegmentParams(segment);
     } catch (e) {
       if (!(e instanceof PromptBudgetExceededError)) throw e;
-      yield createPromptBudgetEvent({
-        callSite: "format.segment",
-        configuredInputBudget: opts.inputBudgetTokens ?? 0,
-        effectiveInputBudget: opts.inputBudgetTokens ?? 0,
-        estimatedInputTokens: e.estimated,
-        outputBudget: opts.maxTokens,
-        compressionProfile: "balanced",
-        contextUnits: 1,
-        sourceChunks,
-        reductionDepth: Math.max(0, segment.id.split("-").length - 2),
-        retryReason: "preflight_budget_exceeded",
-      });
       const children = splitFormatSegment(segment, Math.max(1, Math.floor(maxMarkdownChars / 2)));
       if (children.length <= 1) {
         throw new Error(`Format: segment ${segment.id} exceeds the configured input budget; raise format inputBudgetTokens`);
@@ -612,12 +624,16 @@ export async function* runFormat(
     yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath, segment: segment.id } };
     let text: string;
     try {
-      text = yield* callOnce(params, { allowContextFallback: false });
+      text = yield* callOnce(params, { allowContextFallback: false }, {
+        callSite: "format.segment",
+        contextUnits: 1,
+        sourceChunks,
+        reductionDepth: Math.max(0, segment.id.split("-").length - 2),
+      });
     } catch (e) {
       if (classifyContextError(e) === null) throw e;
       return yield* splitSegmentAfterProviderContext(segment, params, maxMarkdownChars, sourceChunks);
     }
-    yield emitSegmentBudgetEvent(segment, params, sourceChunks);
     if (signal.aborted) {
       if (activeFormatLifecycle) {
         yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "cancelled");
@@ -668,12 +684,16 @@ export async function* runFormat(
     yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath, segment: segment.id, retry: 1 } };
     let retryText: string;
     try {
-      retryText = yield* callOnce(retryParams, { allowContextFallback: false });
+      retryText = yield* callOnce(retryParams, { allowContextFallback: false }, {
+        callSite: "format.segment",
+        contextUnits: 1,
+        sourceChunks,
+        reductionDepth: Math.max(0, segment.id.split("-").length - 2),
+      });
     } catch (e) {
       if (classifyContextError(e) === null) throw e;
       return yield* splitSegmentAfterProviderContext(segment, retryParams, maxMarkdownChars, sourceChunks);
     }
-    yield emitSegmentBudgetEvent(segment, retryParams, sourceChunks);
     const retryParsed = parseFormatSegmentOutput(retryText);
     if (retryParsed.data && retryParsed.data.segmentId === segment.id && !retryParsed.truncated) {
       yield { kind: "tool_result", ok: true, preview: `${segment.id}: ${retryParsed.data.formatted.length} chars` };
@@ -742,16 +762,6 @@ export async function* runFormat(
         yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
         return;
       }
-      yield createPromptBudgetEvent({
-        callSite: "format.output",
-        configuredInputBudget: opts.inputBudgetTokens ?? 0,
-        effectiveInputBudget: opts.inputBudgetTokens ?? 0,
-        estimatedInputTokens: estimatePreparedMessages(baseParams.messages as OpenAI.Chat.ChatCompletionMessageParam[]),
-        outputBudget: opts.maxTokens,
-        compressionProfile: "balanced",
-        contextUnits: 1,
-        retryReason: "provider_context_error",
-      });
       segmented = true;
       parsed = yield* runSegmentedFormatting();
       if (!parsed) return;

@@ -518,7 +518,8 @@ test("answerFromContext rebuilds non-stream fallback params with one composed Ab
   assert.deepEqual(calls[0].params.stream_options, { include_usage: true });
   assert.notEqual(calls[0].signal, signal);
   assertCleanFallback(calls, signal);
-  const budget = events.find((event) => event.kind === "prompt_budget");
+  const budgets = events.filter((event) => event.kind === "prompt_budget");
+  const budget = budgets.find((event) => event.actualInputTokens !== undefined);
   assert.ok(budget && budget.kind === "prompt_budget");
   assert.equal(budget.actualInputTokens, 444);
   const stats = events.filter((event) => event.kind === "llm_call_stats");
@@ -534,6 +535,10 @@ test("answerFromContext rebuilds non-stream fallback params with one composed Ab
     "preparing", "sent", "waiting", "producing", "validating", "applying", "completed",
   ]);
   assert.notEqual(lifecycle[3]?.id, lifecycle[4]?.id);
+  assert.deepEqual(
+    budgets.map((event) => event.requestId),
+    [...new Set(lifecycle.map((event) => event.id))],
+  );
 });
 
 test("runLintChat rebuilds non-stream fallback params with one composed AbortSignal", async () => {
@@ -555,7 +560,8 @@ test("runLintChat rebuilds non-stream fallback params with one composed AbortSig
   assert.deepEqual(calls[0].params.stream_options, { include_usage: true });
   assert.notEqual(calls[0].signal, signal);
   assertCleanFallback(calls, signal);
-  const budget = events.find((event) => event.kind === "prompt_budget");
+  const budgets = events.filter((event) => event.kind === "prompt_budget");
+  const budget = budgets.find((event) => event.actualInputTokens !== undefined);
   assert.ok(budget && budget.kind === "prompt_budget");
   assert.equal(budget.actualInputTokens, 444);
   const stats = events.filter((event) => event.kind === "llm_call_stats");
@@ -570,6 +576,10 @@ test("runLintChat rebuilds non-stream fallback params with one composed AbortSig
     "preparing", "sent", "waiting", "retrying",
     "preparing", "sent", "waiting", "producing", "validating", "applying", "completed",
   ]);
+  assert.deepEqual(
+    budgets.map((event) => event.requestId),
+    [...new Set(lifecycle.map((event) => event.id))],
+  );
   assert.notEqual(lifecycle[3]?.id, lifecycle[4]?.id);
 });
 

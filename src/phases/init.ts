@@ -24,7 +24,6 @@ import { promptVersionOf } from "../prompt-version";
 import { EmbeddingUnavailableError } from "../embedding-error";
 import { prepareBootstrapEvidence, type BootstrapEvidence } from "./ingest-evidence";
 import {
-  createPromptBudgetEvent,
   estimatePreparedMessages,
   PromptBudgetExceededError,
 } from "../prompt-budget";
@@ -158,17 +157,6 @@ async function* prepareDomainBootstrap(
 
   const messages = bootstrapMessages(bootstrapEvidence);
   const estimatedInputTokens = estimatePreparedMessages(prepareChatMessages(messages, opts));
-  yield createPromptBudgetEvent({
-    callSite: "init.bootstrap",
-    configuredInputBudget: inputBudgetTokens,
-    effectiveInputBudget: inputBudgetTokens,
-    estimatedInputTokens,
-    outputBudget: outputBudgetTokens,
-    compressionProfile,
-    contextUnits: bootstrapEvidence.candidates.length
-      + bootstrapEvidence.domainThemes.length
-      + bootstrapEvidence.languageEvidence.length,
-  });
   if (estimatedInputTokens > inputBudgetTokens) {
     yield {
       kind: "error",
@@ -194,6 +182,7 @@ async function* prepareDomainBootstrap(
     language_notes: string;
   };
   try {
+    const bootstrapLifecycle = createLlmLifecycle("bootstrap_domain");
     for await (const event of runStructuredStreaming({
       llm,
       model,
@@ -202,7 +191,7 @@ async function* prepareDomainBootstrap(
       profile: { kind: "json-zod", schema: DomainEntrySchema },
       maxRetries: opts.structuredRetries ?? 1,
       callSite: "init.bootstrap",
-      lifecycle: createLlmLifecycle("bootstrap_domain"),
+      lifecycle: bootstrapLifecycle,
       signal,
       onEvent: () => {},
       transport: "non-stream",

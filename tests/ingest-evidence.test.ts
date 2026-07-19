@@ -717,6 +717,12 @@ test("mapper repair exhaustion performs real requests and emits one safe budget 
   assert.equal(requests.length, 2, "initial mapper request plus one structured repair");
   const budgetEvents = events.filter((event) => event.kind === "prompt_budget");
   assert.equal(budgetEvents.length, requests.length);
+  assert.deepEqual(
+    budgetEvents.map((event) => event.requestId),
+    events
+      .filter((event) => event.kind === "llm_lifecycle" && event.phase === "preparing")
+      .map((event) => event.kind === "llm_lifecycle" ? event.id : undefined),
+  );
   for (let index = 0; index < requests.length; index++) {
     assert.equal(budgetEvents[index].kind, "prompt_budget");
     assert.equal(budgetEvents[index].estimatedInputTokens, estimatePreparedMessages(requests[index]));

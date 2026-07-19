@@ -286,6 +286,7 @@ export type PromptBudgetRetryReason =
   | "provider_context_error";
 
 export interface PromptBudgetMetadata {
+  requestId: string;
   callSite: StructuredCallSite;
   configuredInputBudget: number;
   effectiveInputBudget: number;
@@ -304,6 +305,7 @@ export type PromptBudgetEvent = Extract<RunEvent, { kind: "prompt_budget" }>;
 export function createPromptBudgetEvent(metadata: PromptBudgetMetadata): PromptBudgetEvent {
   const event: PromptBudgetEvent = {
     kind: "prompt_budget",
+    requestId: metadata.requestId,
     callSite: metadata.callSite,
     configuredInputBudget: metadata.configuredInputBudget,
     effectiveInputBudget: metadata.effectiveInputBudget,
@@ -337,6 +339,8 @@ export interface RunWithContextRepackArgs<TBuild, TResult> {
   ) => ContextRepackBuild<TBuild> | Promise<ContextRepackBuild<TBuild>>;
   execute: (value: TBuild) => TResult | Promise<TResult>;
   onEvent: (event: PromptBudgetEvent) => void;
+  requestBudgetsEmittedByExecute?: boolean;
+  requestId?: (result?: TResult) => string | undefined;
 }
 
 export class ContextRepackSuppressedError extends Error {
@@ -369,18 +373,22 @@ export async function runWithContextRepack<TBuild, TResult>(
     }
 
     if (outcome.ok) {
-      args.onEvent(createPromptBudgetEvent({
-        callSite: args.callSite,
-        configuredInputBudget: args.configuredInputBudget,
-        effectiveInputBudget,
-        estimatedInputTokens: outcome.built.estimatedInputTokens,
-        actualInputTokens: resultInputTokens(outcome.result),
-        outputBudget: args.outputBudget,
-        compressionProfile: args.compressionProfile,
-        contextUnits: outcome.built.contextUnits,
-        sourceChunks: outcome.built.sourceChunks,
-        reductionDepth: outcome.built.reductionDepth,
-      }));
+      const requestId = args.requestId?.(outcome.result);
+      if (!args.requestBudgetsEmittedByExecute && requestId) {
+        args.onEvent(createPromptBudgetEvent({
+          requestId,
+          callSite: args.callSite,
+          configuredInputBudget: args.configuredInputBudget,
+          effectiveInputBudget,
+          estimatedInputTokens: outcome.built.estimatedInputTokens,
+          actualInputTokens: resultInputTokens(outcome.result),
+          outputBudget: args.outputBudget,
+          compressionProfile: args.compressionProfile,
+          contextUnits: outcome.built.contextUnits,
+          sourceChunks: outcome.built.sourceChunks,
+          reductionDepth: outcome.built.reductionDepth,
+        }));
+      }
       return outcome.result;
     }
 
@@ -394,20 +402,22 @@ export async function runWithContextRepack<TBuild, TResult>(
         ? "provider_context_error"
         : undefined;
 
-    args.onEvent(createPromptBudgetEvent({
-      callSite: args.callSite,
-      configuredInputBudget: args.configuredInputBudget,
-      effectiveInputBudget,
-      estimatedInputTokens: built?.estimatedInputTokens
-        ?? (preflight ? error.estimated : effectiveInputBudget),
-      outputBudget: args.outputBudget,
-      compressionProfile: args.compressionProfile,
-      contextUnits: built?.contextUnits
-        ?? (preflight ? error.requiredIds.length : 0),
-      sourceChunks: built?.sourceChunks,
-      reductionDepth: built?.reductionDepth,
-      retryReason,
-    }));
+    const requestId = args.requestId?.();
+    if (!args.requestBudgetsEmittedByExecute && requestId && built) {
+      args.onEvent(createPromptBudgetEvent({
+        requestId,
+        callSite: args.callSite,
+        configuredInputBudget: args.configuredInputBudget,
+        effectiveInputBudget,
+        estimatedInputTokens: built.estimatedInputTokens,
+        outputBudget: args.outputBudget,
+        compressionProfile: args.compressionProfile,
+        contextUnits: built.contextUnits,
+        sourceChunks: built.sourceChunks,
+        reductionDepth: built.reductionDepth,
+        retryReason,
+      }));
+    }
 
     if (repackSuppressed) throw error.original;
     if (

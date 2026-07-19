@@ -41245,6 +41245,7 @@ function shrinkInputBudget(currentBudget, details) {
 function createPromptBudgetEvent(metadata) {
   const event = {
     kind: "prompt_budget",
+    requestId: metadata.requestId,
     callSite: metadata.callSite,
     configuredInputBudget: metadata.configuredInputBudget,
     effectiveInputBudget: metadata.effectiveInputBudget,
@@ -41283,18 +41284,22 @@ async function runWithContextRepack(args) {
       outcome = { ok: false, error: error2 };
     }
     if (outcome.ok) {
-      args.onEvent(createPromptBudgetEvent({
-        callSite: args.callSite,
-        configuredInputBudget: args.configuredInputBudget,
-        effectiveInputBudget,
-        estimatedInputTokens: outcome.built.estimatedInputTokens,
-        actualInputTokens: resultInputTokens(outcome.result),
-        outputBudget: args.outputBudget,
-        compressionProfile: args.compressionProfile,
-        contextUnits: outcome.built.contextUnits,
-        sourceChunks: outcome.built.sourceChunks,
-        reductionDepth: outcome.built.reductionDepth
-      }));
+      const requestId2 = args.requestId?.(outcome.result);
+      if (!args.requestBudgetsEmittedByExecute && requestId2) {
+        args.onEvent(createPromptBudgetEvent({
+          requestId: requestId2,
+          callSite: args.callSite,
+          configuredInputBudget: args.configuredInputBudget,
+          effectiveInputBudget,
+          estimatedInputTokens: outcome.built.estimatedInputTokens,
+          actualInputTokens: resultInputTokens(outcome.result),
+          outputBudget: args.outputBudget,
+          compressionProfile: args.compressionProfile,
+          contextUnits: outcome.built.contextUnits,
+          sourceChunks: outcome.built.sourceChunks,
+          reductionDepth: outcome.built.reductionDepth
+        }));
+      }
       return outcome.result;
     }
     const error = outcome.error;
@@ -41302,18 +41307,22 @@ async function runWithContextRepack(args) {
     const details = repackSuppressed ? null : classifyContextError(error);
     const preflight = error instanceof PromptBudgetExceededError;
     const retryReason = preflight ? "preflight_budget_exceeded" : details !== null ? "provider_context_error" : void 0;
-    args.onEvent(createPromptBudgetEvent({
-      callSite: args.callSite,
-      configuredInputBudget: args.configuredInputBudget,
-      effectiveInputBudget,
-      estimatedInputTokens: built?.estimatedInputTokens ?? (preflight ? error.estimated : effectiveInputBudget),
-      outputBudget: args.outputBudget,
-      compressionProfile: args.compressionProfile,
-      contextUnits: built?.contextUnits ?? (preflight ? error.requiredIds.length : 0),
-      sourceChunks: built?.sourceChunks,
-      reductionDepth: built?.reductionDepth,
-      retryReason
-    }));
+    const requestId = args.requestId?.();
+    if (!args.requestBudgetsEmittedByExecute && requestId && built) {
+      args.onEvent(createPromptBudgetEvent({
+        requestId,
+        callSite: args.callSite,
+        configuredInputBudget: args.configuredInputBudget,
+        effectiveInputBudget,
+        estimatedInputTokens: built.estimatedInputTokens,
+        outputBudget: args.outputBudget,
+        compressionProfile: args.compressionProfile,
+        contextUnits: built.contextUnits,
+        sourceChunks: built.sourceChunks,
+        reductionDepth: built.reductionDepth,
+        retryReason
+      }));
+    }
     if (repackSuppressed) throw error.original;
     if (retryReason === void 0 || attempt === MAX_CONTEXT_REPACKS || effectiveInputBudget <= 1) throw error;
     effectiveInputBudget = shrinkInputBudget(effectiveInputBudget, details ?? {});
@@ -51199,20 +51208,24 @@ function repairPrompt(profile, lastText, lastError) {
   }
   return lastError instanceof ZodError ? formatZodFeedback(lastError, lastText) : formatZodFeedback(null, lastText);
 }
-async function streamOnce(llm, model, messages, opts, signal, onEvent, lifecycle, attempt) {
+async function streamOnce(llm, model, messages, opts, signal, onEvent, lifecycle, attempt, callSite) {
   const params = buildChatParams(model, messages, opts, true);
   let fullText = "";
   let outputTokens = 0;
   let finishReason;
   let streamChunkConsumed = false;
   const requestStartMs = Date.now();
+  const requestId = lifecycle.current().id;
+  let inputTokens;
+  let requestError;
   try {
     lifecycle.phase("sent");
+    lifecycle.phase("waiting");
+    llm.beginPromptBudgetRequest?.(requestId);
     const request = llm.chat.completions.create(
       { ...params, stream: true },
       { signal }
     );
-    lifecycle.phase("waiting");
     const rawStream = await request;
     signal.throwIfAborted();
     const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
@@ -51236,6 +51249,7 @@ async function streamOnce(llm, model, messages, opts, signal, onEvent, lifecycle
     signal.throwIfAborted();
     if (finishReason === "length") throw new StructuredOutputTruncatedError(finishReason);
     const stats = getStats();
+    inputTokens = stats?.inputTokens;
     return {
       fullText,
       outputTokens,
@@ -51244,6 +51258,7 @@ async function streamOnce(llm, model, messages, opts, signal, onEvent, lifecycle
       finishReason
     };
   } catch (e) {
+    requestError = e;
     if (signal.aborted || e.name === "AbortError") throw e;
     if (streamChunkConsumed) throw e;
     if (classifyContextError(e) !== null || e instanceof PromptBudgetExceededError || e instanceof StructuredOutputTruncatedError) throw e;
@@ -51251,19 +51266,80 @@ async function streamOnce(llm, model, messages, opts, signal, onEvent, lifecycle
     if (!shouldFallbackStreamToNonStream(e, signal)) throw e;
     lifecycle.close("retrying");
     lifecycle.begin(attempt);
-    return nonStreamOnce(llm, model, messages, opts, signal, onEvent, lifecycle, attempt);
+    return nonStreamOnce(
+      llm,
+      model,
+      messages,
+      opts,
+      signal,
+      onEvent,
+      lifecycle,
+      attempt,
+      callSite
+    );
+  } finally {
+    if (!llm.emitsPromptBudget) onEvent(createPromptBudgetEvent({
+      requestId,
+      callSite,
+      configuredInputBudget: opts.inputBudgetTokens ?? 16384,
+      effectiveInputBudget: opts.inputBudgetTokens ?? 16384,
+      estimatedInputTokens: estimatePreparedMessages(
+        params.messages
+      ),
+      actualInputTokens: inputTokens,
+      outputBudget: opts.maxTokens,
+      compressionProfile: opts.semanticCompression?.profile ?? "balanced",
+      contextUnits: messages.length,
+      retryReason: classifyContextError(requestError) === null ? void 0 : "provider_context_error"
+    }));
   }
 }
-async function nonStreamOnce(llm, model, messages, opts, signal, onEvent, lifecycle, attempt) {
+async function nonStreamOnce(llm, model, messages, opts, signal, onEvent, lifecycle, attempt, callSite) {
   const params = buildChatParams(model, messages, opts);
   const requestStartMs = Date.now();
+  const requestId = lifecycle.current().id;
   lifecycle.phase("sent");
-  const request = llm.chat.completions.create(
-    { ...params, stream: false },
-    { signal }
-  );
-  lifecycle.phase("waiting");
-  const response = await request;
+  let response;
+  try {
+    lifecycle.phase("waiting");
+    llm.beginPromptBudgetRequest?.(requestId);
+    const request = llm.chat.completions.create(
+      { ...params, stream: false },
+      { signal }
+    );
+    response = await request;
+  } catch (error) {
+    if (!llm.emitsPromptBudget) onEvent(createPromptBudgetEvent({
+      requestId,
+      callSite,
+      configuredInputBudget: opts.inputBudgetTokens ?? 16384,
+      effectiveInputBudget: opts.inputBudgetTokens ?? 16384,
+      estimatedInputTokens: estimatePreparedMessages(
+        params.messages
+      ),
+      outputBudget: opts.maxTokens,
+      compressionProfile: opts.semanticCompression?.profile ?? "balanced",
+      contextUnits: messages.length,
+      retryReason: classifyContextError(error) === null ? void 0 : "provider_context_error"
+    }));
+    throw error;
+  }
+  const emitBudget = (actualInputTokens) => {
+    if (llm.emitsPromptBudget) return;
+    onEvent(createPromptBudgetEvent({
+      requestId,
+      callSite,
+      configuredInputBudget: opts.inputBudgetTokens ?? 16384,
+      effectiveInputBudget: opts.inputBudgetTokens ?? 16384,
+      estimatedInputTokens: estimatePreparedMessages(
+        params.messages
+      ),
+      actualInputTokens,
+      outputBudget: opts.maxTokens,
+      compressionProfile: opts.semanticCompression?.profile ?? "balanced",
+      contextUnits: messages.length
+    }));
+  };
   signal.throwIfAborted();
   if (response && typeof response === "object" && Symbol.asyncIterator in response) {
     let fullText2 = "";
@@ -51288,8 +51364,10 @@ async function nonStreamOnce(llm, model, messages, opts, signal, onEvent, lifecy
     }
     signal.throwIfAborted();
     if (finishReason === "length") throw new StructuredOutputTruncatedError("length");
+    emitBudget(inputTokens);
     return { fullText: fullText2, outputTokens, inputTokens, finishReason };
   }
+  emitBudget(response.usage?.prompt_tokens);
   if (response.choices[0]?.finish_reason === "length") {
     throw new StructuredOutputTruncatedError("length");
   }
@@ -51330,7 +51408,7 @@ async function callWithFormatFallback(args, messages, mode, attempt, lifecycle) 
     const callOpts = args.profile.kind === "json-zod" ? optsForMode(args.opts, currentMode, args.callSite, args.profile.schema) : { ...args.opts, jsonMode: false, jsonSchema: void 0 };
     try {
       return {
-        result: args.transport === "non-stream" ? await nonStreamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle, attempt) : await streamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle, attempt),
+        result: args.transport === "non-stream" ? await nonStreamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle, attempt, args.callSite) : await streamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle, attempt, args.callSite),
         mode: currentMode
       };
     } catch (e) {
@@ -52273,6 +52351,7 @@ function findLargestFeasibleBudget(minimum, maximum, evaluate) {
 }
 function llmWithRequestTelemetry(runtime, metadata) {
   const completions = runtime.llm.chat.completions;
+  let pendingRequestId;
   async function createWithTelemetry(params, requestOpts) {
     const estimatedInputTokens = estimatePreparedMessages(params.messages);
     if (estimatedInputTokens > metadata.effectiveInputBudget) {
@@ -52282,22 +52361,40 @@ function llmWithRequestTelemetry(runtime, metadata) {
         []
       );
     }
-    const emitTelemetry = () => runtime.onEvent?.(createPromptBudgetEvent({
-      callSite: metadata.callSite,
-      configuredInputBudget: metadata.configuredInputBudget,
-      effectiveInputBudget: metadata.effectiveInputBudget,
-      estimatedInputTokens,
-      outputBudget: metadata.outputBudget,
-      compressionProfile: metadata.compressionProfile,
-      contextUnits: metadata.contextUnits,
-      sourceChunks: metadata.sourceChunks,
-      reductionDepth: metadata.reductionDepth
-    }));
-    const response = params.stream ? await completions.create(params, requestOpts) : await completions.create(params, requestOpts);
-    emitTelemetry();
-    return response;
+    const requestId = pendingRequestId;
+    pendingRequestId = void 0;
+    if (!requestId) {
+      throw new Error(`Missing requestId for ${metadata.callSite} prompt budget telemetry`);
+    }
+    let error;
+    try {
+      return params.stream ? await completions.create(params, requestOpts) : await completions.create(params, requestOpts);
+    } catch (caught) {
+      error = caught;
+      throw caught;
+    } finally {
+      const event = createPromptBudgetEvent({
+        requestId,
+        callSite: metadata.callSite,
+        configuredInputBudget: metadata.configuredInputBudget,
+        effectiveInputBudget: metadata.effectiveInputBudget,
+        estimatedInputTokens,
+        outputBudget: metadata.outputBudget,
+        compressionProfile: metadata.compressionProfile,
+        contextUnits: metadata.contextUnits,
+        sourceChunks: metadata.sourceChunks,
+        reductionDepth: metadata.reductionDepth,
+        retryReason: classifyContextError(error) === null ? void 0 : "provider_context_error"
+      });
+      if (event.retryReason === void 0) runtime.onEvent?.(event);
+      else forwardContextRepackProgress(runtime, event);
+    }
   }
   return {
+    emitsPromptBudget: true,
+    beginPromptBudgetRequest: (requestId) => {
+      pendingRequestId = requestId;
+    },
     chat: {
       completions: {
         create: createWithTelemetry
@@ -52408,6 +52505,7 @@ async function mapChunksWithContextRepack(source, domainId, initialChunks, polic
   const configuredTypes = mode.rejectEntityTypes ? [] : [...mode.allowedEntityTypes ?? []];
   let failedMapper;
   return runWithContextRepack({
+    requestBudgetsEmittedByExecute: true,
     callSite: mapCallSite,
     configuredInputBudget: configuredBudget,
     outputBudget: policy.outputBudgetTokens,
@@ -52582,6 +52680,7 @@ async function reduceBatch(units, totalChunks, depth, reducerBudget, policy, run
   const retries = policy.reducerRetries ?? 1;
   let failedReducer;
   return runWithContextRepack({
+    requestBudgetsEmittedByExecute: true,
     callSite: "ingest.evidence-reduce",
     configuredInputBudget: configuredBudget,
     outputBudget: policy.outputBudgetTokens,
@@ -53240,6 +53339,7 @@ function repackSynthesisBundles(input, sourceBundles, effectiveInputBudget, fail
 async function executeSynthesisBatch(input, bundles, maxRetries) {
   let failedPromptHash;
   return runWithContextRepack({
+    requestBudgetsEmittedByExecute: true,
     callSite: "ingest.synthesize",
     configuredInputBudget: input.policy.inputBudgetTokens,
     outputBudget: input.policy.outputBudgetTokens,
@@ -53369,22 +53469,6 @@ async function executeSingleRegenerationRequest(input) {
     );
   }
   let forwardedRequests = 0;
-  let forwardedEstimate;
-  let budgetEventEmitted = false;
-  const emitBudget = (actualInputTokens) => {
-    if (budgetEventEmitted || forwardedEstimate === void 0) return;
-    budgetEventEmitted = true;
-    input.onEvent(createPromptBudgetEvent({
-      callSite: "ingest.synthesize",
-      configuredInputBudget: input.policy.inputBudgetTokens,
-      effectiveInputBudget: input.policy.inputBudgetTokens,
-      estimatedInputTokens: forwardedEstimate,
-      actualInputTokens,
-      outputBudget: input.policy.outputBudgetTokens,
-      compressionProfile: input.policy.compression,
-      contextUnits: 1
-    }));
-  };
   const guardedCreate = async (params, requestOptions) => {
     if (forwardedRequests > 0) {
       throw new ConflictRegenerationExhaustedError(
@@ -53393,7 +53477,6 @@ async function executeSingleRegenerationRequest(input) {
       );
     }
     forwardedRequests++;
-    forwardedEstimate = estimatePreparedMessages(params.messages);
     if (params.stream === true) {
       return input.llm.chat.completions.create(params, requestOptions);
     }
@@ -53406,26 +53489,20 @@ async function executeSingleRegenerationRequest(input) {
       }
     }
   };
-  try {
-    const result = await runStructuredWithRetry({
-      llm: guardedLlm,
-      model: input.model,
-      baseMessages: messages,
-      opts,
-      profile: { kind: "json-zod", schema: SynthesisOutputSchema },
-      maxRetries: 0,
-      callSite: "ingest.synthesize",
-      lifecycle: createLlmLifecycle("synthesize_wiki_pages"),
-      signal: input.signal,
-      onEvent: input.onEvent,
-      transport: "non-stream"
-    });
-    emitBudget(result.inputTokens);
-    return { value: result.value, lifecycle: result.lifecycle };
-  } catch (error) {
-    emitBudget();
-    throw error;
-  }
+  const result = await runStructuredWithRetry({
+    llm: guardedLlm,
+    model: input.model,
+    baseMessages: messages,
+    opts,
+    profile: { kind: "json-zod", schema: SynthesisOutputSchema },
+    maxRetries: 0,
+    callSite: "ingest.synthesize",
+    lifecycle: createLlmLifecycle("synthesize_wiki_pages"),
+    signal: input.signal,
+    onEvent: input.onEvent,
+    transport: "non-stream"
+  });
+  return { value: result.value, lifecycle: result.lifecycle };
 }
 async function synthesizeBundles(input, bundles, depth) {
   if (bundles.length === 0) throw new Error("Cannot synthesize an empty bundle list");
@@ -55489,11 +55566,11 @@ async function* answerFromContext(args) {
         try {
           const requestStartMs = Date.now();
           emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"));
+          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
           const pending = llm.chat.completions.create(
             { ...params, stream: true },
             { signal: operationSignal }
           );
-          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
           const rawStream = await pending;
           const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, operationSignal);
           let attemptAnswer = "";
@@ -55529,6 +55606,19 @@ async function* answerFromContext(args) {
           }
           rethrowForContextRepack(error, request.optionalUnits);
           if (!shouldFallbackStreamToNonStream(error, operationSignal)) throw error;
+          budgetEvents.push(createPromptBudgetEvent({
+            requestId: answerLifecycle.id,
+            callSite: "query.answer",
+            configuredInputBudget: opts.inputBudgetTokens ?? 16384,
+            effectiveInputBudget: opts.inputBudgetTokens ?? 16384,
+            estimatedInputTokens: estimatePreparedMessages(
+              params.messages
+            ),
+            outputBudget: opts.maxTokens,
+            compressionProfile: opts.semanticCompression?.profile ?? "balanced",
+            contextUnits: request.messages.length,
+            sourceChunks: request.selectedChunks.length
+          }));
           emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
           answerLifecycle = createLlmLifecycle("answer_question");
           emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing"));
@@ -55537,11 +55627,11 @@ async function* answerFromContext(args) {
           try {
             const fallbackParams = paramsForPreparedMessages(model, request.messages, opts, false);
             emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"));
+            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
             const pending = llm.chat.completions.create(
               { ...fallbackParams, stream: false },
               { signal: operationSignal }
             );
-            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
             response = await pending;
           } catch (fallbackError) {
             if (classifyContextError(fallbackError) !== null && request.optionalUnits > 0) {
@@ -55576,6 +55666,7 @@ async function* answerFromContext(args) {
           };
         }
       },
+      requestId: () => answerLifecycle.id,
       onEvent: (event) => budgetEvents.push(event)
     }), signal);
     signal.throwIfAborted();
@@ -56844,6 +56935,7 @@ function estimateMessages(messages) {
 async function runLintBatchWithSplit(args) {
   try {
     const result = await runWithContextRepack({
+      requestBudgetsEmittedByExecute: true,
       callSite: "lint.batch",
       configuredInputBudget: args.opts.inputBudgetTokens ?? 16384,
       outputBudget: args.opts.maxTokens,
@@ -57610,11 +57702,11 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
         try {
           const requestStartMs = Date.now();
           emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"));
+          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"));
           const pending = llm.chat.completions.create(
             { ...params, stream: true },
             { signal: operationSignal }
           );
-          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"));
           const rawStream = await pending;
           const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, operationSignal);
           let attemptText = "";
@@ -57649,6 +57741,18 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
           }
           rethrowForContextRepack2(error, request.optionalUnits);
           if (!shouldFallbackStreamToNonStream(error, operationSignal)) throw error;
+          budgetEvents.push(createPromptBudgetEvent({
+            requestId: chatLifecycle.id,
+            callSite: opts.semanticCompression?.operation === "query" ? "query.answer" : "lint-chat.fix",
+            configuredInputBudget: opts.inputBudgetTokens ?? 16384,
+            effectiveInputBudget: opts.inputBudgetTokens ?? 16384,
+            estimatedInputTokens: estimatePreparedMessages(
+              params.messages
+            ),
+            outputBudget: opts.maxTokens,
+            compressionProfile: opts.semanticCompression?.profile ?? "balanced",
+            contextUnits: request.messages.length
+          }));
           emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"));
           chatLifecycle = createLlmLifecycle(
             opts.semanticCompression?.operation === "query" ? "answer_question" : "apply_lint_fixes"
@@ -57659,11 +57763,11 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
           try {
             const fallbackParams = paramsForPreparedMessages2(model, request.messages, opts, false);
             emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"));
+            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"));
             const pending = llm.chat.completions.create(
               { ...fallbackParams, stream: false },
               { signal: operationSignal }
             );
-            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"));
             response = await pending;
           } catch (fallbackError) {
             if (classifyContextError(fallbackError) !== null && request.optionalUnits > 0) {
@@ -57697,6 +57801,7 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
           };
         }
       },
+      requestId: () => chatLifecycle.id,
       onEvent: (event) => budgetEvents.push(event)
     }), signal);
     signal.throwIfAborted();
@@ -58000,6 +58105,7 @@ ${schemaContent}` : ""
         emit(event);
       };
       return runWithContextRepack({
+        requestBudgetsEmittedByExecute: true,
         callSite: "lint-chat.patch",
         configuredInputBudget: opts.inputBudgetTokens ?? 16384,
         outputBudget: opts.maxTokens,
@@ -58252,15 +58358,6 @@ ${schemaContent}` : ""
   }
   const messages = bootstrapMessages(bootstrapEvidence);
   const estimatedInputTokens = estimatePreparedMessages(prepareChatMessages(messages, opts));
-  yield createPromptBudgetEvent({
-    callSite: "init.bootstrap",
-    configuredInputBudget: inputBudgetTokens,
-    effectiveInputBudget: inputBudgetTokens,
-    estimatedInputTokens,
-    outputBudget: outputBudgetTokens,
-    compressionProfile: compressionProfile2,
-    contextUnits: bootstrapEvidence.candidates.length + bootstrapEvidence.domainThemes.length + bootstrapEvidence.languageEvidence.length
-  });
   if (estimatedInputTokens > inputBudgetTokens) {
     yield {
       kind: "error",
@@ -58273,6 +58370,7 @@ ${schemaContent}` : ""
   const sink = {};
   let parsed;
   try {
+    const bootstrapLifecycle = createLlmLifecycle("bootstrap_domain");
     for await (const event of runStructuredStreaming({
       llm,
       model,
@@ -58281,7 +58379,7 @@ ${schemaContent}` : ""
       profile: { kind: "json-zod", schema: DomainEntrySchema },
       maxRetries: opts.structuredRetries ?? 1,
       callSite: "init.bootstrap",
-      lifecycle: createLlmLifecycle("bootstrap_domain"),
+      lifecycle: bootstrapLifecycle,
       signal,
       onEvent: () => {
       },
@@ -59595,10 +59693,7 @@ function visionCallOptions(options, language, reasoningLanguage, effectiveInputB
   };
 }
 async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, reasoningLanguage, options, effectiveInputBudget = options.inputBudgetTokens) {
-  const lifecycle = createLlmLifecycle("analyze_attachments");
-  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "preparing"));
   if (signal.aborted) {
-    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "cancelled"));
     signal.throwIfAborted();
   }
   const callOptions = visionCallOptions(
@@ -59607,29 +59702,9 @@ async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, 
     reasoningLanguage,
     effectiveInputBudget
   );
-  let params;
-  try {
-    params = buildChatParams(model, visionMessages(systemPrompt, pages), callOptions);
-  } catch (error) {
-    if (error instanceof PromptBudgetExceededError) {
-      options.onEvent?.(createPromptBudgetEvent({
-        callSite: "vision.analysis",
-        configuredInputBudget: options.inputBudgetTokens,
-        effectiveInputBudget,
-        estimatedInputTokens: error.estimated,
-        outputBudget: options.maxTokens,
-        compressionProfile: options.compressionProfile,
-        contextUnits: pages.length,
-        retryReason: "preflight_budget_exceeded"
-      }));
-    }
-    options.onEvent?.(lifecycleEvent(
-      lifecycle.id,
-      lifecycle.action,
-      signal.aborted || error.name === "AbortError" ? "cancelled" : error instanceof PromptBudgetExceededError ? "retrying" : "failed"
-    ));
-    throw error;
-  }
+  const params = buildChatParams(model, visionMessages(systemPrompt, pages), callOptions);
+  const lifecycle = createLlmLifecycle("analyze_attachments");
+  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "preparing"));
   const estimatedInputTokens = estimatePreparedMessages(
     params.messages
   );
@@ -59637,11 +59712,11 @@ async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, 
   try {
     signal.throwIfAborted();
     options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "sent"));
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "waiting"));
     const request = llm.chat.completions.create(
       { ...params, stream: false },
       { signal }
     );
-    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "waiting"));
     response = await request;
   } catch (error) {
     options.onEvent?.(lifecycleEvent(
@@ -59650,6 +59725,7 @@ async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, 
       signal.aborted || error.name === "AbortError" ? "cancelled" : classifyContextError(error) !== null ? "retrying" : "failed"
     ));
     options.onEvent?.(createPromptBudgetEvent({
+      requestId: lifecycle.id,
       callSite: "vision.analysis",
       configuredInputBudget: options.inputBudgetTokens,
       effectiveInputBudget,
@@ -59676,6 +59752,7 @@ async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, 
   }
   options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "validating"));
   options.onEvent?.(createPromptBudgetEvent({
+    requestId: lifecycle.id,
     callSite: "vision.analysis",
     configuredInputBudget: options.inputBudgetTokens,
     effectiveInputBudget,
@@ -59821,18 +59898,6 @@ async function analyzePdf(buffer, llm, model, signal, language = "auto", reasoni
         mediaReservationTokens: 4096
       });
     } catch (error) {
-      if (error instanceof PromptBudgetExceededError) {
-        resolved.onEvent?.(createPromptBudgetEvent({
-          callSite: "vision.analysis",
-          configuredInputBudget: resolved.inputBudgetTokens,
-          effectiveInputBudget,
-          estimatedInputTokens: error.estimated,
-          outputBudget: resolved.maxTokens,
-          compressionProfile: resolved.compressionProfile,
-          contextUnits: pending.length,
-          retryReason: "preflight_budget_exceeded"
-        }));
-      }
       if (originalContextDetails !== void 0) {
         throw visionContextRecoveryError(
           resolved,
@@ -60443,13 +60508,29 @@ ${tagRegistryBlock}` : ""}`;
   let outputTokens = 0;
   let lastInputTokens;
   let activeFormatLifecycle = null;
+  const formatBudgetEvent = (requestId, params, context, actualInputTokens, retryReason) => createPromptBudgetEvent({
+    requestId,
+    callSite: context.callSite,
+    configuredInputBudget: opts.inputBudgetTokens ?? 0,
+    effectiveInputBudget: opts.inputBudgetTokens ?? 0,
+    estimatedInputTokens: estimatePreparedMessages(
+      params.messages
+    ),
+    actualInputTokens,
+    outputBudget: opts.maxTokens,
+    compressionProfile: "balanced",
+    contextUnits: context.contextUnits,
+    sourceChunks: context.sourceChunks,
+    reductionDepth: context.reductionDepth,
+    retryReason
+  });
   const closeActiveFormatLifecycle = (phase) => {
     const current = activeFormatLifecycle;
     if (!current) return null;
     activeFormatLifecycle = null;
     return lifecycleEvent(current.id, current.action, phase);
   };
-  async function* callOnce(p, fallback = { allowContextFallback: true }) {
+  async function* callOnce(p, fallback = { allowContextFallback: true }, budgetContext = { callSite: "format.output", contextUnits: 1 }) {
     if (activeFormatLifecycle) {
       yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "applying");
       yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "completed");
@@ -60463,11 +60544,11 @@ ${tagRegistryBlock}` : ""}`;
     let streamChunkConsumed = false;
     try {
       yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
       const request = llm.chat.completions.create(
         { ...p, stream: true },
         { signal }
       );
-      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
       const rawStream = await request;
       const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
       let producing = false;
@@ -60489,8 +60570,21 @@ ${tagRegistryBlock}` : ""}`;
         if (fr) lastFinishReason = fr;
       }
       const callStats = getStats();
+      yield formatBudgetEvent(
+        activeFormatLifecycle.id,
+        p,
+        budgetContext,
+        callStats?.inputTokens ?? lastInputTokens
+      );
       if (callStats) yield buildLlmCallStatsEvent(callStats);
     } catch (e) {
+      yield formatBudgetEvent(
+        activeFormatLifecycle.id,
+        p,
+        budgetContext,
+        void 0,
+        classifyContextError(e) === null ? void 0 : "provider_context_error"
+      );
       if (signal.aborted || e.name === "AbortError") {
         yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "cancelled");
         activeFormatLifecycle = null;
@@ -60518,13 +60612,20 @@ ${tagRegistryBlock}` : ""}`;
       let resp;
       try {
         yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
         const pending = llm.chat.completions.create(
           { ...p, stream: false },
           { signal }
         );
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
         resp = await pending;
       } catch (fallbackError) {
+        yield formatBudgetEvent(
+          activeFormatLifecycle.id,
+          p,
+          budgetContext,
+          void 0,
+          classifyContextError(fallbackError) === null ? void 0 : "provider_context_error"
+        );
         yield lifecycleEvent(
           activeFormatLifecycle.id,
           activeFormatLifecycle.action,
@@ -60546,6 +60647,12 @@ ${tagRegistryBlock}` : ""}`;
       const promptTokens = resp.usage?.prompt_tokens;
       if (completionTokens !== void 0) outputTokens += completionTokens;
       if (promptTokens !== void 0) lastInputTokens = promptTokens;
+      yield formatBudgetEvent(
+        activeFormatLifecycle.id,
+        p,
+        budgetContext,
+        promptTokens
+      );
       lastFinishReason = resp.choices[0]?.finish_reason ?? null;
       if (completionTokens !== void 0) {
         const elapsed = Math.max(1, Date.now() - fallbackStartMs);
@@ -60594,38 +60701,11 @@ The previous segment attempt failed: ${retryHint}. Return the same segment again
       ...chatHistory.map((m) => ({ role: m.role, content: m.content }))
     ];
   }
-  function emitSegmentBudgetEvent(segment, params, sourceChunks, retryReason) {
-    return createPromptBudgetEvent({
-      callSite: "format.segment",
-      configuredInputBudget: opts.inputBudgetTokens ?? 0,
-      effectiveInputBudget: opts.inputBudgetTokens ?? 0,
-      estimatedInputTokens: estimatePreparedMessages(params.messages),
-      actualInputTokens: retryReason ? void 0 : lastInputTokens,
-      outputBudget: opts.maxTokens,
-      compressionProfile: "balanced",
-      contextUnits: 1,
-      sourceChunks,
-      reductionDepth: Math.max(0, segment.id.split("-").length - 2),
-      retryReason
-    });
-  }
   function buildSegmentParams(segment, retryHint = "") {
     const params = buildChatParams(model, segmentMessagesWithHint(segment, retryHint), formatOpts, true);
     return params;
   }
   async function* splitSegmentAfterProviderContext(segment, params, maxMarkdownChars, sourceChunks) {
-    yield createPromptBudgetEvent({
-      callSite: "format.segment",
-      configuredInputBudget: opts.inputBudgetTokens ?? 0,
-      effectiveInputBudget: opts.inputBudgetTokens ?? 0,
-      estimatedInputTokens: estimatePreparedMessages(params.messages),
-      outputBudget: opts.maxTokens,
-      compressionProfile: "balanced",
-      contextUnits: 1,
-      sourceChunks,
-      reductionDepth: Math.max(0, segment.id.split("-").length - 2),
-      retryReason: "provider_context_error"
-    });
     const nextMaxMarkdownChars = Math.max(1, Math.floor(maxMarkdownChars / 2));
     const children = splitFormatSegment(segment, nextMaxMarkdownChars);
     if (children.length <= 1) {
@@ -60646,18 +60726,6 @@ The previous segment attempt failed: ${retryHint}. Return the same segment again
       params = buildSegmentParams(segment);
     } catch (e) {
       if (!(e instanceof PromptBudgetExceededError)) throw e;
-      yield createPromptBudgetEvent({
-        callSite: "format.segment",
-        configuredInputBudget: opts.inputBudgetTokens ?? 0,
-        effectiveInputBudget: opts.inputBudgetTokens ?? 0,
-        estimatedInputTokens: e.estimated,
-        outputBudget: opts.maxTokens,
-        compressionProfile: "balanced",
-        contextUnits: 1,
-        sourceChunks,
-        reductionDepth: Math.max(0, segment.id.split("-").length - 2),
-        retryReason: "preflight_budget_exceeded"
-      });
       const children = splitFormatSegment(segment, Math.max(1, Math.floor(maxMarkdownChars / 2)));
       if (children.length <= 1) {
         throw new Error(`Format: segment ${segment.id} exceeds the configured input budget; raise format inputBudgetTokens`);
@@ -60673,12 +60741,16 @@ The previous segment attempt failed: ${retryHint}. Return the same segment again
     yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath, segment: segment.id } };
     let text;
     try {
-      text = yield* callOnce(params, { allowContextFallback: false });
+      text = yield* callOnce(params, { allowContextFallback: false }, {
+        callSite: "format.segment",
+        contextUnits: 1,
+        sourceChunks,
+        reductionDepth: Math.max(0, segment.id.split("-").length - 2)
+      });
     } catch (e) {
       if (classifyContextError(e) === null) throw e;
       return yield* splitSegmentAfterProviderContext(segment, params, maxMarkdownChars, sourceChunks);
     }
-    yield emitSegmentBudgetEvent(segment, params, sourceChunks);
     if (signal.aborted) {
       if (activeFormatLifecycle) {
         yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "cancelled");
@@ -60724,12 +60796,16 @@ The previous segment attempt failed: ${retryHint}. Return the same segment again
     yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath, segment: segment.id, retry: 1 } };
     let retryText;
     try {
-      retryText = yield* callOnce(retryParams, { allowContextFallback: false });
+      retryText = yield* callOnce(retryParams, { allowContextFallback: false }, {
+        callSite: "format.segment",
+        contextUnits: 1,
+        sourceChunks,
+        reductionDepth: Math.max(0, segment.id.split("-").length - 2)
+      });
     } catch (e) {
       if (classifyContextError(e) === null) throw e;
       return yield* splitSegmentAfterProviderContext(segment, retryParams, maxMarkdownChars, sourceChunks);
     }
-    yield emitSegmentBudgetEvent(segment, retryParams, sourceChunks);
     const retryParsed = parseFormatSegmentOutput(retryText);
     if (retryParsed.data && retryParsed.data.segmentId === segment.id && !retryParsed.truncated) {
       yield { kind: "tool_result", ok: true, preview: `${segment.id}: ${retryParsed.data.formatted.length} chars` };
@@ -60792,16 +60868,6 @@ The previous segment attempt failed: ${retryHint}. Return the same segment again
         yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || void 0 };
         return;
       }
-      yield createPromptBudgetEvent({
-        callSite: "format.output",
-        configuredInputBudget: opts.inputBudgetTokens ?? 0,
-        effectiveInputBudget: opts.inputBudgetTokens ?? 0,
-        estimatedInputTokens: estimatePreparedMessages(baseParams.messages),
-        outputBudget: opts.maxTokens,
-        compressionProfile: "balanced",
-        contextUnits: 1,
-        retryReason: "provider_context_error"
-      });
       segmented = true;
       parsed = yield* runSegmentedFormatting();
       if (!parsed) return;
