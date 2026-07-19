@@ -29384,6 +29384,13 @@ function mapAssistant(obj) {
   if (block?.type === "text") {
     return { kind: "assistant_text", delta: typeof block.text === "string" ? block.text : "" };
   }
+  if (block?.type === "thinking") {
+    return {
+      kind: "assistant_text",
+      delta: typeof block.thinking === "string" ? block.thinking : "",
+      isReasoning: true
+    };
+  }
   return null;
 }
 function mapUserToolResult(obj) {
@@ -29659,15 +29666,24 @@ ${stderr()}` : ""}`);
   }
   async _collect(args, signal, timeoutSec, tmpFiles) {
     let text = "";
+    let reasoning = "";
     for await (const chunk of this._generate(args, signal, timeoutSec, tmpFiles)) {
-      text += chunk.choices[0]?.delta?.content ?? "";
+      const delta = chunk.choices[0]?.delta;
+      text += delta?.content ?? "";
+      reasoning += delta?.reasoning ?? delta?.reasoning_content ?? "";
     }
+    const message = {
+      role: "assistant",
+      content: text,
+      refusal: null,
+      ...reasoning ? { reasoning } : {}
+    };
     return {
       id: "cc-0",
       object: "chat.completion",
       model: this.cfg.model || "claude",
       created: 0,
-      choices: [{ index: 0, message: { role: "assistant", content: text, refusal: null }, finish_reason: "stop", logprobs: null }],
+      choices: [{ index: 0, message, finish_reason: "stop", logprobs: null }],
       usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
     };
   }

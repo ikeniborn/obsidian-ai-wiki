@@ -67,6 +67,13 @@ function mapAssistant(obj: Record<string, unknown>): RunEvent | null {
   if (block?.type === "text") {
     return { kind: "assistant_text", delta: typeof block.text === "string" ? block.text : "" };
   }
+  if (block?.type === "thinking") {
+    return {
+      kind: "assistant_text",
+      delta: typeof block.thinking === "string" ? block.thinking : "",
+      isReasoning: true,
+    };
+  }
   return null;
 }
 
