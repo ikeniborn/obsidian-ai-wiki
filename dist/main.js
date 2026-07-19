@@ -58885,31 +58885,36 @@ async function wipeDomainFolder(vaultTools, wikiFolder, signal, options = {}) {
   const root = forceDomainRoot(wikiFolder);
   requireTransactionalWipeAdapter(vaultTools);
   const snapshotByteLimit = options.snapshotByteLimit ?? FORCE_WIPE_SNAPSHOT_BYTE_LIMIT;
-  if (!Number.isSafeInteger(snapshotByteLimit) || snapshotByteLimit < 0) {
-    throw new Error("force: invalid snapshot byte limit");
+  const fileByteLimit = options.fileByteLimit ?? FORCE_WIPE_FILE_BYTE_LIMIT;
+  if (!Number.isSafeInteger(snapshotByteLimit) || snapshotByteLimit < 0 || !Number.isSafeInteger(fileByteLimit) || fileByteLimit < 0) {
+    throw new Error("force: invalid snapshot or per-file byte limit");
   }
   if (activeDomainWipes.has(root)) {
     throw new Error(`force: wipe already in progress for ${root}`);
   }
   activeDomainWipes.add(root);
   try {
-    return await wipeDomainFolderLocked(vaultTools, root, signal, snapshotByteLimit);
+    return await wipeDomainFolderLocked(
+      vaultTools,
+      root,
+      signal,
+      snapshotByteLimit,
+      fileByteLimit
+    );
   } finally {
     activeDomainWipes.delete(root);
   }
 }
-async function wipeDomainFolderLocked(vaultTools, root, signal, snapshotByteLimit) {
+async function wipeDomainFolderLocked(vaultTools, root, signal, snapshotByteLimit, fileByteLimit) {
   if (!await checkedExists(vaultTools, root, signal)) return [];
   const transaction = await createWipeTransaction(vaultTools, signal);
   const quarantinedRoot = `${transaction}/domain`;
-  const trash = `${transaction}/trash`;
   const removed = /* @__PURE__ */ new Set();
-  const tombstones = /* @__PURE__ */ new Map();
   let rootRenameAttempted = false;
   let snapshot;
   try {
     await requireEmptyDirectory(vaultTools, transaction, signal, "new transaction");
-    if (await checkedExists(vaultTools, quarantinedRoot, signal) || await checkedExists(vaultTools, trash, signal)) {
+    if (await checkedExists(vaultTools, quarantinedRoot, signal)) {
       throw new Error("force: transaction destination unexpectedly exists");
     }
     rootRenameAttempted = true;
@@ -58940,55 +58945,30 @@ async function wipeDomainFolderLocked(vaultTools, root, signal, snapshotByteLimi
       vaultTools,
       quarantinedRoot,
       signal,
-      snapshotByteLimit
+      snapshotByteLimit,
+      fileByteLimit
     );
     if (!snapshot.existed) {
       throw new Error("force: quarantined domain disappeared before inventory");
     }
     await requireOriginalRootAbsent(vaultTools, root, signal);
-    if (await checkedExists(vaultTools, trash, signal)) {
-      throw new Error(`force: transaction trash unexpectedly exists: ${trash}`);
-    }
-    await vaultTools.mkdir(trash);
-    await requireEmptyDirectory(vaultTools, trash, signal, "new transaction trash");
-    let tombstoneIndex = 0;
     for (const [path5, bytes] of snapshot.files) {
       throwIfWipeAborted(signal);
       await requireOriginalRootAbsent(vaultTools, root, signal);
       if (!await checkedExists(vaultTools, path5, signal) || !sameBytes(new Uint8Array(await checkedReadBinary(vaultTools, path5, signal)), bytes)) {
         throw new Error(`force: wipe target changed before removal: ${path5}`);
       }
-      const tombstone = `${trash}/file-${(tombstoneIndex++).toString(36)}`;
-      if (await checkedExists(vaultTools, tombstone, signal)) {
-        throw new Error(`force: tombstone destination unexpectedly exists: ${tombstone}`);
-      }
-      let tombstoneRenameError;
       try {
-        await vaultTools.rename(path5, tombstone);
+        await vaultTools.remove(path5);
       } catch (error) {
-        tombstoneRenameError = error instanceof Error ? error : new Error(String(error));
+        if (!await vaultTools.exists(path5)) removed.add(path5);
+        throw error;
       }
-      const sourceRemains = await checkedExists(vaultTools, path5, signal);
-      const tombstoneExists = await checkedExists(vaultTools, tombstone, signal);
-      if (sourceRemains || !tombstoneExists) {
-        throw new Error(
-          `force: tombstone rename trust failure: source=${sourceRemains} tombstone=${tombstoneExists}`
-        );
-      }
-      removed.add(path5);
-      tombstones.set(path5, tombstone);
-      if (!sameBytes(
-        new Uint8Array(await checkedReadBinary(vaultTools, tombstone, signal)),
-        bytes
-      )) {
-        throw new Error(`force: tombstone bytes changed during rename: ${path5}`);
-      }
-      if (tombstoneRenameError) throw tombstoneRenameError;
-      await vaultTools.remove(tombstone);
-      const tombstoneRemains = await checkedExists(vaultTools, tombstone, signal);
+      const pathRemains = await vaultTools.exists(path5);
+      if (!pathRemains) removed.add(path5);
       throwIfWipeAborted(signal);
-      if (tombstoneRemains) {
-        throw new Error(`force: removal did not remove tombstone ${tombstone}`);
+      if (pathRemains) {
+        throw new Error(`force: removal did not remove ${path5}`);
       }
       await requireOriginalRootAbsent(vaultTools, root, signal);
     }
@@ -59001,9 +58981,9 @@ async function wipeDomainFolderLocked(vaultTools, root, signal, snapshotByteLimi
         throw new Error(`force: non-recursive rmdir did not remove ${folder}`);
       }
     }
-    await removeKnownEmptyDirectory(vaultTools, trash, signal, "transaction trash");
     await requireOriginalRootAbsent(vaultTools, root, signal);
     await removeKnownEmptyDirectory(vaultTools, transaction, signal, "transaction");
+    await requireOriginalRootAbsent(vaultTools, root, signal);
   } catch (error) {
     try {
       await rollbackWipeTransaction(
@@ -59011,11 +58991,9 @@ async function wipeDomainFolderLocked(vaultTools, root, signal, snapshotByteLimi
         root,
         transaction,
         quarantinedRoot,
-        trash,
         rootRenameAttempted,
         snapshot,
-        removed,
-        tombstones
+        removed
       );
     } catch (rollbackError) {
       throw new Error(
@@ -59026,7 +59004,9 @@ async function wipeDomainFolderLocked(vaultTools, root, signal, snapshotByteLimi
   }
   return [...snapshot.files.keys()].map((path5) => originalPathFromQuarantine(path5, quarantinedRoot, root));
 }
-var FORCE_WIPE_SNAPSHOT_BYTE_LIMIT = 256 * 1024 * 1024;
+var FORCE_WIPE_SNAPSHOT_BYTE_LIMIT = 128 * 1024 * 1024;
+var FORCE_WIPE_FILE_BYTE_LIMIT = 32 * 1024 * 1024;
+var FORCE_WIPE_PEAK_BYTE_LIMIT = FORCE_WIPE_SNAPSHOT_BYTE_LIMIT + FORCE_WIPE_FILE_BYTE_LIMIT;
 function requireTransactionalWipeAdapter(vaultTools) {
   if (typeof vaultTools.adapter.readBinary !== "function" || typeof vaultTools.adapter.writeBinary !== "function" || typeof vaultTools.adapter.rename !== "function" || typeof vaultTools.adapter.stat !== "function" || typeof vaultTools.adapter.remove !== "function" || typeof vaultTools.adapter.rmdir !== "function") {
     throw new Error(
@@ -59042,8 +59022,14 @@ async function createWipeTransaction(vaultTools, signal) {
     throwIfWipeAborted(signal);
     const candidate = `${WIKI_ROOT}/.ai-wiki-reinit-txn-${runToken}-${attempt.toString(36)}`;
     if (await checkedExists(vaultTools, candidate, signal)) continue;
+    let mkdirSucceeded = false;
     try {
       await vaultTools.mkdir(candidate);
+      mkdirSucceeded = true;
+    } catch {
+      continue;
+    }
+    try {
       if (!await checkedExists(vaultTools, candidate, signal)) {
         throw new Error(`force: transaction mkdir did not create ${candidate}`);
       }
@@ -59051,7 +59037,7 @@ async function createWipeTransaction(vaultTools, signal) {
       return candidate;
     } catch (error) {
       try {
-        if (await vaultTools.exists(candidate)) {
+        if (mkdirSucceeded && await vaultTools.exists(candidate)) {
           const listed = await vaultTools.adapter.list(candidate);
           if (listed.files.length === 0 && listed.folders.length === 0) {
             await vaultTools.rmdir(candidate, false);
@@ -59154,17 +59140,52 @@ function assertDirectDomainChild(root, parent, path5) {
     throw new Error(`force: untrusted domain inventory path ${path5}`);
   }
 }
-async function inventoryDomainTree(vaultTools, root, signal, snapshotByteLimit = FORCE_WIPE_SNAPSHOT_BYTE_LIMIT) {
-  if (!await checkedExists(vaultTools, root, signal)) {
+async function inventoryDomainTree(vaultTools, root, signal, snapshotByteLimit = FORCE_WIPE_SNAPSHOT_BYTE_LIMIT, fileByteLimit = FORCE_WIPE_FILE_BYTE_LIMIT) {
+  const layout = await inventoryDomainLayout(
+    vaultTools,
+    root,
+    signal,
+    snapshotByteLimit,
+    fileByteLimit
+  );
+  if (!layout.existed) {
     return {
       root,
       existed: false,
       files: /* @__PURE__ */ new Map(),
       folders: [],
-      byteLimit: snapshotByteLimit
+      byteLimit: snapshotByteLimit,
+      fileByteLimit
     };
   }
-  const listedFilePaths = [];
+  const files = /* @__PURE__ */ new Map();
+  let snapshotBytes = 0;
+  for (const [path5, expectedSize] of layout.files) {
+    const buffer = await checkedReadBinary(vaultTools, path5, signal);
+    if (buffer.byteLength !== expectedSize) {
+      throw new Error(`force: file size changed after stat: ${path5}`);
+    }
+    snapshotBytes += buffer.byteLength;
+    if (buffer.byteLength > fileByteLimit || !Number.isSafeInteger(snapshotBytes) || snapshotBytes > snapshotByteLimit) {
+      throw new Error(`force: snapshot byte limit exceeded after read: ${path5}`);
+    }
+    files.set(path5, new Uint8Array(buffer));
+    throwIfWipeAborted(signal);
+  }
+  return {
+    root,
+    existed: true,
+    files,
+    folders: layout.folders,
+    byteLimit: snapshotByteLimit,
+    fileByteLimit
+  };
+}
+async function inventoryDomainLayout(vaultTools, root, signal, snapshotByteLimit = FORCE_WIPE_SNAPSHOT_BYTE_LIMIT, fileByteLimit = FORCE_WIPE_FILE_BYTE_LIMIT) {
+  if (!await checkedExists(vaultTools, root, signal)) {
+    return { existed: false, files: /* @__PURE__ */ new Map(), folders: [] };
+  }
+  const filePaths = [];
   const folders = [];
   const visit = async (folder) => {
     throwIfWipeAborted(signal);
@@ -59175,7 +59196,7 @@ async function inventoryDomainTree(vaultTools, root, signal, snapshotByteLimit =
     for (const path5 of listedFiles) {
       throwIfWipeAborted(signal);
       assertDirectDomainChild(root, folder, path5);
-      listedFilePaths.push(path5);
+      filePaths.push(path5);
     }
     for (const path5 of listedFolders) {
       throwIfWipeAborted(signal);
@@ -59185,62 +59206,60 @@ async function inventoryDomainTree(vaultTools, root, signal, snapshotByteLimit =
     }
   };
   await visit(root);
-  listedFilePaths.sort(compareCodePoints5);
-  const expectedSizes = /* @__PURE__ */ new Map();
-  let preflightBytes = 0;
-  for (const path5 of listedFilePaths) {
+  filePaths.sort(compareCodePoints5);
+  const files = /* @__PURE__ */ new Map();
+  let totalBytes = 0;
+  let maxFileBytes = 0;
+  let maxFilePath = "";
+  for (const path5 of filePaths) {
     throwIfWipeAborted(signal);
     const stat = await checkedStat(vaultTools, path5, signal);
     if (stat === null || stat.type !== "file" || !Number.isSafeInteger(stat.size) || stat.size < 0) {
       throw new Error(`force: invalid file stat size for ${path5}`);
     }
-    preflightBytes += stat.size;
-    if (!Number.isSafeInteger(preflightBytes) || preflightBytes > snapshotByteLimit) {
+    totalBytes += stat.size;
+    if (stat.size > maxFileBytes) {
+      maxFileBytes = stat.size;
+      maxFilePath = path5;
+    }
+    if (!Number.isSafeInteger(totalBytes) || totalBytes > snapshotByteLimit) {
       throw new Error(
-        `force: snapshot byte limit exceeded (${preflightBytes} > ${snapshotByteLimit})`
+        `force: snapshot byte limit exceeded (${totalBytes} > ${snapshotByteLimit})`
       );
     }
-    expectedSizes.set(path5, stat.size);
+    files.set(path5, stat.size);
   }
-  const files = /* @__PURE__ */ new Map();
-  let snapshotBytes = 0;
-  for (const path5 of listedFilePaths) {
-    const buffer = await checkedReadBinary(vaultTools, path5, signal);
-    const expectedSize = expectedSizes.get(path5);
-    if (expectedSize === void 0 || buffer.byteLength !== expectedSize) {
-      throw new Error(`force: file size changed after stat: ${path5}`);
-    }
-    snapshotBytes += buffer.byteLength;
-    if (!Number.isSafeInteger(snapshotBytes) || snapshotBytes > snapshotByteLimit) {
-      throw new Error(
-        `force: snapshot byte limit exceeded after read (${snapshotBytes} > ${snapshotByteLimit})`
-      );
-    }
-    files.set(path5, new Uint8Array(buffer));
-    throwIfWipeAborted(signal);
+  if (maxFileBytes > fileByteLimit) {
+    throw new Error(
+      `force: per-file snapshot limit exceeded at ${maxFilePath} (${maxFileBytes} > ${fileByteLimit})`
+    );
   }
   return {
-    root,
     existed: true,
-    files: new Map([...files].sort(([left], [right]) => compareCodePoints5(left, right))),
-    folders: folders.sort(compareCodePoints5),
-    byteLimit: snapshotByteLimit
+    files,
+    folders: folders.sort(compareCodePoints5)
   };
 }
 function samePaths(left, right) {
   return left.length === right.length && left.every((path5, index) => path5 === right[index]);
 }
 async function restoreDomainTree(vaultTools, snapshot, removed) {
-  const current = await inventoryDomainTree(
+  const current = await inventoryDomainLayout(
     vaultTools,
     snapshot.root,
     void 0,
-    snapshot.byteLimit
+    snapshot.byteLimit,
+    snapshot.fileByteLimit
   );
   let firstTrustError;
-  for (const [path5, bytes] of current.files) {
+  for (const path5 of current.files.keys()) {
     const expected = snapshot.files.get(path5);
-    if (expected === void 0 || !sameBytes(expected, bytes)) {
+    if (expected === void 0) {
+      firstTrustError ??= new Error(`rollback trust failure at ${path5}`);
+      continue;
+    }
+    const buffer = await checkedReadBinary(vaultTools, path5);
+    if (buffer.byteLength > snapshot.fileByteLimit || !sameBytes(expected, new Uint8Array(buffer))) {
       firstTrustError ??= new Error(`rollback trust failure at ${path5}`);
     }
   }
@@ -59259,8 +59278,7 @@ async function restoreDomainTree(vaultTools, snapshot, removed) {
     if (!await vaultTools.exists(folder)) await vaultTools.mkdir(folder);
   }
   for (const [path5, bytes] of snapshot.files) {
-    const currentBytes = current.files.get(path5);
-    if (currentBytes !== void 0) continue;
+    if (current.files.has(path5)) continue;
     if (!removed.has(path5) && current.existed) {
       firstTrustError ??= new Error(`rollback trust failure at missing unremoved file ${path5}`);
       continue;
@@ -59271,21 +59289,28 @@ async function restoreDomainTree(vaultTools, snapshot, removed) {
       firstTrustError ??= error instanceof Error ? error : new Error(String(error));
     }
   }
-  const restored = await inventoryDomainTree(
+  if (firstTrustError) throw firstTrustError;
+  await verifyDomainTree(vaultTools, snapshot);
+}
+async function verifyDomainTree(vaultTools, snapshot) {
+  const restored = await inventoryDomainLayout(
     vaultTools,
     snapshot.root,
     void 0,
-    snapshot.byteLimit
+    snapshot.byteLimit,
+    snapshot.fileByteLimit
   );
-  if (firstTrustError) throw firstTrustError;
-  if (!samePaths(restored.folders, snapshot.folders) || restored.files.size !== snapshot.files.size || [...snapshot.files].some(([path5, bytes]) => {
-    const restoredBytes = restored.files.get(path5);
-    return restoredBytes === void 0 || !sameBytes(restoredBytes, bytes);
-  })) {
+  if (!restored.existed || !samePaths(restored.folders, snapshot.folders) || !samePaths([...restored.files.keys()], [...snapshot.files.keys()])) {
     throw new Error("rollback verification failed: domain tree differs from snapshot");
   }
+  for (const [path5, expected] of snapshot.files) {
+    const buffer = await checkedReadBinary(vaultTools, path5);
+    if (buffer.byteLength > snapshot.fileByteLimit || !sameBytes(expected, new Uint8Array(buffer))) {
+      throw new Error(`rollback verification failed: bytes differ at ${path5}`);
+    }
+  }
 }
-async function rollbackWipeTransaction(vaultTools, root, transaction, quarantinedRoot, trash, rootRenameAttempted, snapshot, removed, tombstones) {
+async function rollbackWipeTransaction(vaultTools, root, transaction, quarantinedRoot, rootRenameAttempted, snapshot, removed) {
   const rootExists = await vaultTools.exists(root);
   const quarantinedExists = await vaultTools.exists(quarantinedRoot);
   if (!rootRenameAttempted || rootExists && !quarantinedExists) {
@@ -59303,17 +59328,6 @@ async function rollbackWipeTransaction(vaultTools, root, transaction, quarantine
     throw new Error(`rollback trust failure: quarantined domain missing at ${quarantinedRoot}`);
   }
   if (snapshot) {
-    for (const [source, tombstone] of tombstones) {
-      if (!await vaultTools.exists(tombstone)) continue;
-      if (await vaultTools.exists(source)) {
-        throw new Error(`rollback trust failure: source and tombstone both exist for ${source}`);
-      }
-      await vaultTools.rename(tombstone, source);
-      if (!await vaultTools.exists(source) || await vaultTools.exists(tombstone)) {
-        throw new Error(`rollback verification failed restoring tombstone ${source}`);
-      }
-      removed.delete(source);
-    }
     await restoreDomainTree(vaultTools, snapshot, removed);
   }
   if (await vaultTools.exists(root)) {
@@ -59324,12 +59338,11 @@ async function rollbackWipeTransaction(vaultTools, root, transaction, quarantine
   if (!await vaultTools.exists(quarantinedRoot)) {
     throw new Error(`rollback trust failure: quarantined domain missing at ${quarantinedRoot}`);
   }
-  const trashExists = await vaultTools.exists(trash);
   await requireDirectEntries(
     vaultTools,
     transaction,
     [],
-    trashExists ? [quarantinedRoot, trash] : [quarantinedRoot],
+    [quarantinedRoot],
     void 0,
     "rollback transaction"
   );
@@ -59340,9 +59353,6 @@ async function rollbackWipeTransaction(vaultTools, root, transaction, quarantine
     throw new Error(
       `rollback verification failed after quarantine rename: root=${rootRestored} quarantineAbsent=${quarantineRemoved}`
     );
-  }
-  if (trashExists) {
-    await removeKnownEmptyDirectory(vaultTools, trash, void 0, "rollback trash");
   }
   await removeKnownEmptyDirectory(vaultTools, transaction, void 0, "rollback transaction");
 }

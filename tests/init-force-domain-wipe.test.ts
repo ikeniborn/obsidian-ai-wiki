@@ -14,11 +14,17 @@ export async function resolve(specifier, context, nextResolve) {
 register(`data:text/javascript,${encodeURIComponent(pathBrowserifyLoader)}`);
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 
-const { runInit, wipeDomainFolder } = await import("../src/phases/init");
+const {
+  FORCE_WIPE_FILE_BYTE_LIMIT,
+  FORCE_WIPE_PEAK_BYTE_LIMIT,
+  FORCE_WIPE_SNAPSHOT_BYTE_LIMIT,
+  runInit,
+  wipeDomainFolder,
+} = await import("../src/phases/init");
 const { VaultTools } = await import("../src/vault-tools");
 
 type RmdirMode = "normal" | "throw-after-delete" | "throw-after-root-delete" | "false-success";
-type RenameMode = "normal" | "copy-source" | "clobber";
+type RenameMode = "normal" | "copy-source";
 type AdapterStat = { type: "file" | "folder"; ctime: number; mtime: number; size: number };
 
 class DirectoryAdapter implements VaultAdapter {
@@ -39,8 +45,6 @@ class DirectoryAdapter implements VaultAdapter {
   statOverride?: (path: string, stat: AdapterStat | null) => AdapterStat | null;
   renameMode: RenameMode = "normal";
   rmdirMode: RmdirMode = "normal";
-  beforeRename?: (from: string, to: string) => void;
-  afterMkdir?: (path: string) => void;
   afterReadBinary?: (path: string) => void;
   afterRemove?: (path: string) => void;
   beforeRmdir?: (path: string) => void;
@@ -164,7 +168,6 @@ class DirectoryAdapter implements VaultAdapter {
   async mkdir(path: string): Promise<void> {
     this.mkdirs.push(path);
     this.addFolder(path);
-    this.afterMkdir?.(path);
   }
 
   async remove(path: string): Promise<void> {
@@ -211,22 +214,10 @@ class DirectoryAdapter implements VaultAdapter {
 
   async rename(from: string, to: string): Promise<void> {
     this.renames.push([from, to]);
-    this.beforeRename?.(from, to);
     const failure = this.failRename?.(from, to);
     if (failure) throw failure;
-    if (await this.exists(to) && this.renameMode !== "clobber") throw new Error(`EEXIST: ${to}`);
+    if (await this.exists(to)) throw new Error(`EEXIST: ${to}`);
     if (!await this.exists(from)) throw new Error(`ENOENT: ${from}`);
-    if (this.renameMode === "clobber") {
-      for (const path of [...this.files.keys()]) {
-        if (path === to || path.startsWith(`${to}/`)) this.files.delete(path);
-      }
-      for (const path of [...this.binaryFiles.keys()]) {
-        if (path === to || path.startsWith(`${to}/`)) this.binaryFiles.delete(path);
-      }
-      for (const path of [...this.folders]) {
-        if (path === to || path.startsWith(`${to}/`)) this.folders.delete(path);
-      }
-    }
     const move = (path: string): string => path === from
       ? to
       : path.startsWith(`${from}/`)
@@ -315,6 +306,15 @@ function otherSnapshot(adapter: DirectoryAdapter) {
   };
 }
 
+test("force wipe defines a 128 MiB snapshot plus one 32 MiB comparison buffer peak", () => {
+  assert.equal(FORCE_WIPE_SNAPSHOT_BYTE_LIMIT, 128 * 1024 * 1024);
+  assert.equal(FORCE_WIPE_FILE_BYTE_LIMIT, 32 * 1024 * 1024);
+  assert.equal(
+    FORCE_WIPE_PEAK_BYTE_LIMIT,
+    FORCE_WIPE_SNAPSHOT_BYTE_LIMIT + FORCE_WIPE_FILE_BYTE_LIMIT,
+  );
+});
+
 test("force wipe removes the complete target tree and returns every removed file", async () => {
   const adapter = seededAdapter();
   const unrelatedBefore = otherSnapshot(adapter);
@@ -335,13 +335,12 @@ test("force wipe removes the complete target tree and returns every removed file
   assert.equal(adapter.renames[0]?.[0], "!Wiki/demo");
   assert.match(adapter.renames[0]?.[1] ?? "", /^!Wiki\/\.ai-wiki-reinit-txn-[^/]+\/domain$/);
   const transaction = (adapter.renames[0]?.[1] ?? "").slice(0, -"/domain".length);
-  assert.equal(adapter.renames.slice(1).length, removed.length);
+  assert.equal(adapter.renames.length, 1);
   assert.equal(
-    adapter.renames.slice(1).every(([from, to]) =>
-      from.startsWith(`${transaction}/domain/`) && to.startsWith(`${transaction}/trash/`)),
+    adapter.removes.every((path) => path.startsWith(`${transaction}/domain/`)),
     true,
   );
-  assert.equal(adapter.removes.every((path) => path.startsWith(`${transaction}/trash/`)), true);
+  assert.equal(adapter.removes.some((path) => path.includes("/trash/")), false);
   assert.equal(adapter.rmdirRecursive.every((recursive) => recursive === false), true);
   assert.equal(adapter.rmdirs.at(-1), transaction);
   assert.equal(await adapter.exists(transaction), false);
@@ -411,6 +410,28 @@ test("force wipe preflights stat sizes before any binary read or file destructio
   assert.deepEqual(targetSnapshot(adapter), before);
 });
 
+test("force wipe rejects a file above the per-file cap before any binary read or deletion", async () => {
+  const adapter = seededAdapter();
+  const before = targetSnapshot(adapter);
+  adapter.statOverride = (path, stat) => path.endsWith("/metadata.jsonl") && stat
+    ? { ...stat, size: 17 }
+    : stat;
+
+  await assert.rejects(
+    wipeDomainFolder(
+      new VaultTools(adapter, "/vault"),
+      "demo",
+      undefined,
+      { snapshotByteLimit: 100, fileByteLimit: 16 },
+    ),
+    /file.*limit|per-file.*limit/i,
+  );
+
+  assert.deepEqual(adapter.binaryReads, []);
+  assert.deepEqual(adapter.removes, []);
+  assert.deepEqual(targetSnapshot(adapter), before);
+});
+
 for (const invalidSize of [null, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
   test(`force wipe rejects invalid file stat size ${String(invalidSize)} before binary reads`, async () => {
     const adapter = seededAdapter();
@@ -461,28 +482,6 @@ test("force wipe rejects non-atomic rename behavior before destructive actions",
   assert.deepEqual(adapter.removes, []);
 });
 
-test("force wipe refuses a non-empty transaction destination even with a clobbering adapter", async () => {
-  const adapter = seededAdapter();
-  let transaction = "";
-  adapter.renameMode = "clobber";
-  adapter.afterMkdir = (path) => {
-    if (!transaction && /^!Wiki\/\.ai-wiki-reinit-txn-/.test(path)) {
-      transaction = path;
-      void adapter.write(`${path}/domain/preexisting.md`, "DO NOT CLOBBER");
-    }
-  };
-
-  await assert.rejects(
-    wipeDomainFolder(new VaultTools(adapter, "/vault"), "demo"),
-    /transaction|empty|destination|trust/i,
-  );
-
-  assert.equal(adapter.files.get(`${transaction}/domain/preexisting.md`), "DO NOT CLOBBER");
-  assert.equal(await adapter.exists("!Wiki/demo"), true);
-  assert.equal(adapter.renames.some(([from]) => from === "!Wiki/demo"), false);
-  assert.deepEqual(adapter.removes, []);
-});
-
 test("force wipe skips a colliding transaction parent and preserves it", async () => {
   const adapter = seededAdapter();
   const originalExists = adapter.exists.bind(adapter);
@@ -505,42 +504,24 @@ test("force wipe skips a colliding transaction parent and preserves it", async (
   assert.equal(await adapter.exists(chosenTransaction), false);
 });
 
-test("force wipe detects original quarantined file recreation during tombstone removal", async () => {
+test("force wipe retries mkdir EEXIST and preserves the foreign empty transaction directory", async () => {
   const adapter = seededAdapter();
-  let recreatedPath = "";
-  adapter.afterRemove = (tombstone) => {
-    if (recreatedPath || !tombstone.includes("/trash/")) return;
-    recreatedPath = adapter.renames.find(([, to]) => to === tombstone)?.[0] ?? "";
-    void adapter.write(recreatedPath, "CONCURRENT RECREATION");
+  const originalMkdir = adapter.mkdir.bind(adapter);
+  let foreignPath = "";
+  adapter.mkdir = async (path) => {
+    if (!foreignPath && /^!Wiki\/\.ai-wiki-reinit-txn-/.test(path)) {
+      foreignPath = path;
+      await originalMkdir(path);
+      throw new Error(`EEXIST: ${path}`);
+    }
+    await originalMkdir(path);
   };
 
-  await assert.rejects(
-    wipeDomainFolder(new VaultTools(adapter, "/vault"), "demo"),
-    /not empty|unexpected|trust|rollback/i,
-  );
+  await wipeDomainFolder(new VaultTools(adapter, "/vault"), "demo");
 
-  assert.equal(adapter.files.get(recreatedPath), "CONCURRENT RECREATION");
-  assert.equal(await adapter.exists("!Wiki/demo"), false);
-  assert.equal(adapter.rmdirRecursive.every((recursive) => recursive === false), true);
-});
-
-test("force wipe preserves a new child created before non-recursive folder removal", async () => {
-  const adapter = seededAdapter();
-  let concurrentPath = "";
-  adapter.beforeRmdir = (path) => {
-    if (concurrentPath || !path.includes("/domain/")) return;
-    concurrentPath = `${path}/concurrent.md`;
-    void adapter.write(concurrentPath, "NEW CHILD");
-  };
-
-  await assert.rejects(
-    wipeDomainFolder(new VaultTools(adapter, "/vault"), "demo"),
-    /not empty|unexpected|trust|rollback/i,
-  );
-
-  assert.equal(adapter.files.get(concurrentPath), "NEW CHILD");
-  assert.equal(adapter.rmdirRecursive.every((recursive) => recursive === false), true);
-  assert.equal(await adapter.exists("!Wiki/demo"), false);
+  assert.equal(await adapter.exists(foreignPath), true);
+  assert.equal(adapter.rmdirs.includes(foreignPath), false);
+  assert.notEqual((adapter.renames[0]?.[1] ?? "").slice(0, -"/domain".length), foreignPath);
 });
 
 test("force wipe serializes concurrent runs for the same original root and releases the lock", async () => {
@@ -747,46 +728,6 @@ test("force wipe rolls transaction back before deletion when snapshot byte limit
   assert.equal(adapter.renames.length, 2);
 });
 
-test("force wipe applies the snapshot byte ceiling during rollback inventory", async () => {
-  const adapter = seededAdapter();
-  const rootPrefix = "!Wiki/demo/";
-  const originalBytes = [...adapter.files]
-    .filter(([path]) => path.startsWith(rootPrefix))
-    .reduce((total, [, value]) => total + new TextEncoder().encode(value).byteLength, 0)
-    + [...adapter.binaryFiles]
-      .filter(([path]) => path.startsWith(rootPrefix))
-      .reduce((total, [, value]) => total + value.byteLength, 0);
-  const rollbackReads: string[] = [];
-  let injected = false;
-  adapter.afterRemove = (path) => {
-    if (injected) return;
-    injected = true;
-    const quarantine = adapter.renames[0]?.[1] ?? "";
-    for (const suffix of ["zz-extra-a.bin", "zz-extra-b.bin"]) {
-      const extraPath = `${quarantine}/${suffix}`;
-      adapter.binaryPaths.add(extraPath);
-      adapter.binaryFiles.set(extraPath, new Uint8Array(64).fill(0x5a));
-    }
-    adapter.afterReadBinary = (readPath) => rollbackReads.push(readPath);
-  };
-  adapter.failRemovePath = "!Wiki/demo/log.jsonl";
-
-  await assert.rejects(
-    wipeDomainFolder(
-      new VaultTools(adapter, "/vault"),
-      "demo",
-      undefined,
-      { snapshotByteLimit: originalBytes },
-    ),
-    /rollback|snapshot byte limit/i,
-  );
-
-  assert.equal(rollbackReads.some((path) => path.endsWith("/zz-extra-a.bin")), false);
-  assert.equal(rollbackReads.some((path) => path.endsWith("/zz-extra-b.bin")), false);
-  assert.equal(await adapter.exists("!Wiki/demo"), false);
-  assert.equal(await adapter.exists(adapter.renames[0]?.[1] ?? ""), true);
-});
-
 test("force wipe surfaces rollback failure instead of hiding an untrusted restore", async () => {
   const adapter = seededAdapter();
   adapter.rmdirMode = "throw-after-delete";
@@ -850,6 +791,27 @@ test("force wipe rolls back when cancellation arrives during non-recursive rmdir
   );
 
   assert.deepEqual(targetSnapshot(adapter), before);
+});
+
+test("force wipe preserves and reports an old-root recreation during final transaction rmdir", async () => {
+  const adapter = seededAdapter();
+  let transaction = "";
+  adapter.beforeRmdir = (path) => {
+    if (!transaction) {
+      transaction = (adapter.renames[0]?.[1] ?? "").slice(0, -"/domain".length);
+    }
+    if (path === transaction) {
+      void adapter.write("!Wiki/demo/concurrent.md", "NEW DURING FINAL RMDIR");
+    }
+  };
+
+  await assert.rejects(
+    wipeDomainFolder(new VaultTools(adapter, "/vault"), "demo"),
+    /trust|original root|unexpectedly exists/i,
+  );
+
+  assert.equal(adapter.files.get("!Wiki/demo/concurrent.md"), "NEW DURING FINAL RMDIR");
+  assert.equal(adapter.rmdirRecursive.every((recursive) => recursive === false), true);
 });
 
 for (const unsafe of [
