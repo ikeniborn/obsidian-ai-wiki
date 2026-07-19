@@ -453,6 +453,97 @@ test("format creates no temp preview or source write when a segment response fai
   assertFormatLifecycleIntegrity(events);
 });
 
+test("segmented Format fails the prior validated lifecycle when the next segment preflight is irreducible", async () => {
+  const seenParams: Record<string, unknown>[] = [];
+  const original = [
+    "---",
+    "tags: [preflight-finalizer]",
+    "---",
+    "## Small",
+    "AlphaUniqueToken",
+    "",
+    "```text",
+    "HugeToken " + Array.from({ length: 30_000 }, () => "oversized").join(" "),
+    "```",
+  ].join("\n");
+  const adapter = new MemoryAdapter({ "notes/source.md": original });
+  const { events } = await collectFormatEvents(
+    original,
+    llmWithResponder((params) => {
+      const userText = textFromUserMessage(params);
+      const id = userText.match(/Segment ID:\s*(segment[-\d]+)/)?.[1] ?? "segment-0";
+      const segment = userText.match(/<<<SOURCE_SEGMENT>>>\n([\s\S]*?)\n<<<END_SOURCE_SEGMENT>>>/)?.[1] ?? "";
+      return segmentFrame(id, `- formatted ${id}`, segment);
+    }, seenParams),
+    10_000,
+    adapter,
+  );
+
+  assert.equal(seenParams.length, 1, "second segment must fail before transport");
+  assert.deepEqual(adapter.writes, []);
+  assert.equal(events.some((event) => event.kind === "format_preview"), false);
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  assert.equal(new Set(lifecycle.map((event) => event.id)).size, 1);
+  assert.deepEqual(lifecycle.map((event) => event.phase), [
+    "preparing", "sent", "waiting", "producing", "validating", "failed",
+  ], JSON.stringify(events));
+  assertFormatLifecycleIntegrity(events);
+});
+
+test("segmented Format cancels the prior validated lifecycle before the next segment request", async () => {
+  const controller = new AbortController();
+  const seenParams: Record<string, unknown>[] = [];
+  const original = [
+    "---",
+    "tags: [segment-abort]",
+    "---",
+    "## One",
+    "AlphaUniqueToken",
+    "",
+    "## Two",
+    Array.from({ length: 70 }, (_, index) => `BetaUniqueToken${index} ${"b".repeat(40)}`).join("\n"),
+  ].join("\n");
+  const adapter = new MemoryAdapter({ "notes/source.md": original });
+  const generator = runFormat(
+    ["notes/source.md"],
+    new VaultTools(adapter, "/vault"),
+    llmWithResponder((params) => {
+      const userText = textFromUserMessage(params);
+      const id = userText.match(/Segment ID:\s*(segment[-\d]+)/)?.[1] ?? "segment-0";
+      const segment = userText.match(/<<<SOURCE_SEGMENT>>>\n([\s\S]*?)\n<<<END_SOURCE_SEGMENT>>>/)?.[1] ?? "";
+      return segmentFrame(id, `- formatted ${id}`, segment);
+    }, seenParams),
+    "m",
+    false,
+    [],
+    controller.signal,
+    { inputBudgetTokens: 10_000 },
+  );
+  const events: RunEvent[] = [];
+  while (true) {
+    const next = await generator.next();
+    assert.equal(next.done, false);
+    if (next.done) break;
+    events.push(next.value);
+    if (next.value.kind === "tool_result"
+      && next.value.ok
+      && next.value.preview?.startsWith("segment-0:")) {
+      controller.abort();
+      break;
+    }
+  }
+  for await (const event of generator) events.push(event);
+
+  assert.equal(seenParams.length, 1);
+  assert.deepEqual(adapter.writes, []);
+  assert.equal(events.some((event) => event.kind === "format_preview"), false);
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  assert.deepEqual(lifecycle.map((event) => event.phase), [
+    "preparing", "sent", "waiting", "producing", "validating", "cancelled",
+  ], JSON.stringify(events));
+  assertFormatLifecycleIntegrity(events);
+});
+
 test("Format preview write failure closes the validated request as failed", async () => {
   const original = "# Source\n\nBody";
   const adapter = new MemoryAdapter({ "notes/source.md": original });

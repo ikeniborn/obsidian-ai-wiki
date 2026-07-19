@@ -56875,112 +56875,134 @@ ${schemaContent}` : ""
       const batches = packLintWorkBatches(workItems, domain.name, systemContent, opts.inputBudgetTokens ?? 16384);
       const batchOutputs = [];
       const batchLifecycles = [];
+      const pendingBatchLifecycles = /* @__PURE__ */ new Map();
       let batchApplying = false;
       let batchWriteSucceeded = false;
       let batchWriteFailed = false;
-      for (let i = 0; i < batches.length; i++) {
-        if (signal.aborted) return;
-        const batch = batches[i];
-        yield { kind: "info_text", icon: "\u{1F50D}", summary: `Checking batch ${i + 1}/${batches.length}: ${batch.length} work item(s)` };
-        yield { kind: "tool_use", name: "Analysing wiki", input: { batch: i + 1, workItems: batch.length } };
-        try {
-          const result = yield* runWithLiveEvents((emit) => runLintBatchWithSplit({
-            items: batch,
-            pages,
-            domainName: domain.name,
-            schema: systemContent,
-            allItems: workItems,
-            llm,
-            model,
-            opts,
-            signal,
-            onEvent: emit
-          }));
-          outputTokens += result.outputTokens;
-          batchOutputs.push(result.output);
-          batchLifecycles.push(...result.lifecycles);
-          yield { kind: "tool_result", ok: true, preview: `${result.output.findings.length} findings, ${result.output.patches.length} patches` };
-        } catch (e) {
-          if (signal.aborted || e.name === "AbortError") return;
-          yield { kind: "tool_result", ok: false, preview: e.message };
-          skippedArticles.push(...batch.map((item) => item.id));
-          continue;
+      const closePendingBatchLifecycles = (phase) => {
+        const events = [...pendingBatchLifecycles.values()].map((lifecycle) => lifecycleEvent(lifecycle.id, lifecycle.action, phase));
+        pendingBatchLifecycles.clear();
+        return events;
+      };
+      const trackBatchLifecycle = (event) => {
+        if (event.kind !== "llm_lifecycle") return;
+        if (event.phase === "validating") {
+          pendingBatchLifecycles.set(event.id, { id: event.id, action: event.action });
+        } else if (["completed", "failed", "cancelled", "retrying"].includes(event.phase)) {
+          pendingBatchLifecycles.delete(event.id);
         }
-      }
-      const allBatchFindings = batchOutputs.map((output) => output.findings);
-      mergedFindings = mergeLintFindings([mergedFindings, ...allBatchFindings]);
-      const findingsReport = compactFindingReport(mergedFindings);
-      const allPatches = batchOutputs.flatMap((output) => output.patches);
-      if (allPatches.length === 0) {
-        for (const lifecycle of batchLifecycles) {
-          yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
-        }
-      }
-      yield { kind: "assistant_text", delta: findingsReport };
-      if (allPatches.length === 0) {
-        for (const lifecycle of batchLifecycles) {
-          yield lifecycleEvent(lifecycle.id, lifecycle.action, "completed");
-        }
-      }
-      reportParts.push(`### ${domain.id} lint findings
-${findingsReport}`);
-      const patchPaths = new Set(allPatches.map((patch2) => patch2.path));
-      if (allPatches.length > 0) {
-        const previewContents = /* @__PURE__ */ new Map();
-        for (const patch2 of allPatches) {
-          const current = pages.get(patch2.path);
-          if (current === void 0) continue;
-          const authorities = lintReplaceAuthorities(
-            workItems.filter((item) => item.path === patch2.path),
-            pages
-          );
-          const applied = applyPagePatch(current, patch2, authorities);
-          if (!applied.ok) {
-            yield { kind: "tool_use", name: "Update", input: { path: patch2.path } };
-            yield { kind: "tool_result", ok: false, preview: applied.reason };
+      };
+      try {
+        for (let i = 0; i < batches.length; i++) {
+          if (signal.aborted) return;
+          const batch = batches[i];
+          yield { kind: "info_text", icon: "\u{1F50D}", summary: `Checking batch ${i + 1}/${batches.length}: ${batch.length} work item(s)` };
+          yield { kind: "tool_use", name: "Analysing wiki", input: { batch: i + 1, workItems: batch.length } };
+          try {
+            const result = yield* runWithLiveEvents((emit) => runLintBatchWithSplit({
+              items: batch,
+              pages,
+              domainName: domain.name,
+              schema: systemContent,
+              allItems: workItems,
+              llm,
+              model,
+              opts,
+              signal,
+              onEvent: (event) => {
+                trackBatchLifecycle(event);
+                emit(event);
+              }
+            }));
+            outputTokens += result.outputTokens;
+            batchOutputs.push(result.output);
+            batchLifecycles.push(...result.lifecycles);
+            if (signal.aborted) return;
+            yield { kind: "tool_result", ok: true, preview: `${result.output.findings.length} findings, ${result.output.patches.length} patches` };
+          } catch (e) {
+            if (signal.aborted || e.name === "AbortError") return;
+            yield { kind: "tool_result", ok: false, preview: e.message };
+            skippedArticles.push(...batch.map((item) => item.id));
             continue;
           }
-          previewContents.set(patch2.path, applied.content);
         }
-        const wlFixResult = fixWikiLinks(previewContents, wikiLinkValidationRetries, knownStems);
-        if (wlFixResult.warnings.length > 0) {
-          yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "WikiLink warnings", details: wlFixResult.warnings };
-        }
-        for (const path5 of patchPaths) {
-          const fixed = wlFixResult.fixed.get(path5) ?? previewContents.get(path5);
-          if (fixed === void 0) continue;
-          yield { kind: "tool_use", name: "Update", input: { path: path5 } };
-          try {
-            const originalContent = pages.get(path5) ?? "";
-            const wikiStems = new Set([...pages.keys()].map((p) => p.split("/").pop().replace(/\.md$/, "")));
-            const fixedContent = validateWikiSources(fixed, originalContent, knownStems, titleMap, wikiStems);
-            if (!batchApplying) {
-              for (const lifecycle of batchLifecycles) {
-                yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
-              }
-              batchApplying = true;
-            }
-            await vaultTools.write(path5, fixedContent);
-            writtenPaths.push(path5);
-            pages.set(path5, fixedContent);
-            const record = pageIndexRecordFromMarkdown(wikiVaultPath, path5, fixedContent);
-            annotations.set(record.articleId, record.description);
-            await upsertPageIndex(vaultTools, wikiVaultPath, record);
-            batchWriteSucceeded = true;
-            yield { kind: "tool_result", ok: true };
-          } catch (e) {
-            batchWriteFailed = true;
-            yield { kind: "tool_result", ok: false, preview: e.message };
+        const allBatchFindings = batchOutputs.map((output) => output.findings);
+        mergedFindings = mergeLintFindings([mergedFindings, ...allBatchFindings]);
+        const findingsReport = compactFindingReport(mergedFindings);
+        const allPatches = batchOutputs.flatMap((output) => output.patches);
+        if (allPatches.length === 0) {
+          if (signal.aborted) return;
+          for (const lifecycle of batchLifecycles) {
+            yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
           }
+          if (signal.aborted) return;
         }
-        for (const lifecycle of batchLifecycles) {
-          yield lifecycleEvent(
-            lifecycle.id,
-            lifecycle.action,
-            batchWriteFailed || !batchWriteSucceeded ? "failed" : "completed"
-          );
+        yield { kind: "assistant_text", delta: findingsReport };
+        if (allPatches.length === 0) {
+          if (signal.aborted) return;
+          for (const event of closePendingBatchLifecycles("completed")) yield event;
         }
-        reportParts.push(`#### \u0418\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E: ${allPatches.length} patch(es)`);
+        reportParts.push(`### ${domain.id} lint findings
+${findingsReport}`);
+        const patchPaths = new Set(allPatches.map((patch2) => patch2.path));
+        if (allPatches.length > 0) {
+          const previewContents = /* @__PURE__ */ new Map();
+          for (const patch2 of allPatches) {
+            const current = pages.get(patch2.path);
+            if (current === void 0) continue;
+            const authorities = lintReplaceAuthorities(
+              workItems.filter((item) => item.path === patch2.path),
+              pages
+            );
+            const applied = applyPagePatch(current, patch2, authorities);
+            if (!applied.ok) {
+              yield { kind: "tool_use", name: "Update", input: { path: patch2.path } };
+              yield { kind: "tool_result", ok: false, preview: applied.reason };
+              continue;
+            }
+            previewContents.set(patch2.path, applied.content);
+          }
+          const wlFixResult = fixWikiLinks(previewContents, wikiLinkValidationRetries, knownStems);
+          if (wlFixResult.warnings.length > 0) {
+            yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "WikiLink warnings", details: wlFixResult.warnings };
+          }
+          for (const path5 of patchPaths) {
+            if (signal.aborted) return;
+            const fixed = wlFixResult.fixed.get(path5) ?? previewContents.get(path5);
+            if (fixed === void 0) continue;
+            yield { kind: "tool_use", name: "Update", input: { path: path5 } };
+            try {
+              const originalContent = pages.get(path5) ?? "";
+              const wikiStems = new Set([...pages.keys()].map((p) => p.split("/").pop().replace(/\.md$/, "")));
+              const fixedContent = validateWikiSources(fixed, originalContent, knownStems, titleMap, wikiStems);
+              if (signal.aborted) return;
+              if (!batchApplying) {
+                for (const lifecycle of batchLifecycles) {
+                  yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
+                }
+                batchApplying = true;
+              }
+              if (signal.aborted) return;
+              await vaultTools.write(path5, fixedContent);
+              writtenPaths.push(path5);
+              pages.set(path5, fixedContent);
+              const record = pageIndexRecordFromMarkdown(wikiVaultPath, path5, fixedContent);
+              annotations.set(record.articleId, record.description);
+              await upsertPageIndex(vaultTools, wikiVaultPath, record);
+              batchWriteSucceeded = true;
+              yield { kind: "tool_result", ok: true };
+            } catch (e) {
+              batchWriteFailed = true;
+              yield { kind: "tool_result", ok: false, preview: e.message };
+            }
+          }
+          const terminal = batchWriteFailed || !batchWriteSucceeded ? "failed" : "completed";
+          for (const event of closePendingBatchLifecycles(terminal)) yield event;
+          reportParts.push(`#### \u0418\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E: ${allPatches.length} patch(es)`);
+        }
+      } finally {
+        const terminal = signal.aborted ? "cancelled" : "failed";
+        for (const event of closePendingBatchLifecycles(terminal)) yield event;
       }
       for (const { path: delPath, redirect_to } of batchOutputs.flatMap((output) => output.deletes)) {
         const deletedName = pageId(delPath);
@@ -59900,6 +59922,7 @@ The previous segment attempt failed: ${retryHint}. Return the same segment again
   async function* formatSegmentRecursive(segment, maxMarkdownChars, sourceChunks) {
     let params;
     try {
+      signal.throwIfAborted();
       params = buildSegmentParams(segment);
     } catch (e) {
       if (!(e instanceof PromptBudgetExceededError)) throw e;
@@ -60011,6 +60034,10 @@ The previous segment attempt failed: ${retryHint}. Return the same segment again
       for (const segment of segments) outputs.push(yield* formatSegmentRecursive(segment, initialMaxMarkdownChars, segments.length));
       return reassembleFormatSegments(original, segments, outputs);
     } catch (e) {
+      const terminal = closeActiveFormatLifecycle(
+        signal.aborted || e.name === "AbortError" ? "cancelled" : "failed"
+      );
+      if (terminal) yield terminal;
       const msg = e.message || "Format: segmented formatting failed";
       yield { kind: "tool_result", ok: false, preview: msg };
       yield { kind: "error", message: msg };

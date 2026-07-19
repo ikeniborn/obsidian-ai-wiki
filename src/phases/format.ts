@@ -580,6 +580,7 @@ export async function* runFormat(
   ): AsyncGenerator<RunEvent, import("./zod-schemas").FormatSegmentModelOutput> {
     let params: Record<string, unknown>;
     try {
+      signal.throwIfAborted();
       params = buildSegmentParams(segment);
     } catch (e) {
       if (!(e instanceof PromptBudgetExceededError)) throw e;
@@ -701,6 +702,10 @@ export async function* runFormat(
       for (const segment of segments) outputs.push(yield* formatSegmentRecursive(segment, initialMaxMarkdownChars, segments.length));
       return reassembleFormatSegments(original, segments, outputs);
     } catch (e) {
+      const terminal = closeActiveFormatLifecycle(
+        signal.aborted || (e as Error).name === "AbortError" ? "cancelled" : "failed",
+      );
+      if (terminal) yield terminal;
       const msg = (e as Error).message || "Format: segmented formatting failed";
       yield { kind: "tool_result", ok: false, preview: msg };
       yield { kind: "error", message: msg };

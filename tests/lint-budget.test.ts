@@ -679,6 +679,120 @@ test("Lint batch/config lifecycle completes only after a successful patch write"
   }]);
 });
 
+test("Lint cancels a validated single batch before applying and performs no write", async () => {
+  const { runLint } = await import("../src/phases/lint");
+  const { VaultTools } = await import("../src/vault-tools");
+  const path = "!Wiki/d/concept/wiki_d_alpha.md";
+  const content = "---\ntype: concept\ndescription: Alpha.\nresource: [source]\n---\n# Alpha\n\n## Facts\nOld fact.\n";
+  const adapter = new MemoryAdapter(new Map([[path, content]]));
+  const controller = new AbortController();
+  const generator = runLint(
+    ["d"],
+    new VaultTools(adapter, "/vault"),
+    lintOperationLlm(path, content),
+    "m",
+    [{ id: "d", name: "Demo", wiki_folder: "d", entity_types: [], language_notes: "" } as DomainEntry],
+    "/vault",
+    controller.signal,
+    0,
+    { inputBudgetTokens: 24_000, maxTokens: 2_000, structuredRetries: 0 },
+  );
+  const events: RunEvent[] = [];
+  while (true) {
+    const next = await generator.next();
+    assert.equal(next.done, false);
+    if (next.done) break;
+    events.push(next.value);
+    if (next.value.kind === "llm_lifecycle"
+      && next.value.diagnostics?.callSite === "lint.batch"
+      && next.value.phase === "validating") {
+      controller.abort();
+      break;
+    }
+  }
+  for await (const event of generator) events.push(event);
+
+  assert.deepEqual(adapter.writes, []);
+  assert.deepEqual(lifecycleAttempts(events, "lint.batch"), [{
+    action: "check_wiki_quality",
+    phases: ["preparing", "sent", "waiting", "producing", "validating", "cancelled"],
+  }], JSON.stringify(events));
+});
+
+test("Lint cancels prior validated batches when abort prevents the next request", async () => {
+  const { runLint } = await import("../src/phases/lint");
+  const { VaultTools } = await import("../src/vault-tools");
+  const files = new Map<string, string>();
+  for (let index = 0; index < 24; index += 1) {
+    files.set(
+      `!Wiki/d/concept/wiki_d_${index}.md`,
+      `---\ntype: concept\ndescription: Page ${index}.\nresource: [source]\n---\n# Page ${index}\n\n## Facts\n${`Fact ${index}. `.repeat(300)}\n`,
+    );
+  }
+  const adapter = new MemoryAdapter(files);
+  const controller = new AbortController();
+  let calls = 0;
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      calls += 1;
+      const user = ((params as { messages?: Array<{ content?: unknown }> }).messages ?? [])
+        .find((message) => typeof message.content === "string"
+          && message.content.startsWith("Submitted lint work items:"));
+      assert.equal(typeof user?.content, "string");
+      const match = (user?.content as string)
+        .match(/Submitted lint work items:\n([\s\S]*?)\n\nOptional related sections:/);
+      assert.ok(match);
+      const items = JSON.parse(match[1]) as Array<{ id: string }>;
+      return jsonLlm(JSON.stringify({
+        coveredWorkIds: items.map((item) => item.id),
+        findings: [],
+        patches: [],
+        deletes: [],
+      })).chat.completions.create(params as never);
+    } } },
+  } as unknown as LlmClient;
+  const generator = runLint(
+    ["d"],
+    new VaultTools(adapter, "/vault"),
+    llm,
+    "m",
+    [{ id: "d", name: "Demo", wiki_folder: "d", entity_types: [], language_notes: "" } as DomainEntry],
+    "/vault",
+    controller.signal,
+    0,
+    { inputBudgetTokens: 24_000, maxTokens: 2_000, structuredRetries: 0 },
+  );
+  const events: RunEvent[] = [];
+  let callsAtAbort = 0;
+  while (true) {
+    const next = await generator.next();
+    if (next.done) assert.fail(`generator completed before validation: ${JSON.stringify(events)}`);
+    events.push(next.value);
+    if (next.value.kind === "llm_lifecycle"
+      && next.value.diagnostics?.callSite === "lint.batch"
+      && next.value.phase === "validating") {
+      callsAtAbort = calls;
+      controller.abort();
+      break;
+    }
+  }
+  for await (const event of generator) events.push(event);
+
+  assert.ok(callsAtAbort > 0);
+  assert.equal(calls, callsAtAbort, "abort must prevent the next batch request");
+  assert.deepEqual(adapter.writes, []);
+  const attempts = lifecycleAttempts(events, "lint.batch");
+  const validated = attempts.filter((attempt) => attempt.phases.includes("validating"));
+  assert.ok(validated.length > 0, JSON.stringify(events));
+  assert.ok(validated.every((attempt) =>
+    attempt.action === "check_wiki_quality"
+    && JSON.stringify(attempt.phases) === JSON.stringify([
+      "preparing", "sent", "waiting", "producing", "validating", "cancelled",
+    ])), JSON.stringify(events));
+  assert.ok(attempts.every((attempt) => attempt.phases.filter((phase) =>
+    ["completed", "failed", "cancelled", "retrying"].includes(phase)).length === 1), JSON.stringify(events));
+});
+
 test("Lint batch forwards failed lifecycle when model request rejects", async () => {
   const { runLint } = await import("../src/phases/lint");
   const { VaultTools } = await import("../src/vault-tools");
