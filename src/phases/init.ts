@@ -420,12 +420,7 @@ export async function* runInit(
       yield { kind: "error", message: `force: wipe failed — ${(error as Error).message}` };
       return;
     }
-    yield {
-      kind: "wipe_complete",
-      domainId,
-      ...wipeManifest,
-      atMs: Date.now(),
-    };
+    for (const event of wipeManifestEvents(domainId, wipeManifest)) yield event;
     yield { kind: "tool_result", ok: true };
     yield {
       kind: "assistant_text",
@@ -915,9 +910,59 @@ export async function wipeDomainFolder(
 }
 
 export interface WipeDomainManifest {
+  transactionId: string;
   removedPaths: string[];
   removedFileHashes: Record<string, string>;
   manifestHash: string;
+}
+
+const WIPE_MANIFEST_CHUNK_PATHS = 100;
+const WIPE_MANIFEST_MAX_EVENT_BYTES = 1_048_576;
+
+export function wipeManifestEvents(
+  domainId: string,
+  manifest: WipeDomainManifest,
+  atMs = Date.now(),
+): Array<Extract<RunEvent, { kind: "wipe_manifest_chunk" | "wipe_complete" }>> {
+  const entries = manifest.removedPaths.map((path) => ({
+    path,
+    ...(manifest.removedFileHashes[path] === undefined
+      ? {}
+      : { hash: manifest.removedFileHashes[path] }),
+  }));
+  const groups: typeof entries[] = [];
+  for (let index = 0; index < entries.length; index += WIPE_MANIFEST_CHUNK_PATHS) {
+    groups.push(entries.slice(index, index + WIPE_MANIFEST_CHUNK_PATHS));
+  }
+  const chunks = groups.map((chunkEntries, chunkIndex) => ({
+    kind: "wipe_manifest_chunk" as const,
+    domainId,
+    transactionId: manifest.transactionId,
+    chunkIndex,
+    chunkCount: groups.length,
+    entries: chunkEntries,
+    chunkHash: contentHash(JSON.stringify(chunkEntries)),
+  }));
+  for (const chunk of chunks) {
+    if (
+      chunk.entries.length > WIPE_MANIFEST_CHUNK_PATHS
+      || Buffer.byteLength(JSON.stringify(chunk), "utf8") > WIPE_MANIFEST_MAX_EVENT_BYTES
+    ) {
+      throw new Error("force: wipe manifest chunk exceeds telemetry line limit");
+    }
+  }
+  return [
+    ...chunks,
+    {
+      kind: "wipe_complete",
+      domainId,
+      transactionId: manifest.transactionId,
+      chunkCount: chunks.length,
+      totalCount: entries.length,
+      manifestHash: manifest.manifestHash,
+      atMs,
+    },
+  ];
 }
 
 export async function wipeDomainFolderWithManifest(
@@ -967,12 +1012,10 @@ async function wipeDomainFolderLocked(
     const removedPaths: string[] = [];
     const removedFileHashes: Record<string, string> = {};
     return {
+      transactionId: `wipe-empty-${Date.now().toString(36)}`,
       removedPaths,
       removedFileHashes,
-      manifestHash: contentHash(JSON.stringify({
-        removedPaths,
-        removedFileHashes,
-      })),
+      manifestHash: contentHash(JSON.stringify([])),
     };
   }
 
@@ -1104,13 +1147,15 @@ async function wipeDomainFolderLocked(
         return `${originalPath.slice(root.length + 1)}/`;
       }),
   ].sort(compareCodePoints);
+  const manifestEntries = removedPaths.map((path) => ({
+    path,
+    ...(removedFileHashes[path] === undefined ? {} : { hash: removedFileHashes[path] }),
+  }));
   return {
+    transactionId: transaction.slice(transaction.lastIndexOf("/") + 1),
     removedPaths,
     removedFileHashes,
-    manifestHash: contentHash(JSON.stringify({
-      removedPaths,
-      removedFileHashes,
-    })),
+    manifestHash: contentHash(JSON.stringify(manifestEntries)),
   };
 }
 

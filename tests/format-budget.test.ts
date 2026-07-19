@@ -246,6 +246,16 @@ test("Format generic pre-chunk incompatibility falls back once with AbortSignal"
   assert.ok(seenSignals.every((seenSignal) => seenSignal === signal));
   assert.equal(adapter.writes.length, 1);
   assertFormatLifecycleIntegrity(events);
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  for (const [index, id] of [...new Set(lifecycle.map((event) => event.id))].entries()) {
+    const diagnostics = lifecycle
+      .filter((event) => event.id === id)
+      .map((event) => event.diagnostics);
+    assert.ok(diagnostics.every((value) => value?.callSite === "format.output"));
+    assert.ok(diagnostics.every((value) =>
+      value?.transport === (index % 2 === 0 ? "stream" : "non-stream")));
+    assert.ok(diagnostics.every((value) => value?.attempt === index));
+  }
 });
 
 test("Format HTTP 502 failure is sent exactly once", async () => {

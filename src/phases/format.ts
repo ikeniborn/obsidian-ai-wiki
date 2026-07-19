@@ -352,6 +352,7 @@ export async function* runFormat(
   let outputTokens = 0;
   let lastInputTokens: number | undefined;
   let activeFormatLifecycle: ReturnType<typeof createLlmLifecycle> | null = null;
+  let formatRequestAttempt = 0;
   interface FormatBudgetContext {
     callSite: "format.output" | "format.segment";
     contextUnits: number;
@@ -399,7 +400,11 @@ export async function* runFormat(
       yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "completed");
     }
     activeFormatLifecycle = createLlmLifecycle("format_note");
-    yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing");
+    yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing", Date.now(), {
+      callSite: budgetContext.callSite,
+      transport: "stream",
+      attempt: formatRequestAttempt++,
+    });
     let acc = "";
     lastFinishReason = null;
     lastInputTokens = undefined;
@@ -467,7 +472,11 @@ export async function* runFormat(
       }
       yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
       activeFormatLifecycle = createLlmLifecycle("format_note");
-      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing");
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing", Date.now(), {
+        callSite: budgetContext.callSite,
+        transport: "non-stream",
+        attempt: formatRequestAttempt++,
+      });
       const fallbackStartMs = Date.now();
       let resp: OpenAI.Chat.ChatCompletion;
       try {

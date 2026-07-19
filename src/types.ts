@@ -164,10 +164,20 @@ export type RunEvent =
   | { kind: "system"; message: string; sessionId?: string }
   | { kind: "run_config"; llmIdleTimeoutMs: number }
   | {
+      kind: "wipe_manifest_chunk";
+      domainId: string;
+      transactionId: string;
+      chunkIndex: number;
+      chunkCount: number;
+      entries: Array<{ path: string; hash?: string }>;
+      chunkHash: string;
+    }
+  | {
       kind: "wipe_complete";
       domainId: string;
-      removedPaths: string[];
-      removedFileHashes: Record<string, string>;
+      transactionId: string;
+      chunkCount: number;
+      totalCount: number;
       manifestHash: string;
       atMs: number;
     }

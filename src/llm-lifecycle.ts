@@ -88,6 +88,7 @@ const TERMINAL_PHASES = new Set<LlmLifecyclePhase>([
   "failed",
   "cancelled",
 ]);
+const lifecycleDiagnostics = new Map<string, LlmLifecycleDiagnostics>();
 
 export function emptyLlmLifecycleState(): LlmLifecycleState {
   return { calls: {} };
@@ -104,14 +105,18 @@ export function lifecycleEvent(
   atMs: number = Date.now(),
   diagnostics?: LlmLifecycleDiagnostics,
 ): LlmLifecycleEvent {
-  return {
+  if (diagnostics) lifecycleDiagnostics.set(id, diagnostics);
+  const retainedDiagnostics = diagnostics ?? lifecycleDiagnostics.get(id);
+  const event: LlmLifecycleEvent = {
     kind: "llm_lifecycle",
     id,
     action,
     phase,
     atMs,
-    ...(diagnostics ? { diagnostics } : {}),
+    ...(retainedDiagnostics ? { diagnostics: retainedDiagnostics } : {}),
   };
+  if (TERMINAL_PHASES.has(phase)) lifecycleDiagnostics.delete(id);
+  return event;
 }
 
 export function reduceLlmLifecycle(

@@ -20,8 +20,37 @@ const {
   FORCE_WIPE_SNAPSHOT_BYTE_LIMIT,
   runInit,
   wipeDomainFolder,
+  wipeManifestEvents,
 } = await import("../src/phases/init");
 const { VaultTools } = await import("../src/vault-tools");
+const { contentHash } = await import("../src/content-hash");
+
+test("wipe manifest producer chunks thousands of paths into bounded log events", () => {
+  const removedPaths = Array.from(
+    { length: 5_000 },
+    (_, index) => `nested/path-${index.toString().padStart(5, "0")}.md`,
+  );
+  const removedFileHashes = Object.fromEntries(
+    removedPaths.map((path) => [path, "fnv1a:00000000"]),
+  );
+  const entries = removedPaths.map((path) => ({ path, hash: removedFileHashes[path] }));
+  const events = wipeManifestEvents("domain", {
+    transactionId: "transaction",
+    removedPaths,
+    removedFileHashes,
+    manifestHash: contentHash(JSON.stringify(entries)),
+  }, 123);
+  const chunks = events.filter((event) => event.kind === "wipe_manifest_chunk");
+  const complete = events.at(-1);
+
+  assert.equal(chunks.length, 50);
+  assert.ok(chunks.every((event) =>
+    event.entries.length <= 100
+    && Buffer.byteLength(JSON.stringify(event), "utf8") <= 1_048_576));
+  assert.ok(complete?.kind === "wipe_complete");
+  assert.equal(complete.totalCount, 5_000);
+  assert.equal(Object.hasOwn(complete, "removedPaths"), false);
+});
 
 type RmdirMode = "normal" | "throw-after-delete" | "throw-after-root-delete" | "false-success";
 type RenameMode = "normal" | "copy-source";
@@ -1006,10 +1035,24 @@ test("force init emits one wipe, proves absence, then creates a fresh domain bef
     "demo",
   );
   assert.equal(
-    wipeComplete?.kind === "wipe_complete"
-      ? wipeComplete.removedPaths.includes("concept/old.md")
-      : false,
+    events.some((event) =>
+      event.kind === "wipe_manifest_chunk"
+      && event.entries.some((entry) => entry.path === "concept/old.md")),
     true,
+  );
+  const wipeChunks = events.filter((event) => event.kind === "wipe_manifest_chunk");
+  assert.ok(wipeChunks.every((event) =>
+    event.entries.length <= 100
+    && Buffer.byteLength(JSON.stringify(event), "utf8") <= 1_048_576));
+  assert.equal(
+    wipeComplete?.kind === "wipe_complete" ? wipeComplete.totalCount : undefined,
+    wipeChunks.flatMap((event) => event.entries).length,
+  );
+  assert.equal(
+    wipeComplete?.kind === "wipe_complete"
+      ? Object.hasOwn(wipeComplete, "removedPaths")
+      : false,
+    false,
   );
   assert.match(
     wipeComplete?.kind === "wipe_complete" ? wipeComplete.manifestHash : "",

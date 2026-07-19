@@ -42584,6 +42584,7 @@ var TERMINAL_PHASES = /* @__PURE__ */ new Set([
   "failed",
   "cancelled"
 ]);
+var lifecycleDiagnostics = /* @__PURE__ */ new Map();
 function emptyLlmLifecycleState() {
   return { calls: {} };
 }
@@ -42591,14 +42592,18 @@ function isTerminalLlmLifecyclePhase(phase) {
   return TERMINAL_PHASES.has(phase);
 }
 function lifecycleEvent(id, action, phase, atMs = Date.now(), diagnostics) {
-  return {
+  if (diagnostics) lifecycleDiagnostics.set(id, diagnostics);
+  const retainedDiagnostics = diagnostics ?? lifecycleDiagnostics.get(id);
+  const event = {
     kind: "llm_lifecycle",
     id,
     action,
     phase,
     atMs,
-    ...diagnostics ? { diagnostics } : {}
+    ...retainedDiagnostics ? { diagnostics: retainedDiagnostics } : {}
   };
+  if (TERMINAL_PHASES.has(phase)) lifecycleDiagnostics.delete(id);
+  return event;
 }
 function reduceLlmLifecycle(state, event) {
   const current = state.calls[event.id];
@@ -51112,25 +51117,25 @@ function structuredLifecycle(args) {
   let sequence = 0;
   let active = false;
   let currentId = descriptor.id;
-  const emit = (phase, attempt) => {
+  let currentDiagnostics;
+  let lastAttempt = -1;
+  const emit = (phase) => {
     args.onEvent(lifecycleEvent(
       currentId,
       descriptor.action,
       phase,
       Date.now(),
-      {
-        callSite: args.callSite,
-        transport: args.transport ?? "stream",
-        ...attempt === void 0 ? {} : { attempt }
-      }
+      currentDiagnostics
     ));
   };
   return {
-    begin(attempt) {
+    begin(attempt, transport) {
       currentId = sequence === 0 ? descriptor.id : `${descriptor.id}:retry-${sequence}`;
       sequence += 1;
+      lastAttempt = Math.max(attempt, lastAttempt + 1);
+      currentDiagnostics = { callSite: args.callSite, transport, attempt: lastAttempt };
       active = true;
-      emit("preparing", attempt);
+      emit("preparing");
     },
     phase(phase) {
       if (active) emit(phase);
@@ -51265,7 +51270,7 @@ async function streamOnce(llm, model, messages, opts, signal, onEvent, lifecycle
     if (isJsonModeError(e)) throw e;
     if (!shouldFallbackStreamToNonStream(e, signal)) throw e;
     lifecycle.close("retrying");
-    lifecycle.begin(attempt);
+    lifecycle.begin(attempt, "non-stream");
     return nonStreamOnce(
       llm,
       model,
@@ -51408,7 +51413,7 @@ function classifyError(profile, err) {
 async function callWithFormatFallback(args, messages, mode, attempt, lifecycle) {
   let currentMode = mode;
   while (true) {
-    lifecycle.begin(attempt);
+    lifecycle.begin(attempt, args.transport ?? "stream");
     const callOpts = args.profile.kind === "json-zod" ? optsForMode(args.opts, currentMode, args.callSite, args.profile.schema) : { ...args.opts, jsonMode: false, jsonSchema: void 0 };
     try {
       return {
@@ -55530,6 +55535,7 @@ async function* answerFromContext(args) {
   let eligibleChunks;
   let answerLifecycle = createLlmLifecycle("answer_question");
   let executionCount = 0;
+  let requestAttempt = 0;
   yield { kind: "tool_use", name: "Answering", input: {} };
   let attempt;
   try {
@@ -55564,7 +55570,11 @@ async function* answerFromContext(args) {
           answerLifecycle = createLlmLifecycle("answer_question");
         }
         executionCount += 1;
-        emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing"));
+        emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing", Date.now(), {
+          callSite: "query.answer",
+          transport: "stream",
+          attempt: requestAttempt++
+        }));
         const params = paramsForPreparedMessages(model, request.messages, opts, true);
         let streamChunkConsumed = false;
         try {
@@ -55625,7 +55635,11 @@ async function* answerFromContext(args) {
           }));
           emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
           answerLifecycle = createLlmLifecycle("answer_question");
-          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing"));
+          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing", Date.now(), {
+            callSite: "query.answer",
+            transport: "non-stream",
+            attempt: requestAttempt++
+          }));
           let response;
           const fallbackStartMs = Date.now();
           try {
@@ -57665,6 +57679,8 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
     opts.semanticCompression?.operation === "query" ? "answer_question" : "apply_lint_fixes"
   );
   let executionCount = 0;
+  let requestAttempt = 0;
+  const callSite = opts.semanticCompression?.operation === "query" ? "query.answer" : "lint-chat.fix";
   yield { kind: "tool_use", name: "Responding", input: {} };
   let attempt;
   try {
@@ -57700,7 +57716,11 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
           );
         }
         executionCount += 1;
-        emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing"));
+        emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing", Date.now(), {
+          callSite,
+          transport: "stream",
+          attempt: requestAttempt++
+        }));
         const params = paramsForPreparedMessages2(model, request.messages, opts, true);
         let streamChunkConsumed = false;
         try {
@@ -57761,7 +57781,11 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
           chatLifecycle = createLlmLifecycle(
             opts.semanticCompression?.operation === "query" ? "answer_question" : "apply_lint_fixes"
           );
-          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing"));
+          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing", Date.now(), {
+            callSite,
+            transport: "non-stream",
+            attempt: requestAttempt++
+          }));
           let response;
           const fallbackStartMs = Date.now();
           try {
@@ -58593,12 +58617,7 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
       yield { kind: "error", message: `force: wipe failed \u2014 ${error.message}` };
       return;
     }
-    yield {
-      kind: "wipe_complete",
-      domainId,
-      ...wipeManifest,
-      atMs: Date.now()
-    };
+    for (const event of wipeManifestEvents(domainId, wipeManifest)) yield event;
     yield { kind: "tool_result", ok: true };
     yield {
       kind: "assistant_text",
@@ -58998,6 +59017,44 @@ async function* runIncrementalReinit(domainId, changedFiles, vaultTools, llm, mo
     text: `Domain "${domainId}": re-ingested ${doneCount} of ${changedFiles.length} changed source(s).`
   };
 }
+var WIPE_MANIFEST_CHUNK_PATHS = 100;
+var WIPE_MANIFEST_MAX_EVENT_BYTES = 1048576;
+function wipeManifestEvents(domainId, manifest, atMs = Date.now()) {
+  const entries = manifest.removedPaths.map((path5) => ({
+    path: path5,
+    ...manifest.removedFileHashes[path5] === void 0 ? {} : { hash: manifest.removedFileHashes[path5] }
+  }));
+  const groups = [];
+  for (let index = 0; index < entries.length; index += WIPE_MANIFEST_CHUNK_PATHS) {
+    groups.push(entries.slice(index, index + WIPE_MANIFEST_CHUNK_PATHS));
+  }
+  const chunks = groups.map((chunkEntries, chunkIndex) => ({
+    kind: "wipe_manifest_chunk",
+    domainId,
+    transactionId: manifest.transactionId,
+    chunkIndex,
+    chunkCount: groups.length,
+    entries: chunkEntries,
+    chunkHash: contentHash(JSON.stringify(chunkEntries))
+  }));
+  for (const chunk of chunks) {
+    if (chunk.entries.length > WIPE_MANIFEST_CHUNK_PATHS || Buffer.byteLength(JSON.stringify(chunk), "utf8") > WIPE_MANIFEST_MAX_EVENT_BYTES) {
+      throw new Error("force: wipe manifest chunk exceeds telemetry line limit");
+    }
+  }
+  return [
+    ...chunks,
+    {
+      kind: "wipe_complete",
+      domainId,
+      transactionId: manifest.transactionId,
+      chunkCount: chunks.length,
+      totalCount: entries.length,
+      manifestHash: manifest.manifestHash,
+      atMs
+    }
+  ];
+}
 async function wipeDomainFolderWithManifest(vaultTools, wikiFolder, signal, options = {}) {
   const root = forceDomainRoot(wikiFolder);
   requireTransactionalWipeAdapter(vaultTools);
@@ -59027,12 +59084,10 @@ async function wipeDomainFolderLocked(vaultTools, root, signal, snapshotByteLimi
     const removedPaths2 = [];
     const removedFileHashes2 = {};
     return {
+      transactionId: `wipe-empty-${Date.now().toString(36)}`,
       removedPaths: removedPaths2,
       removedFileHashes: removedFileHashes2,
-      manifestHash: contentHash(JSON.stringify({
-        removedPaths: removedPaths2,
-        removedFileHashes: removedFileHashes2
-      }))
+      manifestHash: contentHash(JSON.stringify([]))
     };
   }
   const transaction = await createWipeTransaction(vaultTools, signal);
@@ -59150,13 +59205,15 @@ async function wipeDomainFolderLocked(vaultTools, root, signal, snapshotByteLimi
       return `${originalPath.slice(root.length + 1)}/`;
     })
   ].sort(compareCodePoints5);
+  const manifestEntries = removedPaths.map((path5) => ({
+    path: path5,
+    ...removedFileHashes[path5] === void 0 ? {} : { hash: removedFileHashes[path5] }
+  }));
   return {
+    transactionId: transaction.slice(transaction.lastIndexOf("/") + 1),
     removedPaths,
     removedFileHashes,
-    manifestHash: contentHash(JSON.stringify({
-      removedPaths,
-      removedFileHashes
-    }))
+    manifestHash: contentHash(JSON.stringify(manifestEntries))
   };
 }
 function hashBytes(bytes) {
@@ -59757,7 +59814,7 @@ function visionCallOptions(options, language, reasoningLanguage, effectiveInputB
     }
   };
 }
-async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, reasoningLanguage, options, effectiveInputBudget = options.inputBudgetTokens) {
+async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, reasoningLanguage, options, effectiveInputBudget = options.inputBudgetTokens, attempt = 0) {
   if (signal.aborted) {
     signal.throwIfAborted();
   }
@@ -59769,7 +59826,11 @@ async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, 
   );
   const params = buildChatParams(model, visionMessages(systemPrompt, pages), callOptions);
   const lifecycle = createLlmLifecycle("analyze_attachments");
-  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "preparing"));
+  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "preparing", Date.now(), {
+    callSite: "vision.analysis",
+    transport: "non-stream",
+    attempt
+  }));
   const estimatedInputTokens = estimatePreparedMessages(
     params.messages
   );
@@ -59923,6 +59984,7 @@ async function analyzePdf(buffer, llm, model, signal, language = "auto", reasoni
   );
   const fixedEstimatedTokens = estimatePreparedMessages(fixedMessages);
   const resizedPages = /* @__PURE__ */ new Set();
+  let visionAttempt = 0;
   const recognize = (batch, effectiveInputBudget2) => callVisionLlm(
     llm,
     model,
@@ -59932,7 +59994,8 @@ async function analyzePdf(buffer, llm, model, signal, language = "auto", reasoni
     language,
     reasoningLanguage,
     resolved,
-    effectiveInputBudget2
+    effectiveInputBudget2,
+    visionAttempt++
   );
   const resize = async (page) => {
     if (resizedPages.has(page.pageId)) {
@@ -60577,6 +60640,7 @@ ${tagRegistryBlock}` : ""}`;
   let outputTokens = 0;
   let lastInputTokens;
   let activeFormatLifecycle = null;
+  let formatRequestAttempt = 0;
   const formatBudgetEvent = (requestId, params, context, actualInputTokens, retryReason) => createPromptBudgetEvent({
     requestId,
     callSite: context.callSite,
@@ -60605,7 +60669,11 @@ ${tagRegistryBlock}` : ""}`;
       yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "completed");
     }
     activeFormatLifecycle = createLlmLifecycle("format_note");
-    yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing");
+    yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing", Date.now(), {
+      callSite: budgetContext.callSite,
+      transport: "stream",
+      attempt: formatRequestAttempt++
+    });
     let acc = "";
     lastFinishReason = null;
     lastInputTokens = void 0;
@@ -60676,7 +60744,11 @@ ${tagRegistryBlock}` : ""}`;
       }
       yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
       activeFormatLifecycle = createLlmLifecycle("format_note");
-      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing");
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing", Date.now(), {
+        callSite: budgetContext.callSite,
+        transport: "non-stream",
+        attempt: formatRequestAttempt++
+      });
       const fallbackStartMs = Date.now();
       let resp;
       try {

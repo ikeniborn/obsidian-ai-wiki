@@ -351,6 +351,10 @@ function auditWipe(records: AgentLogRecord[], expectedFolder: string): WipeAudit
     isRecord(record.event) && record.event.kind === "wipe_complete"
       ? [index]
       : []);
+  const chunkIndexes = records.flatMap((record, index) =>
+    isRecord(record.event) && record.event.kind === "wipe_manifest_chunk"
+      ? [index]
+      : []);
   if (wipeIndexes.length !== 1 || completeIndexes.length !== 1) {
     return {
       count: wipeIndexes.length,
@@ -377,15 +381,6 @@ function auditWipe(records: AgentLogRecord[], expectedFolder: string): WipeAudit
     && typeof records[creationIndex].event.entry.id === "string"
       ? records[creationIndex].event.entry.id
       : undefined;
-  const removedPaths = isRecord(complete) && Array.isArray(complete.removedPaths)
-    ? complete.removedPaths
-    : [];
-  const removedFileHashes = isRecord(complete) && isRecord(complete.removedFileHashes)
-    ? complete.removedFileHashes
-    : {};
-  const removedFiles = removedPaths.filter((entry): entry is string =>
-    typeof entry === "string" && !entry.endsWith("/"));
-  const hashPaths = Object.keys(removedFileHashes);
   if (
     completeIndexes[0] <= wipeIndexes[0]
     || (creationIndex >= 0 && completeIndexes[0] >= creationIndex)
@@ -394,29 +389,97 @@ function auditWipe(records: AgentLogRecord[], expectedFolder: string): WipeAudit
     || complete.domainId.length === 0
     || (createdDomainId !== undefined && complete.domainId !== createdDomainId)
     || !finiteNonnegative(complete.atMs)
-    || !Array.isArray(complete.removedPaths)
-    || !complete.removedPaths.every((entry) => typeof entry === "string")
-    || !isRecord(complete.removedFileHashes)
-    || !Object.values(complete.removedFileHashes).every((hash) =>
-      typeof hash === "string" && /^fnv1a:[0-9a-f]{8}$/.test(hash))
-    || new Set(complete.removedPaths).size !== complete.removedPaths.length
-    || removedFiles.length !== hashPaths.length
-    || removedFiles.some((removedPath) => !Object.hasOwn(removedFileHashes, removedPath))
+    || typeof complete.transactionId !== "string"
+    || complete.transactionId.length === 0
+    || !finiteNonnegativeInteger(complete.chunkCount)
+    || !finiteNonnegativeInteger(complete.totalCount)
     || typeof complete.manifestHash !== "string"
     || !/^fnv1a:[0-9a-f]{8}$/.test(complete.manifestHash)
-    || complete.manifestHash !== contentHash(JSON.stringify({
-      removedPaths: complete.removedPaths,
-      removedFileHashes: complete.removedFileHashes,
-    }))
   ) {
     throw new Error("wipe_complete marker is invalid or not paired after WipeDomain");
   }
+  const rawChunkIndexes = chunkIndexes.map((recordIndex) => {
+    const event = records[recordIndex].event;
+    return isRecord(event) && finiteNonnegativeInteger(event.chunkIndex)
+      ? event.chunkIndex
+      : undefined;
+  });
+  const duplicateChunkIndex = rawChunkIndexes.find((value, index) =>
+    value !== undefined && rawChunkIndexes.indexOf(value) !== index);
+  if (duplicateChunkIndex !== undefined) {
+    throw new Error(`duplicate wipe manifest chunk index: ${duplicateChunkIndex}`);
+  }
+  if (chunkIndexes.length !== complete.chunkCount) {
+    throw new Error(
+      `wipe manifest chunks: ${chunkIndexes.length}, expected: ${complete.chunkCount}`,
+    );
+  }
+  const seenChunkIndexes = new Set<number>();
+  const entries: Array<{ path: string; hash?: string }> = [];
+  for (const [expectedIndex, recordIndex] of chunkIndexes.entries()) {
+    const chunk = records[recordIndex].event;
+    if (!isRecord(chunk)) throw new Error(`wipe manifest chunk ${expectedIndex} is invalid`);
+    if (
+      !finiteNonnegativeInteger(chunk.chunkIndex)
+      || !finiteNonnegativeInteger(chunk.chunkCount)
+      || typeof chunk.domainId !== "string"
+      || typeof chunk.transactionId !== "string"
+      || chunk.domainId !== complete.domainId
+      || chunk.transactionId !== complete.transactionId
+      || chunk.chunkCount !== complete.chunkCount
+      || !Array.isArray(chunk.entries)
+      || chunk.entries.length > 100
+      || typeof chunk.chunkHash !== "string"
+    ) {
+      throw new Error(`wipe manifest chunk ${expectedIndex} is invalid`);
+    }
+    if (seenChunkIndexes.has(chunk.chunkIndex)) {
+      throw new Error(`duplicate wipe manifest chunk index: ${chunk.chunkIndex}`);
+    }
+    seenChunkIndexes.add(chunk.chunkIndex);
+    if (chunk.chunkIndex !== expectedIndex) {
+      throw new Error(`wipe manifest chunk order: ${chunk.chunkIndex}, expected: ${expectedIndex}`);
+    }
+    if (recordIndex <= wipeIndexes[0] || recordIndex >= completeIndexes[0]) {
+      throw new Error(`wipe manifest chunk ${chunk.chunkIndex} is not between wipe and completion`);
+    }
+    if (Buffer.byteLength(JSON.stringify(chunk), "utf8") > MAX_JSONL_LINE_BYTES) {
+      throw new Error(`wipe manifest chunk ${chunk.chunkIndex} exceeds JSONL line limit`);
+    }
+    if (chunk.chunkHash !== contentHash(JSON.stringify(chunk.entries))) {
+      throw new Error(`wipe manifest chunk ${chunk.chunkIndex} hash mismatch`);
+    }
+    for (const entry of chunk.entries) {
+      if (
+        !isRecord(entry)
+        || typeof entry.path !== "string"
+        || (entry.hash !== undefined
+          && (typeof entry.hash !== "string" || !/^fnv1a:[0-9a-f]{8}$/.test(entry.hash)))
+      ) {
+        throw new Error(`wipe manifest chunk ${chunk.chunkIndex} has invalid entry`);
+      }
+      entries.push(entry as { path: string; hash?: string });
+    }
+  }
+  if (entries.length !== complete.totalCount) {
+    throw new Error(`wipe manifest paths: ${entries.length}, expected: ${complete.totalCount}`);
+  }
+  if (complete.manifestHash !== contentHash(JSON.stringify(entries))) {
+    throw new Error("wipe manifest hash mismatch");
+  }
+  const removedPaths = entries.map((entry) => entry.path);
+  if (new Set(removedPaths).size !== removedPaths.length) {
+    throw new Error("wipe manifest contains duplicate paths");
+  }
+  const removedFileHashes = Object.fromEntries(
+    entries.flatMap((entry) => entry.hash === undefined ? [] : [[entry.path, entry.hash]]),
+  );
   return {
     count: 1,
     completeCount: 1,
     folder,
-    removedPaths: complete.removedPaths,
-    removedFileHashes: complete.removedFileHashes as Record<string, string>,
+    removedPaths,
+    removedFileHashes,
   };
 }
 
@@ -429,8 +492,18 @@ function auditLifecycles(
   const failures: string[] = [];
   let technicalHumanLabelFields = 0;
   const budgetValues = new Set<string>();
+  const budgetByRequestId = new Map<string, Record<string, unknown>>();
+  const budgetRequestIdCounts = new Map<string, number>();
+  let missingRequestIds = 0;
   for (const record of records) {
     if (!isRecord(record.event) || record.event.kind !== "prompt_budget") continue;
+    if (typeof record.event.requestId !== "string" || record.event.requestId.length === 0) {
+      missingRequestIds++;
+    } else {
+      const count = (budgetRequestIdCounts.get(record.event.requestId) ?? 0) + 1;
+      budgetRequestIdCounts.set(record.event.requestId, count);
+      if (count === 1) budgetByRequestId.set(record.event.requestId, record.event);
+    }
     for (const field of [
       "configuredInputBudget",
       "effectiveInputBudget",
@@ -584,7 +657,10 @@ function auditLifecycles(
       descriptor.attempt = diagnostics.attempt;
     }
     for (const event of events) {
-      if (!isRecord(event.diagnostics) || event.diagnostics.callSite === undefined) continue;
+      if (!isRecord(event.diagnostics)) {
+        failures.push(`lifecycle ${id} missing diagnostics on phase ${String(event.phase)}`);
+        continue;
+      }
       if (event.diagnostics.callSite !== descriptor.callSite) {
         failures.push(`lifecycle ${id} changed diagnostics.callSite`);
       }
@@ -595,43 +671,31 @@ function auditLifecycles(
       ) {
         failures.push(`lifecycle ${id} changed diagnostics.transport`);
       }
+      if (
+        descriptor.attempt !== undefined
+        && event.diagnostics.attempt !== descriptor.attempt
+      ) {
+        failures.push(`lifecycle ${id} changed diagnostics.attempt`);
+      }
     }
     descriptors.set(id, descriptor);
   }
 
-  const promptIds = new Map<string, number>();
-  let missingRequestIds = 0;
-  for (const record of records) {
-    if (!isRecord(record.event) || record.event.kind !== "prompt_budget") continue;
-    if (typeof record.event.requestId !== "string" || record.event.requestId.length === 0) {
-      missingRequestIds++;
-      continue;
-    }
-    promptIds.set(
-      record.event.requestId,
-      (promptIds.get(record.event.requestId) ?? 0) + 1,
-    );
-  }
   if (missingRequestIds > 0) {
     failures.push(
       `prompt_budget correlation unsupported/inconclusive: ${missingRequestIds} event(s) missing requestId`,
     );
   }
-  for (const [requestId, count] of promptIds) {
-    if (count !== 1) {
-      failures.push(`prompt_budget requestId ${requestId} appears ${count} times`);
-    }
+  for (const [requestId, count] of budgetRequestIdCounts) {
+    if (count !== 1) failures.push(`prompt_budget requestId ${requestId} appears ${count} times`);
+  }
+  for (const [requestId, budget] of budgetByRequestId) {
     if (!calls.has(requestId)) {
       failures.push(`prompt_budget requestId ${requestId} has no lifecycle`);
     }
     const descriptor = descriptors.get(requestId);
-    const budget = records.find((record) =>
-      isRecord(record.event)
-      && record.event.kind === "prompt_budget"
-      && record.event.requestId === requestId)?.event;
     if (
       descriptor
-      && isRecord(budget)
       && budget.callSite !== descriptor.callSite
     ) {
       failures.push(
@@ -640,7 +704,7 @@ function auditLifecycles(
     }
   }
   for (const id of calls.keys()) {
-    if (!promptIds.has(id)) {
+    if (!budgetByRequestId.has(id)) {
       failures.push(`orphan lifecycle ${id} has no prompt_budget`);
     }
   }
@@ -669,6 +733,7 @@ function auditLifecycles(
       descriptor?.transport !== undefined
       && nextDescriptor?.transport !== undefined
       && descriptor.transport !== nextDescriptor.transport
+      && !(descriptor.transport === "stream" && nextDescriptor.transport === "non-stream")
     ) {
       failures.push(
         `lifecycle ${id} retrying changed transport: ${descriptor.transport} -> ${nextDescriptor.transport}`,
@@ -851,12 +916,20 @@ async function hashFile(filePath: string): Promise<string> {
   return `fnv1a:${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
-async function stalePreWipeDescendants(
+interface StaleManifestFs {
+  lstat: typeof lstat;
+  readdir: typeof readdir;
+  hashFile: (filePath: string) => Promise<string>;
+}
+
+export async function findStaleWipeManifestDescendants(
   domainRoot: string,
-  wipe: WipeAudit,
+  entries: Array<{ path: string; hash?: string }>,
+  fs: StaleManifestFs = { lstat, readdir, hashFile },
 ): Promise<string[]> {
   const stale: string[] = [];
-  for (const raw of wipe.removedPaths) {
+  for (const entry of entries) {
+    const raw = entry.path;
     const relative = safeManifestPath(raw);
     const directory = relative.endsWith("/");
     const absolute = path.join(
@@ -865,15 +938,16 @@ async function stalePreWipeDescendants(
     );
     let info;
     try {
-      info = await lstat(absolute);
-    } catch {
-      continue;
+      info = await fs.lstat(absolute);
+    } catch (error) {
+      if (isRecord(error) && error.code === "ENOENT") continue;
+      throw error;
     }
     if (info.isSymbolicLink()) {
       throw new Error(`unsafe domain symlink: ${relative}`);
     }
     if (directory) {
-      if (info.isDirectory() && (await readdir(absolute)).length === 0) {
+      if (info.isDirectory() && (await fs.readdir(absolute)).length === 0) {
         stale.push(relative);
       }
       continue;
@@ -882,12 +956,26 @@ async function stalePreWipeDescendants(
       stale.push(relative);
       continue;
     }
-    const expectedHash = wipe.removedFileHashes[relative];
-    if (expectedHash === undefined || await hashFile(absolute) === expectedHash) {
+    if (entry.hash === undefined || await fs.hashFile(absolute) === entry.hash) {
       stale.push(relative);
     }
   }
   return stale.sort();
+}
+
+async function stalePreWipeDescendants(
+  domainRoot: string,
+  wipe: WipeAudit,
+): Promise<string[]> {
+  return findStaleWipeManifestDescendants(
+    domainRoot,
+    wipe.removedPaths.map((path) => ({
+      path,
+      ...(wipe.removedFileHashes[path] === undefined
+        ? {}
+        : { hash: wipe.removedFileHashes[path] }),
+    })),
+  );
 }
 
 function eventContainsContextError(value: unknown, seen = new Set<object>()): boolean {

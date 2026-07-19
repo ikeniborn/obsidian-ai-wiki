@@ -96,6 +96,10 @@ export async function* runLintChat(
       : "apply_lint_fixes",
   );
   let executionCount = 0;
+  let requestAttempt = 0;
+  const callSite = opts.semanticCompression?.operation === "query"
+    ? "query.answer"
+    : "lint-chat.fix";
 
   yield { kind: "tool_use", name: "Responding", input: {} };
   let attempt: ChatAttempt;
@@ -138,7 +142,11 @@ export async function* runLintChat(
           );
         }
         executionCount += 1;
-        emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing"));
+        emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing", Date.now(), {
+          callSite,
+          transport: "stream",
+          attempt: requestAttempt++,
+        }));
         const params = paramsForPreparedMessages(model, request.messages, opts, true);
         let streamChunkConsumed = false;
         try {
@@ -206,7 +214,11 @@ export async function* runLintChat(
               ? "answer_question"
               : "apply_lint_fixes",
           );
-          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing"));
+          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing", Date.now(), {
+            callSite,
+            transport: "non-stream",
+            attempt: requestAttempt++,
+          }));
           let response: OpenAI.Chat.ChatCompletion;
           const fallbackStartMs = Date.now();
           try {

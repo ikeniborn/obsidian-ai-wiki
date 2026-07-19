@@ -111,6 +111,7 @@ export async function* answerFromContext(args: {
   let eligibleChunks: SelectedChunk[] | undefined;
   let answerLifecycle = createLlmLifecycle("answer_question");
   let executionCount = 0;
+  let requestAttempt = 0;
   yield { kind: "tool_use", name: "Answering", input: {} };
 
   let attempt: AnswerAttempt;
@@ -148,7 +149,11 @@ export async function* answerFromContext(args: {
           answerLifecycle = createLlmLifecycle("answer_question");
         }
         executionCount += 1;
-        emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing"));
+        emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing", Date.now(), {
+          callSite: "query.answer",
+          transport: "stream",
+          attempt: requestAttempt++,
+        }));
         const params = paramsForPreparedMessages(model, request.messages, opts, true);
         let streamChunkConsumed = false;
         try {
@@ -212,7 +217,11 @@ export async function* answerFromContext(args: {
           }));
           emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
           answerLifecycle = createLlmLifecycle("answer_question");
-          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing"));
+          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing", Date.now(), {
+            callSite: "query.answer",
+            transport: "non-stream",
+            attempt: requestAttempt++,
+          }));
           let response: OpenAI.Chat.ChatCompletion;
           const fallbackStartMs = Date.now();
           try {

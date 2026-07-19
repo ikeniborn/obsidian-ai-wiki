@@ -113,7 +113,7 @@ interface CallResult {
 }
 
 interface StructuredLifecycle {
-  begin(attempt: number): void;
+  begin(attempt: number, transport: "stream" | "non-stream"): void;
   phase(phase: "sent" | "waiting" | "producing" | "validating"): void;
   close(phase: "retrying" | "failed" | "cancelled"): void;
   isActive(): boolean;
@@ -125,28 +125,31 @@ function structuredLifecycle<T>(args: RunStructuredArgs<T>): StructuredLifecycle
   let sequence = 0;
   let active = false;
   let currentId = descriptor.id;
+  let currentDiagnostics: {
+    callSite: StructuredCallSite;
+    transport: "stream" | "non-stream";
+    attempt: number;
+  } | undefined;
+  let lastAttempt = -1;
   const emit = (
     phase: Extract<RunEvent, { kind: "llm_lifecycle" }>["phase"],
-    attempt?: number,
   ) => {
     args.onEvent(lifecycleEvent(
       currentId,
       descriptor.action,
       phase,
       Date.now(),
-      {
-        callSite: args.callSite,
-        transport: args.transport ?? "stream",
-        ...(attempt === undefined ? {} : { attempt }),
-      },
+      currentDiagnostics,
     ));
   };
   return {
-    begin(attempt) {
+    begin(attempt, transport) {
       currentId = sequence === 0 ? descriptor.id : `${descriptor.id}:retry-${sequence}`;
       sequence += 1;
+      lastAttempt = Math.max(attempt, lastAttempt + 1);
+      currentDiagnostics = { callSite: args.callSite, transport, attempt: lastAttempt };
       active = true;
-      emit("preparing", attempt);
+      emit("preparing");
     },
     phase(phase) {
       if (active) emit(phase);
@@ -327,7 +330,7 @@ async function streamOnce(
     if (isJsonModeError(e)) throw e;
     if (!shouldFallbackStreamToNonStream(e, signal)) throw e;
     lifecycle.close("retrying");
-    lifecycle.begin(attempt);
+    lifecycle.begin(attempt, "non-stream");
     return nonStreamOnce(
       llm,
       model,
@@ -504,7 +507,7 @@ async function callWithFormatFallback<T>(
 ): Promise<{ result: CallResult; mode: ResponseFormatMode }> {
   let currentMode = mode;
   while (true) {
-    lifecycle.begin(attempt);
+    lifecycle.begin(attempt, args.transport ?? "stream");
     const callOpts: LlmCallOptions = args.profile.kind === "json-zod"
       ? optsForMode(args.opts, currentMode, args.callSite, args.profile.schema)
       : { ...args.opts, jsonMode: false, jsonSchema: undefined };

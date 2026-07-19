@@ -535,6 +535,15 @@ test("answerFromContext rebuilds non-stream fallback params with one composed Ab
     "preparing", "sent", "waiting", "producing", "validating", "applying", "completed",
   ]);
   assert.notEqual(lifecycle[3]?.id, lifecycle[4]?.id);
+  for (const [index, id] of [...new Set(lifecycle.map((event) => event.id))].entries()) {
+    const diagnostics = lifecycle
+      .filter((event) => event.id === id)
+      .map((event) => event.diagnostics);
+    assert.ok(diagnostics.every((value) => value?.callSite === "query.answer"));
+    assert.ok(diagnostics.every((value) =>
+      value?.transport === (index === 0 ? "stream" : "non-stream")));
+    assert.ok(diagnostics.every((value) => value?.attempt === index));
+  }
   assert.deepEqual(
     budgets.map((event) => event.requestId),
     [...new Set(lifecycle.map((event) => event.id))],
@@ -581,6 +590,15 @@ test("runLintChat rebuilds non-stream fallback params with one composed AbortSig
     [...new Set(lifecycle.map((event) => event.id))],
   );
   assert.notEqual(lifecycle[3]?.id, lifecycle[4]?.id);
+  for (const [index, id] of [...new Set(lifecycle.map((event) => event.id))].entries()) {
+    const diagnostics = lifecycle
+      .filter((event) => event.id === id)
+      .map((event) => event.diagnostics);
+    assert.ok(diagnostics.every((value) => value?.callSite === "lint-chat.fix"));
+    assert.ok(diagnostics.every((value) =>
+      value?.transport === (index === 0 ? "stream" : "non-stream")));
+    assert.ok(diagnostics.every((value) => value?.attempt === index));
+  }
 });
 
 test("Query and Chat yield preparing sent waiting before a pending request resolves", async () => {

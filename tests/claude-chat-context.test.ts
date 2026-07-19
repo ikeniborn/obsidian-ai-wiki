@@ -711,11 +711,10 @@ test("native and Claude non-stream runners share lifecycle human semantics and i
     assert.doesNotMatch(human, /claude|native|cli|--|\/tmp\//i);
     assert.deepEqual(
       Object.keys(event.diagnostics ?? {}).sort(),
-      event.phase === "preparing"
-        ? ["attempt", "callSite", "transport"]
-        : ["callSite", "transport"],
+      ["attempt", "callSite", "transport"],
     );
     assert.equal(event.diagnostics?.callSite, "query.answer");
     assert.equal(event.diagnostics?.transport, "non-stream");
+    assert.equal(event.diagnostics?.attempt, 0);
   }
 });

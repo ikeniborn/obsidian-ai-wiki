@@ -920,6 +920,10 @@ test("PDF abort after a batch response prevents every remaining request and desc
     lifecycle.find((event) => event.phase === "cancelled")?.id,
     budgets[0].requestId,
   );
+  assert.ok(lifecycle.every((event) =>
+    event.diagnostics?.callSite === "vision.analysis"
+    && event.diagnostics.transport === "non-stream"
+    && event.diagnostics.attempt === 0));
 });
 
 test("PDF abort during lower render prevents the resize transport retry", async () => {

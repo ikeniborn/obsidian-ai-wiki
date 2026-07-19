@@ -1160,6 +1160,10 @@ test("structured non-stream abort after transport completion closes cancelled wi
     lifecycle.find((event) => event.phase === "cancelled")?.id,
     budgets[0].requestId,
   );
+  assert.ok(lifecycle.every((event) =>
+    event.diagnostics?.callSite === "query.seeds"
+    && event.diagnostics.transport === "non-stream"
+    && event.diagnostics.attempt === 0));
 });
 
 test("runStructuredStreaming aborts background work when the consumer returns", async () => {
@@ -1497,6 +1501,15 @@ test("stream transport fallback closes the old ID before a new non-stream lifecy
   ]);
   assert.notEqual(lifecycle[3]?.id, lifecycle[4]?.id);
   assert.equal(new Set(lifecycle.map((event) => event.id)).size, 2);
+  for (const [index, id] of [...new Set(lifecycle.map((event) => event.id))].entries()) {
+    const diagnostics = lifecycle
+      .filter((event) => event.id === id)
+      .map((event) => event.diagnostics);
+    assert.ok(diagnostics.every((value) => value?.callSite === "query.seeds"));
+    assert.ok(diagnostics.every((value) =>
+      value?.transport === (index === 0 ? "stream" : "non-stream")));
+    assert.ok(diagnostics.every((value) => value?.attempt === index));
+  }
   const requestIds = events
     .filter((event) => event.kind === "prompt_budget")
     .map((event) => event.kind === "prompt_budget" ? event.requestId : undefined);

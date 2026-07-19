@@ -152,6 +152,43 @@ function indexJsonl(
   return records.map((record) => JSON.stringify(record)).join("\n") + "\n";
 }
 
+function wipeTelemetry(
+  domainId: string,
+  session: string,
+  entries: Array<{ path: string; hash?: string }> = [
+    { path: OLD_MANIFEST_FILE, hash: contentHash(OLD_MANIFEST_CONTENT) },
+    { path: "obsolete-empty/" },
+  ],
+): AgentRecord[] {
+  const transactionId = `wipe-${session}`;
+  const chunkCount = entries.length === 0 ? 0 : Math.ceil(entries.length / 100);
+  const manifestHash = contentHash(JSON.stringify(entries));
+  const chunks = Array.from({ length: chunkCount }, (_, chunkIndex) => {
+    const chunkEntries = entries.slice(chunkIndex * 100, (chunkIndex + 1) * 100);
+    return agentRecord({
+      kind: "wipe_manifest_chunk",
+      domainId,
+      transactionId,
+      chunkIndex,
+      chunkCount,
+      entries: chunkEntries,
+      chunkHash: contentHash(JSON.stringify(chunkEntries)),
+    }, session);
+  });
+  return [
+    ...chunks,
+    agentRecord({
+      kind: "wipe_complete",
+      domainId,
+      transactionId,
+      chunkCount,
+      totalCount: entries.length,
+      manifestHash,
+      atMs: Number(session),
+    }, session),
+  ];
+}
+
 function sessionRecords(options: {
   session?: string;
   domainId?: string;
@@ -162,10 +199,6 @@ function sessionRecords(options: {
   const domainId = options.domainId ?? "domain-id";
   const wikiFolder = options.wikiFolder ?? "replay-folder";
   const sources = options.sources ?? ["sources/a.md", "sources/b.md"];
-  const removedPaths = [OLD_MANIFEST_FILE, "obsolete-empty/"];
-  const removedFileHashes = {
-    [OLD_MANIFEST_FILE]: contentHash(OLD_MANIFEST_CONTENT),
-  };
   const records = [
     agentRecord({ kind: "system", message: "start op=init" }, session),
     agentRecord({ kind: "run_config", llmIdleTimeoutMs: IDLE_DEADLINE_MS }, session),
@@ -175,17 +208,7 @@ function sessionRecords(options: {
       input: { folder: `!Wiki/${wikiFolder}` },
     }, session),
     agentRecord({ kind: "tool_result", ok: true }, session),
-    agentRecord({
-      kind: "wipe_complete",
-      domainId,
-      removedPaths,
-      removedFileHashes,
-      manifestHash: contentHash(JSON.stringify({
-        removedPaths,
-        removedFileHashes,
-      })),
-      atMs: Number(session),
-    }, session),
+    ...wipeTelemetry(domainId, session),
     agentRecord({
       kind: "domain_created",
       entry: {
@@ -570,6 +593,37 @@ test("valid structured retry has one prompt budget per fresh lifecycle ID", asyn
   }
 });
 
+test("auditor permits a correlated stream to non-stream fallback with a fresh attempt", async () => {
+  const records = sessionRecords({ sources: ["sources/a.md"] });
+  const firstLifecycle = records.findIndex((record) =>
+    record.event.kind === "llm_lifecycle" && record.event.id === "call-0");
+  records.splice(
+    firstLifecycle,
+    7,
+    ...lifecycleRecords("call-0", 1_000, SESSION, {
+      phases: ["preparing", "sent", "waiting", "retrying"],
+      diagnostics: { transport: "stream" },
+    }),
+    ...lifecycleRecords("call-0:retry-1", 1_100, SESSION, {
+      attempt: 1,
+      diagnostics: { transport: "non-stream" },
+    }),
+  );
+  const firstBudget = records.findIndex((record) => record.event.kind === "prompt_budget");
+  records.splice(
+    firstBudget + 1,
+    0,
+    agentRecord(promptBudget({ requestId: "call-0:retry-1" })),
+  );
+  const value = await fixture({ records });
+  try {
+    const summary = await audit(value, { expectedSources: 1 });
+    assert.equal(summary.lifecycleCalls, 2);
+  } finally {
+    await value.cleanup();
+  }
+});
+
 test("correlation reports a missing lifecycle ID and an orphan lifecycle ID", async () => {
   const records = sessionRecords();
   const secondBudget = records.find((record) =>
@@ -758,6 +812,99 @@ test("missing and duplicate wipe_complete markers fail pairing", async (t) => {
   ]>) {
     await t.test(name, async () => {
       const value = await fixture({ records: mutate(sessionRecords()) });
+      try {
+        await assert.rejects(audit(value), expected);
+      } finally {
+        await value.cleanup();
+      }
+    });
+  }
+});
+
+test("chunked wipe manifest accepts thousands of paths within the JSONL line limit", async () => {
+  const entries = Array.from({ length: 2_500 }, (_, index) => ({
+    path: `obsolete/type-${Math.floor(index / 100)}/page-${index}.md`,
+    hash: contentHash(`old-${index}`),
+  }));
+  const records = sessionRecords();
+  const telemetry = wipeTelemetry("domain-id", SESSION, entries);
+  const firstTelemetry = records.findIndex((record) =>
+    record.event.kind === "wipe_manifest_chunk" || record.event.kind === "wipe_complete");
+  records.splice(
+    firstTelemetry,
+    records.filter((record) =>
+      record.event.kind === "wipe_manifest_chunk" || record.event.kind === "wipe_complete").length,
+    ...telemetry,
+  );
+  for (const record of telemetry) {
+    assert.ok(Buffer.byteLength(JSON.stringify(record), "utf8") <= 1_048_576);
+    if (record.event.kind === "wipe_manifest_chunk") {
+      assert.ok((record.event.entries as unknown[]).length <= 100);
+    } else {
+      assert.equal(Object.hasOwn(record.event, "entries"), false);
+    }
+  }
+  const value = await fixture({ records });
+  try {
+    const summary = await audit(value);
+    assert.equal(summary.wipeCompleteEvents, 1);
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("wipe manifest rejects missing, duplicate, reordered, and tampered chunks", async (t) => {
+  const entries = Array.from({ length: 150 }, (_, index) => ({
+    path: `obsolete/page-${index}.md`,
+    hash: contentHash(`old-${index}`),
+  }));
+  for (const [name, mutate, expected] of [
+    [
+      "missing",
+      (telemetry: AgentRecord[]) => telemetry.filter((record) =>
+        !(record.event.kind === "wipe_manifest_chunk" && record.event.chunkIndex === 0)),
+      /wipe manifest chunks: 1, expected: 2/i,
+    ],
+    [
+      "duplicate",
+      (telemetry: AgentRecord[]) => {
+        const chunk = telemetry.find((record) =>
+          record.event.kind === "wipe_manifest_chunk" && record.event.chunkIndex === 0)!;
+        return [structuredClone(chunk), ...telemetry];
+      },
+      /duplicate wipe manifest chunk index: 0/i,
+    ],
+    [
+      "reordered",
+      (telemetry: AgentRecord[]) => [
+        telemetry[1],
+        telemetry[0],
+        ...telemetry.slice(2),
+      ],
+      /wipe manifest chunk order: 1, expected: 0/i,
+    ],
+    [
+      "tampered",
+      (telemetry: AgentRecord[]) => {
+        const copy = structuredClone(telemetry);
+        const chunk = copy.find((record) => record.event.kind === "wipe_manifest_chunk")!;
+        (chunk.event.entries as Array<Record<string, unknown>>)[0].path = "tampered.md";
+        return copy;
+      },
+      /wipe manifest chunk 0 hash mismatch/i,
+    ],
+  ] as Array<[
+    string,
+    (telemetry: AgentRecord[]) => AgentRecord[],
+    RegExp,
+  ]>) {
+    await t.test(name, async () => {
+      const records = sessionRecords();
+      const current = records.filter((record) =>
+        record.event.kind === "wipe_manifest_chunk" || record.event.kind === "wipe_complete");
+      const firstTelemetry = records.indexOf(current[0]);
+      records.splice(firstTelemetry, current.length, ...mutate(wipeTelemetry("domain-id", SESSION, entries)));
+      const value = await fixture({ records });
       try {
         await assert.rejects(audit(value), expected);
       } finally {
@@ -1109,6 +1256,37 @@ test("agent and index JSONL are streamed instead of read as whole files", async 
   assert.doesNotMatch(source, /readFile\(agentPath/);
   assert.doesNotMatch(source, /readFile\(indexPath/);
   assert.match(source, /createReadStream/);
+});
+
+test("stale manifest proof ignores only ENOENT and surfaces other lstat failures", async () => {
+  const module = await import("../scripts/audit-bounded-init-replay");
+  const findStale = (module as unknown as {
+    findStaleWipeManifestDescendants?: (
+      root: string,
+      entries: Array<{ path: string; hash?: string }>,
+      fs: {
+        lstat: (path: string) => Promise<never>;
+        readdir: (path: string) => Promise<string[]>;
+        hashFile: (path: string) => Promise<string>;
+      },
+    ) => Promise<string[]>;
+  }).findStaleWipeManifestDescendants;
+  assert.equal(typeof findStale, "function");
+  const denied = Object.assign(new Error("permission denied"), { code: "EACCES" });
+  await assert.rejects(
+    findStale!("/vault/domain", [{ path: "old.md", hash: "fnv1a:00000000" }], {
+      lstat: async () => { throw denied; },
+      readdir: async () => [],
+      hashFile: async () => "fnv1a:00000000",
+    }),
+    /permission denied/i,
+  );
+});
+
+test("lifecycle budget correlation builds one requestId map without records.find", async () => {
+  const source = await readFile(SCRIPT_PATH, "utf8");
+  assert.match(source, /budgetByRequestId/);
+  assert.doesNotMatch(source, /const budget = records\.find/);
 });
 
 test("latest-init selection works after a large unrelated prefix", async () => {

@@ -207,6 +207,7 @@ async function callVisionLlm(
   reasoningLanguage: OutputLanguage,
   options: ResolvedVisionAnalysisOptions,
   effectiveInputBudget: number = options.inputBudgetTokens,
+  attempt = 0,
 ): Promise<VisionRecognitionRecord[]> {
   if (signal.aborted) {
     signal.throwIfAborted();
@@ -220,7 +221,11 @@ async function callVisionLlm(
   const params = buildChatParams(model, visionMessages(systemPrompt, pages), callOptions);
 
   const lifecycle = createLlmLifecycle("analyze_attachments");
-  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "preparing"));
+  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "preparing", Date.now(), {
+    callSite: "vision.analysis",
+    transport: "non-stream",
+    attempt,
+  }));
   const estimatedInputTokens = estimatePreparedMessages(
     params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
   );
@@ -430,6 +435,7 @@ export async function analyzePdf(
   );
   const fixedEstimatedTokens = estimatePreparedMessages(fixedMessages);
   const resizedPages = new Set<string>();
+  let visionAttempt = 0;
 
   const recognize = (
     batch: readonly VisionMediaPage[],
@@ -444,6 +450,7 @@ export async function analyzePdf(
     reasoningLanguage,
     resolved,
     effectiveInputBudget,
+    visionAttempt++,
   );
   const resize = async (
     page: VisionMediaPage,
