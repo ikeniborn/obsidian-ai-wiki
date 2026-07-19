@@ -1,7 +1,7 @@
 ---
 review:
-  intent_hash: 991da6d260b128cc
-  last_run: 2026-07-16
+  intent_hash: b125ed7c9fd23440
+  last_run: 2026-07-19
   phases:
     structure: { status: passed }
     completeness: { status: passed }
@@ -22,6 +22,13 @@ Make the LLM context used by Init, Re-init, and Ingest bounded and relevant for 
 
 Make model resource controls explicit in Settings: separate input and output token budgets with per-operation overrides, operation-aware semantic compression levels for every safely compressible operation, and a real native-backend Vision model availability check. Preserve the current output-limit behavior while replacing the ambiguous `Max tokens` label.
 
+Make model execution understandable in the sidebar. Every LLM-backed operation must show
+a human-readable lifecycle that distinguishes request preparation, dispatch, waiting,
+model output, validation, and result application. Keep technical routing, transport,
+attempt, and budget fields in `agent.jsonl`, not in the user-facing progress labels.
+Destructive full Re-init must remove the complete prior domain tree before rebuilding it,
+including obsolete empty entity-type directories.
+
 ## Desired Outcomes
 
 - A one-page domain and a 100-page domain can complete normal Ingest without a model context-length error when their source input is within the supported budget.
@@ -35,6 +42,13 @@ Make model resource controls explicit in Settings: separate input and output tok
 - Existing `maxTokens` values retain their output-limit meaning and appear as `Output budget tokens`; no saved value silently changes meaning during migration.
 - A global maximum/balanced/minimum semantic compression profile has per-operation overrides when per-operation mode is enabled. Ingest/Init compress evidence representation without dropping facts, Query/Chat/Lint compress prose without dropping findings, and Vision compresses descriptions without changing recognized OCR, objects, or structure. Format is excluded because it must not semantically rewrite content.
 - The native Vision model `Check` action sends a real inline-image request through the configured Base URL, API key, and model, then reports a clear success or provider error without mutating settings.
+- Init/Re-init, Ingest, Query, Chat, Lint, Format, and Vision show the same human-readable
+  LLM lifecycle in the sidebar. Reasoning remains available in its expandable block while
+  the active state says that the model is producing a response.
+- Technical `callSite`, transport, retry-attempt, and budget metadata remain available in
+  `agent.jsonl` but never appear in sidebar progress text.
+- Full Re-init leaves no prior page, service file, or obsolete empty subdirectory under
+  `!Wiki/<domain>` before the new domain state is created.
 
 ## Health Metrics
 
@@ -50,6 +64,10 @@ Make model resource controls explicit in Settings: separate input and output tok
 - Budget settings: global and per-operation input/output values round-trip without drift, and effective-operation resolution selects the expected fallback or override in all fixtures.
 - Compression invariants: every profile preserves Ingest evidence coverage, Lint findings, and Vision recognition meaning; Format prompt behavior remains unchanged.
 - Vision availability: the probe request contains an `image_url` part and selected Vision model; success and failure fixtures both produce the expected read-only notice.
+- LLM progress coverage: every model-backed operation emits an ordered lifecycle with no
+  ambiguous silent wait between dispatch and first response.
+- Re-init cleanup: zero descendants from the previous domain tree survive the destructive
+  wipe; other domain trees remain byte-identical.
 
 ## Strategic Context
 
@@ -62,6 +80,9 @@ Make model resource controls explicit in Settings: separate input and output tok
   - `src/types.ts`, `src/effective-settings.ts`, `src/main.ts`, `src/settings.ts`, and `src/i18n.ts`, which own persisted defaults, migration, effective per-operation values, and Settings UI.
   - `src/phases/attachment-analyzer.ts`, whose native-compatible multimodal request shape is the reference for the Vision availability probe.
   - Structured-output request diagnostics in `agent.jsonl`.
+  - `src/view.ts` and shared `RunEvent` rendering, which must present human labels while
+    keeping technical diagnostics out of the sidebar.
+  - Domain-folder deletion and recreation used by destructive Re-init.
   - Users running Ingest, Init, or destructive Re-init across small and large domains, and users validating native chat/vision model configuration.
 - Priority trade-off: trust > cost > speed. Preserve synthesis correctness and existing knowledge first, then minimize prompt cost, then optimize latency.
 
@@ -76,6 +97,11 @@ Make model resource controls explicit in Settings: separate input and output tok
 - Keep behavior proportional for domains from 1 to 100 pages; do not penalize a one-page domain with unnecessary retrieval or extra calls.
 - Minimize LLM calls and tokens without imposing a fixed call-count limit that would reduce output quality.
 - Record prompt size and selected context composition so budget decisions can be diagnosed from `agent.jsonl`.
+- Emit lifecycle transitions from model execution boundaries rather than inferring network
+  state in the view. Sidebar elapsed-time rendering must not create heartbeat events or
+  extend the LLM idle watchdog.
+- Use non-stream transport for background structured calls whose output is consumed
+  atomically. Preserve streaming for interactive Chat, Query, and Format output.
 - Keep numeric input/output budgets separate from maximum/balanced/minimum semantic compression; each compressible operation receives its own policy fragment and preservation rules.
 - Store one global compression profile and expose per-operation overrides only when per-operation mode is enabled.
 - Mirror global budget controls in native per-operation settings; mirror the input budget in Claude Agent per-operation settings.
@@ -93,6 +119,11 @@ Make model resource controls explicit in Settings: separate input and output tok
 - Run the Vision image probe only for the native OpenAI-compatible backend and keep the action read-only.
 - Do not let semantic compression drop Ingest facts/anchors, Lint findings, or Vision OCR/object/structure meaning.
 - Do not apply semantic compression policy to Format.
+- Do not expose `callSite`, transport names, retry counters, token budgets, or raw provider
+  diagnostics in sidebar progress labels.
+- Do not let UI waiting timers reset or extend the operation idle watchdog.
+- Full Re-init must delete the complete target domain tree exactly once per explicit user
+  run before creating fresh metadata, index, entity folders, or pages.
 - Do not run destructive Init/Re-init against the user's working vault without separate explicit approval.
 
 ## Autonomy Zones
@@ -113,4 +144,4 @@ Make model resource controls explicit in Settings: separate input and output tok
 - Halt if: oversized-source reduction cannot account for every source chunk or would silently drop exact technical evidence.
 - Escalate if: preserving create/update quality requires an `index.jsonl` schema change or a public page-update contract beyond the approved internal section patches.
 - Escalate if: the requested Vision check requires Claude multimodal transport or the requested output budget requires plugin control over Claude CLI output limits.
-- Done when: 1-page, 15-page, and 100-page fixtures stay within the selected context budget with no raw vectors; oversized-source evidence covers every input chunk; focused create/update and duplicate checks pass; untouched sections are preserved; unchanged chunk embeddings are reused; the 22-source Init/Re-init scenario completes on a safe vault copy without a context-length failure; global/per-operation budgets and compression profiles resolve correctly; compression preservation invariants pass for Ingest, Lint, and Vision while Format remains unchanged; and the native Vision image probe passes success/failure read-only fixtures.
+- Done when: 1-page, 15-page, and 100-page fixtures stay within the selected context budget with no raw vectors; oversized-source evidence covers every input chunk; focused create/update and duplicate checks pass; untouched sections are preserved; unchanged chunk embeddings are reused; the 22-source Init/Re-init scenario completes on a safe vault copy without a context-length failure; global/per-operation budgets and compression profiles resolve correctly; compression preservation invariants pass for Ingest, Lint, and Vision while Format remains unchanged; the native Vision image probe passes success/failure read-only fixtures; all model-backed operations expose the approved human lifecycle without technical sidebar fields; and full Re-init leaves no stale descendants in the rebuilt domain tree.

@@ -1,7 +1,7 @@
 ---
 review:
-  spec_hash: 9fd50c32bac7fe8d
-  last_run: 2026-07-16
+  spec_hash: 07e1445bc795678d
+  last_run: 2026-07-19
   phases:
     structure: { status: passed }
     coverage: { status: passed }
@@ -31,7 +31,13 @@ Intent: `docs/superpowers/intents/2026-07-16-bounded-ingest-model-controls-inten
 - Existing `maxTokens` values retain their output-limit meaning and appear as `Output budget tokens`; no saved value silently changes meaning during migration.
 - A global maximum/balanced/minimum semantic compression profile has per-operation overrides when per-operation mode is enabled. Ingest/Init compress evidence representation without dropping facts, Query/Chat/Lint compress prose without dropping findings, and Vision compresses descriptions without changing recognized OCR, objects, or structure. Format is excluded because it must not semantically rewrite content.
 - The native Vision model `Check` action sends a real inline-image request through the configured Base URL, API key, and model, then reports a clear success or provider error without mutating settings.
-- Done when: 1-page, 15-page, and 100-page fixtures stay within the selected context budget with no raw vectors; oversized-source evidence covers every input chunk; focused create/update and duplicate checks pass; untouched sections are preserved; unchanged chunk embeddings are reused; the 22-source Init/Re-init scenario completes on a safe vault copy without a context-length failure; global/per-operation budgets and compression profiles resolve correctly; compression preservation invariants pass for Ingest, Lint, and Vision while Format remains unchanged; and the native Vision image probe passes success/failure read-only fixtures.
+- Every model-backed operation shows a human-readable lifecycle in the sidebar without
+  exposing `callSite`, transport, attempt, or budget fields there.
+- Reasoning remains expandable while progress distinguishes waiting for the first response
+  from receiving model output.
+- Full Re-init removes the complete prior domain tree, including obsolete empty
+  subdirectories, before creating fresh domain state.
+- Done when: 1-page, 15-page, and 100-page fixtures stay within the selected context budget with no raw vectors; oversized-source evidence covers every input chunk; focused create/update and duplicate checks pass; untouched sections are preserved; unchanged chunk embeddings are reused; the 22-source Init/Re-init scenario completes on a safe vault copy without a context-length failure; global/per-operation budgets and compression profiles resolve correctly; compression preservation invariants pass for Ingest, Lint, and Vision while Format remains unchanged; the native Vision image probe passes success/failure read-only fixtures; all model-backed operations expose the approved human lifecycle without technical sidebar fields; and full Re-init leaves no stale descendants in the rebuilt domain tree.
 
 ## Problem Evidence
 
@@ -83,6 +89,13 @@ The design has four coordinated parts:
 - Markdown source chunking, structured evidence extraction, and per-entity reduction;
 - section-level page updates plus structured JSONL page/chunk persistence;
 - Settings controls for budgets/compression and a native Vision image probe.
+
+Two operational contracts complement those parts:
+
+- one shared model-call lifecycle for Init/Re-init, Ingest, Query, Chat, Lint, Format,
+  and Vision;
+- one fail-closed destructive Re-init wipe that deletes and recreates the target domain
+  tree without retaining stale descendants.
 
 Rejected alternatives:
 
@@ -174,6 +187,54 @@ Packing rules:
 
 Every call records estimated input, configured/effective budget, actual input when the
 backend reports usage, unit counts, and reduction depth. Prompt content is not logged.
+
+## Human-Readable LLM Lifecycle
+
+Model progress is emitted at execution boundaries rather than inferred from elapsed time
+or from unrelated tool events. One lifecycle uses these ordered user states:
+
+1. `Preparing request`
+2. `Request sent to model`
+3. `Waiting for model response`
+4. `Model is producing a response`
+5. `Validating response`
+6. `Applying result`
+7. terminal `Completed`, `Retrying`, `Failed`, or `Cancelled`
+
+The sidebar translates each state and combines it with an operation-specific human action,
+for example `Extracting source facts`, `Creating wiki pages`, `Answering the question`, or
+`Analyzing attachments`. It never renders `callSite`, transport, attempt number, token
+budget, or raw provider diagnostics. Those technical fields remain in `agent.jsonl`.
+
+The waiting duration is rendered by a local view timer. The timer emits no `RunEvent` and
+does not reset the operation idle watchdog. A request transition is emitted once when the
+client call is dispatched. Streaming calls transition to `Model is producing a response`
+on the first reasoning or content chunk. Reasoning text continues to use the existing
+expandable reasoning block.
+
+Background structured calls whose output is consumed atomically use non-stream transport:
+Init bootstrap, evidence mapping/reduction, Ingest synthesis, and bounded Lint batches.
+Their reasoning is surfaced after the response is parsed. Interactive Chat, Query answer,
+and Format keep SSE; their first reasoning/content chunk advances the lifecycle live.
+Transport fallback, structured repair, and context repacking close the current lifecycle
+as `Retrying` before opening the next attempt. Attempt numbers remain log-only.
+
+The lifecycle helper is shared by native OpenAI-compatible calls and operation-level Claude
+execution so operation names and states remain consistent across backends. A state event
+contains a stable operation identity, phase, human action key, elapsed-time anchor, and
+log-only diagnostic metadata. The view consumes only the identity, phase, and action key.
+
+## Full Re-init Domain Wipe
+
+Destructive Re-init reads and validates the bootstrap result before mutation, then removes
+the complete target `!Wiki/<domain>` tree exactly once. This includes pages, `index.jsonl`,
+`metadata.jsonl`, logs, temporary files, entity-type folders, and obsolete empty folders.
+The runtime then recreates the domain root and writes fresh metadata/index state from the
+approved bootstrap result.
+
+Deletion failure is terminal and occurs before source ingest. The implementation verifies
+that no prior descendant remains before recreation. Other domains are outside the deletion
+scope and remain byte-identical. Internal model retries cannot replay the destructive wipe.
 
 ## Oversized Source Chunking
 
@@ -705,6 +766,24 @@ all Lint pages/findings, reassemble every Format segment under existing preserva
 and cover every Vision/PDF page while preserving recognition fields; Format receives no
 compression fragment.
 
+### R17 - Human-Readable Model Progress
+
+All model-backed operation families emit the shared lifecycle. Sidebar labels contain only
+localized human actions/states; technical routing remains in `agent.jsonl`.
+
+DoD: Init/Re-init, Ingest, Query, Chat, Lint, Format, and Vision fixtures observe ordered
+prepare/sent/wait/receive-or-response/validate/apply/terminal transitions; reasoning stays
+expandable; waiting timers do not reset watchdogs; no sidebar text contains `callSite`,
+transport, attempt, or budget fields.
+
+### R18 - Complete Destructive Re-init Wipe
+
+Full Re-init deletes the entire prior target-domain tree before fresh domain creation.
+
+DoD: fixtures with pages, service files, temporary files, nested entity folders, and empty
+obsolete folders retain no prior descendants after wipe; fresh metadata/index are created
+only afterward; another domain is byte-identical; one explicit run emits one `WipeDomain`.
+
 ## Risks and Mitigations
 
 - **Conservative token estimation underuses large contexts.** Mitigation: expose the input
@@ -724,6 +803,11 @@ compression fragment.
   run full-note preservation guards after reassembly.
 - **Vision media-token pricing varies by provider.** Mitigation: conservative per-page
   reservation, PDF page batching, one bounded resize retry, and context-error telemetry.
+- **Lifecycle events could accidentally keep a hung request alive.** Mitigation: UI elapsed
+  time is local-only and lifecycle transitions are excluded from semantic idle reset.
+- **Full-tree deletion increases destructive scope.** Mitigation: validate the canonical
+  target domain path, bootstrap before mutation, delete exactly one domain, verify absence,
+  and fail before ingest if cleanup is incomplete.
 
 ## Out of Scope
 
