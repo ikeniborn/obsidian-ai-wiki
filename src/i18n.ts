@@ -1,7 +1,34 @@
 import { moment } from "obsidian";
 import type { OutputLanguage } from "./types";
+import type { LlmLifecycleLabels } from "./llm-lifecycle";
 
 const en = {
+  llmLifecycle: {
+    phases: {
+      preparing: "Preparing request",
+      sent: "Request sent to model",
+      waiting: "Waiting for model response",
+      producing: "Model is producing a response",
+      validating: "Validating response",
+      applying: "Applying result",
+      completed: "Completed",
+      retrying: "Retrying request",
+      failed: "Failed",
+      cancelled: "Cancelled",
+    },
+    actions: {
+      bootstrap_domain: "Preparing domain structure",
+      extract_source_facts: "Extracting source facts",
+      reduce_source_evidence: "Combining source evidence",
+      synthesize_wiki_pages: "Creating wiki pages",
+      select_relevant_pages: "Selecting relevant pages",
+      answer_question: "Answering the question",
+      check_wiki_quality: "Checking wiki quality",
+      apply_lint_fixes: "Applying quality fixes",
+      format_note: "Formatting note",
+      analyze_attachments: "Analyzing attachments",
+    },
+  } satisfies LlmLifecycleLabels,
   settings: {
     h3_general: "General settings",
     h3_backend: "Backend",
@@ -405,6 +432,32 @@ const _formatProgressShapeCheck: FormatProgress = en.formatProgress;
 void _formatProgressShapeCheck;
 
 const ru: I18n = {
+  llmLifecycle: {
+    phases: {
+      preparing: "Подготавливаем запрос",
+      sent: "Запрос передан модели",
+      waiting: "Ожидаем ответ модели",
+      producing: "Модель формирует ответ",
+      validating: "Проверяем ответ",
+      applying: "Применяем результат",
+      completed: "Готово",
+      retrying: "Повторяем запрос",
+      failed: "Ошибка",
+      cancelled: "Отменено",
+    },
+    actions: {
+      bootstrap_domain: "Подготавливаем структуру домена",
+      extract_source_facts: "Извлекаем факты из источника",
+      reduce_source_evidence: "Объединяем данные источника",
+      synthesize_wiki_pages: "Создаём страницы wiki",
+      select_relevant_pages: "Выбираем релевантные страницы",
+      answer_question: "Отвечаем на вопрос",
+      check_wiki_quality: "Проверяем качество wiki",
+      apply_lint_fixes: "Применяем исправления качества",
+      format_note: "Форматируем заметку",
+      analyze_attachments: "Анализируем вложения",
+    },
+  },
   settings: {
     h3_general: "Общие настройки",
     h3_backend: "Бэкенд",
@@ -786,6 +839,32 @@ const ru: I18n = {
 };
 
 const es: I18n = {
+  llmLifecycle: {
+    phases: {
+      preparing: "Preparando la solicitud",
+      sent: "Solicitud enviada al modelo",
+      waiting: "Esperando la respuesta del modelo",
+      producing: "El modelo está generando una respuesta",
+      validating: "Validando la respuesta",
+      applying: "Aplicando el resultado",
+      completed: "Completado",
+      retrying: "Reintentando la solicitud",
+      failed: "Error",
+      cancelled: "Cancelado",
+    },
+    actions: {
+      bootstrap_domain: "Preparando la estructura del dominio",
+      extract_source_facts: "Extrayendo datos de la fuente",
+      reduce_source_evidence: "Combinando evidencia de la fuente",
+      synthesize_wiki_pages: "Creando páginas wiki",
+      select_relevant_pages: "Seleccionando páginas relevantes",
+      answer_question: "Respondiendo la pregunta",
+      check_wiki_quality: "Comprobando la calidad de la wiki",
+      apply_lint_fixes: "Aplicando correcciones de calidad",
+      format_note: "Formateando la nota",
+      analyze_attachments: "Analizando archivos adjuntos",
+    },
+  },
   settings: {
     h3_general: "Configuración general",
     h3_backend: "Backend",

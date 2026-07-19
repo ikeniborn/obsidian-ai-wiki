@@ -66,6 +66,13 @@
 }
 .ai-wiki-step.reasoning { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; padding: 4px 0; opacity: 0.6; }
 .ai-wiki-reasoning-text { white-space: pre-wrap; word-break: break-word; font-style: italic; color: var(--text-muted); font-size: 0.88em; }
+.ai-wiki-llm-action { font-weight: 600; margin-bottom: 3px; }
+.ai-wiki-llm-phases { display: grid; gap: 2px; font-family: var(--font-interface); font-size: 11px; }
+.ai-wiki-llm-phase { display: flex; gap: 5px; color: var(--text-muted); }
+.ai-wiki-llm-phase--current { color: var(--text-accent); font-weight: 600; }
+.ai-wiki-llm-phase--completed { color: var(--text-success); }
+.ai-wiki-llm-phase--failed { color: var(--text-error); font-weight: 600; }
+.ai-wiki-llm-phase--pending { color: var(--text-faint); }
 .ai-wiki-step.muted, .muted { color: var(--text-muted); }
 .ai-wiki-step.err { color: var(--text-error); }
 

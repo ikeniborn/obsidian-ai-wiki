@@ -36,6 +36,39 @@ export type StructuredCallSite =
   | "format.segment"
   | "vision.analysis";
 
+export type LlmLifecyclePhase =
+  | "preparing"
+  | "sent"
+  | "waiting"
+  | "producing"
+  | "validating"
+  | "applying"
+  | "completed"
+  | "retrying"
+  | "failed"
+  | "cancelled";
+
+export type LlmLifecycleAction =
+  | "bootstrap_domain"
+  | "extract_source_facts"
+  | "reduce_source_evidence"
+  | "synthesize_wiki_pages"
+  | "select_relevant_pages"
+  | "answer_question"
+  | "check_wiki_quality"
+  | "apply_lint_fixes"
+  | "format_note"
+  | "analyze_attachments";
+
+export interface LlmLifecycleDiagnostics {
+  callSite?: StructuredCallSite;
+  transport?: "stream" | "non-stream" | "claude";
+  attempt?: number;
+  configuredInputBudget?: number;
+  effectiveInputBudget?: number;
+  provider?: string;
+}
+
 export type OnFileError = (
   file: string,
   err: Error,
@@ -129,6 +162,14 @@ export interface RunRequest {
 
 export type RunEvent =
   | { kind: "system"; message: string; sessionId?: string }
+  | {
+      kind: "llm_lifecycle";
+      id: string;
+      action: LlmLifecycleAction;
+      phase: LlmLifecyclePhase;
+      atMs: number;
+      diagnostics?: LlmLifecycleDiagnostics;
+    }
   | { kind: "tool_use"; name: string; input: unknown }
   | { kind: "tool_result"; ok: boolean; preview?: string }
   | { kind: "assistant_text"; delta: string; isReasoning?: boolean }

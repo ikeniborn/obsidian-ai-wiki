@@ -11,6 +11,14 @@ import { computeSpeedText } from "./phases/llm-utils";
 import { isAbsolute, relative } from "path-browserify";
 import { retrievalTag } from "./retrieval-diag";
 import { OPERATION_AXES, type Rating } from "./eval-log";
+import {
+  emptyLlmLifecycleState,
+  lifecycleScale,
+  reduceLlmLifecycle,
+  shouldSuppressLegacyLlmTool,
+  type LlmLifecycleEvent,
+  type LlmLifecycleState,
+} from "./llm-lifecycle";
 
 import { collectMdInPaths, walkFolder } from "./utils/vault-walk";
 export { collectMdInPaths, walkFolder };
@@ -142,11 +150,14 @@ export class LlmWikiView extends ItemView {
   private progressPhaseEl: HTMLElement | null = null;
   private tickHandle: number | null = null;
   private currentToolStep: HTMLElement | null = null;
+  private suppressNextToolResult = false;
   private currentToolStartedAt = 0;
   private reasoningBlock: HTMLElement | null = null;
   private reasoningBuffer = "";
   private reasoningRafHandle: number | null = null;
-  private waitingStep: HTMLElement | null = null;
+  private llmLifecycleState: LlmLifecycleState = emptyLlmLifecycleState();
+  private llmLifecycleRows = new Map<string, HTMLElement>();
+  private waitingDurationEl: HTMLElement | null = null;
   private waitingTickHandle: number | null = null;
   private waitingStartedAt = 0;
   private liveStatusSection: HTMLElement | null = null;
@@ -639,6 +650,9 @@ export class LlmWikiView extends ItemView {
     this.progressTotal = 0;
     this.progressDone = 0;
     this.currentToolStep = null;
+    this.suppressNextToolResult = false;
+    this.llmLifecycleState = emptyLlmLifecycleState();
+    this.llmLifecycleRows.clear();
     this.reasoningBlock = null;
     this.reasoningBuffer = "";
     if (this.reasoningRafHandle !== null) {
@@ -756,9 +770,22 @@ export class LlmWikiView extends ItemView {
       if (ev.inputTokens !== undefined) this.fillQueryStatsTokens(ev.inputTokens);
       return;
     }
+    if (ev.kind === "llm_lifecycle") {
+      this.renderLlmLifecycle(ev);
+      this.stepCount++;
+      this.updateMetrics();
+      return;
+    }
+    if (ev.kind === "tool_use" && shouldSuppressLegacyLlmTool(ev.name, this.llmLifecycleState)) {
+      this.suppressNextToolResult = true;
+      return;
+    }
+    if (ev.kind === "tool_result" && this.suppressNextToolResult) {
+      this.suppressNextToolResult = false;
+      return;
+    }
     if (ev.kind !== "assistant_text") this.stepCount++;
     if (ev.kind === "tool_use") {
-      this.stopWaiting();
       this.toolCount++;
       this.reasoningBlock = null;
       this.reasoningBuffer = "";
@@ -792,7 +819,6 @@ export class LlmWikiView extends ItemView {
         }
         this.currentToolStep = null;
       }
-      this.startWaiting();
     } else if (ev.kind === "ask_user") {
       const el = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step--ask");
       el.createSpan({ text: "⏳ Waiting for answer…" });
@@ -801,7 +827,6 @@ export class LlmWikiView extends ItemView {
       // query.ts corrects answer in-place before emitting result event —
       // no live markdown block exists for non-chat query, so no-op here.
     } else if (ev.kind === "assistant_text") {
-      this.stopWaiting();
       if (ev.isReasoning) {
         if (!this.reasoningBlock) {
           this.reasoningBlock = this.stepsEl.createDiv("ai-wiki-step reasoning");
@@ -827,7 +852,6 @@ export class LlmWikiView extends ItemView {
         this.liveStatusTextEl?.setText(i18nFor(resolveLang(this.plugin.settings.outputLanguage)).view.formingResponse);
       }
     } else if (ev.kind === "info_text") {
-      this.stopWaiting();
       const step = this.stepsEl.createDiv("ai-wiki-step");
       const head = step.createDiv("ai-wiki-step-head");
       head.createSpan({ cls: "ai-wiki-step-icon" }).setText(ev.icon);
@@ -848,11 +872,8 @@ export class LlmWikiView extends ItemView {
       head.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
       this.scrollSteps();
     } else if (ev.kind === "error") {
-      this.stopWaiting();
       this.stepsEl.createDiv("ai-wiki-step err").setText(`✗ ${ev.message}`);
       this.scrollSteps();
-    } else if (ev.kind === "result") {
-      this.stopWaiting();
     }
     this.updateMetrics();
   }
@@ -1346,13 +1367,55 @@ export class LlmWikiView extends ItemView {
     this.stepsEl.scrollTop = this.stepsEl.scrollHeight;
   }
 
-  private startWaiting(): void {
+  private renderLlmLifecycle(ev: LlmLifecycleEvent): void {
+    this.llmLifecycleState = reduceLlmLifecycle(this.llmLifecycleState, ev);
+    let row = this.llmLifecycleRows.get(ev.id);
+    if (!row) {
+      row = this.stepsEl.createDiv("ai-wiki-step ai-wiki-llm-lifecycle");
+      this.llmLifecycleRows.set(ev.id, row);
+    }
+    row.empty();
+    const labels = i18nFor(resolveLang(this.plugin.settings.outputLanguage)).llmLifecycle;
+    const call = this.llmLifecycleState.calls[ev.id];
+    const scale = lifecycleScale(
+      ev,
+      labels,
+      ev.phase === "waiting" ? 0 : undefined,
+      call.progressPhase,
+    );
+    row.createDiv({ cls: "ai-wiki-llm-action", text: scale.action });
+    const phases = row.createDiv("ai-wiki-llm-phases");
+    let waitingText: HTMLElement | null = null;
+    for (const item of scale.items) {
+      const phase = phases.createDiv(
+        `ai-wiki-llm-phase ai-wiki-llm-phase--${item.state}`,
+      );
+      phase.createSpan({ cls: "ai-wiki-llm-phase-marker", text: "•" });
+      const text = phase.createSpan({ cls: "ai-wiki-llm-phase-text", text: item.text });
+      if (item.key === "waiting") waitingText = text;
+    }
+    if (ev.phase === "waiting" && waitingText) {
+      this.startWaiting(waitingText);
+    } else if (
+      ev.phase === "producing"
+      || ev.phase === "validating"
+      || ev.phase === "applying"
+      || ev.phase === "completed"
+      || ev.phase === "retrying"
+      || ev.phase === "failed"
+      || ev.phase === "cancelled"
+    ) {
+      this.stopWaiting();
+    }
+    this.liveStatusIconEl?.setText("✦");
+    this.liveStatusTextEl?.setText(scale.action);
+    this.scrollSteps();
+  }
+
+  private startWaiting(durationEl: HTMLElement): void {
     this.stopWaiting();
     this.waitingStartedAt = Date.now();
-    this.waitingStep = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step--waiting");
-    this.waitingStep.createSpan({ cls: "ai-wiki-step-icon" }).setText("⏳");
-    this.waitingStep.createSpan({ cls: "ai-wiki-waiting-text" }).setText("");
-    this.scrollSteps();
+    this.waitingDurationEl = durationEl;
     this.scheduleWaitingTick();
   }
 
@@ -1361,16 +1424,15 @@ export class LlmWikiView extends ItemView {
       window.clearTimeout(this.waitingTickHandle);
       this.waitingTickHandle = null;
     }
-    this.waitingStep?.remove();
-    this.waitingStep = null;
+    this.waitingDurationEl = null;
   }
 
   private scheduleWaitingTick(): void {
     this.waitingTickHandle = window.setTimeout(() => {
-      if (!this.waitingStep) return;
+      if (!this.waitingDurationEl) return;
       const s = ((Date.now() - this.waitingStartedAt) / 1000).toFixed(1);
-      const span = this.waitingStep.querySelector<HTMLElement>(".ai-wiki-waiting-text");
-      if (span) span.setText(`${s}s`);
+      const labels = i18nFor(resolveLang(this.plugin.settings.outputLanguage)).llmLifecycle;
+      this.waitingDurationEl.setText(`${labels.phases.waiting} · ${s}s`);
       this.scheduleWaitingTick();
     }, 100);
   }
