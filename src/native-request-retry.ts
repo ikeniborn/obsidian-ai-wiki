@@ -72,10 +72,19 @@ function errorCode(value: unknown): string | undefined {
   return typeof value.code === "string" ? value.code : undefined;
 }
 
-function apiErrorHeaders(error: unknown): Headers | undefined {
+function hasHeaderGetter(value: unknown): value is { get(name: string): unknown } {
+  return value !== null
+    && typeof value === "object"
+    && "get" in value
+    && typeof value.get === "function";
+}
+
+function apiErrorHeader(error: unknown, name: string): string | undefined {
   if (error === null || typeof error !== "object" || !("headers" in error)) return undefined;
   const headers: unknown = error.headers;
-  return headers instanceof Headers ? headers : undefined;
+  if (!hasHeaderGetter(headers)) return undefined;
+  const value = headers.get(name);
+  return typeof value === "string" ? value : undefined;
 }
 
 function decision(
@@ -121,7 +130,7 @@ export function classifyNativeRetry(error: unknown): NativeRetryDecision {
   }
 
   if (error instanceof APIError) {
-    const shouldRetry = apiErrorHeaders(error)?.get("x-should-retry")?.trim().toLowerCase();
+    const shouldRetry = apiErrorHeader(error, "x-should-retry")?.trim().toLowerCase();
     if (shouldRetry === "false") return decision(false, "provider_no_retry", error);
     if (shouldRetry === "true") return decision(true, "provider_retry", error);
   }

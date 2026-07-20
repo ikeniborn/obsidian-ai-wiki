@@ -7,6 +7,7 @@ import {
   APIError,
   APIUserAbortError,
 } from "openai";
+import { Headers as UndiciHeaders } from "undici";
 
 import { classifyNativeRetry, retryDelay } from "../src/native-request-retry";
 import type { RunEvent } from "../src/types";
@@ -53,6 +54,23 @@ test("returns typed HTTP metadata", () => {
 test("x-should-retry false overrides retryable status and true overrides status matrix", () => {
   assert.equal(classifyNativeRetry(apiError(502, { "x-should-retry": "false" })).retryable, false);
   assert.equal(classifyNativeRetry(apiError(400, { "x-should-retry": "true" })).retryable, true);
+});
+
+test("x-should-retry supports undici Headers from real SDK API errors", () => {
+  const doNotRetry = APIError.generate(
+    502,
+    {},
+    undefined,
+    new UndiciHeaders({ "x-should-retry": "false" }) as unknown as Headers,
+  );
+  const retry = APIError.generate(
+    400,
+    {},
+    undefined,
+    new UndiciHeaders({ "x-should-retry": "true" }) as unknown as Headers,
+  );
+  assert.equal(classifyNativeRetry(doNotRetry).retryable, false);
+  assert.equal(classifyNativeRetry(retry).retryable, true);
 });
 
 test("retries temporary socket and DNS codes through nested causes", () => {
