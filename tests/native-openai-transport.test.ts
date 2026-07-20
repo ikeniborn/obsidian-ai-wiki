@@ -9,6 +9,13 @@ import OpenAI from "openai";
 import ts from "typescript";
 import { getGlobalDispatcher, MockAgent, setGlobalDispatcher } from "undici";
 
+import { createNativeOpenAiClient } from "../src/native-openai-client";
+import {
+  createNativeRequestLifecycle,
+  createNativeRequestRetryContext,
+} from "../src/native-llm-executor";
+import type { RunEvent } from "../src/types";
+
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 
 if (typeof window === "undefined") {
@@ -74,6 +81,81 @@ test("production native factory owns Node-safe transport construction", () => {
     ));
   });
   assert.deepEqual(obsidianImports, []);
+});
+
+test("production native factory runs idle timing and retry delay without window", async () => {
+  let attempts = 0;
+  const events: RunEvent[] = [];
+  const runtime = globalThis as typeof globalThis & { window?: typeof globalThis };
+  const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
+
+  await withServer(async (response) => {
+    attempts += 1;
+    response.writeHead(attempts === 1 ? 502 : 200, {
+      "content-type": "application/json",
+      ...(attempts === 1 ? { "retry-after-ms": "1" } : {}),
+    });
+    response.end(JSON.stringify(attempts === 1
+      ? { error: { message: "temporary", type: "server_error" } }
+      : {
+          id: "chatcmpl-clean-node",
+          object: "chat.completion",
+          created: 0,
+          model: "test-model",
+          choices: [{
+            index: 0,
+            finish_reason: "stop",
+            message: { role: "assistant", content: "ok" },
+          }],
+        }));
+  }, async (url) => {
+    delete runtime.window;
+    try {
+      const signal = new AbortController().signal;
+      const client = createNativeOpenAiClient({
+        baseURL: new URL(url).origin,
+        apiKey: "test-key",
+        requestTimeoutMs: 1_000,
+        isMobile: false,
+        proxyConfig: { enabled: false, url: "" },
+        mobileFetch: fetch,
+      });
+      const lifecycle = createNativeRequestLifecycle({
+        initial: { id: "clean-node", action: "synthesize_wiki_pages" },
+        callSite: "ingest.synthesize",
+        onEvent: (event) => events.push(event),
+      });
+      const response = await client.chat.completions.create(
+        {
+          model: "test-model",
+          messages: [{ role: "user", content: "test" }],
+          stream: false,
+        },
+        {
+          signal,
+          retry: createNativeRequestRetryContext({
+            callSite: "ingest.synthesize",
+            opts: {
+              nativeRequestRetries: 1,
+              nativeRequestIdleTimeoutMs: 500,
+            },
+            signal,
+            onEvent: (event) => events.push(event),
+            lifecycle,
+          }),
+        },
+      );
+
+      assert.equal(response.choices[0]?.message.content, "ok");
+    } finally {
+      if (windowDescriptor) Object.defineProperty(globalThis, "window", windowDescriptor);
+      else delete runtime.window;
+    }
+  });
+
+  assert.equal(attempts, 2);
+  assert.equal(events.some((event) => event.kind === "transport_retry_scheduled"), true);
+  assert.equal(events.some((event) => event.kind === "transport_retry_recovered"), true);
 });
 
 test("native OpenAI client disables SDK request retries", () => {

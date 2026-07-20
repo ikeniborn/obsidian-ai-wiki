@@ -45,6 +45,18 @@ interface AttemptScope {
   race<T>(work: Promise<T>): Promise<T>;
 }
 
+type NativeTimer = ReturnType<typeof setTimeout>;
+
+function scheduleTimer(callback: () => void, delayMs: number): NativeTimer {
+  // eslint-disable-next-line obsidianmd/prefer-window-timers -- Shared production seam must also run without window in Node.
+  return setTimeout(callback, delayMs);
+}
+
+function cancelTimer(timer: NativeTimer): void {
+  // eslint-disable-next-line obsidianmd/prefer-window-timers -- Shared production seam must also run without window in Node.
+  clearTimeout(timer);
+}
+
 export function isNativeLlmClient(llm: LlmClient): boolean {
   return llm.nativeRequestExecutor === true;
 }
@@ -116,9 +128,9 @@ export function createNativeRequestLifecycle(input: {
 function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
   if (signal.aborted) return Promise.reject(abortReason(signal));
   return new Promise<void>((resolve, reject) => {
-    const timer = window.setTimeout(finish, ms);
+    const timer = scheduleTimer(finish, ms);
     const onAbort = () => {
-      window.clearTimeout(timer);
+      cancelTimer(timer);
       signal.removeEventListener("abort", onAbort);
       reject(abortReason(signal));
     };
@@ -164,7 +176,7 @@ function isAbortError(error: unknown): boolean {
 
 function attemptScope(callerSignal: AbortSignal, idleTimeoutMs: number): AttemptScope {
   const controller = new AbortController();
-  let timer: number | undefined;
+  let timer: NativeTimer | undefined;
   let rejectAbort: ((reason: unknown) => void) | undefined;
   const onCallerAbort = () => controller.abort(abortReason(callerSignal));
   if (callerSignal.aborted) onCallerAbort();
@@ -172,7 +184,7 @@ function attemptScope(callerSignal: AbortSignal, idleTimeoutMs: number): Attempt
 
   const clearIdle = (): void => {
     if (timer === undefined) return;
-    window.clearTimeout(timer);
+    cancelTimer(timer);
     timer = undefined;
   };
   const abortPromise = new Promise<never>((_resolve, reject) => {
@@ -194,7 +206,7 @@ function attemptScope(callerSignal: AbortSignal, idleTimeoutMs: number): Attempt
         message: `LLM idle timeout after ${idleTimeoutMs}ms`,
       }));
     };
-    timer = window.setTimeout(callback, idleTimeoutMs);
+    timer = scheduleTimer(callback, idleTimeoutMs);
   };
   const dispose = (reason?: unknown): void => {
     clearIdle();

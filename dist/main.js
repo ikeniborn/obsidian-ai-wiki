@@ -51249,6 +51249,12 @@ function retryDelay(headers, retryOrdinal, env = {
 }
 
 // src/native-llm-executor.ts
+function scheduleTimer(callback, delayMs) {
+  return setTimeout(callback, delayMs);
+}
+function cancelTimer(timer) {
+  clearTimeout(timer);
+}
 function isNativeLlmClient(llm) {
   return llm.nativeRequestExecutor === true;
 }
@@ -51304,9 +51310,9 @@ function createNativeRequestLifecycle(input) {
 function abortableDelay(ms, signal) {
   if (signal.aborted) return Promise.reject(abortReason(signal));
   return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(finish, ms);
+    const timer = scheduleTimer(finish, ms);
     const onAbort = () => {
-      window.clearTimeout(timer);
+      cancelTimer(timer);
       signal.removeEventListener("abort", onAbort);
       reject(abortReason(signal));
     };
@@ -51344,7 +51350,7 @@ function attemptScope(callerSignal, idleTimeoutMs) {
   else callerSignal.addEventListener("abort", onCallerAbort, { once: true });
   const clearIdle = () => {
     if (timer === void 0) return;
-    window.clearTimeout(timer);
+    cancelTimer(timer);
     timer = void 0;
   };
   const abortPromise = new Promise((_resolve, reject) => {
@@ -51365,7 +51371,7 @@ function attemptScope(callerSignal, idleTimeoutMs) {
         message: `LLM idle timeout after ${idleTimeoutMs}ms`
       }));
     };
-    timer = window.setTimeout(callback, idleTimeoutMs);
+    timer = scheduleTimer(callback, idleTimeoutMs);
   };
   const dispose = (reason) => {
     clearIdle();
