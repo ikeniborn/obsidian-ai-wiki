@@ -160,6 +160,22 @@ export interface RunRequest {
   lintOpts?: { useLlm: boolean; entityTypeFilter: string[] };
 }
 
+type TransportRetryMetadata = {
+  logicalRequestId: string;
+  lifecycleId: string;
+  callSite: string;
+  attempt: number;
+  maxRetries: number;
+  errorClass?: string;
+  status?: number;
+  delayMs?: number;
+  delaySource?: "retry-after-ms" | "retry-after" | "backoff";
+  meaningfulOutputSeen: boolean;
+  connectionTimeoutMs: number;
+  idleTimeoutMs: number;
+  providerRequestId?: string;
+};
+
 export type RunEvent =
   | { kind: "system"; message: string; sessionId?: string }
   | { kind: "run_config"; llmIdleTimeoutMs: number }
@@ -221,6 +237,9 @@ export type RunEvent =
       reductionDepth?: number;
       retryReason?: string;
     }
+  | ({ kind: "transport_retry_scheduled" } & TransportRetryMetadata)
+  | ({ kind: "transport_retry_recovered" } & TransportRetryMetadata)
+  | ({ kind: "transport_retry_exhausted" } & TransportRetryMetadata)
   | {
       kind: "query_stats";
       crossDomain: boolean;
