@@ -1,6 +1,6 @@
 ---
 review:
-  intent_hash: 39c65ba5ee62594c
+  intent_hash: e49131eb760267e5
   last_run: 2026-07-20
   phases:
     structure: { status: passed }
@@ -29,11 +29,12 @@ attempt, and budget fields in `agent.jsonl`, not in the user-facing progress lab
 Destructive full Re-init must remove the complete prior domain tree before rebuilding it,
 including obsolete empty entity-type directories.
 
-Make every individual LLM step resilient to transient connection and provider failures
-without replaying the enclosing operation or any completed/destructive work. Reuse one
-configured retry limit for request-scoped recovery, separate the network connection
-timeout from the model idle timeout, and fail closed once an attempt has produced
-meaningful model reasoning or content.
+Make every native OpenAI-compatible LLM step resilient to transient connection and
+provider failures without replaying the enclosing operation or any
+completed/destructive work. Reuse one configured retry limit for request-scoped recovery,
+separate the network connection timeout from the model idle timeout, and fail closed once
+an attempt has produced meaningful model reasoning or content. Keep Claude Agent CLI
+transport behavior unchanged.
 
 ## Desired Outcomes
 
@@ -55,9 +56,9 @@ meaningful model reasoning or content.
   `agent.jsonl` but never appear in sidebar progress text.
 - Full Re-init leaves no prior page, service file, or obsolete empty subdirectory under
   `!Wiki/<domain>` before the new domain state is created.
-- Every LLM step retries eligible transient connection failures and HTTP 408, 409, 429,
-  and 5xx responses within that step's configured retry limit. A successful retry
-  continues with the next pipeline step; exhaustion ends the operation.
+- Every native OpenAI-compatible LLM step retries eligible transient connection failures
+  and HTTP 408, 409, 429, and 5xx responses within that step's configured retry limit. A
+  successful retry continues with the next pipeline step; exhaustion ends the operation.
 - Request retry never repeats `WipeDomain`, source enumeration, completed evidence work,
   page application, or the enclosing Init/Re-init/Ingest operation.
 - Settings expose independent connection and LLM idle timeouts. The connection timeout
@@ -170,6 +171,8 @@ meaningful model reasoning or content.
 - Keep connection timeout and LLM idle timeout as independent persisted settings. Default
   connection timeout is 15 seconds and default LLM idle timeout is 300 seconds; migration
   must preserve explicitly saved values.
+- Apply request-scoped transport retry only to the native OpenAI-compatible backend; do
+  not change Claude Agent CLI transport retry behavior.
 - Do not run destructive Init/Re-init against the user's working vault without separate explicit approval.
 
 ## Autonomy Zones

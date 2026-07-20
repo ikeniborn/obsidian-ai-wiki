@@ -1,7 +1,7 @@
 ---
 review:
-  spec_hash: 07e1445bc795678d
-  last_run: 2026-07-19
+  spec_hash: a9d31e86d7666b09
+  last_run: 2026-07-20
   phases:
     structure: { status: passed }
     coverage: { status: passed }
@@ -15,7 +15,7 @@ chain:
 # Bounded Ingest and Model Controls - Design
 
 Date: 2026-07-16
-Status: approved
+Status: draft
 Intent: `docs/superpowers/intents/2026-07-16-bounded-ingest-model-controls-intent.md`
 
 ## Acceptance From Intent
@@ -37,7 +37,18 @@ Intent: `docs/superpowers/intents/2026-07-16-bounded-ingest-model-controls-inten
   from receiving model output.
 - Full Re-init removes the complete prior domain tree, including obsolete empty
   subdirectories, before creating fresh domain state.
-- Done when: 1-page, 15-page, and 100-page fixtures stay within the selected context budget with no raw vectors; oversized-source evidence covers every input chunk; focused create/update and duplicate checks pass; untouched sections are preserved; unchanged chunk embeddings are reused; the 22-source Init/Re-init scenario completes on a safe vault copy without a context-length failure; global/per-operation budgets and compression profiles resolve correctly; compression preservation invariants pass for Ingest, Lint, and Vision while Format remains unchanged; the native Vision image probe passes success/failure read-only fixtures; all model-backed operations expose the approved human lifecycle without technical sidebar fields; and full Re-init leaves no stale descendants in the rebuilt domain tree.
+- Every native OpenAI-compatible LLM step retries eligible transient connection failures
+  and HTTP 408, 409, 429, and 5xx responses within that step's configured retry limit. A
+  successful retry continues with the next pipeline step; exhaustion ends the operation.
+- Request retry never repeats `WipeDomain`, source enumeration, completed evidence work,
+  page application, or the enclosing Init/Re-init/Ingest operation.
+- Settings expose independent connection and LLM idle timeouts. The connection timeout
+  defaults to 15 seconds; the LLM idle timeout defaults to 300 seconds; persisted user
+  values are not overwritten.
+- Sidebar lifecycle shows each replacement LLM attempt in the selected Obsidian language,
+  while exact retry classification, status, delay, and attempt counters remain in
+  `agent.jsonl`.
+- Done when: 1-page, 15-page, and 100-page fixtures stay within the selected context budget with no raw vectors; oversized-source evidence covers every input chunk; focused create/update and duplicate checks pass; untouched sections are preserved; unchanged chunk embeddings are reused; the 22-source Init/Re-init scenario completes on a safe vault copy without a context-length failure; global/per-operation budgets and compression profiles resolve correctly; compression preservation invariants pass for Ingest, Lint, and Vision while Format remains unchanged; the native Vision image probe passes success/failure read-only fixtures; all model-backed operations expose the approved human lifecycle without technical sidebar fields; full Re-init leaves no stale descendants in the rebuilt domain tree; eligible connection and provider failures recover within the configured per-request retry limit without replaying completed work; retry exhaustion terminates the operation; non-retryable failures produce no transport retries; and connection/idle timeout settings remain independent with defaults of 15 and 300 seconds.
 
 ## Problem Evidence
 
@@ -89,6 +100,11 @@ The design has four coordinated parts:
 - Markdown source chunking, structured evidence extraction, and per-entity reduction;
 - section-level page updates plus structured JSONL page/chunk persistence;
 - Settings controls for budgets/compression and a native Vision image probe.
+
+It adds one native transport contract:
+
+- a shared request executor retries only the current OpenAI-compatible HTTP request,
+  never the operation, phase, source, or tool mutation.
 
 Two operational contracts complement those parts:
 
@@ -223,6 +239,11 @@ The lifecycle helper is shared by native OpenAI-compatible calls and operation-l
 execution so operation names and states remain consistent across backends. A state event
 contains a stable operation identity, phase, human action key, elapsed-time anchor, and
 log-only diagnostic metadata. The view consumes only the identity, phase, and action key.
+
+Native request recovery closes the failed attempt as `Retrying` and opens a new lifecycle
+ID. The sidebar renders the localized human action `Retrying model request` and then the
+normal sent/waiting states. Attempt number, HTTP status, error class, delay, and transport
+remain log-only. Claude Agent lifecycle behavior is unchanged.
 
 ## Full Re-init Domain Wipe
 
@@ -488,6 +509,12 @@ inventing a description.
 Native settings add:
 
 ```ts
+interface LlmWikiPluginSettings {
+  llmIdleRetries: number; // top-level persisted key
+  llmConnectionTimeoutSec: number; // top-level persisted key
+  llmIdleTimeoutSec: number; // top-level persisted key
+}
+
 interface NativeAgentSettings {
   inputBudgetTokens: number;
   maxTokens: number; // persisted key; displayed as Output budget tokens
@@ -518,6 +545,19 @@ Load behavior:
 - Claude global/per-operation sections show input plus compression except Format;
 - invalid numeric edits do not replace the last valid saved value;
 - EN/RU/ES settings text remains shape-compatible and synchronized.
+- existing top-level `llmIdleRetries` values remain in place. Native UI labels the value
+  `LLM request retries`; Claude UI retains `LLM idle retries` because its operation-level
+  behavior is unchanged;
+- missing `llmConnectionTimeoutSec` receives `15`;
+- missing `llmIdleTimeoutSec` receives `300`, while every persisted value, including
+  `600` and the disabled value `0`, remains unchanged;
+- all three controls remain top-level global settings with no per-operation overrides.
+  The connection timeout is shown and applied only for native OpenAI-compatible backend;
+- no migration moves `llmIdleRetries` or `llmIdleTimeoutSec` into `nativeAgent`; loading
+  old settings therefore preserves both values and their Claude semantics;
+- connection timeout accepts positive integers, idle timeout accepts `0` or a positive
+  integer, and invalid edits preserve the last valid value;
+- EN/RU/ES descriptions distinguish DNS/TCP/TLS establishment from model idle.
 
 ## Native Vision Model Probe
 
@@ -536,6 +576,55 @@ error, malformed response, and empty content produce distinct failure notices. T
 does not modify the model field, budgets, compression profile, or any vault file.
 
 Claude Agent Vision Check and Claude multimodal transport are outside this design.
+
+## Native Request-Scoped Retry
+
+All native OpenAI-compatible chat-completion call sites use one shared request executor.
+The call site constructs its payload once and supplies lifecycle/event callbacks. The
+executor may send that identical payload through attempt `0` plus at most
+`llmIdleRetries` additional transport attempts. A successful attempt returns one response
+to the original caller, which continues the next pipeline step. Exhaustion throws the
+last error and terminates the enclosing operation.
+
+The executor owns request-level connection, idle, classification, cancellation, and
+backoff behavior. Structured repair, response-format fallback, context repacking, and
+conflict regeneration retain independent budgets and do not consume transport attempts.
+For the native backend, the operation-level watchdog may stop a stuck operation but its
+operation replay branch is disabled; only the request executor may recover. In particular,
+request recovery after `WipeDomain` cannot execute the wipe, source enumeration, evidence
+mapping, or any completed mutation again. Claude Agent does not use the request executor
+and retains its existing guarded operation-level idle retry behavior for non-destructive,
+no-visible-output runs.
+
+Retry classification follows OpenAI SDK 6.34 behavior with explicit safety guards:
+
+- retry `APIConnectionError`, `APIConnectionTimeoutError`, HTTP 408, 409, 429, and
+  500-599;
+- honor `x-should-retry: true` and `x-should-retry: false`, with explicit false taking
+  precedence over the status matrix;
+- honor `retry-after-ms`, then `Retry-After`; otherwise use bounded exponential backoff
+  with jitter capped at eight seconds;
+- never retry user cancellation, permanent TLS/certificate/hostname/protocol failures,
+  HTTP 400, 401, 403, 404, 422, context-limit errors, JSON/schema/empty-output repair,
+  application/index/embedding errors, or unknown errors.
+
+For streaming requests the executor inspects OpenAI chunks. A connection/provider failure
+before the first nonblank reasoning or content delta may retry. Once meaningful output
+appears, the attempt is not transport-retryable even if the stream later fails. A
+non-stream request may retry only when it fails before returning a `ChatCompletion`.
+
+`llmConnectionTimeoutSec` governs DNS/TCP/TLS establishment only. Desktop direct
+transport maps it to Undici connection establishment rather than headers/body timeout, so
+a healthy non-stream generation longer than 15 seconds is not aborted. Desktop proxy
+receives the equivalent connect policy. Mobile retains its current transport timeout
+because Obsidian's mobile request API exposes no equivalent low-level connect signal; the
+Settings description and diagnostics state this limitation.
+
+`llmIdleTimeoutSec` starts after request dispatch and measures model silence independently
+from connection establishment. Streaming progress resets it only for a real OpenAI model
+chunk, not sidebar timers or transport heartbeats. Non-stream requests remain eligible for
+the full idle window while waiting for the atomic completion. `0` disables only the idle
+watchdog.
 
 ## Context Error Recovery
 
@@ -568,6 +657,8 @@ the operation's preservation invariant. Structured retry exhaustion fails the so
 - A second hash conflict rejects the patch without overwriting newer content.
 - Embedding endpoint failure preserves the existing Init fail-loud behavior.
 - An LLM/model/provider failure emits an error and leaves the source resumable.
+- An eligible native transport/provider failure is retried only at the current request
+  boundary. Exhaustion emits the final error and leaves the source resumable.
 - Vision Check failures remain Settings notices and do not alter runtime configuration.
 - Fixed prompt overhead larger than the configured input budget is a configuration error,
   not a request to truncate system/schema rules.
@@ -597,6 +688,28 @@ No prompt text, evidence text, source content, image data, API key, or authoriza
 header is logged. Existing `llm_call_stats`, structural diagnostics, and JSONL envelope
 remain compatible.
 
+Request retry adds metadata-only events:
+
+```ts
+{
+  kind: "transport_retry_scheduled" | "transport_retry_recovered" | "transport_retry_exhausted";
+  callSite: string;
+  attempt: number;
+  maxRetries: number;
+  errorClass?: string;
+  status?: number;
+  delayMs?: number;
+  delaySource?: "retry-after-ms" | "retry-after" | "backoff";
+  meaningfulOutputSeen: boolean;
+  connectionTimeoutMs: number;
+  idleTimeoutMs: number;
+  providerRequestId?: string;
+}
+```
+
+Recovered attempts are diagnostic rather than operation errors. Exact counters and
+provider details never enter sidebar labels.
+
 ## Verification Strategy
 
 ### Unit Tests
@@ -612,6 +725,9 @@ remain compatible.
 - native/Claude policy resolution, global/per-operation fallback, compression inheritance,
   and Format exclusion;
 - Vision probe request shape and success/HTTP/timeout/empty-response behavior.
+- native retry classification, retry-header precedence, deterministic backoff/jitter,
+  exhaustion, cancellation during request/backoff, stream failure before/after meaningful
+  output, and independent connection/idle timers.
 
 ### Regression Fixtures
 
@@ -630,6 +746,16 @@ remain compatible.
   guards without receiving a compression fragment;
 - multi-page Vision/PDF analysis covers every page and preserves recognition fields through
   reduction.
+- structured non-stream `502 -> success`, streaming connection reset before content,
+  no retry after streamed content, `429` with `Retry-After`, and zero transport attempts
+  for context/schema failures;
+- Re-init after one `WipeDomain` recovers from an injected first-synthesis 502 without a
+  second wipe or duplicate source/page/index application;
+- every native chat-completion call site uses the shared executor while Claude Agent
+  request behavior remains unchanged;
+- native idle failure performs request-scoped recovery with zero operation replays; Claude
+  non-destructive idle fixtures retain their existing guarded operation retry behavior;
+- EN/RU/ES Settings and lifecycle fixtures cover request retries and both timeouts.
 
 ### End-to-End Acceptance
 
@@ -639,6 +765,10 @@ remain compatible.
 - confirm zero context-length errors, all source outcomes successful, prompts within
   effective budgets, no raw vectors, no duplicate regression, and no untouched-section
   loss;
+- inject one 502 into the first synthesis request and confirm request recovery, one
+  `WipeDomain`, and exactly-once source/page/index effects;
+- run a live synthesis-like endpoint eval and confirm a healthy non-stream response longer
+  than 15 seconds is not classified as a connection timeout;
 - never wipe or reinitialize the user's working vault for verification.
 
 ## Requirements and Definitions of Done
@@ -784,6 +914,48 @@ DoD: fixtures with pages, service files, temporary files, nested entity folders,
 obsolete folders retain no prior descendants after wipe; fresh metadata/index are created
 only afterward; another domain is byte-identical; one explicit run emits one `WipeDomain`.
 
+### R19 - Native Request-Scoped Transient Recovery
+
+Every native OpenAI-compatible chat-completion step uses the shared request executor and
+may retry only the current identical request for approved transient failures.
+
+DoD: connection/timeout and HTTP 408/409/429/5xx fixtures recover within the configured
+additional-attempt limit; exhaustion terminates the operation; successful recovery
+advances the pipeline once; Re-init recovery emits one `WipeDomain` and no duplicate
+source/page/index effects.
+
+### R20 - Retry Safety and Error Precision
+
+Transport retry is fail-closed after meaningful model output and remains independent from
+context repacking, structured repair, user cancellation, and application failures.
+
+DoD: `x-should-retry` precedence, permanent TLS, HTTP 400/401/403/404/422, context,
+schema/empty output, cancellation, post-content stream failure, and unknown-error fixtures
+produce the specified retry/no-retry result with separate transport and structured budgets.
+
+### R21 - Independent Native Timeout Controls
+
+Native Settings expose global request retries, DNS/TCP/TLS connection timeout, and LLM
+idle timeout without per-operation overrides or persisted-value drift.
+
+DoD: missing values resolve to 3 additional attempts, 15-second connection establishment,
+and 300-second idle; existing top-level values round-trip without moving under
+`nativeAgent`; native interprets retries per request and disables operation replay; Claude
+retains the top-level values and existing operation-level idle behavior; desktop
+direct/proxy apply connect timeout without aborting a healthy generation longer than 15
+seconds; Mobile documents and logs its current transport limitation; EN/RU/ES controls
+compile.
+
+### R22 - Retry Lifecycle and Diagnostics
+
+Each replacement request receives a new lifecycle ID and localized human progress while
+technical retry evidence remains metadata-only.
+
+DoD: sidebar fixtures show localized retry/sent/waiting states without counters, statuses,
+transport, or `callSite`; `agent.jsonl` records scheduled/recovered/exhausted events,
+classification, delay, timeout values, attempts, output-seen state, and provider request
+ID when present.
+
 ## Risks and Mitigations
 
 - **Conservative token estimation underuses large contexts.** Mitigation: expose the input
@@ -808,6 +980,17 @@ only afterward; another domain is byte-identical; one explicit run emits one `Wi
 - **Full-tree deletion increases destructive scope.** Mitigation: validate the canonical
   target domain path, bootstrap before mutation, delete exactly one domain, verify absence,
   and fail before ingest if cleanup is incomplete.
+- **Nested retry layers can multiply requests.** Mitigation: native SDK `maxRetries`
+  remains zero; native operation replay is disabled; only the shared executor owns native
+  transport attempts, while context and structured repair use separate explicit budgets.
+  Claude keeps its prior operation retry path and never uses the native executor.
+- **A 15-second timeout could abort healthy generation.** Mitigation: apply it only to
+  DNS/TCP/TLS establishment; headers/body generation use the independent idle policy.
+- **Retry after partial output can duplicate or diverge model work.** Mitigation: fail
+  closed after the first nonblank reasoning/content delta and never retry application
+  failures.
+- **Provider overload can create retry storms.** Mitigation: honor retry headers, use
+  exponential backoff with jitter, cap delays, and bound additional attempts globally.
 
 ## Out of Scope
 
@@ -819,3 +1002,5 @@ only afterward; another domain is byte-identical; one explicit run emits one `Wi
 - Semantic compression of Format.
 - Destructive verification against the user's working vault.
 - Recommending or automatically switching models.
+- Transport retry for Claude Agent CLI.
+- Low-level desktop-equivalent connection establishment timeout on Obsidian Mobile.
