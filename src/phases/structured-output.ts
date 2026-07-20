@@ -54,7 +54,7 @@ export function createLlmLifecycle(action: LlmLifecycleAction): {
 }
 
 export type StructuredProfile<T> =
-  | { kind: "json-zod"; schema: z.ZodSchema<T> }
+  | { kind: "json-zod"; schema: z.ZodSchema<T>; repairInstruction?: string }
   | {
       kind: "framed-zod";
       schema: z.ZodSchema<T>;
@@ -250,9 +250,12 @@ function repairPrompt<T>(profile: StructuredProfile<T>, lastText: string, lastEr
       lastText.slice(0, 2000),
     ].join("\n");
   }
-  return lastError instanceof ZodError
+  const feedback = lastError instanceof ZodError
     ? formatZodFeedback(lastError, lastText)
     : formatZodFeedback(null, lastText);
+  return profile.repairInstruction
+    ? `${feedback}\n\n${profile.repairInstruction}`
+    : feedback;
 }
 
 async function streamOnce(

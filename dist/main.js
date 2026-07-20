@@ -26686,6 +26686,8 @@ var en = {
     rerankerTimeoutMs_desc: "Timeout for rerank calls. Default 800 ms. On timeout Query falls back to pre-rerank order.",
     rerankerFlow_desc: "Flow: seedTopK -> graphDepth/bfsTopK -> rerankerTopN -> contextTopN.",
     rerankerInvalidTopN: "Reranker input top-N must be greater than or equal to final context top-N.",
+    chatCheck_ok: (model) => `\u2705 Chat model responds: "${model}"`,
+    rerankerCheck_ok: (model) => `\u2705 Reranker model responds: "${model}"`,
     dedupOnIngest_desc: "On creating a near-duplicate page \u2014 merge into the existing one via LLM-merge.",
     dedupThreshold_desc: "Cosine threshold for dedup on ingest (0..1). Default 0.85. \u2191 merges only near-duplicates (safer) \xB7 \u2193 more aggressive, risk of false merges. Recommended 0.83\u20130.90.",
     lintNearDuplicate_desc: "In Lint, report pairs of close pages by embedding cosine.",
@@ -26696,7 +26698,7 @@ var en = {
     visionModel_desc: "Model name for vision chat calls, e.g. gpt-4o-mini.",
     visionCheck_tooltip: "Send one read-only multimodal request to verify this native model",
     visionCheck_missing: "Set Base URL and Vision model first",
-    visionCheck_ok: "\u2705 Vision model responds",
+    visionCheck_ok: (model) => `\u2705 Vision model responds: "${model}"`,
     visionCheck_timeout: "The Vision request timed out.",
     visionCheck_http: "The Vision endpoint returned an HTTP or transport error.",
     visionCheck_malformed: "The Vision endpoint returned malformed JSON.",
@@ -27096,6 +27098,8 @@ var ru = {
     rerankerTimeoutMs_desc: "\u0422\u0430\u0439\u043C\u0430\u0443\u0442 rerank-\u0432\u044B\u0437\u043E\u0432\u043E\u0432. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E 800 ms. \u041F\u0440\u0438 timeout Query \u043E\u0442\u043A\u0430\u0442\u044B\u0432\u0430\u0435\u0442\u0441\u044F \u043A pre-rerank \u043F\u043E\u0440\u044F\u0434\u043A\u0443.",
     rerankerFlow_desc: "Flow: seedTopK -> graphDepth/bfsTopK -> rerankerTopN -> contextTopN.",
     rerankerInvalidTopN: "Reranker input top-N \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u0431\u043E\u043B\u044C\u0448\u0435 \u0438\u043B\u0438 \u0440\u0430\u0432\u0435\u043D final context top-N.",
+    chatCheck_ok: (model) => `\u2705 Chat model \u043E\u0442\u0432\u0435\u0447\u0430\u0435\u0442: "${model}"`,
+    rerankerCheck_ok: (model) => `\u2705 Reranker model \u043E\u0442\u0432\u0435\u0447\u0430\u0435\u0442: "${model}"`,
     dedupOnIngest_desc: "\u041D\u0430 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u0438 near-duplicate \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u2014 \u0441\u043B\u0438\u0442\u044C \u0432 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0443\u044E \u0447\u0435\u0440\u0435\u0437 LLM-merge.",
     dedupThreshold_desc: "\u041F\u043E\u0440\u043E\u0433 \u043A\u043E\u0441\u0438\u043D\u0443\u0441\u0430 \u0434\u043B\u044F \u0434\u0435\u0434\u0443\u043F\u0430 \u043F\u0440\u0438 ingest (0..1). \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 0.85. \u2191 \u0441\u043B\u0438\u0432\u0430\u0435\u0442 \u0442\u043E\u043B\u044C\u043A\u043E near-duplicate (\u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u0435\u0435) \xB7 \u2193 \u0430\u0433\u0440\u0435\u0441\u0441\u0438\u0432\u043D\u0435\u0435, \u0440\u0438\u0441\u043A \u043B\u043E\u0436\u043D\u044B\u0445 merge. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u044E 0.83\u20130.90.",
     lintNearDuplicate_desc: "\u0412 Lint \u043F\u043E\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u043F\u0430\u0440\u044B \u0431\u043B\u0438\u0437\u043A\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043F\u043E embedding-\u043A\u043E\u0441\u0438\u043D\u0443\u0441\u0443.",
@@ -27106,7 +27110,7 @@ var ru = {
     visionModel_desc: "\u0418\u043C\u044F \u043C\u043E\u0434\u0435\u043B\u0438 \u0434\u043B\u044F vision chat-\u0432\u044B\u0437\u043E\u0432\u043E\u0432, \u043D\u0430\u043F\u0440\u0438\u043C\u0435\u0440 gpt-4o-mini.",
     visionCheck_tooltip: "\u041E\u0442\u043F\u0440\u0430\u0432\u0438\u0442\u044C \u043E\u0434\u0438\u043D read-only multimodal-\u0437\u0430\u043F\u0440\u043E\u0441 \u0434\u043B\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 native-\u043C\u043E\u0434\u0435\u043B\u0438",
     visionCheck_missing: "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0437\u0430\u0434\u0430\u0439\u0442\u0435 Base URL \u0438 Vision model",
-    visionCheck_ok: "\u2705 Vision model \u043E\u0442\u0432\u0435\u0447\u0430\u0435\u0442",
+    visionCheck_ok: (model) => `\u2705 Vision model \u043E\u0442\u0432\u0435\u0447\u0430\u0435\u0442: "${model}"`,
     visionCheck_timeout: "\u0412\u0440\u0435\u043C\u044F \u043E\u0436\u0438\u0434\u0430\u043D\u0438\u044F Vision-\u0437\u0430\u043F\u0440\u043E\u0441\u0430 \u0438\u0441\u0442\u0435\u043A\u043B\u043E.",
     visionCheck_http: "Vision endpoint \u0432\u0435\u0440\u043D\u0443\u043B HTTP-\u043E\u0448\u0438\u0431\u043A\u0443 \u0438\u043B\u0438 \u043E\u0448\u0438\u0431\u043A\u0443 \u0442\u0440\u0430\u043D\u0441\u043F\u043E\u0440\u0442\u0430.",
     visionCheck_malformed: "Vision endpoint \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u044B\u0439 JSON.",
@@ -27505,6 +27509,8 @@ var es = {
     rerankerTimeoutMs_desc: "Timeout para llamadas rerank. Por defecto 800 ms. En timeout, Query vuelve al orden pre-rerank.",
     rerankerFlow_desc: "Flow: seedTopK -> graphDepth/bfsTopK -> rerankerTopN -> contextTopN.",
     rerankerInvalidTopN: "Reranker input top-N debe ser mayor o igual que final context top-N.",
+    chatCheck_ok: (model) => `\u2705 El modelo Chat responde: "${model}"`,
+    rerankerCheck_ok: (model) => `\u2705 El modelo Reranker responde: "${model}"`,
     dedupOnIngest_desc: "Al crear una p\xE1gina casi duplicada \u2014 fusionar con la existente mediante LLM-merge.",
     dedupThreshold_desc: "Umbral de coseno para dedup en ingest (0..1). Por defecto 0.85. \u2191 fusiona solo casi duplicados (m\xE1s seguro) \xB7 \u2193 m\xE1s agresivo, riesgo de fusiones falsas. Recomendado 0.83\u20130.90.",
     lintNearDuplicate_desc: "En Lint, mostrar pares de p\xE1ginas cercanas por coseno de embedding.",
@@ -27515,7 +27521,7 @@ var es = {
     visionModel_desc: "Nombre del modelo para llamadas vision chat, p. ej. gpt-4o-mini.",
     visionCheck_tooltip: "Enviar una solicitud multimodal de solo lectura para verificar este modelo nativo",
     visionCheck_missing: "Configura primero Base URL y el modelo Vision",
-    visionCheck_ok: "\u2705 El modelo Vision responde",
+    visionCheck_ok: (model) => `\u2705 El modelo Vision responde: "${model}"`,
     visionCheck_timeout: "La solicitud Vision agot\xF3 el tiempo de espera.",
     visionCheck_http: "El endpoint Vision devolvi\xF3 un error HTTP o de transporte.",
     visionCheck_malformed: "El endpoint Vision devolvi\xF3 JSON no v\xE1lido.",
@@ -32929,27 +32935,31 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
     }
   }
   async checkReranker() {
+    const T = i18n();
     const na = this.plugin.settings.nativeAgent;
     if (!na.baseUrl || !na.rerankerModel) {
       new import_obsidian5.Notice("Set Base URL and reranker model first");
       return;
     }
+    const model = na.rerankerModel;
     const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
-    const config = normalizeRerankerConfig({ enabled: true, model: na.rerankerModel });
+    const config = normalizeRerankerConfig({ enabled: true, model });
     const r = await probeRerankerModel(na.baseUrl, apiKey, config);
-    new import_obsidian5.Notice(r.ok ? `OK \u2014 reranker "${na.rerankerModel}" reachable` : `Reranker check failed: ${r.error}`);
+    new import_obsidian5.Notice(r.ok ? T.settings.rerankerCheck_ok(model) : `Reranker check failed: ${r.error}`);
   }
   // Verify the chat model responds (a minimal /chat/completions probe).
   async checkChatModel() {
+    const T = i18n();
     const na = this.plugin.settings.nativeAgent;
     if (!na.baseUrl || !na.model) {
       new import_obsidian5.Notice("Set Base URL and model first");
       return;
     }
+    const model = na.model;
     const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
     try {
-      await checkNativeAvailability(na.baseUrl, apiKey, na.model);
-      new import_obsidian5.Notice(`OK \u2014 chat model "${na.model}" reachable`);
+      await checkNativeAvailability(na.baseUrl, apiKey, model);
+      new import_obsidian5.Notice(T.settings.chatCheck_ok(model));
     } catch (e) {
       new import_obsidian5.Notice(`Chat model check failed: ${e.message}`);
     }
@@ -32965,7 +32975,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
       request: createRequestUrlVisionTransport(import_obsidian5.requestUrl),
       messages: {
         missing: T.settings.visionCheck_missing,
-        success: T.settings.visionCheck_ok,
+        success: T.settings.visionCheck_ok(model),
         details: {
           timeout: T.settings.visionCheck_timeout,
           http: T.settings.visionCheck_http,
@@ -51215,7 +51225,10 @@ function repairPrompt(profile, lastText, lastError) {
       lastText.slice(0, 2e3)
     ].join("\n");
   }
-  return lastError instanceof ZodError ? formatZodFeedback(lastError, lastText) : formatZodFeedback(null, lastText);
+  const feedback = lastError instanceof ZodError ? formatZodFeedback(lastError, lastText) : formatZodFeedback(null, lastText);
+  return profile.repairInstruction ? `${feedback}
+
+${profile.repairInstruction}` : feedback;
 }
 async function streamOnce(llm, model, messages, opts, signal, onEvent, lifecycle, attempt, callSite) {
   const params = buildChatParams(model, messages, opts, true);
@@ -52887,9 +52900,16 @@ async function prepareBootstrapEvidence(source, provisionalDomainId, policy, run
 }
 
 // prompts/ingest-synthesis.md
-var ingest_synthesis_default = "You are a bounded wiki synthesis assistant for the supplied domain.\n\nThe request contains only these contracts and typed inputs:\n- domain contract: {{domain_contract}}\n- output schema contract: {{schema_contract}}\n- canonical path contract: {{path_contract}}\n- complete EntityContextBundle values with validated evidence, selected complete WikiSectionUnit values, and ReplaceSectionAuthority metadata: {{entity_context_bundles}}\n- typed page descriptions: {{page_descriptions}}\n- packed tag-registry units: {{tag_registry_units}}\n\nThe request does not contain serialized service-storage records or machine-only retrieval data. Do not ask for, reproduce, or infer such data.\n\nReturn the structured output described by the schema. Cover every supplied entity exactly once with one action or one skip. Create a complete page only for a path that is not an existing page. An existing page may receive only a patch or skip. Patch sections must use add, append, or replace. Replace is permitted only when the supplied ReplaceSectionAuthority exactly matches path, normalized heading, expected section ordinal, expected section hash, and exact section text. Every replace section must include expectedSectionOrdinal. Add and append do not require replace authority. Preserve server-owned metadata and do not delete sections.\n";
+var ingest_synthesis_default = 'You are a bounded wiki synthesis assistant for the supplied domain.\n\nThe request contains only these contracts and typed inputs:\n- domain contract: {{domain_contract}}\n- output schema contract: {{schema_contract}}\n- canonical path contract: {{path_contract}}\n- complete EntityContextBundle values with validated evidence, selected complete WikiSectionUnit values, and ReplaceSectionAuthority metadata: {{entity_context_bundles}}\n- typed page descriptions: {{page_descriptions}}\n- packed tag-registry units: {{tag_registry_units}}\n\nThe request does not contain serialized service-storage records or machine-only retrieval data. Do not ask for, reproduce, or infer such data.\n\nReturn ONLY one JSON object with these three required root fields and one optional field:\n{"reasoning":"...","actions":[],"skips":[],"entity_types_delta":[]}\n\nDo not return page fields such as `type`, `description`, `resource`, `tags`, `status`,\n`aliases`, or `content` at the root. Put every page mutation inside `actions`.\n\nA create action has exactly this required shape:\n{"kind":"create","entityKey":"exact supplied entityKey","path":"canonical new page path","annotation":"short index description","content":"complete markdown page"}\n\nA patch action has this required outer shape:\n{"kind":"patch","entityKey":"exact supplied entityKey","path":"exact existing page path","expectedPageHash":"exact supplied page hash","sections":[]}\n\nA skip has exactly this shape:\n{"entityKey":"exact supplied entityKey","reason":"why no mutation is needed"}\n\nUse `kind` exactly as `create` or `patch`; never use `create_page`, `update`, or another\nsynonym. Every action requires `entityKey`. Every create requires `annotation`, even\nwhen it is an empty string. Always include `reasoning`, `actions`, and `skips`.\n`entity_types_delta` is optional; include it only for justified domain type updates.\n\nCover every supplied entity exactly once with one action or one skip. Create a complete\npage only for a path that is not an existing page. An existing page may receive only a\npatch or skip. Patch sections must use add, append, or replace. Replace is permitted\nonly when the supplied ReplaceSectionAuthority exactly matches path, normalized heading,\nexpected section ordinal, expected section hash, and exact section text. Every replace\nsection must include expectedSectionOrdinal. Add and append do not require replace\nauthority. Preserve server-owned metadata and do not delete sections.\n';
 
 // src/phases/ingest-synthesis.ts
+var synthesisRepairInstruction = [
+  'Use these required root fields and optional delta: {"reasoning":"...","actions":[],"skips":[],"entity_types_delta":[]}.',
+  "Do not return page fields at the root; put mutations inside actions.",
+  'Create action: {"kind":"create","entityKey":"exact supplied entityKey","path":"canonical new page path","annotation":"short index description","content":"complete markdown page"}.',
+  'Patch action: {"kind":"patch","entityKey":"exact supplied entityKey","path":"exact existing page path","expectedPageHash":"exact supplied page hash","sections":[]}.',
+  "Use kind exactly as create or patch. Every action requires entityKey; every create requires annotation. entity_types_delta is optional."
+].join("\n");
 var SynthesisSplitRequiredError = class extends Error {
   constructor(entityKeys, message = "Synthesis context cannot fit one entity bundle") {
     super(message);
@@ -53381,7 +53401,11 @@ async function executeSynthesisBatch(input, bundles, maxRetries) {
           model: input.model,
           baseMessages: request.messages,
           opts: request.opts,
-          profile: { kind: "json-zod", schema: SynthesisOutputSchema },
+          profile: {
+            kind: "json-zod",
+            schema: SynthesisOutputSchema,
+            repairInstruction: synthesisRepairInstruction
+          },
           maxRetries,
           callSite: "ingest.synthesize",
           lifecycle: createLlmLifecycle("synthesize_wiki_pages"),
@@ -53507,7 +53531,11 @@ async function executeSingleRegenerationRequest(input) {
     model: input.model,
     baseMessages: messages,
     opts,
-    profile: { kind: "json-zod", schema: SynthesisOutputSchema },
+    profile: {
+      kind: "json-zod",
+      schema: SynthesisOutputSchema,
+      repairInstruction: synthesisRepairInstruction
+    },
     maxRetries: 0,
     callSite: "ingest.synthesize",
     lifecycle: createLlmLifecycle("synthesize_wiki_pages"),

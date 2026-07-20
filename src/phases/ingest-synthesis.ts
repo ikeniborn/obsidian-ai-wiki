@@ -27,6 +27,14 @@ import { createLlmLifecycle, runStructuredWithRetry, StructuredOutputTruncatedEr
 import { lifecycleEvent } from "../llm-lifecycle";
 import synthesisPrompt from "../../prompts/ingest-synthesis.md";
 
+const synthesisRepairInstruction = [
+  "Use these required root fields and optional delta: {\"reasoning\":\"...\",\"actions\":[],\"skips\":[],\"entity_types_delta\":[]}.",
+  "Do not return page fields at the root; put mutations inside actions.",
+  "Create action: {\"kind\":\"create\",\"entityKey\":\"exact supplied entityKey\",\"path\":\"canonical new page path\",\"annotation\":\"short index description\",\"content\":\"complete markdown page\"}.",
+  "Patch action: {\"kind\":\"patch\",\"entityKey\":\"exact supplied entityKey\",\"path\":\"exact existing page path\",\"expectedPageHash\":\"exact supplied page hash\",\"sections\":[]}.",
+  "Use kind exactly as create or patch. Every action requires entityKey; every create requires annotation. entity_types_delta is optional.",
+].join("\n");
+
 export interface SynthesisCoverage {
   actions: readonly SynthesisAction[];
   skips: readonly { entityKey: string; reason: string }[];
@@ -676,7 +684,11 @@ async function executeSynthesisBatch(
           model: input.model,
           baseMessages: request.messages,
           opts: request.opts,
-          profile: { kind: "json-zod", schema: SynthesisOutputSchema },
+          profile: {
+            kind: "json-zod",
+            schema: SynthesisOutputSchema,
+            repairInstruction: synthesisRepairInstruction,
+          },
           maxRetries,
           callSite: "ingest.synthesize",
           lifecycle: createLlmLifecycle("synthesize_wiki_pages"),
@@ -816,7 +828,11 @@ async function executeSingleRegenerationRequest(input: ConflictRegenerationInput
     model: input.model,
     baseMessages: messages,
     opts,
-    profile: { kind: "json-zod", schema: SynthesisOutputSchema },
+    profile: {
+      kind: "json-zod",
+      schema: SynthesisOutputSchema,
+      repairInstruction: synthesisRepairInstruction,
+    },
     maxRetries: 0,
     callSite: "ingest.synthesize",
     lifecycle: createLlmLifecycle("synthesize_wiki_pages"),

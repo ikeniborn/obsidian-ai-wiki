@@ -348,6 +348,46 @@ test("single-bundle structured exhaustion is typed", async () => {
   );
 });
 
+test("single-bundle synthesis states the exact action envelope on initial and repair attempts", async () => {
+  const seen: Record<string, unknown>[] = [];
+  let calls = 0;
+  const llm = mockLlm(() => {
+    calls++;
+    return calls === 1
+      ? JSON.stringify({
+          type: "concept",
+          description: "A page",
+          content: "# A",
+        })
+      : outputFor(["a"]);
+  }, seen, []);
+
+  const result = await synthesizeEntityBatch(synthesisArgs([bundle("a")], llm, {
+    opts: { structuredRetries: 1 },
+  }));
+
+  assert.equal(result.actions[0].entityKey, "a");
+  assert.equal(seen.length, 2);
+  const requestText = (request: Record<string, unknown>) =>
+    (request.messages as Array<{ content?: unknown }>)
+      .map((message) => typeof message.content === "string" ? message.content : "");
+  for (const request of seen) {
+    const messages = requestText(request).join("\n");
+    assert.match(messages, /\"reasoning\"/);
+    assert.match(messages, /\"actions\"/);
+    assert.match(messages, /\"skips\"/);
+    assert.match(messages, /\"entity_types_delta\"/);
+    assert.match(messages, /\"kind\":\"create\"/);
+    assert.match(messages, /\"entityKey\"/);
+    assert.match(messages, /\"annotation\"/);
+    assert.match(messages, /Do not return page fields.*root/is);
+  }
+  const repairMessage = requestText(seen[1]).at(-1) ?? "";
+  assert.match(repairMessage, /required root fields and optional delta/i);
+  assert.match(repairMessage, /\"entity_types_delta\"/);
+  assert.match(repairMessage, /Do not return page fields at the root/i);
+});
+
 test("single bundle that cannot fit is typed as split-required", async () => {
   const seen: Record<string, unknown>[] = [];
   const llm = mockLlm(() => outputFor(["a"]), seen, []);

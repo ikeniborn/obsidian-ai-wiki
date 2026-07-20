@@ -820,6 +820,47 @@ test("schema retry recovery emits succeeded structural_error event", async () =>
   );
 });
 
+test("json-zod repair instruction is profile-local and absent by default", async () => {
+  const defaultRequests: Record<string, unknown>[] = [];
+  await runStructuredWithRetry({
+    llm: llmFromAttempts(['{"value":42}', '{"value":"ok"}'], defaultRequests),
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 1,
+    callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+
+  const instructedRequests: Record<string, unknown>[] = [];
+  await runStructuredWithRetry({
+    llm: llmFromAttempts(['{"value":42}', '{"value":"ok"}'], instructedRequests),
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: {},
+    profile: {
+      kind: "json-zod",
+      schema: SmallSchema,
+      repairInstruction: "PROFILE-LOCAL-REPAIR",
+    },
+    maxRetries: 1,
+    callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+
+  const lastUserText = (request: Record<string, unknown>) =>
+    ((request.messages as Array<{ role?: string; content?: unknown }>).filter(
+      (message) => message.role === "user" && typeof message.content === "string",
+    ).at(-1)?.content ?? "") as string;
+  assert.doesNotMatch(lastUserText(defaultRequests[1]), /PROFILE-LOCAL-REPAIR/);
+  assert.match(lastUserText(instructedRequests[1]), /PROFILE-LOCAL-REPAIR/);
+});
+
 test("json-zod with jsonMode unset starts with json_schema response_format", async () => {
   const seenParams: Record<string, unknown>[] = [];
 

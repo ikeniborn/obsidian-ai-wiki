@@ -161,22 +161,26 @@ export class LlmWikiSettingTab extends PluginSettingTab {
   }
 
   private async checkReranker(): Promise<void> {
+    const T = i18n();
     const na = this.plugin.settings.nativeAgent;
     if (!na.baseUrl || !na.rerankerModel) { new Notice("Set Base URL and reranker model first"); return; }
+    const model = na.rerankerModel;
     const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
-    const config = normalizeRerankerConfig({ enabled: true, model: na.rerankerModel });
+    const config = normalizeRerankerConfig({ enabled: true, model });
     const r = await probeRerankerModel(na.baseUrl, apiKey, config);
-    new Notice(r.ok ? `OK — reranker "${na.rerankerModel}" reachable` : `Reranker check failed: ${r.error}`);
+    new Notice(r.ok ? T.settings.rerankerCheck_ok(model) : `Reranker check failed: ${r.error}`);
   }
 
   // Verify the chat model responds (a minimal /chat/completions probe).
   private async checkChatModel(): Promise<void> {
+    const T = i18n();
     const na = this.plugin.settings.nativeAgent;
     if (!na.baseUrl || !na.model) { new Notice("Set Base URL and model first"); return; }
+    const model = na.model;
     const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
     try {
-      await checkNativeAvailability(na.baseUrl, apiKey, na.model);
-      new Notice(`OK — chat model "${na.model}" reachable`);
+      await checkNativeAvailability(na.baseUrl, apiKey, model);
+      new Notice(T.settings.chatCheck_ok(model));
     } catch (e) {
       new Notice(`Chat model check failed: ${(e as Error).message}`);
     }
@@ -193,7 +197,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       request: createRequestUrlVisionTransport(requestUrl),
       messages: {
         missing: T.settings.visionCheck_missing,
-        success: T.settings.visionCheck_ok,
+        success: T.settings.visionCheck_ok(model),
         details: {
           timeout: T.settings.visionCheck_timeout,
           http: T.settings.visionCheck_http,

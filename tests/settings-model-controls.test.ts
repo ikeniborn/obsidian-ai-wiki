@@ -381,7 +381,7 @@ test("all locales wrap exact localized details for every probe failure code", as
           timeoutMs: item.timeoutMs,
           messages: {
             missing: T.visionCheck_missing,
-            success: T.visionCheck_ok,
+            success: T.visionCheck_ok("m"),
             details: {
               timeout: T.visionCheck_timeout,
               http: T.visionCheck_http,
@@ -402,6 +402,35 @@ test("all locales wrap exact localized details for every probe failure code", as
   } finally {
     if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
     else Reflect.deleteProperty(globalThis, "window");
+  }
+});
+
+test("chat, reranker, and vision checks use one localized success format", () => {
+  const expected = {
+    en: [
+      '✅ Chat model responds: "chat-model"',
+      '✅ Reranker model responds: "rerank-model"',
+      '✅ Vision model responds: "vision-model"',
+    ],
+    ru: [
+      '✅ Chat model отвечает: "chat-model"',
+      '✅ Reranker model отвечает: "rerank-model"',
+      '✅ Vision model отвечает: "vision-model"',
+    ],
+    es: [
+      '✅ El modelo Chat responde: "chat-model"',
+      '✅ El modelo Reranker responde: "rerank-model"',
+      '✅ El modelo Vision responde: "vision-model"',
+    ],
+  } as const;
+
+  for (const lang of ["en", "ru", "es"] as const) {
+    const T = i18nFor(lang).settings;
+    assert.deepEqual([
+      T.chatCheck_ok("chat-model"),
+      T.rerankerCheck_ok("rerank-model"),
+      T.visionCheck_ok("vision-model"),
+    ], expected[lang]);
   }
 });
 
