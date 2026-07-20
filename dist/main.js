@@ -32666,7 +32666,7 @@ async function probeRerankerModel(baseUrl, apiKey, config, transport = fetchRera
 }
 
 // src/vision-probe.ts
-var PROBE_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+var PROBE_PNG = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQAQAAAAA3iMLMAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAACYktHRAAB3YoTpAAAAAd0SU1FB+oHFA0eFj4dl0EAAAAOSURBVAjXY/j/n4EUBAD9Th/hc4umrAAAAABJRU5ErkJggg==";
 function createRequestUrlVisionTransport(requestUrl4) {
   return async (request) => {
     if (request.signal.aborted) throw new DOMException("Request aborted", "AbortError");
@@ -32719,7 +32719,7 @@ async function probeNativeVisionModel(options) {
           messages: [{
             role: "user",
             content: [
-              { type: "text", text: "Describe the single pixel in one word." },
+              { type: "text", text: "Describe the image color in one word." },
               {
                 type: "image_url",
                 image_url: { url: `data:image/png;base64,${PROBE_PNG}` }

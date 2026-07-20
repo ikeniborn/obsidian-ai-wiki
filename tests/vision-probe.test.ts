@@ -45,7 +45,15 @@ test("probe sends selected model, auth, inline PNG, and small output cap", async
   assert.equal(body.model, "vision-model");
   assert.equal(body.max_tokens, 16);
   assert.equal(body.stream, false);
-  assert.match(JSON.stringify(body.messages), /data:image\/png;base64/);
+  const dataUrl = body.messages[0].content[1].image_url.url as string;
+  assert.match(dataUrl, /^data:image\/png;base64,/);
+  const png = Buffer.from(dataUrl.split(",", 2)[1], "base64");
+  assert.deepEqual(
+    png.subarray(0, 8),
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  );
+  assert.ok(png.readUInt32BE(16) >= 16);
+  assert.ok(png.readUInt32BE(20) >= 16);
 });
 
 test("HTTP, malformed, and empty responses are distinct failures", async () => {

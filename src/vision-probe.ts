@@ -1,5 +1,5 @@
 const PROBE_PNG =
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+  "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQAQAAAAA3iMLMAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAACYktHRAAB3YoTpAAAAAd0SU1FB+oHFA0eFj4dl0EAAAAOSURBVAjXY/j/n4EUBAD9Th/hc4umrAAAAABJRU5ErkJggg==";
 
 export type VisionProbeFailureCode = "timeout" | "http" | "malformed" | "empty";
 
@@ -106,7 +106,7 @@ export async function probeNativeVisionModel(
           messages: [{
             role: "user",
             content: [
-              { type: "text", text: "Describe the single pixel in one word." },
+              { type: "text", text: "Describe the image color in one word." },
               {
                 type: "image_url",
                 image_url: { url: `data:image/png;base64,${PROBE_PNG}` },
