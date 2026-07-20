@@ -1,6 +1,6 @@
 ---
 review:
-  spec_hash: a9d31e86d7666b09
+  spec_hash: 282f83c01f078280
   last_run: 2026-07-20
   phases:
     structure: { status: passed }
@@ -15,7 +15,7 @@ chain:
 # Bounded Ingest and Model Controls - Design
 
 Date: 2026-07-16
-Status: draft
+Status: approved
 Intent: `docs/superpowers/intents/2026-07-16-bounded-ingest-model-controls-intent.md`
 
 ## Acceptance From Intent
