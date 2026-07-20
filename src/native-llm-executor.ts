@@ -217,7 +217,8 @@ async function waitForRetry(
   retry.onEvent({
     kind: "transport_retry_scheduled",
     ...metadata(retry, attempt, meaningfulOutputSeen, failure),
-    ...delay,
+    delayMs: delay.delayMs,
+    delaySource: delay.source,
   });
   retry.lifecycle.begin(attempt + 1, transport);
   try {

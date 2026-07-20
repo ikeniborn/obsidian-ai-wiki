@@ -432,6 +432,8 @@ test("retry telemetry keeps one logical ID, fresh lifecycle IDs, and provider re
   assert.equal(retryEvents[0]?.providerRequestId, "provider-502");
   assert.equal(retryEvents[1]?.providerRequestId, "provider-502");
   assert.equal(retryEvents[0]?.delayMs, 25);
+  assert.equal(retryEvents[0]?.delaySource, "retry-after-ms");
+  assert.equal("source" in retryEvents[0], false);
   assert.equal(retryEvents[0]?.status, 502);
   assert.equal(retryEvents[0]?.connectionTimeoutMs, 0);
   assert.deepEqual(phases(events), [
