@@ -1,7 +1,7 @@
 ---
 review:
-  plan_hash: dffae2e77d80ce2f
-  last_run: 2026-07-19
+  plan_hash: 362acc301dad6717
+  last_run: 2026-07-20
   phases:
     structure: { status: passed }
     coverage: { status: passed }
@@ -18,9 +18,9 @@ chain:
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Keep every model request inside an explicit input budget while preserving complete source evidence, non-destructive wiki updates, reusable embeddings, operation-specific response quality controls, understandable model progress, and a complete full-Re-init domain rebuild.
+**Goal:** Keep every model request inside an explicit input budget, recover native OpenAI-compatible requests from bounded transient failures without replaying completed work, and preserve complete source evidence, non-destructive wiki updates, reusable embeddings, understandable model progress, and a complete full-Re-init domain rebuild.
 
-**Architecture:** A shared model-call policy resolves backend-specific input/output budgets and semantic compression. A conservative prompt governor packs complete context units and repacks on provider context errors. Ingest becomes a Markdown-aware evidence map/reduce pipeline whose synthesis emits complete creates or hash-guarded section patches; Query, Chat, Lint, Format, and Vision receive preservation-aware budget adapters. A shared lifecycle emits human model states while preserving log-only diagnostics, and destructive Re-init transactionally removes and recreates the complete target domain tree. `index.jsonl` remains structured storage and never crosses a prompt boundary.
+**Architecture:** A shared model-call policy resolves backend-specific input/output budgets and semantic compression. A conservative prompt governor packs complete context units and repacks on provider context errors. Ingest becomes a Markdown-aware evidence map/reduce pipeline whose synthesis emits complete creates or hash-guarded section patches; Query, Chat, Lint, Format, and Vision receive preservation-aware budget adapters. A native request executor owns connection/idle timeouts and bounded retry of the identical HTTP request, while structured repair and context repacking retain separate budgets. A shared lifecycle emits human model states while preserving log-only diagnostics, and destructive Re-init transactionally removes and recreates the complete target domain tree. `index.jsonl` remains structured storage and never crosses a prompt boundary.
 
 **Tech Stack:** TypeScript, OpenAI-compatible chat API, Claude CLI adapter, Zod, Obsidian plugin API, JSONL domain storage, Node test runner through `tsx`, ESLint, esbuild.
 
@@ -61,6 +61,11 @@ chain:
 - `src/phases/format-segments.ts`: preservation-oriented segmentation and ordered reassembly.
 - `src/phases/vision-recognition.ts`: typed recognition records and PDF page batching.
 - `src/vision-probe.ts`: pure native multimodal availability probe with injected transport.
+- `src/native-request-retry.ts`: pure native error classification, retry-header parsing,
+  deterministic delay calculation, and retry telemetry types.
+- `src/native-llm-executor.ts`: stream/non-stream request attempts, meaningful-output
+  guard, idle timing, cancellation, and lifecycle/event callbacks.
+- `src/proxy.ts`: desktop direct/proxy DNS/TCP/TLS connection timeout wiring.
 - Existing phase files remain orchestration owners and delegate to these focused modules.
 
 ## Requirement Traceability
@@ -85,6 +90,10 @@ chain:
 | R16 Bounded Non-Ingest Operations | Tasks 11-15, 17 |
 | R17 Human-Readable Model Progress | Tasks 18-20, 22 |
 | R18 Complete Destructive Re-init Wipe | Tasks 21-22 |
+| R19 Native Request-Scoped Transient Recovery | Tasks 23-25, 27 |
+| R20 Retry Safety and Error Precision | Tasks 23-25 |
+| R21 Independent Native Timeout Controls | Tasks 26-27 |
+| R22 Retry Lifecycle and Diagnostics | Tasks 24-27 |
 
 ## Phase 1: Shared Policy and Prompt Governance
 
@@ -2901,9 +2910,483 @@ no stale domain descendants survive wipe; all local gates and `wiki_lint` pass.
 Invoke `$check-chain result docs/superpowers/plans/2026-07-16-bounded-ingest-model-controls-plan.md`.
 Close `docs/TODO.md` only when result is `OK`.
 
+## Phase 7: Native Request-Scoped Transient Recovery
+
+### Task 23: Classify Retryable Native Failures and Calculate Bounded Delays
+
+**Requirements:** R19, R20
+
+**Files:**
+- Create: `src/native-request-retry.ts`
+- Create: `tests/native-request-retry.test.ts`
+- Modify: `src/types.ts` (`RunEvent` retry diagnostics only; Task 26 owns persisted timeout settings)
+
+- [ ] **Step 1: Write the failing retry-classification table**
+
+Cover `APIConnectionError`, `APIConnectionTimeoutError`, temporary socket/DNS errors,
+permanent TLS errors, HTTP 408/409/429/500/502/503/504, HTTP
+400/401/403/404/422, unknown errors, context errors, and `x-should-retry` precedence.
+
+```ts
+for (const [status, expected] of [
+  [408, true], [409, true], [429, true], [500, true], [502, true],
+  [400, false], [401, false], [403, false], [404, false], [422, false],
+] as const) {
+  test(`HTTP ${status} retryable=${expected}`, () => {
+    assert.equal(classifyNativeRetry(apiError(status)).retryable, expected);
+  });
+}
+
+test("x-should-retry false overrides HTTP 502", () => {
+  assert.equal(classifyNativeRetry(apiError(502, { "x-should-retry": "false" })).retryable, false);
+});
+```
+
+- [ ] **Step 2: Write failing delay and retry-header tests**
+
+Inject `now` and `random` so tests prove `retry-after-ms`, numeric/date `Retry-After`,
+exponential backoff, jitter, and the eight-second cap without sleeping.
+
+```ts
+assert.deepEqual(retryDelay(headers({ "retry-after-ms": "1250" }), 1, fixedClock), {
+  delayMs: 1250,
+  source: "retry-after-ms",
+});
+assert.ok(retryDelay(new Headers(), 20, fixedClock).delayMs <= 8000);
+```
+
+- [ ] **Step 3: Run focused tests and confirm RED**
+
+```bash
+node --import tsx --test tests/native-request-retry.test.ts
+```
+
+Expected: FAIL because `src/native-request-retry.ts` and retry diagnostic event variants
+do not exist.
+
+- [ ] **Step 4: Implement the pure policy**
+
+Create explicit results; unknown and permanent-certificate failures default to fail-closed.
+
+```ts
+export interface NativeRetryDecision {
+  retryable: boolean;
+  errorClass: string;
+  status?: number;
+  providerRequestId?: string;
+}
+
+export function classifyNativeRetry(error: unknown): NativeRetryDecision;
+export function retryDelay(
+  headers: Headers | undefined,
+  retryOrdinal: number,
+  env?: { now: () => number; random: () => number },
+): { delayMs: number; source: "retry-after-ms" | "retry-after" | "backoff" };
+```
+
+Add metadata-only `transport_retry_scheduled`, `transport_retry_recovered`, and
+`transport_retry_exhausted` `RunEvent` variants. Do not include prompt, source, body,
+authorization, or API key fields.
+
+- [ ] **Step 5: Verify policy tests**
+
+```bash
+node --import tsx --test tests/native-request-retry.test.ts tests/prompt-budget.test.ts
+npx tsc --noEmit --pretty false
+```
+
+Expected: PASS; context-limit fixtures remain non-transport-retryable.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/native-request-retry.ts src/types.ts tests/native-request-retry.test.ts
+git commit -m "feat(llm): classify transient native request failures"
+```
+
+### Task 24: Execute Stream and Non-Stream Attempts Without Replaying Output
+
+**Requirements:** R19, R20, R22
+
+**Files:**
+- Create: `src/native-llm-executor.ts`
+- Create: `tests/native-llm-executor.test.ts`
+- Modify: `src/types.ts` (`NativeRequestRetryContext` and native create options)
+- Modify: `src/llm-lifecycle.ts` (replacement-attempt helper)
+
+- [ ] **Step 1: Write failing non-stream attempt tests**
+
+Use a fake completion client and fake delay. Prove `502 -> success`, exhaustion,
+zero-retry mode, identical request params, user cancellation during request/backoff, and
+one returned completion.
+
+```ts
+const result = await executeNativeLlmRequest({
+  create: sequence([apiError(502), completion("ok")]),
+  params,
+  retry: retryContext({ maxRetries: 3 }),
+});
+assert.equal(result.kind, "completion");
+assert.equal(seenParams.length, 2);
+assert.deepEqual(seenParams[0], seenParams[1]);
+```
+
+- [ ] **Step 2: Write failing stream safety tests**
+
+Cover connection failure before the first chunk, role/usage-only chunks, retry before
+meaningful output, and fail-closed after nonblank reasoning/content.
+
+```ts
+await consume(executeNativeLlmRequest({
+  create: sequence([streamThatFailsBeforeContent(), streamOf("ok")]),
+  params: { ...params, stream: true },
+  retry: retryContext({ maxRetries: 1 }),
+}));
+assert.equal(requests, 2);
+
+await assert.rejects(consume(executeNativeLlmRequest({
+  create: sequence([streamThenFail("partial"), streamOf("must-not-run")]),
+  params: { ...params, stream: true },
+  retry: retryContext({ maxRetries: 1 }),
+})));
+assert.equal(requests, 1);
+```
+
+- [ ] **Step 3: Write failing lifecycle and telemetry tests**
+
+Require a fresh lifecycle ID per attempt, localized action key
+`retry_model_request`, ordered retry/sent/waiting states, log-only counters/status, and
+scheduled/recovered/exhausted diagnostics.
+
+- [ ] **Step 4: Run executor tests and confirm RED**
+
+```bash
+node --import tsx --test tests/native-llm-executor.test.ts
+```
+
+Expected: FAIL because the executor is absent.
+
+- [ ] **Step 5: Implement one logical request over bounded attempts**
+
+Use one immutable params object and attempt-local abort/timer state.
+
+```ts
+export interface NativeRequestRetryContext {
+  callSite: string;
+  action: LlmLifecycleAction;
+  maxRetries: number;
+  idleTimeoutMs: number;
+  signal: AbortSignal;
+  onEvent: (event: RunEvent) => void;
+  delay: (ms: number, signal: AbortSignal) => Promise<void>;
+}
+
+export function executeNativeLlmRequest(
+  input: NativeLlmExecutionInput,
+): Promise<OpenAI.Chat.ChatCompletion | AsyncIterable<OpenAI.Chat.ChatCompletionChunk>>;
+```
+
+For streams, return a wrapped async iterable that retries only before a nonblank
+`reasoning`, `reasoning_content`, or `content` delta. Ensure iterator cancellation clears
+the attempt timer and propagates user abort.
+
+- [ ] **Step 6: Verify executor and lifecycle**
+
+```bash
+node --import tsx --test tests/native-llm-executor.test.ts tests/llm-lifecycle.test.ts tests/structured-output.test.ts
+npx tsc --noEmit --pretty false
+```
+
+Expected: PASS; no delayed abort fires after success, cancellation, exhaustion, or early
+iterator close.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/native-llm-executor.ts src/types.ts src/llm-lifecycle.ts tests/native-llm-executor.test.ts tests/llm-lifecycle.test.ts
+git commit -m "feat(llm): add request-scoped native retry executor"
+```
+
+### Task 25: Route Every Native Chat Completion Through the Executor
+
+**Requirements:** R19, R20, R22
+
+**Files:**
+- Modify: `src/controller.ts` (construct retry-aware native client only)
+- Modify: `src/agent-runner.ts` (disable native operation replay; retain Claude path)
+- Modify: `src/phases/structured-output.ts`
+- Modify: `src/phases/ingest-evidence.ts`
+- Modify: `src/phases/ingest-synthesis.ts`
+- Modify: `src/phases/query-answer.ts`
+- Modify: `src/phases/chat.ts`
+- Modify: `src/phases/format.ts`
+- Modify: `src/phases/attachment-analyzer.ts`
+- Modify: `src/mobile-llm-wrap.ts`
+- Test: `tests/native-request-callsite-coverage.test.ts`
+- Test: `tests/init-force-retry.test.ts`
+- Test: existing phase lifecycle suites
+
+- [ ] **Step 1: Write a failing static call-site coverage test**
+
+Require every production `chat.completions.create` call to occur inside
+`native-llm-executor.ts` or an explicit adapter that supplies `NativeRequestRetryContext`.
+The test fails on an ungoverned direct call and lists its file/line.
+
+- [ ] **Step 2: Write failing backend-split watchdog tests**
+
+Add fixtures proving native idle recovery retries only the current request and never
+re-enters `runOperation`; Claude retains one guarded operation replay before destructive
+or visible output.
+
+```ts
+assert.equal(nativeRunOperationCalls, 1);
+assert.equal(nativeCompletionAttempts, 2);
+assert.equal(claudeRunOperationCalls, 2);
+```
+
+- [ ] **Step 3: Write the Re-init exactly-once regression**
+
+Inject first-synthesis HTTP 502 followed by success. Assert one `WipeDomain`, one source
+read/evidence application, one page/index application, and two synthesis HTTP attempts.
+
+- [ ] **Step 4: Run focused tests and confirm RED**
+
+```bash
+node --import tsx --test tests/native-request-callsite-coverage.test.ts tests/init-force-retry.test.ts tests/structured-output.test.ts
+```
+
+Expected: FAIL on direct calls and native operation replay.
+
+- [ ] **Step 5: Integrate the executor at shared request boundaries**
+
+Pass immutable request params plus `callSite`, human action, signal, retry limit, idle
+timeout, and `onEvent`. Keep response-format fallback, structured repair, context repack,
+and conflict regeneration outside the transport attempt loop. Keep OpenAI SDK
+`maxRetries: 0`.
+
+- [ ] **Step 6: Split native and Claude operation watchdog behavior**
+
+For native, timeout closes the active request and propagates exhaustion; never `continue`
+the outer `runOperation` loop. Preserve the existing destructive/visible-output guards and
+operation replay only in the Claude branch.
+
+- [ ] **Step 7: Verify all native operation families**
+
+```bash
+node --import tsx --test tests/native-request-callsite-coverage.test.ts tests/init-force-retry.test.ts tests/structured-output.test.ts tests/query-parity.test.ts tests/format-lifecycle.test.ts tests/vision-budget.test.ts
+node --import tsx --test tests/*.test.ts
+npx tsc --noEmit --pretty false
+```
+
+Expected: all native call sites governed; structured/context budgets remain independent;
+Claude behavior unchanged.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add src/controller.ts src/agent-runner.ts src/phases/structured-output.ts src/phases/ingest-evidence.ts src/phases/ingest-synthesis.ts src/phases/query-answer.ts src/phases/chat.ts src/phases/format.ts src/phases/attachment-analyzer.ts src/mobile-llm-wrap.ts tests/native-request-callsite-coverage.test.ts tests/init-force-retry.test.ts
+git commit -m "feat(llm): route native calls through request retries"
+```
+
+### Task 26: Separate Connection and Model-Idle Settings
+
+**Requirements:** R21, R22
+
+**Files:**
+- Modify: `src/types.ts` (top-level `llmConnectionTimeoutSec` default 15)
+- Modify: `src/main.ts` (preserve existing top-level values)
+- Modify: `src/proxy.ts` (direct/proxy connect timeout)
+- Modify: `src/controller.ts` (native transport construction)
+- Modify: `src/settings.ts`
+- Modify: `src/i18n.ts`
+- Test: `tests/native-openai-transport.test.ts`
+- Test: `tests/settings-model-controls.test.ts`
+- Test: `tests/settings-migration.test.ts`
+
+- [ ] **Step 1: Write failing persistence and UI tests**
+
+Prove old top-level `llmIdleRetries`/`llmIdleTimeoutSec` remain in place, missing
+connection timeout becomes 15, saved idle 600 survives, native labels request retries,
+Claude labels idle retries, and EN/RU/ES key shapes match.
+
+- [ ] **Step 2: Write failing desktop transport tests**
+
+Use local servers/sockets to prove DNS/TCP/TLS establishment receives the 15-second
+connect policy while a healthy non-stream response delayed beyond 15 seconds is not
+aborted. Verify direct and proxy dispatcher construction. Mobile keeps its current
+transport path and emits no false desktop guarantee.
+
+- [ ] **Step 3: Run settings/transport tests and confirm RED**
+
+```bash
+node --import tsx --test tests/native-openai-transport.test.ts tests/settings-model-controls.test.ts tests/settings-migration.test.ts
+```
+
+Expected: FAIL because one timeout currently controls headers/non-stream request duration.
+
+- [ ] **Step 4: Add independent top-level settings**
+
+Keep persisted keys at root:
+
+```ts
+llmConnectionTimeoutSec: 15,
+llmIdleTimeoutSec: 300,
+llmIdleRetries: 3,
+```
+
+Do not move old values under `nativeAgent`. Validate retries as integer `>= 0`,
+connection timeout as integer `>= 1`, and idle timeout as `0` or integer `>= 1`.
+
+- [ ] **Step 5: Wire desktop connection establishment only**
+
+Configure Undici direct/proxy connection establishment from
+`llmConnectionTimeoutSec`. Do not use 15 seconds as headers/body/OpenAI whole-request
+timeout. The executor owns model idle. Keep the Mobile limitation explicit in localized
+description and diagnostics.
+
+- [ ] **Step 6: Verify settings, transport, types, and build**
+
+```bash
+node --import tsx --test tests/native-openai-transport.test.ts tests/settings-model-controls.test.ts tests/settings-migration.test.ts
+npx tsc --noEmit --pretty false
+npm run build
+```
+
+Expected: defaults 3/15/300; saved 600 preserved; delayed healthy generation survives;
+EN/RU/ES compile.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/types.ts src/main.ts src/proxy.ts src/controller.ts src/settings.ts src/i18n.ts tests/native-openai-transport.test.ts tests/settings-model-controls.test.ts tests/settings-migration.test.ts
+git commit -m "feat(settings): separate connection and model idle timeouts"
+```
+
+### Task 27: Audit, Document, and Replay Transient Recovery
+
+**Requirements:** R15, R19, R20, R21, R22
+
+**Files:**
+- Create: `scripts/eval-native-request-retry.ts`
+- Create: `tests/eval-native-request-retry.test.ts`
+- Create at live verification: `docs/superpowers/evals/native-request-retry-live.json`
+- Modify: `scripts/audit-bounded-init-replay.ts`
+- Modify: `tests/audit-bounded-init-replay.test.ts`
+- Modify: `README.md`
+- Modify: `docs/README.ru.md`
+- Modify through iwiki MCP: `architecture/structured-output-runner`
+- Modify through iwiki MCP: `architecture/llm-lifecycle`
+
+- [ ] **Step 1: Write failing replay-auditor fixtures**
+
+Add valid `502 -> scheduled -> replacement lifecycle -> recovered -> next step`, retry
+exhaustion, retry after content, duplicate wipe, duplicate source/page application,
+missing terminal diagnostic, and timeout-value mismatch fixtures.
+
+- [ ] **Step 2: Run auditor tests and confirm RED**
+
+```bash
+node --import tsx --test tests/audit-bounded-init-replay.test.ts
+```
+
+Expected: FAIL because retry evidence and exactly-once recovery are not audited.
+
+- [ ] **Step 3: Extend the read-only auditor**
+
+Require attempt ordering, one lifecycle ID per attempt, approved status classification,
+configured retry bound, exactly one wipe, no duplicate effects, and continuation after
+recovery. Reject retry after meaningful output.
+
+- [ ] **Step 4: Update repository docs and iwiki**
+
+Document native-only request retry, status matrix, top-level global settings, 3/15/300
+defaults, Claude unchanged behavior, Mobile connection-timeout limitation, sidebar human
+states, and log-only diagnostics. Update iwiki only after runtime code exists, then run
+`wiki_lint`.
+
+- [ ] **Step 5: Write and test the metadata-only live eval script**
+
+The script accepts `--base-url`, `--model`, `--api-key-file`, and `--out`. It sends one
+small non-stream chat request through `/v1/chat/completions`, records no request body or
+credential, and writes:
+
+```json
+{
+  "endpointPath": "/v1/chat/completions",
+  "model": "configured-model",
+  "httpStatus": 200,
+  "durationMs": 17000,
+  "completed": true,
+  "exceededConnectionTimeoutMs": true
+}
+```
+
+Tests use a local delayed server and assert the JSON contains no `apiKey`,
+`authorization`, `messages`, `prompt`, or response content.
+
+```bash
+node --import tsx --test tests/eval-native-request-retry.test.ts
+```
+
+Expected: PASS; a delayed healthy response produces metadata-only evidence.
+
+- [ ] **Step 6: Run deterministic integration and live endpoint eval**
+
+Run injected 502 fixtures first. Then send a non-destructive synthesis-like request to the
+configured live endpoint and record status/duration without logging API keys or prompt
+content. A healthy response longer than 15 seconds must complete.
+
+```bash
+node --import tsx --test tests/native-request-retry.test.ts tests/native-llm-executor.test.ts tests/init-force-retry.test.ts tests/audit-bounded-init-replay.test.ts
+node --import tsx scripts/eval-native-request-retry.ts --base-url https://homelab.ikeniborn.ru/v1 --model ollama-deepseek-v4-pro-cloud --api-key-file tmp/api.txt --out docs/superpowers/evals/native-request-retry-live.json
+node -e "const e=require('./docs/superpowers/evals/native-request-retry-live.json'); if(!e.completed || e.httpStatus!==200) process.exit(1); console.log({httpStatus:e.httpStatus,durationMs:e.durationMs,completed:e.completed})"
+```
+
+Expected: injected retry recovers; non-retryable matrix fails closed; live request returns
+normally; evidence contains status/duration only.
+
+- [ ] **Step 7: Build and install the protected replay**
+
+```bash
+npm run build
+: "${RUN_VAULT:=/tmp/ai-wiki-bounded-ingest-replay.EehDiu/run}"
+test -d "$RUN_VAULT/.obsidian/plugins/ai-wiki"
+case "$RUN_VAULT" in /tmp/ai-wiki-bounded-ingest-replay.*/run) ;; *) exit 1 ;; esac
+cp dist/main.js dist/manifest.json dist/styles.css "$RUN_VAULT/.obsidian/plugins/ai-wiki/"
+```
+
+Restart Obsidian and run Re-init only in the protected replay vault.
+
+- [ ] **Step 8: Audit live Re-init and final gates**
+
+```bash
+node --import tsx scripts/audit-bounded-init-replay.ts --vault "$RUN_VAULT" --session latest-init --expected-sources 22
+node --import tsx --test tests/*.test.ts
+npx tsc --noEmit --pretty false
+npm run lint
+npm run build
+git diff --check
+```
+
+Expected: 22/22 sources; one wipe; no duplicate effects; any transient recovery remains
+within the configured limit; zero retry after content; tests/build pass; lint has zero
+errors; `wiki_lint` has no new broken/stale finding from changed sources.
+
+- [ ] **Step 9: Commit documentation, eval evidence, and audit tooling**
+
+```bash
+git add scripts/audit-bounded-init-replay.ts scripts/eval-native-request-retry.ts tests/audit-bounded-init-replay.test.ts tests/eval-native-request-retry.test.ts docs/superpowers/evals/native-request-retry-live.json README.md docs/README.ru.md
+git commit -m "docs(llm): document native transient request recovery"
+```
+
+- [ ] **Step 10: Run chain result reconciliation**
+
+Invoke `$check-chain result docs/superpowers/plans/2026-07-16-bounded-ingest-model-controls-plan.md`.
+Close `docs/TODO.md` only when R1-R22 and the protected replay produce verdict `OK`.
+
 ## Final Evidence Checklist
 
-- [ ] Every R1-R18 row maps to passing test or replay evidence.
+- [ ] Every R1-R22 row maps to passing test or replay evidence.
 - [ ] Every prepared request estimate is within its effective input budget.
 - [ ] No serialized vector/raw index record appears in captured prompts.
 - [ ] Oversized source chunk and reducer packet coverage is complete.
@@ -2917,4 +3400,10 @@ Close `docs/TODO.md` only when result is `OK`.
 - [ ] Background structured calls are non-stream; Chat, Query answer, and Format remain SSE.
 - [ ] Waiting timers do not extend the LLM watchdog.
 - [ ] Full Re-init removes the prior domain tree, recreates fresh state, and wipes exactly once.
+- [ ] Native transient failures retry only the current identical request; native operation replay is disabled.
+- [ ] Claude retains its existing guarded operation-level idle retry and never uses the native executor.
+- [ ] Retry stops after meaningful reasoning/content and after the configured additional-attempt limit.
+- [ ] Existing top-level retry/idle values round-trip; missing settings resolve to 3/15/300.
+- [ ] A healthy native generation longer than 15 seconds is not treated as a connection timeout.
+- [ ] Retry scheduled/recovered/exhausted evidence is complete in `agent.jsonl` and technical details stay out of sidebar labels.
 - [ ] Full tests, lint, build, diff check, safe replay audit, iwiki update, and `wiki_lint` pass.
