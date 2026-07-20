@@ -37,7 +37,7 @@ test("retries real OpenAI connection and timeout errors", () => {
 
 test("classifies the HTTP retry matrix from real SDK API errors", () => {
   for (const [status, expected] of [
-    [408, true], [409, true], [429, true], [500, true], [502, true], [503, true], [504, true],
+    [408, true], [409, true], [429, true], [500, true], [501, true], [502, true], [503, true], [504, true], [599, true],
     [400, false], [401, false], [403, false], [404, false], [422, false],
   ] as const) {
     assert.equal(classifyNativeRetry(apiError(status)).retryable, expected, `HTTP ${status}`);
@@ -105,6 +105,33 @@ test("never retries cancellation, context, repair, application, or unknown failu
     "unknown",
   ];
   for (const error of failures) assert.equal(classifyNativeRetry(error).retryable, false);
+});
+
+test("semantic and application failures remain non-retryable inside real connection errors", () => {
+  for (const name of [
+    "SchemaRepairError",
+    "EmptyOutputError",
+    "ApplicationError",
+    "IndexError",
+    "EmbeddingError",
+  ]) {
+    const semantic = Object.assign(new Error(name), { name });
+    const wrapped = new APIConnectionError({
+      message: "connection failed",
+      cause: new Error("middle", { cause: semantic }),
+    });
+    assert.equal(classifyNativeRetry(wrapped).retryable, false, name);
+  }
+});
+
+test("semantic failures remain non-retryable inside a real timeout error", () => {
+  const semantic = Object.assign(new Error("schema repair"), {
+    name: "SchemaRepairError",
+    code: "SCHEMA_REPAIR",
+  });
+  const timeout = new APIConnectionTimeoutError({ message: "connection timed out" });
+  Object.assign(timeout, { cause: semantic });
+  assert.equal(classifyNativeRetry(timeout).retryable, false);
 });
 
 const fixedClock = { now: () => Date.parse("2026-07-21T12:00:00.000Z"), random: () => 1 };

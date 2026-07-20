@@ -39,6 +39,20 @@ const CONTEXT_CODES = new Set([
   "context_length_exceeded",
   "max_context_length_exceeded",
 ]);
+const SEMANTIC_ERROR_NAMES = new Set([
+  "ApplicationError",
+  "EmbeddingError",
+  "EmptyOutputError",
+  "IndexError",
+  "SchemaRepairError",
+]);
+const SEMANTIC_ERROR_CODES = new Set([
+  "APPLICATION_ERROR",
+  "EMBEDDING_ERROR",
+  "EMPTY_OUTPUT",
+  "INDEX_ERROR",
+  "SCHEMA_REPAIR",
+]);
 
 function causeNodes(error: unknown): unknown[] {
   const nodes: unknown[] = [];
@@ -72,12 +86,12 @@ function decision(
 }
 
 export function classifyNativeRetry(error: unknown): NativeRetryDecision {
-  if (error instanceof APIUserAbortError
-    || (error instanceof Error && error.name === "AbortError")) {
+  const nodes = causeNodes(error);
+  if (nodes.some((node) => node instanceof APIUserAbortError
+    || (node instanceof Error && node.name === "AbortError"))) {
     return decision(false, "user_cancellation");
   }
 
-  const nodes = causeNodes(error);
   for (const node of nodes) {
     const code = errorCode(node);
     if (code !== undefined && PERMANENT_TRANSPORT_CODES.has(code)) {
@@ -85,10 +99,22 @@ export function classifyNativeRetry(error: unknown): NativeRetryDecision {
     }
   }
 
-  if (error instanceof APIError) {
-    if (error.code !== null && error.code !== undefined && CONTEXT_CODES.has(error.code)) {
-      return decision(false, "context_limit", error);
+  for (const node of nodes) {
+    const code = errorCode(node);
+    if (code !== undefined && CONTEXT_CODES.has(code)) {
+      return decision(false, "context_limit", error instanceof APIError ? error : undefined);
     }
+  }
+
+  for (const node of nodes) {
+    const code = errorCode(node);
+    if ((node instanceof Error && SEMANTIC_ERROR_NAMES.has(node.name))
+      || (code !== undefined && SEMANTIC_ERROR_CODES.has(code))) {
+      return decision(false, "semantic_error", error instanceof APIError ? error : undefined);
+    }
+  }
+
+  if (error instanceof APIError) {
     const shouldRetry = error.headers?.get("x-should-retry")?.trim().toLowerCase();
     if (shouldRetry === "false") return decision(false, "provider_no_retry", error);
     if (shouldRetry === "true") return decision(true, "provider_retry", error);
