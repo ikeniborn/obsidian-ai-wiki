@@ -1,7 +1,7 @@
 ---
 review:
-  intent_hash: b125ed7c9fd23440
-  last_run: 2026-07-19
+  intent_hash: 39c65ba5ee62594c
+  last_run: 2026-07-20
   phases:
     structure: { status: passed }
     completeness: { status: passed }
@@ -29,6 +29,12 @@ attempt, and budget fields in `agent.jsonl`, not in the user-facing progress lab
 Destructive full Re-init must remove the complete prior domain tree before rebuilding it,
 including obsolete empty entity-type directories.
 
+Make every individual LLM step resilient to transient connection and provider failures
+without replaying the enclosing operation or any completed/destructive work. Reuse one
+configured retry limit for request-scoped recovery, separate the network connection
+timeout from the model idle timeout, and fail closed once an attempt has produced
+meaningful model reasoning or content.
+
 ## Desired Outcomes
 
 - A one-page domain and a 100-page domain can complete normal Ingest without a model context-length error when their source input is within the supported budget.
@@ -49,6 +55,17 @@ including obsolete empty entity-type directories.
   `agent.jsonl` but never appear in sidebar progress text.
 - Full Re-init leaves no prior page, service file, or obsolete empty subdirectory under
   `!Wiki/<domain>` before the new domain state is created.
+- Every LLM step retries eligible transient connection failures and HTTP 408, 409, 429,
+  and 5xx responses within that step's configured retry limit. A successful retry
+  continues with the next pipeline step; exhaustion ends the operation.
+- Request retry never repeats `WipeDomain`, source enumeration, completed evidence work,
+  page application, or the enclosing Init/Re-init/Ingest operation.
+- Settings expose independent connection and LLM idle timeouts. The connection timeout
+  defaults to 15 seconds; the LLM idle timeout defaults to 300 seconds; persisted user
+  values are not overwritten.
+- Sidebar lifecycle shows each replacement LLM attempt in the selected Obsidian language,
+  while exact retry classification, status, delay, and attempt counters remain in
+  `agent.jsonl`.
 
 ## Health Metrics
 
@@ -68,6 +85,16 @@ including obsolete empty entity-type directories.
   ambiguous silent wait between dispatch and first response.
 - Re-init cleanup: zero descendants from the previous domain tree survive the destructive
   wipe; other domain trees remain byte-identical.
+- Transient recovery: each eligible request failure consumes at most the configured
+  request retry count, and a recovered request advances the pipeline exactly once.
+- Retry safety: zero enclosing-operation replays and zero duplicate tool/page/index
+  applications after a request retry.
+- Retry precision: HTTP 400, 401, 403, 404, 422, context-limit errors, structured
+  validation failures, user cancellation, permanent TLS failures, and failures after
+  meaningful model output produce zero transport retries.
+- Timeout separation: connection timeout and LLM idle timeout round-trip independently;
+  healthy non-stream calls longer than 15 seconds are not classified as connection
+  timeouts.
 
 ## Strategic Context
 
@@ -83,8 +110,11 @@ including obsolete empty entity-type directories.
   - `src/view.ts` and shared `RunEvent` rendering, which must present human labels while
     keeping technical diagnostics out of the sidebar.
   - Domain-folder deletion and recreation used by destructive Re-init.
+  - `src/phases/llm-utils.ts`, shared native OpenAI-compatible request execution,
+    OpenAI SDK error classes, and provider retry headers.
+  - Request-level lifecycle emission in structured and interactive model call paths.
   - Users running Ingest, Init, or destructive Re-init across small and large domains, and users validating native chat/vision model configuration.
-- Priority trade-off: trust > cost > speed. Preserve synthesis correctness and existing knowledge first, then minimize prompt cost, then optimize latency.
+- Priority trade-off: data integrity > operation recovery > speed > token cost.
 
 ## Constraints
 
@@ -105,6 +135,13 @@ including obsolete empty entity-type directories.
 - Keep numeric input/output budgets separate from maximum/balanced/minimum semantic compression; each compressible operation receives its own policy fragment and preservation rules.
 - Store one global compression profile and expose per-operation overrides only when per-operation mode is enabled.
 - Mirror global budget controls in native per-operation settings; mirror the input budget in Claude Agent per-operation settings.
+- Apply retry at the smallest request boundary shared by every LLM step, never around an
+  operation, phase, source, or tool mutation.
+- Honor provider `Retry-After` guidance when present; otherwise use bounded exponential
+  backoff with jitter.
+- Treat OpenAI-compatible connection errors, connection timeouts, HTTP 408, 409, 429,
+  and 5xx responses as retryable unless `x-should-retry: false` is present. Honor
+  `x-should-retry: true` for provider-declared transient failures.
 
 ### Hard (architectural enforcement)
 
@@ -124,14 +161,23 @@ including obsolete empty entity-type directories.
 - Do not let UI waiting timers reset or extend the operation idle watchdog.
 - Full Re-init must delete the complete target domain tree exactly once per explicit user
   run before creating fresh metadata, index, entity folders, or pages.
+- Never transport-retry after an attempt has emitted nonblank model reasoning or content.
+- Never transport-retry user cancellation, permanent TLS/certificate failures, HTTP 400,
+  401, 403, 404, or 422, context-limit errors, structured validation failures, or
+  application/index/embedding failures.
+- Never replay the enclosing operation or any completed/destructive step to recover one
+  failed LLM request.
+- Keep connection timeout and LLM idle timeout as independent persisted settings. Default
+  connection timeout is 15 seconds and default LLM idle timeout is 300 seconds; migration
+  must preserve explicitly saved values.
 - Do not run destructive Init/Re-init against the user's working vault without separate explicit approval.
 
 ## Autonomy Zones
 
-- Full autonomy (reversible, low risk): root-cause analysis, focused fixtures, approved context-budget/retrieval/section-patch changes, approved budget and compression Settings controls, native Vision probe, prompt diagnostics, and non-destructive verification.
-- Guarded (log + confidence threshold): numeric context budgets, retrieval thresholds, and context-unit selection limits, provided their decisions and measured prompt composition are logged.
-- Proposal-first (needs approval): changing the `index.jsonl` schema, adding model controls beyond those named here, controlling Claude Agent output limits from the plugin, supporting Vision Check through Claude CLI, or changing the public page-update contract beyond internal section patches.
-- No autonomy (human only): destructive Init/Re-init on the working vault, silent source/context truncation, or any behavior that knowingly permits existing-section loss.
+- Full autonomy (reversible, low risk): root-cause analysis, focused fixtures, approved context-budget/retrieval/section-patch changes, approved budget/compression/timeout Settings controls, native Vision probe, prompt diagnostics, approved request-retry classification, lifecycle/log events, and non-destructive verification.
+- Guarded (log + confidence threshold): numeric context budgets, retrieval thresholds, context-unit selection limits, and retry backoff timing, provided decisions and measured request diagnostics are logged.
+- Proposal-first (needs approval): changing the retryable HTTP status set, permitting retry after meaningful model output, changing the `index.jsonl` schema, adding model controls beyond those named here, controlling Claude Agent output limits from the plugin, supporting Vision Check through Claude CLI, or changing the public page-update contract beyond internal section patches.
+- No autonomy (human only): destructive Init/Re-init on the working vault, replaying an enclosing operation after destructive work, silent source/context truncation, or any behavior that knowingly permits duplicate application or existing-section loss.
 
 > These zones OVERRIDE subagent-driven-development's "continuous execution,
 > don't pause" default. Any task touching proposal-first / no-go decisions
@@ -144,4 +190,8 @@ including obsolete empty entity-type directories.
 - Halt if: oversized-source reduction cannot account for every source chunk or would silently drop exact technical evidence.
 - Escalate if: preserving create/update quality requires an `index.jsonl` schema change or a public page-update contract beyond the approved internal section patches.
 - Escalate if: the requested Vision check requires Claude multimodal transport or the requested output budget requires plugin control over Claude CLI output limits.
-- Done when: 1-page, 15-page, and 100-page fixtures stay within the selected context budget with no raw vectors; oversized-source evidence covers every input chunk; focused create/update and duplicate checks pass; untouched sections are preserved; unchanged chunk embeddings are reused; the 22-source Init/Re-init scenario completes on a safe vault copy without a context-length failure; global/per-operation budgets and compression profiles resolve correctly; compression preservation invariants pass for Ingest, Lint, and Vision while Format remains unchanged; the native Vision image probe passes success/failure read-only fixtures; all model-backed operations expose the approved human lifecycle without technical sidebar fields; and full Re-init leaves no stale descendants in the rebuilt domain tree.
+- Halt if: request retry cannot prove that no meaningful model reasoning/content was
+  emitted, or recovery would replay a tool mutation, source, phase, or operation.
+- Escalate if: a provider requires adding a retryable status outside the approved matrix
+  or retrying after meaningful model output.
+- Done when: 1-page, 15-page, and 100-page fixtures stay within the selected context budget with no raw vectors; oversized-source evidence covers every input chunk; focused create/update and duplicate checks pass; untouched sections are preserved; unchanged chunk embeddings are reused; the 22-source Init/Re-init scenario completes on a safe vault copy without a context-length failure; global/per-operation budgets and compression profiles resolve correctly; compression preservation invariants pass for Ingest, Lint, and Vision while Format remains unchanged; the native Vision image probe passes success/failure read-only fixtures; all model-backed operations expose the approved human lifecycle without technical sidebar fields; full Re-init leaves no stale descendants in the rebuilt domain tree; eligible connection and provider failures recover within the configured per-request retry limit without replaying completed work; retry exhaustion terminates the operation; non-retryable failures produce no transport retries; and connection/idle timeout settings remain independent with defaults of 15 and 300 seconds.
