@@ -1,6 +1,6 @@
 ---
 review:
-  plan_hash: 362acc301dad6717
+  plan_hash: 2170b83ff543ae41
   last_run: 2026-07-20
   phases:
     structure: { status: passed }
@@ -2337,8 +2337,12 @@ Use `wiki_update_page` on existing headings in `overview`, `jsonl-domain-storage
 ```bash
 REPLAY_ROOT=$(mktemp -d /tmp/ai-wiki-bounded-ingest-replay.XXXXXX)
 chmod 700 "$REPLAY_ROOT"
-cp -a --reflink=auto /home/ikeniborn/Documents/Project/notes/vaults/Work "$REPLAY_ROOT/before"
-cp -a --reflink=auto /home/ikeniborn/Documents/Project/notes/vaults/Work "$REPLAY_ROOT/run"
+SOURCE_VAULT=/home/ikeniborn/Documents/Project/notes/vaults/Work
+SOURCE_VAULT=$(realpath -e "$SOURCE_VAULT")
+cp -a --reflink=auto "$SOURCE_VAULT" "$REPLAY_ROOT/before"
+cp -a --reflink=auto "$SOURCE_VAULT" "$REPLAY_ROOT/run"
+printf 'source=%s\ncreated_epoch=%s\nroot=%s\n' "$SOURCE_VAULT" "$(date +%s)" "$REPLAY_ROOT" > "$REPLAY_ROOT/.replay-provenance"
+chmod 600 "$REPLAY_ROOT/.replay-provenance"
 test "$REPLAY_ROOT/run" != /home/ikeniborn/Documents/Project/notes/vaults/Work
 printf '%s\n' "$REPLAY_ROOT"
 ```
@@ -2879,10 +2883,22 @@ until PASS/APPROVED.
 npm run build
 sha256sum dist/main.js
 : "${REPLAY_ROOT:?Set REPLAY_ROOT to the protected replay root created in Task 17 Step 4}"
-RUN_VAULT="$REPLAY_ROOT/run"
+RAW_REPLAY_ROOT=$REPLAY_ROOT
+test ! -L "$RAW_REPLAY_ROOT"
+test ! -L "$RAW_REPLAY_ROOT/run"
+REPLAY_ROOT=$(realpath -e "$RAW_REPLAY_ROOT")
+RUN_VAULT=$(realpath -e "$REPLAY_ROOT/run")
 test -d "$RUN_VAULT/.obsidian/plugins/ai-wiki"
 test "$RUN_VAULT" != /home/ikeniborn/Documents/Project/notes/vaults/Work
 case "$RUN_VAULT" in /tmp/ai-wiki-bounded-ingest-replay.*/run) ;; *) exit 1 ;; esac
+MARKER="$REPLAY_ROOT/.replay-provenance"
+test -f "$MARKER"
+test -O "$MARKER"
+grep -Fx "source=/home/ikeniborn/Documents/Project/notes/vaults/Work" "$MARKER"
+grep -Fx "root=$REPLAY_ROOT" "$MARKER"
+CREATED_EPOCH=$(sed -n 's/^created_epoch=//p' "$MARKER")
+test "$CREATED_EPOCH" -le "$(date +%s)"
+test "$CREATED_EPOCH" -ge "$(( $(date +%s) - 604800 ))"
 cp dist/main.js dist/manifest.json dist/styles.css "$RUN_VAULT/.obsidian/plugins/ai-wiki/"
 ```
 
@@ -2926,6 +2942,10 @@ Close `docs/TODO.md` only when result is `OK`.
 Cover `APIConnectionError`, `APIConnectionTimeoutError`, temporary socket/DNS errors,
 permanent TLS errors, HTTP 408/409/429/500/502/503/504, HTTP
 400/401/403/404/422, unknown errors, context errors, and `x-should-retry` precedence.
+Construct fixtures with the real OpenAI SDK error APIs (`APIConnectionError`,
+`APIConnectionTimeoutError`, and `APIError.generate`) rather than structural lookalikes.
+Include wrapped socket/TLS failures at multiple `cause` depths, plus a cyclic cause graph,
+and require bounded cycle-safe traversal.
 
 ```ts
 for (const [status, expected] of [
@@ -2984,6 +3004,10 @@ export function retryDelay(
 ): { delayMs: number; source: "retry-after-ms" | "retry-after" | "backoff" };
 ```
 
+The classifier may inspect OpenAI SDK errors and their nested `cause` chain only through a
+cycle-safe bounded walk. It must not classify by message substring when a typed status,
+header override, socket code, or TLS code is available.
+
 Add metadata-only `transport_retry_scheduled`, `transport_retry_recovered`, and
 `transport_retry_exhausted` `RunEvent` variants. Do not include prompt, source, body,
 authorization, or API key fields.
@@ -3026,7 +3050,8 @@ const result = await executeNativeLlmRequest({
   params,
   retry: retryContext({ maxRetries: 3 }),
 });
-assert.equal(result.kind, "completion");
+assert.equal("choices" in result, true);
+assert.equal((result as OpenAI.Chat.ChatCompletion).choices[0]?.message.content, "ok");
 assert.equal(seenParams.length, 2);
 assert.deepEqual(seenParams[0], seenParams[1]);
 ```
@@ -3054,9 +3079,10 @@ assert.equal(requests, 1);
 
 - [ ] **Step 3: Write failing lifecycle and telemetry tests**
 
-Require a fresh lifecycle ID per attempt, localized action key
+Require one stable logical request ID, a fresh lifecycle ID per attempt, localized action key
 `retry_model_request`, ordered retry/sent/waiting states, log-only counters/status, and
-scheduled/recovered/exhausted diagnostics.
+scheduled/recovered/exhausted diagnostics. Include an `x-request-id` fixture and assert
+`providerRequestId` is extracted and logged when present.
 
 - [ ] **Step 4: Run executor tests and confirm RED**
 
@@ -3072,13 +3098,21 @@ Use one immutable params object and attempt-local abort/timer state.
 
 ```ts
 export interface NativeRequestRetryContext {
+  logicalRequestId: string;
   callSite: string;
-  action: LlmLifecycleAction;
   maxRetries: number;
   idleTimeoutMs: number;
   signal: AbortSignal;
   onEvent: (event: RunEvent) => void;
+  lifecycle: NativeRequestLifecycle;
   delay: (ms: number, signal: AbortSignal) => Promise<void>;
+}
+
+export interface NativeRequestLifecycle {
+  begin(attempt: number, transport: "stream" | "non-stream"): void;
+  phase(phase: "sent" | "waiting" | "producing" | "validating"): void;
+  close(phase: "retrying" | "failed" | "cancelled"): void;
+  current(): { id: string; action: LlmLifecycleAction };
 }
 
 export function executeNativeLlmRequest(
@@ -3087,8 +3121,11 @@ export function executeNativeLlmRequest(
 ```
 
 For streams, return a wrapped async iterable that retries only before a nonblank
-`reasoning`, `reasoning_content`, or `content` delta. Ensure iterator cancellation clears
-the attempt timer and propagates user abort.
+`reasoning`, `reasoning_content`, or `content` delta. Any valid OpenAI chunk may reset the
+idle timer, but role/usage-only chunks do not set the meaningful-output retry guard. The
+executor drives the call site's supplied lifecycle controller; it must not create a second
+parallel lifecycle. Ensure iterator cancellation clears the attempt timer and propagates
+user abort.
 
 - [ ] **Step 6: Verify executor and lifecycle**
 
@@ -3113,6 +3150,7 @@ git commit -m "feat(llm): add request-scoped native retry executor"
 
 **Files:**
 - Modify: `src/controller.ts` (construct retry-aware native client only)
+- Create: `src/native-openai-client.ts` (Node-safe production client/transport factory)
 - Modify: `src/agent-runner.ts` (disable native operation replay; retain Claude path)
 - Modify: `src/phases/structured-output.ts`
 - Modify: `src/phases/ingest-evidence.ts`
@@ -3128,9 +3166,12 @@ git commit -m "feat(llm): add request-scoped native retry executor"
 
 - [ ] **Step 1: Write a failing static call-site coverage test**
 
-Require every production `chat.completions.create` call to occur inside
-`native-llm-executor.ts` or an explicit adapter that supplies `NativeRequestRetryContext`.
-The test fails on an ungoverned direct call and lists its file/line.
+Use the TypeScript AST, not a text search. Require every production completion call,
+including `completions.create`, destructured aliases, bound methods, and wrappers, to occur
+inside `native-llm-executor.ts` or an explicit adapter that supplies
+`NativeRequestRetryContext`. Seed the test with the current 13 direct/wrapper sites and
+make it fail if a raw OpenAI client escapes the controller/executor boundary. The test
+lists every ungoverned file/line.
 
 - [ ] **Step 2: Write failing backend-split watchdog tests**
 
@@ -3162,7 +3203,19 @@ Expected: FAIL on direct calls and native operation replay.
 Pass immutable request params plus `callSite`, human action, signal, retry limit, idle
 timeout, and `onEvent`. Keep response-format fallback, structured repair, context repack,
 and conflict regeneration outside the transport attempt loop. Keep OpenAI SDK
-`maxRetries: 0`.
+`maxRetries: 0`. Move `preparing/sent/waiting/producing/retrying/failed/cancelled`
+ownership into the executor-driven supplied lifecycle controller and remove duplicate
+transport-phase emissions from phase call sites. Phase owners retain only
+`validating/applying/completed`.
+
+Extract OpenAI client and Undici transport construction from the Obsidian-dependent
+controller into `native-openai-client.ts`. Both the controller and Node live-eval script
+must import this production factory; the module must not import `obsidian`.
+
+This ownership move is backend-specific: the native executor emits native transport
+phases, while the Claude adapter retains its existing lifecycle driver for the same shared
+phase functions. Do not remove backend-neutral phase transitions until both adapters have
+explicit owners. Add parity tests proving one lifecycle sequence per backend.
 
 - [ ] **Step 6: Split native and Claude operation watchdog behavior**
 
@@ -3173,7 +3226,7 @@ operation replay only in the Claude branch.
 - [ ] **Step 7: Verify all native operation families**
 
 ```bash
-node --import tsx --test tests/native-request-callsite-coverage.test.ts tests/init-force-retry.test.ts tests/structured-output.test.ts tests/query-parity.test.ts tests/format-lifecycle.test.ts tests/vision-budget.test.ts
+node --import tsx --test tests/native-request-callsite-coverage.test.ts tests/init-force-retry.test.ts tests/structured-output.test.ts tests/query-parity.test.ts tests/format-budget.test.ts tests/vision-budget.test.ts
 node --import tsx --test tests/*.test.ts
 npx tsc --noEmit --pretty false
 ```
@@ -3184,7 +3237,7 @@ Claude behavior unchanged.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/controller.ts src/agent-runner.ts src/phases/structured-output.ts src/phases/ingest-evidence.ts src/phases/ingest-synthesis.ts src/phases/query-answer.ts src/phases/chat.ts src/phases/format.ts src/phases/attachment-analyzer.ts src/mobile-llm-wrap.ts tests/native-request-callsite-coverage.test.ts tests/init-force-retry.test.ts
+git add src/controller.ts src/native-openai-client.ts src/agent-runner.ts src/phases/structured-output.ts src/phases/ingest-evidence.ts src/phases/ingest-synthesis.ts src/phases/query-answer.ts src/phases/chat.ts src/phases/format.ts src/phases/attachment-analyzer.ts src/mobile-llm-wrap.ts tests/native-request-callsite-coverage.test.ts tests/init-force-retry.test.ts
 git commit -m "feat(llm): route native calls through request retries"
 ```
 
@@ -3200,8 +3253,7 @@ git commit -m "feat(llm): route native calls through request retries"
 - Modify: `src/settings.ts`
 - Modify: `src/i18n.ts`
 - Test: `tests/native-openai-transport.test.ts`
-- Test: `tests/settings-model-controls.test.ts`
-- Test: `tests/settings-migration.test.ts`
+- Modify: `tests/settings-model-controls.test.ts` (defaults, persisted round-trip, and UI)
 
 - [ ] **Step 1: Write failing persistence and UI tests**
 
@@ -3213,13 +3265,15 @@ Claude labels idle retries, and EN/RU/ES key shapes match.
 
 Use local servers/sockets to prove DNS/TCP/TLS establishment receives the 15-second
 connect policy while a healthy non-stream response delayed beyond 15 seconds is not
-aborted. Verify direct and proxy dispatcher construction. Mobile keeps its current
-transport path and emits no false desktop guarantee.
+aborted. Verify direct `connectTimeout` and both ProxyAgent connector layers:
+top-level `connectTimeout`, `proxyTls.timeout`, and `requestTls.timeout`. Include separate
+stalled-proxy and stalled-target TLS fixtures. Mobile keeps its current transport path and
+emits no false desktop guarantee.
 
 - [ ] **Step 3: Run settings/transport tests and confirm RED**
 
 ```bash
-node --import tsx --test tests/native-openai-transport.test.ts tests/settings-model-controls.test.ts tests/settings-migration.test.ts
+node --import tsx --test tests/native-openai-transport.test.ts tests/settings-model-controls.test.ts
 ```
 
 Expected: FAIL because one timeout currently controls headers/non-stream request duration.
@@ -3235,19 +3289,27 @@ llmIdleRetries: 3,
 ```
 
 Do not move old values under `nativeAgent`. Validate retries as integer `>= 0`,
-connection timeout as integer `>= 1`, and idle timeout as `0` or integer `>= 1`.
+connection timeout as integer `>= 1`, and idle timeout as `0` or integer from `1` through
+`2_146_999` seconds. Define `MAX_SAFE_TIMER_MS = 2_147_000_000`; enabled idle uses its
+deadline plus a 1,000 ms SDK margin, while idle `0` sets SDK timeout exactly to
+`MAX_SAFE_TIMER_MS`.
+Configure OpenAI SDK `timeout` above every enabled executor idle deadline. When idle is
+`0`, use that explicit maximum safe timer instead of the SDK ten-minute default.
+Add fake-timer fixtures for idle `0`, idle above 600 seconds, and executor deadline winning
+when enabled. Reject values above the timer-safe maximum in load validation and Settings.
 
 - [ ] **Step 5: Wire desktop connection establishment only**
 
 Configure Undici direct/proxy connection establishment from
 `llmConnectionTimeoutSec`. Do not use 15 seconds as headers/body/OpenAI whole-request
-timeout. The executor owns model idle. Keep the Mobile limitation explicit in localized
-description and diagnostics.
+timeout. Direct uses `connectTimeout`; ProxyAgent configures `connectTimeout`,
+`proxyTls.timeout`, and `requestTls.timeout`. The executor owns model idle. Keep the
+Mobile limitation explicit in localized description and diagnostics.
 
 - [ ] **Step 6: Verify settings, transport, types, and build**
 
 ```bash
-node --import tsx --test tests/native-openai-transport.test.ts tests/settings-model-controls.test.ts tests/settings-migration.test.ts
+node --import tsx --test tests/native-openai-transport.test.ts tests/settings-model-controls.test.ts
 npx tsc --noEmit --pretty false
 npm run build
 ```
@@ -3258,7 +3320,7 @@ EN/RU/ES compile.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/types.ts src/main.ts src/proxy.ts src/controller.ts src/settings.ts src/i18n.ts tests/native-openai-transport.test.ts tests/settings-model-controls.test.ts tests/settings-migration.test.ts
+git add src/types.ts src/main.ts src/proxy.ts src/controller.ts src/settings.ts src/i18n.ts tests/native-openai-transport.test.ts tests/settings-model-controls.test.ts
 git commit -m "feat(settings): separate connection and model idle timeouts"
 ```
 
@@ -3307,7 +3369,8 @@ states, and log-only diagnostics. Update iwiki only after runtime code exists, t
 - [ ] **Step 5: Write and test the metadata-only live eval script**
 
 The script accepts `--base-url`, `--model`, `--api-key-file`, and `--out`. It sends one
-small non-stream chat request through `/v1/chat/completions`, records no request body or
+small non-stream synthesis-shaped request through `/v1/chat/completions` with the
+`reasoning/actions/skips` JSON schema, records no request body, response content, or
 credential, and writes:
 
 ```json
@@ -3315,43 +3378,76 @@ credential, and writes:
   "endpointPath": "/v1/chat/completions",
   "model": "configured-model",
   "httpStatus": 200,
-  "durationMs": 17000,
+  "durationMs": 9000,
   "completed": true,
-  "exceededConnectionTimeoutMs": true
+  "exceededConnectionTimeoutMs": false,
+  "connectionTimeoutMs": 15000,
+  "idleTimeoutMs": 300000,
+  "transport": "direct",
+  "attempts": 1,
+  "retryEvents": [],
+  "logicalRequestId": "eval-...",
+  "lifecycleIds": ["eval-attempt-1"]
 }
 ```
 
 Tests use a local delayed server and assert the JSON contains no `apiKey`,
 `authorization`, `messages`, `prompt`, or response content.
+The script must import the production native client factory, production transport, retry
+classifier, and `executeNativeLlmRequest`; it must not construct a bypass client or call
+bare `fetch`. Evidence also records `attempts`, retry event kinds, connection/idle timeout
+values, transport kind, `logicalRequestId`, and lifecycle IDs.
 
 ```bash
 node --import tsx --test tests/eval-native-request-retry.test.ts
 ```
 
-Expected: PASS; a delayed healthy response produces metadata-only evidence.
+Expected: PASS; a local delayed response longer than 15 seconds produces metadata-only
+evidence through the production factory and proves connection timeout does not cap body
+duration.
 
 - [ ] **Step 6: Run deterministic integration and live endpoint eval**
 
 Run injected 502 fixtures first. Then send a non-destructive synthesis-like request to the
 configured live endpoint and record status/duration without logging API keys or prompt
-content. A healthy response longer than 15 seconds must complete.
+content. The deterministic local delayed-server test proves a healthy response longer
+than 15 seconds completes; the live endpoint gate proves connectivity and schema handling
+without imposing a minimum provider latency.
 
 ```bash
 node --import tsx --test tests/native-request-retry.test.ts tests/native-llm-executor.test.ts tests/init-force-retry.test.ts tests/audit-bounded-init-replay.test.ts
 node --import tsx scripts/eval-native-request-retry.ts --base-url https://homelab.ikeniborn.ru/v1 --model ollama-deepseek-v4-pro-cloud --api-key-file tmp/api.txt --out docs/superpowers/evals/native-request-retry-live.json
-node -e "const e=require('./docs/superpowers/evals/native-request-retry-live.json'); if(!e.completed || e.httpStatus!==200) process.exit(1); console.log({httpStatus:e.httpStatus,durationMs:e.durationMs,completed:e.completed})"
+node -e "const e=require('./docs/superpowers/evals/native-request-retry-live.json'); if(!e.completed || e.httpStatus!==200 || e.connectionTimeoutMs!==15000) process.exit(1); console.log({httpStatus:e.httpStatus,durationMs:e.durationMs,completed:e.completed,attempts:e.attempts})"
 ```
 
 Expected: injected retry recovers; non-retryable matrix fails closed; live request returns
-normally; evidence contains status/duration only.
+normally; evidence contains metadata only and no request body, response content,
+credential, or authorization header.
 
 - [ ] **Step 7: Build and install the protected replay**
 
 ```bash
 npm run build
-: "${RUN_VAULT:=/tmp/ai-wiki-bounded-ingest-replay.EehDiu/run}"
+: "${REPLAY_ROOT:?Set REPLAY_ROOT to the protected replay root created in Task 17 Step 4}"
+RAW_REPLAY_ROOT=$REPLAY_ROOT
+test ! -L "$RAW_REPLAY_ROOT"
+test ! -L "$RAW_REPLAY_ROOT/run"
+REPLAY_ROOT=$(realpath -e "$REPLAY_ROOT")
+RUN_VAULT=$(realpath -e "$REPLAY_ROOT/run")
+BEFORE_VAULT=$(realpath -e "$REPLAY_ROOT/before")
 test -d "$RUN_VAULT/.obsidian/plugins/ai-wiki"
-case "$RUN_VAULT" in /tmp/ai-wiki-bounded-ingest-replay.*/run) ;; *) exit 1 ;; esac
+test -d "$BEFORE_VAULT/.obsidian"
+test "$RUN_VAULT" = "$REPLAY_ROOT/run"
+test "$BEFORE_VAULT" = "$REPLAY_ROOT/before"
+case "$REPLAY_ROOT" in /tmp/ai-wiki-bounded-ingest-replay.*) ;; *) exit 1 ;; esac
+MARKER="$REPLAY_ROOT/.replay-provenance"
+test -f "$MARKER"
+test -O "$MARKER"
+grep -Fx "source=/home/ikeniborn/Documents/Project/notes/vaults/Work" "$MARKER"
+grep -Fx "root=$REPLAY_ROOT" "$MARKER"
+CREATED_EPOCH=$(sed -n 's/^created_epoch=//p' "$MARKER")
+test "$CREATED_EPOCH" -le "$(date +%s)"
+test "$CREATED_EPOCH" -ge "$(( $(date +%s) - 604800 ))"
 cp dist/main.js dist/manifest.json dist/styles.css "$RUN_VAULT/.obsidian/plugins/ai-wiki/"
 ```
 

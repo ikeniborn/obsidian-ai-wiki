@@ -1,6 +1,6 @@
 ---
 review:
-  spec_hash: 282f83c01f078280
+  spec_hash: ace467c1375634c4
   last_run: 2026-07-20
   phases:
     structure: { status: passed }
@@ -616,15 +616,22 @@ non-stream request may retry only when it fails before returning a `ChatCompleti
 `llmConnectionTimeoutSec` governs DNS/TCP/TLS establishment only. Desktop direct
 transport maps it to Undici connection establishment rather than headers/body timeout, so
 a healthy non-stream generation longer than 15 seconds is not aborted. Desktop proxy
-receives the equivalent connect policy. Mobile retains its current transport timeout
-because Obsidian's mobile request API exposes no equivalent low-level connect signal; the
-Settings description and diagnostics state this limitation.
+applies the timeout to proxy and target connector layers. Mobile retains its current
+transport timeout because Obsidian's mobile request API exposes no equivalent low-level
+connect signal; the Settings description and diagnostics state this limitation.
 
 `llmIdleTimeoutSec` starts after request dispatch and measures model silence independently
 from connection establishment. Streaming progress resets it only for a real OpenAI model
 chunk, not sidebar timers or transport heartbeats. Non-stream requests remain eligible for
 the full idle window while waiting for the atomic completion. `0` disables only the idle
 watchdog.
+
+OpenAI SDK `maxRetries` remains zero. Its positive whole-request timeout is configured
+above every enabled executor idle deadline; when idle timeout is disabled, the SDK uses a
+`2_147_000_000` ms maximum safe timer. Persisted enabled idle timeout is limited to
+`2_146_999` seconds, leaving a 1,000 ms SDK margin. The executor therefore wins every
+configured idle deadline, and the SDK default ten-minute timeout cannot silently override `0` or values
+above 600 seconds.
 
 ## Context Error Recovery
 
@@ -693,6 +700,8 @@ Request retry adds metadata-only events:
 ```ts
 {
   kind: "transport_retry_scheduled" | "transport_retry_recovered" | "transport_retry_exhausted";
+  logicalRequestId: string;
+  lifecycleId: string;
   callSite: string;
   attempt: number;
   maxRetries: number;
@@ -767,8 +776,9 @@ provider details never enter sidebar labels.
   loss;
 - inject one 502 into the first synthesis request and confirm request recovery, one
   `WipeDomain`, and exactly-once source/page/index effects;
-- run a live synthesis-like endpoint eval and confirm a healthy non-stream response longer
-  than 15 seconds is not classified as a connection timeout;
+- use a deterministic local delayed server through the production factory to confirm a
+  healthy non-stream response longer than 15 seconds is not classified as a connection
+  timeout, then run a live synthesis-like endpoint eval for connectivity and schema handling;
 - never wipe or reinitialize the user's working vault for verification.
 
 ## Requirements and Definitions of Done
@@ -944,12 +954,14 @@ and 300-second idle; existing top-level values round-trip without moving under
 retains the top-level values and existing operation-level idle behavior; desktop
 direct/proxy apply connect timeout without aborting a healthy generation longer than 15
 seconds; Mobile documents and logs its current transport limitation; EN/RU/ES controls
-compile.
+compile; idle values above `2_146_999` seconds are rejected and idle `0` cannot fall back
+to the SDK ten-minute default.
 
 ### R22 - Retry Lifecycle and Diagnostics
 
 Each replacement request receives a new lifecycle ID and localized human progress while
-technical retry evidence remains metadata-only.
+technical retry evidence remains metadata-only. One stable `logicalRequestId` links every
+attempt lifecycle ID; `providerRequestId` is retained when the provider supplies it.
 
 DoD: sidebar fixtures show localized retry/sent/waiting states without counters, statuses,
 transport, or `callSite`; `agent.jsonl` records scheduled/recovered/exhausted events,
