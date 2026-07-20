@@ -1,4 +1,4 @@
-import type { LlmClient } from "./types";
+import type { LlmChatCompletionCreateOptions, LlmClient } from "./types";
 import type OpenAI from "openai";
 
 /**
@@ -9,7 +9,7 @@ import type OpenAI from "openai";
 export function wrapMobileNoStream(inner: LlmClient): LlmClient {
   const create = (async (
     params: Record<string, unknown>,
-    callOpts?: { signal?: AbortSignal },
+    callOpts?: LlmChatCompletionCreateOptions,
   ) => {
     if (params.stream !== true) {
       return (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<unknown>)(params, callOpts);
@@ -22,7 +22,10 @@ export function wrapMobileNoStream(inner: LlmClient): LlmClient {
     );
     return completionToAsyncIterable(resp);
   }) as unknown as LlmClient["chat"]["completions"]["create"];
-  return { chat: { completions: { create } } };
+  return {
+    ...(inner.nativeRequestExecutor ? { nativeRequestExecutor: true as const } : {}),
+    chat: { completions: { create } },
+  };
 }
 
 async function* completionToAsyncIterable(

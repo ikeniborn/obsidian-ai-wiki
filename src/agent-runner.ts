@@ -106,6 +106,8 @@ export class AgentRunner {
         dedupThreshold: na.dedupThreshold,
         lintNearDuplicate: na.lintNearDuplicate,
         nearDupThreshold: na.nearDupThreshold,
+        nativeRequestRetries: s.llmIdleRetries ?? 3,
+        nativeRequestIdleTimeoutMs: (s.llmIdleTimeoutSec ?? 300) * 1000,
       },
     };
   }
@@ -216,6 +218,8 @@ export class AgentRunner {
           language: this.settings.outputLanguage ?? "auto",
           imageOnly: this.isMobile,
           compressionProfile,
+          nativeRequestRetries: this.settings.llmIdleRetries ?? 3,
+          nativeRequestIdleTimeoutMs: (this.settings.llmIdleTimeoutSec ?? 300) * 1000,
         };
         const visionSettings = noVision ? { ...baseVisionSettings, enabled: false } : baseVisionSettings;
         const progress = i18nFor(resolveLang(this.settings.outputLanguage)).formatProgress;
@@ -253,8 +257,11 @@ export class AgentRunner {
       : this.domains;
 
     const similarity = this.buildSimilarity();
-    const maxRetries = this.settings.llmIdleRetries ?? 3;
-    const desktopTimers = this.isMobile ? null : loadDesktopTimers();
+    const operationWatchdogEnabled = this.settings.backend === "claude-agent" && idleTimeoutMs > 0;
+    const maxRetries = this.settings.backend === "claude-agent"
+      ? this.settings.llmIdleRetries ?? 3
+      : 0;
+    const desktopTimers = !operationWatchdogEnabled || this.isMobile ? null : loadDesktopTimers();
     type IdleTimer = number | NodeJS.Timeout;
     const scheduleIdleAbort = (callback: () => void): IdleTimer => desktopTimers
       ? desktopTimers.setTimeout(callback, idleTimeoutMs)
@@ -290,11 +297,11 @@ export class AgentRunner {
     while (true) {
       const idleCtrl = new AbortController();
       const signalAny = (AbortSignal as unknown as { any(this: void, signals: AbortSignal[]): AbortSignal }).any;
-      const combined = idleTimeoutMs > 0
+      const combined = operationWatchdogEnabled
         ? signalAny([req.signal, idleCtrl.signal])
         : req.signal;
       let idleTimer: IdleTimer | null =
-        idleTimeoutMs > 0 ? scheduleIdleAbort(() => idleCtrl.abort()) : null;
+        operationWatchdogEnabled ? scheduleIdleAbort(() => idleCtrl.abort()) : null;
 
       const resetTimer = () => {
         if (!idleTimer) return;

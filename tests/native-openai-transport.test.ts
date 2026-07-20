@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createRequire, register } from "node:module";
+import { dirname, resolve } from "node:path";
 import { setTimeout as nodeSetTimeout } from "node:timers";
 import test from "node:test";
 import OpenAI from "openai";
+import ts from "typescript";
 import { getGlobalDispatcher, MockAgent, setGlobalDispatcher } from "undici";
 
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
@@ -16,25 +18,66 @@ if (typeof window === "undefined") {
 (globalThis as typeof globalThis & { require: NodeJS.Require }).require =
   createRequire(import.meta.url);
 
-const transport = await import("../src/proxy") as typeof import("../src/proxy") & {
-  createDirectDesktopFetch?: (headersTimeoutMs?: number) => typeof fetch;
-  createDesktopOpenAiFetch?: (options: {
-    nonStreamFetch: typeof fetch;
-    streamFetch: typeof fetch;
-    nonStreamTimeoutMs: number;
-  }) => typeof fetch;
-  selectNativeFetch?: (options: {
-    isMobile: boolean;
-    mobileFetch: typeof fetch;
-    proxyFetch: typeof fetch | null;
-    directDesktopFetch: () => typeof fetch;
-    requestTimeoutMs: number;
-  }) => typeof fetch;
-};
+const transport = await import("../src/native-openai-transport");
 const { buildChatParams } = await import("../src/phases/llm-utils");
 
+function localImportGraph(entry: string): string[] {
+  const visited = new Set<string>();
+  const visit = (file: string): void => {
+    if (visited.has(file)) return;
+    visited.add(file);
+    const source = ts.createSourceFile(
+      file,
+      readFileSync(file, "utf8"),
+      ts.ScriptTarget.ES2022,
+      true,
+    );
+    for (const statement of source.statements) {
+      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+      const specifier = statement.moduleSpecifier.text;
+      if (!specifier.startsWith(".")) continue;
+      const candidate = resolve(dirname(file), `${specifier}.ts`);
+      if (existsSync(candidate)) visit(candidate);
+    }
+  };
+  visit(entry);
+  return [...visited];
+}
+
+test("production native factory owns Node-safe transport construction", () => {
+  const factoryPath = resolve(new URL("../src/native-openai-client.ts", import.meta.url).pathname);
+  const factorySource = readFileSync(factoryPath, "utf8");
+  const controllerSource = readFileSync(new URL("../src/controller.ts", import.meta.url), "utf8");
+
+  assert.match(factorySource, /createNativeOpenAiFetch/);
+  assert.match(factorySource, /proxyConfig:\s*ProxyConfig/);
+  assert.match(factorySource, /mobileFetch:\s*typeof fetch/);
+  assert.match(factorySource, /isMobile:\s*boolean/);
+  assert.doesNotMatch(
+    controllerSource,
+    /\b(?:createProxyFetch|createDirectDesktopFetch|selectNativeFetch)\b/,
+  );
+
+  const obsidianImports = localImportGraph(factoryPath).flatMap((file) => {
+    const source = ts.createSourceFile(
+      file,
+      readFileSync(file, "utf8"),
+      ts.ScriptTarget.ES2022,
+      true,
+    );
+    return source.statements.flatMap((statement) => (
+      ts.isImportDeclaration(statement)
+      && ts.isStringLiteral(statement.moduleSpecifier)
+      && statement.moduleSpecifier.text === "obsidian"
+        ? [`${file}:${source.getLineAndCharacterOfPosition(statement.getStart()).line + 1}`]
+        : []
+    ));
+  });
+  assert.deepEqual(obsidianImports, []);
+});
+
 test("native OpenAI client disables SDK request retries", () => {
-  const source = readFileSync(new URL("../src/controller.ts", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../src/native-openai-client.ts", import.meta.url), "utf8");
   const constructorStart = source.indexOf("new OpenAI({");
   assert.ok(constructorStart >= 0, "OpenAI constructor must be present");
 
@@ -43,11 +86,15 @@ test("native OpenAI client disables SDK request retries", () => {
 });
 
 test("native OpenAI transport uses the configured LLM idle timeout", () => {
-  const source = readFileSync(new URL("../src/controller.ts", import.meta.url), "utf8");
+  const controllerSource = readFileSync(new URL("../src/controller.ts", import.meta.url), "utf8");
+  const factorySource = readFileSync(new URL("../src/native-openai-client.ts", import.meta.url), "utf8");
+  const transportSource = readFileSync(new URL("../src/native-openai-transport.ts", import.meta.url), "utf8");
 
-  assert.match(source, /requestTimeoutMs\s*=\s*s\.llmIdleTimeoutSec\s*\*\s*1000/);
-  assert.match(source, /createDirectDesktopFetch\(requestTimeoutMs\)/);
-  assert.match(source, /timeout:\s*requestTimeoutMs/);
+  assert.match(controllerSource, /requestTimeoutMs\s*=\s*s\.llmIdleTimeoutSec\s*\*\s*1000/);
+  assert.match(controllerSource, /createNativeOpenAiClient\([\s\S]*?requestTimeoutMs,/);
+  assert.match(factorySource, /timeout:\s*options\.requestTimeoutMs/);
+  assert.match(transportSource, /createDirectDesktopFetch\(options\.requestTimeoutMs\)/);
+  assert.match(transportSource, /nonStreamTimeoutMs:\s*options\.requestTimeoutMs/);
 });
 
 test("agent logger bounds backend and model envelope fields before serialization", () => {

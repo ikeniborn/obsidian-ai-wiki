@@ -3,8 +3,11 @@ import { readFileSync } from "node:fs";
 import { createRequire, register } from "node:module";
 import { setTimeout as nodeSetTimeout } from "node:timers";
 import test from "node:test";
+import type OpenAI from "openai";
+import { APIError } from "openai";
 
 import { DEFAULT_SETTINGS, type LlmWikiPluginSettings, type RunEvent } from "../src/types";
+import * as nativeExecutor from "../src/native-llm-executor";
 import { VaultTools, type VaultAdapter } from "../src/vault-tools";
 
 const pathBrowserifyLoader = `
@@ -55,6 +58,10 @@ function settings(): LlmWikiPluginSettings {
   };
 }
 
+function claudeSettings(): LlmWikiPluginSettings {
+  return { ...settings(), backend: "claude-agent" };
+}
+
 test("runner emits effective idle timeout as machine-readable run configuration", async () => {
   const runner = new AgentRunner(
     { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
@@ -91,7 +98,7 @@ test("desktop idle timers use Electron-compatible synchronous require", () => {
 });
 
 test("desktop idle watchdog falls back to process.getBuiltinModule in Node ESM", async () => {
-  const idleSettings = settings();
+  const idleSettings = claudeSettings();
   idleSettings.llmIdleRetries = 0;
   const runner = new AgentRunner(
     { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
@@ -157,7 +164,7 @@ test("desktop idle watchdog falls back to process.getBuiltinModule in Node ESM",
 test("mobile idle timers do not evaluate desktop require", async () => {
   const runner = new AgentRunner(
     { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
-    settings(),
+    claudeSettings(),
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [],
@@ -195,7 +202,7 @@ test("mobile idle timers do not evaluate desktop require", async () => {
 });
 
 test("streaming idle abort does not depend on Electron renderer timers", async () => {
-  const idleSettings = settings();
+  const idleSettings = claudeSettings();
   idleSettings.llmIdleRetries = 0;
   const runner = new AgentRunner(
     { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
@@ -253,7 +260,7 @@ test("streaming idle abort does not depend on Electron renderer timers", async (
 });
 
 test("consumer return clears the active idle timer without aborting later", async () => {
-  const idleSettings = settings();
+  const idleSettings = claudeSettings();
   idleSettings.llmIdleTimeoutSec = 0.02;
   idleSettings.llmIdleRetries = 0;
   const runner = new AgentRunner(
@@ -295,7 +302,7 @@ test("consumer return clears the active idle timer without aborting later", asyn
 test("operation-level idle retry does not replay WipeDomain after destructive prelude", async () => {
   const runner = new AgentRunner(
     { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
-    settings(),
+    claudeSettings(),
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [{
@@ -339,7 +346,7 @@ test("operation-level idle retry does not replay WipeDomain after destructive pr
 test("caught idle AbortError does not replay WipeDomain after destructive prelude", async () => {
   const runner = new AgentRunner(
     { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
-    settings(),
+    claudeSettings(),
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [{
@@ -382,10 +389,10 @@ test("caught idle AbortError does not replay WipeDomain after destructive prelud
   assert.equal(events.filter((ev) => ev.kind === "tool_use" && ev.name === "WipeDomain").length, 1);
 });
 
-test("operation-level idle retry still replays non-destructive operations", async () => {
+test("Claude operation-level idle retry still replays non-destructive operations", async () => {
   const runner = new AgentRunner(
     { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
-    settings(),
+    claudeSettings(),
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [],
@@ -417,10 +424,146 @@ test("operation-level idle retry still replays non-destructive operations", asyn
   assert.equal(events.some((ev) => ev.kind === "result" && ev.text === "ok"), true);
 });
 
-test("silent idle abort after visible assistant text does not replay the operation", async () => {
+test("native operation-level idle exhaustion never continues the outer runOperation loop", async () => {
   const runner = new AgentRunner(
     { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
     settings(),
+    new VaultTools(adapter(), "/vault"),
+    "Vault",
+    [],
+  );
+  let calls = 0;
+
+  (runner as unknown as { runOperation: () => AsyncGenerator<RunEvent> }).runOperation = async function* () {
+    calls++;
+    if (calls === 1) {
+      throw new DOMException("native request idle timeout exhausted", "AbortError");
+    }
+    yield { kind: "result", durationMs: 1, text: "must-not-replay" };
+  };
+
+  const events: RunEvent[] = [];
+  await assert.rejects(async () => {
+    for await (const event of runner.run({
+      operation: "query",
+      args: ["hello"],
+      cwd: "/vault",
+      signal: new AbortController().signal,
+      timeoutMs: 0,
+    })) events.push(event);
+  }, /idle timeout/i);
+
+  assert.equal(calls, 1);
+  assert.equal(events.some((event) => event.kind === "result" && event.text === "must-not-replay"), false);
+  assert.equal(events.some((event) => event.kind === "system" && event.message.includes("retrying")), false);
+});
+
+test("native synthesis 502 retries only the request and keeps Re-init effects exactly once", async () => {
+  type CreateNativeClient = (create: (
+    params: unknown,
+    options: { signal: AbortSignal },
+  ) => Promise<OpenAI.Chat.ChatCompletion>) => {
+    chat: { completions: { create: (params: unknown, options: unknown) => Promise<OpenAI.Chat.ChatCompletion> } };
+  };
+  const createNativeClient = (nativeExecutor as unknown as {
+    createNativeLlmClient?: CreateNativeClient;
+  }).createNativeLlmClient;
+  assert.equal(typeof createNativeClient, "function", "native executor client adapter is missing");
+
+  let synthesisAttempts = 0;
+  const llm = createNativeClient!(async (_params, _options) => {
+    synthesisAttempts++;
+    if (synthesisAttempts === 1) {
+      throw APIError.generate(502, {}, undefined, new Headers());
+    }
+    return {
+      id: "synthesis-ok",
+      object: "chat.completion",
+      created: 0,
+      model: "mock",
+      choices: [{
+        index: 0,
+        finish_reason: "stop",
+        logprobs: null,
+        message: { role: "assistant", content: "ok", refusal: null },
+      }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    };
+  });
+  const runner = new AgentRunner(
+    llm as never,
+    settings(),
+    new VaultTools(adapter(), "/vault"),
+    "Vault",
+    [],
+  );
+  let runOperationCalls = 0;
+  let wipeDomain = 0;
+  let sourceReads = 0;
+  let evidenceApplies = 0;
+  let pageApplies = 0;
+  let indexApplies = 0;
+
+  (runner as unknown as {
+    runOperation: (req: { signal: AbortSignal }) => AsyncGenerator<RunEvent>;
+  }).runOperation = async function* (req) {
+    runOperationCalls++;
+    wipeDomain++;
+    yield { kind: "tool_use", name: "WipeDomain", input: { folder: "!Wiki/demo" } };
+    sourceReads++;
+    evidenceApplies++;
+    let current = { id: "synthesis", action: "synthesize_wiki_pages" as const };
+    const onEvent = (_event: RunEvent) => {};
+    await llm.chat.completions.create({ model: "mock", messages: [], stream: false }, {
+      signal: req.signal,
+      retry: {
+        logicalRequestId: "synthesis",
+        callSite: "ingest.synthesize",
+        maxRetries: 1,
+        idleTimeoutMs: 0,
+        signal: req.signal,
+        onEvent,
+        lifecycle: {
+          begin(attempt: number) {
+            current = attempt === 0
+              ? current
+              : { id: `synthesis:retry-${attempt}`, action: "retry_model_request" };
+          },
+          phase() {},
+          close() {},
+          current: () => current,
+        },
+        delay: async () => {},
+      },
+    });
+    pageApplies++;
+    indexApplies++;
+    yield { kind: "result", durationMs: 1, text: "ok" };
+  };
+
+  for await (const _event of runner.run({
+    operation: "init",
+    args: ["demo", "--force"],
+    cwd: "/vault",
+    signal: new AbortController().signal,
+    timeoutMs: 0,
+  })) {
+    // Drain the simulated full Re-init boundary.
+  }
+
+  assert.equal(runOperationCalls, 1);
+  assert.equal(wipeDomain, 1);
+  assert.equal(sourceReads, 1);
+  assert.equal(evidenceApplies, 1);
+  assert.equal(pageApplies, 1);
+  assert.equal(indexApplies, 1);
+  assert.equal(synthesisAttempts, 2);
+});
+
+test("silent idle abort after visible assistant text does not replay the operation", async () => {
+  const runner = new AgentRunner(
+    { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
+    claudeSettings(),
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [],
@@ -467,7 +610,7 @@ test("silent idle abort after visible assistant text does not replay the operati
 test("thrown idle AbortError after visible assistant text does not replay the operation", async () => {
   const runner = new AgentRunner(
     { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
-    settings(),
+    claudeSettings(),
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [],
@@ -601,7 +744,7 @@ test("agent runner keeps non-policy options while applying resolved model policy
 });
 
 test("llm lifecycle progress does not reset the semantic idle watchdog", async () => {
-  const idleSettings = settings();
+  const idleSettings = claudeSettings();
   idleSettings.llmIdleRetries = 0;
   const runner = new AgentRunner(
     { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
@@ -656,7 +799,7 @@ test("llm lifecycle progress does not reset the semantic idle watchdog", async (
 });
 
 test("non-empty assistant reasoning resets the semantic idle watchdog", async () => {
-  const idleSettings = settings();
+  const idleSettings = claudeSettings();
   idleSettings.llmIdleRetries = 0;
   const runner = new AgentRunner(
     { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,

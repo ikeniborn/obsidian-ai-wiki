@@ -11812,8 +11812,8 @@ var require_util2 = __commonJS({
         return true;
       }
       const strongest = getStrongestMetadata(parsedMetadata);
-      const metadata = filterMetadataListByAlgorithm(parsedMetadata, strongest);
-      for (const item of metadata) {
+      const metadata2 = filterMetadataListByAlgorithm(parsedMetadata, strongest);
+      for (const item of metadata2) {
         const algorithm = item.algo;
         const expectedValue = item.hash;
         let actualValue = crypto2.createHash(algorithm).update(bytes).digest("base64");
@@ -11831,10 +11831,10 @@ var require_util2 = __commonJS({
       return false;
     }
     var parseHashWithOptions = /(?<algo>sha256|sha384|sha512)-((?<hash>[A-Za-z0-9+/]+|[A-Za-z0-9_-]+)={0,2}(?:\s|$)( +[!-~]*)?)?/i;
-    function parseMetadata(metadata) {
+    function parseMetadata(metadata2) {
       const result = [];
       let empty = true;
-      for (const token of metadata.split(" ")) {
+      for (const token of metadata2.split(" ")) {
         empty = false;
         const parsedToken = parseHashWithOptions.exec(token);
         if (parsedToken === null || parsedToken.groups === void 0 || parsedToken.groups.algo === void 0) {
@@ -11856,13 +11856,13 @@ var require_util2 = __commonJS({
         return algorithm;
       }
       for (let i = 1; i < metadataList.length; ++i) {
-        const metadata = metadataList[i];
-        if (metadata.algo[3] === "5") {
+        const metadata2 = metadataList[i];
+        if (metadata2.algo[3] === "5") {
           algorithm = "sha512";
           break;
         } else if (algorithm[3] === "3") {
           continue;
-        } else if (metadata.algo[3] === "3") {
+        } else if (metadata2.algo[3] === "3") {
           algorithm = "sha384";
         }
       }
@@ -26269,7 +26269,7 @@ __export(main_exports, {
   migrateToLocalV2: () => migrateToLocalV2
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian15 = require("obsidian");
+var import_obsidian14 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_SETTINGS = {
@@ -41255,22 +41255,22 @@ function shrinkInputBudget(currentBudget, details) {
   }
   return Math.max(1, Math.min(currentBudget - 1, next));
 }
-function createPromptBudgetEvent(metadata) {
+function createPromptBudgetEvent(metadata2) {
   const event = {
     kind: "prompt_budget",
-    requestId: metadata.requestId,
-    callSite: metadata.callSite,
-    configuredInputBudget: metadata.configuredInputBudget,
-    effectiveInputBudget: metadata.effectiveInputBudget,
-    estimatedInputTokens: metadata.estimatedInputTokens,
-    compressionProfile: metadata.compressionProfile,
-    contextUnits: metadata.contextUnits
+    requestId: metadata2.requestId,
+    callSite: metadata2.callSite,
+    configuredInputBudget: metadata2.configuredInputBudget,
+    effectiveInputBudget: metadata2.effectiveInputBudget,
+    estimatedInputTokens: metadata2.estimatedInputTokens,
+    compressionProfile: metadata2.compressionProfile,
+    contextUnits: metadata2.contextUnits
   };
-  if (metadata.actualInputTokens !== void 0) event.actualInputTokens = metadata.actualInputTokens;
-  if (metadata.outputBudget !== void 0) event.outputBudget = metadata.outputBudget;
-  if (metadata.sourceChunks !== void 0) event.sourceChunks = metadata.sourceChunks;
-  if (metadata.reductionDepth !== void 0) event.reductionDepth = metadata.reductionDepth;
-  if (metadata.retryReason !== void 0) event.retryReason = metadata.retryReason;
+  if (metadata2.actualInputTokens !== void 0) event.actualInputTokens = metadata2.actualInputTokens;
+  if (metadata2.outputBudget !== void 0) event.outputBudget = metadata2.outputBudget;
+  if (metadata2.sourceChunks !== void 0) event.sourceChunks = metadata2.sourceChunks;
+  if (metadata2.reductionDepth !== void 0) event.reductionDepth = metadata2.reductionDepth;
+  if (metadata2.retryReason !== void 0) event.retryReason = metadata2.retryReason;
   return event;
 }
 var ContextRepackSuppressedError = class extends Error {
@@ -42615,6 +42615,12 @@ function lifecycleEvent(id, action, phase, atMs = Date.now(), diagnostics) {
   if (TERMINAL_PHASES.has(phase)) lifecycleDiagnostics.delete(id);
   return event;
 }
+function createReplacementAttemptLifecycle(initial, attempt) {
+  return {
+    id: `${initial.id}:retry-${attempt}`,
+    action: "retry_model_request"
+  };
+}
 function reduceLlmLifecycle(state, event) {
   const current = state.calls[event.id];
   if (!current) {
@@ -42681,7 +42687,10 @@ function lifecycleScale(event, labels, waitingMs, reachedPhase) {
     text: terminal ? labels.phases[event.phase] : labels.phases.completed,
     state: terminalState
   });
-  return { action: labels.actions[event.action], items };
+  return {
+    action: labels.actions[event.action] ?? labels.phases.retrying,
+    items
+  };
 }
 function renderLifecycleScale(root, scale) {
   root.empty();
@@ -44309,7 +44318,7 @@ function translateSystemEvent(message) {
 }
 
 // src/controller.ts
-var import_obsidian11 = require("obsidian");
+var import_obsidian10 = require("obsidian");
 var import_path_browserify9 = __toESM(require_path_browserify(), 1);
 
 // src/phases/ingest.ts
@@ -51092,6 +51101,532 @@ var Counter = class {
 };
 var structuralErrorCounter = new Counter();
 
+// src/native-request-retry.ts
+var MAX_CAUSE_NODES = 16;
+var MAX_DELAY_MS = 8e3;
+var TEMPORARY_CODES = /* @__PURE__ */ new Set([
+  "EAI_AGAIN",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "EHOSTUNREACH",
+  "ENETDOWN",
+  "ENETUNREACH",
+  "EPIPE",
+  "ETIMEDOUT"
+]);
+var PERMANENT_TRANSPORT_CODES = /* @__PURE__ */ new Set([
+  "CERT_HAS_EXPIRED",
+  "CERT_NOT_YET_VALID",
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "EPROTO",
+  "ERR_SSL_WRONG_VERSION_NUMBER",
+  "ERR_TLS_CERT_ALTNAME_INVALID",
+  "SELF_SIGNED_CERT_IN_CHAIN",
+  "UNABLE_TO_GET_ISSUER_CERT",
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE"
+]);
+var CONTEXT_CODES = /* @__PURE__ */ new Set([
+  "context_length_exceeded",
+  "max_context_length_exceeded"
+]);
+var SEMANTIC_ERROR_NAMES = /* @__PURE__ */ new Set([
+  "ApplicationError",
+  "EmbeddingError",
+  "EmptyOutputError",
+  "IndexError",
+  "SchemaRepairError"
+]);
+var SEMANTIC_ERROR_CODES = /* @__PURE__ */ new Set([
+  "APPLICATION_ERROR",
+  "EMBEDDING_ERROR",
+  "EMPTY_OUTPUT",
+  "INDEX_ERROR",
+  "SCHEMA_REPAIR"
+]);
+function causeNodes(error) {
+  const nodes = [];
+  const seen = /* @__PURE__ */ new Set();
+  let current = error;
+  while (current !== null && typeof current === "object" && nodes.length < MAX_CAUSE_NODES) {
+    if (seen.has(current)) break;
+    seen.add(current);
+    nodes.push(current);
+    current = "cause" in current ? current.cause : void 0;
+  }
+  return nodes;
+}
+function errorCode(value) {
+  if (value === null || typeof value !== "object" || !("code" in value)) return void 0;
+  return typeof value.code === "string" ? value.code : void 0;
+}
+function hasHeaderGetter(value) {
+  return value !== null && typeof value === "object" && "get" in value && typeof value.get === "function";
+}
+function apiErrorHeader(error, name) {
+  if (error === null || typeof error !== "object" || !("headers" in error)) return void 0;
+  const headers = error.headers;
+  if (!hasHeaderGetter(headers)) return void 0;
+  const value = headers.get(name);
+  return typeof value === "string" ? value : void 0;
+}
+function decision(retryable, errorClass, error) {
+  return {
+    retryable,
+    errorClass,
+    ...error?.status === void 0 ? {} : { status: error.status },
+    ...error?.requestID == null ? {} : { providerRequestId: error.requestID }
+  };
+}
+function classifyNativeRetry(error) {
+  const nodes = causeNodes(error);
+  if (nodes.some((node) => node instanceof APIUserAbortError || node instanceof Error && node.name === "AbortError")) {
+    return decision(false, "user_cancellation");
+  }
+  for (const node of nodes) {
+    const code = errorCode(node);
+    if (code !== void 0 && PERMANENT_TRANSPORT_CODES.has(code)) {
+      return decision(false, `permanent_transport:${code}`);
+    }
+  }
+  for (const node of nodes) {
+    const code = errorCode(node);
+    if (code !== void 0 && CONTEXT_CODES.has(code)) {
+      return decision(false, "context_limit", error instanceof APIError ? error : void 0);
+    }
+  }
+  for (const node of nodes) {
+    const code = errorCode(node);
+    if (node instanceof Error && SEMANTIC_ERROR_NAMES.has(node.name) || code !== void 0 && SEMANTIC_ERROR_CODES.has(code)) {
+      return decision(false, "semantic_error", error instanceof APIError ? error : void 0);
+    }
+  }
+  if (error instanceof APIError) {
+    const shouldRetry = apiErrorHeader(error, "x-should-retry")?.trim().toLowerCase();
+    if (shouldRetry === "false") return decision(false, "provider_no_retry", error);
+    if (shouldRetry === "true") return decision(true, "provider_retry", error);
+  }
+  if (error instanceof APIConnectionTimeoutError) return decision(true, "connection_timeout");
+  if (error instanceof APIConnectionError) return decision(true, "connection");
+  for (const node of nodes) {
+    const code = errorCode(node);
+    if (code !== void 0 && TEMPORARY_CODES.has(code)) {
+      return decision(true, `temporary_transport:${code}`);
+    }
+  }
+  if (error instanceof APIError && error.status !== void 0) {
+    const retryable = error.status === 408 || error.status === 409 || error.status === 429 || error.status >= 500 && error.status <= 599;
+    return decision(retryable, retryable ? "retryable_http" : "permanent_http", error);
+  }
+  return decision(false, "unknown");
+}
+function retryDelay(headers, retryOrdinal, env = {
+  now: Date.now,
+  random: Math.random
+}) {
+  const retryAfterMs = headers?.get("retry-after-ms");
+  if (retryAfterMs !== null && retryAfterMs !== void 0) {
+    const trimmed = retryAfterMs.trim();
+    const parsed = Number(trimmed);
+    if (trimmed !== "" && Number.isFinite(parsed) && parsed >= 0) {
+      return { delayMs: Math.min(Math.round(parsed), MAX_DELAY_MS), source: "retry-after-ms" };
+    }
+  }
+  const retryAfter = headers?.get("retry-after");
+  if (retryAfter !== null && retryAfter !== void 0) {
+    const seconds = Number(retryAfter);
+    const parsed = Number.isFinite(seconds) ? seconds * 1e3 : Date.parse(retryAfter) - env.now();
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      return { delayMs: Math.min(Math.round(parsed), MAX_DELAY_MS), source: "retry-after" };
+    }
+  }
+  const ordinal = Math.max(1, Math.floor(retryOrdinal));
+  const exponential = Math.min(500 * 2 ** (ordinal - 1), MAX_DELAY_MS);
+  const random = Math.min(1, Math.max(0, env.random()));
+  return {
+    delayMs: Math.round(exponential * (0.75 + random * 0.25)),
+    source: "backoff"
+  };
+}
+
+// src/native-llm-executor.ts
+function isNativeLlmClient(llm) {
+  return llm.nativeRequestExecutor === true;
+}
+function createNativeLlmClient(create) {
+  const execute = (async (params, options) => {
+    if (!options?.retry) {
+      throw new TypeError("Native completion requires NativeRequestRetryContext");
+    }
+    return executeNativeLlmRequest({
+      create,
+      params,
+      retry: options.retry
+    });
+  });
+  return {
+    nativeRequestExecutor: true,
+    chat: { completions: { create: execute } }
+  };
+}
+function createNativeRequestLifecycle(input) {
+  let current = input.initial;
+  let active = false;
+  const emit = (phase) => {
+    input.onEvent(lifecycleEvent(current.id, current.action, phase, Date.now()));
+  };
+  return {
+    begin(attempt, transport) {
+      current = attempt === 0 ? input.initial : createReplacementAttemptLifecycle(input.initial, attempt);
+      active = true;
+      input.onEvent(lifecycleEvent(
+        current.id,
+        current.action,
+        "preparing",
+        Date.now(),
+        {
+          callSite: input.callSite,
+          transport,
+          attempt: (input.attemptOffset ?? 0) + attempt
+        }
+      ));
+    },
+    phase(phase) {
+      if (active) emit(phase);
+    },
+    close(phase) {
+      if (!active) return;
+      emit(phase);
+      active = false;
+    },
+    current: () => current
+  };
+}
+function abortableDelay(ms, signal) {
+  if (signal.aborted) return Promise.reject(abortReason(signal));
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(finish, ms);
+    const onAbort = () => {
+      window.clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+      reject(abortReason(signal));
+    };
+    function finish() {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+function createNativeRequestRetryContext(input) {
+  return {
+    logicalRequestId: input.logicalRequestId ?? input.lifecycle.current().id,
+    callSite: input.callSite,
+    maxRetries: input.opts.nativeRequestRetries ?? 0,
+    idleTimeoutMs: input.opts.nativeRequestIdleTimeoutMs ?? 0,
+    signal: input.signal,
+    onEvent: input.onEvent,
+    lifecycle: input.lifecycle,
+    delay: abortableDelay
+  };
+}
+function abortReason(signal) {
+  return signal.reason instanceof Error ? signal.reason : new DOMException("The operation was aborted", "AbortError");
+}
+function isAbortError2(error) {
+  return error instanceof Error && error.name === "AbortError";
+}
+function attemptScope(callerSignal, idleTimeoutMs) {
+  const controller = new AbortController();
+  let timer;
+  let rejectAbort;
+  const onCallerAbort = () => controller.abort(abortReason(callerSignal));
+  if (callerSignal.aborted) onCallerAbort();
+  else callerSignal.addEventListener("abort", onCallerAbort, { once: true });
+  const clearIdle = () => {
+    if (timer === void 0) return;
+    window.clearTimeout(timer);
+    timer = void 0;
+  };
+  const abortPromise = new Promise((_resolve, reject) => {
+    rejectAbort = reject;
+  });
+  const onAttemptAbort = () => {
+    clearIdle();
+    rejectAbort?.(abortReason(controller.signal));
+  };
+  if (controller.signal.aborted) onAttemptAbort();
+  else controller.signal.addEventListener("abort", onAttemptAbort, { once: true });
+  const resetIdle = () => {
+    clearIdle();
+    if (idleTimeoutMs <= 0 || controller.signal.aborted) return;
+    const callback = () => {
+      timer = void 0;
+      controller.abort(new APIConnectionTimeoutError({
+        message: `LLM idle timeout after ${idleTimeoutMs}ms`
+      }));
+    };
+    timer = window.setTimeout(callback, idleTimeoutMs);
+  };
+  const dispose = (reason) => {
+    clearIdle();
+    callerSignal.removeEventListener("abort", onCallerAbort);
+    controller.signal.removeEventListener("abort", onAttemptAbort);
+    if (!controller.signal.aborted && reason !== void 0) controller.abort(reason);
+  };
+  return {
+    signal: controller.signal,
+    resetIdle,
+    clearIdle,
+    dispose,
+    race: (work) => Promise.race([work, abortPromise])
+  };
+}
+function closeOnceLifecycle(lifecycle) {
+  let open = false;
+  return {
+    begin(attempt, transport) {
+      lifecycle.begin(attempt, transport);
+      open = true;
+    },
+    close(phase) {
+      if (!open) return;
+      open = false;
+      lifecycle.close(phase);
+    }
+  };
+}
+function retryHeaders(error) {
+  if (!(error instanceof APIError)) return void 0;
+  const headers = error.headers;
+  return headers !== null && typeof headers === "object" && "get" in headers && typeof headers.get === "function" ? headers : void 0;
+}
+function validModelChunk(value) {
+  return value !== null && typeof value === "object" && "choices" in value && Array.isArray(value.choices);
+}
+function meaningfulChunk(chunk) {
+  for (const choice of chunk.choices) {
+    const delta = choice.delta;
+    for (const value of [delta.reasoning, delta.reasoning_content, delta.content]) {
+      if (typeof value === "string" && value.trim() !== "") return true;
+    }
+  }
+  return false;
+}
+function meaningfulCompletion(completion) {
+  for (const choice of completion.choices) {
+    const message = choice.message;
+    for (const value of [message.reasoning, message.reasoning_content, message.content]) {
+      if (typeof value === "string" && value.trim() !== "") return true;
+    }
+  }
+  return false;
+}
+function metadata(retry, attempt, meaningfulOutputSeen, failure) {
+  return {
+    logicalRequestId: retry.logicalRequestId,
+    lifecycleId: retry.lifecycle.current().id,
+    callSite: retry.callSite,
+    attempt,
+    maxRetries: retry.maxRetries,
+    meaningfulOutputSeen,
+    connectionTimeoutMs: 0,
+    idleTimeoutMs: retry.idleTimeoutMs,
+    ...failure
+  };
+}
+function emitRecovered(retry, attempt, meaningfulOutputSeen, failure) {
+  if (attempt === 0 || failure === void 0) return;
+  retry.onEvent({
+    kind: "transport_retry_recovered",
+    ...metadata(retry, attempt, meaningfulOutputSeen, failure)
+  });
+}
+function safeReturn(iterator) {
+  if (!iterator?.return) return;
+  try {
+    void Promise.resolve(iterator.return()).catch(() => {
+    });
+  } catch {
+  }
+}
+async function waitForRetry(retry, error, attempt, transport, meaningfulOutputSeen, lifecycle = retry.lifecycle) {
+  const decision2 = classifyNativeRetry(error);
+  const failure = {
+    errorClass: decision2.errorClass,
+    ...decision2.status === void 0 ? {} : { status: decision2.status },
+    ...decision2.providerRequestId === void 0 ? {} : { providerRequestId: decision2.providerRequestId }
+  };
+  const canRetry = decision2.retryable && !meaningfulOutputSeen && attempt < retry.maxRetries;
+  if (!canRetry) {
+    lifecycle.close(retry.signal.aborted || isAbortError2(error) ? "cancelled" : "failed");
+    if (decision2.retryable) {
+      retry.onEvent({
+        kind: "transport_retry_exhausted",
+        ...metadata(retry, attempt, meaningfulOutputSeen, failure)
+      });
+    }
+    return null;
+  }
+  const delay = retryDelay(retryHeaders(error), attempt + 1);
+  lifecycle.close("retrying");
+  retry.onEvent({
+    kind: "transport_retry_scheduled",
+    ...metadata(retry, attempt, meaningfulOutputSeen, failure),
+    delayMs: delay.delayMs,
+    delaySource: delay.source
+  });
+  lifecycle.begin(attempt + 1, transport);
+  try {
+    await raceWithAbort(retry.delay(delay.delayMs, retry.signal), retry.signal);
+  } catch (delayError) {
+    lifecycle.close(retry.signal.aborted || isAbortError2(delayError) ? "cancelled" : "failed");
+    throw delayError;
+  }
+  return failure;
+}
+function raceWithAbort(work, signal) {
+  if (signal.aborted) return Promise.reject(abortReason(signal));
+  let onAbort;
+  const aborted = new Promise((_resolve, reject) => {
+    onAbort = () => reject(abortReason(signal));
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  return Promise.race([work, aborted]).finally(() => {
+    if (onAbort) signal.removeEventListener("abort", onAbort);
+  });
+}
+async function executeNonStream(input) {
+  const { retry } = input;
+  let attempt = 0;
+  let priorFailure;
+  retry.lifecycle.begin(0, "non-stream");
+  while (true) {
+    const scope = attemptScope(retry.signal, retry.idleTimeoutMs);
+    try {
+      retry.signal.throwIfAborted();
+      retry.lifecycle.phase("sent");
+      retry.lifecycle.phase("waiting");
+      scope.resetIdle();
+      const result = await scope.race(input.create(input.params, { signal: scope.signal }));
+      scope.clearIdle();
+      retry.signal.throwIfAborted();
+      const meaningfulOutputSeen = meaningfulCompletion(result);
+      if (meaningfulOutputSeen) retry.lifecycle.phase("producing");
+      emitRecovered(retry, attempt, meaningfulOutputSeen, priorFailure);
+      return result;
+    } catch (error) {
+      scope.clearIdle();
+      if (retry.signal.aborted || isAbortError2(error)) {
+        retry.lifecycle.close("cancelled");
+        throw retry.signal.aborted ? abortReason(retry.signal) : error;
+      }
+      const failure = await waitForRetry(retry, error, attempt, "non-stream", false);
+      if (failure === null) throw error;
+      priorFailure = failure;
+      attempt += 1;
+    } finally {
+      scope.dispose();
+    }
+  }
+}
+function executeStream(input) {
+  const { retry } = input;
+  return (async function* () {
+    let attempt = 0;
+    let priorFailure;
+    let scope;
+    let iterator;
+    let meaningfulOutputSeen = false;
+    let requestCompleted = false;
+    const lifecycle = closeOnceLifecycle(retry.lifecycle);
+    lifecycle.begin(0, "stream");
+    const onCallerAbort = () => lifecycle.close("cancelled");
+    if (retry.signal.aborted) onCallerAbort();
+    else retry.signal.addEventListener("abort", onCallerAbort, { once: true });
+    try {
+      while (true) {
+        scope = attemptScope(retry.signal, retry.idleTimeoutMs);
+        const buffered = [];
+        meaningfulOutputSeen = false;
+        let attemptComplete = false;
+        try {
+          retry.signal.throwIfAborted();
+          retry.lifecycle.phase("sent");
+          retry.lifecycle.phase("waiting");
+          scope.resetIdle();
+          const stream = await scope.race(input.create(input.params, { signal: scope.signal }));
+          iterator = stream[Symbol.asyncIterator]();
+          let armIdleBeforeNext = true;
+          while (true) {
+            if (armIdleBeforeNext) {
+              scope.resetIdle();
+              armIdleBeforeNext = false;
+            }
+            const next = await scope.race(Promise.resolve(iterator.next()));
+            if (next.done) {
+              scope.clearIdle();
+              iterator = void 0;
+              for (const pending of buffered) yield pending;
+              emitRecovered(retry, attempt, meaningfulOutputSeen, priorFailure);
+              attemptComplete = true;
+              requestCompleted = true;
+              return;
+            }
+            if (!validModelChunk(next.value)) continue;
+            scope.clearIdle();
+            armIdleBeforeNext = true;
+            if (!meaningfulOutputSeen && meaningfulChunk(next.value)) {
+              meaningfulOutputSeen = true;
+              retry.lifecycle.phase("producing");
+              for (const pending of buffered) yield pending;
+              buffered.length = 0;
+            }
+            if (meaningfulOutputSeen) yield next.value;
+            else buffered.push(next.value);
+          }
+        } catch (error) {
+          scope.clearIdle();
+          safeReturn(iterator);
+          iterator = void 0;
+          if (retry.signal.aborted || isAbortError2(error)) {
+            lifecycle.close("cancelled");
+            throw retry.signal.aborted ? abortReason(retry.signal) : error;
+          }
+          const failure = await waitForRetry(
+            retry,
+            error,
+            attempt,
+            "stream",
+            meaningfulOutputSeen,
+            lifecycle
+          );
+          if (failure === null) throw error;
+          priorFailure = failure;
+          attempt += 1;
+        } finally {
+          scope.dispose(attemptComplete ? void 0 : new DOMException("Stream attempt closed", "AbortError"));
+          scope = void 0;
+        }
+      }
+    } finally {
+      retry.signal.removeEventListener("abort", onCallerAbort);
+      if (!requestCompleted) lifecycle.close("cancelled");
+      safeReturn(iterator);
+      scope?.dispose(new DOMException("Stream iterator closed", "AbortError"));
+    }
+  })();
+}
+function executeNativeLlmRequest(input) {
+  if (input.params.stream === true) {
+    return Promise.resolve(executeStream(
+      input
+    ));
+  }
+  return executeNonStream(
+    input
+  );
+}
+
 // src/phases/structured-output.ts
 var repairJson = [
   "{{detail}}",
@@ -51241,12 +51776,24 @@ async function streamOnce(llm, model, messages, opts, signal, onEvent, lifecycle
   let inputTokens;
   let requestError;
   try {
-    lifecycle.phase("sent");
-    lifecycle.phase("waiting");
+    if (!isNativeLlmClient(llm)) {
+      lifecycle.phase("sent");
+      lifecycle.phase("waiting");
+    }
     llm.beginPromptBudgetRequest?.(requestId);
     const request = llm.chat.completions.create(
       { ...params, stream: true },
-      { signal }
+      {
+        signal,
+        retry: createNativeRequestRetryContext({
+          callSite,
+          opts,
+          signal,
+          onEvent,
+          lifecycle,
+          logicalRequestId: requestId
+        })
+      }
     );
     const rawStream = await request;
     signal.throwIfAborted();
@@ -51258,7 +51805,7 @@ async function streamOnce(llm, model, messages, opts, signal, onEvent, lifecycle
       if (reason !== void 0) finishReason = reason;
       const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
       if (!producing && (reasoning.trim() || content.trim())) {
-        lifecycle.phase("producing");
+        if (!isNativeLlmClient(llm)) lifecycle.phase("producing");
         producing = true;
       }
       if (reasoning) onEvent({ kind: "assistant_text", delta: reasoning, isReasoning: true });
@@ -51286,8 +51833,10 @@ async function streamOnce(llm, model, messages, opts, signal, onEvent, lifecycle
     if (classifyContextError(e) !== null || e instanceof PromptBudgetExceededError || e instanceof StructuredOutputTruncatedError) throw e;
     if (isJsonModeError(e)) throw e;
     if (!shouldFallbackStreamToNonStream(e, signal)) throw e;
-    lifecycle.close("retrying");
-    lifecycle.begin(attempt, "non-stream");
+    if (!isNativeLlmClient(llm)) {
+      lifecycle.close("retrying");
+      lifecycle.begin(attempt, "non-stream");
+    }
     return nonStreamOnce(
       llm,
       model,
@@ -51320,14 +51869,24 @@ async function nonStreamOnce(llm, model, messages, opts, signal, onEvent, lifecy
   const params = buildChatParams(model, messages, opts);
   const requestStartMs = Date.now();
   const requestId = lifecycle.current().id;
-  lifecycle.phase("sent");
+  if (!isNativeLlmClient(llm)) lifecycle.phase("sent");
   let response;
   try {
-    lifecycle.phase("waiting");
+    if (!isNativeLlmClient(llm)) lifecycle.phase("waiting");
     llm.beginPromptBudgetRequest?.(requestId);
     const request = llm.chat.completions.create(
       { ...params, stream: false },
-      { signal }
+      {
+        signal,
+        retry: createNativeRequestRetryContext({
+          callSite,
+          opts,
+          signal,
+          onEvent,
+          lifecycle,
+          logicalRequestId: requestId
+        })
+      }
     );
     response = await request;
   } catch (error) {
@@ -51375,7 +51934,7 @@ async function nonStreamOnce(llm, model, messages, opts, signal, onEvent, lifecy
         if (reason !== void 0) finishReason = reason;
         const deltas = extractStreamDeltas(chunk);
         if (!producing && (deltas.reasoning.trim() || deltas.content.trim())) {
-          lifecycle.phase("producing");
+          if (!isNativeLlmClient(llm)) lifecycle.phase("producing");
           producing = true;
         }
         if (deltas.reasoning) {
@@ -51400,7 +51959,9 @@ async function nonStreamOnce(llm, model, messages, opts, signal, onEvent, lifecy
   const message = response.choices[0]?.message;
   const reasoning = completionReasoning(message);
   const fullText = message?.content ?? "";
-  if (reasoning.trim() || fullText.trim()) lifecycle.phase("producing");
+  if ((reasoning.trim() || fullText.trim()) && !isNativeLlmClient(llm)) {
+    lifecycle.phase("producing");
+  }
   if (reasoning) onEvent({ kind: "assistant_text", delta: reasoning, isReasoning: true });
   signal.throwIfAborted();
   return {
@@ -51430,7 +51991,9 @@ function classifyError(profile, err) {
 async function callWithFormatFallback(args, messages, mode, attempt, lifecycle) {
   let currentMode = mode;
   while (true) {
-    lifecycle.begin(attempt, args.transport ?? "stream");
+    if (!isNativeLlmClient(args.llm)) {
+      lifecycle.begin(attempt, args.transport ?? "stream");
+    }
     const callOpts = args.profile.kind === "json-zod" ? optsForMode(args.opts, currentMode, args.callSite, args.profile.schema) : { ...args.opts, jsonMode: false, jsonSchema: void 0 };
     try {
       return {
@@ -52375,14 +52938,14 @@ function findLargestFeasibleBudget(minimum, maximum, evaluate) {
   }
   return feasible;
 }
-function llmWithRequestTelemetry(runtime, metadata) {
+function llmWithRequestTelemetry(runtime, metadata2) {
   const completions = runtime.llm.chat.completions;
   let pendingRequestId;
   async function createWithTelemetry(params, requestOpts) {
     const estimatedInputTokens = estimatePreparedMessages(params.messages);
-    if (estimatedInputTokens > metadata.effectiveInputBudget) {
+    if (estimatedInputTokens > metadata2.effectiveInputBudget) {
       throw new PromptBudgetExceededError(
-        metadata.effectiveInputBudget,
+        metadata2.effectiveInputBudget,
         estimatedInputTokens,
         []
       );
@@ -52390,7 +52953,7 @@ function llmWithRequestTelemetry(runtime, metadata) {
     const requestId = pendingRequestId;
     pendingRequestId = void 0;
     if (!requestId) {
-      throw new Error(`Missing requestId for ${metadata.callSite} prompt budget telemetry`);
+      throw new Error(`Missing requestId for ${metadata2.callSite} prompt budget telemetry`);
     }
     let error;
     try {
@@ -52401,15 +52964,15 @@ function llmWithRequestTelemetry(runtime, metadata) {
     } finally {
       const event = createPromptBudgetEvent({
         requestId,
-        callSite: metadata.callSite,
-        configuredInputBudget: metadata.configuredInputBudget,
-        effectiveInputBudget: metadata.effectiveInputBudget,
+        callSite: metadata2.callSite,
+        configuredInputBudget: metadata2.configuredInputBudget,
+        effectiveInputBudget: metadata2.effectiveInputBudget,
         estimatedInputTokens,
-        outputBudget: metadata.outputBudget,
-        compressionProfile: metadata.compressionProfile,
-        contextUnits: metadata.contextUnits,
-        sourceChunks: metadata.sourceChunks,
-        reductionDepth: metadata.reductionDepth,
+        outputBudget: metadata2.outputBudget,
+        compressionProfile: metadata2.compressionProfile,
+        contextUnits: metadata2.contextUnits,
+        sourceChunks: metadata2.sourceChunks,
+        reductionDepth: metadata2.reductionDepth,
         retryReason: classifyContextError(error) === null ? void 0 : "provider_context_error"
       });
       if (event.retryReason === void 0) runtime.onEvent?.(event);
@@ -52417,6 +52980,7 @@ function llmWithRequestTelemetry(runtime, metadata) {
     }
   }
   return {
+    ...runtime.llm.nativeRequestExecutor ? { nativeRequestExecutor: true } : {},
     emitsPromptBudget: true,
     beginPromptBudgetRequest: (requestId) => {
       pendingRequestId = requestId;
@@ -53520,6 +54084,7 @@ async function executeSingleRegenerationRequest(input) {
     return input.llm.chat.completions.create(params, requestOptions);
   };
   const guardedLlm = {
+    ...input.llm.nativeRequestExecutor ? { nativeRequestExecutor: true } : {},
     chat: {
       completions: {
         create: guardedCreate
@@ -55602,20 +56167,40 @@ async function* answerFromContext(args) {
           answerLifecycle = createLlmLifecycle("answer_question");
         }
         executionCount += 1;
-        emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing", Date.now(), {
+        const streamAttempt = requestAttempt++;
+        if (!isNativeLlmClient(llm)) {
+          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing", Date.now(), {
+            callSite: "query.answer",
+            transport: "stream",
+            attempt: streamAttempt
+          }));
+        }
+        const requestLifecycle = createNativeRequestLifecycle({
+          initial: answerLifecycle,
           callSite: "query.answer",
-          transport: "stream",
-          attempt: requestAttempt++
-        }));
+          onEvent: emit,
+          attemptOffset: streamAttempt
+        });
         const params = paramsForPreparedMessages(model, request.messages, opts, true);
         let streamChunkConsumed = false;
         try {
           const requestStartMs = Date.now();
-          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"));
-          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
+          if (!isNativeLlmClient(llm)) {
+            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"));
+            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
+          }
           const pending = llm.chat.completions.create(
             { ...params, stream: true },
-            { signal: operationSignal }
+            {
+              signal: operationSignal,
+              retry: createNativeRequestRetryContext({
+                callSite: "query.answer",
+                opts,
+                signal: operationSignal,
+                onEvent: emit,
+                lifecycle: requestLifecycle
+              })
+            }
           );
           const rawStream = await pending;
           const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, operationSignal);
@@ -55626,7 +56211,9 @@ async function* answerFromContext(args) {
             streamChunkConsumed = true;
             const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
             if (!producing && (reasoning.trim() || content.trim())) {
-              emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "producing"));
+              if (!isNativeLlmClient(llm)) {
+                emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "producing"));
+              }
               producing = true;
             }
             if (reasoning) emit({ kind: "assistant_text", delta: reasoning, isReasoning: true });
@@ -55637,6 +56224,7 @@ async function* answerFromContext(args) {
             if (tok !== void 0) attemptOutputTokens += tok;
           }
           const stats = getStats();
+          if (isNativeLlmClient(llm)) answerLifecycle = requestLifecycle.current();
           return {
             answer: attemptAnswer,
             outputTokens: attemptOutputTokens,
@@ -55648,7 +56236,9 @@ async function* answerFromContext(args) {
           if (operationSignal.aborted || error.name === "AbortError") throw error;
           if (streamChunkConsumed) throw new ContextRepackSuppressedError(error);
           if (classifyContextError(error) !== null && request.optionalUnits > 0) {
-            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
+            if (!isNativeLlmClient(llm)) {
+              emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
+            }
           }
           rethrowForContextRepack(error, request.optionalUnits);
           if (!shouldFallbackStreamToNonStream(error, operationSignal)) throw error;
@@ -55667,25 +56257,48 @@ async function* answerFromContext(args) {
           }));
           emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
           answerLifecycle = createLlmLifecycle("answer_question");
-          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing", Date.now(), {
+          const fallbackAttempt = requestAttempt++;
+          if (!isNativeLlmClient(llm)) {
+            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing", Date.now(), {
+              callSite: "query.answer",
+              transport: "non-stream",
+              attempt: fallbackAttempt
+            }));
+          }
+          const fallbackLifecycle = createNativeRequestLifecycle({
+            initial: answerLifecycle,
             callSite: "query.answer",
-            transport: "non-stream",
-            attempt: requestAttempt++
-          }));
+            onEvent: emit,
+            attemptOffset: fallbackAttempt
+          });
           let response;
           const fallbackStartMs = Date.now();
           try {
             const fallbackParams = paramsForPreparedMessages(model, request.messages, opts, false);
-            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"));
-            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
+            if (!isNativeLlmClient(llm)) {
+              emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"));
+              emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
+            }
             const pending = llm.chat.completions.create(
               { ...fallbackParams, stream: false },
-              { signal: operationSignal }
+              {
+                signal: operationSignal,
+                retry: createNativeRequestRetryContext({
+                  callSite: "query.answer",
+                  opts,
+                  signal: operationSignal,
+                  onEvent: emit,
+                  lifecycle: fallbackLifecycle
+                })
+              }
             );
             response = await pending;
+            if (isNativeLlmClient(llm)) answerLifecycle = fallbackLifecycle.current();
           } catch (fallbackError) {
             if (classifyContextError(fallbackError) !== null && request.optionalUnits > 0) {
-              emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
+              if (!isNativeLlmClient(llm)) {
+                emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
+              }
             }
             rethrowForContextRepack(fallbackError, request.optionalUnits);
             throw fallbackError;
@@ -55696,7 +56309,9 @@ async function* answerFromContext(args) {
           const fallbackAnswer = fallbackMessage?.content ?? "";
           const fallbackTokens = extractUsage(response) ?? 0;
           if (fallbackReasoning.trim() || fallbackAnswer.trim()) {
-            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "producing"));
+            if (!isNativeLlmClient(llm)) {
+              emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "producing"));
+            }
           }
           if (fallbackReasoning) {
             emit({ kind: "assistant_text", delta: fallbackReasoning, isReasoning: true });
@@ -55723,10 +56338,14 @@ async function* answerFromContext(args) {
   } catch (error) {
     for (const event of budgetEvents) yield event;
     if (signal.aborted || error.name === "AbortError") {
-      yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
+      if (!isNativeLlmClient(llm)) {
+        yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
+      }
       return { answer: "", outputTokens, selectedChunks };
     }
-    yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "failed");
+    if (!isNativeLlmClient(llm)) {
+      yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "failed");
+    }
     throw error;
   }
   for (const event of budgetEvents) yield event;
@@ -57748,20 +58367,40 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
           );
         }
         executionCount += 1;
-        emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing", Date.now(), {
+        const streamAttempt = requestAttempt++;
+        if (!isNativeLlmClient(llm)) {
+          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing", Date.now(), {
+            callSite,
+            transport: "stream",
+            attempt: streamAttempt
+          }));
+        }
+        const requestLifecycle = createNativeRequestLifecycle({
+          initial: chatLifecycle,
           callSite,
-          transport: "stream",
-          attempt: requestAttempt++
-        }));
+          onEvent: emit,
+          attemptOffset: streamAttempt
+        });
         const params = paramsForPreparedMessages2(model, request.messages, opts, true);
         let streamChunkConsumed = false;
         try {
           const requestStartMs = Date.now();
-          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"));
-          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"));
+          if (!isNativeLlmClient(llm)) {
+            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"));
+            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"));
+          }
           const pending = llm.chat.completions.create(
             { ...params, stream: true },
-            { signal: operationSignal }
+            {
+              signal: operationSignal,
+              retry: createNativeRequestRetryContext({
+                callSite,
+                opts,
+                signal: operationSignal,
+                onEvent: emit,
+                lifecycle: requestLifecycle
+              })
+            }
           );
           const rawStream = await pending;
           const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, operationSignal);
@@ -57772,7 +58411,9 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
             streamChunkConsumed = true;
             const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
             if (!producing && (reasoning.trim() || content.trim())) {
-              emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "producing"));
+              if (!isNativeLlmClient(llm)) {
+                emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "producing"));
+              }
               producing = true;
             }
             if (reasoning) emit({ kind: "assistant_text", delta: reasoning, isReasoning: true });
@@ -57783,6 +58424,7 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
             if (tok !== void 0) attemptOutputTokens += tok;
           }
           const stats = getStats();
+          if (isNativeLlmClient(llm)) chatLifecycle = requestLifecycle.current();
           return {
             text: attemptText,
             outputTokens: attemptOutputTokens,
@@ -57793,7 +58435,9 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
           if (operationSignal.aborted || error.name === "AbortError") throw error;
           if (streamChunkConsumed) throw new ContextRepackSuppressedError(error);
           if (classifyContextError(error) !== null && request.optionalUnits > 0) {
-            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"));
+            if (!isNativeLlmClient(llm)) {
+              emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"));
+            }
           }
           rethrowForContextRepack2(error, request.optionalUnits);
           if (!shouldFallbackStreamToNonStream(error, operationSignal)) throw error;
@@ -57813,25 +58457,48 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
           chatLifecycle = createLlmLifecycle(
             opts.semanticCompression?.operation === "query" ? "answer_question" : "apply_lint_fixes"
           );
-          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing", Date.now(), {
+          const fallbackAttempt = requestAttempt++;
+          if (!isNativeLlmClient(llm)) {
+            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing", Date.now(), {
+              callSite,
+              transport: "non-stream",
+              attempt: fallbackAttempt
+            }));
+          }
+          const fallbackLifecycle = createNativeRequestLifecycle({
+            initial: chatLifecycle,
             callSite,
-            transport: "non-stream",
-            attempt: requestAttempt++
-          }));
+            onEvent: emit,
+            attemptOffset: fallbackAttempt
+          });
           let response;
           const fallbackStartMs = Date.now();
           try {
             const fallbackParams = paramsForPreparedMessages2(model, request.messages, opts, false);
-            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"));
-            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"));
+            if (!isNativeLlmClient(llm)) {
+              emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"));
+              emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"));
+            }
             const pending = llm.chat.completions.create(
               { ...fallbackParams, stream: false },
-              { signal: operationSignal }
+              {
+                signal: operationSignal,
+                retry: createNativeRequestRetryContext({
+                  callSite,
+                  opts,
+                  signal: operationSignal,
+                  onEvent: emit,
+                  lifecycle: fallbackLifecycle
+                })
+              }
             );
             response = await pending;
+            if (isNativeLlmClient(llm)) chatLifecycle = fallbackLifecycle.current();
           } catch (fallbackError) {
             if (classifyContextError(fallbackError) !== null && request.optionalUnits > 0) {
-              emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"));
+              if (!isNativeLlmClient(llm)) {
+                emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"));
+              }
             }
             rethrowForContextRepack2(fallbackError, request.optionalUnits);
             throw fallbackError;
@@ -57842,7 +58509,9 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
           const fallbackText = fallbackMessage?.content ?? "";
           const fallbackTokens = extractUsage(response) ?? 0;
           if (fallbackReasoning.trim() || fallbackText.trim()) {
-            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "producing"));
+            if (!isNativeLlmClient(llm)) {
+              emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "producing"));
+            }
           }
           if (fallbackReasoning) {
             emit({ kind: "assistant_text", delta: fallbackReasoning, isReasoning: true });
@@ -57868,10 +58537,14 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
   } catch (error) {
     for (const event of budgetEvents) yield event;
     if (signal.aborted || error.name === "AbortError") {
-      yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "cancelled");
+      if (!isNativeLlmClient(llm)) {
+        yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "cancelled");
+      }
       return;
     }
-    yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "failed");
+    if (!isNativeLlmClient(llm)) {
+      yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "failed");
+    }
     throw error;
   }
   for (const event of budgetEvents) yield event;
@@ -59982,7 +60655,9 @@ function resolveVisionOptions(options) {
     inputBudgetTokens: options?.inputBudgetTokens ?? 16384,
     maxTokens: options?.maxTokens,
     compressionProfile: options?.compressionProfile ?? "balanced",
-    onEvent: options?.onEvent
+    onEvent: options?.onEvent,
+    nativeRequestRetries: options?.nativeRequestRetries,
+    nativeRequestIdleTimeoutMs: options?.nativeRequestIdleTimeoutMs
   };
 }
 function visionContextRecoveryError(options, effectiveInputBudget, details) {
@@ -60021,6 +60696,8 @@ function visionCallOptions(options, language, reasoningLanguage, effectiveInputB
     maxTokens: options.maxTokens,
     outputLanguage: language,
     reasoningLanguage,
+    nativeRequestRetries: options.nativeRequestRetries,
+    nativeRequestIdleTimeoutMs: options.nativeRequestIdleTimeoutMs,
     semanticCompression: {
       profile: options.compressionProfile,
       operation: "vision"
@@ -60043,12 +60720,22 @@ async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, 
     effectiveInputBudget
   );
   const params = buildChatParams(model, visionMessages(systemPrompt, pages), callOptions);
-  const lifecycle = createLlmLifecycle("analyze_attachments");
-  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "preparing", Date.now(), {
+  let lifecycle = createLlmLifecycle("analyze_attachments");
+  const onEvent = options.onEvent ?? (() => {
+  });
+  if (!isNativeLlmClient(llm)) {
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "preparing", Date.now(), {
+      callSite: "vision.analysis",
+      transport: "non-stream",
+      attempt
+    }));
+  }
+  const requestLifecycle = createNativeRequestLifecycle({
+    initial: lifecycle,
     callSite: "vision.analysis",
-    transport: "non-stream",
-    attempt
-  }));
+    onEvent,
+    attemptOffset: attempt
+  });
   const estimatedInputTokens = estimatePreparedMessages(
     params.messages
   );
@@ -60056,20 +60743,34 @@ async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, 
   let response;
   try {
     signal.throwIfAborted();
-    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "sent"));
-    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "waiting"));
+    if (!isNativeLlmClient(llm)) {
+      options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "sent"));
+      options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "waiting"));
+    }
     providerDispatched = true;
     const request = llm.chat.completions.create(
       { ...params, stream: false },
-      { signal }
+      {
+        signal,
+        retry: createNativeRequestRetryContext({
+          callSite: "vision.analysis",
+          opts: callOptions,
+          signal,
+          onEvent,
+          lifecycle: requestLifecycle
+        })
+      }
     );
     response = await request;
+    if (isNativeLlmClient(llm)) lifecycle = requestLifecycle.current();
   } catch (error) {
-    options.onEvent?.(lifecycleEvent(
-      lifecycle.id,
-      lifecycle.action,
-      signal.aborted || error.name === "AbortError" ? "cancelled" : classifyContextError(error) !== null ? "retrying" : "failed"
-    ));
+    if (!isNativeLlmClient(llm)) {
+      options.onEvent?.(lifecycleEvent(
+        lifecycle.id,
+        lifecycle.action,
+        signal.aborted || error.name === "AbortError" ? "cancelled" : classifyContextError(error) !== null ? "retrying" : "failed"
+      ));
+    }
     if (providerDispatched) {
       options.onEvent?.(createPromptBudgetEvent({
         requestId: lifecycle.id,
@@ -60103,7 +60804,7 @@ async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, 
   const message = response.choices[0]?.message;
   const reasoning = completionReasoning(message);
   const content = message?.content ?? "";
-  if (reasoning.trim() || content.trim()) {
+  if ((reasoning.trim() || content.trim()) && !isNativeLlmClient(llm)) {
     options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "producing"));
   }
   if (reasoning) {
@@ -60887,10 +61588,20 @@ ${tagRegistryBlock}` : ""}`;
       yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "completed");
     }
     activeFormatLifecycle = createLlmLifecycle("format_note");
-    yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing", Date.now(), {
+    const streamAttempt = formatRequestAttempt++;
+    if (!isNativeLlmClient(llm)) {
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing", Date.now(), {
+        callSite: budgetContext.callSite,
+        transport: "stream",
+        attempt: streamAttempt
+      });
+    }
+    const nativeEvents = [];
+    const requestLifecycle = createNativeRequestLifecycle({
+      initial: activeFormatLifecycle,
       callSite: budgetContext.callSite,
-      transport: "stream",
-      attempt: formatRequestAttempt++
+      onEvent: (event) => nativeEvents.push(event),
+      attemptOffset: streamAttempt
     });
     let acc = "";
     lastFinishReason = null;
@@ -60898,20 +61609,35 @@ ${tagRegistryBlock}` : ""}`;
     const requestStartMs = Date.now();
     let streamChunkConsumed = false;
     try {
-      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
-      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
+      if (!isNativeLlmClient(llm)) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
+      }
       const request = llm.chat.completions.create(
         { ...p, stream: true },
-        { signal }
+        {
+          signal,
+          retry: createNativeRequestRetryContext({
+            callSite: budgetContext.callSite,
+            opts,
+            signal,
+            onEvent: (event) => nativeEvents.push(event),
+            lifecycle: requestLifecycle
+          })
+        }
       );
       const rawStream = await request;
+      while (nativeEvents.length > 0) yield nativeEvents.shift();
       const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
       let producing = false;
       for await (const chunk of stream) {
+        while (nativeEvents.length > 0) yield nativeEvents.shift();
         streamChunkConsumed = true;
         const { reasoning, content, outputTokens: tok, inputTokens: inTok } = extractStreamDeltas(chunk);
         if (!producing && (reasoning.trim() || content.trim())) {
-          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "producing");
+          if (!isNativeLlmClient(llm)) {
+            yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "producing");
+          }
           producing = true;
         }
         if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
@@ -60924,6 +61650,8 @@ ${tagRegistryBlock}` : ""}`;
         const fr = chunk.choices[0]?.finish_reason;
         if (fr) lastFinishReason = fr;
       }
+      while (nativeEvents.length > 0) yield nativeEvents.shift();
+      if (isNativeLlmClient(llm)) activeFormatLifecycle = requestLifecycle.current();
       const callStats = getStats();
       yield formatBudgetEvent(
         activeFormatLifecycle.id,
@@ -60933,6 +61661,8 @@ ${tagRegistryBlock}` : ""}`;
       );
       if (callStats) yield buildLlmCallStatsEvent(callStats);
     } catch (e) {
+      while (nativeEvents.length > 0) yield nativeEvents.shift();
+      if (isNativeLlmClient(llm)) activeFormatLifecycle = requestLifecycle.current();
       yield formatBudgetEvent(
         activeFormatLifecycle.id,
         p,
@@ -60941,43 +61671,78 @@ ${tagRegistryBlock}` : ""}`;
         classifyContextError(e) === null ? void 0 : "provider_context_error"
       );
       if (signal.aborted || e.name === "AbortError") {
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "cancelled");
+        if (!isNativeLlmClient(llm)) {
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "cancelled");
+        }
         activeFormatLifecycle = null;
         return acc;
       }
       if (streamChunkConsumed) {
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
+        if (!isNativeLlmClient(llm)) {
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
+        }
         activeFormatLifecycle = null;
         throw e;
       }
       if (!fallback.allowContextFallback && classifyContextError(e) !== null) {
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+        if (!isNativeLlmClient(llm)) {
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+        }
         activeFormatLifecycle = null;
         throw e;
       }
       if (!shouldFallbackStreamToNonStream(e, signal)) {
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
+        if (!isNativeLlmClient(llm)) {
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
+        }
         activeFormatLifecycle = null;
         throw e;
       }
-      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+      if (!isNativeLlmClient(llm)) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+      }
       activeFormatLifecycle = createLlmLifecycle("format_note");
-      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing", Date.now(), {
+      const fallbackAttempt = formatRequestAttempt++;
+      if (!isNativeLlmClient(llm)) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing", Date.now(), {
+          callSite: budgetContext.callSite,
+          transport: "non-stream",
+          attempt: fallbackAttempt
+        });
+      }
+      const fallbackEvents = [];
+      const fallbackLifecycle = createNativeRequestLifecycle({
+        initial: activeFormatLifecycle,
         callSite: budgetContext.callSite,
-        transport: "non-stream",
-        attempt: formatRequestAttempt++
+        onEvent: (event) => fallbackEvents.push(event),
+        attemptOffset: fallbackAttempt
       });
       const fallbackStartMs = Date.now();
       let resp;
       try {
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
+        if (!isNativeLlmClient(llm)) {
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
+        }
         const pending = llm.chat.completions.create(
           { ...p, stream: false },
-          { signal }
+          {
+            signal,
+            retry: createNativeRequestRetryContext({
+              callSite: budgetContext.callSite,
+              opts,
+              signal,
+              onEvent: (event) => fallbackEvents.push(event),
+              lifecycle: fallbackLifecycle
+            })
+          }
         );
         resp = await pending;
+        while (fallbackEvents.length > 0) yield fallbackEvents.shift();
+        if (isNativeLlmClient(llm)) activeFormatLifecycle = fallbackLifecycle.current();
       } catch (fallbackError) {
+        while (fallbackEvents.length > 0) yield fallbackEvents.shift();
+        if (isNativeLlmClient(llm)) activeFormatLifecycle = fallbackLifecycle.current();
         yield formatBudgetEvent(
           activeFormatLifecycle.id,
           p,
@@ -60985,18 +61750,20 @@ ${tagRegistryBlock}` : ""}`;
           void 0,
           classifyContextError(fallbackError) === null ? void 0 : "provider_context_error"
         );
-        yield lifecycleEvent(
-          activeFormatLifecycle.id,
-          activeFormatLifecycle.action,
-          signal.aborted || fallbackError.name === "AbortError" ? "cancelled" : classifyContextError(fallbackError) !== null ? "retrying" : "failed"
-        );
+        if (!isNativeLlmClient(llm)) {
+          yield lifecycleEvent(
+            activeFormatLifecycle.id,
+            activeFormatLifecycle.action,
+            signal.aborted || fallbackError.name === "AbortError" ? "cancelled" : classifyContextError(fallbackError) !== null ? "retrying" : "failed"
+          );
+        }
         activeFormatLifecycle = null;
         throw fallbackError;
       }
       const fallbackMessage = resp.choices[0]?.message;
       const fallbackReasoning = completionReasoning(fallbackMessage);
       acc = fallbackMessage?.content ?? "";
-      if (fallbackReasoning.trim() || acc.trim()) {
+      if ((fallbackReasoning.trim() || acc.trim()) && !isNativeLlmClient(llm)) {
         yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "producing");
       }
       if (fallbackReasoning) {
@@ -62376,7 +63143,9 @@ var AgentRunner = class {
         dedupOnIngest: na.dedupOnIngest,
         dedupThreshold: na.dedupThreshold,
         lintNearDuplicate: na.lintNearDuplicate,
-        nearDupThreshold: na.nearDupThreshold
+        nearDupThreshold: na.nearDupThreshold,
+        nativeRequestRetries: s.llmIdleRetries ?? 3,
+        nativeRequestIdleTimeoutMs: (s.llmIdleTimeoutSec ?? 300) * 1e3
       }
     };
   }
@@ -62482,7 +63251,9 @@ var AgentRunner = class {
           model: this.settings.vision?.model ?? "",
           language: this.settings.outputLanguage ?? "auto",
           imageOnly: this.isMobile,
-          compressionProfile: compressionProfile2
+          compressionProfile: compressionProfile2,
+          nativeRequestRetries: this.settings.llmIdleRetries ?? 3,
+          nativeRequestIdleTimeoutMs: (this.settings.llmIdleTimeoutSec ?? 300) * 1e3
         };
         const visionSettings = noVision ? { ...baseVisionSettings, enabled: false } : baseVisionSettings;
         const progress = i18nFor(resolveLang(this.settings.outputLanguage)).formatProgress;
@@ -62512,8 +63283,9 @@ var AgentRunner = class {
     const vaultRoot = req.cwd ?? "";
     const domains = req.domainId && req.domainId !== "*" ? this.domains.filter((d) => d.id === req.domainId) : this.domains;
     const similarity = this.buildSimilarity();
-    const maxRetries = this.settings.llmIdleRetries ?? 3;
-    const desktopTimers = this.isMobile ? null : loadDesktopTimers();
+    const operationWatchdogEnabled = this.settings.backend === "claude-agent" && idleTimeoutMs > 0;
+    const maxRetries = this.settings.backend === "claude-agent" ? this.settings.llmIdleRetries ?? 3 : 0;
+    const desktopTimers = !operationWatchdogEnabled || this.isMobile ? null : loadDesktopTimers();
     const scheduleIdleAbort = (callback) => desktopTimers ? desktopTimers.setTimeout(callback, idleTimeoutMs) : window.setTimeout(callback, idleTimeoutMs);
     const clearIdleAbort = (timer) => {
       if (desktopTimers) desktopTimers.clearTimeout(timer);
@@ -62542,8 +63314,8 @@ var AgentRunner = class {
       while (true) {
         const idleCtrl = new AbortController();
         const signalAny = AbortSignal.any;
-        const combined = idleTimeoutMs > 0 ? signalAny([req.signal, idleCtrl.signal]) : req.signal;
-        let idleTimer = idleTimeoutMs > 0 ? scheduleIdleAbort(() => idleCtrl.abort()) : null;
+        const combined = operationWatchdogEnabled ? signalAny([req.signal, idleCtrl.signal]) : req.signal;
+        let idleTimer = operationWatchdogEnabled ? scheduleIdleAbort(() => idleCtrl.abort()) : null;
         const resetTimer = () => {
           if (!idleTimer) return;
           clearIdleAbort(idleTimer);
@@ -62635,7 +63407,130 @@ var AgentRunner = class {
 };
 
 // src/proxy.ts
+function buildProxyUrl(cfg) {
+  const u = new URL(cfg.url);
+  if (cfg.username) u.username = encodeURIComponent(cfg.username);
+  if (cfg.password) u.password = encodeURIComponent(cfg.password);
+  return u.toString();
+}
+function shouldBypass(host, list) {
+  const h = host.toLowerCase();
+  for (const raw of list) {
+    const entry = raw.toLowerCase();
+    if (entry.startsWith("*.")) {
+      const suffix = entry.slice(1);
+      if (h.endsWith(suffix)) return true;
+    } else if (h === entry) {
+      return true;
+    }
+  }
+  return false;
+}
+function parseNoProxy(csv) {
+  if (!csv) return [];
+  return csv.split(",").map((s) => s.trim()).filter(Boolean);
+}
+function maskProxyUrl(url) {
+  try {
+    const u = new URL(url);
+    if (!u.password) return url;
+    u.password = "****";
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
+// src/mobile-fetch.ts
 var import_obsidian8 = require("obsidian");
+var mobileFetch = async (input, init) => {
+  if (init?.signal?.aborted) throw new DOMException("Aborted", "AbortError");
+  let url;
+  if (typeof input === "string") url = input;
+  else if (input instanceof URL) url = input.toString();
+  else url = input.url;
+  const body = init?.body;
+  if (body != null && typeof body !== "string") {
+    throw new Error("mobileFetch: only string body supported");
+  }
+  let headers;
+  if (init?.headers instanceof Headers) {
+    headers = {};
+    init.headers.forEach((v, k) => {
+      headers[k] = v;
+    });
+  } else if (init?.headers) {
+    headers = init.headers;
+  }
+  const requestPromise = (0, import_obsidian8.requestUrl)({
+    url,
+    method: init?.method ?? "GET",
+    headers,
+    body: body ?? void 0,
+    throw: false
+  });
+  const r = init?.signal ? await Promise.race([requestPromise, abortRace(init.signal)]) : await requestPromise;
+  return new Response(r.text, { status: r.status, headers: r.headers });
+};
+function abortRace(signal) {
+  return new Promise((_, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    const handler = () => reject(new DOMException("Aborted", "AbortError"));
+    signal.addEventListener("abort", handler, { once: true });
+  });
+}
+
+// src/mobile-llm-wrap.ts
+function wrapMobileNoStream(inner) {
+  const create = (async (params, callOpts) => {
+    if (params.stream !== true) {
+      return inner.chat.completions.create(params, callOpts);
+    }
+    const noStreamParams = { ...params, stream: false };
+    delete noStreamParams.stream_options;
+    const resp = await inner.chat.completions.create(
+      noStreamParams,
+      callOpts
+    );
+    return completionToAsyncIterable(resp);
+  });
+  return {
+    ...inner.nativeRequestExecutor ? { nativeRequestExecutor: true } : {},
+    chat: { completions: { create } }
+  };
+}
+async function* completionToAsyncIterable(c) {
+  const choice = c.choices[0];
+  const content = typeof choice?.message?.content === "string" ? choice.message.content : "";
+  const reasoning = choice?.message?.reasoning;
+  if (reasoning) {
+    yield mkChunk(c, { reasoning });
+  }
+  if (content) {
+    yield mkChunk(c, { content });
+  }
+  yield mkChunk(c, {}, choice?.finish_reason ?? "stop", c.usage ?? null);
+}
+function mkChunk(base, delta, finish_reason = null, usage = null) {
+  return {
+    id: base.id,
+    object: "chat.completion.chunk",
+    created: base.created,
+    model: base.model,
+    choices: [{
+      index: 0,
+      delta,
+      finish_reason,
+      logprobs: null
+    }],
+    usage: usage ?? void 0
+  };
+}
+
+// src/native-openai-transport.ts
 var directDispatchers = /* @__PURE__ */ new Map();
 function closeAtOpenAiDone(response, undici) {
   if (!response.body || !response.headers.get("content-type")?.toLowerCase().includes("text/event-stream")) {
@@ -62680,7 +63575,6 @@ function closeAtOpenAiDone(response, undici) {
 }
 function createProxyDispatcher(cfg) {
   if (!cfg.enabled) return null;
-  if (import_obsidian8.Platform.isMobile) return null;
   const undici = require_undici();
   return new undici.ProxyAgent(buildProxyUrl(cfg));
 }
@@ -62733,6 +63627,27 @@ function selectNativeFetch(options) {
     nonStreamTimeoutMs: options.requestTimeoutMs
   });
 }
+function createNativeOpenAiFetch(options) {
+  let proxyFetch = null;
+  if (!options.isMobile && options.proxyConfig.enabled) {
+    try {
+      const baseHost = new URL(options.baseURL).hostname;
+      if (!shouldBypass(baseHost, parseNoProxy(options.proxyConfig.noProxy))) {
+        proxyFetch = createProxyFetch(options.proxyConfig);
+        if (proxyFetch) options.onProxySelected?.(options.proxyConfig);
+      }
+    } catch (error) {
+      options.onProxyError?.(error);
+    }
+  }
+  return selectNativeFetch({
+    isMobile: options.isMobile,
+    mobileFetch: options.mobileFetch,
+    proxyFetch,
+    directDesktopFetch: () => createDirectDesktopFetch(options.requestTimeoutMs),
+    requestTimeoutMs: options.requestTimeoutMs
+  });
+}
 function requestUsesStreaming(body) {
   if (typeof body !== "string") return false;
   try {
@@ -62774,124 +63689,31 @@ function boundedFetch(fetchImpl, input, init, timeoutMs) {
 function normalizeTimeout(timeoutMs) {
   return Number.isFinite(timeoutMs) && timeoutMs > 0 ? Math.floor(timeoutMs) : 3e5;
 }
-function buildProxyUrl(cfg) {
-  const u = new URL(cfg.url);
-  if (cfg.username) u.username = encodeURIComponent(cfg.username);
-  if (cfg.password) u.password = encodeURIComponent(cfg.password);
-  return u.toString();
-}
-function shouldBypass(host, list) {
-  const h = host.toLowerCase();
-  for (const raw of list) {
-    const entry = raw.toLowerCase();
-    if (entry.startsWith("*.")) {
-      const suffix = entry.slice(1);
-      if (h.endsWith(suffix)) return true;
-    } else if (h === entry) {
-      return true;
-    }
-  }
-  return false;
-}
-function parseNoProxy(csv) {
-  if (!csv) return [];
-  return csv.split(",").map((s) => s.trim()).filter(Boolean);
-}
-function maskProxyUrl(url) {
-  try {
-    const u = new URL(url);
-    if (!u.password) return url;
-    u.password = "****";
-    return u.toString();
-  } catch {
-    return url;
-  }
-}
 
-// src/mobile-fetch.ts
-var import_obsidian9 = require("obsidian");
-var mobileFetch = async (input, init) => {
-  if (init?.signal?.aborted) throw new DOMException("Aborted", "AbortError");
-  let url;
-  if (typeof input === "string") url = input;
-  else if (input instanceof URL) url = input.toString();
-  else url = input.url;
-  const body = init?.body;
-  if (body != null && typeof body !== "string") {
-    throw new Error("mobileFetch: only string body supported");
-  }
-  let headers;
-  if (init?.headers instanceof Headers) {
-    headers = {};
-    init.headers.forEach((v, k) => {
-      headers[k] = v;
-    });
-  } else if (init?.headers) {
-    headers = init.headers;
-  }
-  const requestPromise = (0, import_obsidian9.requestUrl)({
-    url,
-    method: init?.method ?? "GET",
-    headers,
-    body: body ?? void 0,
-    throw: false
+// src/native-openai-client.ts
+function createNativeOpenAiClient(options) {
+  const nativeFetch = createNativeOpenAiFetch({
+    baseURL: options.baseURL,
+    isMobile: options.isMobile,
+    proxyConfig: options.proxyConfig,
+    mobileFetch: options.mobileFetch,
+    requestTimeoutMs: options.requestTimeoutMs,
+    onProxySelected: options.onProxySelected,
+    onProxyError: options.onProxyError
   });
-  const r = init?.signal ? await Promise.race([requestPromise, abortRace(init.signal)]) : await requestPromise;
-  return new Response(r.text, { status: r.status, headers: r.headers });
-};
-function abortRace(signal) {
-  return new Promise((_, reject) => {
-    if (signal.aborted) {
-      reject(new DOMException("Aborted", "AbortError"));
-      return;
-    }
-    const handler = () => reject(new DOMException("Aborted", "AbortError"));
-    signal.addEventListener("abort", handler, { once: true });
+  const raw = new OpenAI({
+    baseURL: options.baseURL,
+    apiKey: options.apiKey,
+    timeout: options.requestTimeoutMs,
+    maxRetries: 0,
+    dangerouslyAllowBrowser: true,
+    fetch: nativeFetch
   });
-}
-
-// src/mobile-llm-wrap.ts
-function wrapMobileNoStream(inner) {
-  const create = (async (params, callOpts) => {
-    if (params.stream !== true) {
-      return inner.chat.completions.create(params, callOpts);
-    }
-    const noStreamParams = { ...params, stream: false };
-    delete noStreamParams.stream_options;
-    const resp = await inner.chat.completions.create(
-      noStreamParams,
-      callOpts
-    );
-    return completionToAsyncIterable(resp);
-  });
-  return { chat: { completions: { create } } };
-}
-async function* completionToAsyncIterable(c) {
-  const choice = c.choices[0];
-  const content = typeof choice?.message?.content === "string" ? choice.message.content : "";
-  const reasoning = choice?.message?.reasoning;
-  if (reasoning) {
-    yield mkChunk(c, { reasoning });
-  }
-  if (content) {
-    yield mkChunk(c, { content });
-  }
-  yield mkChunk(c, {}, choice?.finish_reason ?? "stop", c.usage ?? null);
-}
-function mkChunk(base, delta, finish_reason = null, usage = null) {
-  return {
-    id: base.id,
-    object: "chat.completion.chunk",
-    created: base.created,
-    model: base.model,
-    choices: [{
-      index: 0,
-      delta,
-      finish_reason,
-      logprobs: null
-    }],
-    usage: usage ?? void 0
-  };
+  const rawCreate = raw.chat.completions.create.bind(
+    raw.chat.completions
+  );
+  const executorClient = createNativeLlmClient(rawCreate);
+  return options.isMobile ? wrapMobileNoStream(executorClient) : executorClient;
 }
 
 // src/okf-export.ts
@@ -62992,9 +63814,9 @@ function buildIndex(pages, descriptions) {
 }
 
 // src/okf-export-fs.ts
-var import_obsidian10 = require("obsidian");
+var import_obsidian9 = require("obsidian");
 async function writeOkfBundle(destAbs, bundle) {
-  if (!import_obsidian10.Platform.isDesktopApp) throw new Error("OKF export is desktop-only");
+  if (!import_obsidian9.Platform.isDesktopApp) throw new Error("OKF export is desktop-only");
   const fs = await import("node:fs/promises");
   const path5 = await import("node:path");
   for (const file of bundle.files) {
@@ -63093,17 +63915,17 @@ var WikiController = class {
   cancelCurrent() {
     if (this.current) {
       this.current.abort();
-      new import_obsidian11.Notice(i18n().ctrl.cancelling);
+      new import_obsidian10.Notice(i18n().ctrl.cancelling);
     }
   }
   async format() {
     const file = this.app.workspace.getActiveFile();
     if (!file) {
-      new import_obsidian11.Notice(i18n().ctrl.noActiveFile);
+      new import_obsidian10.Notice(i18n().ctrl.noActiveFile);
       return;
     }
     if (file.extension !== "md") {
-      new import_obsidian11.Notice(i18n().view.formatOnlyMarkdown ?? "Format only works on markdown files");
+      new import_obsidian10.Notice(i18n().view.formatOnlyMarkdown ?? "Format only works on markdown files");
       return;
     }
     const domains = await this.loadDomains();
@@ -63134,11 +63956,11 @@ var WikiController = class {
   async formatApply(keepOld) {
     const p = this._pendingFormat;
     if (!p || !p.tempPath) {
-      new import_obsidian11.Notice(i18n().view.formatNoPending ?? "No format preview to apply");
+      new import_obsidian10.Notice(i18n().view.formatNoPending ?? "No format preview to apply");
       return;
     }
     if (this.isBusy()) {
-      new import_obsidian11.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian10.Notice(i18n().ctrl.operationRunning);
       return;
     }
     const adapter = this.app.vault.adapter;
@@ -63165,17 +63987,17 @@ var WikiController = class {
         const content = await adapter.read(p.tempPath);
         const patched = restoreSourceFrontmatter(originalContent, content);
         const origFile = this.app.vault.getAbstractFileByPath(p.originalPath);
-        if (origFile instanceof import_obsidian11.TFile) {
+        if (origFile instanceof import_obsidian10.TFile) {
           await this.app.vault.modify(origFile, patched);
         } else {
           await adapter.write(p.originalPath, patched);
         }
         await this.app.vault.adapter.remove(p.tempPath);
       }
-      new import_obsidian11.Notice(i18n().view.formatApplied(p.originalPath));
+      new import_obsidian10.Notice(i18n().view.formatApplied(p.originalPath));
       this.activeView()?.appendEvent({ kind: "format_applied", path: p.originalPath });
     } catch (e) {
-      new import_obsidian11.Notice(i18n().ctrl.errorPrefix(e.message));
+      new import_obsidian10.Notice(i18n().ctrl.errorPrefix(e.message));
     } finally {
       this._pendingFormat = null;
       this.onBusyChange?.();
@@ -63192,18 +64014,18 @@ var WikiController = class {
     } catch {
     }
     this._pendingFormat = null;
-    new import_obsidian11.Notice(i18n().view.formatCancelled);
+    new import_obsidian10.Notice(i18n().view.formatCancelled);
     this.activeView()?.appendEvent({ kind: "format_cancelled" });
     this.onBusyChange?.();
   }
   async formatRefine(message) {
     const p = this._pendingFormat;
     if (!p) {
-      new import_obsidian11.Notice(i18n().view.formatNoPending ?? "No format preview to refine");
+      new import_obsidian10.Notice(i18n().view.formatNoPending ?? "No format preview to refine");
       return;
     }
     if (this.isBusy()) {
-      new import_obsidian11.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian10.Notice(i18n().ctrl.operationRunning);
       return;
     }
     p.chat.push({ role: "user", content: message });
@@ -63212,7 +64034,7 @@ var WikiController = class {
   async ingestActive(domainId) {
     const file = this.app.workspace.getActiveFile();
     if (!file) {
-      new import_obsidian11.Notice(i18n().ctrl.noActiveFile);
+      new import_obsidian10.Notice(i18n().ctrl.noActiveFile);
       return;
     }
     await this.dispatch("ingest", [file.path], domainId);
@@ -63254,11 +64076,11 @@ var WikiController = class {
   }
   async dispatchChat(operation, domainId, context, chatMessages) {
     if (this.isBusy()) {
-      new import_obsidian11.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian10.Notice(i18n().ctrl.operationRunning);
       return;
     }
-    if (import_obsidian11.Platform.isMobile && operation !== "query") {
-      new import_obsidian11.Notice(i18n().ctrl.mobileNotAvailable);
+    if (import_obsidian10.Platform.isMobile && operation !== "query") {
+      new import_obsidian10.Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
     {
@@ -63287,7 +64109,7 @@ var WikiController = class {
         this.plugin.settings.timeouts.lint
       );
     } catch (e) {
-      new import_obsidian11.Notice(i18n().ctrl.errorPrefix(e.message));
+      new import_obsidian10.Notice(i18n().ctrl.errorPrefix(e.message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
       return;
     }
@@ -63381,7 +64203,7 @@ var WikiController = class {
     const adapter = this.app.vault.adapter;
     const base = adapter.getBasePath?.();
     if (base == null) {
-      if (!import_obsidian11.Platform.isMobile) {
+      if (!import_obsidian10.Platform.isMobile) {
         console.warn("[ai-wiki] vault.adapter.getBasePath is undefined on desktop");
       }
       return "";
@@ -63423,7 +64245,7 @@ var WikiController = class {
       return await this.domainStore.load();
     } catch (e) {
       if (e instanceof DomainCorruptError) {
-        new import_obsidian11.Notice(`Domain map corrupt: ${e.message}`);
+        new import_obsidian10.Notice(`Domain map corrupt: ${e.message}`);
       }
       throw e;
     }
@@ -63475,13 +64297,13 @@ var WikiController = class {
     const id = input.id.trim();
     const err = validateDomainId(id);
     if (err) {
-      new import_obsidian11.Notice(i18n().ctrl.domainAddFailed(err));
+      new import_obsidian10.Notice(i18n().ctrl.domainAddFailed(err));
       return { ok: false, error: err };
     }
     const cur = await this.domainStore.load();
     if (cur.some((d) => d.id === id)) {
       const msg = `\u0414\u043E\u043C\u0435\u043D \xAB${id}\xBB \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442`;
-      new import_obsidian11.Notice(i18n().ctrl.domainAddFailed(msg));
+      new import_obsidian10.Notice(i18n().ctrl.domainAddFailed(msg));
       return { ok: false, error: msg };
     }
     const wikiSubfolder = input.wikiFolder.trim() || id;
@@ -63497,10 +64319,10 @@ var WikiController = class {
       await this.domainStore.save(next);
     } catch (e) {
       const msg = e.message;
-      new import_obsidian11.Notice(i18n().ctrl.domainAddFailed(msg));
+      new import_obsidian10.Notice(i18n().ctrl.domainAddFailed(msg));
       return { ok: false, error: msg };
     }
-    new import_obsidian11.Notice(i18n().ctrl.domainAdded(id));
+    new import_obsidian10.Notice(i18n().ctrl.domainAdded(id));
     return { ok: true };
   }
   async updateDomainSources(domainId, sourcePaths) {
@@ -63534,7 +64356,7 @@ var WikiController = class {
     const domains = await this.loadDomains();
     const entry = domains.find((d) => d.id === domainId);
     if (!entry) {
-      new import_obsidian11.Notice(i18n().ctrl.noActiveFile);
+      new import_obsidian10.Notice(i18n().ctrl.noActiveFile);
       return;
     }
     const wikiFolder = domainWikiFolder(entry.wiki_folder);
@@ -63565,7 +64387,7 @@ var WikiController = class {
   requireClaudeAgent(local) {
     const { iclaudePath } = local;
     if (!iclaudePath) {
-      new import_obsidian11.Notice(i18n().ctrl.setClaudeCodePath);
+      new import_obsidian10.Notice(i18n().ctrl.setClaudeCodePath);
       return null;
     }
     return iclaudePath;
@@ -63573,7 +64395,7 @@ var WikiController = class {
   requireNativeAgent(eff) {
     const na = eff.nativeAgent;
     if (!na?.baseUrl?.trim() || !na?.apiKey?.trim()) {
-      new import_obsidian11.Notice(i18n().ctrl.configureCloudLlm);
+      new import_obsidian10.Notice(i18n().ctrl.configureCloudLlm);
       return false;
     }
     return true;
@@ -63592,7 +64414,7 @@ var WikiController = class {
       return this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath)?.path ?? null;
     };
     adapter.renderExcalidrawPng = async (resolvedPath) => {
-      if (import_obsidian11.Platform.isMobile) return null;
+      if (import_obsidian10.Platform.isMobile) return null;
       try {
         const host = this.app.plugins?.plugins?.["obsidian-excalidraw-plugin"];
         const ea = host?.ea;
@@ -63662,41 +64484,26 @@ var WikiController = class {
       llm = client;
     } else {
       this._currentClaudeClient = null;
-      const proxyCfg = s.proxy;
-      let proxyFetch = null;
-      if (proxyCfg.enabled && import_obsidian11.Platform.isMobile) {
-        new import_obsidian11.Notice(i18n().settings.proxy_mobile_warning);
-      } else if (proxyCfg.enabled) {
-        try {
-          const baseHost = new URL(s.nativeAgent.baseUrl).hostname;
-          const noProxyList = parseNoProxy(proxyCfg.noProxy);
-          if (!shouldBypass(baseHost, noProxyList)) {
-            proxyFetch = createProxyFetch(proxyCfg);
-            if (proxyFetch) console.debug(`[ai-wiki] using proxy ${maskProxyUrl(proxyCfg.url)}`);
-          }
-        } catch (e) {
-          new import_obsidian11.Notice(i18n().settings.proxy_invalid(e.message));
-        }
+      if (s.proxy.enabled && import_obsidian10.Platform.isMobile) {
+        new import_obsidian10.Notice(i18n().settings.proxy_mobile_warning);
       }
       const requestTimeoutMs = s.llmIdleTimeoutSec * 1e3;
-      const nativeFetch = selectNativeFetch({
-        isMobile: import_obsidian11.Platform.isMobile,
-        mobileFetch,
-        proxyFetch,
-        directDesktopFetch: () => createDirectDesktopFetch(requestTimeoutMs),
-        requestTimeoutMs
-      });
-      const openaiClient = new OpenAI({
+      llm = createNativeOpenAiClient({
         baseURL: s.nativeAgent.baseUrl,
         apiKey: s.nativeAgent.apiKey,
-        timeout: requestTimeoutMs,
-        maxRetries: 0,
-        dangerouslyAllowBrowser: true,
-        fetch: nativeFetch
+        requestTimeoutMs,
+        isMobile: import_obsidian10.Platform.isMobile,
+        proxyConfig: s.proxy,
+        mobileFetch,
+        onProxySelected: (config) => {
+          console.debug(`[ai-wiki] using proxy ${maskProxyUrl(config.url)}`);
+        },
+        onProxyError: (error) => {
+          new import_obsidian10.Notice(i18n().settings.proxy_invalid(error.message));
+        }
       });
-      llm = import_obsidian11.Platform.isMobile ? wrapMobileNoStream(openaiClient) : openaiClient;
     }
-    return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`, import_obsidian11.Platform.isMobile);
+    return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`, import_obsidian10.Platform.isMobile);
   }
   async logEvent(_vaultRoot, sessionId, op, domainId, ev) {
     if (!(this._currentLogMeta?.agentLogEnabled ?? this.plugin.settings.agentLogEnabled)) return;
@@ -63800,12 +64607,12 @@ var WikiController = class {
   }
   async dispatch(op, args, domainId, context, instruction, onFileError, chatMessages, lintOpts) {
     if (this.isBusy()) {
-      new import_obsidian11.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian10.Notice(i18n().ctrl.operationRunning);
       return;
     }
     this._chatSessionId = void 0;
-    if (import_obsidian11.Platform.isMobile && op !== "query" && op !== "format" && op !== "delete") {
-      new import_obsidian11.Notice(i18n().ctrl.mobileNotAvailable);
+    if (import_obsidian10.Platform.isMobile && op !== "query" && op !== "format" && op !== "delete") {
+      new import_obsidian10.Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
     {
@@ -63836,7 +64643,7 @@ var WikiController = class {
     try {
       agentRunner = await this.buildAgentRunner(vaultRoot, void 0, opKey, opTimeoutSec);
     } catch (e) {
-      new import_obsidian11.Notice(i18n().ctrl.errorPrefix(e.message));
+      new import_obsidian10.Notice(i18n().ctrl.errorPrefix(e.message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
       return;
     }
@@ -63909,7 +64716,7 @@ var WikiController = class {
             if (next !== cur) await this.domainStore.save(next);
           } catch (e) {
             if (e instanceof DomainCorruptError) {
-              new import_obsidian11.Notice(`Domain map corrupt: ${e.message}`);
+              new import_obsidian10.Notice(`Domain map corrupt: ${e.message}`);
             }
             status = "error";
             ctrl.abort();
@@ -64182,7 +64989,7 @@ async function rmdirIfEmpty(adapter, dir) {
 }
 
 // src/migrate-index-format.ts
-var import_obsidian12 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 var OLD_ENTRY = /^- \[\[([^\]]+)\]\] \S+ — (.+)$/;
 var NEW_ENTRY = /^- \S+ — .+$/;
 function migrateLine(line) {
@@ -64231,12 +65038,12 @@ async function migrateIndexFormat(vault, domains) {
     linesChanged += changed;
   }
   if (filesChanged > 0) {
-    new import_obsidian12.Notice(`AI Wiki: index format migrated \u2014 ${filesChanged} files, ${linesChanged} lines`);
+    new import_obsidian11.Notice(`AI Wiki: index format migrated \u2014 ${filesChanged} files, ${linesChanged} lines`);
   }
 }
 
 // src/migrate-drop-sections.ts
-var import_obsidian13 = require("obsidian");
+var import_obsidian12 = require("obsidian");
 
 // src/strip-legacy-sections.ts
 var LEGACY_HEADINGS = /* @__PURE__ */ new Set([
@@ -64351,13 +65158,13 @@ async function migrateDropSections(vault, domains, localConfigStore) {
   }
   await localConfigStore.save({ migrated_drop_sections: true });
   if (filesChanged > 0) {
-    new import_obsidian13.Notice(`AI Wiki: legacy wiki sections removed \u2014 ${filesChanged} pages`);
+    new import_obsidian12.Notice(`AI Wiki: legacy wiki sections removed \u2014 ${filesChanged} pages`);
   }
 }
 
 // src/migrate-okf-frontmatter.ts
 var import_yaml6 = __toESM(require_dist(), 1);
-var import_obsidian14 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 var FM_RE6 = /^---\n([\s\S]*?)\n---\n?/;
 function isH22(line) {
   return /^##\s+/.test(line);
@@ -64494,7 +65301,7 @@ async function migrateOkfFrontmatter(vault, domains, localConfigStore) {
   }
   await localConfigStore.save({ migrated_okf_frontmatter: true });
   if (filesChanged > 0) {
-    new import_obsidian14.Notice(`AI Wiki: OKF frontmatter migrated \u2014 ${filesChanged} pages`);
+    new import_obsidian13.Notice(`AI Wiki: OKF frontmatter migrated \u2014 ${filesChanged} pages`);
   }
 }
 
@@ -64651,7 +65458,7 @@ async function migrateJsonlDomainStorage(vault, opts = {}) {
 }
 
 // src/main.ts
-var LlmWikiPlugin = class extends import_obsidian15.Plugin {
+var LlmWikiPlugin = class extends import_obsidian14.Plugin {
   settings;
   controller;
   settingTab;
@@ -64664,11 +65471,11 @@ var LlmWikiPlugin = class extends import_obsidian15.Plugin {
       await runStorageMigration(this.app.vault);
       const report = await migrateJsonlDomainStorage(this.app.vault);
       if (!report.ok) {
-        new import_obsidian15.Notice(`AI Wiki: JSONL domain migration failed \u2014 ${report.errors.join("; ")}`, 0);
+        new import_obsidian14.Notice(`AI Wiki: JSONL domain migration failed \u2014 ${report.errors.join("; ")}`, 0);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian15.Notice(`AI Wiki: storage migration failed \u2014 ${msg}`, 0);
+      new import_obsidian14.Notice(`AI Wiki: storage migration failed \u2014 ${msg}`, 0);
       console.error("[AI Wiki] storage migration error:", e);
     }
     await cleanupBundledSchemaCopies(this.app.vault);
@@ -64683,7 +65490,7 @@ var LlmWikiPlugin = class extends import_obsidian15.Plugin {
       await migrateIndexFormat(this.app.vault, domains);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian15.Notice(`AI Wiki: index format migration failed \u2014 ${msg}`, 0);
+      new import_obsidian14.Notice(`AI Wiki: index format migration failed \u2014 ${msg}`, 0);
       console.error("[AI Wiki] index format migration error:", e);
     }
     try {
@@ -64691,7 +65498,7 @@ var LlmWikiPlugin = class extends import_obsidian15.Plugin {
       await migrateDropSections(this.app.vault, domains, this.localConfigStore);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian15.Notice(`AI Wiki: drop-sections migration failed \u2014 ${msg}`, 0);
+      new import_obsidian14.Notice(`AI Wiki: drop-sections migration failed \u2014 ${msg}`, 0);
       console.error("[AI Wiki] drop-sections migration error:", e);
     }
     try {
@@ -64699,7 +65506,7 @@ var LlmWikiPlugin = class extends import_obsidian15.Plugin {
       await migrateOkfFrontmatter(this.app.vault, domains, this.localConfigStore);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian15.Notice(`AI Wiki: OKF frontmatter migration failed \u2014 ${msg}`, 0);
+      new import_obsidian14.Notice(`AI Wiki: OKF frontmatter migration failed \u2014 ${msg}`, 0);
       console.error("[AI Wiki] OKF frontmatter migration error:", e);
     }
     this.controller = new WikiController(this.app, this, this.domainStore, this.localConfigStore);
@@ -64714,7 +65521,7 @@ var LlmWikiPlugin = class extends import_obsidian15.Plugin {
         if (right) void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
-    if (!import_obsidian15.Platform.isMobile) {
+    if (!import_obsidian14.Platform.isMobile) {
       const statusBar = this.addStatusBarItem();
       statusBar.setText("schema: 0/0");
       statusBar.setAttribute("aria-label", "validation: 0 ok, 0 retried, 0 failed");
@@ -64737,7 +65544,7 @@ var LlmWikiPlugin = class extends import_obsidian15.Plugin {
         if (right) void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
-    if (!import_obsidian15.Platform.isMobile) {
+    if (!import_obsidian14.Platform.isMobile) {
       this.addCommand({
         id: "ingest-current",
         name: T.cmd.ingestActive,
@@ -64749,7 +65556,7 @@ var LlmWikiPlugin = class extends import_obsidian15.Plugin {
       name: T.cmd.query,
       callback: () => new QueryModal(this.app, (q) => void this.controller.query(q)).open()
     });
-    if (!import_obsidian15.Platform.isMobile) {
+    if (!import_obsidian14.Platform.isMobile) {
       this.addCommand({
         id: "lint",
         name: T.cmd.lint,
@@ -64815,12 +65622,12 @@ var LlmWikiPlugin = class extends import_obsidian15.Plugin {
             const last = (await this.localConfigStore.load()).lastDomain;
             const domain = domains.find((d) => d.id === last) ?? domains[0];
             if (!domain) {
-              new import_obsidian15.Notice(i18n().view.selectDomainFirst);
+              new import_obsidian14.Notice(i18n().view.selectDomainFirst);
               return;
             }
             const defaultDest = `${this.controller.cwdOrEmpty()}/okf-export/${domain.wiki_folder}`;
             new ExportOkfModal(this.app, defaultDest, (dest) => {
-              void this.controller.exportOkf(domain, dest).then((r) => new import_obsidian15.Notice(`OKF: ${r.pages} pages \u2192 ${dest}${r.warnings.length ? ` (${r.warnings.length} warnings)` : ""}`)).catch((e) => new import_obsidian15.Notice(`OKF export failed: ${e.message}`, 0));
+              void this.controller.exportOkf(domain, dest).then((r) => new import_obsidian14.Notice(`OKF: ${r.pages} pages \u2192 ${dest}${r.warnings.length ? ` (${r.warnings.length} warnings)` : ""}`)).catch((e) => new import_obsidian14.Notice(`OKF export failed: ${e.message}`, 0));
             }).open();
           })();
         }
@@ -64913,11 +65720,11 @@ var LlmWikiPlugin = class extends import_obsidian15.Plugin {
       if (data && data.model && !this.settings.claudeAgent.model)
         this.settings.claudeAgent.model = data.model;
     }
-    if (import_obsidian15.Platform.isMobile && this.settings.backend === "claude-agent") {
+    if (import_obsidian14.Platform.isMobile && this.settings.backend === "claude-agent") {
       this.settings.backend = "native-agent";
       await this.saveData(this.settings);
     }
-    if (import_obsidian15.Platform.isMobile) {
+    if (import_obsidian14.Platform.isMobile) {
       let dirty = false;
       if (this.settings.nativeAgent.perOperation) {
         this.settings.nativeAgent.perOperation = false;

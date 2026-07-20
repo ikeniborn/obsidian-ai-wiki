@@ -356,10 +356,19 @@ export interface LlmCallOptions {
   lintNearDuplicate?: boolean;
   nearDupThreshold?: number;
   semanticCompression?: SemanticCompression;
+  /** Internal native transport policy resolved from existing top-level settings. */
+  nativeRequestRetries?: number;
+  /** Internal native transport policy resolved from existing top-level settings. */
+  nativeRequestIdleTimeoutMs?: number;
 }
 
 export interface NativeChatCompletionCreateOptions {
   signal: AbortSignal;
+}
+
+export interface LlmChatCompletionCreateOptions {
+  signal?: AbortSignal;
+  retry?: NativeRequestRetryContext;
 }
 
 export interface NativeChatCompletionCreate {
@@ -405,17 +414,19 @@ export type NativeLlmExecutionInput =
 
 /** Минимальный интерфейс OpenAI-клиента, используемый фазами. */
 export type LlmClient = {
+  /** True only for the executor-backed native adapter; absent for Claude and test clients. */
+  nativeRequestExecutor?: true;
   emitsPromptBudget?: boolean;
   beginPromptBudgetRequest?: (requestId: string) => void;
   chat: {
     completions: {
       create(
         params: OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-        opts?: { signal?: AbortSignal },
+        opts?: LlmChatCompletionCreateOptions,
       ): Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk>>;
       create(
         params: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-        opts?: { signal?: AbortSignal },
+        opts?: LlmChatCompletionCreateOptions,
       ): Promise<OpenAI.Chat.ChatCompletion>;
     };
   };

@@ -21,7 +21,13 @@ import {
   runWithContextRepack,
   type ContextUnit,
 } from "../prompt-budget";
-import type { LlmCallOptions, LlmClient, ModelCallPolicy, RunEvent } from "../types";
+import type {
+  LlmCallOptions,
+  LlmChatCompletionCreateOptions,
+  LlmClient,
+  ModelCallPolicy,
+  RunEvent,
+} from "../types";
 import { prepareChatMessages } from "./llm-utils";
 import { createLlmLifecycle, runStructuredWithRetry, StructuredOutputTruncatedError, StructuredValidationError } from "./structured-output";
 import { lifecycleEvent } from "../llm-lifecycle";
@@ -802,7 +808,7 @@ async function executeSingleRegenerationRequest(input: ConflictRegenerationInput
   let forwardedRequests = 0;
   const guardedCreate = async (
     params: OpenAI.Chat.ChatCompletionCreateParamsStreaming | OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-    requestOptions?: { signal?: AbortSignal },
+    requestOptions?: LlmChatCompletionCreateOptions,
   ): Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk> | OpenAI.Chat.ChatCompletion> => {
     if (forwardedRequests > 0) {
       throw new ConflictRegenerationExhaustedError(
@@ -817,6 +823,7 @@ async function executeSingleRegenerationRequest(input: ConflictRegenerationInput
     return input.llm.chat.completions.create(params, requestOptions);
   };
   const guardedLlm: LlmClient = {
+    ...(input.llm.nativeRequestExecutor ? { nativeRequestExecutor: true as const } : {}),
     chat: {
       completions: {
         create: guardedCreate as LlmClient["chat"]["completions"]["create"],

@@ -38,6 +38,11 @@ import type { DomainEntry } from "../domain";
 import { collectDomainTags, renderTagRegistryBlock, DEFAULT_MAX_TAG_CATEGORIES } from "../utils/tag-registry";
 import { domainWikiFolder } from "../wiki-path";
 import { reassembleFormatSegments, segmentFormatInput, splitFormatSegment, type FormatSegment } from "./format-segments";
+import {
+  createNativeRequestLifecycle,
+  createNativeRequestRetryContext,
+  isNativeLlmClient,
+} from "../native-llm-executor";
 
 function parseFormatOutput(
   text: string,
@@ -400,10 +405,20 @@ export async function* runFormat(
       yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "completed");
     }
     activeFormatLifecycle = createLlmLifecycle("format_note");
-    yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing", Date.now(), {
+    const streamAttempt = formatRequestAttempt++;
+    if (!isNativeLlmClient(llm)) {
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing", Date.now(), {
+        callSite: budgetContext.callSite,
+        transport: "stream",
+        attempt: streamAttempt,
+      });
+    }
+    const nativeEvents: RunEvent[] = [];
+    const requestLifecycle = createNativeRequestLifecycle({
+      initial: activeFormatLifecycle,
       callSite: budgetContext.callSite,
-      transport: "stream",
-      attempt: formatRequestAttempt++,
+      onEvent: (event) => nativeEvents.push(event),
+      attemptOffset: streamAttempt,
     });
     let acc = "";
     lastFinishReason = null;
@@ -411,20 +426,35 @@ export async function* runFormat(
     const requestStartMs = Date.now();
     let streamChunkConsumed = false;
     try {
-      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
-      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
+      if (!isNativeLlmClient(llm)) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
+      }
       const request = llm.chat.completions.create(
         { ...p, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-        { signal },
+        {
+          signal,
+          retry: createNativeRequestRetryContext({
+            callSite: budgetContext.callSite,
+            opts,
+            signal,
+            onEvent: (event) => nativeEvents.push(event),
+            lifecycle: requestLifecycle,
+          }),
+        },
       );
       const rawStream = await request;
+      while (nativeEvents.length > 0) yield nativeEvents.shift()!;
       const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
       let producing = false;
       for await (const chunk of stream) {
+        while (nativeEvents.length > 0) yield nativeEvents.shift()!;
         streamChunkConsumed = true;
         const { reasoning, content, outputTokens: tok, inputTokens: inTok } = extractStreamDeltas(chunk);
         if (!producing && (reasoning.trim() || content.trim())) {
-          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "producing");
+          if (!isNativeLlmClient(llm)) {
+            yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "producing");
+          }
           producing = true;
         }
         if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
@@ -434,6 +464,8 @@ export async function* runFormat(
         const fr = chunk.choices[0]?.finish_reason;
         if (fr) lastFinishReason = fr;
       }
+      while (nativeEvents.length > 0) yield nativeEvents.shift()!;
+      if (isNativeLlmClient(llm)) activeFormatLifecycle = requestLifecycle.current();
       const callStats = getStats();
       yield formatBudgetEvent(
         activeFormatLifecycle.id,
@@ -443,6 +475,8 @@ export async function* runFormat(
       );
       if (callStats) yield buildLlmCallStatsEvent(callStats);
     } catch (e) {
+      while (nativeEvents.length > 0) yield nativeEvents.shift()!;
+      if (isNativeLlmClient(llm)) activeFormatLifecycle = requestLifecycle.current();
       yield formatBudgetEvent(
         activeFormatLifecycle.id,
         p,
@@ -451,43 +485,78 @@ export async function* runFormat(
         classifyContextError(e) === null ? undefined : "provider_context_error",
       );
       if (signal.aborted || (e as Error).name === "AbortError") {
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "cancelled");
+        if (!isNativeLlmClient(llm)) {
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "cancelled");
+        }
         activeFormatLifecycle = null;
         return acc;
       }
       if (streamChunkConsumed) {
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
+        if (!isNativeLlmClient(llm)) {
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
+        }
         activeFormatLifecycle = null;
         throw e;
       }
       if (!fallback.allowContextFallback && classifyContextError(e) !== null) {
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+        if (!isNativeLlmClient(llm)) {
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+        }
         activeFormatLifecycle = null;
         throw e;
       }
       if (!shouldFallbackStreamToNonStream(e, signal)) {
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
+        if (!isNativeLlmClient(llm)) {
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
+        }
         activeFormatLifecycle = null;
         throw e;
       }
-      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+      if (!isNativeLlmClient(llm)) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+      }
       activeFormatLifecycle = createLlmLifecycle("format_note");
-      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing", Date.now(), {
+      const fallbackAttempt = formatRequestAttempt++;
+      if (!isNativeLlmClient(llm)) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing", Date.now(), {
+          callSite: budgetContext.callSite,
+          transport: "non-stream",
+          attempt: fallbackAttempt,
+        });
+      }
+      const fallbackEvents: RunEvent[] = [];
+      const fallbackLifecycle = createNativeRequestLifecycle({
+        initial: activeFormatLifecycle,
         callSite: budgetContext.callSite,
-        transport: "non-stream",
-        attempt: formatRequestAttempt++,
+        onEvent: (event) => fallbackEvents.push(event),
+        attemptOffset: fallbackAttempt,
       });
       const fallbackStartMs = Date.now();
       let resp: OpenAI.Chat.ChatCompletion;
       try {
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
-        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
+        if (!isNativeLlmClient(llm)) {
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
+        }
         const pending = llm.chat.completions.create(
           { ...p, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-          { signal },
+          {
+            signal,
+            retry: createNativeRequestRetryContext({
+              callSite: budgetContext.callSite,
+              opts,
+              signal,
+              onEvent: (event) => fallbackEvents.push(event),
+              lifecycle: fallbackLifecycle,
+            }),
+          },
         );
         resp = await pending;
+        while (fallbackEvents.length > 0) yield fallbackEvents.shift()!;
+        if (isNativeLlmClient(llm)) activeFormatLifecycle = fallbackLifecycle.current();
       } catch (fallbackError) {
+        while (fallbackEvents.length > 0) yield fallbackEvents.shift()!;
+        if (isNativeLlmClient(llm)) activeFormatLifecycle = fallbackLifecycle.current();
         yield formatBudgetEvent(
           activeFormatLifecycle.id,
           p,
@@ -497,22 +566,24 @@ export async function* runFormat(
             ? undefined
             : "provider_context_error",
         );
-        yield lifecycleEvent(
-          activeFormatLifecycle.id,
-          activeFormatLifecycle.action,
-          signal.aborted || (fallbackError as Error).name === "AbortError"
-            ? "cancelled"
-            : classifyContextError(fallbackError) !== null
-              ? "retrying"
-              : "failed",
-        );
+        if (!isNativeLlmClient(llm)) {
+          yield lifecycleEvent(
+            activeFormatLifecycle.id,
+            activeFormatLifecycle.action,
+            signal.aborted || (fallbackError as Error).name === "AbortError"
+              ? "cancelled"
+              : classifyContextError(fallbackError) !== null
+                ? "retrying"
+                : "failed",
+          );
+        }
         activeFormatLifecycle = null;
         throw fallbackError;
       }
       const fallbackMessage = resp.choices[0]?.message;
       const fallbackReasoning = completionReasoning(fallbackMessage);
       acc = fallbackMessage?.content ?? "";
-      if (fallbackReasoning.trim() || acc.trim()) {
+      if ((fallbackReasoning.trim() || acc.trim()) && !isNativeLlmClient(llm)) {
         yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "producing");
       }
       if (fallbackReasoning) {

@@ -27,6 +27,11 @@ import {
   type PromptBudgetEvent,
 } from "../prompt-budget";
 import { packQueryChunks, type QuerySystemPrompt } from "./query-budget";
+import {
+  createNativeRequestLifecycle,
+  createNativeRequestRetryContext,
+  isNativeLlmClient,
+} from "../native-llm-executor";
 
 interface PackedAnswerRequest {
   messages: OpenAI.Chat.ChatCompletionMessageParam[];
@@ -149,20 +154,40 @@ export async function* answerFromContext(args: {
           answerLifecycle = createLlmLifecycle("answer_question");
         }
         executionCount += 1;
-        emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing", Date.now(), {
+        const streamAttempt = requestAttempt++;
+        if (!isNativeLlmClient(llm)) {
+          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing", Date.now(), {
+            callSite: "query.answer",
+            transport: "stream",
+            attempt: streamAttempt,
+          }));
+        }
+        const requestLifecycle = createNativeRequestLifecycle({
+          initial: answerLifecycle,
           callSite: "query.answer",
-          transport: "stream",
-          attempt: requestAttempt++,
-        }));
+          onEvent: emit,
+          attemptOffset: streamAttempt,
+        });
         const params = paramsForPreparedMessages(model, request.messages, opts, true);
         let streamChunkConsumed = false;
         try {
           const requestStartMs = Date.now();
-          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"));
-          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
+          if (!isNativeLlmClient(llm)) {
+            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"));
+            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
+          }
           const pending = llm.chat.completions.create(
             { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-            { signal: operationSignal },
+            {
+              signal: operationSignal,
+              retry: createNativeRequestRetryContext({
+                callSite: "query.answer",
+                opts,
+                signal: operationSignal,
+                onEvent: emit,
+                lifecycle: requestLifecycle,
+              }),
+            },
           );
           const rawStream = await pending;
           const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, operationSignal);
@@ -173,7 +198,9 @@ export async function* answerFromContext(args: {
             streamChunkConsumed = true;
             const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
             if (!producing && (reasoning.trim() || content.trim())) {
-              emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "producing"));
+              if (!isNativeLlmClient(llm)) {
+                emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "producing"));
+              }
               producing = true;
             }
             if (reasoning) emit({ kind: "assistant_text", delta: reasoning, isReasoning: true });
@@ -184,6 +211,7 @@ export async function* answerFromContext(args: {
             if (tok !== undefined) attemptOutputTokens += tok;
           }
           const stats = getStats();
+          if (isNativeLlmClient(llm)) answerLifecycle = requestLifecycle.current();
           return {
             answer: attemptAnswer,
             outputTokens: attemptOutputTokens,
@@ -198,7 +226,9 @@ export async function* answerFromContext(args: {
           ) throw error;
           if (streamChunkConsumed) throw new ContextRepackSuppressedError(error);
           if (classifyContextError(error) !== null && request.optionalUnits > 0) {
-            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
+            if (!isNativeLlmClient(llm)) {
+              emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
+            }
           }
           rethrowForContextRepack(error, request.optionalUnits);
           if (!shouldFallbackStreamToNonStream(error, operationSignal)) throw error;
@@ -217,25 +247,48 @@ export async function* answerFromContext(args: {
           }));
           emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
           answerLifecycle = createLlmLifecycle("answer_question");
-          emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing", Date.now(), {
+          const fallbackAttempt = requestAttempt++;
+          if (!isNativeLlmClient(llm)) {
+            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "preparing", Date.now(), {
+              callSite: "query.answer",
+              transport: "non-stream",
+              attempt: fallbackAttempt,
+            }));
+          }
+          const fallbackLifecycle = createNativeRequestLifecycle({
+            initial: answerLifecycle,
             callSite: "query.answer",
-            transport: "non-stream",
-            attempt: requestAttempt++,
-          }));
+            onEvent: emit,
+            attemptOffset: fallbackAttempt,
+          });
           let response: OpenAI.Chat.ChatCompletion;
           const fallbackStartMs = Date.now();
           try {
             const fallbackParams = paramsForPreparedMessages(model, request.messages, opts, false);
-            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"));
-            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
+            if (!isNativeLlmClient(llm)) {
+              emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "sent"));
+              emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "waiting"));
+            }
             const pending = llm.chat.completions.create(
               { ...fallbackParams, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-              { signal: operationSignal },
+              {
+                signal: operationSignal,
+                retry: createNativeRequestRetryContext({
+                  callSite: "query.answer",
+                  opts,
+                  signal: operationSignal,
+                  onEvent: emit,
+                  lifecycle: fallbackLifecycle,
+                }),
+              },
             );
             response = await pending;
+            if (isNativeLlmClient(llm)) answerLifecycle = fallbackLifecycle.current();
           } catch (fallbackError) {
             if (classifyContextError(fallbackError) !== null && request.optionalUnits > 0) {
-              emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
+              if (!isNativeLlmClient(llm)) {
+                emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "retrying"));
+              }
             }
             rethrowForContextRepack(fallbackError, request.optionalUnits);
             throw fallbackError;
@@ -246,7 +299,9 @@ export async function* answerFromContext(args: {
           const fallbackAnswer = fallbackMessage?.content ?? "";
           const fallbackTokens = extractUsage(response) ?? 0;
           if (fallbackReasoning.trim() || fallbackAnswer.trim()) {
-            emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "producing"));
+            if (!isNativeLlmClient(llm)) {
+              emit(lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "producing"));
+            }
           }
           if (fallbackReasoning) {
             emit({ kind: "assistant_text", delta: fallbackReasoning, isReasoning: true });
@@ -275,10 +330,14 @@ export async function* answerFromContext(args: {
   } catch (error) {
     for (const event of budgetEvents) yield event;
     if (signal.aborted || (error as Error).name === "AbortError") {
-      yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
+      if (!isNativeLlmClient(llm)) {
+        yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "cancelled");
+      }
       return { answer: "", outputTokens, selectedChunks };
     }
-    yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "failed");
+    if (!isNativeLlmClient(llm)) {
+      yield lifecycleEvent(answerLifecycle.id, answerLifecycle.action, "failed");
+    }
     throw error;
   }
   for (const event of budgetEvents) yield event;

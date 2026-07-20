@@ -19,6 +19,10 @@ import {
 import { RunEventBridge } from "../run-event-bridge";
 import { structuralErrorCounter } from "../structural-error-counter";
 import {
+  createNativeRequestRetryContext,
+  isNativeLlmClient,
+} from "../native-llm-executor";
+import {
   buildChatParams,
   buildLlmCallStatsEvent,
   completionReasoning,
@@ -280,12 +284,24 @@ async function streamOnce(
   let requestError: unknown;
 
   try {
-    lifecycle.phase("sent");
-    lifecycle.phase("waiting");
+    if (!isNativeLlmClient(llm)) {
+      lifecycle.phase("sent");
+      lifecycle.phase("waiting");
+    }
     llm.beginPromptBudgetRequest?.(requestId);
     const request = llm.chat.completions.create(
       { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-      { signal },
+      {
+        signal,
+        retry: createNativeRequestRetryContext({
+          callSite,
+          opts,
+          signal,
+          onEvent,
+          lifecycle,
+          logicalRequestId: requestId,
+        }),
+      },
     );
     const rawStream = await request;
     signal.throwIfAborted();
@@ -297,7 +313,7 @@ async function streamOnce(
       if (reason !== undefined) finishReason = reason;
       const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
       if (!producing && (reasoning.trim() || content.trim())) {
-        lifecycle.phase("producing");
+        if (!isNativeLlmClient(llm)) lifecycle.phase("producing");
         producing = true;
       }
       if (reasoning) onEvent({ kind: "assistant_text", delta: reasoning, isReasoning: true });
@@ -332,8 +348,10 @@ async function streamOnce(
     ) throw e;
     if (isJsonModeError(e)) throw e;
     if (!shouldFallbackStreamToNonStream(e, signal)) throw e;
-    lifecycle.close("retrying");
-    lifecycle.begin(attempt, "non-stream");
+    if (!isNativeLlmClient(llm)) {
+      lifecycle.close("retrying");
+      lifecycle.begin(attempt, "non-stream");
+    }
     return nonStreamOnce(
       llm,
       model,
@@ -379,14 +397,24 @@ async function nonStreamOnce(
   const params = buildChatParams(model, messages, opts);
   const requestStartMs = Date.now();
   const requestId = lifecycle.current().id;
-  lifecycle.phase("sent");
+  if (!isNativeLlmClient(llm)) lifecycle.phase("sent");
   let response: OpenAI.Chat.ChatCompletion | AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
   try {
-    lifecycle.phase("waiting");
+    if (!isNativeLlmClient(llm)) lifecycle.phase("waiting");
     llm.beginPromptBudgetRequest?.(requestId);
     const request = llm.chat.completions.create(
       { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-      { signal },
+      {
+        signal,
+        retry: createNativeRequestRetryContext({
+          callSite,
+          opts,
+          signal,
+          onEvent,
+          lifecycle,
+          logicalRequestId: requestId,
+        }),
+      },
     );
     response = await request;
   } catch (error) {
@@ -440,7 +468,7 @@ async function nonStreamOnce(
         if (reason !== undefined) finishReason = reason;
         const deltas = extractStreamDeltas(chunk);
         if (!producing && (deltas.reasoning.trim() || deltas.content.trim())) {
-          lifecycle.phase("producing");
+          if (!isNativeLlmClient(llm)) lifecycle.phase("producing");
           producing = true;
         }
         if (deltas.reasoning) {
@@ -465,7 +493,9 @@ async function nonStreamOnce(
   const message = response.choices[0]?.message;
   const reasoning = completionReasoning(message);
   const fullText = message?.content ?? "";
-  if (reasoning.trim() || fullText.trim()) lifecycle.phase("producing");
+  if ((reasoning.trim() || fullText.trim()) && !isNativeLlmClient(llm)) {
+    lifecycle.phase("producing");
+  }
   if (reasoning) onEvent({ kind: "assistant_text", delta: reasoning, isReasoning: true });
   signal.throwIfAborted();
   return {
@@ -510,7 +540,9 @@ async function callWithFormatFallback<T>(
 ): Promise<{ result: CallResult; mode: ResponseFormatMode }> {
   let currentMode = mode;
   while (true) {
-    lifecycle.begin(attempt, args.transport ?? "stream");
+    if (!isNativeLlmClient(args.llm)) {
+      lifecycle.begin(attempt, args.transport ?? "stream");
+    }
     const callOpts: LlmCallOptions = args.profile.kind === "json-zod"
       ? optsForMode(args.opts, currentMode, args.callSite, args.profile.schema)
       : { ...args.opts, jsonMode: false, jsonSchema: undefined };

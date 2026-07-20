@@ -26,6 +26,11 @@ import {
   type PromptBudgetEvent,
 } from "../prompt-budget";
 import { packChatHistory } from "./query-budget";
+import {
+  createNativeRequestLifecycle,
+  createNativeRequestRetryContext,
+  isNativeLlmClient,
+} from "../native-llm-executor";
 
 interface PackedChatRequest {
   messages: OpenAI.Chat.ChatCompletionMessageParam[];
@@ -142,20 +147,40 @@ export async function* runLintChat(
           );
         }
         executionCount += 1;
-        emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing", Date.now(), {
+        const streamAttempt = requestAttempt++;
+        if (!isNativeLlmClient(llm)) {
+          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing", Date.now(), {
+            callSite,
+            transport: "stream",
+            attempt: streamAttempt,
+          }));
+        }
+        const requestLifecycle = createNativeRequestLifecycle({
+          initial: chatLifecycle,
           callSite,
-          transport: "stream",
-          attempt: requestAttempt++,
-        }));
+          onEvent: emit,
+          attemptOffset: streamAttempt,
+        });
         const params = paramsForPreparedMessages(model, request.messages, opts, true);
         let streamChunkConsumed = false;
         try {
           const requestStartMs = Date.now();
-          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"));
-          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"));
+          if (!isNativeLlmClient(llm)) {
+            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"));
+            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"));
+          }
           const pending = llm.chat.completions.create(
             { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-            { signal: operationSignal },
+            {
+              signal: operationSignal,
+              retry: createNativeRequestRetryContext({
+                callSite,
+                opts,
+                signal: operationSignal,
+                onEvent: emit,
+                lifecycle: requestLifecycle,
+              }),
+            },
           );
           const rawStream = await pending;
           const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, operationSignal);
@@ -166,7 +191,9 @@ export async function* runLintChat(
             streamChunkConsumed = true;
             const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
             if (!producing && (reasoning.trim() || content.trim())) {
-              emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "producing"));
+              if (!isNativeLlmClient(llm)) {
+                emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "producing"));
+              }
               producing = true;
             }
             if (reasoning) emit({ kind: "assistant_text", delta: reasoning, isReasoning: true });
@@ -177,6 +204,7 @@ export async function* runLintChat(
             if (tok !== undefined) attemptOutputTokens += tok;
           }
           const stats = getStats();
+          if (isNativeLlmClient(llm)) chatLifecycle = requestLifecycle.current();
           return {
             text: attemptText,
             outputTokens: attemptOutputTokens,
@@ -190,7 +218,9 @@ export async function* runLintChat(
           ) throw error;
           if (streamChunkConsumed) throw new ContextRepackSuppressedError(error);
           if (classifyContextError(error) !== null && request.optionalUnits > 0) {
-            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"));
+            if (!isNativeLlmClient(llm)) {
+              emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"));
+            }
           }
           rethrowForContextRepack(error, request.optionalUnits);
           if (!shouldFallbackStreamToNonStream(error, operationSignal)) throw error;
@@ -214,25 +244,48 @@ export async function* runLintChat(
               ? "answer_question"
               : "apply_lint_fixes",
           );
-          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing", Date.now(), {
+          const fallbackAttempt = requestAttempt++;
+          if (!isNativeLlmClient(llm)) {
+            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing", Date.now(), {
+              callSite,
+              transport: "non-stream",
+              attempt: fallbackAttempt,
+            }));
+          }
+          const fallbackLifecycle = createNativeRequestLifecycle({
+            initial: chatLifecycle,
             callSite,
-            transport: "non-stream",
-            attempt: requestAttempt++,
-          }));
+            onEvent: emit,
+            attemptOffset: fallbackAttempt,
+          });
           let response: OpenAI.Chat.ChatCompletion;
           const fallbackStartMs = Date.now();
           try {
             const fallbackParams = paramsForPreparedMessages(model, request.messages, opts, false);
-            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"));
-            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"));
+            if (!isNativeLlmClient(llm)) {
+              emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"));
+              emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"));
+            }
             const pending = llm.chat.completions.create(
               { ...fallbackParams, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-              { signal: operationSignal },
+              {
+                signal: operationSignal,
+                retry: createNativeRequestRetryContext({
+                  callSite,
+                  opts,
+                  signal: operationSignal,
+                  onEvent: emit,
+                  lifecycle: fallbackLifecycle,
+                }),
+              },
             );
             response = await pending;
+            if (isNativeLlmClient(llm)) chatLifecycle = fallbackLifecycle.current();
           } catch (fallbackError) {
             if (classifyContextError(fallbackError) !== null && request.optionalUnits > 0) {
-              emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"));
+              if (!isNativeLlmClient(llm)) {
+                emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"));
+              }
             }
             rethrowForContextRepack(fallbackError, request.optionalUnits);
             throw fallbackError;
@@ -243,7 +296,9 @@ export async function* runLintChat(
           const fallbackText = fallbackMessage?.content ?? "";
           const fallbackTokens = extractUsage(response) ?? 0;
           if (fallbackReasoning.trim() || fallbackText.trim()) {
-            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "producing"));
+            if (!isNativeLlmClient(llm)) {
+              emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "producing"));
+            }
           }
           if (fallbackReasoning) {
             emit({ kind: "assistant_text", delta: fallbackReasoning, isReasoning: true });
@@ -271,10 +326,14 @@ export async function* runLintChat(
   } catch (error) {
     for (const event of budgetEvents) yield event;
     if (signal.aborted || (error as Error).name === "AbortError") {
-      yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "cancelled");
+      if (!isNativeLlmClient(llm)) {
+        yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "cancelled");
+      }
       return;
     }
-    yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "failed");
+    if (!isNativeLlmClient(llm)) {
+      yield lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "failed");
+    }
     throw error;
   }
   for (const event of budgetEvents) yield event;

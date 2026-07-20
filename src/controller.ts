@@ -9,17 +9,9 @@ import type { ChatMessage } from "./types";
 import { VaultTools, type VaultAdapter } from "./vault-tools";
 import { arrayBufferToBase64, stripImageDataUriPrefix } from "./phases/attachment-analyzer";
 import { ClaudeCliClient } from "./claude-cli-client";
-import OpenAI from "openai";
-import {
-  createDirectDesktopFetch,
-  createProxyFetch,
-  maskProxyUrl,
-  parseNoProxy,
-  selectNativeFetch,
-  shouldBypass,
-} from "./proxy";
+import { maskProxyUrl } from "./proxy";
 import { mobileFetch } from "./mobile-fetch";
-import { wrapMobileNoStream } from "./mobile-llm-wrap";
+import { createNativeOpenAiClient } from "./native-openai-client";
 import { i18n } from "./i18n";
 import { resolveEffective } from "./effective-settings";
 import { applyDomainEvent } from "./domain";
@@ -738,42 +730,25 @@ export class WikiController {
     } else {
       this._currentClaudeClient = null;
 
-      const proxyCfg = s.proxy;
-      let proxyFetch: typeof fetch | null = null;
-      if (proxyCfg.enabled && Platform.isMobile) {
+      if (s.proxy.enabled && Platform.isMobile) {
         new Notice(i18n().settings.proxy_mobile_warning);
-      } else if (proxyCfg.enabled) {
-        try {
-          const baseHost = new URL(s.nativeAgent.baseUrl).hostname;
-          const noProxyList = parseNoProxy(proxyCfg.noProxy);
-          if (!shouldBypass(baseHost, noProxyList)) {
-            proxyFetch = createProxyFetch(proxyCfg);
-            if (proxyFetch) console.debug(`[ai-wiki] using proxy ${maskProxyUrl(proxyCfg.url)}`);
-          }
-        } catch (e) {
-          new Notice(i18n().settings.proxy_invalid((e as Error).message));
-        }
       }
 
       const requestTimeoutMs = s.llmIdleTimeoutSec * 1000;
-      const nativeFetch = selectNativeFetch({
-        isMobile: Platform.isMobile,
-        mobileFetch,
-        proxyFetch,
-        directDesktopFetch: () => createDirectDesktopFetch(requestTimeoutMs),
-        requestTimeoutMs,
-      });
-      const openaiClient = new OpenAI({
+      llm = createNativeOpenAiClient({
         baseURL: s.nativeAgent.baseUrl,
         apiKey: s.nativeAgent.apiKey,
-        timeout: requestTimeoutMs,
-        maxRetries: 0,
-        dangerouslyAllowBrowser: true,
-        fetch: nativeFetch,
+        requestTimeoutMs,
+        isMobile: Platform.isMobile,
+        proxyConfig: s.proxy,
+        mobileFetch,
+        onProxySelected: (config) => {
+          console.debug(`[ai-wiki] using proxy ${maskProxyUrl(config.url)}`);
+        },
+        onProxyError: (error) => {
+          new Notice(i18n().settings.proxy_invalid((error as Error).message));
+        },
       });
-      llm = Platform.isMobile
-        ? wrapMobileNoStream(openaiClient)
-        : openaiClient;
     }
 
     return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`, Platform.isMobile);

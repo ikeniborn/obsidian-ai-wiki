@@ -31,6 +31,11 @@ import { createLlmLifecycle } from "./structured-output";
 import { lifecycleEvent } from "../llm-lifecycle";
 import { VisionRecognitionBatchSchema } from "./zod-schemas";
 import {
+  createNativeRequestLifecycle,
+  createNativeRequestRetryContext,
+  isNativeLlmClient,
+} from "../native-llm-executor";
+import {
   batchPdfPages,
   mergeRecognitionRecords,
   validateRecognitionCoverage,
@@ -111,6 +116,8 @@ export interface VisionAnalysisOptions {
   maxTokens?: number;
   compressionProfile?: CompressionProfile;
   onEvent?: (event: RunEvent) => void;
+  nativeRequestRetries?: number;
+  nativeRequestIdleTimeoutMs?: number;
 }
 
 interface ResolvedVisionAnalysisOptions {
@@ -118,6 +125,8 @@ interface ResolvedVisionAnalysisOptions {
   maxTokens?: number;
   compressionProfile: CompressionProfile;
   onEvent?: (event: RunEvent) => void;
+  nativeRequestRetries?: number;
+  nativeRequestIdleTimeoutMs?: number;
 }
 
 function resolveVisionOptions(
@@ -128,6 +137,8 @@ function resolveVisionOptions(
     maxTokens: options?.maxTokens,
     compressionProfile: options?.compressionProfile ?? "balanced",
     onEvent: options?.onEvent,
+    nativeRequestRetries: options?.nativeRequestRetries,
+    nativeRequestIdleTimeoutMs: options?.nativeRequestIdleTimeoutMs,
   };
 }
 
@@ -185,6 +196,8 @@ function visionCallOptions(
     maxTokens: options.maxTokens,
     outputLanguage: language,
     reasoningLanguage,
+    nativeRequestRetries: options.nativeRequestRetries,
+    nativeRequestIdleTimeoutMs: options.nativeRequestIdleTimeoutMs,
     semanticCompression: {
       profile: options.compressionProfile,
       operation: "vision" as const,
@@ -220,12 +233,21 @@ async function callVisionLlm(
   );
   const params = buildChatParams(model, visionMessages(systemPrompt, pages), callOptions);
 
-  const lifecycle = createLlmLifecycle("analyze_attachments");
-  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "preparing", Date.now(), {
+  let lifecycle = createLlmLifecycle("analyze_attachments");
+  const onEvent = options.onEvent ?? (() => {});
+  if (!isNativeLlmClient(llm)) {
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "preparing", Date.now(), {
+      callSite: "vision.analysis",
+      transport: "non-stream",
+      attempt,
+    }));
+  }
+  const requestLifecycle = createNativeRequestLifecycle({
+    initial: lifecycle,
     callSite: "vision.analysis",
-    transport: "non-stream",
-    attempt,
-  }));
+    onEvent,
+    attemptOffset: attempt,
+  });
   const estimatedInputTokens = estimatePreparedMessages(
     params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
   );
@@ -233,24 +255,38 @@ async function callVisionLlm(
   let response: OpenAI.Chat.ChatCompletion;
   try {
     signal.throwIfAborted();
-    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "sent"));
-    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "waiting"));
+    if (!isNativeLlmClient(llm)) {
+      options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "sent"));
+      options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "waiting"));
+    }
     providerDispatched = true;
     const request = llm.chat.completions.create(
       { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-      { signal },
+      {
+        signal,
+        retry: createNativeRequestRetryContext({
+          callSite: "vision.analysis",
+          opts: callOptions,
+          signal,
+          onEvent,
+          lifecycle: requestLifecycle,
+        }),
+      },
     );
     response = await request;
+    if (isNativeLlmClient(llm)) lifecycle = requestLifecycle.current();
   } catch (error) {
-    options.onEvent?.(lifecycleEvent(
-      lifecycle.id,
-      lifecycle.action,
-      signal.aborted || (error as Error).name === "AbortError"
-        ? "cancelled"
-        : classifyContextError(error) !== null
-          ? "retrying"
-          : "failed",
-    ));
+    if (!isNativeLlmClient(llm)) {
+      options.onEvent?.(lifecycleEvent(
+        lifecycle.id,
+        lifecycle.action,
+        signal.aborted || (error as Error).name === "AbortError"
+          ? "cancelled"
+          : classifyContextError(error) !== null
+            ? "retrying"
+            : "failed",
+      ));
+    }
     if (providerDispatched) {
       options.onEvent?.(createPromptBudgetEvent({
         requestId: lifecycle.id,
@@ -287,7 +323,7 @@ async function callVisionLlm(
   const message = response.choices[0]?.message;
   const reasoning = completionReasoning(message);
   const content = message?.content ?? "";
-  if (reasoning.trim() || content.trim()) {
+  if ((reasoning.trim() || content.trim()) && !isNativeLlmClient(llm)) {
     options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "producing"));
   }
   if (reasoning) {

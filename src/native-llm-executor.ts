@@ -2,12 +2,17 @@ import type OpenAI from "openai";
 import { APIConnectionTimeoutError, APIError } from "openai";
 
 import { classifyNativeRetry, retryDelay } from "./native-request-retry";
+import { createReplacementAttemptLifecycle, lifecycleEvent } from "./llm-lifecycle";
 import type {
+  LlmCallOptions,
+  LlmClient,
+  LlmLifecycleAction,
   NativeChatCompletionCreate,
   NativeLlmExecutionInput,
   NativeRequestLifecycle,
   NativeRequestRetryContext,
   RunEvent,
+  StructuredCallSite,
 } from "./types";
 
 type NativeResult = OpenAI.Chat.ChatCompletion | AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
@@ -38,6 +43,111 @@ interface AttemptScope {
   clearIdle(): void;
   dispose(reason?: unknown): void;
   race<T>(work: Promise<T>): Promise<T>;
+}
+
+export function isNativeLlmClient(llm: LlmClient): boolean {
+  return llm.nativeRequestExecutor === true;
+}
+
+export function createNativeLlmClient(create: NativeChatCompletionCreate): LlmClient {
+  const execute = (async (
+    params: OpenAI.Chat.ChatCompletionCreateParamsStreaming
+      | OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+    options?: { signal?: AbortSignal; retry?: NativeRequestRetryContext },
+  ) => {
+    if (!options?.retry) {
+      throw new TypeError("Native completion requires NativeRequestRetryContext");
+    }
+    return executeNativeLlmRequest({
+      create,
+      params,
+      retry: options.retry,
+    } as NativeLlmExecutionInput);
+  }) as LlmClient["chat"]["completions"]["create"];
+  return {
+    nativeRequestExecutor: true,
+    chat: { completions: { create: execute } },
+  };
+}
+
+export function createNativeRequestLifecycle(input: {
+  initial: { id: string; action: LlmLifecycleAction };
+  callSite: StructuredCallSite;
+  onEvent: (event: RunEvent) => void;
+  attemptOffset?: number;
+}): NativeRequestLifecycle {
+  let current = input.initial;
+  let active = false;
+  const emit = (phase: Parameters<NativeRequestLifecycle["phase"]>[0]
+    | Parameters<NativeRequestLifecycle["close"]>[0]
+    | "preparing"): void => {
+    input.onEvent(lifecycleEvent(current.id, current.action, phase, Date.now()));
+  };
+  return {
+    begin(attempt, transport) {
+      current = attempt === 0
+        ? input.initial
+        : createReplacementAttemptLifecycle(input.initial, attempt);
+      active = true;
+      input.onEvent(lifecycleEvent(
+        current.id,
+        current.action,
+        "preparing",
+        Date.now(),
+        {
+          callSite: input.callSite,
+          transport,
+          attempt: (input.attemptOffset ?? 0) + attempt,
+        },
+      ));
+    },
+    phase(phase) {
+      if (active) emit(phase);
+    },
+    close(phase) {
+      if (!active) return;
+      emit(phase);
+      active = false;
+    },
+    current: () => current,
+  };
+}
+
+function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.reject(abortReason(signal));
+  return new Promise<void>((resolve, reject) => {
+    const timer = window.setTimeout(finish, ms);
+    const onAbort = () => {
+      window.clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+      reject(abortReason(signal));
+    };
+    function finish(): void {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+export function createNativeRequestRetryContext(input: {
+  callSite: StructuredCallSite;
+  opts: LlmCallOptions;
+  signal: AbortSignal;
+  onEvent: (event: RunEvent) => void;
+  lifecycle: NativeRequestLifecycle;
+  logicalRequestId?: string;
+}): NativeRequestRetryContext {
+  return {
+    logicalRequestId: input.logicalRequestId ?? input.lifecycle.current().id,
+    callSite: input.callSite,
+    maxRetries: input.opts.nativeRequestRetries ?? 0,
+    idleTimeoutMs: input.opts.nativeRequestIdleTimeoutMs ?? 0,
+    signal: input.signal,
+    onEvent: input.onEvent,
+    lifecycle: input.lifecycle,
+    delay: abortableDelay,
+  };
 }
 
 type CloseOnceLifecycle = Pick<NativeRequestLifecycle, "begin" | "close">;

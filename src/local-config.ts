@@ -1,13 +1,5 @@
 import type { Plugin } from "obsidian";
-
-/** Full proxy config (password included) — used only in EffectiveSettings. */
-export interface ProxyConfig {
-  enabled: boolean;
-  url: string;
-  username?: string;
-  password?: string;
-  noProxy?: string;
-}
+export type { ProxyConfig } from "./proxy";
 
 export interface LocalConfig {
   iclaudePath: string;

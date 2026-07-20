@@ -12,6 +12,7 @@ import type {
   CompressionProfile,
   LlmCallOptions,
   LlmClient,
+  LlmChatCompletionCreateOptions,
   RunEvent,
 } from "../types";
 import {
@@ -793,17 +794,17 @@ function llmWithRequestTelemetry(
   let pendingRequestId: string | undefined;
   function createWithTelemetry(
     params: OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-    requestOpts?: { signal?: AbortSignal },
+    requestOpts?: LlmChatCompletionCreateOptions,
   ): Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk>>;
   function createWithTelemetry(
     params: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-    requestOpts?: { signal?: AbortSignal },
+    requestOpts?: LlmChatCompletionCreateOptions,
   ): Promise<OpenAI.Chat.ChatCompletion>;
   async function createWithTelemetry(
     params:
       | OpenAI.Chat.ChatCompletionCreateParamsStreaming
       | OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-    requestOpts?: { signal?: AbortSignal },
+    requestOpts?: LlmChatCompletionCreateOptions,
   ): Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk> | OpenAI.Chat.ChatCompletion> {
     const estimatedInputTokens = estimatePreparedMessages(params.messages);
     if (estimatedInputTokens > metadata.effectiveInputBudget) {
@@ -847,6 +848,7 @@ function llmWithRequestTelemetry(
     }
   }
   return {
+    ...(runtime.llm.nativeRequestExecutor ? { nativeRequestExecutor: true as const } : {}),
     emitsPromptBudget: true,
     beginPromptBudgetRequest: (requestId) => {
       pendingRequestId = requestId;

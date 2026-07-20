@@ -9,7 +9,8 @@ import {
 } from "openai";
 import { fetch as undiciFetch } from "undici";
 import { z } from "zod";
-import type { LlmClient, RunEvent } from "../src/types";
+import type { LlmClient, NativeChatCompletionCreate, RunEvent } from "../src/types";
+import { createNativeLlmClient } from "../src/native-llm-executor";
 import { parseAnswerFrames } from "../src/phases/framed-output";
 
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
@@ -1427,6 +1428,54 @@ test("non-stream structured completion exposes reasoning before validation", asy
     event.kind === "assistant_text"
     && event.isReasoning
     && event.delta === "compat reasoning"));
+});
+
+test("native executor and Claude adapter emit one equivalent non-stream lifecycle", async () => {
+  const completion = {
+    id: "parity",
+    object: "chat.completion" as const,
+    created: 0,
+    model: "m",
+    choices: [{
+      index: 0,
+      finish_reason: "stop" as const,
+      logprobs: null,
+      message: { role: "assistant" as const, content: '{"value":"ok"}', refusal: null },
+    }],
+    usage: { prompt_tokens: 2, completion_tokens: 3, total_tokens: 5 },
+  };
+  const claude = {
+    chat: { completions: { create: async () => completion } },
+  } as unknown as LlmClient;
+  const native = createNativeLlmClient((async () => completion) as NativeChatCompletionCreate);
+
+  const phasesByBackend: string[][] = [];
+  for (const [backend, llm] of [["claude", claude], ["native", native]] as const) {
+    const events: RunEvent[] = [];
+    await runStructuredWithRetry({
+      llm,
+      model: "m",
+      baseMessages: [{ role: "user", content: "x" }],
+      opts: backend === "native"
+        ? { nativeRequestRetries: 0, nativeRequestIdleTimeoutMs: 0 }
+        : {},
+      profile: { kind: "json-zod", schema: SmallSchema },
+      maxRetries: 0,
+      callSite: "query.seeds",
+      lifecycle: { id: `${backend}-parity`, action: "select_relevant_pages" },
+      signal: new AbortController().signal,
+      onEvent: (event) => events.push(event),
+      transport: "non-stream",
+    });
+    const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+    assert.equal(new Set(lifecycle.map((event) => event.id)).size, 1);
+    phasesByBackend.push(lifecycle.map((event) => event.phase));
+  }
+
+  assert.deepEqual(phasesByBackend[0], [
+    "preparing", "sent", "waiting", "producing", "validating",
+  ]);
+  assert.deepEqual(phasesByBackend[1], phasesByBackend[0]);
 });
 
 test("structured repair closes the old lifecycle before opening a new ID", async () => {
