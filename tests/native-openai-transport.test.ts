@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createRequire, register } from "node:module";
+import { createServer as createNetServer, type Socket } from "node:net";
 import { dirname, resolve } from "node:path";
 import { setTimeout as nodeSetTimeout } from "node:timers";
 import test from "node:test";
@@ -11,6 +12,7 @@ import { getGlobalDispatcher, MockAgent, setGlobalDispatcher } from "undici";
 
 import { createNativeOpenAiClient } from "../src/native-openai-client";
 import {
+  createNativeLlmClient,
   createNativeRequestLifecycle,
   createNativeRequestRetryContext,
 } from "../src/native-llm-executor";
@@ -26,6 +28,8 @@ if (typeof window === "undefined") {
   createRequire(import.meta.url);
 
 const transport = await import("../src/native-openai-transport");
+const nativeClientModule = await import("../src/native-openai-client") as unknown as Record<string, unknown>;
+const typesModule = await import("../src/types") as unknown as Record<string, unknown>;
 const { buildChatParams } = await import("../src/phases/llm-utils");
 
 function localImportGraph(entry: string): string[] {
@@ -115,7 +119,8 @@ test("production native factory runs idle timing and retry delay without window"
       const client = createNativeOpenAiClient({
         baseURL: new URL(url).origin,
         apiKey: "test-key",
-        requestTimeoutMs: 1_000,
+        connectionTimeoutMs: 1_000,
+        idleTimeoutMs: 1_000,
         isMobile: false,
         proxyConfig: { enabled: false, url: "" },
         mobileFetch: fetch,
@@ -167,16 +172,63 @@ test("native OpenAI client disables SDK request retries", () => {
   assert.match(constructorOptions, /maxRetries:\s*0/);
 });
 
-test("native OpenAI transport uses the configured LLM idle timeout", () => {
+test("native OpenAI client keeps SDK timeout above executor idle and disables SDK retries", () => {
   const controllerSource = readFileSync(new URL("../src/controller.ts", import.meta.url), "utf8");
   const factorySource = readFileSync(new URL("../src/native-openai-client.ts", import.meta.url), "utf8");
   const transportSource = readFileSync(new URL("../src/native-openai-transport.ts", import.meta.url), "utf8");
+  const sdkTimeout = nativeClientModule.sdkTimeoutForIdleMs;
 
-  assert.match(controllerSource, /requestTimeoutMs\s*=\s*s\.llmIdleTimeoutSec\s*\*\s*1000/);
-  assert.match(controllerSource, /createNativeOpenAiClient\([\s\S]*?requestTimeoutMs,/);
-  assert.match(factorySource, /timeout:\s*options\.requestTimeoutMs/);
-  assert.match(transportSource, /createDirectDesktopFetch\(options\.requestTimeoutMs\)/);
-  assert.match(transportSource, /nonStreamTimeoutMs:\s*options\.requestTimeoutMs/);
+  assert.equal(typeof sdkTimeout, "function");
+  assert.equal(typesModule.MAX_SAFE_TIMER_MS, 2_147_000_000);
+  assert.equal((sdkTimeout as (idleMs: number) => number)(0), 2_147_000_000);
+  assert.equal((sdkTimeout as (idleMs: number) => number)(601_000), 602_000);
+  assert.equal((sdkTimeout as (idleMs: number) => number)(2_146_999_000), 2_147_000_000);
+  assert.match(controllerSource, /connectionTimeoutMs:\s*s\.llmConnectionTimeoutSec\s*\*\s*1000/);
+  assert.match(controllerSource, /idleTimeoutMs:\s*s\.llmIdleTimeoutSec\s*\*\s*1000/);
+  assert.match(factorySource, /timeout:\s*sdkTimeoutForIdleMs\(options\.idleTimeoutMs\)/);
+  assert.match(transportSource, /createDirectDesktopFetch\(options\.connectionTimeoutMs\)/);
+  assert.match(transportSource, /new undici\.Agent\(\{[\s\S]*?connectTimeout:\s*normalizedTimeout/);
+  assert.match(transportSource, /new undici\.ProxyAgent\(\{[\s\S]*?connectTimeout:\s*normalizedTimeout/);
+  assert.match(transportSource, /proxyTls:\s*\{\s*timeout:\s*normalizedTimeout\s*\}/);
+  assert.match(transportSource, /requestTls:\s*\{\s*timeout:\s*normalizedTimeout\s*\}/);
+  assert.doesNotMatch(transportSource, /headersTimeout:\s*options\.connectionTimeoutMs/);
+  assert.doesNotMatch(transportSource, /bodyTimeout:\s*options\.connectionTimeoutMs/);
+});
+
+test("executor idle deadline wins before a later request deadline", async () => {
+  const signal = new AbortController().signal;
+  const lifecycle = createNativeRequestLifecycle({
+    initial: { id: "idle-wins", action: "synthesize_wiki_pages" },
+    callSite: "ingest.synthesize",
+    onEvent: () => undefined,
+  });
+  const client = createNativeLlmClient((async (_params, options) => {
+    return await new Promise((_resolve, reject) => {
+      const laterDeadline = nodeSetTimeout(() => reject(new Error("request deadline")), 100);
+      options?.signal?.addEventListener("abort", () => {
+        clearTimeout(laterDeadline);
+        reject(options.signal?.reason);
+      }, { once: true });
+    });
+  }) as never);
+
+  await assert.rejects(
+    client.chat.completions.create({
+      model: "test-model",
+      messages: [{ role: "user", content: "test" }],
+      stream: false,
+    }, {
+      signal,
+      retry: createNativeRequestRetryContext({
+        callSite: "ingest.synthesize",
+        opts: { nativeRequestRetries: 0, nativeRequestIdleTimeoutMs: 10 },
+        signal,
+        onEvent: () => undefined,
+        lifecycle,
+      }),
+    }),
+    /LLM idle timeout after 10ms/,
+  );
 });
 
 test("agent logger bounds backend and model envelope fields before serialization", () => {
@@ -215,14 +267,12 @@ test("native client selects mobile, proxy, and direct desktop transports", () =>
     mobileFetch,
     proxyFetch,
     directDesktopFetch,
-    requestTimeoutMs: 1_000,
   }), mobileFetch);
   assert.equal(selectNativeFetch({
     isMobile: false,
     mobileFetch,
     proxyFetch,
     directDesktopFetch,
-    requestTimeoutMs: 1_000,
   }), proxyFetch);
   assert.equal(directDesktopSelections, 0);
   const desktopRouter = selectNativeFetch({
@@ -230,120 +280,78 @@ test("native client selects mobile, proxy, and direct desktop transports", () =>
     mobileFetch,
     proxyFetch: null,
     directDesktopFetch,
-    requestTimeoutMs: 1_000,
   });
-  assert.notEqual(desktopRouter, desktopFetch);
+  assert.equal(desktopRouter, desktopFetch);
   assert.equal(directDesktopSelections, 1);
 });
 
-test("desktop OpenAI transport routes only stream:true through direct streaming fetch", async () => {
-  assert.equal(
-    typeof transport.createDesktopOpenAiFetch,
-    "function",
-    "desktop OpenAI transport router must be exported",
-  );
-
-  const calls: Array<{ transport: string; url: string }> = [];
-  const nonStreamFetch: typeof fetch = async (input) => {
-    calls.push({ transport: "requestUrl", url: String(input) });
-    return new Response('{"transport":"requestUrl"}');
-  };
-  const streamFetch: typeof fetch = async (input) => {
-    calls.push({ transport: "undici", url: String(input) });
-    return new Response('{"transport":"undici"}');
-  };
-  const routedFetch = transport.createDesktopOpenAiFetch!({
-    nonStreamFetch,
-    streamFetch,
-    nonStreamTimeoutMs: 1_000,
-  });
-  const nestedUrl = "https://example.test/url/path/path/v1/chat/completions";
-
-  await routedFetch(nestedUrl, {
-    method: "POST",
-    body: JSON.stringify({ model: "test", stream: false }),
-  });
-  await routedFetch(nestedUrl, {
-    method: "POST",
-    body: JSON.stringify({ model: "test" }),
-  });
-  await routedFetch(nestedUrl, {
-    method: "POST",
-    body: JSON.stringify({ model: "test", stream: true }),
-  });
-
-  assert.deepEqual(calls, [
-    { transport: "requestUrl", url: nestedUrl },
-    { transport: "requestUrl", url: nestedUrl },
-    { transport: "undici", url: nestedUrl },
-  ]);
-});
-
-test("desktop non-stream requestUrl route has bounded timeout and preserves abort", async () => {
-  assert.equal(
-    typeof transport.createDesktopOpenAiFetch,
-    "function",
-    "desktop OpenAI transport router must be exported",
-  );
-
-  const neverSettles: typeof fetch = async () => await new Promise<Response>(() => {});
-  const routedFetch = transport.createDesktopOpenAiFetch!({
-    nonStreamFetch: neverSettles,
-    streamFetch: async () => new Response("stream"),
-    nonStreamTimeoutMs: 10,
-  });
-
-  await assert.rejects(
-    routedFetch("https://example.test/v1/chat/completions", {
+test("healthy desktop non-stream generation beyond 15 seconds survives connection timeout", { timeout: 20_000 }, async () => {
+  await withServer(async (response) => {
+    await new Promise<void>((resolve) => nodeSetTimeout(resolve, 15_100));
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end('{"ok":true}');
+  }, async (url) => {
+    const desktopFetch = transport.createNativeOpenAiFetch!({
+      baseURL: new URL(url).origin,
+      isMobile: false,
+      proxyConfig: { enabled: false, url: "" },
+      mobileFetch: async () => { throw new Error("desktop used mobile transport"); },
+      connectionTimeoutMs: 15_000,
+    });
+    const response = await desktopFetch(url, {
       method: "POST",
       body: JSON.stringify({ stream: false }),
-    }),
-    (error: unknown) => error instanceof Error && error.name === "TimeoutError",
-  );
-
-  const controller = new AbortController();
-  const pending = routedFetch("https://example.test/v1/chat/completions", {
-    method: "POST",
-    body: JSON.stringify({ stream: false }),
-    signal: controller.signal,
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { ok: true });
   });
-  controller.abort();
-  await assert.rejects(
-    pending,
-    (error: unknown) => error instanceof Error && error.name === "AbortError",
-  );
 });
 
-test("desktop non-stream timeout does not depend on Electron renderer timers", async () => {
-  assert.equal(
-    typeof transport.createDesktopOpenAiFetch,
-    "function",
-    "desktop OpenAI transport router must be exported",
-  );
+test("direct desktop TLS establishment is bounded by connectTimeout", async () => {
+  await withNetServer(() => undefined, async (port) => {
+    const controller = new AbortController();
+    const outcome = await settleBeforeAbort(
+      transport.createDirectDesktopFetch!(25)(`https://localhost:${port}/`, {
+        signal: controller.signal,
+      }),
+      controller,
+    );
+    assert.notEqual(outcome, "still-pending");
+  });
+});
 
-  const originalSetTimeout = window.setTimeout;
-  window.setTimeout = (() => 1) as typeof window.setTimeout;
-  try {
-    const routedFetch = transport.createDesktopOpenAiFetch!({
-      nonStreamFetch: async () => await new Promise<Response>(() => {}),
-      streamFetch: async () => new Response("stream"),
-      nonStreamTimeoutMs: 5,
-    });
-    const outcome = await Promise.race([
-      routedFetch("https://example.test/v1/chat/completions", {
-        method: "POST",
-        body: JSON.stringify({ stream: false }),
-      }).then(
-        () => "resolved",
-        (error: unknown) => error instanceof Error ? error.name : "unknown-error",
-      ),
-      new Promise<string>((resolve) => nodeSetTimeout(() => resolve("still-pending"), 30)),
-    ]);
+test("proxy TLS establishment has its own bounded timeout", async () => {
+  await withNetServer(() => undefined, async (port) => {
+    const controller = new AbortController();
+    const proxyFetch = transport.createProxyFetch!({
+      enabled: true,
+      url: `https://localhost:${port}`,
+    }, 25);
+    assert.ok(proxyFetch);
+    const outcome = await settleBeforeAbort(
+      proxyFetch("https://target.example/v1/chat/completions", { signal: controller.signal }),
+      controller,
+    );
+    assert.notEqual(outcome, "still-pending");
+  });
+});
 
-    assert.equal(outcome, "TimeoutError");
-  } finally {
-    window.setTimeout = originalSetTimeout;
-  }
+test("target TLS establishment through proxy has its own bounded timeout", async () => {
+  await withNetServer((socket) => {
+    socket.once("data", () => socket.write("HTTP/1.1 200 Connection Established\r\n\r\n"));
+  }, async (port) => {
+    const controller = new AbortController();
+    const proxyFetch = transport.createProxyFetch!({
+      enabled: true,
+      url: `http://localhost:${port}`,
+    }, 25);
+    assert.ok(proxyFetch);
+    const outcome = await settleBeforeAbort(
+      proxyFetch("https://target.example/v1/chat/completions", { signal: controller.signal }),
+      controller,
+    );
+    assert.notEqual(outcome, "still-pending");
+  });
 });
 
 test("direct desktop transport exposes the first SSE chunk before completion", async () => {
@@ -600,4 +608,48 @@ async function readRequestBody(request: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of request) chunks.push(Buffer.from(chunk));
   return Buffer.concat(chunks).toString("utf8");
+}
+
+async function withNetServer(
+  onConnection: (socket: Socket) => void,
+  run: (port: number) => Promise<void>,
+): Promise<void> {
+  const sockets = new Set<Socket>();
+  const server = createNetServer((socket) => {
+    sockets.add(socket);
+    socket.once("close", () => sockets.delete(socket));
+    onConnection(socket);
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "localhost", resolve);
+  });
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  try {
+    await run(address.port);
+  } finally {
+    for (const socket of sockets) socket.destroy();
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+    });
+  }
+}
+
+async function settleBeforeAbort(
+  request: Promise<Response>,
+  controller: AbortController,
+): Promise<string> {
+  const outcome = await Promise.race([
+    request.then(
+      () => "resolved",
+      (error: unknown) => error instanceof Error ? error.name : "unknown-error",
+    ),
+    new Promise<string>((resolve) => nodeSetTimeout(() => resolve("still-pending"), 1_500)),
+  ]);
+  if (outcome === "still-pending") {
+    controller.abort();
+    await request.catch(() => undefined);
+  }
+  return outcome;
 }

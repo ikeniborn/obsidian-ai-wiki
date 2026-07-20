@@ -26272,6 +26272,36 @@ module.exports = __toCommonJS(main_exports);
 var import_obsidian14 = require("obsidian");
 
 // src/types.ts
+var MAX_SAFE_TIMER_MS = 2147e6;
+var MAX_LLM_IDLE_TIMEOUT_SEC = 2146999;
+function integerInput(value) {
+  if (typeof value === "number") {
+    return Number.isSafeInteger(value) ? value : void 0;
+  }
+  if (typeof value !== "string" || !/^\d+$/.test(value.trim())) return void 0;
+  const parsed = Number(value.trim());
+  return Number.isSafeInteger(parsed) ? parsed : void 0;
+}
+function parseLlmRetryCount(value, previous) {
+  const parsed = integerInput(value);
+  return parsed !== void 0 && parsed >= 0 ? parsed : previous;
+}
+function parseLlmConnectionTimeoutSec(value, previous) {
+  const parsed = integerInput(value);
+  return parsed !== void 0 && parsed >= 1 ? parsed : previous;
+}
+function parseLlmIdleTimeoutSec(value, previous) {
+  const parsed = integerInput(value);
+  return parsed !== void 0 && parsed >= 0 && parsed <= MAX_LLM_IDLE_TIMEOUT_SEC ? parsed : previous;
+}
+function normalizeLlmRuntimeControls(settings) {
+  settings.llmIdleRetries = parseLlmRetryCount(settings.llmIdleRetries, 3);
+  settings.llmConnectionTimeoutSec = parseLlmConnectionTimeoutSec(
+    settings.llmConnectionTimeoutSec,
+    15
+  );
+  settings.llmIdleTimeoutSec = parseLlmIdleTimeoutSec(settings.llmIdleTimeoutSec, 300);
+}
 var DEFAULT_SETTINGS = {
   backend: "native-agent",
   systemPrompt: "",
@@ -26345,6 +26375,7 @@ var DEFAULT_SETTINGS = {
     enabled: false,
     model: ""
   },
+  llmConnectionTimeoutSec: 15,
   llmIdleTimeoutSec: 300,
   llmIdleRetries: 3
 };
@@ -26646,8 +26677,12 @@ var en = {
     mergeDeleteWarnThreshold_desc: "Ingest warns when the LLM requests deleting more pages than this in one merge. Default 5. \u2191 fewer warnings, risk of bulk loss \xB7 \u2193 flags merges earlier.",
     structuredRetries_name: "Output repair retries",
     structuredRetries_desc: "Retries for invalid JSON or invalid framed output after Zod validation, 0\u20133. Default 1. \u2191 higher success on weaker models, more latency/tokens \xB7 \u2193 faster, more failures.",
+    llmConnectionTimeout_name: "Connection timeout (seconds)",
+    llmConnectionTimeout_desc: "Desktop only: maximum time for DNS/TCP/TLS establishment. It does not limit response headers, body, or generation. Default 15. Mobile keeps its current transport and cannot guarantee an exact connection-only timeout.",
     llmIdleTimeout_name: "LLM idle timeout (seconds)",
-    llmIdleTimeout_desc: "Seconds of LLM silence before aborting the attempt. 0 = disabled. Default 300. \u2191 more patience for slow models \xB7 \u2193 catches stalls sooner.",
+    llmIdleTimeout_desc: "Seconds of LLM silence before aborting the attempt. 0 = disabled; maximum 2,146,999. Default 300. \u2191 more patience for slow models \xB7 \u2193 catches stalls sooner.",
+    llmRequestRetries_name: "Request retries",
+    llmRequestRetries_desc: "Additional attempts for each native LLM request after an eligible transient failure. 0 = no retry. Default 3.",
     llmIdleRetries_name: "LLM idle retries",
     llmIdleRetries_desc: "Max retry attempts after an idle abort. 0 = no retry. Default 3. \u2191 more resilient to transient stalls, slower \xB7 \u2193 fails fast.",
     effort_desc: "Claude reasoning level (--effort). Empty = no thinking. In per-op mode \u2014 global fallback.",
@@ -27058,8 +27093,12 @@ var ru = {
     mergeDeleteWarnThreshold_desc: "Ingest \u043F\u0440\u0435\u0434\u0443\u043F\u0440\u0435\u0436\u0434\u0430\u0435\u0442, \u0435\u0441\u043B\u0438 LLM \u043F\u0440\u043E\u0441\u0438\u0442 \u0443\u0434\u0430\u043B\u0438\u0442\u044C \u0431\u043E\u043B\u044C\u0448\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u0437\u0430 \u043E\u0434\u0438\u043D merge. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 5. \u2191 \u0440\u0435\u0436\u0435 \u043F\u0440\u0435\u0434\u0443\u043F\u0440\u0435\u0436\u0434\u0435\u043D\u0438\u044F, \u0440\u0438\u0441\u043A \u043C\u0430\u0441\u0441\u043E\u0432\u043E\u0433\u043E \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F \xB7 \u2193 \u0440\u0430\u043D\u044C\u0448\u0435 \u043B\u043E\u0432\u0438\u0442 merge.",
     structuredRetries_name: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u043E\u0442\u0432\u0435\u0442\u0430",
     structuredRetries_desc: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u043F\u0440\u0438 \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E\u043C JSON \u0438\u043B\u0438 \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E\u043C framed-\u043E\u0442\u0432\u0435\u0442\u0435 \u043F\u043E\u0441\u043B\u0435 Zod validation, 0\u20133. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 1. \u2191 \u043D\u0430\u0434\u0451\u0436\u043D\u0435\u0435 \u043D\u0430 \u0441\u043B\u0430\u0431\u044B\u0445 \u043C\u043E\u0434\u0435\u043B\u044F\u0445, \u0434\u043E\u0440\u043E\u0436\u0435 \u043F\u043E \u0442\u043E\u043A\u0435\u043D\u0430\u043C/\u0432\u0440\u0435\u043C\u0435\u043D\u0438 \xB7 \u2193 \u0431\u044B\u0441\u0442\u0440\u0435\u0435, \u0431\u043E\u043B\u044C\u0448\u0435 \u043E\u0442\u043A\u0430\u0437\u043E\u0432.",
+    llmConnectionTimeout_name: "\u0422\u0430\u0439\u043C\u0430\u0443\u0442 \u0441\u043E\u0435\u0434\u0438\u043D\u0435\u043D\u0438\u044F (\u0441\u0435\u043A\u0443\u043D\u0434\u044B)",
+    llmConnectionTimeout_desc: "\u0422\u043E\u043B\u044C\u043A\u043E desktop: \u043C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u0432\u0440\u0435\u043C\u0435\u043D\u0438 \u043D\u0430 DNS/TCP/TLS-\u0441\u043E\u0435\u0434\u0438\u043D\u0435\u043D\u0438\u0435. \u041D\u0435 \u043E\u0433\u0440\u0430\u043D\u0438\u0447\u0438\u0432\u0430\u0435\u0442 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0438, \u0442\u0435\u043B\u043E \u043E\u0442\u0432\u0435\u0442\u0430 \u0438\u043B\u0438 \u0433\u0435\u043D\u0435\u0440\u0430\u0446\u0438\u044E. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 15. \u041D\u0430 \u043C\u043E\u0431\u0438\u043B\u044C\u043D\u043E\u043C \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442\u0441\u044F \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u0442\u0440\u0430\u043D\u0441\u043F\u043E\u0440\u0442 \u0431\u0435\u0437 \u0433\u0430\u0440\u0430\u043D\u0442\u0438\u0438 \u0442\u043E\u0447\u043D\u043E\u0433\u043E \u0442\u0430\u0439\u043C\u0430\u0443\u0442\u0430 \u0442\u043E\u043B\u044C\u043A\u043E \u0434\u043B\u044F \u0441\u043E\u0435\u0434\u0438\u043D\u0435\u043D\u0438\u044F.",
     llmIdleTimeout_name: "\u0422\u0430\u0439\u043C\u0430\u0443\u0442 \u043F\u0440\u043E\u0441\u0442\u043E\u044F LLM (\u0441\u0435\u043A\u0443\u043D\u0434\u044B)",
-    llmIdleTimeout_desc: "\u0421\u0435\u043A\u0443\u043D\u0434 \u0442\u0438\u0448\u0438\u043D\u044B LLM \u0434\u043E \u043F\u0440\u0435\u0440\u044B\u0432\u0430\u043D\u0438\u044F \u043F\u043E\u043F\u044B\u0442\u043A\u0438. 0 = \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 300. \u2191 \u0442\u0435\u0440\u043F\u0435\u043B\u0438\u0432\u0435\u0435 \u043A \u043C\u0435\u0434\u043B\u0435\u043D\u043D\u044B\u043C \u043C\u043E\u0434\u0435\u043B\u044F\u043C \xB7 \u2193 \u0440\u0430\u043D\u044C\u0448\u0435 \u043B\u043E\u0432\u0438\u0442 \u0437\u0430\u0432\u0438\u0441\u0430\u043D\u0438\u044F.",
+    llmIdleTimeout_desc: "\u0421\u0435\u043A\u0443\u043D\u0434 \u0442\u0438\u0448\u0438\u043D\u044B LLM \u0434\u043E \u043F\u0440\u0435\u0440\u044B\u0432\u0430\u043D\u0438\u044F \u043F\u043E\u043F\u044B\u0442\u043A\u0438. 0 = \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E; \u043C\u0430\u043A\u0441\u0438\u043C\u0443\u043C 2 146 999. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 300. \u2191 \u0442\u0435\u0440\u043F\u0435\u043B\u0438\u0432\u0435\u0435 \u043A \u043C\u0435\u0434\u043B\u0435\u043D\u043D\u044B\u043C \u043C\u043E\u0434\u0435\u043B\u044F\u043C \xB7 \u2193 \u0440\u0430\u043D\u044C\u0448\u0435 \u043B\u043E\u0432\u0438\u0442 \u0437\u0430\u0432\u0438\u0441\u0430\u043D\u0438\u044F.",
+    llmRequestRetries_name: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u0437\u0430\u043F\u0440\u043E\u0441\u0430",
+    llmRequestRetries_desc: "\u0414\u043E\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0435 \u043F\u043E\u043F\u044B\u0442\u043A\u0438 \u043A\u0430\u0436\u0434\u043E\u0433\u043E native LLM-\u0437\u0430\u043F\u0440\u043E\u0441\u0430 \u043F\u043E\u0441\u043B\u0435 \u043F\u043E\u0434\u0445\u043E\u0434\u044F\u0449\u0435\u0439 \u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E\u0439 \u043E\u0448\u0438\u0431\u043A\u0438. 0 = \u0431\u0435\u0437 \u043F\u043E\u0432\u0442\u043E\u0440\u043E\u0432. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 3.",
     llmIdleRetries_name: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u043F\u0440\u0438 \u043F\u0440\u043E\u0441\u0442\u043E\u0435 LLM",
     llmIdleRetries_desc: "\u041C\u0430\u043A\u0441. \u0447\u0438\u0441\u043B\u043E \u043F\u043E\u0432\u0442\u043E\u0440\u043E\u0432 \u043F\u043E\u0441\u043B\u0435 \u043F\u0440\u0435\u0440\u044B\u0432\u0430\u043D\u0438\u044F \u043F\u043E \u043F\u0440\u043E\u0441\u0442\u043E\u044E. 0 = \u0431\u0435\u0437 \u043F\u043E\u0432\u0442\u043E\u0440\u043E\u0432. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 3. \u2191 \u0443\u0441\u0442\u043E\u0439\u0447\u0438\u0432\u0435\u0435 \u043A \u0440\u0430\u0437\u043E\u0432\u044B\u043C \u0437\u0430\u0432\u0438\u0441\u0430\u043D\u0438\u044F\u043C, \u043C\u0435\u0434\u043B\u0435\u043D\u043D\u0435\u0435 \xB7 \u2193 \u0431\u044B\u0441\u0442\u0440\u044B\u0439 \u043E\u0442\u043A\u0430\u0437.",
     effort_desc: "\u0423\u0440\u043E\u0432\u0435\u043D\u044C \u0440\u0430\u0437\u043C\u044B\u0448\u043B\u0435\u043D\u0438\u044F Claude (--effort). \u041F\u0443\u0441\u0442\u043E = \u0431\u0435\u0437 thinking. \u0412 per-op \u0440\u0435\u0436\u0438\u043C\u0435 \u2014 \u0433\u043B\u043E\u0431\u0430\u043B\u044C\u043D\u044B\u0439 fallback.",
@@ -27469,8 +27508,12 @@ var es = {
     mergeDeleteWarnThreshold_desc: "Ingest avisa cuando el LLM pide borrar m\xE1s p\xE1ginas que esto en un merge. Por defecto 5. \u2191 menos avisos, riesgo de p\xE9rdida masiva \xB7 \u2193 marca merges antes.",
     structuredRetries_name: "Reintentos de reparaci\xF3n de salida",
     structuredRetries_desc: "Reintentos para JSON inv\xE1lido o salida framed inv\xE1lida tras validaci\xF3n Zod, 0\u20133. Por defecto 1. \u2191 m\xE1s \xE9xito en modelos d\xE9biles, m\xE1s latencia/tokens \xB7 \u2193 m\xE1s r\xE1pido, m\xE1s fallos.",
+    llmConnectionTimeout_name: "Tiempo de espera de conexi\xF3n (segundos)",
+    llmConnectionTimeout_desc: "Solo escritorio: tiempo m\xE1ximo para establecer DNS/TCP/TLS. No limita cabeceras, cuerpo ni generaci\xF3n. Por defecto 15. En m\xF3vil se mantiene el transporte actual sin garantizar un tiempo exacto solo para la conexi\xF3n.",
     llmIdleTimeout_name: "Tiempo de espera de inactividad LLM (segundos)",
-    llmIdleTimeout_desc: "Segundos de silencio del LLM antes de abortar el intento. 0 = desactivado. Por defecto 300. \u2191 m\xE1s paciencia con modelos lentos \xB7 \u2193 detecta bloqueos antes.",
+    llmIdleTimeout_desc: "Segundos de silencio del LLM antes de abortar el intento. 0 = desactivado; m\xE1ximo 2.146.999. Por defecto 300. \u2191 m\xE1s paciencia con modelos lentos \xB7 \u2193 detecta bloqueos antes.",
+    llmRequestRetries_name: "Reintentos de solicitud",
+    llmRequestRetries_desc: "Intentos adicionales por cada solicitud LLM nativa tras un fallo transitorio apto. 0 = sin reintentos. Por defecto 3.",
     llmIdleRetries_name: "Reintentos por inactividad LLM",
     llmIdleRetries_desc: "M\xE1x. reintentos tras un aborto por inactividad. 0 = sin reintentos. Por defecto 3. \u2191 m\xE1s resistente a bloqueos transitorios, m\xE1s lento \xB7 \u2193 falla r\xE1pido.",
     effort_desc: "Nivel de razonamiento de Claude (--effort). Vac\xEDo = sin thinking. En modo per-op \u2014 fallback global.",
@@ -33150,20 +33193,29 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         }
       })
     );
-    new import_obsidian5.Setting(containerEl).setName(T.settings.llmIdleTimeout_name).setDesc(T.settings.llmIdleTimeout_desc).addText(
-      (t) => t.setPlaceholder("300").setValue(String(s.llmIdleTimeoutSec)).onChange(async (v) => {
-        const n = Number(v);
-        if (Number.isFinite(n) && n >= 0) {
-          s.llmIdleTimeoutSec = Math.floor(n);
+    new import_obsidian5.Setting(containerEl).setName(T.settings.llmConnectionTimeout_name).setDesc(T.settings.llmConnectionTimeout_desc).addText(
+      (t) => t.setPlaceholder("15").setValue(String(s.llmConnectionTimeoutSec)).onChange(async (v) => {
+        const next = parseLlmConnectionTimeoutSec(v, 0);
+        if (next >= 1) {
+          s.llmConnectionTimeoutSec = next;
           await this.plugin.saveSettings();
         }
       })
     );
-    new import_obsidian5.Setting(containerEl).setName(T.settings.llmIdleRetries_name).setDesc(T.settings.llmIdleRetries_desc).addText(
+    new import_obsidian5.Setting(containerEl).setName(T.settings.llmIdleTimeout_name).setDesc(T.settings.llmIdleTimeout_desc).addText(
+      (t) => t.setPlaceholder("300").setValue(String(s.llmIdleTimeoutSec)).onChange(async (v) => {
+        const next = parseLlmIdleTimeoutSec(v, -1);
+        if (next >= 0) {
+          s.llmIdleTimeoutSec = next;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian5.Setting(containerEl).setName(eff.backend === "native-agent" ? T.settings.llmRequestRetries_name : T.settings.llmIdleRetries_name).setDesc(eff.backend === "native-agent" ? T.settings.llmRequestRetries_desc : T.settings.llmIdleRetries_desc).addText(
       (t) => t.setPlaceholder("3").setValue(String(s.llmIdleRetries)).onChange(async (v) => {
-        const n = Number(v);
-        if (Number.isInteger(n) && n >= 0) {
-          s.llmIdleRetries = n;
+        const next = parseLlmRetryCount(v, -1);
+        if (next >= 0) {
+          s.llmIdleRetries = next;
           await this.plugin.saveSettings();
         }
       })
@@ -63647,13 +63699,21 @@ function closeAtOpenAiDone(response, undici) {
     headers: response.headers
   });
 }
-function createProxyDispatcher(cfg) {
+function createProxyDispatcher(cfg, connectionTimeoutMs = 15e3) {
   if (!cfg.enabled) return null;
   const undici = require_undici();
-  return new undici.ProxyAgent(buildProxyUrl(cfg));
+  const normalizedTimeout = normalizeConnectionTimeout(connectionTimeoutMs);
+  return new undici.ProxyAgent({
+    uri: buildProxyUrl(cfg),
+    connectTimeout: normalizedTimeout,
+    proxyTls: { timeout: normalizedTimeout },
+    requestTls: { timeout: normalizedTimeout },
+    headersTimeout: 0,
+    bodyTimeout: 0
+  });
 }
-function createProxyFetch(cfg) {
-  const dispatcher = createProxyDispatcher(cfg);
+function createProxyFetch(cfg, connectionTimeoutMs = 15e3) {
+  const dispatcher = createProxyDispatcher(cfg, connectionTimeoutMs);
   if (!dispatcher) return null;
   const undici = require_undici();
   const wrapped = (input, init) => {
@@ -63664,13 +63724,14 @@ function createProxyFetch(cfg) {
   };
   return wrapped;
 }
-function createDirectDesktopFetch(headersTimeoutMs = 3e5) {
+function createDirectDesktopFetch(connectionTimeoutMs = 15e3) {
   const undici = require_undici();
-  const normalizedTimeout = Number.isFinite(headersTimeoutMs) && headersTimeoutMs > 0 ? Math.floor(headersTimeoutMs) : 3e5;
+  const normalizedTimeout = normalizeConnectionTimeout(connectionTimeoutMs);
   let dispatcher = directDispatchers.get(normalizedTimeout);
   if (!dispatcher) {
     dispatcher = new undici.Agent({
-      headersTimeout: normalizedTimeout,
+      connectTimeout: normalizedTimeout,
+      headersTimeout: 0,
       bodyTimeout: 0
     });
     directDispatchers.set(normalizedTimeout, dispatcher);
@@ -63683,23 +63744,10 @@ function createDirectDesktopFetch(headersTimeoutMs = 3e5) {
   };
   return wrapped;
 }
-function createDesktopOpenAiFetch(options) {
-  const timeoutMs = normalizeTimeout(options.nonStreamTimeoutMs);
-  return async (input, init) => {
-    if (requestUsesStreaming(init?.body)) {
-      return options.streamFetch(input, init);
-    }
-    return boundedFetch(options.nonStreamFetch, input, init, timeoutMs);
-  };
-}
 function selectNativeFetch(options) {
   if (options.isMobile) return options.mobileFetch;
   if (options.proxyFetch) return options.proxyFetch;
-  return createDesktopOpenAiFetch({
-    nonStreamFetch: options.mobileFetch,
-    streamFetch: options.directDesktopFetch(),
-    nonStreamTimeoutMs: options.requestTimeoutMs
-  });
+  return options.directDesktopFetch();
 }
 function createNativeOpenAiFetch(options) {
   let proxyFetch = null;
@@ -63707,7 +63755,7 @@ function createNativeOpenAiFetch(options) {
     try {
       const baseHost = new URL(options.baseURL).hostname;
       if (!shouldBypass(baseHost, parseNoProxy(options.proxyConfig.noProxy))) {
-        proxyFetch = createProxyFetch(options.proxyConfig);
+        proxyFetch = createProxyFetch(options.proxyConfig, options.connectionTimeoutMs);
         if (proxyFetch) options.onProxySelected?.(options.proxyConfig);
       }
     } catch (error) {
@@ -63718,67 +63766,32 @@ function createNativeOpenAiFetch(options) {
     isMobile: options.isMobile,
     mobileFetch: options.mobileFetch,
     proxyFetch,
-    directDesktopFetch: () => createDirectDesktopFetch(options.requestTimeoutMs),
-    requestTimeoutMs: options.requestTimeoutMs
+    directDesktopFetch: () => createDirectDesktopFetch(options.connectionTimeoutMs)
   });
 }
-function requestUsesStreaming(body) {
-  if (typeof body !== "string") return false;
-  try {
-    const parsed = JSON.parse(body);
-    return parsed.stream === true;
-  } catch {
-    return false;
-  }
-}
-function boundedFetch(fetchImpl, input, init, timeoutMs) {
-  const timers = require("node:timers");
-  if (init?.signal?.aborted) {
-    return Promise.reject(new DOMException("Aborted", "AbortError"));
-  }
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const finish = (callback) => {
-      if (settled) return;
-      settled = true;
-      timers.clearTimeout(timer);
-      init?.signal?.removeEventListener("abort", onAbort);
-      callback();
-    };
-    const onAbort = () => {
-      finish(() => reject(new DOMException("Aborted", "AbortError")));
-    };
-    const timer = timers.setTimeout(() => {
-      finish(() => reject(new DOMException("Request timed out", "TimeoutError")));
-    }, timeoutMs);
-    init?.signal?.addEventListener("abort", onAbort, { once: true });
-    void Promise.resolve().then(() => fetchImpl(input, init)).then(
-      (response) => finish(() => resolve(response)),
-      (error) => finish(() => reject(
-        error instanceof Error ? error : new Error(String(error))
-      ))
-    );
-  });
-}
-function normalizeTimeout(timeoutMs) {
-  return Number.isFinite(timeoutMs) && timeoutMs > 0 ? Math.floor(timeoutMs) : 3e5;
+function normalizeConnectionTimeout(timeoutMs) {
+  return Number.isFinite(timeoutMs) && timeoutMs > 0 ? Math.floor(timeoutMs) : 15e3;
 }
 
 // src/native-openai-client.ts
+function sdkTimeoutForIdleMs(idleTimeoutMs) {
+  if (!Number.isFinite(idleTimeoutMs) || idleTimeoutMs <= 0) return MAX_SAFE_TIMER_MS;
+  return Math.min(MAX_SAFE_TIMER_MS, Math.floor(idleTimeoutMs) + 1e3);
+}
 function createNativeOpenAiClient(options) {
   const nativeFetch = createNativeOpenAiFetch({
     baseURL: options.baseURL,
     isMobile: options.isMobile,
     proxyConfig: options.proxyConfig,
     mobileFetch: options.mobileFetch,
-    requestTimeoutMs: options.requestTimeoutMs,
+    connectionTimeoutMs: options.connectionTimeoutMs,
     onProxySelected: options.onProxySelected,
     onProxyError: options.onProxyError
   });
   const raw = new OpenAI({
     baseURL: options.baseURL,
     apiKey: options.apiKey,
-    timeout: options.requestTimeoutMs,
+    timeout: sdkTimeoutForIdleMs(options.idleTimeoutMs),
     maxRetries: 0,
     dangerouslyAllowBrowser: true,
     fetch: nativeFetch
@@ -64561,11 +64574,11 @@ var WikiController = class {
       if (s.proxy.enabled && import_obsidian10.Platform.isMobile) {
         new import_obsidian10.Notice(i18n().settings.proxy_mobile_warning);
       }
-      const requestTimeoutMs = s.llmIdleTimeoutSec * 1e3;
       llm = createNativeOpenAiClient({
         baseURL: s.nativeAgent.baseUrl,
         apiKey: s.nativeAgent.apiKey,
-        requestTimeoutMs,
+        connectionTimeoutMs: s.llmConnectionTimeoutSec * 1e3,
+        idleTimeoutMs: s.llmIdleTimeoutSec * 1e3,
         isMobile: import_obsidian10.Platform.isMobile,
         proxyConfig: s.proxy,
         mobileFetch,
@@ -65758,6 +65771,7 @@ var LlmWikiPlugin = class extends import_obsidian14.Plugin {
       history: data?.history ?? []
     };
     normalizeModelCallPolicySettings(this.settings);
+    normalizeLlmRuntimeControls(this.settings);
     if (!data?.systemPrompt && (caData.systemPrompt || naData.systemPrompt))
       this.settings.systemPrompt = caData.systemPrompt ?? naData.systemPrompt;
     {

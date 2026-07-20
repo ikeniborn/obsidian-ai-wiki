@@ -535,8 +535,47 @@ export interface LlmWikiPluginSettings {
     model: string;
     compressionProfile?: CompressionProfile;
   };
+  llmConnectionTimeoutSec: number;
   llmIdleTimeoutSec: number;
   llmIdleRetries: number;
+}
+
+export const MAX_SAFE_TIMER_MS = 2_147_000_000;
+export const MAX_LLM_IDLE_TIMEOUT_SEC = 2_146_999;
+
+function integerInput(value: unknown): number | undefined {
+  if (typeof value === "number") {
+    return Number.isSafeInteger(value) ? value : undefined;
+  }
+  if (typeof value !== "string" || !/^\d+$/.test(value.trim())) return undefined;
+  const parsed = Number(value.trim());
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+export function parseLlmRetryCount(value: unknown, previous: number): number {
+  const parsed = integerInput(value);
+  return parsed !== undefined && parsed >= 0 ? parsed : previous;
+}
+
+export function parseLlmConnectionTimeoutSec(value: unknown, previous: number): number {
+  const parsed = integerInput(value);
+  return parsed !== undefined && parsed >= 1 ? parsed : previous;
+}
+
+export function parseLlmIdleTimeoutSec(value: unknown, previous: number): number {
+  const parsed = integerInput(value);
+  return parsed !== undefined && parsed >= 0 && parsed <= MAX_LLM_IDLE_TIMEOUT_SEC
+    ? parsed
+    : previous;
+}
+
+export function normalizeLlmRuntimeControls(settings: LlmWikiPluginSettings): void {
+  settings.llmIdleRetries = parseLlmRetryCount(settings.llmIdleRetries, 3);
+  settings.llmConnectionTimeoutSec = parseLlmConnectionTimeoutSec(
+    settings.llmConnectionTimeoutSec,
+    15,
+  );
+  settings.llmIdleTimeoutSec = parseLlmIdleTimeoutSec(settings.llmIdleTimeoutSec, 300);
 }
 
 export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
@@ -611,6 +650,7 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
     enabled: false,
     model: "",
   },
+  llmConnectionTimeoutSec: 15,
   llmIdleTimeoutSec: 300,
   llmIdleRetries: 3,
 };

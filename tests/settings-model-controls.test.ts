@@ -16,7 +16,9 @@ import { runNativeVisionModelCheck } from "../src/vision-probe";
 
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 const { i18nFor } = await import("../src/i18n");
+const runtimeControls = await import("../src/types") as unknown as Record<string, unknown>;
 const settingsSource = readFileSync(new URL("../src/settings.ts", import.meta.url), "utf8");
+const mainSource = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
 
 function assertSourceOrder(source: string, markers: readonly string[]): void {
   let previous = -1;
@@ -100,6 +102,75 @@ test("positive budget parser accepts only strict positive integers and preserves
   assert.equal(parsePositiveBudgetInput(" 42 ", 777), 42);
   for (const input of ["", "0", "-1", "1.5", "1e3", "Infinity", "12px"]) {
     assert.equal(parsePositiveBudgetInput(input, 777), 777, input);
+  }
+});
+
+test("runtime controls keep top-level 3/15/300 defaults", () => {
+  assert.equal(DEFAULT_SETTINGS.llmIdleRetries, 3);
+  assert.equal(DEFAULT_SETTINGS.llmConnectionTimeoutSec, 15);
+  assert.equal(DEFAULT_SETTINGS.llmIdleTimeoutSec, 300);
+  assert.equal("llmIdleRetries" in DEFAULT_SETTINGS.nativeAgent, false);
+  assert.equal("llmConnectionTimeoutSec" in DEFAULT_SETTINGS.nativeAgent, false);
+  assert.equal("llmIdleTimeoutSec" in DEFAULT_SETTINGS.nativeAgent, false);
+});
+
+test("persisted top-level runtime controls round-trip and saved idle 600 survives", () => {
+  const normalize = runtimeControls.normalizeLlmRuntimeControls;
+  assert.equal(typeof normalize, "function");
+  const settings = structuredClone(DEFAULT_SETTINGS);
+  settings.llmIdleRetries = 7;
+  settings.llmConnectionTimeoutSec = 45;
+  settings.llmIdleTimeoutSec = 600;
+
+  (normalize as (value: LlmWikiPluginSettings) => void)(settings);
+
+  assert.equal(settings.llmIdleRetries, 7);
+  assert.equal(settings.llmConnectionTimeoutSec, 45);
+  assert.equal(settings.llmIdleTimeoutSec, 600);
+  assert.match(mainSource, /normalizeLlmRuntimeControls\(this\.settings\)/);
+});
+
+test("runtime control validation rejects fractions, unsafe idle timers, and invalid minima", () => {
+  const parseRetries = runtimeControls.parseLlmRetryCount;
+  const parseConnection = runtimeControls.parseLlmConnectionTimeoutSec;
+  const parseIdle = runtimeControls.parseLlmIdleTimeoutSec;
+  assert.equal(typeof parseRetries, "function");
+  assert.equal(typeof parseConnection, "function");
+  assert.equal(typeof parseIdle, "function");
+
+  const retries = parseRetries as (value: unknown, previous: number) => number;
+  const connection = parseConnection as (value: unknown, previous: number) => number;
+  const idle = parseIdle as (value: unknown, previous: number) => number;
+  assert.equal(retries("0", 9), 0);
+  assert.equal(retries("4", 9), 4);
+  assert.equal(connection("1", 9), 1);
+  assert.equal(idle("0", 9), 0);
+  assert.equal(idle("2146999", 9), 2_146_999);
+  for (const value of ["", "-1", "1.5", "1e3", "Infinity", "12px"]) {
+    assert.equal(retries(value, 9), 9, `retry:${value}`);
+  }
+  for (const value of ["", "0", "-1", "1.5", "1e3", "Infinity", "12px"]) {
+    assert.equal(connection(value, 9), 9, `connection:${value}`);
+  }
+  for (const value of ["", "-1", "1.5", "1e3", "2147000", "Infinity", "12px"]) {
+    assert.equal(idle(value, 9), 9, `idle:${value}`);
+  }
+});
+
+test("native labels request retries while Claude labels idle retries", () => {
+  assert.match(
+    settingsSource,
+    /eff\.backend === "native-agent"\s*\? T\.settings\.llmRequestRetries_name\s*:\s*T\.settings\.llmIdleRetries_name/,
+  );
+  assert.match(
+    settingsSource,
+    /eff\.backend === "native-agent"\s*\? T\.settings\.llmRequestRetries_desc\s*:\s*T\.settings\.llmIdleRetries_desc/,
+  );
+  for (const lang of ["en", "ru", "es"] as const) {
+    const labels = i18nFor(lang).settings;
+    assert.ok(labels.llmConnectionTimeout_name.length > 0, lang);
+    assert.ok(labels.llmRequestRetries_name.length > 0, lang);
+    assert.match(labels.llmConnectionTimeout_desc, /mobile|мобиль|móvil/i, lang);
   }
 });
 

@@ -50,14 +50,25 @@ function closeAtOpenAiDone(
   });
 }
 
-export function createProxyDispatcher(cfg: ProxyConfig): import("undici").Dispatcher | null {
+export function createProxyDispatcher(
+  cfg: ProxyConfig,
+  connectionTimeoutMs = 15_000,
+): import("undici").Dispatcher | null {
   if (!cfg.enabled) return null;
   const undici = require("undici") as typeof import("undici");
-  return new undici.ProxyAgent(buildProxyUrl(cfg));
+  const normalizedTimeout = normalizeConnectionTimeout(connectionTimeoutMs);
+  return new undici.ProxyAgent({
+    uri: buildProxyUrl(cfg),
+    connectTimeout: normalizedTimeout,
+    proxyTls: { timeout: normalizedTimeout },
+    requestTls: { timeout: normalizedTimeout },
+    headersTimeout: 0,
+    bodyTimeout: 0,
+  });
 }
 
-export function createProxyFetch(cfg: ProxyConfig): typeof fetch | null {
-  const dispatcher = createProxyDispatcher(cfg);
+export function createProxyFetch(cfg: ProxyConfig, connectionTimeoutMs = 15_000): typeof fetch | null {
+  const dispatcher = createProxyDispatcher(cfg, connectionTimeoutMs);
   if (!dispatcher) return null;
   const undici = require("undici") as typeof import("undici");
   const wrapped: typeof fetch = (input, init) => {
@@ -69,15 +80,14 @@ export function createProxyFetch(cfg: ProxyConfig): typeof fetch | null {
   return wrapped;
 }
 
-export function createDirectDesktopFetch(headersTimeoutMs = 300_000): typeof fetch {
+export function createDirectDesktopFetch(connectionTimeoutMs = 15_000): typeof fetch {
   const undici = require("undici") as typeof import("undici");
-  const normalizedTimeout = Number.isFinite(headersTimeoutMs) && headersTimeoutMs > 0
-    ? Math.floor(headersTimeoutMs)
-    : 300_000;
+  const normalizedTimeout = normalizeConnectionTimeout(connectionTimeoutMs);
   let dispatcher = directDispatchers.get(normalizedTimeout);
   if (!dispatcher) {
     dispatcher = new undici.Agent({
-      headersTimeout: normalizedTimeout,
+      connectTimeout: normalizedTimeout,
+      headersTimeout: 0,
       bodyTimeout: 0,
     });
     directDispatchers.set(normalizedTimeout, dispatcher);
@@ -91,34 +101,15 @@ export function createDirectDesktopFetch(headersTimeoutMs = 300_000): typeof fet
   return wrapped;
 }
 
-export function createDesktopOpenAiFetch(options: {
-  nonStreamFetch: typeof fetch;
-  streamFetch: typeof fetch;
-  nonStreamTimeoutMs: number;
-}): typeof fetch {
-  const timeoutMs = normalizeTimeout(options.nonStreamTimeoutMs);
-  return async (input, init) => {
-    if (requestUsesStreaming(init?.body)) {
-      return options.streamFetch(input, init);
-    }
-    return boundedFetch(options.nonStreamFetch, input, init, timeoutMs);
-  };
-}
-
 export function selectNativeFetch(options: {
   isMobile: boolean;
   mobileFetch: typeof fetch;
   proxyFetch: typeof fetch | null;
   directDesktopFetch: () => typeof fetch;
-  requestTimeoutMs: number;
 }): typeof fetch {
   if (options.isMobile) return options.mobileFetch;
   if (options.proxyFetch) return options.proxyFetch;
-  return createDesktopOpenAiFetch({
-    nonStreamFetch: options.mobileFetch,
-    streamFetch: options.directDesktopFetch(),
-    nonStreamTimeoutMs: options.requestTimeoutMs,
-  });
+  return options.directDesktopFetch();
 }
 
 export function createNativeOpenAiFetch(options: {
@@ -126,7 +117,7 @@ export function createNativeOpenAiFetch(options: {
   isMobile: boolean;
   proxyConfig: ProxyConfig;
   mobileFetch: typeof fetch;
-  requestTimeoutMs: number;
+  connectionTimeoutMs: number;
   onProxySelected?: (config: ProxyConfig) => void;
   onProxyError?: (error: unknown) => void;
 }): typeof fetch {
@@ -135,7 +126,7 @@ export function createNativeOpenAiFetch(options: {
     try {
       const baseHost = new URL(options.baseURL).hostname;
       if (!shouldBypass(baseHost, parseNoProxy(options.proxyConfig.noProxy))) {
-        proxyFetch = createProxyFetch(options.proxyConfig);
+        proxyFetch = createProxyFetch(options.proxyConfig, options.connectionTimeoutMs);
         if (proxyFetch) options.onProxySelected?.(options.proxyConfig);
       }
     } catch (error) {
@@ -146,61 +137,12 @@ export function createNativeOpenAiFetch(options: {
     isMobile: options.isMobile,
     mobileFetch: options.mobileFetch,
     proxyFetch,
-    directDesktopFetch: () => createDirectDesktopFetch(options.requestTimeoutMs),
-    requestTimeoutMs: options.requestTimeoutMs,
+    directDesktopFetch: () => createDirectDesktopFetch(options.connectionTimeoutMs),
   });
 }
 
-function requestUsesStreaming(body: BodyInit | null | undefined): boolean {
-  if (typeof body !== "string") return false;
-  try {
-    const parsed = JSON.parse(body) as { stream?: unknown };
-    return parsed.stream === true;
-  } catch {
-    return false;
-  }
-}
-
-function boundedFetch(
-  fetchImpl: typeof fetch,
-  input: Parameters<typeof fetch>[0],
-  init: Parameters<typeof fetch>[1],
-  timeoutMs: number,
-): Promise<Response> {
-  // eslint-disable-next-line import/no-nodejs-modules -- Must survive Electron renderer timer suspension.
-  const timers = require("node:timers") as typeof import("node:timers");
-  if (init?.signal?.aborted) {
-    return Promise.reject(new DOMException("Aborted", "AbortError"));
-  }
-
-  return new Promise<Response>((resolve, reject) => {
-    let settled = false;
-    const finish = (callback: () => void): void => {
-      if (settled) return;
-      settled = true;
-      timers.clearTimeout(timer);
-      init?.signal?.removeEventListener("abort", onAbort);
-      callback();
-    };
-    const onAbort = (): void => {
-      finish(() => reject(new DOMException("Aborted", "AbortError")));
-    };
-    const timer = timers.setTimeout(() => {
-      finish(() => reject(new DOMException("Request timed out", "TimeoutError")));
-    }, timeoutMs);
-
-    init?.signal?.addEventListener("abort", onAbort, { once: true });
-    void Promise.resolve().then(() => fetchImpl(input, init)).then(
-      (response) => finish(() => resolve(response)),
-      (error: unknown) => finish(() => reject(
-        error instanceof Error ? error : new Error(String(error)),
-      )),
-    );
-  });
-}
-
-function normalizeTimeout(timeoutMs: number): number {
+function normalizeConnectionTimeout(timeoutMs: number): number {
   return Number.isFinite(timeoutMs) && timeoutMs > 0
     ? Math.floor(timeoutMs)
-    : 300_000;
+    : 15_000;
 }

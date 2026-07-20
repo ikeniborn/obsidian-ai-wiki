@@ -2,7 +2,14 @@ import { AbstractInputSuggest, App, DropdownComponent, Notice, Platform, PluginS
 import { ConfirmModal, EditDomainModal, ExportOkfModal, ShellConsentModal } from "./modals";
 import { probeClaudeBinary } from "./claude-cli-client";
 import type LlmWikiPlugin from "./main";
-import type { CompressionProfile, LlmWikiPluginSettings, OpKey } from "./types";
+import {
+  parseLlmConnectionTimeoutSec,
+  parseLlmIdleTimeoutSec,
+  parseLlmRetryCount,
+  type CompressionProfile,
+  type LlmWikiPluginSettings,
+  type OpKey,
+} from "./types";
 import type { DomainEntry } from "./domain";
 import { removeDomainFolder } from "./domain-store";
 import { i18n } from "./i18n";
@@ -430,30 +437,45 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName(T.settings.llmIdleTimeout_name)
-      .setDesc(T.settings.llmIdleTimeout_desc)
+      .setName(T.settings.llmConnectionTimeout_name)
+      .setDesc(T.settings.llmConnectionTimeout_desc)
       .addText((t) =>
-        t.setPlaceholder("300")
-          .setValue(String(s.llmIdleTimeoutSec))
+        t.setPlaceholder("15")
+          .setValue(String(s.llmConnectionTimeoutSec))
           .onChange(async (v) => {
-            const n = Number(v);
-            if (Number.isFinite(n) && n >= 0) {
-              s.llmIdleTimeoutSec = Math.floor(n);
+            const next = parseLlmConnectionTimeoutSec(v, 0);
+            if (next >= 1) {
+              s.llmConnectionTimeoutSec = next;
               await this.plugin.saveSettings();
             }
           }),
       );
 
     new Setting(containerEl)
-      .setName(T.settings.llmIdleRetries_name)
-      .setDesc(T.settings.llmIdleRetries_desc)
+      .setName(T.settings.llmIdleTimeout_name)
+      .setDesc(T.settings.llmIdleTimeout_desc)
+      .addText((t) =>
+        t.setPlaceholder("300")
+          .setValue(String(s.llmIdleTimeoutSec))
+          .onChange(async (v) => {
+            const next = parseLlmIdleTimeoutSec(v, -1);
+            if (next >= 0) {
+              s.llmIdleTimeoutSec = next;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName(eff.backend === "native-agent" ? T.settings.llmRequestRetries_name : T.settings.llmIdleRetries_name)
+      .setDesc(eff.backend === "native-agent" ? T.settings.llmRequestRetries_desc : T.settings.llmIdleRetries_desc)
       .addText((t) =>
         t.setPlaceholder("3")
           .setValue(String(s.llmIdleRetries))
           .onChange(async (v) => {
-            const n = Number(v);
-            if (Number.isInteger(n) && n >= 0) {
-              s.llmIdleRetries = n;
+            const next = parseLlmRetryCount(v, -1);
+            if (next >= 0) {
+              s.llmIdleRetries = next;
               await this.plugin.saveSettings();
             }
           }),

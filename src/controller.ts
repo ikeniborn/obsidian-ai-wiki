@@ -734,11 +734,11 @@ export class WikiController {
         new Notice(i18n().settings.proxy_mobile_warning);
       }
 
-      const requestTimeoutMs = s.llmIdleTimeoutSec * 1000;
       llm = createNativeOpenAiClient({
         baseURL: s.nativeAgent.baseUrl,
         apiKey: s.nativeAgent.apiKey,
-        requestTimeoutMs,
+        connectionTimeoutMs: s.llmConnectionTimeoutSec * 1000,
+        idleTimeoutMs: s.llmIdleTimeoutSec * 1000,
         isMobile: Platform.isMobile,
         proxyConfig: s.proxy,
         mobileFetch,

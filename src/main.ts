@@ -1,5 +1,10 @@
 import { Plugin, WorkspaceLeaf, Platform, Notice } from "obsidian";
-import { DEFAULT_SETTINGS, type LlmWikiPluginSettings, type RunHistoryEntry } from "./types";
+import {
+  DEFAULT_SETTINGS,
+  normalizeLlmRuntimeControls,
+  type LlmWikiPluginSettings,
+  type RunHistoryEntry,
+} from "./types";
 import { normalizeModelCallPolicySettings } from "./model-call-policy";
 import type { DomainEntry } from "./domain";
 import { LlmWikiSettingTab } from "./settings";
@@ -239,6 +244,7 @@ export default class LlmWikiPlugin extends Plugin {
       history: (data?.history as RunHistoryEntry[]) ?? [],
     };
     normalizeModelCallPolicySettings(this.settings);
+    normalizeLlmRuntimeControls(this.settings);
 
     // Schema v2: systemPrompt promoted to top-level
     if (!data?.systemPrompt && (caData.systemPrompt || naData.systemPrompt))
