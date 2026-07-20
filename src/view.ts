@@ -3,7 +3,7 @@ import { AddDomainModal, BusyCloseModal, ConfirmModal, ManageSourcesModal, Inges
 import type LlmWikiPlugin from "./main";
 import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./types";
 import type { DomainEntry } from "./domain";
-import { i18n, i18nFor, resolveLang } from "./i18n";
+import { i18n, i18nFor, resolveLang, resolveUiLang } from "./i18n";
 import { isSourceFile } from "./source-deletion";
 import { resolveRerunDomain } from "./rerun-domain";
 import { domainWikiFolder, domainLogPath, domainIndexPath, isWikiArticlePath, effectiveSubfolder } from "./wiki-path";
@@ -1432,7 +1432,7 @@ export class LlmWikiView extends ItemView {
       this.llmWaitingTimers.stop(ev.id);
     }
     this.refreshLlmLifecycle(ev.id);
-    const labels = i18nFor(resolveLang(this.plugin.settings.outputLanguage)).llmLifecycle;
+    const labels = i18nFor(resolveUiLang()).llmLifecycle;
     const scale = lifecycleScale(ev, labels);
     this.liveStatusIconEl?.setText("✦");
     this.liveStatusTextEl?.setText(scale.action);
@@ -1444,7 +1444,7 @@ export class LlmWikiView extends ItemView {
     const row = this.llmLifecycleRows.get(id);
     const call = this.llmLifecycleState.calls[id];
     if (!ev || !row || !call) return;
-    const labels = i18nFor(resolveLang(this.plugin.settings.outputLanguage)).llmLifecycle;
+    const labels = i18nFor(resolveUiLang()).llmLifecycle;
     const scale = lifecycleScale(
       ev,
       labels,

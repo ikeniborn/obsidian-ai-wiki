@@ -27750,14 +27750,17 @@ var langBundles = { ru, en, es };
 function i18nFor(lang) {
   return langBundles[lang];
 }
+function resolveUiLang(locale = import_obsidian.moment.locale()) {
+  const normalized = locale.toLowerCase();
+  if (normalized.startsWith("ru")) return "ru";
+  if (normalized.startsWith("es")) return "es";
+  return "en";
+}
 function resolveLang(outputLanguage) {
   if (outputLanguage === "ru" || outputLanguage === "en" || outputLanguage === "es") {
     return outputLanguage;
   }
-  const loc = import_obsidian.moment.locale();
-  if (loc.startsWith("ru")) return "ru";
-  if (loc.startsWith("es")) return "es";
-  return "en";
+  return resolveUiLang();
 }
 function resolveReasoningLang(reasoningLanguage, outputLanguage) {
   if (reasoningLanguage === "ru" || reasoningLanguage === "en" || reasoningLanguage === "es") {
@@ -44088,7 +44091,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
       this.llmWaitingTimers.stop(ev.id);
     }
     this.refreshLlmLifecycle(ev.id);
-    const labels = i18nFor(resolveLang(this.plugin.settings.outputLanguage)).llmLifecycle;
+    const labels = i18nFor(resolveUiLang()).llmLifecycle;
     const scale = lifecycleScale(ev, labels);
     this.liveStatusIconEl?.setText("\u2726");
     this.liveStatusTextEl?.setText(scale.action);
@@ -44099,7 +44102,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     const row = this.llmLifecycleRows.get(id);
     const call = this.llmLifecycleState.calls[id];
     if (!ev || !row || !call) return;
-    const labels = i18nFor(resolveLang(this.plugin.settings.outputLanguage)).llmLifecycle;
+    const labels = i18nFor(resolveUiLang()).llmLifecycle;
     const scale = lifecycleScale(
       ev,
       labels,

@@ -1259,6 +1259,14 @@ export function i18nFor(lang: "ru" | "en" | "es"): I18n {
   return langBundles[lang];
 }
 
+/** Resolves the Obsidian interface locale independently of content settings. */
+export function resolveUiLang(locale = moment.locale()): "ru" | "en" | "es" {
+  const normalized = locale.toLowerCase();
+  if (normalized.startsWith("ru")) return "ru";
+  if (normalized.startsWith("es")) return "es";
+  return "en";
+}
+
 /**
  * Resolves a concrete language for status strings (layer A) and generated content (layer C).
  * Explicit outputLanguage wins; `auto`/undefined falls back to the Obsidian UI locale.
@@ -1267,10 +1275,7 @@ export function resolveLang(outputLanguage: OutputLanguage | undefined): "ru" | 
   if (outputLanguage === "ru" || outputLanguage === "en" || outputLanguage === "es") {
     return outputLanguage;
   }
-  const loc = moment.locale();
-  if (loc.startsWith("ru")) return "ru";
-  if (loc.startsWith("es")) return "es";
-  return "en";
+  return resolveUiLang();
 }
 
 /**

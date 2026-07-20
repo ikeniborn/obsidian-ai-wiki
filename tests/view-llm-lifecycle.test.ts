@@ -5,7 +5,8 @@ import test from "node:test";
 
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 
-const { i18nFor } = await import("../src/i18n");
+const i18nModule = await import("../src/i18n");
+const { i18nFor } = i18nModule;
 const {
   emptyLlmLifecycleState,
   lifecycleEvent,
@@ -98,6 +99,28 @@ test("EN RU ES lifecycle labels have identical phase and action shapes", () => {
     assert.equal(Object.values(bundle.phases).every(Boolean), true);
     assert.equal(Object.values(bundle.actions).every(Boolean), true);
   }
+});
+
+test("lifecycle UI locale normalizes Obsidian locale variants independently of output language", () => {
+  const resolveUiLang = (
+    i18nModule as typeof i18nModule & {
+      resolveUiLang?: (locale?: string) => "ru" | "en" | "es";
+    }
+  ).resolveUiLang;
+
+  assert.equal(typeof resolveUiLang, "function");
+  assert.equal(resolveUiLang?.("en-US"), "en");
+  assert.equal(resolveUiLang?.("ru-RU"), "ru");
+  assert.equal(resolveUiLang?.("es-ES"), "es");
+  assert.equal(resolveUiLang?.("fr-FR"), "en");
+
+  const source = readFileSync(new URL("../src/view.ts", import.meta.url), "utf8");
+  const lifecycleRenderer = source.slice(
+    source.indexOf("private renderLlmLifecycle"),
+    source.indexOf("private renderReasoning"),
+  );
+  assert.match(lifecycleRenderer, /resolveUiLang\(\)/);
+  assert.doesNotMatch(lifecycleRenderer, /settings\.outputLanguage/);
 });
 
 test("scale contains every human phase and one terminal slot in place", () => {
