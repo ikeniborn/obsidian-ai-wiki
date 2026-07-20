@@ -72,6 +72,12 @@ function errorCode(value: unknown): string | undefined {
   return typeof value.code === "string" ? value.code : undefined;
 }
 
+function apiErrorHeaders(error: unknown): Headers | undefined {
+  if (error === null || typeof error !== "object" || !("headers" in error)) return undefined;
+  const headers: unknown = error.headers;
+  return headers instanceof Headers ? headers : undefined;
+}
+
 function decision(
   retryable: boolean,
   errorClass: string,
@@ -115,7 +121,7 @@ export function classifyNativeRetry(error: unknown): NativeRetryDecision {
   }
 
   if (error instanceof APIError) {
-    const shouldRetry = error.headers?.get("x-should-retry")?.trim().toLowerCase();
+    const shouldRetry = apiErrorHeaders(error)?.get("x-should-retry")?.trim().toLowerCase();
     if (shouldRetry === "false") return decision(false, "provider_no_retry", error);
     if (shouldRetry === "true") return decision(true, "provider_retry", error);
   }
@@ -151,8 +157,9 @@ export function retryDelay(
 ): { delayMs: number; source: "retry-after-ms" | "retry-after" | "backoff" } {
   const retryAfterMs = headers?.get("retry-after-ms");
   if (retryAfterMs !== null && retryAfterMs !== undefined) {
-    const parsed = Number(retryAfterMs);
-    if (Number.isFinite(parsed) && parsed >= 0) {
+    const trimmed = retryAfterMs.trim();
+    const parsed = Number(trimmed);
+    if (trimmed !== "" && Number.isFinite(parsed) && parsed >= 0) {
       return { delayMs: Math.min(Math.round(parsed), MAX_DELAY_MS), source: "retry-after-ms" };
     }
   }

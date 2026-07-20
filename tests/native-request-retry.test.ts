@@ -144,6 +144,16 @@ test("retry-after-ms takes precedence and is capped at eight seconds", () => {
   assert.equal(retryDelay(new Headers({ "retry-after-ms": "9000" }), 1, fixedClock).delayMs, 8000);
 });
 
+test("invalid retry-after-ms falls through to valid Retry-After", () => {
+  for (const retryAfterMs of ["", "   ", "not-a-number"]) {
+    assert.deepEqual(
+      retryDelay(new Headers({ "retry-after-ms": retryAfterMs, "retry-after": "2" }), 1, fixedClock),
+      { delayMs: 2000, source: "retry-after" },
+      JSON.stringify(retryAfterMs),
+    );
+  }
+});
+
 test("supports numeric and HTTP-date Retry-After without sleeping", () => {
   assert.deepEqual(retryDelay(new Headers({ "retry-after": "2.5" }), 1, fixedClock), {
     delayMs: 2500,
