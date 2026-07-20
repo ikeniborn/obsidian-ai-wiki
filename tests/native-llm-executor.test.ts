@@ -10,7 +10,9 @@ import OpenAI, {
 import { executeNativeLlmRequest } from "../src/native-llm-executor";
 import {
   createReplacementAttemptLifecycle,
+  emptyLlmLifecycleState,
   lifecycleEvent,
+  reduceLlmLifecycle,
 } from "../src/llm-lifecycle";
 import type {
   LlmLifecycleAction,
@@ -153,6 +155,36 @@ function lifecycleRecorder(
   };
 }
 
+function strictLifecycleRecorder(
+  onEvent: (event: RunEvent) => void,
+  initial: { id: string; action: LlmLifecycleAction } = {
+    id: "attempt-0",
+    action: "answer_question",
+  },
+): NativeRequestLifecycle {
+  let current = initial;
+  let state = emptyLlmLifecycleState();
+  let atMs = 0;
+  const record = (phase: Parameters<NativeRequestLifecycle["close"]>[0]
+    | Parameters<NativeRequestLifecycle["phase"]>[0]
+    | "preparing"): void => {
+    const event = lifecycleEvent(current.id, current.action, phase, atMs++);
+    state = reduceLlmLifecycle(state, event);
+    onEvent(event);
+  };
+  return {
+    begin(attempt) {
+      current = attempt === 0
+        ? initial
+        : createReplacementAttemptLifecycle(initial, attempt);
+      record("preparing");
+    },
+    phase: record,
+    close: record,
+    current: () => current,
+  };
+}
+
 function retryContext(
   overrides: Partial<NativeRequestRetryContext> = {},
 ): NativeRequestRetryContext {
@@ -199,6 +231,14 @@ function phases(events: RunEvent[]): string[] {
     .filter((event): event is Extract<RunEvent, { kind: "llm_lifecycle" }> =>
       event.kind === "llm_lifecycle")
     .map((event) => `${event.id}:${event.action}:${event.phase}`);
+}
+
+function terminalPhases(events: RunEvent[]): string[] {
+  return events
+    .filter((event): event is Extract<RunEvent, { kind: "llm_lifecycle" }> =>
+      event.kind === "llm_lifecycle"
+      && ["retrying", "failed", "cancelled"].includes(event.phase))
+    .map((event) => event.phase);
 }
 
 test("non-stream retries 502 and returns the one raw completion with identical params", async () => {
@@ -379,6 +419,85 @@ test("role, usage, whitespace, and empty chunks do not block a pre-output stream
   assert.deepEqual(values.map((value) => value.choices[0]?.delta.content), ["ok"]);
 });
 
+test("stream exhaustion closes a strict lifecycle exactly once", async () => {
+  const failure = new APIConnectionError({ message: "stream exhausted" });
+  const events: RunEvent[] = [];
+  await assert.rejects(consume(executeNativeLlmRequest({
+    create: sequence([failingStream([], failure)]),
+    params: streamParams,
+    retry: retryContext({
+      maxRetries: 0,
+      onEvent: (event) => events.push(event),
+      lifecycle: strictLifecycleRecorder((event) => events.push(event)),
+    }),
+  })), (error) => error === failure);
+
+  assert.deepEqual(terminalPhases(events), ["failed"]);
+});
+
+test("post-content stream failure closes a strict lifecycle exactly once", async () => {
+  const failure = new APIConnectionError({ message: "stream disconnected" });
+  const events: RunEvent[] = [];
+  await assert.rejects(consume(executeNativeLlmRequest({
+    create: sequence([failingStream([chunk({ content: "partial" })], failure)]),
+    params: streamParams,
+    retry: retryContext({
+      maxRetries: 1,
+      onEvent: (event) => events.push(event),
+      lifecycle: strictLifecycleRecorder((event) => events.push(event)),
+    }),
+  })), (error) => error === failure);
+
+  assert.deepEqual(terminalPhases(events), ["failed"]);
+});
+
+test("stream request abort closes a strict lifecycle exactly once", async () => {
+  const caller = new AbortController();
+  const started = deferred<void>();
+  const events: RunEvent[] = [];
+  const operation = consume(executeNativeLlmRequest({
+    create: sequence([async () => {
+      started.resolve(undefined);
+      return new Promise<NativeResult>(() => {});
+    }]),
+    params: streamParams,
+    retry: retryContext({
+      signal: caller.signal,
+      onEvent: (event) => events.push(event),
+      lifecycle: strictLifecycleRecorder((event) => events.push(event)),
+    }),
+  }));
+
+  await started.promise;
+  caller.abort();
+  await assert.rejects(operation, (error) => error instanceof Error && error.name === "AbortError");
+  assert.deepEqual(terminalPhases(events), ["cancelled"]);
+});
+
+test("stream backoff abort closes each strict lifecycle exactly once", async () => {
+  const caller = new AbortController();
+  const delayStarted = deferred<void>();
+  const events: RunEvent[] = [];
+  const operation = consume(executeNativeLlmRequest({
+    create: sequence([new APIConnectionError({ message: "connect failed" })]),
+    params: streamParams,
+    retry: retryContext({
+      signal: caller.signal,
+      onEvent: (event) => events.push(event),
+      lifecycle: strictLifecycleRecorder((event) => events.push(event)),
+      delay: async () => {
+        delayStarted.resolve(undefined);
+        return new Promise<void>(() => {});
+      },
+    }),
+  }));
+
+  await delayStarted.promise;
+  caller.abort();
+  await assert.rejects(operation, (error) => error instanceof Error && error.name === "AbortError");
+  assert.deepEqual(terminalPhases(events), ["retrying", "cancelled"]);
+});
+
 for (const field of ["reasoning", "reasoning_content", "content"] as const) {
   test(`nonblank ${field} marks meaningful stream output and fails closed`, async () => {
     let attempts = 0;
@@ -541,6 +660,57 @@ test("valid model chunks reset idle timing while invalid transport heartbeats do
   });
 });
 
+test("consumer backpressure pauses idle timing until the next upstream read", async () => {
+  await withFakeTimers(async (timers) => {
+    const caller = new AbortController();
+    const secondNext = deferred<IteratorResult<OpenAI.Chat.ChatCompletionChunk>>();
+    const secondRequested = deferred<void>();
+    let attemptSignal: AbortSignal | undefined;
+    let nextCalls = 0;
+    const modelStream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk> = {
+      [Symbol.asyncIterator]() {
+        return {
+          next() {
+            nextCalls += 1;
+            if (nextCalls === 1) {
+              return Promise.resolve({ done: false, value: chunk({ content: "healthy" }) });
+            }
+            secondRequested.resolve(undefined);
+            return secondNext.promise;
+          },
+        };
+      },
+    };
+    const result = await executeNativeLlmRequest({
+      create: sequence([async (signal) => {
+        attemptSignal = signal;
+        return modelStream;
+      }]),
+      params: streamParams,
+      retry: retryContext({
+        maxRetries: 0,
+        idleTimeoutMs: 100,
+        signal: caller.signal,
+      }),
+    });
+    const iterator = (result as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>)[Symbol.asyncIterator]();
+
+    const first = await iterator.next();
+    assert.equal(first.value?.choices[0]?.delta.content, "healthy");
+    assert.equal(timers.activeCount(), 0);
+    timers.tick(150);
+    assert.equal(attemptSignal?.aborted, false);
+
+    const pending = iterator.next();
+    await secondRequested.promise;
+    assert.equal(timers.activeCount(), 1);
+    timers.tick(100);
+    await assert.rejects(pending, APIConnectionTimeoutError);
+    assert.equal(attemptSignal?.aborted, true);
+    assert.equal(timers.activeCount(), 0);
+  });
+});
+
 test("non-stream success, permanent error, and retry exhaustion clear idle timers", async () => {
   await withFakeTimers(async (timers) => {
     const success = await executeNativeLlmRequest({
@@ -598,7 +768,7 @@ test("early iterator close clears timers, aborts the attempt, and never awaits h
     const iterator = (result as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>)[Symbol.asyncIterator]();
     const first = await iterator.next();
     assert.equal(first.value?.choices[0]?.delta.content, "first");
-    assert.equal(timers.activeCount(), 1);
+    assert.equal(timers.activeCount(), 0);
 
     const closed = await iterator.return?.();
     assert.equal(closed?.done, true);
@@ -636,7 +806,7 @@ test("caller abort while a stream yield is paused clears timers and closes lifec
     });
     const iterator = (result as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>)[Symbol.asyncIterator]();
     await iterator.next();
-    assert.equal(timers.activeCount(), 1);
+    assert.equal(timers.activeCount(), 0);
 
     caller.abort();
     await Promise.resolve();

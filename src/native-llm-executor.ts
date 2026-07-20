@@ -5,6 +5,7 @@ import { classifyNativeRetry, retryDelay } from "./native-request-retry";
 import type {
   NativeChatCompletionCreate,
   NativeLlmExecutionInput,
+  NativeRequestLifecycle,
   NativeRequestRetryContext,
   RunEvent,
 } from "./types";
@@ -38,6 +39,8 @@ interface AttemptScope {
   dispose(reason?: unknown): void;
   race<T>(work: Promise<T>): Promise<T>;
 }
+
+type CloseOnceLifecycle = Pick<NativeRequestLifecycle, "begin" | "close">;
 
 function abortReason(signal: AbortSignal): Error {
   return signal.reason instanceof Error
@@ -95,6 +98,21 @@ function attemptScope(callerSignal: AbortSignal, idleTimeoutMs: number): Attempt
     clearIdle,
     dispose,
     race: <T>(work: Promise<T>) => Promise.race([work, abortPromise]),
+  };
+}
+
+function closeOnceLifecycle(lifecycle: NativeRequestLifecycle): CloseOnceLifecycle {
+  let open = false;
+  return {
+    begin(attempt, transport) {
+      lifecycle.begin(attempt, transport);
+      open = true;
+    },
+    close(phase) {
+      if (!open) return;
+      open = false;
+      lifecycle.close(phase);
+    },
   };
 }
 
@@ -189,6 +207,7 @@ async function waitForRetry(
   attempt: number,
   transport: "stream" | "non-stream",
   meaningfulOutputSeen: boolean,
+  lifecycle: CloseOnceLifecycle = retry.lifecycle,
 ): Promise<FailureDetails | null> {
   const decision = classifyNativeRetry(error);
   const failure: FailureDetails = {
@@ -202,7 +221,7 @@ async function waitForRetry(
     && !meaningfulOutputSeen
     && attempt < retry.maxRetries;
   if (!canRetry) {
-    retry.lifecycle.close(retry.signal.aborted || isAbortError(error) ? "cancelled" : "failed");
+    lifecycle.close(retry.signal.aborted || isAbortError(error) ? "cancelled" : "failed");
     if (decision.retryable) {
       retry.onEvent({
         kind: "transport_retry_exhausted",
@@ -213,18 +232,18 @@ async function waitForRetry(
   }
 
   const delay = retryDelay(retryHeaders(error), attempt + 1);
-  retry.lifecycle.close("retrying");
+  lifecycle.close("retrying");
   retry.onEvent({
     kind: "transport_retry_scheduled",
     ...metadata(retry, attempt, meaningfulOutputSeen, failure),
     delayMs: delay.delayMs,
     delaySource: delay.source,
   });
-  retry.lifecycle.begin(attempt + 1, transport);
+  lifecycle.begin(attempt + 1, transport);
   try {
     await raceWithAbort(retry.delay(delay.delayMs, retry.signal), retry.signal);
   } catch (delayError) {
-    retry.lifecycle.close(retry.signal.aborted || isAbortError(delayError) ? "cancelled" : "failed");
+    lifecycle.close(retry.signal.aborted || isAbortError(delayError) ? "cancelled" : "failed");
     throw delayError;
   }
   return failure;
@@ -290,8 +309,9 @@ function executeStream(
     let iterator: AsyncIterator<OpenAI.Chat.ChatCompletionChunk> | undefined;
     let meaningfulOutputSeen = false;
     let requestCompleted = false;
-    retry.lifecycle.begin(0, "stream");
-    const onCallerAbort = () => retry.lifecycle.close("cancelled");
+    const lifecycle = closeOnceLifecycle(retry.lifecycle);
+    lifecycle.begin(0, "stream");
+    const onCallerAbort = () => lifecycle.close("cancelled");
     if (retry.signal.aborted) onCallerAbort();
     else retry.signal.addEventListener("abort", onCallerAbort, { once: true });
     try {
@@ -307,7 +327,12 @@ function executeStream(
           scope.resetIdle();
           const stream = await scope.race(input.create(input.params, { signal: scope.signal }));
           iterator = stream[Symbol.asyncIterator]();
+          let armIdleBeforeNext = true;
           while (true) {
+            if (armIdleBeforeNext) {
+              scope.resetIdle();
+              armIdleBeforeNext = false;
+            }
             const next = await scope.race(Promise.resolve(iterator.next()));
             if (next.done) {
               scope.clearIdle();
@@ -319,7 +344,8 @@ function executeStream(
               return;
             }
             if (!validModelChunk(next.value)) continue;
-            scope.resetIdle();
+            scope.clearIdle();
+            armIdleBeforeNext = true;
             if (!meaningfulOutputSeen && meaningfulChunk(next.value)) {
               meaningfulOutputSeen = true;
               retry.lifecycle.phase("producing");
@@ -334,7 +360,7 @@ function executeStream(
           safeReturn(iterator);
           iterator = undefined;
           if (retry.signal.aborted || isAbortError(error)) {
-            retry.lifecycle.close("cancelled");
+            lifecycle.close("cancelled");
             throw retry.signal.aborted ? abortReason(retry.signal) : error;
           }
           const failure = await waitForRetry(
@@ -343,6 +369,7 @@ function executeStream(
             attempt,
             "stream",
             meaningfulOutputSeen,
+            lifecycle,
           );
           if (failure === null) throw error;
           priorFailure = failure;
@@ -356,7 +383,7 @@ function executeStream(
       }
     } finally {
       retry.signal.removeEventListener("abort", onCallerAbort);
-      if (!requestCompleted) retry.lifecycle.close("cancelled");
+      if (!requestCompleted) lifecycle.close("cancelled");
       safeReturn(iterator);
       scope?.dispose(new DOMException("Stream iterator closed", "AbortError"));
     }
