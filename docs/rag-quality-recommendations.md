@@ -38,7 +38,8 @@
 - Панель показывает только человекочитаемые этапы запроса: подготовка, отправка, ожидание,
   получение ответа, проверка, применение и terminal state. Рассуждение остаётся
   раскрываемым. Call site, transport, попытки, бюджеты и provider diagnostics пишутся
-  только в `agent.jsonl`.
+  только в `agent.jsonl`. Agent log хранит до 4 MiB рассуждения на операцию в
+  упорядоченных bounded records; превышение заменяется metadata-only marker обрезки.
 - Таймер ожидания — локальное прошедшее время UI, не heartbeat провайдера; lifecycle-события
   не продлевают idle deadline.
 - Init bootstrap, evidence map/reduce, synthesis Ingest и bounded Lint batches используют

@@ -175,7 +175,8 @@ response → Applying result → Completed** (or a terminal retry, failure, or c
 Reasoning remains available in its expandable block. Call sites, transport details,
 attempts, budgets, and provider data stay in `agent.jsonl`, not sidebar labels. The waiting
 timer shows UI elapsed time; it is not a provider heartbeat and does not extend the idle
-deadline.
+deadline. Agent-log reasoning is retained in ordered bounded records up to 4 MiB per
+operation; excess text is replaced by a metadata-only truncation marker.
 
 Background structured work—Init bootstrap, evidence map/reduce, Ingest synthesis, and
 bounded Lint batches—uses atomic non-stream responses. Interactive Chat, the Query answer,

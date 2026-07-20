@@ -39,6 +39,40 @@ import {
 } from "./wipe-proof";
 
 const AGENT_LOG_LINE_MAX_BYTES = WIPE_LOG_LINE_MAX_BYTES;
+const AGENT_LOG_REASONING_CHUNK_BYTES = 128 * 1024;
+/** Maximum reasoning retained in agent.jsonl per operation. */
+export const AGENT_LOG_REASONING_TOTAL_BYTES = 4 * 1024 * 1024;
+
+function utf8ByteLength(value: string): number {
+  let bytes = 0;
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    bytes += codePoint <= 0x7f ? 1 : codePoint <= 0x7ff ? 2 : codePoint <= 0xffff ? 3 : 4;
+  }
+  return bytes;
+}
+
+function takeUtf8Prefix(value: string, maxBytes: number): {
+  prefix: string;
+  rest: string;
+  prefixBytes: number;
+} {
+  let bytes = 0;
+  let end = 0;
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    const characterBytes =
+      codePoint <= 0x7f ? 1 : codePoint <= 0x7ff ? 2 : codePoint <= 0xffff ? 3 : 4;
+    if (bytes + characterBytes > maxBytes) break;
+    bytes += characterBytes;
+    end += character.length;
+  }
+  return {
+    prefix: value.slice(0, end),
+    rest: value.slice(end),
+    prefixBytes: bytes,
+  };
+}
 
 export function boundAgentLogField(value: string | undefined): string | undefined {
   if (value === undefined) return undefined;
@@ -79,6 +113,10 @@ export class WikiController {
   private _currentLogMeta: { backend: string; model: string; agentLogEnabled: boolean } | null = null;
   private _llmCallIndex = 0;
   private _reasoningBuf = "";
+  private _reasoningBufBytes = 0;
+  private _reasoningRetainedBytes = 0;
+  private _reasoningOmittedBytes = 0;
+  private _reasoningTruncationReported = false;
   constructor(
     private app: App,
     private plugin: LlmWikiPlugin,
@@ -307,6 +345,12 @@ export class WikiController {
     const lastMsg = chatMessages[chatMessages.length - 1]?.content ?? "";
     let finalText = "";
     let status: "done" | "error" | "cancelled" = "done";
+    this._llmCallIndex = 0;
+    this._reasoningBuf = "";
+    this._reasoningBufBytes = 0;
+    this._reasoningRetainedBytes = 0;
+    this._reasoningOmittedBytes = 0;
+    this._reasoningTruncationReported = false;
 
     await this.logEvent(vaultRoot, sessionId, "chat", domainId, {
       kind: "system",
@@ -738,55 +782,114 @@ export class WikiController {
   private async logEvent(_vaultRoot: string, sessionId: string, op: WikiOperation, domainId: string | undefined, ev: RunEvent): Promise<void> {
     if (!(this._currentLogMeta?.agentLogEnabled ?? this.plugin.settings.agentLogEnabled)) return;
 
-    // Reasoning chunks (assistant_text + isReasoning) accumulate into a buffer and
-    // are flushed as ONE consolidated line when the next non-assistant_text event
-    // arrives. Non-reasoning assistant_text (progress chatter) stays dropped — the
-    // final answer is already captured by the `result` event.
-    if (ev.kind === "assistant_text") {
-      if (ev.isReasoning) this._reasoningBuf += ev.delta;
-      return;
-    }
-
     const adapter = this.app.vault.adapter;
     // Agent log lives in the plugin dir (NOT the synced wiki tree). The pluginDir
     // always exists (the plugin loads from it), so no folder creation is needed.
     const path = `${this.pluginDir()}/agent.jsonl`;
-    try {
-      const appendLine = async (record: unknown): Promise<void> => {
-        const line = JSON.stringify(record) + "\n";
-        const encodedByteLength = new TextEncoder().encode(line).length;
-        if (encodedByteLength > AGENT_LOG_LINE_MAX_BYTES) {
-          throw new Error(`agent log line exceeds ${AGENT_LOG_LINE_MAX_BYTES} bytes`);
-        }
+    const appendLine = async (line: string): Promise<void> => {
+      try {
         if (await adapter.exists(path)) await adapter.append(path, line);
         else await adapter.write(path, line);
-      };
-      const envelope = {
-        session: sessionId, op, domainId,
-        backend: boundAgentLogField(this._currentLogMeta?.backend),
-        model: boundAgentLogField(this._currentLogMeta?.model),
-      };
-
-      // Flush accumulated reasoning as one line, stamped with the current call index,
-      // before writing the event that triggered the flush.
-      if (this._reasoningBuf) {
-        await appendLine({
-          ts: new Date().toISOString(),
-          ...envelope,
-          event: { kind: "reasoning", text: this._reasoningBuf },
-          callIndex: this._llmCallIndex,
-        });
-        this._reasoningBuf = "";
-      }
-
-      const extra = ev.kind === "llm_call_stats" ? { callIndex: this._llmCallIndex++ } : {};
-      await appendLine({
+      } catch { /* не блокируем операцию */ }
+    };
+    const envelope = {
+      session: sessionId, op, domainId,
+      backend: boundAgentLogField(this._currentLogMeta?.backend),
+      model: boundAgentLogField(this._currentLogMeta?.model),
+    };
+    const appendRecord = async (
+      event: Record<string, unknown> | RunEvent,
+      extra: Record<string, unknown> = {},
+    ): Promise<void> => {
+      const record = {
         ts: new Date().toISOString(),
         ...envelope,
-        event: ev,
+        event,
         ...extra,
+      };
+      const line = JSON.stringify(record) + "\n";
+      const encodedByteLength = new TextEncoder().encode(line).length;
+      if (encodedByteLength <= AGENT_LOG_LINE_MAX_BYTES) {
+        await appendLine(line);
+        return;
+      }
+      const omitted = JSON.stringify({
+        ts: new Date().toISOString(),
+        ...envelope,
+        event: {
+          kind: "log_record_omitted",
+          eventKind: typeof event.kind === "string" ? event.kind : "unknown",
+          byteCount: encodedByteLength,
+          reason: "agent_log_line_limit",
+        },
+        ...extra,
+      }) + "\n";
+      await appendLine(omitted);
+    };
+
+    // Reasoning stays bounded in memory and on disk. Full chunks are detached before
+    // writes; a failed adapter call therefore cannot replay the same buffered text.
+    if (ev.kind === "assistant_text") {
+      if (!ev.isReasoning) return;
+      const deltaBytes = utf8ByteLength(ev.delta);
+      const remaining = Math.max(
+        0,
+        AGENT_LOG_REASONING_TOTAL_BYTES - this._reasoningRetainedBytes,
+      );
+      const retained = deltaBytes <= remaining
+        ? { prefix: ev.delta, rest: "", prefixBytes: deltaBytes }
+        : takeUtf8Prefix(ev.delta, remaining);
+      this._reasoningRetainedBytes += retained.prefixBytes;
+      this._reasoningBuf += retained.prefix;
+      this._reasoningBufBytes += retained.prefixBytes;
+      if (!this._reasoningTruncationReported) {
+        this._reasoningOmittedBytes += deltaBytes - retained.prefixBytes;
+      }
+      const chunks: string[] = [];
+      while (this._reasoningBufBytes >= AGENT_LOG_REASONING_CHUNK_BYTES) {
+        const chunk = takeUtf8Prefix(
+          this._reasoningBuf,
+          AGENT_LOG_REASONING_CHUNK_BYTES,
+        );
+        chunks.push(chunk.prefix);
+        this._reasoningBuf = chunk.rest;
+        this._reasoningBufBytes -= chunk.prefixBytes;
+      }
+      for (const chunk of chunks) {
+        await appendRecord(
+          { kind: "assistant_text", delta: chunk, isReasoning: true },
+          { callIndex: this._llmCallIndex },
+        );
+      }
+      return;
+    }
+
+    const reasoning = this._reasoningBuf;
+    const omittedReasoningBytes = this._reasoningOmittedBytes;
+    this._reasoningBuf = "";
+    this._reasoningBufBytes = 0;
+    this._reasoningOmittedBytes = 0;
+    const reportTruncation =
+      omittedReasoningBytes > 0 && !this._reasoningTruncationReported;
+    if (reportTruncation) this._reasoningTruncationReported = true;
+
+    if (reasoning) {
+      await appendRecord(
+        { kind: "assistant_text", delta: reasoning, isReasoning: true },
+        { callIndex: this._llmCallIndex },
+      );
+    }
+    if (reportTruncation) {
+      await appendRecord({
+        kind: "reasoning_omitted",
+        truncated: true,
+        omittedByteCount: omittedReasoningBytes,
+        retainedByteLimit: AGENT_LOG_REASONING_TOTAL_BYTES,
       });
-    } catch { /* не блокируем операцию */ }
+    }
+
+    const extra = ev.kind === "llm_call_stats" ? { callIndex: this._llmCallIndex++ } : {};
+    await appendRecord(ev, extra);
   }
 
   private async dispatch(op: WikiOperation, args: string[], domainId?: string, context?: string, instruction?: string, onFileError?: OnFileError, chatMessages?: ChatMessage[], lintOpts?: { useLlm: boolean; entityTypeFilter: string[] }): Promise<void> {
@@ -848,6 +951,10 @@ export class WikiController {
     const startedAt = Date.now();
     this._llmCallIndex = 0;
     this._reasoningBuf = "";
+    this._reasoningBufBytes = 0;
+    this._reasoningRetainedBytes = 0;
+    this._reasoningOmittedBytes = 0;
+    this._reasoningTruncationReported = false;
     const sessionId = String(startedAt);
     const steps: RunHistoryEntry["steps"] = [];
     let finalText = "";
