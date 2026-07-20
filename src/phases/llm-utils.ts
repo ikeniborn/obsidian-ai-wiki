@@ -189,9 +189,6 @@ export function buildChatParams(
     delete params.response_format;
     delete params.temperature;
     delete params.top_p;
-  } else {
-    params.reasoning_effort = "none";
-    params.extra_body = { reasoning_effort: "none" };
   }
 
   return params;

@@ -62,12 +62,31 @@ test("semantic compression is appended once after other system sections through 
   assert.equal(firstSystem.name, "original-system");
 });
 
-test("zero or absent thinking budget explicitly disables reasoning", () => {
+test("zero or absent thinking budget omits reasoning controls", () => {
   const messages = [{ role: "user" as const, content: "Answer this" }];
 
   for (const opts of [{}, { thinkingBudgetTokens: 0 }]) {
     const params = buildChatParams("model", messages, opts);
-    assert.equal(params.reasoning_effort, "none");
-    assert.deepEqual(params.extra_body, { reasoning_effort: "none" });
+    assert.equal("reasoning_effort" in params, false);
+    assert.equal("extra_body" in params, false);
+    assert.equal("thinking" in params, false);
   }
+});
+
+test("positive thinking budget keeps the explicit thinking payload", () => {
+  const params = buildChatParams(
+    "model",
+    [{ role: "user" as const, content: "Answer this" }],
+    {
+      thinkingBudgetTokens: 512,
+      jsonMode: "json_object",
+      temperature: 0.2,
+      topP: 0.9,
+    },
+  );
+
+  assert.deepEqual(params.thinking, { type: "enabled", budget_tokens: 512 });
+  assert.equal("response_format" in params, false);
+  assert.equal("temperature" in params, false);
+  assert.equal("top_p" in params, false);
 });

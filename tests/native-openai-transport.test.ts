@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { createServer, type ServerResponse } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createRequire, register } from "node:module";
 import { setTimeout as nodeSetTimeout } from "node:timers";
 import test from "node:test";
@@ -31,6 +31,7 @@ const transport = await import("../src/proxy") as typeof import("../src/proxy") 
     requestTimeoutMs: number;
   }) => typeof fetch;
 };
+const { buildChatParams } = await import("../src/phases/llm-utils");
 
 test("native OpenAI client disables SDK request retries", () => {
   const source = readFileSync(new URL("../src/controller.ts", import.meta.url), "utf8");
@@ -389,12 +390,63 @@ test("OpenAI client preserves nested base URL paths", async () => {
   assert.equal(observedPath, "/url/path/path/v1/chat/completions");
 });
 
+test("OpenAI client omits disabled reasoning controls from stream and non-stream request bodies", async () => {
+  const observedBodies: Array<Record<string, unknown>> = [];
+
+  await withServer(async (response, _requestPath, request) => {
+    observedBodies.push(JSON.parse(await readRequestBody(request)) as Record<string, unknown>);
+    response.writeHead(200, {
+      "content-type": request.headers.accept === "text/event-stream"
+        ? "text/event-stream"
+        : "application/json",
+    });
+    if (request.headers.accept === "text/event-stream") {
+      response.end("data: [DONE]\n\n");
+      return;
+    }
+    response.end(JSON.stringify({
+      id: "chatcmpl-test",
+      object: "chat.completion",
+      created: 0,
+      model: "test-model",
+      choices: [{
+        index: 0,
+        finish_reason: "stop",
+        message: {role: "assistant", content: "ok"},
+      }],
+    }));
+  }, async (url) => {
+    const client = new OpenAI({ apiKey: "test-key", baseURL: new URL(".", url).href, maxRetries: 0 });
+    const messages = [{ role: "user" as const, content: "hello" }];
+
+    for (const thinkingBudgetTokens of [undefined, 0]) {
+      for (const stream of [false, true] as const) {
+        const params = buildChatParams("test-model", messages, { thinkingBudgetTokens }, stream);
+        const response = await client.chat.completions.create({ ...params, stream } as never);
+        if (stream) {
+          for await (const _chunk of response as AsyncIterable<unknown>) {
+            // Drain the stream so the serialized request completes.
+          }
+        }
+      }
+    }
+  });
+
+  assert.equal(observedBodies.length, 4);
+  for (const body of observedBodies) {
+    assert.equal("reasoning_effort" in body, false);
+    assert.equal("extra_body" in body, false);
+    assert.equal("thinking" in body, false);
+  }
+  assert.deepEqual(observedBodies.map((body) => body.stream), [false, true, false, true]);
+});
+
 async function withServer(
-  handle: (response: ServerResponse, requestPath: string) => Promise<void>,
+  handle: (response: ServerResponse, requestPath: string, request: IncomingMessage) => Promise<void>,
   run: (url: string) => Promise<void>,
 ): Promise<void> {
   const server = createServer((request, response) => {
-    void handle(response, request.url ?? "");
+    void handle(response, request.url ?? "", request);
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -413,4 +465,10 @@ async function withServer(
       server.close((error) => error ? reject(error) : resolve());
     });
   }
+}
+
+async function readRequestBody(request: IncomingMessage): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) chunks.push(Buffer.from(chunk));
+  return Buffer.concat(chunks).toString("utf8");
 }
