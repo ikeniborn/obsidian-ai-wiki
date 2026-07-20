@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  createReplacementAttemptLifecycle,
   emptyLlmLifecycleState,
   humanLifecycleText,
   lifecycleEvent,
@@ -136,6 +137,24 @@ test("retry opens a fresh lifecycle ID at preparing", () => {
 
   assert.equal(state.calls["call-1"].phase, "retrying");
   assert.equal(state.calls["call-2"].phase, "preparing");
+});
+
+test("replacement attempt gets a fresh ID and localized retry action key", () => {
+  const replacement = createReplacementAttemptLifecycle(
+    { id: "call-1", action: "answer_question" },
+    2,
+  );
+  assert.deepEqual(
+    replacement,
+    { id: "call-1:retry-2", action: "retry_model_request" },
+  );
+  assert.equal(
+    humanLifecycleText(
+      lifecycleEvent(replacement.id, replacement.action, "sent", 10),
+      labels,
+    ),
+    "Retrying request — Request sent to model",
+  );
 });
 
 test("human text consumes action and phase but never diagnostics", () => {

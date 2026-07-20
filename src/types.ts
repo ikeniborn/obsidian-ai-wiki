@@ -58,7 +58,8 @@ export type LlmLifecycleAction =
   | "check_wiki_quality"
   | "apply_lint_fixes"
   | "format_note"
-  | "analyze_attachments";
+  | "analyze_attachments"
+  | "retry_model_request";
 
 export interface LlmLifecycleDiagnostics {
   callSite?: StructuredCallSite;
@@ -356,6 +357,51 @@ export interface LlmCallOptions {
   nearDupThreshold?: number;
   semanticCompression?: SemanticCompression;
 }
+
+export interface NativeChatCompletionCreateOptions {
+  signal: AbortSignal;
+}
+
+export interface NativeChatCompletionCreate {
+  (
+    params: OpenAI.Chat.ChatCompletionCreateParamsStreaming,
+    options: NativeChatCompletionCreateOptions,
+  ): Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk>>;
+  (
+    params: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+    options: NativeChatCompletionCreateOptions,
+  ): Promise<OpenAI.Chat.ChatCompletion>;
+}
+
+export interface NativeRequestLifecycle {
+  begin(attempt: number, transport: "stream" | "non-stream"): void;
+  phase(phase: "sent" | "waiting" | "producing" | "validating"): void;
+  close(phase: "retrying" | "failed" | "cancelled"): void;
+  current(): { id: string; action: LlmLifecycleAction };
+}
+
+export interface NativeRequestRetryContext {
+  logicalRequestId: string;
+  callSite: string;
+  maxRetries: number;
+  idleTimeoutMs: number;
+  signal: AbortSignal;
+  onEvent: (event: RunEvent) => void;
+  lifecycle: NativeRequestLifecycle;
+  delay: (ms: number, signal: AbortSignal) => Promise<void>;
+}
+
+export type NativeLlmExecutionInput =
+  | {
+      create: NativeChatCompletionCreate;
+      params: OpenAI.Chat.ChatCompletionCreateParamsStreaming;
+      retry: NativeRequestRetryContext;
+    }
+  | {
+      create: NativeChatCompletionCreate;
+      params: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming;
+      retry: NativeRequestRetryContext;
+    };
 
 /** Минимальный интерфейс OpenAI-клиента, используемый фазами. */
 export type LlmClient = {

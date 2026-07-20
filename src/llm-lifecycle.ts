@@ -9,7 +9,8 @@ export type { LlmLifecycleAction, LlmLifecycleDiagnostics, LlmLifecyclePhase };
 
 export interface LlmLifecycleLabels {
   phases: Record<LlmLifecyclePhase, string>;
-  actions: Record<LlmLifecycleAction, string>;
+  actions: Record<Exclude<LlmLifecycleAction, "retry_model_request">, string>
+    & Partial<Record<"retry_model_request", string>>;
 }
 
 export interface LlmLifecycleCall {
@@ -119,6 +120,16 @@ export function lifecycleEvent(
   return event;
 }
 
+export function createReplacementAttemptLifecycle(
+  initial: { id: string; action: LlmLifecycleAction },
+  attempt: number,
+): { id: string; action: LlmLifecycleAction } {
+  return {
+    id: `${initial.id}:retry-${attempt}`,
+    action: "retry_model_request",
+  };
+}
+
 export function reduceLlmLifecycle(
   state: LlmLifecycleState,
   event: LlmLifecycleEvent,
@@ -181,7 +192,8 @@ export function humanLifecycleText(
   event: Pick<LlmLifecycleEvent, "action" | "phase">,
   labels: LlmLifecycleLabels,
 ): string {
-  return `${labels.actions[event.action]} — ${labels.phases[event.phase]}`;
+  const action = labels.actions[event.action] ?? labels.phases.retrying;
+  return `${action} — ${labels.phases[event.phase]}`;
 }
 
 export function lifecycleScale(
@@ -216,7 +228,10 @@ export function lifecycleScale(
     text: terminal ? labels.phases[event.phase] : labels.phases.completed,
     state: terminalState,
   });
-  return { action: labels.actions[event.action], items };
+  return {
+    action: labels.actions[event.action] ?? labels.phases.retrying,
+    items,
+  };
 }
 
 export function renderLifecycleScale(
