@@ -3,7 +3,13 @@ import { register } from "node:module";
 import test from "node:test";
 import type OpenAI from "openai";
 import { APIConnectionError } from "openai";
-import type { LlmCallOptions, LlmClient, RunEvent } from "../src/types";
+import type {
+  LlmCallOptions,
+  LlmClient,
+  NativeChatCompletionCreate,
+  RunEvent,
+} from "../src/types";
+import { createNativeLlmClient } from "../src/native-llm-executor";
 import { VaultTools, type VaultAdapter } from "../src/vault-tools";
 
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
@@ -209,6 +215,59 @@ function assertFormatLifecycleIntegrity(events: RunEvent[]): void {
       ["completed", "retrying", "failed", "cancelled"].includes(phase)).length, 1);
   }
 }
+
+test("native Format yields transport lifecycle while create is pending", async () => {
+  const original = "# Pending native format\n\nKeep this line.";
+  const adapter = new MemoryAdapter({ "notes/source.md": original });
+  let releaseCreate!: () => void;
+  const createGate = new Promise<void>((resolve) => {
+    releaseCreate = resolve;
+  });
+  let enteredCreate!: () => void;
+  const createEntered = new Promise<void>((resolve) => {
+    enteredCreate = resolve;
+  });
+  let calls = 0;
+  const rawCreate = (async () => {
+    calls += 1;
+    if (calls === 1) {
+      enteredCreate();
+      await createGate;
+    }
+    return (async function* () {
+      yield chunk(frame("- formatted", "# Formatted pending native note\n\nKeep this line."));
+      yield usageChunk();
+    })();
+  }) as NativeChatCompletionCreate;
+  const events: RunEvent[] = [];
+  const draining = (async () => {
+    for await (const event of runFormat(
+      ["notes/source.md"],
+      new VaultTools(adapter, "/vault"),
+      createNativeLlmClient(rawCreate),
+      "m",
+      false,
+      [],
+      new AbortController().signal,
+      {
+        inputBudgetTokens: 20_000,
+        nativeRequestRetries: 0,
+        nativeRequestIdleTimeoutMs: 0,
+      },
+    )) events.push(event);
+  })();
+
+  await createEntered;
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  const phasesBeforeResolve = events
+    .filter((event) => event.kind === "llm_lifecycle")
+    .map((event) => event.phase);
+  releaseCreate();
+  await draining;
+
+  assert.deepEqual(phasesBeforeResolve, ["preparing", "sent", "waiting"]);
+  assertFormatLifecycleIntegrity(events);
+});
 
 test("Format generic pre-chunk incompatibility falls back once with AbortSignal", async () => {
   const seenParams: Record<string, unknown>[] = [];

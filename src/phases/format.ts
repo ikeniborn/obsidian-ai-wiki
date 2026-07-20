@@ -14,6 +14,7 @@ import {
   completionReasoning,
   extractStreamDeltas,
   extractUsage,
+  runWithLiveEvents,
   shouldFallbackStreamToNonStream,
   wrapStreamWithStats,
 } from "./llm-utils";
@@ -394,6 +395,44 @@ export async function* runFormat(
     activeFormatLifecycle = null;
     return lifecycleEvent(current.id, current.action, phase);
   };
+  const createFormatStream = (
+    params: Record<string, unknown>,
+    requestSignal: AbortSignal,
+    onEvent: (event: RunEvent) => void,
+    lifecycle: ReturnType<typeof createNativeRequestLifecycle>,
+    callSite: FormatBudgetContext["callSite"],
+  ) => llm.chat.completions.create(
+    { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
+    {
+      signal: requestSignal,
+      retry: createNativeRequestRetryContext({
+        callSite,
+        opts,
+        signal: requestSignal,
+        onEvent,
+        lifecycle,
+      }),
+    },
+  );
+  const createFormatCompletion = (
+    params: Record<string, unknown>,
+    requestSignal: AbortSignal,
+    onEvent: (event: RunEvent) => void,
+    lifecycle: ReturnType<typeof createNativeRequestLifecycle>,
+    callSite: FormatBudgetContext["callSite"],
+  ) => llm.chat.completions.create(
+    { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+    {
+      signal: requestSignal,
+      retry: createNativeRequestRetryContext({
+        callSite,
+        opts,
+        signal: requestSignal,
+        onEvent,
+        lifecycle,
+      }),
+    },
+  );
 
   async function* callOnce(
     p: Record<string, unknown>,
@@ -413,11 +452,10 @@ export async function* runFormat(
         attempt: streamAttempt,
       });
     }
-    const nativeEvents: RunEvent[] = [];
-    const requestLifecycle = createNativeRequestLifecycle({
+    let requestLifecycle = createNativeRequestLifecycle({
       initial: activeFormatLifecycle,
       callSite: budgetContext.callSite,
-      onEvent: (event) => nativeEvents.push(event),
+      onEvent: () => {},
       attemptOffset: streamAttempt,
     });
     let acc = "";
@@ -430,43 +468,73 @@ export async function* runFormat(
         yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
         yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
       }
-      const request = llm.chat.completions.create(
-        { ...p, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-        {
-          signal,
-          retry: createNativeRequestRetryContext({
+      let callStats: ReturnType<ReturnType<typeof wrapStreamWithStats>["getStats"]>;
+      if (isNativeLlmClient(llm)) {
+        callStats = yield* runWithLiveEvents(async (emit, operationSignal) => {
+          const liveLifecycle = createNativeRequestLifecycle({
+            initial: activeFormatLifecycle!,
             callSite: budgetContext.callSite,
-            opts,
-            signal,
-            onEvent: (event) => nativeEvents.push(event),
-            lifecycle: requestLifecycle,
-          }),
-        },
-      );
-      const rawStream = await request;
-      while (nativeEvents.length > 0) yield nativeEvents.shift()!;
-      const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
-      let producing = false;
-      for await (const chunk of stream) {
-        while (nativeEvents.length > 0) yield nativeEvents.shift()!;
-        streamChunkConsumed = true;
-        const { reasoning, content, outputTokens: tok, inputTokens: inTok } = extractStreamDeltas(chunk);
-        if (!producing && (reasoning.trim() || content.trim())) {
-          if (!isNativeLlmClient(llm)) {
-            yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "producing");
+            onEvent: emit,
+            attemptOffset: streamAttempt,
+          });
+          requestLifecycle = liveLifecycle;
+          const rawStream = await createFormatStream(
+            p,
+            operationSignal,
+            emit,
+            liveLifecycle,
+            budgetContext.callSite,
+          );
+          const { stream, getStats } = wrapStreamWithStats(
+            rawStream,
+            requestStartMs,
+            operationSignal,
+          );
+          for await (const chunk of stream) {
+            streamChunkConsumed = true;
+            const deltas = extractStreamDeltas(chunk);
+            if (deltas.reasoning) {
+              emit({ kind: "assistant_text", delta: deltas.reasoning, isReasoning: true });
+            }
+            if (deltas.content) {
+              acc += deltas.content;
+              emit({ kind: "assistant_text", delta: deltas.content });
+            }
+            if (deltas.outputTokens !== undefined) outputTokens += deltas.outputTokens;
+            if (deltas.inputTokens !== undefined) lastInputTokens = deltas.inputTokens;
+            const finishReason = chunk.choices[0]?.finish_reason;
+            if (finishReason) lastFinishReason = finishReason;
           }
-          producing = true;
+          activeFormatLifecycle = liveLifecycle.current();
+          return getStats();
+        }, signal);
+      } else {
+        const request = createFormatStream(
+          p,
+          signal,
+          () => {},
+          requestLifecycle,
+          budgetContext.callSite,
+        );
+        const rawStream = await request;
+        const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
+        let producing = false;
+        for await (const chunk of stream) {
+          streamChunkConsumed = true;
+          const { reasoning, content, outputTokens: tok, inputTokens: inTok } = extractStreamDeltas(chunk);
+          if (!producing && (reasoning.trim() || content.trim())) {
+            yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "producing");
+            producing = true;
+          }
+          if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
+          if (content) { acc += content; yield { kind: "assistant_text", delta: content }; }
+          if (tok !== undefined) outputTokens += tok;
+          if (inTok !== undefined) lastInputTokens = inTok;
+          const fr = chunk.choices[0]?.finish_reason;
+          if (fr) lastFinishReason = fr;
         }
-        if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
-        if (content) { acc += content; yield { kind: "assistant_text", delta: content }; }
-        if (tok !== undefined) outputTokens += tok;
-        if (inTok !== undefined) lastInputTokens = inTok;
-        const fr = chunk.choices[0]?.finish_reason;
-        if (fr) lastFinishReason = fr;
+        callStats = getStats();
       }
-      while (nativeEvents.length > 0) yield nativeEvents.shift()!;
-      if (isNativeLlmClient(llm)) activeFormatLifecycle = requestLifecycle.current();
-      const callStats = getStats();
       yield formatBudgetEvent(
         activeFormatLifecycle.id,
         p,
@@ -475,7 +543,6 @@ export async function* runFormat(
       );
       if (callStats) yield buildLlmCallStatsEvent(callStats);
     } catch (e) {
-      while (nativeEvents.length > 0) yield nativeEvents.shift()!;
       if (isNativeLlmClient(llm)) activeFormatLifecycle = requestLifecycle.current();
       yield formatBudgetEvent(
         activeFormatLifecycle.id,
@@ -524,11 +591,10 @@ export async function* runFormat(
           attempt: fallbackAttempt,
         });
       }
-      const fallbackEvents: RunEvent[] = [];
-      const fallbackLifecycle = createNativeRequestLifecycle({
+      let fallbackLifecycle = createNativeRequestLifecycle({
         initial: activeFormatLifecycle,
         callSite: budgetContext.callSite,
-        onEvent: (event) => fallbackEvents.push(event),
+        onEvent: () => {},
         attemptOffset: fallbackAttempt,
       });
       const fallbackStartMs = Date.now();
@@ -538,24 +604,35 @@ export async function* runFormat(
           yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
           yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
         }
-        const pending = llm.chat.completions.create(
-          { ...p, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-          {
-            signal,
-            retry: createNativeRequestRetryContext({
+        if (isNativeLlmClient(llm)) {
+          resp = yield* runWithLiveEvents(async (emit, operationSignal) => {
+            const liveLifecycle = createNativeRequestLifecycle({
+              initial: activeFormatLifecycle!,
               callSite: budgetContext.callSite,
-              opts,
-              signal,
-              onEvent: (event) => fallbackEvents.push(event),
-              lifecycle: fallbackLifecycle,
-            }),
-          },
-        );
-        resp = await pending;
-        while (fallbackEvents.length > 0) yield fallbackEvents.shift()!;
-        if (isNativeLlmClient(llm)) activeFormatLifecycle = fallbackLifecycle.current();
+              onEvent: emit,
+              attemptOffset: fallbackAttempt,
+            });
+            fallbackLifecycle = liveLifecycle;
+            const response = await createFormatCompletion(
+              p,
+              operationSignal,
+              emit,
+              liveLifecycle,
+              budgetContext.callSite,
+            );
+            activeFormatLifecycle = liveLifecycle.current();
+            return response;
+          }, signal);
+        } else {
+          resp = await createFormatCompletion(
+            p,
+            signal,
+            () => {},
+            fallbackLifecycle,
+            budgetContext.callSite,
+          );
+        }
       } catch (fallbackError) {
-        while (fallbackEvents.length > 0) yield fallbackEvents.shift()!;
         if (isNativeLlmClient(llm)) activeFormatLifecycle = fallbackLifecycle.current();
         yield formatBudgetEvent(
           activeFormatLifecycle.id,

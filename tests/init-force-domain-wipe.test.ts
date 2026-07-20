@@ -3,8 +3,11 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import test from "node:test";
+import type OpenAI from "openai";
+import { APIError } from "openai";
 import type { DomainEntry } from "../src/domain";
-import type { LlmClient, RunEvent } from "../src/types";
+import { createNativeLlmClient } from "../src/native-llm-executor";
+import type { LlmClient, NativeChatCompletionCreate, RunEvent } from "../src/types";
 import type { VaultAdapter } from "../src/vault-tools";
 
 const pathBrowserifyLoader = `
@@ -199,6 +202,7 @@ class DirectoryAdapter implements VaultAdapter {
   readonly binaryPaths = new Set<string>();
   readonly folders = new Set<string>([""]);
   readonly reads: string[] = [];
+  readonly writes: Array<{ path: string; data: string }> = [];
   readonly removes: string[] = [];
   readonly rmdirs: string[] = [];
   readonly rmdirRecursive: boolean[] = [];
@@ -251,6 +255,7 @@ class DirectoryAdapter implements VaultAdapter {
   }
 
   async write(path: string, data: string): Promise<void> {
+    this.writes.push({ path, data });
     this.addFolder(path.split("/").slice(0, -1).join("/"));
     if (this.binaryPaths.has(path)) {
       this.binaryFiles.set(path, new TextEncoder().encode(data));
@@ -1098,6 +1103,79 @@ function bootstrapLlm(): LlmClient {
   } as unknown as LlmClient;
 }
 
+function nativeReinitLlm(calls: {
+  bootstrap: number;
+  evidence: number;
+  synthesis: number;
+}): LlmClient {
+  let bootstrapEvidencePrepared = false;
+  const create = (async (params: unknown) => {
+    const prompt = JSON.stringify(params);
+    const chunkId = prompt.match(/CHUNK_ID ([^\s\\"]+)/)?.[1];
+    if (chunkId) {
+      if (!bootstrapEvidencePrepared) {
+        bootstrapEvidencePrepared = true;
+        return mockResponse(params, JSON.stringify({
+          packets: [],
+          noEvidence: [{ chunkId, reason: "Entity types are not configured yet." }],
+        }));
+      }
+      calls.evidence += 1;
+      return mockResponse(params, JSON.stringify({
+        packets: [{
+          id: `packet-${chunkId}`,
+          chunkId,
+          entityKey: "created",
+          entityType: "concept",
+          facts: ["Alpha."],
+          exactSourceRanges: [{ startLine: 3, endLine: 3 }],
+          links: [],
+          sourceAnchor: "src/a.md:3",
+        }],
+        noEvidence: [],
+      }));
+    }
+    if (prompt.includes("Entity bundle:")) {
+      calls.synthesis += 1;
+      if (calls.synthesis === 1) {
+        throw APIError.generate(
+          502,
+          { error: { message: "temporary synthesis failure" } },
+          undefined,
+          new Headers({ "retry-after-ms": "0" }),
+        );
+      }
+      return mockResponse(params, JSON.stringify({
+        reasoning: "Create one page.",
+        actions: [{
+          kind: "create",
+          entityKey: "created",
+          path: "!Wiki/demo/concept/wiki_demo_created.md",
+          annotation: "Created concept.",
+          content: "# Created\n\n## Facts\nAlpha.\n",
+        }],
+        skips: [],
+        entity_types_delta: [],
+      }));
+    }
+    calls.bootstrap += 1;
+    return mockResponse(params, JSON.stringify({
+      reasoning: "",
+      id: "demo",
+      name: "Demo",
+      wiki_folder: "ignored-by-force",
+      entity_types: [{
+        type: "concept",
+        description: "Concept",
+        extraction_cues: ["Alpha"],
+        wiki_subfolder: "concept",
+      }],
+      language_notes: "",
+    }));
+  }) as NativeChatCompletionCreate;
+  return createNativeLlmClient(create);
+}
+
 function domain(wikiFolder = "demo"): DomainEntry {
   return {
     id: "demo",
@@ -1222,6 +1300,56 @@ test("force init emits one wipe, proves absence, then creates a fresh domain bef
   assert.ok(createdIndex > wipeIndexes[0]);
   assert.ok(firstSourceIndex > createdIndex);
   assert.equal(events.slice(wipeIndexes[0], createdIndex).some((event) => event.kind === "domain_updated"), false);
+});
+
+test("native force re-init retries synthesis without replaying real effects", async () => {
+  const adapter = seededAdapter();
+  const calls = { bootstrap: 0, evidence: 0, synthesis: 0 };
+  const events: RunEvent[] = [];
+
+  for await (const event of runInit(
+    ["demo", "--force"],
+    new VaultTools(adapter, "/vault"),
+    nativeReinitLlm(calls),
+    "m",
+    [domain()],
+    "Vault",
+    new AbortController().signal,
+    {
+      inputBudgetTokens: 20_000,
+      maxTokens: 1_000,
+      structuredRetries: 0,
+      nativeRequestRetries: 1,
+      nativeRequestIdleTimeoutMs: 0,
+      semanticCompression: { profile: "balanced", operation: "ingest" },
+    },
+  )) events.push(event);
+
+  assert.equal(events.filter((event) =>
+    event.kind === "tool_use" && event.name === "WipeDomain").length, 1, JSON.stringify({
+      calls,
+      errors: events.filter((event) => event.kind === "error" || event.kind === "result"),
+    }));
+  assert.equal(events.filter((event) => event.kind === "wipe_complete").length, 1);
+  assert.equal(events.filter((event) =>
+    event.kind === "tool_use"
+    && event.name === "Read"
+    && event.input.path === "src/a.md").length, 1);
+  assert.equal(calls.bootstrap, 1);
+  assert.equal(calls.evidence, 1);
+  assert.equal(calls.synthesis, 2);
+  assert.equal(adapter.writes.filter(({ path }) =>
+    path === "!Wiki/demo/concept/wiki_demo_created.md").length, 1);
+  assert.equal(adapter.writes.filter(({ path, data }) =>
+    path === "!Wiki/demo/index.jsonl" && data !== "").length, 1);
+  assert.equal(adapter.files.has("!Wiki/demo/concept/old.md"), false);
+  assert.equal(
+    adapter.files.get("!Wiki/demo/concept/wiki_demo_created.md"),
+    "# Created\n\n## Facts\nAlpha.\n\n## Sources\n- [[a]]",
+  );
+  assert.equal(events.filter((event) =>
+    event.kind === "file_done" && event.file === "src/a.md").length, 1);
+  assert.equal(events.some((event) => event.kind === "error"), false);
 });
 
 test("force init reports terminal wipe failure and starts zero source ingestion", async () => {

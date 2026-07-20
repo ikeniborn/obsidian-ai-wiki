@@ -3,11 +3,8 @@ import { readFileSync } from "node:fs";
 import { createRequire, register } from "node:module";
 import { setTimeout as nodeSetTimeout } from "node:timers";
 import test from "node:test";
-import type OpenAI from "openai";
-import { APIError } from "openai";
 
 import { DEFAULT_SETTINGS, type LlmWikiPluginSettings, type RunEvent } from "../src/types";
-import * as nativeExecutor from "../src/native-llm-executor";
 import { VaultTools, type VaultAdapter } from "../src/vault-tools";
 
 const pathBrowserifyLoader = `
@@ -456,108 +453,6 @@ test("native operation-level idle exhaustion never continues the outer runOperat
   assert.equal(calls, 1);
   assert.equal(events.some((event) => event.kind === "result" && event.text === "must-not-replay"), false);
   assert.equal(events.some((event) => event.kind === "system" && event.message.includes("retrying")), false);
-});
-
-test("native synthesis 502 retries only the request and keeps Re-init effects exactly once", async () => {
-  type CreateNativeClient = (create: (
-    params: unknown,
-    options: { signal: AbortSignal },
-  ) => Promise<OpenAI.Chat.ChatCompletion>) => {
-    chat: { completions: { create: (params: unknown, options: unknown) => Promise<OpenAI.Chat.ChatCompletion> } };
-  };
-  const createNativeClient = (nativeExecutor as unknown as {
-    createNativeLlmClient?: CreateNativeClient;
-  }).createNativeLlmClient;
-  assert.equal(typeof createNativeClient, "function", "native executor client adapter is missing");
-
-  let synthesisAttempts = 0;
-  const llm = createNativeClient!(async (_params, _options) => {
-    synthesisAttempts++;
-    if (synthesisAttempts === 1) {
-      throw APIError.generate(502, {}, undefined, new Headers());
-    }
-    return {
-      id: "synthesis-ok",
-      object: "chat.completion",
-      created: 0,
-      model: "mock",
-      choices: [{
-        index: 0,
-        finish_reason: "stop",
-        logprobs: null,
-        message: { role: "assistant", content: "ok", refusal: null },
-      }],
-      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
-    };
-  });
-  const runner = new AgentRunner(
-    llm as never,
-    settings(),
-    new VaultTools(adapter(), "/vault"),
-    "Vault",
-    [],
-  );
-  let runOperationCalls = 0;
-  let wipeDomain = 0;
-  let sourceReads = 0;
-  let evidenceApplies = 0;
-  let pageApplies = 0;
-  let indexApplies = 0;
-
-  (runner as unknown as {
-    runOperation: (req: { signal: AbortSignal }) => AsyncGenerator<RunEvent>;
-  }).runOperation = async function* (req) {
-    runOperationCalls++;
-    wipeDomain++;
-    yield { kind: "tool_use", name: "WipeDomain", input: { folder: "!Wiki/demo" } };
-    sourceReads++;
-    evidenceApplies++;
-    let current = { id: "synthesis", action: "synthesize_wiki_pages" as const };
-    const onEvent = (_event: RunEvent) => {};
-    await llm.chat.completions.create({ model: "mock", messages: [], stream: false }, {
-      signal: req.signal,
-      retry: {
-        logicalRequestId: "synthesis",
-        callSite: "ingest.synthesize",
-        maxRetries: 1,
-        idleTimeoutMs: 0,
-        signal: req.signal,
-        onEvent,
-        lifecycle: {
-          begin(attempt: number) {
-            current = attempt === 0
-              ? current
-              : { id: `synthesis:retry-${attempt}`, action: "retry_model_request" };
-          },
-          phase() {},
-          close() {},
-          current: () => current,
-        },
-        delay: async () => {},
-      },
-    });
-    pageApplies++;
-    indexApplies++;
-    yield { kind: "result", durationMs: 1, text: "ok" };
-  };
-
-  for await (const _event of runner.run({
-    operation: "init",
-    args: ["demo", "--force"],
-    cwd: "/vault",
-    signal: new AbortController().signal,
-    timeoutMs: 0,
-  })) {
-    // Drain the simulated full Re-init boundary.
-  }
-
-  assert.equal(runOperationCalls, 1);
-  assert.equal(wipeDomain, 1);
-  assert.equal(sourceReads, 1);
-  assert.equal(evidenceApplies, 1);
-  assert.equal(pageApplies, 1);
-  assert.equal(indexApplies, 1);
-  assert.equal(synthesisAttempts, 2);
 });
 
 test("silent idle abort after visible assistant text does not replay the operation", async () => {
