@@ -436,24 +436,26 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           }),
       );
 
-    new Setting(containerEl)
-      .setName(T.settings.llmConnectionTimeout_name)
-      .setDesc(T.settings.llmConnectionTimeout_desc)
-      .addText((t) =>
-        t.setPlaceholder("15")
-          .setValue(String(s.llmConnectionTimeoutSec))
-          .onChange(async (v) => {
-            const next = parseLlmConnectionTimeoutSec(v, 0);
-            if (next >= 1) {
-              s.llmConnectionTimeoutSec = next;
-              await this.plugin.saveSettings();
-            }
-          }),
-      );
+    if (eff.backend === "native-agent") {
+      new Setting(containerEl)
+        .setName(T.settings.llmConnectionTimeout_name)
+        .setDesc(T.settings.llmConnectionTimeout_desc)
+        .addText((t) =>
+          t.setPlaceholder("15")
+            .setValue(String(s.llmConnectionTimeoutSec))
+            .onChange(async (v) => {
+              const next = parseLlmConnectionTimeoutSec(v, 0);
+              if (next >= 1) {
+                s.llmConnectionTimeoutSec = next;
+                await this.plugin.saveSettings();
+              }
+            }),
+        );
+    }
 
     new Setting(containerEl)
-      .setName(T.settings.llmIdleTimeout_name)
-      .setDesc(T.settings.llmIdleTimeout_desc)
+      .setName(eff.backend === "native-agent" ? T.settings.llmRequestIdleTimeout_name : T.settings.llmIdleTimeout_name)
+      .setDesc(eff.backend === "native-agent" ? T.settings.llmRequestIdleTimeout_desc : T.settings.llmIdleTimeout_desc)
       .addText((t) =>
         t.setPlaceholder("300")
           .setValue(String(s.llmIdleTimeoutSec))

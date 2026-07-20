@@ -157,7 +157,27 @@ test("runtime control validation rejects fractions, unsafe idle timers, and inva
   }
 });
 
-test("native labels request retries while Claude labels idle retries", () => {
+test("native-only connection control and backend-specific idle/retry labels", () => {
+  const runtimeControlsStart = settingsSource.indexOf(".setName(T.settings.timeouts_name)");
+  const nativeConnectionBlock = sourceBlock(
+    settingsSource,
+    'if (eff.backend === "native-agent")',
+    runtimeControlsStart,
+  );
+  assert.match(nativeConnectionBlock.body, /T\.settings\.llmConnectionTimeout_name/);
+  assert.match(nativeConnectionBlock.body, /T\.settings\.llmConnectionTimeout_desc/);
+  assert.ok(
+    nativeConnectionBlock.end < settingsSource.indexOf("T.settings.llmRequestIdleTimeout_name"),
+    "shared idle control must remain outside the native-only connection block",
+  );
+  assert.match(
+    settingsSource,
+    /eff\.backend === "native-agent"\s*\? T\.settings\.llmRequestIdleTimeout_name\s*:\s*T\.settings\.llmIdleTimeout_name/,
+  );
+  assert.match(
+    settingsSource,
+    /eff\.backend === "native-agent"\s*\? T\.settings\.llmRequestIdleTimeout_desc\s*:\s*T\.settings\.llmIdleTimeout_desc/,
+  );
   assert.match(
     settingsSource,
     /eff\.backend === "native-agent"\s*\? T\.settings\.llmRequestRetries_name\s*:\s*T\.settings\.llmIdleRetries_name/,
@@ -169,6 +189,7 @@ test("native labels request retries while Claude labels idle retries", () => {
   for (const lang of ["en", "ru", "es"] as const) {
     const labels = i18nFor(lang).settings;
     assert.ok(labels.llmConnectionTimeout_name.length > 0, lang);
+    assert.ok(labels.llmRequestIdleTimeout_name.length > 0, lang);
     assert.ok(labels.llmRequestRetries_name.length > 0, lang);
     assert.match(labels.llmConnectionTimeout_desc, /mobile|мобиль|móvil/i, lang);
   }

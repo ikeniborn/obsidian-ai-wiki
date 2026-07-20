@@ -1,4 +1,5 @@
 import { buildProxyUrl, parseNoProxy, shouldBypass, type ProxyConfig } from "./proxy";
+import type { NativeTransportDiagnostic } from "./types";
 
 declare const require: NodeJS.Require;
 
@@ -107,9 +108,28 @@ export function selectNativeFetch(options: {
   proxyFetch: typeof fetch | null;
   directDesktopFetch: () => typeof fetch;
 }): typeof fetch {
-  if (options.isMobile) return options.mobileFetch;
-  if (options.proxyFetch) return options.proxyFetch;
-  return options.directDesktopFetch();
+  return selectNativeTransport(options).fetch;
+}
+
+export function selectNativeTransport(options: {
+  isMobile: boolean;
+  mobileFetch: typeof fetch;
+  proxyFetch: typeof fetch | null;
+  directDesktopFetch: () => typeof fetch;
+}): { fetch: typeof fetch; diagnostic?: NativeTransportDiagnostic } {
+  if (options.isMobile) {
+    return {
+      fetch: options.mobileFetch,
+      diagnostic: {
+        transport: "mobile-host",
+        requestedScope: "dns_tcp_tls_establishment",
+        exactConnectTimeoutAvailable: false,
+        hostTransportRetained: true,
+      },
+    };
+  }
+  if (options.proxyFetch) return { fetch: options.proxyFetch };
+  return { fetch: options.directDesktopFetch() };
 }
 
 export function createNativeOpenAiFetch(options: {
@@ -120,6 +140,7 @@ export function createNativeOpenAiFetch(options: {
   connectionTimeoutMs: number;
   onProxySelected?: (config: ProxyConfig) => void;
   onProxyError?: (error: unknown) => void;
+  onTransportDiagnostic?: (diagnostic: NativeTransportDiagnostic) => void;
 }): typeof fetch {
   let proxyFetch: typeof fetch | null = null;
   if (!options.isMobile && options.proxyConfig.enabled) {
@@ -133,12 +154,14 @@ export function createNativeOpenAiFetch(options: {
       options.onProxyError?.(error);
     }
   }
-  return selectNativeFetch({
+  const selection = selectNativeTransport({
     isMobile: options.isMobile,
     mobileFetch: options.mobileFetch,
     proxyFetch,
     directDesktopFetch: () => createDirectDesktopFetch(options.connectionTimeoutMs),
   });
+  if (selection.diagnostic) options.onTransportDiagnostic?.(selection.diagnostic);
+  return selection.fetch;
 }
 
 function normalizeConnectionTimeout(timeoutMs: number): number {

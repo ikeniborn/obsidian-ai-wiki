@@ -3,7 +3,13 @@ import { join } from "path-browserify";
 import { AI_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
 import { validateDomainId, type DomainEntry, type AddDomainInput } from "./domain";
 import type LlmWikiPlugin from "./main";
-import type { RunEvent, RunHistoryEntry, WikiOperation, OnFileError } from "./types";
+import type {
+  NativeTransportDiagnostic,
+  OnFileError,
+  RunEvent,
+  RunHistoryEntry,
+  WikiOperation,
+} from "./types";
 import { AgentRunner, resolveFollowUpPolicyOperation } from "./agent-runner";
 import type { ChatMessage } from "./types";
 import { VaultTools, type VaultAdapter } from "./vault-tools";
@@ -103,6 +109,7 @@ export class WikiController {
   private _currentClaudeClient: ClaudeCliClient | null = null;
   private _pendingFormat: { originalPath: string; tempPath: string; chat: ChatMessage[] } | null = null;
   private _currentLogMeta: { backend: string; model: string; agentLogEnabled: boolean } | null = null;
+  private _currentNativeTransportDiagnostic: NativeTransportDiagnostic | undefined;
   private _llmCallIndex = 0;
   private _reasoningBuf = "";
   private _reasoningBufBytes = 0;
@@ -751,10 +758,14 @@ export class WikiController {
       });
     }
 
+    this._currentNativeTransportDiagnostic = llm.nativeTransportDiagnostic;
     return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`, Platform.isMobile);
   }
 
   private async logEvent(_vaultRoot: string, sessionId: string, op: WikiOperation, domainId: string | undefined, ev: RunEvent): Promise<void> {
+    if (ev.kind === "run_config" && this._currentNativeTransportDiagnostic) {
+      ev.nativeTransport = this._currentNativeTransportDiagnostic;
+    }
     if (!(this._currentLogMeta?.agentLogEnabled ?? this.plugin.settings.agentLogEnabled)) return;
 
     const adapter = this.app.vault.adapter;

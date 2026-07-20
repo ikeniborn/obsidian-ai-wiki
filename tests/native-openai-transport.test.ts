@@ -285,6 +285,74 @@ test("native client selects mobile, proxy, and direct desktop transports", () =>
   assert.equal(directDesktopSelections, 1);
 });
 
+test("mobile transport selection returns mandatory connection-scope diagnostic metadata", () => {
+  const selectNativeTransport = (transport as Record<string, unknown>).selectNativeTransport;
+  assert.equal(typeof selectNativeTransport, "function");
+
+  const mobileFetch = async () => new Response("mobile");
+  const selection = (selectNativeTransport as (options: {
+    isMobile: boolean;
+    mobileFetch: typeof fetch;
+    proxyFetch: typeof fetch | null;
+    directDesktopFetch: () => typeof fetch;
+  }) => { fetch: typeof fetch; diagnostic: unknown })({
+    isMobile: true,
+    mobileFetch,
+    proxyFetch: async () => new Response("proxy"),
+    directDesktopFetch: () => async () => new Response("desktop"),
+  });
+
+  assert.equal(selection.fetch, mobileFetch);
+  assert.deepEqual(selection.diagnostic, {
+    transport: "mobile-host",
+    requestedScope: "dns_tcp_tls_establishment",
+    exactConnectTimeoutAvailable: false,
+    hostTransportRetained: true,
+  });
+});
+
+test("mobile native client exposes transport diagnostic for run metadata", () => {
+  const client = createNativeOpenAiClient({
+    baseURL: "https://example.invalid/v1",
+    apiKey: "test-key",
+    connectionTimeoutMs: 15_000,
+    idleTimeoutMs: 300_000,
+    isMobile: true,
+    proxyConfig: { enabled: false, url: "" },
+    mobileFetch: async () => new Response("unused"),
+  });
+
+  assert.deepEqual((client as unknown as { nativeTransportDiagnostic?: unknown }).nativeTransportDiagnostic, {
+    transport: "mobile-host",
+    requestedScope: "dns_tcp_tls_establishment",
+    exactConnectTimeoutAvailable: false,
+    hostTransportRetained: true,
+  });
+});
+
+test("controller enriches metadata-only run configuration before logging or view delivery", () => {
+  const controllerSource = readFileSync(new URL("../src/controller.ts", import.meta.url), "utf8");
+  const viewSource = readFileSync(new URL("../src/view.ts", import.meta.url), "utf8");
+  const logEventStart = controllerSource.indexOf("private async logEvent");
+  const logEvent = controllerSource.slice(
+    logEventStart,
+    controllerSource.indexOf("private async dispatch(", logEventStart),
+  );
+  const enrichment = logEvent.indexOf('ev.kind === "run_config"');
+  const loggingOptOut = logEvent.indexOf("agentLogEnabled)) return");
+
+  assert.match(
+    controllerSource,
+    /this\._currentNativeTransportDiagnostic\s*=\s*llm\.nativeTransportDiagnostic/,
+  );
+  assert.ok(enrichment >= 0 && enrichment < loggingOptOut);
+  assert.match(logEvent, /ev\.nativeTransport\s*=\s*this\._currentNativeTransportDiagnostic/);
+  assert.match(
+    viewSource,
+    /isTelemetryOnlyRunEvent[\s\S]*?event\.kind === "run_config"/,
+  );
+});
+
 test("healthy desktop non-stream generation beyond 15 seconds survives connection timeout", { timeout: 20_000 }, async () => {
   await withServer(async (response) => {
     await new Promise<void>((resolve) => nodeSetTimeout(resolve, 15_100));

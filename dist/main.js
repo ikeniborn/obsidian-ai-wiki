@@ -26679,6 +26679,8 @@ var en = {
     structuredRetries_desc: "Retries for invalid JSON or invalid framed output after Zod validation, 0\u20133. Default 1. \u2191 higher success on weaker models, more latency/tokens \xB7 \u2193 faster, more failures.",
     llmConnectionTimeout_name: "Connection timeout (seconds)",
     llmConnectionTimeout_desc: "Desktop only: maximum time for DNS/TCP/TLS establishment. It does not limit response headers, body, or generation. Default 15. Mobile keeps its current transport and cannot guarantee an exact connection-only timeout.",
+    llmRequestIdleTimeout_name: "Request idle timeout (seconds)",
+    llmRequestIdleTimeout_desc: "Seconds without model output before aborting a native request attempt. 0 = disabled; maximum 2,146,999. Default 300. \u2191 more patience for slow models \xB7 \u2193 catches stalls sooner.",
     llmIdleTimeout_name: "LLM idle timeout (seconds)",
     llmIdleTimeout_desc: "Seconds of LLM silence before aborting the attempt. 0 = disabled; maximum 2,146,999. Default 300. \u2191 more patience for slow models \xB7 \u2193 catches stalls sooner.",
     llmRequestRetries_name: "Request retries",
@@ -27095,6 +27097,8 @@ var ru = {
     structuredRetries_desc: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u043F\u0440\u0438 \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E\u043C JSON \u0438\u043B\u0438 \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E\u043C framed-\u043E\u0442\u0432\u0435\u0442\u0435 \u043F\u043E\u0441\u043B\u0435 Zod validation, 0\u20133. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 1. \u2191 \u043D\u0430\u0434\u0451\u0436\u043D\u0435\u0435 \u043D\u0430 \u0441\u043B\u0430\u0431\u044B\u0445 \u043C\u043E\u0434\u0435\u043B\u044F\u0445, \u0434\u043E\u0440\u043E\u0436\u0435 \u043F\u043E \u0442\u043E\u043A\u0435\u043D\u0430\u043C/\u0432\u0440\u0435\u043C\u0435\u043D\u0438 \xB7 \u2193 \u0431\u044B\u0441\u0442\u0440\u0435\u0435, \u0431\u043E\u043B\u044C\u0448\u0435 \u043E\u0442\u043A\u0430\u0437\u043E\u0432.",
     llmConnectionTimeout_name: "\u0422\u0430\u0439\u043C\u0430\u0443\u0442 \u0441\u043E\u0435\u0434\u0438\u043D\u0435\u043D\u0438\u044F (\u0441\u0435\u043A\u0443\u043D\u0434\u044B)",
     llmConnectionTimeout_desc: "\u0422\u043E\u043B\u044C\u043A\u043E desktop: \u043C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u0432\u0440\u0435\u043C\u0435\u043D\u0438 \u043D\u0430 DNS/TCP/TLS-\u0441\u043E\u0435\u0434\u0438\u043D\u0435\u043D\u0438\u0435. \u041D\u0435 \u043E\u0433\u0440\u0430\u043D\u0438\u0447\u0438\u0432\u0430\u0435\u0442 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0438, \u0442\u0435\u043B\u043E \u043E\u0442\u0432\u0435\u0442\u0430 \u0438\u043B\u0438 \u0433\u0435\u043D\u0435\u0440\u0430\u0446\u0438\u044E. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 15. \u041D\u0430 \u043C\u043E\u0431\u0438\u043B\u044C\u043D\u043E\u043C \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442\u0441\u044F \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u0442\u0440\u0430\u043D\u0441\u043F\u043E\u0440\u0442 \u0431\u0435\u0437 \u0433\u0430\u0440\u0430\u043D\u0442\u0438\u0438 \u0442\u043E\u0447\u043D\u043E\u0433\u043E \u0442\u0430\u0439\u043C\u0430\u0443\u0442\u0430 \u0442\u043E\u043B\u044C\u043A\u043E \u0434\u043B\u044F \u0441\u043E\u0435\u0434\u0438\u043D\u0435\u043D\u0438\u044F.",
+    llmRequestIdleTimeout_name: "\u0422\u0430\u0439\u043C\u0430\u0443\u0442 \u043F\u0440\u043E\u0441\u0442\u043E\u044F \u0437\u0430\u043F\u0440\u043E\u0441\u0430 (\u0441\u0435\u043A\u0443\u043D\u0434\u044B)",
+    llmRequestIdleTimeout_desc: "\u0421\u0435\u043A\u0443\u043D\u0434 \u0431\u0435\u0437 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 \u0434\u043E \u043F\u0440\u0435\u0440\u044B\u0432\u0430\u043D\u0438\u044F \u043F\u043E\u043F\u044B\u0442\u043A\u0438 native-\u0437\u0430\u043F\u0440\u043E\u0441\u0430. 0 = \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E; \u043C\u0430\u043A\u0441\u0438\u043C\u0443\u043C 2 146 999. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 300. \u2191 \u0442\u0435\u0440\u043F\u0435\u043B\u0438\u0432\u0435\u0435 \u043A \u043C\u0435\u0434\u043B\u0435\u043D\u043D\u044B\u043C \u043C\u043E\u0434\u0435\u043B\u044F\u043C \xB7 \u2193 \u0440\u0430\u043D\u044C\u0448\u0435 \u043B\u043E\u0432\u0438\u0442 \u0437\u0430\u0432\u0438\u0441\u0430\u043D\u0438\u044F.",
     llmIdleTimeout_name: "\u0422\u0430\u0439\u043C\u0430\u0443\u0442 \u043F\u0440\u043E\u0441\u0442\u043E\u044F LLM (\u0441\u0435\u043A\u0443\u043D\u0434\u044B)",
     llmIdleTimeout_desc: "\u0421\u0435\u043A\u0443\u043D\u0434 \u0442\u0438\u0448\u0438\u043D\u044B LLM \u0434\u043E \u043F\u0440\u0435\u0440\u044B\u0432\u0430\u043D\u0438\u044F \u043F\u043E\u043F\u044B\u0442\u043A\u0438. 0 = \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E; \u043C\u0430\u043A\u0441\u0438\u043C\u0443\u043C 2 146 999. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 300. \u2191 \u0442\u0435\u0440\u043F\u0435\u043B\u0438\u0432\u0435\u0435 \u043A \u043C\u0435\u0434\u043B\u0435\u043D\u043D\u044B\u043C \u043C\u043E\u0434\u0435\u043B\u044F\u043C \xB7 \u2193 \u0440\u0430\u043D\u044C\u0448\u0435 \u043B\u043E\u0432\u0438\u0442 \u0437\u0430\u0432\u0438\u0441\u0430\u043D\u0438\u044F.",
     llmRequestRetries_name: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u0437\u0430\u043F\u0440\u043E\u0441\u0430",
@@ -27510,6 +27514,8 @@ var es = {
     structuredRetries_desc: "Reintentos para JSON inv\xE1lido o salida framed inv\xE1lida tras validaci\xF3n Zod, 0\u20133. Por defecto 1. \u2191 m\xE1s \xE9xito en modelos d\xE9biles, m\xE1s latencia/tokens \xB7 \u2193 m\xE1s r\xE1pido, m\xE1s fallos.",
     llmConnectionTimeout_name: "Tiempo de espera de conexi\xF3n (segundos)",
     llmConnectionTimeout_desc: "Solo escritorio: tiempo m\xE1ximo para establecer DNS/TCP/TLS. No limita cabeceras, cuerpo ni generaci\xF3n. Por defecto 15. En m\xF3vil se mantiene el transporte actual sin garantizar un tiempo exacto solo para la conexi\xF3n.",
+    llmRequestIdleTimeout_name: "Tiempo de espera de inactividad de solicitud (segundos)",
+    llmRequestIdleTimeout_desc: "Segundos sin salida del modelo antes de abortar un intento de solicitud nativa. 0 = desactivado; m\xE1ximo 2.146.999. Por defecto 300. \u2191 m\xE1s paciencia con modelos lentos \xB7 \u2193 detecta bloqueos antes.",
     llmIdleTimeout_name: "Tiempo de espera de inactividad LLM (segundos)",
     llmIdleTimeout_desc: "Segundos de silencio del LLM antes de abortar el intento. 0 = desactivado; m\xE1ximo 2.146.999. Por defecto 300. \u2191 m\xE1s paciencia con modelos lentos \xB7 \u2193 detecta bloqueos antes.",
     llmRequestRetries_name: "Reintentos de solicitud",
@@ -33193,16 +33199,18 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         }
       })
     );
-    new import_obsidian5.Setting(containerEl).setName(T.settings.llmConnectionTimeout_name).setDesc(T.settings.llmConnectionTimeout_desc).addText(
-      (t) => t.setPlaceholder("15").setValue(String(s.llmConnectionTimeoutSec)).onChange(async (v) => {
-        const next = parseLlmConnectionTimeoutSec(v, 0);
-        if (next >= 1) {
-          s.llmConnectionTimeoutSec = next;
-          await this.plugin.saveSettings();
-        }
-      })
-    );
-    new import_obsidian5.Setting(containerEl).setName(T.settings.llmIdleTimeout_name).setDesc(T.settings.llmIdleTimeout_desc).addText(
+    if (eff.backend === "native-agent") {
+      new import_obsidian5.Setting(containerEl).setName(T.settings.llmConnectionTimeout_name).setDesc(T.settings.llmConnectionTimeout_desc).addText(
+        (t) => t.setPlaceholder("15").setValue(String(s.llmConnectionTimeoutSec)).onChange(async (v) => {
+          const next = parseLlmConnectionTimeoutSec(v, 0);
+          if (next >= 1) {
+            s.llmConnectionTimeoutSec = next;
+            await this.plugin.saveSettings();
+          }
+        })
+      );
+    }
+    new import_obsidian5.Setting(containerEl).setName(eff.backend === "native-agent" ? T.settings.llmRequestIdleTimeout_name : T.settings.llmIdleTimeout_name).setDesc(eff.backend === "native-agent" ? T.settings.llmRequestIdleTimeout_desc : T.settings.llmIdleTimeout_desc).addText(
       (t) => t.setPlaceholder("300").setValue(String(s.llmIdleTimeoutSec)).onChange(async (v) => {
         const next = parseLlmIdleTimeoutSec(v, -1);
         if (next >= 0) {
@@ -63744,10 +63752,20 @@ function createDirectDesktopFetch(connectionTimeoutMs = 15e3) {
   };
   return wrapped;
 }
-function selectNativeFetch(options) {
-  if (options.isMobile) return options.mobileFetch;
-  if (options.proxyFetch) return options.proxyFetch;
-  return options.directDesktopFetch();
+function selectNativeTransport(options) {
+  if (options.isMobile) {
+    return {
+      fetch: options.mobileFetch,
+      diagnostic: {
+        transport: "mobile-host",
+        requestedScope: "dns_tcp_tls_establishment",
+        exactConnectTimeoutAvailable: false,
+        hostTransportRetained: true
+      }
+    };
+  }
+  if (options.proxyFetch) return { fetch: options.proxyFetch };
+  return { fetch: options.directDesktopFetch() };
 }
 function createNativeOpenAiFetch(options) {
   let proxyFetch = null;
@@ -63762,12 +63780,14 @@ function createNativeOpenAiFetch(options) {
       options.onProxyError?.(error);
     }
   }
-  return selectNativeFetch({
+  const selection = selectNativeTransport({
     isMobile: options.isMobile,
     mobileFetch: options.mobileFetch,
     proxyFetch,
     directDesktopFetch: () => createDirectDesktopFetch(options.connectionTimeoutMs)
   });
+  if (selection.diagnostic) options.onTransportDiagnostic?.(selection.diagnostic);
+  return selection.fetch;
 }
 function normalizeConnectionTimeout(timeoutMs) {
   return Number.isFinite(timeoutMs) && timeoutMs > 0 ? Math.floor(timeoutMs) : 15e3;
@@ -63779,6 +63799,7 @@ function sdkTimeoutForIdleMs(idleTimeoutMs) {
   return Math.min(MAX_SAFE_TIMER_MS, Math.floor(idleTimeoutMs) + 1e3);
 }
 function createNativeOpenAiClient(options) {
+  let nativeTransportDiagnostic;
   const nativeFetch = createNativeOpenAiFetch({
     baseURL: options.baseURL,
     isMobile: options.isMobile,
@@ -63786,7 +63807,10 @@ function createNativeOpenAiClient(options) {
     mobileFetch: options.mobileFetch,
     connectionTimeoutMs: options.connectionTimeoutMs,
     onProxySelected: options.onProxySelected,
-    onProxyError: options.onProxyError
+    onProxyError: options.onProxyError,
+    onTransportDiagnostic: (diagnostic) => {
+      nativeTransportDiagnostic = diagnostic;
+    }
   });
   const raw = new OpenAI({
     baseURL: options.baseURL,
@@ -63800,7 +63824,9 @@ function createNativeOpenAiClient(options) {
     raw.chat.completions
   );
   const executorClient = createNativeLlmClient(rawCreate);
-  return options.isMobile ? wrapMobileNoStream(executorClient) : executorClient;
+  const client = options.isMobile ? wrapMobileNoStream(executorClient) : executorClient;
+  if (nativeTransportDiagnostic) client.nativeTransportDiagnostic = nativeTransportDiagnostic;
+  return client;
 }
 
 // src/okf-export.ts
@@ -63986,6 +64012,7 @@ var WikiController = class {
   _currentClaudeClient = null;
   _pendingFormat = null;
   _currentLogMeta = null;
+  _currentNativeTransportDiagnostic;
   _llmCallIndex = 0;
   _reasoningBuf = "";
   _reasoningBufBytes = 0;
@@ -64590,9 +64617,13 @@ var WikiController = class {
         }
       });
     }
+    this._currentNativeTransportDiagnostic = llm.nativeTransportDiagnostic;
     return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`, import_obsidian10.Platform.isMobile);
   }
   async logEvent(_vaultRoot, sessionId, op, domainId, ev) {
+    if (ev.kind === "run_config" && this._currentNativeTransportDiagnostic) {
+      ev.nativeTransport = this._currentNativeTransportDiagnostic;
+    }
     if (!(this._currentLogMeta?.agentLogEnabled ?? this.plugin.settings.agentLogEnabled)) return;
     const adapter = this.app.vault.adapter;
     const path5 = `${this.pluginDir()}/agent.jsonl`;

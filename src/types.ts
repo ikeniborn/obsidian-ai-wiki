@@ -179,7 +179,11 @@ type TransportRetryMetadata = {
 
 export type RunEvent =
   | { kind: "system"; message: string; sessionId?: string }
-  | { kind: "run_config"; llmIdleTimeoutMs: number }
+  | {
+      kind: "run_config";
+      llmIdleTimeoutMs: number;
+      nativeTransport?: NativeTransportDiagnostic;
+    }
   | {
       kind: "wipe_manifest_chunk";
       domainId: string;
@@ -416,6 +420,7 @@ export type NativeLlmExecutionInput =
 export type LlmClient = {
   /** True only for the executor-backed native adapter; absent for Claude and test clients. */
   nativeRequestExecutor?: true;
+  nativeTransportDiagnostic?: NativeTransportDiagnostic;
   emitsPromptBudget?: boolean;
   beginPromptBudgetRequest?: (requestId: string) => void;
   chat: {
@@ -430,6 +435,13 @@ export type LlmClient = {
       ): Promise<OpenAI.Chat.ChatCompletion>;
     };
   };
+};
+
+export type NativeTransportDiagnostic = {
+  transport: "mobile-host";
+  requestedScope: "dns_tcp_tls_establishment";
+  exactConnectTimeoutAvailable: false;
+  hostTransportRetained: true;
 };
 
 export type OutputLanguage = "auto" | "ru" | "en" | "es";
