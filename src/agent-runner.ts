@@ -243,7 +243,12 @@ export class AgentRunner {
       req.policyOperation,
     );
     const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1000;
-    yield { kind: "run_config", llmIdleTimeoutMs: idleTimeoutMs };
+    const connectionTimeoutMs = (this.settings.llmConnectionTimeoutSec ?? 15) * 1000;
+    yield {
+      kind: "run_config",
+      llmConnectionTimeoutMs: connectionTimeoutMs,
+      llmIdleTimeoutMs: idleTimeoutMs,
+    };
     const baseUrlHint = this.settings.backend === "native-agent"
       ? ` @ ${this.settings.nativeAgent.baseUrl}`
       : "";

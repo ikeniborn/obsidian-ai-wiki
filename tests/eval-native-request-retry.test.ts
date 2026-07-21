@@ -165,6 +165,10 @@ test("production path retries 502 and completes a delayed response beyond 15 sec
         evidence.retryEvents.map((event) => event.kind),
         ["transport_retry_scheduled", "transport_retry_recovered"],
       );
+      assert.equal(
+        evidence.retryEvents.every((event) => event.connectionTimeoutMs === CONNECTION_TIMEOUT_MS),
+        true,
+      );
       assert.match(evidence.logicalRequestId, /^eval-/);
       assert.equal(evidence.lifecycleIds.length, 2);
       assert.notEqual(evidence.lifecycleIds[0], evidence.lifecycleIds[1]);

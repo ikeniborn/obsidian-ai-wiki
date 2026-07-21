@@ -139,6 +139,7 @@ test("production native factory runs idle timing and retry delay without window"
         {
           signal,
           retry: createNativeRequestRetryContext({
+            llm: client,
             callSite: "ingest.synthesize",
             opts: {
               nativeRequestRetries: 1,
@@ -161,6 +162,12 @@ test("production native factory runs idle timing and retry delay without window"
   assert.equal(attempts, 2);
   assert.equal(events.some((event) => event.kind === "transport_retry_scheduled"), true);
   assert.equal(events.some((event) => event.kind === "transport_retry_recovered"), true);
+  assert.equal(
+    events
+      .filter((event) => event.kind.startsWith("transport_retry_"))
+      .every((event) => "connectionTimeoutMs" in event && event.connectionTimeoutMs === 1_000),
+    true,
+  );
 });
 
 test("native OpenAI client disables SDK request retries", () => {
@@ -220,6 +227,7 @@ test("executor idle deadline wins before a later request deadline", async () => 
     }, {
       signal,
       retry: createNativeRequestRetryContext({
+        llm: client,
         callSite: "ingest.synthesize",
         opts: { nativeRequestRetries: 0, nativeRequestIdleTimeoutMs: 10 },
         signal,

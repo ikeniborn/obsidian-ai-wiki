@@ -406,6 +406,7 @@ export async function* runFormat(
     {
       signal: requestSignal,
       retry: createNativeRequestRetryContext({
+        llm,
         callSite,
         opts,
         signal: requestSignal,
@@ -425,6 +426,7 @@ export async function* runFormat(
     {
       signal: requestSignal,
       retry: createNativeRequestRetryContext({
+        llm,
         callSite,
         opts,
         signal: requestSignal,

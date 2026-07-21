@@ -61,7 +61,10 @@ export function isNativeLlmClient(llm: LlmClient): boolean {
   return llm.nativeRequestExecutor === true;
 }
 
-export function createNativeLlmClient(create: NativeChatCompletionCreate): LlmClient {
+export function createNativeLlmClient(
+  create: NativeChatCompletionCreate,
+  connectionTimeoutMs: number = 15_000,
+): LlmClient {
   const execute = (async (
     params: OpenAI.Chat.ChatCompletionCreateParamsStreaming
       | OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
@@ -78,6 +81,7 @@ export function createNativeLlmClient(create: NativeChatCompletionCreate): LlmCl
   }) as LlmClient["chat"]["completions"]["create"];
   return {
     nativeRequestExecutor: true,
+    nativeConnectionTimeoutMs: connectionTimeoutMs,
     chat: { completions: { create: execute } },
   };
 }
@@ -143,6 +147,7 @@ function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 export function createNativeRequestRetryContext(input: {
+  llm: LlmClient;
   callSite: StructuredCallSite;
   opts: LlmCallOptions;
   signal: AbortSignal;
@@ -154,6 +159,9 @@ export function createNativeRequestRetryContext(input: {
     logicalRequestId: input.logicalRequestId ?? input.lifecycle.current().id,
     callSite: input.callSite,
     maxRetries: input.opts.nativeRequestRetries ?? 0,
+    connectionTimeoutMs: input.llm.nativeRequestExecutor
+      ? input.llm.nativeConnectionTimeoutMs ?? 15_000
+      : 0,
     idleTimeoutMs: input.opts.nativeRequestIdleTimeoutMs ?? 0,
     signal: input.signal,
     onEvent: input.onEvent,
@@ -295,7 +303,7 @@ function metadata(
     attempt,
     maxRetries: retry.maxRetries,
     meaningfulOutputSeen,
-    connectionTimeoutMs: 0,
+    connectionTimeoutMs: retry.connectionTimeoutMs,
     idleTimeoutMs: retry.idleTimeoutMs,
     ...failure,
   };

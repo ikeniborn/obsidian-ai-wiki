@@ -35,6 +35,7 @@ interface Fixture {
 const SESSION = "200";
 const SOURCE_MARKER = "SECRET_SOURCE_MARKER";
 const IDLE_DEADLINE_MS = 300_000;
+const CONNECTION_TIMEOUT_MS = 15_000;
 const OLD_MANIFEST_FILE = "obsolete-old.md";
 const OLD_MANIFEST_CONTENT = "old domain content";
 const WIPE_HASH_ALGORITHM = "sha256-v2";
@@ -205,7 +206,7 @@ function transportRetryEvent(
     errorClass: "retryable_http",
     status: 502,
     meaningfulOutputSeen: recovered,
-    connectionTimeoutMs: 0,
+    connectionTimeoutMs: CONNECTION_TIMEOUT_MS,
     idleTimeoutMs: IDLE_DEADLINE_MS,
     ...(kind === "transport_retry_scheduled"
       ? { delayMs: 1, delaySource: "retry-after-ms" }
@@ -309,7 +310,11 @@ function sessionRecords(options: {
   const sources = options.sources ?? ["sources/a.md", "sources/b.md"];
   const records = [
     agentRecord({ kind: "system", message: "start op=init" }, session),
-    agentRecord({ kind: "run_config", llmIdleTimeoutMs: IDLE_DEADLINE_MS }, session),
+    agentRecord({
+      kind: "run_config",
+      llmConnectionTimeoutMs: CONNECTION_TIMEOUT_MS,
+      llmIdleTimeoutMs: IDLE_DEADLINE_MS,
+    }, session),
     agentRecord({
       kind: "tool_use",
       name: "WipeDomain",
@@ -894,6 +899,38 @@ test("transport retry idle timeout must match selected run configuration", async
     await assert.rejects(
       audit(value, { expectedSources: 1 }),
       /transport retry scheduled.*idleTimeoutMs 299999.*run_config 300000/i,
+    );
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("transport retry connection timeout must match selected run configuration", async () => {
+  const records = sessionRecords({ sources: ["sources/a.md"] });
+  replaceFirstCallWithTransportRetry(records, {
+    scheduled: { connectionTimeoutMs: CONNECTION_TIMEOUT_MS - 1 },
+    recovered: { connectionTimeoutMs: CONNECTION_TIMEOUT_MS - 1 },
+  });
+  const value = await fixture({ records });
+  try {
+    await assert.rejects(
+      audit(value, { expectedSources: 1 }),
+      /transport retry scheduled.*connectionTimeoutMs 14999.*run_config 15000/i,
+    );
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("selected run configuration requires connection timeout metadata", async () => {
+  const records = sessionRecords();
+  const config = records.find((record) => record.event.kind === "run_config")!;
+  delete config.event.llmConnectionTimeoutMs;
+  const value = await fixture({ records });
+  try {
+    await assert.rejects(
+      audit(value),
+      /run_config llmConnectionTimeoutMs is missing or invalid/i,
     );
   } finally {
     await value.cleanup();

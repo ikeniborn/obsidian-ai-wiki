@@ -181,6 +181,7 @@ export type RunEvent =
   | { kind: "system"; message: string; sessionId?: string }
   | {
       kind: "run_config";
+      llmConnectionTimeoutMs: number;
       llmIdleTimeoutMs: number;
       nativeTransport?: NativeTransportDiagnostic;
     }
@@ -397,6 +398,7 @@ export interface NativeRequestRetryContext {
   logicalRequestId: string;
   callSite: string;
   maxRetries: number;
+  connectionTimeoutMs: number;
   idleTimeoutMs: number;
   signal: AbortSignal;
   onEvent: (event: RunEvent) => void;
@@ -420,6 +422,8 @@ export type NativeLlmExecutionInput =
 export type LlmClient = {
   /** True only for the executor-backed native adapter; absent for Claude and test clients. */
   nativeRequestExecutor?: true;
+  /** Configured native DNS/TCP/TLS establishment timeout carried into retry diagnostics. */
+  nativeConnectionTimeoutMs?: number;
   nativeTransportDiagnostic?: NativeTransportDiagnostic;
   emitsPromptBudget?: boolean;
   beginPromptBudgetRequest?: (requestId: string) => void;

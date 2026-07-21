@@ -179,6 +179,7 @@ interface SessionAudit {
   finishCount: number;
   finishStatus?: string;
   errorEvents: number;
+  connectionTimeoutMs?: number;
   idleTimeoutMs: number;
   failures: string[];
 }
@@ -856,6 +857,7 @@ function operationEffect(event: Record<string, unknown>): boolean {
 function auditTransportRetries(
   records: AgentLogRecord[],
   lifecycle: LifecycleAudit,
+  connectionTimeoutMs: number | undefined,
   idleTimeoutMs: number,
 ): TransportRetryAudit {
   const failures: string[] = [];
@@ -913,6 +915,13 @@ function auditTransportRetries(
     }
     if (!finiteNonnegative(event.connectionTimeoutMs)) {
       fail(index, `${label} has invalid connectionTimeoutMs`);
+    } else if (connectionTimeoutMs === undefined) {
+      fail(index, `${label} connectionTimeoutMs cannot be verified without run_config`);
+    } else if (event.connectionTimeoutMs !== connectionTimeoutMs) {
+      fail(
+        index,
+        `${label} connectionTimeoutMs ${event.connectionTimeoutMs} does not match run_config ${connectionTimeoutMs}`,
+      );
     }
     if (!finiteNonnegative(event.idleTimeoutMs)) {
       fail(index, `${label} has invalid idleTimeoutMs`);
@@ -1124,7 +1133,7 @@ function auditSelectedSession(
 ): SessionAudit {
   const finishes: string[] = [];
   const finishIndexes: number[] = [];
-  const configs: number[] = [];
+  const configs: Array<{ connectionTimeoutMs: number; idleTimeoutMs: number }> = [];
   let startEvents = 0;
   let errorEvents = 0;
   for (const [index, record] of records.entries()) {
@@ -1142,9 +1151,14 @@ function auditSelectedSession(
       }
     }
     if (record.event.kind === "run_config") {
-      const timeout = record.event.llmIdleTimeoutMs;
-      if (finiteNonnegative(timeout)) configs.push(timeout);
-      else configs.push(Number.NaN);
+      configs.push({
+        connectionTimeoutMs: finiteNonnegative(record.event.llmConnectionTimeoutMs)
+          ? record.event.llmConnectionTimeoutMs
+          : Number.NaN,
+        idleTimeoutMs: finiteNonnegative(record.event.llmIdleTimeoutMs)
+          ? record.event.llmIdleTimeoutMs
+          : Number.NaN,
+      });
     }
   }
   const failures: string[] = [];
@@ -1162,14 +1176,21 @@ function auditSelectedSession(
   if (idleTimeoutOverride === undefined && configs.length !== 1) {
     failures.push(`run_config events: ${configs.length}, expected: 1`);
   }
-  const idleTimeoutMs = idleTimeoutOverride ?? configs[0];
+  const idleTimeoutMs = idleTimeoutOverride ?? configs[0]?.idleTimeoutMs;
+  const connectionTimeoutMs = configs[0]?.connectionTimeoutMs;
   if (!finiteNonnegative(idleTimeoutMs)) {
     failures.push("run_config llmIdleTimeoutMs is missing or invalid");
+  }
+  if (configs.length === 1 && !finiteNonnegative(connectionTimeoutMs)) {
+    failures.push("run_config llmConnectionTimeoutMs is missing or invalid");
   }
   return {
     finishCount: finishes.length,
     finishStatus: finishes[0],
     errorEvents,
+    connectionTimeoutMs: finiteNonnegative(connectionTimeoutMs)
+      ? connectionTimeoutMs
+      : undefined,
     idleTimeoutMs: finiteNonnegative(idleTimeoutMs) ? idleTimeoutMs : 0,
     failures,
   };
@@ -1603,6 +1624,7 @@ export async function auditBoundedInitReplay(
   const retryAudit = auditTransportRetries(
     selected.records,
     lifecycle,
+    sessionAudit.connectionTimeoutMs,
     sessionAudit.idleTimeoutMs,
   );
   const effectAudit = auditEffects(selected.records, expectedFolder);

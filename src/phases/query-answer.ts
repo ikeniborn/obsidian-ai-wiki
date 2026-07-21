@@ -181,6 +181,7 @@ export async function* answerFromContext(args: {
             {
               signal: operationSignal,
               retry: createNativeRequestRetryContext({
+                llm,
                 callSite: "query.answer",
                 opts,
                 signal: operationSignal,
@@ -274,6 +275,7 @@ export async function* answerFromContext(args: {
               {
                 signal: operationSignal,
                 retry: createNativeRequestRetryContext({
+                  llm,
                   callSite: "query.answer",
                   opts,
                   signal: operationSignal,

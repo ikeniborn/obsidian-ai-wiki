@@ -83,7 +83,11 @@ test("runner emits effective idle timeout as machine-readable run configuration"
 
   assert.deepEqual(
     events.find((event) => event.kind === "run_config"),
-    { kind: "run_config", llmIdleTimeoutMs: 10 },
+    {
+      kind: "run_config",
+      llmConnectionTimeoutMs: 15_000,
+      llmIdleTimeoutMs: 10,
+    },
   );
 });
 

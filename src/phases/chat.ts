@@ -174,6 +174,7 @@ export async function* runLintChat(
             {
               signal: operationSignal,
               retry: createNativeRequestRetryContext({
+                llm,
                 callSite,
                 opts,
                 signal: operationSignal,
@@ -271,6 +272,7 @@ export async function* runLintChat(
               {
                 signal: operationSignal,
                 retry: createNativeRequestRetryContext({
+                  llm,
                   callSite,
                   opts,
                   signal: operationSignal,

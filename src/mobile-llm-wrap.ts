@@ -24,6 +24,9 @@ export function wrapMobileNoStream(inner: LlmClient): LlmClient {
   }) as unknown as LlmClient["chat"]["completions"]["create"];
   return {
     ...(inner.nativeRequestExecutor ? { nativeRequestExecutor: true as const } : {}),
+    ...(inner.nativeConnectionTimeoutMs === undefined
+      ? {}
+      : { nativeConnectionTimeoutMs: inner.nativeConnectionTimeoutMs }),
     chat: { completions: { create } },
   };
 }

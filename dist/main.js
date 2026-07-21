@@ -51318,7 +51318,7 @@ function cancelTimer(timer) {
 function isNativeLlmClient(llm) {
   return llm.nativeRequestExecutor === true;
 }
-function createNativeLlmClient(create) {
+function createNativeLlmClient(create, connectionTimeoutMs = 15e3) {
   const execute = (async (params, options) => {
     if (!options?.retry) {
       throw new TypeError("Native completion requires NativeRequestRetryContext");
@@ -51331,6 +51331,7 @@ function createNativeLlmClient(create) {
   });
   return {
     nativeRequestExecutor: true,
+    nativeConnectionTimeoutMs: connectionTimeoutMs,
     chat: { completions: { create: execute } }
   };
 }
@@ -51388,6 +51389,7 @@ function createNativeRequestRetryContext(input) {
     logicalRequestId: input.logicalRequestId ?? input.lifecycle.current().id,
     callSite: input.callSite,
     maxRetries: input.opts.nativeRequestRetries ?? 0,
+    connectionTimeoutMs: input.llm.nativeRequestExecutor ? input.llm.nativeConnectionTimeoutMs ?? 15e3 : 0,
     idleTimeoutMs: input.opts.nativeRequestIdleTimeoutMs ?? 0,
     signal: input.signal,
     onEvent: input.onEvent,
@@ -51495,7 +51497,7 @@ function metadata(retry, attempt, meaningfulOutputSeen, failure) {
     attempt,
     maxRetries: retry.maxRetries,
     meaningfulOutputSeen,
-    connectionTimeoutMs: 0,
+    connectionTimeoutMs: retry.connectionTimeoutMs,
     idleTimeoutMs: retry.idleTimeoutMs,
     ...failure
   };
@@ -51852,6 +51854,7 @@ async function streamOnce(llm, model, messages, opts, signal, onEvent, lifecycle
       {
         signal,
         retry: createNativeRequestRetryContext({
+          llm,
           callSite,
           opts,
           signal,
@@ -51945,6 +51948,7 @@ async function nonStreamOnce(llm, model, messages, opts, signal, onEvent, lifecy
       {
         signal,
         retry: createNativeRequestRetryContext({
+          llm,
           callSite,
           opts,
           signal,
@@ -56260,6 +56264,7 @@ async function* answerFromContext(args) {
             {
               signal: operationSignal,
               retry: createNativeRequestRetryContext({
+                llm,
                 callSite: "query.answer",
                 opts,
                 signal: operationSignal,
@@ -56350,6 +56355,7 @@ async function* answerFromContext(args) {
               {
                 signal: operationSignal,
                 retry: createNativeRequestRetryContext({
+                  llm,
                   callSite: "query.answer",
                   opts,
                   signal: operationSignal,
@@ -58460,6 +58466,7 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
             {
               signal: operationSignal,
               retry: createNativeRequestRetryContext({
+                llm,
                 callSite,
                 opts,
                 signal: operationSignal,
@@ -58550,6 +58557,7 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
               {
                 signal: operationSignal,
                 retry: createNativeRequestRetryContext({
+                  llm,
                   callSite,
                   opts,
                   signal: operationSignal,
@@ -60819,6 +60827,7 @@ async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, 
       {
         signal,
         retry: createNativeRequestRetryContext({
+          llm,
           callSite: "vision.analysis",
           opts: callOptions,
           signal,
@@ -61653,6 +61662,7 @@ ${tagRegistryBlock}` : ""}`;
     {
       signal: requestSignal,
       retry: createNativeRequestRetryContext({
+        llm,
         callSite,
         opts,
         signal: requestSignal,
@@ -61666,6 +61676,7 @@ ${tagRegistryBlock}` : ""}`;
     {
       signal: requestSignal,
       retry: createNativeRequestRetryContext({
+        llm,
         callSite,
         opts,
         signal: requestSignal,
@@ -63410,7 +63421,12 @@ var AgentRunner = class {
       req.policyOperation
     );
     const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1e3;
-    yield { kind: "run_config", llmIdleTimeoutMs: idleTimeoutMs };
+    const connectionTimeoutMs = (this.settings.llmConnectionTimeoutSec ?? 15) * 1e3;
+    yield {
+      kind: "run_config",
+      llmConnectionTimeoutMs: connectionTimeoutMs,
+      llmIdleTimeoutMs: idleTimeoutMs
+    };
     const baseUrlHint = this.settings.backend === "native-agent" ? ` @ ${this.settings.nativeAgent.baseUrl}` : "";
     yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"}${baseUrlHint}` };
     if (req.signal.aborted) return;
@@ -63633,6 +63649,7 @@ function wrapMobileNoStream(inner) {
   });
   return {
     ...inner.nativeRequestExecutor ? { nativeRequestExecutor: true } : {},
+    ...inner.nativeConnectionTimeoutMs === void 0 ? {} : { nativeConnectionTimeoutMs: inner.nativeConnectionTimeoutMs },
     chat: { completions: { create } }
   };
 }
@@ -63823,7 +63840,7 @@ function createNativeOpenAiClient(options) {
   const rawCreate = raw.chat.completions.create.bind(
     raw.chat.completions
   );
-  const executorClient = createNativeLlmClient(rawCreate);
+  const executorClient = createNativeLlmClient(rawCreate, options.connectionTimeoutMs);
   const client = options.isMobile ? wrapMobileNoStream(executorClient) : executorClient;
   if (nativeTransportDiagnostic) client.nativeTransportDiagnostic = nativeTransportDiagnostic;
   return client;

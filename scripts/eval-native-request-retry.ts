@@ -67,6 +67,8 @@ export interface NativeRequestRetryEvalEvidence {
     delayMs?: number;
     delaySource?: "retry-after-ms" | "retry-after" | "backoff";
     meaningfulOutputSeen: boolean;
+    connectionTimeoutMs: number;
+    idleTimeoutMs: number;
   }>;
   logicalRequestId: string;
   lifecycleIds: string[];
@@ -98,6 +100,8 @@ function retryEvidence(event: RunEvent): NativeRequestRetryEvalEvidence["retryEv
     ...(event.delayMs === undefined ? {} : { delayMs: event.delayMs }),
     ...(event.delaySource === undefined ? {} : { delaySource: event.delaySource }),
     meaningfulOutputSeen: event.meaningfulOutputSeen,
+    connectionTimeoutMs: event.connectionTimeoutMs,
+    idleTimeoutMs: event.idleTimeoutMs,
   };
 }
 

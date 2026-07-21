@@ -52,7 +52,7 @@ export function createNativeOpenAiClient(options: NativeOpenAiClientOptions): Ll
   const rawCreate = raw.chat.completions.create.bind(
     raw.chat.completions,
   ) as NativeChatCompletionCreate;
-  const executorClient = createNativeLlmClient(rawCreate);
+  const executorClient = createNativeLlmClient(rawCreate, options.connectionTimeoutMs);
   const client = options.isMobile ? wrapMobileNoStream(executorClient) : executorClient;
   if (nativeTransportDiagnostic) client.nativeTransportDiagnostic = nativeTransportDiagnostic;
   return client;

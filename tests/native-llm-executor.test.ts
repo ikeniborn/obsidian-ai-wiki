@@ -194,6 +194,7 @@ function retryContext(
     logicalRequestId: "logical-1",
     callSite: "query.answer",
     maxRetries: 1,
+    connectionTimeoutMs: 15_000,
     idleTimeoutMs: 0,
     signal,
     onEvent,
@@ -554,7 +555,7 @@ test("retry telemetry keeps one logical ID, fresh lifecycle IDs, and provider re
   assert.equal(retryEvents[0]?.delaySource, "retry-after-ms");
   assert.equal("source" in retryEvents[0], false);
   assert.equal(retryEvents[0]?.status, 502);
-  assert.equal(retryEvents[0]?.connectionTimeoutMs, 0);
+  assert.equal(retryEvents[0]?.connectionTimeoutMs, 15_000);
   assert.deepEqual(phases(events), [
     "attempt-0:answer_question:preparing",
     "attempt-0:answer_question:sent",

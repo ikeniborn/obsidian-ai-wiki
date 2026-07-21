@@ -2,7 +2,7 @@
   "endpointPath": "/v1/chat/completions",
   "model": "ollama-deepseek-v4-pro-cloud",
   "httpStatus": 200,
-  "durationMs": 3883,
+  "durationMs": 2345,
   "completed": true,
   "exceededConnectionTimeoutMs": false,
   "connectionTimeoutMs": 15000,
@@ -10,8 +10,8 @@
   "transport": "direct",
   "attempts": 1,
   "retryEvents": [],
-  "logicalRequestId": "eval-7eb5f1eb-c2ca-425e-9b96-a52718605196",
+  "logicalRequestId": "eval-ec66b357-c0d6-4af7-9325-86cfbc99ce86",
   "lifecycleIds": [
-    "eval-7eb5f1eb-c2ca-425e-9b96-a52718605196"
+    "eval-ec66b357-c0d6-4af7-9325-86cfbc99ce86"
   ]
 }

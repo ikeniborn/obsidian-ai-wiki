@@ -294,6 +294,7 @@ async function streamOnce(
       {
         signal,
         retry: createNativeRequestRetryContext({
+          llm,
           callSite,
           opts,
           signal,
@@ -407,6 +408,7 @@ async function nonStreamOnce(
       {
         signal,
         retry: createNativeRequestRetryContext({
+          llm,
           callSite,
           opts,
           signal,

@@ -265,6 +265,7 @@ async function callVisionLlm(
       {
         signal,
         retry: createNativeRequestRetryContext({
+          llm,
           callSite: "vision.analysis",
           opts: callOptions,
           signal,
