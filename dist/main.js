@@ -42872,7 +42872,7 @@ function parseWikiSources(content) {
 // src/view.ts
 var AI_WIKI_VIEW_TYPE = "ai-wiki-view";
 function isTelemetryOnlyRunEvent(event) {
-  return event.kind === "run_config" || event.kind === "wipe_manifest_chunk" || event.kind === "wipe_complete" || event.kind === "index_effect";
+  return event.kind === "run_config" || event.kind === "wipe_manifest_chunk" || event.kind === "wipe_complete" || event.kind === "index_effect" || event.kind === "llm_request_fingerprint";
 }
 function formatGraphStatsLines(ev, agentLogEnabled) {
   if (!agentLogEnabled) {
@@ -51701,6 +51701,32 @@ var repairJson = [
   "",
   "Return ONLY a single valid JSON object matching the schema. No markdown fences, no <think> tags, no commentary."
 ].join("\n");
+function stringContentLength(message) {
+  return typeof message.content === "string" ? message.content.length : JSON.stringify(message.content ?? "").length;
+}
+function requestFingerprint(requestId, callSite, transport, attempt, model, params) {
+  const messages = Array.isArray(params.messages) ? params.messages : [];
+  const responseFormat = params.response_format;
+  return {
+    kind: "llm_request_fingerprint",
+    requestId,
+    callSite,
+    transport,
+    attempt,
+    model,
+    stream: params.stream === true,
+    messageCount: messages.length,
+    messageCharLengths: messages.map(stringContentLength),
+    estimatedInputTokens: estimatePreparedMessages(messages),
+    ...typeof params.max_tokens === "number" ? { outputBudget: params.max_tokens } : {},
+    ...typeof responseFormat?.type === "string" ? { responseFormatType: responseFormat.type } : {},
+    ...typeof responseFormat?.json_schema?.name === "string" ? { responseFormatName: responseFormat.json_schema.name } : {},
+    ...typeof params.temperature === "number" ? { temperature: params.temperature } : {},
+    ...typeof params.top_p === "number" ? { topP: params.top_p } : {},
+    hasThinking: "thinking" in params,
+    preparedMessagesHash: contentHash(JSON.stringify(messages))
+  };
+}
 var lifecycleSequence = 0;
 function createLlmLifecycle(action) {
   lifecycleSequence += 1;
@@ -51848,6 +51874,7 @@ async function streamOnce(llm, model, messages, opts, signal, onEvent, lifecycle
       lifecycle.phase("sent");
       lifecycle.phase("waiting");
     }
+    onEvent(requestFingerprint(requestId, callSite, "stream", attempt, model, { ...params, stream: true }));
     llm.beginPromptBudgetRequest?.(requestId);
     const request = llm.chat.completions.create(
       { ...params, stream: true },
@@ -51942,6 +51969,7 @@ async function nonStreamOnce(llm, model, messages, opts, signal, onEvent, lifecy
   let response;
   try {
     if (!isNativeLlmClient(llm)) lifecycle.phase("waiting");
+    onEvent(requestFingerprint(requestId, callSite, "non-stream", attempt, model, { ...params, stream: false }));
     llm.beginPromptBudgetRequest?.(requestId);
     const request = llm.chat.completions.create(
       { ...params, stream: false },
@@ -52917,7 +52945,7 @@ function forwardEvidenceStructuredEvent(runtime, event) {
       ...event,
       message: "Structured output validation event"
     });
-  } else if (event.kind === "llm_lifecycle" || event.kind === "assistant_text" || event.kind === "rule_fired" || event.kind === "llm_call_stats" || event.kind === "prompt_budget") {
+  } else if (event.kind === "llm_lifecycle" || event.kind === "assistant_text" || event.kind === "rule_fired" || event.kind === "llm_call_stats" || event.kind === "llm_request_fingerprint" || event.kind === "prompt_budget") {
     runtime.onEvent?.(event);
   }
 }

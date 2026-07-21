@@ -647,6 +647,7 @@ function forwardEvidenceStructuredEvent(
     || event.kind === "assistant_text"
     || event.kind === "rule_fired"
     || event.kind === "llm_call_stats"
+    || event.kind === "llm_request_fingerprint"
     || event.kind === "prompt_budget"
   ) {
     runtime.onEvent?.(event);

@@ -901,6 +901,37 @@ test("structured json calls ignore provider thinking controls", async () => {
   assert.equal((seenParams[0]?.response_format as { type?: string } | undefined)?.type, "json_schema");
 });
 
+test("structured requests emit metadata-only request fingerprints", async () => {
+  const events: RunEvent[] = [];
+
+  await parseWithRetry({
+    llm: llmFromAttempts(['{"value":"plain"}']),
+    model: "m",
+    baseMessages: [{ role: "user", content: "SECRET_SOURCE" }],
+    opts: { jsonMode: "json_schema", maxTokens: 4096, inputBudgetTokens: 16_384 },
+    schema: SmallSchema,
+    maxRetries: 1,
+    callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
+    signal: new AbortController().signal,
+    onEvent: (event) => events.push(event),
+  });
+
+  const fingerprint = events.find((event) => event.kind === "llm_request_fingerprint");
+  assert.ok(fingerprint && fingerprint.kind === "llm_request_fingerprint");
+  assert.equal(fingerprint.callSite, "query.seeds");
+  assert.equal(fingerprint.model, "m");
+  assert.equal(fingerprint.transport, "stream");
+  assert.equal(fingerprint.stream, true);
+  assert.equal(fingerprint.outputBudget, 4096);
+  assert.equal(fingerprint.responseFormatType, "json_schema");
+  assert.equal(fingerprint.responseFormatName, "query_seeds");
+  assert.equal(fingerprint.messageCharLengths.length, 2);
+  assert.ok(fingerprint.messageCharLengths.every((length) => length > 0));
+  assert.match(fingerprint.preparedMessagesHash, /^fnv1a:[0-9a-f]{8}$/);
+  assert.equal(JSON.stringify(fingerprint).includes("SECRET_SOURCE"), false);
+});
+
 test("json-zod with jsonMode false sends no response_format", async () => {
   const seenParams: Record<string, unknown>[] = [];
 

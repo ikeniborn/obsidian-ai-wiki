@@ -35,7 +35,8 @@ export function isTelemetryOnlyRunEvent(event: RunEvent): boolean {
   return event.kind === "run_config"
     || event.kind === "wipe_manifest_chunk"
     || event.kind === "wipe_complete"
-    || event.kind === "index_effect";
+    || event.kind === "index_effect"
+    || event.kind === "llm_request_fingerprint";
 }
 
 export function formatGraphStatsLines(

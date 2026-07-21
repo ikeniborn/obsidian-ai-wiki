@@ -559,6 +559,7 @@ test("source orchestration maps complete chunks and recursively reduces whole pa
   assert.equal(budgetEvents.length, requests.length, "one prompt_budget event per actual request");
   assert.ok(events.every((event) =>
     event.kind === "prompt_budget"
+    || event.kind === "llm_request_fingerprint"
     || event.kind === "llm_lifecycle"
     || event.kind === "llm_call_stats"
     || event.kind === "tool_use"
@@ -940,6 +941,7 @@ test("bootstrap derives bounded candidate, theme, and language evidence from val
   assert.equal(budgetEvents.length, requests.length);
   assert.ok(events.every((event) =>
     event.kind === "prompt_budget"
+    || event.kind === "llm_request_fingerprint"
     || event.kind === "llm_lifecycle"
     || event.kind === "llm_call_stats"
     || event.kind === "tool_use"

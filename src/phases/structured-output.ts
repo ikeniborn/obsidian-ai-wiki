@@ -18,6 +18,7 @@ import {
 } from "../prompt-budget";
 import { RunEventBridge } from "../run-event-bridge";
 import { structuralErrorCounter } from "../structural-error-counter";
+import { contentHash } from "../content-hash";
 import {
   createNativeRequestRetryContext,
   isNativeLlmClient,
@@ -40,6 +41,43 @@ const repairJson = [
   "",
   "Return ONLY a single valid JSON object matching the schema. No markdown fences, no <think> tags, no commentary.",
 ].join("\n");
+
+function stringContentLength(message: OpenAI.Chat.ChatCompletionMessageParam): number {
+  return typeof message.content === "string" ? message.content.length : JSON.stringify(message.content ?? "").length;
+}
+
+function requestFingerprint(
+  requestId: string,
+  callSite: StructuredCallSite,
+  transport: "stream" | "non-stream",
+  attempt: number,
+  model: string,
+  params: Record<string, unknown>,
+): Extract<RunEvent, { kind: "llm_request_fingerprint" }> {
+  const messages = Array.isArray(params.messages)
+    ? params.messages as OpenAI.Chat.ChatCompletionMessageParam[]
+    : [];
+  const responseFormat = params.response_format as { type?: unknown; json_schema?: { name?: unknown } } | undefined;
+  return {
+    kind: "llm_request_fingerprint",
+    requestId,
+    callSite,
+    transport,
+    attempt,
+    model,
+    stream: params.stream === true,
+    messageCount: messages.length,
+    messageCharLengths: messages.map(stringContentLength),
+    estimatedInputTokens: estimatePreparedMessages(messages),
+    ...(typeof params.max_tokens === "number" ? { outputBudget: params.max_tokens } : {}),
+    ...(typeof responseFormat?.type === "string" ? { responseFormatType: responseFormat.type } : {}),
+    ...(typeof responseFormat?.json_schema?.name === "string" ? { responseFormatName: responseFormat.json_schema.name } : {}),
+    ...(typeof params.temperature === "number" ? { temperature: params.temperature } : {}),
+    ...(typeof params.top_p === "number" ? { topP: params.top_p } : {}),
+    hasThinking: "thinking" in params,
+    preparedMessagesHash: contentHash(JSON.stringify(messages)),
+  };
+}
 
 export type { StructuredCallSite } from "../types";
 
@@ -288,6 +326,7 @@ async function streamOnce(
       lifecycle.phase("sent");
       lifecycle.phase("waiting");
     }
+    onEvent(requestFingerprint(requestId, callSite, "stream", attempt, model, { ...params, stream: true }));
     llm.beginPromptBudgetRequest?.(requestId);
     const request = llm.chat.completions.create(
       { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
@@ -402,6 +441,7 @@ async function nonStreamOnce(
   let response: OpenAI.Chat.ChatCompletion | AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
   try {
     if (!isNativeLlmClient(llm)) lifecycle.phase("waiting");
+    onEvent(requestFingerprint(requestId, callSite, "non-stream", attempt, model, { ...params, stream: false }));
     llm.beginPromptBudgetRequest?.(requestId);
     const request = llm.chat.completions.create(
       { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,

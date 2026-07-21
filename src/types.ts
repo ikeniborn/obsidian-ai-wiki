@@ -249,6 +249,25 @@ export type RunEvent =
       reductionDepth?: number;
       retryReason?: string;
     }
+  | {
+      kind: "llm_request_fingerprint";
+      requestId: string;
+      callSite: StructuredCallSite;
+      transport: "stream" | "non-stream";
+      attempt: number;
+      model: string;
+      stream: boolean;
+      messageCount: number;
+      messageCharLengths: number[];
+      estimatedInputTokens: number;
+      outputBudget?: number;
+      responseFormatType?: string;
+      responseFormatName?: string;
+      temperature?: number;
+      topP?: number;
+      hasThinking: boolean;
+      preparedMessagesHash: string;
+    }
   | ({ kind: "transport_retry_scheduled" } & TransportRetryMetadata)
   | ({ kind: "transport_retry_recovered" } & TransportRetryMetadata)
   | ({ kind: "transport_retry_exhausted" } & TransportRetryMetadata)
