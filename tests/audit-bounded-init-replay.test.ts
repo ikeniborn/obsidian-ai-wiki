@@ -265,8 +265,13 @@ function replaceFirstCallWithTransportRetry(
 
 function replaceFirstCallWithRecoveredStructuredRepair(
   records: AgentRecord[],
-  completes: boolean = true,
+  options: {
+    completes?: boolean;
+    meaningfulOutputSeen?: boolean;
+  } = {},
 ): void {
+  const completes = options.completes ?? true;
+  const meaningfulOutputSeen = options.meaningfulOutputSeen ?? true;
   const firstLifecycle = records.findIndex((record) =>
     record.event.kind === "llm_lifecycle" && record.event.id === "call-0");
   const initial = lifecycleRecords("call-0", 1_000, SESSION, {
@@ -274,7 +279,14 @@ function replaceFirstCallWithRecoveredStructuredRepair(
   });
   const recoveredAttempt = lifecycleRecords("call-0:retry-1", 1_100, SESSION, {
     attempt: 1,
-    phases: ["preparing", "sent", "waiting", "producing", "validating", "retrying"],
+    phases: [
+      "preparing",
+      "sent",
+      "waiting",
+      ...(meaningfulOutputSeen ? ["producing"] : []),
+      "validating",
+      "retrying",
+    ],
   });
   const structuredAttempt = lifecycleRecords("call-0:retry-2", 1_200, SESSION, {
     attempt: 2,
@@ -287,9 +299,9 @@ function replaceFirstCallWithRecoveredStructuredRepair(
     7,
     ...initial,
     transportRetryEvent("transport_retry_scheduled"),
-    ...recoveredAttempt.slice(0, 4),
-    transportRetryEvent("transport_retry_recovered"),
-    ...recoveredAttempt.slice(4),
+    ...recoveredAttempt.slice(0, meaningfulOutputSeen ? 4 : 3),
+    transportRetryEvent("transport_retry_recovered", { meaningfulOutputSeen }),
+    ...recoveredAttempt.slice(meaningfulOutputSeen ? 4 : 3),
     agentRecord(promptBudget({ requestId: "call-0:retry-1" })),
     ...structuredAttempt,
   );
@@ -797,9 +809,22 @@ test("recovered transport may continue through a correlated structured repair li
   }
 });
 
+test("recovered empty completion may continue through a correlated structured repair lifecycle", async () => {
+  const records = sessionRecords({ sources: ["sources/a.md"] });
+  replaceFirstCallWithRecoveredStructuredRepair(records, { meaningfulOutputSeen: false });
+  const value = await fixture({ records });
+  try {
+    const summary = await audit(value, { expectedSources: 1 });
+    assert.equal(summary.transportRetryRecovered, 1);
+    assert.equal(summary.invalidTransportRetryEvents, 0);
+  } finally {
+    await value.cleanup();
+  }
+});
+
 test("recovered transport still requires a correlated successful operation continuation", async () => {
   const records = sessionRecords({ sources: ["sources/a.md"] });
-  replaceFirstCallWithRecoveredStructuredRepair(records, false);
+  replaceFirstCallWithRecoveredStructuredRepair(records, { completes: false });
   const value = await fixture({ records });
   try {
     await assert.rejects(

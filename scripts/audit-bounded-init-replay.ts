@@ -557,6 +557,15 @@ function auditLifecycles(
   const budgetValues = new Set<string>();
   const budgetByRequestId = new Map<string, Record<string, unknown>>();
   const budgetRequestIdCounts = new Map<string, number>();
+  const emptyRecoveredLifecycleIds = new Set(records.flatMap((record) => {
+    if (
+      !isRecord(record.event)
+      || record.event.kind !== "transport_retry_recovered"
+      || record.event.meaningfulOutputSeen !== false
+      || typeof record.event.lifecycleId !== "string"
+    ) return [];
+    return [record.event.lifecycleId];
+  }));
   let missingRequestIds = 0;
   for (const record of records) {
     if (!isRecord(record.event) || record.event.kind !== "prompt_budget") continue;
@@ -662,14 +671,17 @@ function auditLifecycles(
         continue;
       }
       const expected = ORDERED_LIFECYCLE_PHASES[expectedIndex];
-      if (phase !== expected) {
+      const validEmptyRecoverySkip = expected === "producing"
+        && phase === "validating"
+        && emptyRecoveredLifecycleIds.has(id);
+      if (phase !== expected && !validEmptyRecoverySkip) {
         failures.push(`lifecycle ${id} expected ${expected ?? "terminal"}, got ${phase}`);
         const actualIndex = ORDERED_LIFECYCLE_PHASES.indexOf(
           phase as (typeof ORDERED_LIFECYCLE_PHASES)[number],
         );
         if (actualIndex >= expectedIndex) expectedIndex = actualIndex + 1;
       } else {
-        expectedIndex++;
+        expectedIndex += validEmptyRecoverySkip ? 2 : 1;
       }
       if (phase === "waiting") waitingAtMs = atMs;
     }
@@ -1119,7 +1131,9 @@ function auditTransportRetries(
             break;
           }
         }
-        if (producingIndex < 0 || producingIndex > index || !continued) {
+        const requiredProducingMissing = event.meaningfulOutputSeen === true
+          && (producingIndex < 0 || producingIndex > index);
+        if (requiredProducingMissing || !continued) {
           fail(index, `${label} does not continue through correlated validation, application, and completion`);
         }
       } else {
