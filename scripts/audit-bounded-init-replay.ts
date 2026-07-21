@@ -55,6 +55,12 @@ export interface AuditBoundedInitReplaySummary {
   stalePreWipeDescendants: number;
   systemFinishEvents: number;
   technicalHumanLabelFields: number;
+  transportRetryScheduled: number;
+  transportRetryRecovered: number;
+  transportRetryExhausted: number;
+  invalidTransportRetryEvents: number;
+  duplicateSourceEffects: number;
+  duplicatePageEffects: number;
   pageRecords: number;
   chunkRecords: number;
   duplicateRecordIds: number;
@@ -158,6 +164,8 @@ interface LifecycleAudit {
   invalidCalls: number;
   technicalHumanLabelFields: number;
   failures: string[];
+  descriptors: Map<string, LifecycleDescriptor>;
+  events: Map<string, Record<string, unknown>[]>;
 }
 
 interface LifecycleDescriptor {
@@ -172,6 +180,20 @@ interface SessionAudit {
   finishStatus?: string;
   errorEvents: number;
   idleTimeoutMs: number;
+  failures: string[];
+}
+
+interface TransportRetryAudit {
+  scheduled: number;
+  recovered: number;
+  exhausted: number;
+  invalidEvents: number;
+  failures: string[];
+}
+
+interface EffectAudit {
+  duplicateSources: number;
+  duplicatePages: number;
   failures: string[];
 }
 
@@ -739,8 +761,17 @@ function auditLifecycles(
       );
     }
   }
+  const transportLifecycleIds = new Set(records.flatMap((record) => {
+    if (
+      !isRecord(record.event)
+      || !["transport_retry_scheduled", "transport_retry_recovered", "transport_retry_exhausted"]
+        .includes(String(record.event.kind))
+      || typeof record.event.lifecycleId !== "string"
+    ) return [];
+    return [record.event.lifecycleId];
+  }));
   for (const id of calls.keys()) {
-    if (!budgetByRequestId.has(id)) {
+    if (!budgetByRequestId.has(id) && !transportLifecycleIds.has(id)) {
       failures.push(`orphan lifecycle ${id} has no prompt_budget`);
     }
   }
@@ -795,6 +826,223 @@ function auditLifecycles(
       }),
     ).size,
     technicalHumanLabelFields,
+    failures,
+    descriptors,
+    events: calls,
+  };
+}
+
+const TRANSPORT_RETRY_KINDS = new Set([
+  "transport_retry_scheduled",
+  "transport_retry_recovered",
+  "transport_retry_exhausted",
+]);
+
+function retryableHttpStatus(status: number): boolean {
+  return status === 408
+    || status === 409
+    || status === 429
+    || (status >= 500 && status <= 599);
+}
+
+function operationEffect(event: Record<string, unknown>): boolean {
+  if (["file_done", "domain_updated", "source_path_added"].includes(String(event.kind))) {
+    return true;
+  }
+  return event.kind === "tool_use"
+    && ["Create", "Update", "Write", "Delete"].includes(String(event.name));
+}
+
+function auditTransportRetries(
+  records: AgentLogRecord[],
+  lifecycle: LifecycleAudit,
+  idleTimeoutMs: number,
+): TransportRetryAudit {
+  const failures: string[] = [];
+  const invalid = new Set<number>();
+  const byLogicalRequest = new Map<
+    string,
+    Array<{ index: number; event: Record<string, unknown> }>
+  >();
+  let scheduled = 0;
+  let recovered = 0;
+  let exhausted = 0;
+
+  const fail = (index: number, message: string): void => {
+    invalid.add(index);
+    failures.push(message);
+  };
+
+  for (const [index, record] of records.entries()) {
+    const event = record.event;
+    if (!isRecord(event) || !TRANSPORT_RETRY_KINDS.has(String(event.kind))) continue;
+    const kind = String(event.kind);
+    if (kind === "transport_retry_scheduled") scheduled++;
+    else if (kind === "transport_retry_recovered") recovered++;
+    else exhausted++;
+    const label = kind.replaceAll("_", " ");
+    if (typeof event.logicalRequestId !== "string" || event.logicalRequestId.length === 0) {
+      fail(index, `${label} missing logicalRequestId`);
+      continue;
+    }
+    const group = byLogicalRequest.get(event.logicalRequestId) ?? [];
+    group.push({ index, event });
+    byLogicalRequest.set(event.logicalRequestId, group);
+
+    if (typeof event.lifecycleId !== "string" || event.lifecycleId.length === 0) {
+      fail(index, `${label} missing lifecycleId`);
+    }
+    if (typeof event.callSite !== "string" || !STRUCTURED_CALL_SITES.has(event.callSite)) {
+      fail(index, `${label} has invalid callSite`);
+    }
+    if (!finiteNonnegativeInteger(event.attempt)) {
+      fail(index, `${label} has invalid attempt`);
+    }
+    if (!finiteNonnegativeInteger(event.maxRetries)) {
+      fail(index, `${label} has invalid maxRetries`);
+    } else if (finiteNonnegativeInteger(event.attempt) && event.attempt > event.maxRetries) {
+      fail(
+        index,
+        `${label} attempt ${event.attempt} exceeds maxRetries ${event.maxRetries}`,
+      );
+    }
+    if (typeof event.meaningfulOutputSeen !== "boolean") {
+      fail(index, `${label} has invalid meaningfulOutputSeen`);
+    } else if (kind === "transport_retry_scheduled" && event.meaningfulOutputSeen) {
+      fail(index, `${label} attempted after meaningful output`);
+    }
+    if (!finiteNonnegative(event.connectionTimeoutMs)) {
+      fail(index, `${label} has invalid connectionTimeoutMs`);
+    }
+    if (!finiteNonnegative(event.idleTimeoutMs)) {
+      fail(index, `${label} has invalid idleTimeoutMs`);
+    } else if (event.idleTimeoutMs !== idleTimeoutMs) {
+      fail(
+        index,
+        `${label} idleTimeoutMs ${event.idleTimeoutMs} does not match run_config ${idleTimeoutMs}`,
+      );
+    }
+    if (typeof event.errorClass !== "string" || event.errorClass.length === 0) {
+      fail(index, `${label} missing errorClass`);
+    }
+    if (
+      event.status !== undefined
+      && (
+        !finiteNonnegativeInteger(event.status)
+        || (!retryableHttpStatus(event.status) && event.errorClass !== "provider_retry")
+      )
+    ) {
+      fail(index, `${label} status ${String(event.status)} is not retryable`);
+    }
+    if (kind === "transport_retry_scheduled") {
+      if (!finiteNonnegative(event.delayMs)) fail(index, `${label} has invalid delayMs`);
+      if (!new Set(["retry-after-ms", "retry-after", "backoff"]).has(String(event.delaySource))) {
+        fail(index, `${label} has invalid delaySource`);
+      }
+      if (
+        finiteNonnegativeInteger(event.attempt)
+        && finiteNonnegativeInteger(event.maxRetries)
+        && event.attempt >= event.maxRetries
+      ) {
+        fail(index, `${label} attempt ${event.attempt} cannot schedule beyond maxRetries ${event.maxRetries}`);
+      }
+    }
+  }
+
+  for (const [logicalRequestId, events] of byLogicalRequest) {
+    const first = events[0]?.event;
+    const expectedMaxRetries = first?.maxRetries;
+    const expectedCallSite = first?.callSite;
+    const expectedConnectionTimeout = first?.connectionTimeoutMs;
+    for (const { index, event } of events) {
+      const label = String(event.kind).replaceAll("_", " ");
+      if (event.maxRetries !== expectedMaxRetries) {
+        fail(index, `${label} changed maxRetries for ${logicalRequestId}`);
+      }
+      if (event.callSite !== expectedCallSite) {
+        fail(index, `${label} changed callSite for ${logicalRequestId}`);
+      }
+      if (event.connectionTimeoutMs !== expectedConnectionTimeout) {
+        fail(index, `${label} changed connectionTimeoutMs for ${logicalRequestId}`);
+      }
+
+      const lifecycleId = typeof event.lifecycleId === "string" ? event.lifecycleId : "";
+      const descriptor = lifecycle.descriptors.get(lifecycleId);
+      if (!descriptor) {
+        fail(index, `${label} lifecycle ${lifecycleId || "<missing>"} does not exist`);
+      } else {
+        if (descriptor.callSite !== event.callSite) {
+          fail(index, `${label} lifecycle ${lifecycleId} changed callSite`);
+        }
+        if (descriptor.attempt !== event.attempt) {
+          fail(index, `${label} lifecycle ${lifecycleId} attempt does not match ${String(event.attempt)}`);
+        }
+      }
+    }
+
+    for (const [eventIndex, current] of events.entries()) {
+      const { index, event } = current;
+      const kind = String(event.kind);
+      const label = kind.replaceAll("_", " ");
+      const lifecycleId = typeof event.lifecycleId === "string" ? event.lifecycleId : "";
+      const phases = lifecycle.events.get(lifecycleId) ?? [];
+      if (kind === "transport_retry_scheduled") {
+        if (!phases.some((phase) => phase.phase === "retrying")) {
+          fail(index, `${label} lifecycle ${lifecycleId} is not terminal retrying`);
+        }
+        const next = events[eventIndex + 1];
+        const expectedAttempt = typeof event.attempt === "number" ? event.attempt + 1 : Number.NaN;
+        if (!next) {
+          fail(index, `${label} missing recovered or exhausted terminal diagnostic`);
+          continue;
+        }
+        if (next.event.attempt !== expectedAttempt) {
+          fail(
+            next.index,
+            `${String(next.event.kind).replaceAll("_", " ")} attempt ${String(next.event.attempt)} expected ${expectedAttempt}`,
+          );
+        }
+        if (next.event.lifecycleId === lifecycleId) {
+          fail(next.index, `transport retry attempt ${expectedAttempt} must use a fresh lifecycle ID`);
+        }
+      } else if (kind === "transport_retry_recovered") {
+        const previous = events[eventIndex - 1];
+        if (!previous || previous.event.kind !== "transport_retry_scheduled") {
+          fail(index, `${label} has no preceding scheduled diagnostic`);
+        }
+        const producingIndex = records.findIndex((record) =>
+          isRecord(record.event)
+          && record.event.kind === "llm_lifecycle"
+          && record.event.id === lifecycleId
+          && record.event.phase === "producing");
+        const continuation = ["validating", "applying", "completed"].map((phase) =>
+          records.findIndex((record, recordIndex) =>
+            recordIndex > index
+            && isRecord(record.event)
+            && record.event.kind === "llm_lifecycle"
+            && record.event.id === lifecycleId
+            && record.event.phase === phase));
+        if (producingIndex < 0 || producingIndex > index || continuation.some((value) => value < 0)) {
+          fail(index, `${label} does not continue through validation, application, and completion`);
+        }
+      } else {
+        if (!phases.some((phase) => phase.phase === "failed")) {
+          fail(index, `${label} lifecycle ${lifecycleId} is not terminal failed`);
+        }
+        if (records.slice(index + 1).some((record) => isRecord(record.event) && operationEffect(record.event))) {
+          fail(index, `${label} was followed by operation effects`);
+        } else {
+          fail(index, `${label} ended the replay`);
+        }
+      }
+    }
+  }
+
+  return {
+    scheduled,
+    recovered,
+    exhausted,
+    invalidEvents: invalid.size,
     failures,
   };
 }
@@ -1077,6 +1325,67 @@ function validPromptBudgetEvent(event: Record<string, unknown>): boolean {
   return true;
 }
 
+function auditEffects(records: AgentLogRecord[], wikiFolder: string): EffectAudit {
+  const sourceStarts = new Map<string, number>();
+  const sourceCompletions = new Map<string, number>();
+  const pageEffects = new Map<string, number>();
+  const duplicateSourcePaths = new Set<string>();
+  const duplicatePagePaths = new Set<string>();
+  let duplicateSources = 0;
+  let duplicatePages = 0;
+  let currentSource: string | undefined;
+
+  for (const record of records) {
+    const event = record.event;
+    if (!isRecord(event)) continue;
+    if (event.kind === "file_start" && typeof event.file === "string") {
+      currentSource = event.file;
+      const count = (sourceStarts.get(event.file) ?? 0) + 1;
+      sourceStarts.set(event.file, count);
+      if (count > 1) {
+        duplicateSources++;
+        duplicateSourcePaths.add(event.file);
+      }
+      continue;
+    }
+    if (event.kind === "file_done" && typeof event.file === "string") {
+      const count = (sourceCompletions.get(event.file) ?? 0) + 1;
+      sourceCompletions.set(event.file, count);
+      if (count > 1) {
+        duplicateSources++;
+        duplicateSourcePaths.add(event.file);
+      }
+      if (currentSource === event.file) currentSource = undefined;
+      continue;
+    }
+    if (
+      currentSource === undefined
+      || event.kind !== "tool_use"
+      || !["Create", "Update", "Write"].includes(String(event.name))
+      || !isRecord(event.input)
+      || typeof event.input.path !== "string"
+      || !event.input.path.startsWith(`${wikiFolder}/`)
+      || !event.input.path.endsWith(".md")
+    ) continue;
+    const key = `${currentSource}\0${event.input.path}`;
+    const count = (pageEffects.get(key) ?? 0) + 1;
+    pageEffects.set(key, count);
+    if (count > 1) {
+      duplicatePages++;
+      duplicatePagePaths.add(event.input.path);
+    }
+  }
+
+  const failures: string[] = [];
+  if (duplicateSources > 0) {
+    failures.push(`duplicate source effects: ${[...duplicateSourcePaths].sort().join(", ")}`);
+  }
+  if (duplicatePages > 0) {
+    failures.push(`duplicate page effects: ${[...duplicatePagePaths].sort().join(", ")}`);
+  }
+  return { duplicateSources, duplicatePages, failures };
+}
+
 function auditSession(
   records: AgentLogRecord[],
   session: string,
@@ -1084,6 +1393,8 @@ function auditSession(
   lifecycle: LifecycleAudit,
   wipe: WipeAudit,
   sessionAudit: SessionAudit,
+  retryAudit: TransportRetryAudit,
+  effectAudit: EffectAudit,
   staleDescendants: string[],
 ): Omit<AuditBoundedInitReplaySummary, "pageRecords" | "chunkRecords" | "duplicateRecordIds"> {
   const successfulSources = new Set<string>();
@@ -1158,6 +1469,12 @@ function auditSession(
     stalePreWipeDescendants: staleDescendants.length,
     systemFinishEvents: sessionAudit.finishCount,
     technicalHumanLabelFields: lifecycle.technicalHumanLabelFields,
+    transportRetryScheduled: retryAudit.scheduled,
+    transportRetryRecovered: retryAudit.recovered,
+    transportRetryExhausted: retryAudit.exhausted,
+    invalidTransportRetryEvents: retryAudit.invalidEvents,
+    duplicateSourceEffects: effectAudit.duplicateSources,
+    duplicatePageEffects: effectAudit.duplicatePages,
     leakedPromptFields,
   };
 }
@@ -1207,6 +1524,8 @@ function assertAudit(
   summary: AuditBoundedInitReplaySummary,
   sessionFailures: string[],
   lifecycleFailures: string[],
+  retryFailures: string[],
+  effectFailures: string[],
   staleDescendants: string[],
 ): void {
   const failures: string[] = [];
@@ -1228,6 +1547,8 @@ function assertAudit(
   }
   failures.push(...sessionFailures);
   failures.push(...lifecycleFailures);
+  failures.push(...retryFailures);
+  failures.push(...effectFailures);
   if (summary.wipeDomainEvents !== 1) {
     failures.push(`WipeDomain events: ${summary.wipeDomainEvents}, expected: 1`);
   }
@@ -1279,6 +1600,12 @@ export async function auditBoundedInitReplay(
     selected.records,
     sessionAudit.idleTimeoutMs,
   );
+  const retryAudit = auditTransportRetries(
+    selected.records,
+    lifecycle,
+    sessionAudit.idleTimeoutMs,
+  );
+  const effectAudit = auditEffects(selected.records, expectedFolder);
   const staleDescendants = wipe.count === 1 && wipe.completeCount === 1
     ? await stalePreWipeDescendants(path.dirname(indexPath), wipe)
     : [];
@@ -1290,6 +1617,8 @@ export async function auditBoundedInitReplay(
       lifecycle,
       wipe,
       sessionAudit,
+      retryAudit,
+      effectAudit,
       staleDescendants,
     ),
     ...await auditIndex(indexPath),
@@ -1298,6 +1627,8 @@ export async function auditBoundedInitReplay(
     summary,
     sessionAudit.failures,
     lifecycle.failures,
+    retryAudit.failures,
+    effectAudit.failures,
     staleDescendants,
   );
   return summary;

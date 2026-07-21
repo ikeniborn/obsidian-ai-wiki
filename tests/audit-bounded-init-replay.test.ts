@@ -190,6 +190,63 @@ function lifecycleRecords(
   }, session));
 }
 
+function transportRetryEvent(
+  kind: "transport_retry_scheduled" | "transport_retry_recovered" | "transport_retry_exhausted",
+  overrides: Record<string, unknown> = {},
+): AgentRecord {
+  const recovered = kind === "transport_retry_recovered";
+  return agentRecord({
+    kind,
+    logicalRequestId: "call-0",
+    lifecycleId: recovered ? "call-0:retry-1" : "call-0",
+    callSite: "ingest.evidence-map",
+    attempt: recovered ? 1 : 0,
+    maxRetries: 1,
+    errorClass: "retryable_http",
+    status: 502,
+    meaningfulOutputSeen: recovered,
+    connectionTimeoutMs: 0,
+    idleTimeoutMs: IDLE_DEADLINE_MS,
+    ...(kind === "transport_retry_scheduled"
+      ? { delayMs: 1, delaySource: "retry-after-ms" }
+      : {}),
+    ...overrides,
+  });
+}
+
+function replaceFirstCallWithTransportRetry(
+  records: AgentRecord[],
+  options: {
+    status?: number;
+    scheduled?: Record<string, unknown>;
+    recovered?: Record<string, unknown>;
+  } = {},
+): void {
+  const firstLifecycle = records.findIndex((record) =>
+    record.event.kind === "llm_lifecycle" && record.event.id === "call-0");
+  const initial = lifecycleRecords("call-0", 1_000, SESSION, {
+    phases: ["preparing", "sent", "waiting", "retrying"],
+  });
+  const replacement = lifecycleRecords("call-0:retry-1", 1_100, SESSION, {
+    attempt: 1,
+  });
+  records.splice(
+    firstLifecycle,
+    7,
+    ...initial,
+    transportRetryEvent("transport_retry_scheduled", {
+      status: options.status ?? 502,
+      ...options.scheduled,
+    }),
+    ...replacement.slice(0, 4),
+    transportRetryEvent("transport_retry_recovered", {
+      status: options.status ?? 502,
+      ...options.recovered,
+    }),
+    ...replacement.slice(4),
+  );
+}
+
 function indexJsonl(
   records: Record<string, unknown>[] = [
     pageRecord("alpha"),
@@ -413,6 +470,12 @@ test("success uses domain_created wiki_folder when domainId differs and other do
       stalePreWipeDescendants: 0,
       systemFinishEvents: 1,
       technicalHumanLabelFields: 0,
+      transportRetryScheduled: 0,
+      transportRetryRecovered: 0,
+      transportRetryExhausted: 0,
+      invalidTransportRetryEvents: 0,
+      duplicateSourceEffects: 0,
+      duplicatePageEffects: 0,
       pageRecords: 2,
       chunkRecords: 2,
       duplicateRecordIds: 0,
@@ -641,6 +704,237 @@ test("valid structured retry has one prompt budget per fresh lifecycle ID", asyn
     assert.equal(summary.promptBudgetEvents, 2);
   } finally {
     await value.cleanup();
+  }
+});
+
+test("valid 502 transport retry uses one logical request and continues after recovery", async () => {
+  const records = sessionRecords({ sources: ["sources/a.md"] });
+  replaceFirstCallWithTransportRetry(records);
+  const done = records.findIndex((record) => record.event.kind === "file_done");
+  records.splice(done, 0, agentRecord({
+    kind: "tool_use",
+    name: "Create",
+    input: { path: "!Wiki/replay-folder/concept/alpha.md" },
+  }));
+  const value = await fixture({ records });
+  try {
+    const summary = await audit(value, { expectedSources: 1 });
+    assert.equal(summary.transportRetryScheduled, 1);
+    assert.equal(summary.transportRetryRecovered, 1);
+    assert.equal(summary.transportRetryExhausted, 0);
+    assert.equal(summary.duplicateSourceEffects, 0);
+    assert.equal(summary.duplicatePageEffects, 0);
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("transport retry accepts only the approved HTTP status matrix", async (t) => {
+  for (const status of [408, 409, 429, 500, 502, 599]) {
+    await t.test(String(status), async () => {
+      const records = sessionRecords({ sources: ["sources/a.md"] });
+      replaceFirstCallWithTransportRetry(records, { status });
+      const value = await fixture({ records });
+      try {
+        const summary = await audit(value, { expectedSources: 1 });
+        assert.equal(summary.transportRetryRecovered, 1);
+      } finally {
+        await value.cleanup();
+      }
+    });
+  }
+
+  await t.test("400 is rejected", async () => {
+    const records = sessionRecords({ sources: ["sources/a.md"] });
+    replaceFirstCallWithTransportRetry(records, { status: 400 });
+    const value = await fixture({ records });
+    try {
+      await assert.rejects(
+        audit(value, { expectedSources: 1 }),
+        /transport retry scheduled.*status 400.*not retryable/i,
+      );
+    } finally {
+      await value.cleanup();
+    }
+  });
+
+  await t.test("provider retry override accepts 400", async () => {
+    const records = sessionRecords({ sources: ["sources/a.md"] });
+    replaceFirstCallWithTransportRetry(records, {
+      status: 400,
+      scheduled: { errorClass: "provider_retry" },
+      recovered: { errorClass: "provider_retry" },
+    });
+    const value = await fixture({ records });
+    try {
+      const summary = await audit(value, { expectedSources: 1 });
+      assert.equal(summary.transportRetryRecovered, 1);
+    } finally {
+      await value.cleanup();
+    }
+  });
+
+  await t.test("connection retry has no HTTP status", async () => {
+    const records = sessionRecords({ sources: ["sources/a.md"] });
+    replaceFirstCallWithTransportRetry(records, {
+      scheduled: { status: undefined, errorClass: "connection" },
+      recovered: { status: undefined, errorClass: "connection" },
+    });
+    const value = await fixture({ records });
+    try {
+      const summary = await audit(value, { expectedSources: 1 });
+      assert.equal(summary.transportRetryRecovered, 1);
+    } finally {
+      await value.cleanup();
+    }
+  });
+});
+
+test("retry exhaustion is terminal and cannot be followed by successful effects", async () => {
+  const records = sessionRecords({ sources: ["sources/a.md"] });
+  replaceFirstCallWithTransportRetry(records);
+  const replacementStart = records.findIndex((record) =>
+    record.event.kind === "llm_lifecycle" && record.event.id === "call-0:retry-1");
+  const replacementEnd = records.findLastIndex((record) =>
+    (record.event.kind === "llm_lifecycle" && record.event.id === "call-0:retry-1")
+    || record.event.kind === "transport_retry_recovered");
+  records.splice(
+    replacementStart,
+    replacementEnd - replacementStart + 1,
+    ...lifecycleRecords("call-0:retry-1", 1_100, SESSION, {
+      attempt: 1,
+      phases: ["preparing", "sent", "waiting", "failed"],
+    }),
+    transportRetryEvent("transport_retry_exhausted", {
+      lifecycleId: "call-0:retry-1",
+      attempt: 1,
+      meaningfulOutputSeen: false,
+    }),
+  );
+  const value = await fixture({ records });
+  try {
+    await assert.rejects(
+      audit(value, { expectedSources: 1 }),
+      /transport retry exhausted.*followed by operation effects/i,
+    );
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("transport retry is rejected after meaningful model content", async () => {
+  const records = sessionRecords({ sources: ["sources/a.md"] });
+  replaceFirstCallWithTransportRetry(records, {
+    scheduled: { meaningfulOutputSeen: true },
+  });
+  const value = await fixture({ records });
+  try {
+    await assert.rejects(
+      audit(value, { expectedSources: 1 }),
+      /transport retry scheduled.*meaningful output/i,
+    );
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("transport retry requires ordered attempts, unique lifecycle IDs, and configured bound", async (t) => {
+  for (const [name, mutate, expected] of [
+    [
+      "recovered attempt",
+      (records: AgentRecord[]) => {
+        const event = records.find((record) => record.event.kind === "transport_retry_recovered")!;
+        event.event.attempt = 0;
+      },
+      /transport retry recovered.*attempt 0.*expected 1/i,
+    ],
+    [
+      "duplicate lifecycle",
+      (records: AgentRecord[]) => {
+        for (const record of records) {
+          if (record.event.kind === "llm_lifecycle" && record.event.id === "call-0:retry-1") {
+            record.event.id = "call-0";
+          }
+        }
+        const event = records.find((record) => record.event.kind === "transport_retry_recovered")!;
+        event.event.lifecycleId = "call-0";
+      },
+      /transport retry attempt 1.*fresh lifecycle/i,
+    ],
+    [
+      "bound",
+      (records: AgentRecord[]) => {
+        const event = records.find((record) => record.event.kind === "transport_retry_recovered")!;
+        event.event.maxRetries = 0;
+      },
+      /transport retry recovered.*attempt 1.*maxRetries 0/i,
+    ],
+  ] as Array<[string, (records: AgentRecord[]) => void, RegExp]>) {
+    await t.test(name, async () => {
+      const records = sessionRecords({ sources: ["sources/a.md"] });
+      replaceFirstCallWithTransportRetry(records);
+      mutate(records);
+      const value = await fixture({ records });
+      try {
+        await assert.rejects(audit(value, { expectedSources: 1 }), expected);
+      } finally {
+        await value.cleanup();
+      }
+    });
+  }
+});
+
+test("transport retry idle timeout must match selected run configuration", async () => {
+  const records = sessionRecords({ sources: ["sources/a.md"] });
+  replaceFirstCallWithTransportRetry(records, {
+    scheduled: { idleTimeoutMs: IDLE_DEADLINE_MS - 1 },
+  });
+  const value = await fixture({ records });
+  try {
+    await assert.rejects(
+      audit(value, { expectedSources: 1 }),
+      /transport retry scheduled.*idleTimeoutMs 299999.*run_config 300000/i,
+    );
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("recovered retry rejects duplicate source and page effects", async (t) => {
+  for (const [name, duplicate, expected] of [
+    [
+      "source",
+      (records: AgentRecord[]) => {
+        const done = records.find((record) => record.event.kind === "file_done")!;
+        records.splice(records.indexOf(done), 0, structuredClone(done));
+      },
+      /duplicate source effects.*sources\/a\.md/i,
+    ],
+    [
+      "page",
+      (records: AgentRecord[]) => {
+        const done = records.findIndex((record) => record.event.kind === "file_done");
+        const write = agentRecord({
+          kind: "tool_use",
+          name: "Create",
+          input: { path: "!Wiki/replay-folder/concept/alpha.md" },
+        });
+        records.splice(done, 0, write, structuredClone(write));
+      },
+      /duplicate page effects.*alpha\.md/i,
+    ],
+  ] as Array<[string, (records: AgentRecord[]) => void, RegExp]>) {
+    await t.test(name, async () => {
+      const records = sessionRecords({ sources: ["sources/a.md"] });
+      replaceFirstCallWithTransportRetry(records);
+      duplicate(records);
+      const value = await fixture({ records });
+      try {
+        await assert.rejects(audit(value, { expectedSources: 1 }), expected);
+      } finally {
+        await value.cleanup();
+      }
+    });
   }
 });
 

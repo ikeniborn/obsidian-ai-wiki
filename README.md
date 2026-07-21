@@ -178,6 +178,14 @@ timer shows UI elapsed time; it is not a provider heartbeat and does not extend 
 deadline. Agent-log reasoning is retained in ordered bounded records up to 4 MiB per
 operation; excess text is replaced by a metadata-only truncation marker.
 
+For Native Agent, a replacement transport attempt starts a fresh human lifecycle at
+**Preparing request**. The sidebar does not show retry counters or HTTP details.
+`agent.jsonl` records metadata-only `transport_retry_scheduled`,
+`transport_retry_recovered`, and `transport_retry_exhausted` events with the logical
+request ID, lifecycle ID, status/classification, delay, attempt bound, and timeout values;
+request bodies, response content, authorization headers, and API keys are never retry
+diagnostics.
+
 Background structured work—Init bootstrap, evidence map/reduce, Ingest synthesis, and
 bounded Lint batches—uses atomic non-stream responses. Interactive Chat, the Query answer,
 and Format use SSE so reasoning or answer text can appear as it arrives.
@@ -213,6 +221,8 @@ recreated domain tree.
 |---|---|---|
 | User prompt | Added to the system prompt of every operation | empty |
 | Timeouts (seconds) | `ingest/query/lint/init/format`, slash-separated | `300/300/900/3600/600` |
+| LLM idle timeout | Maximum silence between meaningful native model events; `0` disables the executor idle deadline | `300` s |
+| Retry count | Backend-specific: native additional attempts per request; Claude guarded idle retries per operation | `3` |
 | History limit | Max operations in sidebar history | `20` |
 | Agent log (JSONL) | Log agent events to plugin-local `agent.jsonl` (desktop only) | off |
 
@@ -240,6 +250,8 @@ List of created domains with **Edit** / **Delete** buttons. Domain map is stored
 
 Claude output limits are owned by the external Claude CLI configuration. AI Wiki bounds
 and packs Claude input, but does not send or expose a plugin-owned Claude output budget.
+Claude keeps its existing guarded operation-level idle retry behavior; it does not use
+Native Agent's request executor, HTTP status matrix, or connection-timeout transport.
 
 ### Native Agent
 
@@ -247,6 +259,7 @@ and packs Claude input, but does not send or expose a plugin-owned Claude output
 |---|---|---|
 | Base URL | OpenAI-compatible endpoint. Ollama: `http://localhost:11434/v1` | `http://localhost:11434/v1` |
 | API key | `ollama` for Ollama; `sk-...` for OpenAI | `ollama` |
+| Connection timeout | Desktop DNS/TCP/TLS establishment only; it does not cap response headers, body, or generation | `15` s |
 | Input budget tokens | Maximum estimated size of the packed prompt. This is configured explicitly; the plugin does not discover the model's context window | `16384` |
 | Output budget tokens | Response cap sent through the existing `maxTokens`/API `max_tokens` setting | `4096` |
 | Semantic compression | Prompt-density profile (`Maximum`/`Balanced`/`Minimum`) with operation-specific preservation rules | `Balanced` |
@@ -255,6 +268,25 @@ and packs Claude input, but does not send or expose a plugin-owned Claude output
 | Temperature | `0.0`–`1.0`. Low values (`0.1`–`0.3`) give more precise, factual answers | `0.2` |
 | Per-operation models | When on, configure model, input/output budgets, compression, thinking budget, and temperature per operation. Format keeps numeric budgets but has no semantic-compression control | off |
 | Output repair retries | Retries for invalid JSON or invalid framed output after Zod validation (0–3). Higher = more reliable on weaker models | `1` |
+
+### Native transient request recovery
+
+Native Agent retries only the current identical OpenAI-compatible request, up to the
+configured number of additional attempts. It never replays Init, Re-init, Ingest, a source
+read, `WipeDomain`, completed evidence, or page/index application. Eligible failures are
+connection errors/timeouts and HTTP `408`, `409`, `429`, and `5xx`. Provider
+`x-should-retry: true` can opt in another transient response; `x-should-retry: false`
+always opts out. HTTP `400`, `401`, `403`, `404`, and `422`, context-limit and schema
+failures, cancellation, permanent TLS/certificate errors, and application/index/embedding
+failures are not transport-retried.
+
+Retry stops after nonblank reasoning or content, or when the additional-attempt bound is
+exhausted. Connection timeout (`15` seconds), model idle timeout (`300` seconds), and
+retry count (`3`) are independent top-level settings; existing persisted values are
+preserved. A healthy response may take longer than 15 seconds because that value applies
+only to desktop connection establishment. On Mobile, Native Agent keeps the host-provided
+transport, so an exact DNS/TCP/TLS-only timeout cannot be guaranteed; request retry and
+model-idle handling remain separate from that limitation.
 
 ### Vision
 
@@ -296,6 +328,14 @@ Small sources keep the short path. Oversized sources, pages, histories, notes, o
 require extra bounded model calls, increasing latency and provider cost in exchange for
 complete processing within the configured input budget. Vision Check is also a real
 provider request and may incur a small charge.
+
+Destructive Re-init acceptance must use a private copied vault, never the working vault.
+The protected replay root must be a recent `/tmp/ai-wiki-bounded-ingest-replay.*`
+directory with an owner-only `.replay-provenance` marker that records the resolved source
+and replay root. Install the build into its `run` copy, visibly confirm that vault path in
+Obsidian, and only then perform the human Re-init checkpoint. The read-only replay auditor
+rejects duplicate wipe/source/page/index effects, invalid retry lifecycles, timeout drift,
+retry after content, and recovery that does not continue to the next step.
 
 ### Proxy (native-agent only)
 
