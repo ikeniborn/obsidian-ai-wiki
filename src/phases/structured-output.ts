@@ -533,6 +533,10 @@ function classifyError<T>(profile: StructuredProfile<T>, err: Error): Extract<Ru
   return "json_parse";
 }
 
+function structuredCallOptions(opts: LlmCallOptions): LlmCallOptions {
+  return { ...opts, thinkingBudgetTokens: undefined };
+}
+
 async function callWithFormatFallback<T>(
   args: RunStructuredArgs<T>,
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
@@ -545,9 +549,9 @@ async function callWithFormatFallback<T>(
     if (!isNativeLlmClient(args.llm)) {
       lifecycle.begin(attempt, args.transport ?? "stream");
     }
-    const callOpts: LlmCallOptions = args.profile.kind === "json-zod"
+    const callOpts: LlmCallOptions = structuredCallOptions(args.profile.kind === "json-zod"
       ? optsForMode(args.opts, currentMode, args.callSite, args.profile.schema)
-      : { ...args.opts, jsonMode: false, jsonSchema: undefined };
+      : { ...args.opts, jsonMode: false, jsonSchema: undefined });
 
     try {
       return {

@@ -52058,13 +52058,16 @@ function classifyError(profile, err) {
   if (err instanceof ZodError) return "schema_validate";
   return "json_parse";
 }
+function structuredCallOptions(opts) {
+  return { ...opts, thinkingBudgetTokens: void 0 };
+}
 async function callWithFormatFallback(args, messages, mode, attempt, lifecycle) {
   let currentMode = mode;
   while (true) {
     if (!isNativeLlmClient(args.llm)) {
       lifecycle.begin(attempt, args.transport ?? "stream");
     }
-    const callOpts = args.profile.kind === "json-zod" ? optsForMode(args.opts, currentMode, args.callSite, args.profile.schema) : { ...args.opts, jsonMode: false, jsonSchema: void 0 };
+    const callOpts = structuredCallOptions(args.profile.kind === "json-zod" ? optsForMode(args.opts, currentMode, args.callSite, args.profile.schema) : { ...args.opts, jsonMode: false, jsonSchema: void 0 });
     try {
       return {
         result: args.transport === "non-stream" ? await nonStreamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle, attempt, args.callSite) : await streamOnce(args.llm, args.model, messages, callOpts, args.signal, args.onEvent, lifecycle, attempt, args.callSite),

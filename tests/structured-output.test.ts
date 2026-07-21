@@ -881,6 +881,26 @@ test("json-zod with jsonMode unset starts with json_schema response_format", asy
   assert.equal((seenParams[0]?.response_format as { type?: string } | undefined)?.type, "json_schema");
 });
 
+test("structured json calls ignore provider thinking controls", async () => {
+  const seenParams: Record<string, unknown>[] = [];
+
+  await parseWithRetry({
+    llm: llmFromAttempts(['{"value":"plain"}'], seenParams),
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: { jsonMode: "json_schema", thinkingBudgetTokens: 512 },
+    schema: SmallSchema,
+    maxRetries: 1,
+    callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+
+  assert.equal("thinking" in seenParams[0], false);
+  assert.equal((seenParams[0]?.response_format as { type?: string } | undefined)?.type, "json_schema");
+});
+
 test("json-zod with jsonMode false sends no response_format", async () => {
   const seenParams: Record<string, unknown>[] = [];
 
