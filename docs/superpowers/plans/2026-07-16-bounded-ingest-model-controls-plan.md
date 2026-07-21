@@ -3339,13 +3339,13 @@ git commit -m "feat(settings): separate connection and model idle timeouts"
 - Modify through iwiki MCP: `architecture/structured-output-runner`
 - Modify through iwiki MCP: `architecture/llm-lifecycle`
 
-- [ ] **Step 1: Write failing replay-auditor fixtures**
+- [x] **Step 1: Write failing replay-auditor fixtures**
 
 Add valid `502 -> scheduled -> replacement lifecycle -> recovered -> next step`, retry
 exhaustion, retry after content, duplicate wipe, duplicate source/page application,
 missing terminal diagnostic, and timeout-value mismatch fixtures.
 
-- [ ] **Step 2: Run auditor tests and confirm RED**
+- [x] **Step 2: Run auditor tests and confirm RED**
 
 ```bash
 node --import tsx --test tests/audit-bounded-init-replay.test.ts
@@ -3353,20 +3353,20 @@ node --import tsx --test tests/audit-bounded-init-replay.test.ts
 
 Expected: FAIL because retry evidence and exactly-once recovery are not audited.
 
-- [ ] **Step 3: Extend the read-only auditor**
+- [x] **Step 3: Extend the read-only auditor**
 
 Require attempt ordering, one lifecycle ID per attempt, approved status classification,
 configured retry bound, exactly one wipe, no duplicate effects, and continuation after
 recovery. Reject retry after meaningful output.
 
-- [ ] **Step 4: Update repository docs and iwiki**
+- [x] **Step 4: Update repository docs and iwiki**
 
 Document native-only request retry, status matrix, top-level global settings, 3/15/300
 defaults, Claude unchanged behavior, Mobile connection-timeout limitation, sidebar human
 states, and log-only diagnostics. Update iwiki only after runtime code exists, then run
 `wiki_lint`.
 
-- [ ] **Step 5: Write and test the metadata-only live eval script**
+- [x] **Step 5: Write and test the metadata-only live eval script**
 
 The script accepts `--base-url`, `--model`, `--api-key-file`, and `--out`. It sends one
 small non-stream synthesis-shaped request through `/v1/chat/completions` with the
@@ -3406,7 +3406,7 @@ Expected: PASS; a local delayed response longer than 15 seconds produces metadat
 evidence through the production factory and proves connection timeout does not cap body
 duration.
 
-- [ ] **Step 6: Run deterministic integration and live endpoint eval**
+- [x] **Step 6: Run deterministic integration and live endpoint eval**
 
 Run injected 502 fixtures first. Then send a non-destructive synthesis-like request to the
 configured live endpoint and record status/duration without logging API keys or prompt
@@ -3424,7 +3424,7 @@ Expected: injected retry recovers; non-retryable matrix fails closed; live reque
 normally; evidence contains metadata only and no request body, response content,
 credential, or authorization header.
 
-- [ ] **Step 7: Build and install the protected replay**
+- [x] **Step 7: Build and install the protected replay**
 
 ```bash
 npm run build
@@ -3468,7 +3468,7 @@ Expected: 22/22 sources; one wipe; no duplicate effects; any transient recovery 
 within the configured limit; zero retry after content; tests/build pass; lint has zero
 errors; `wiki_lint` has no new broken/stale finding from changed sources.
 
-- [ ] **Step 9: Commit documentation, eval evidence, and audit tooling**
+- [x] **Step 9: Commit documentation, eval evidence, and audit tooling**
 
 ```bash
 git add scripts/audit-bounded-init-replay.ts scripts/eval-native-request-retry.ts tests/audit-bounded-init-replay.test.ts tests/eval-native-request-retry.test.ts docs/superpowers/evals/native-request-retry-live.json README.md docs/README.ru.md
