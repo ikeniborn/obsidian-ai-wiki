@@ -280,6 +280,11 @@ Native Agent повторяет только текущий идентичный
 context-limit и schema errors, отмена, постоянные TLS/certificate errors и ошибки
 application/index/embedding не повторяются на transport-уровне.
 
+Сохранённая retry-диагностика принимает только классы connection, connection timeout,
+разрешённые temporary transport, retryable HTTP и явный provider override. Transport-классы
+не содержат HTTP status; HTTP-классы обязаны содержать согласованный валидный status, а
+recovered/exhausted diagnostics должны совпадать с закрываемой scheduled failure.
+
 После непустого reasoning или content повтор запрещён; исчерпание границы завершает
 операцию ошибкой. Таймаут соединения (`15` секунд), idle timeout модели (`300` секунд) и
 число повторов (`3`) — независимые top-level настройки; сохранённые значения не
@@ -338,7 +343,10 @@ Protected replay root должен быть свежим каталогом
 Obsidian вручную проверяют путь открытого vault и только после этого выполняют human
 Re-init checkpoint. Read-only auditor отклоняет повторный wipe, source/page/index effects,
 неверные retry lifecycle и таймауты, retry после content и recovery без перехода к
-следующему шагу.
+следующему шагу. После transport recovery допустим коррелированный structured-repair
+lifecycle перед успешными validation/application/completion. Page mutation считается
+эффектом только после соответствующего успешного `tool_result`; metadata-only index
+checkpoints связывают обе стадии index reconciliation с активным source и выбранным domain.
 
 ### Прокси (только native-agent)
 

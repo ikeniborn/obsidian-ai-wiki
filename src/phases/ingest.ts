@@ -1217,6 +1217,12 @@ export async function* runIngest(
       domainRoot,
       [...finalPages].map(([path, content]) => ({ path, content })),
     );
+    yield {
+      kind: "index_effect",
+      domainId: domain.id,
+      sourcePath,
+      stage: "page_reconcile",
+    };
   } catch (error) {
     const message = `ingest: index reconciliation failed — ${(error as Error).message}`;
     yield { kind: "error", message };
@@ -1262,6 +1268,12 @@ export async function* runIngest(
       domainRoot,
       [...backlinkPages].map(([path, content]) => ({ path, content })),
     );
+    yield {
+      kind: "index_effect",
+      domainId: domain.id,
+      sourcePath,
+      stage: "final_reconcile",
+    };
   } catch (error) {
     const message = `ingest: final page inventory failed — ${(error as Error).message}`;
     yield { kind: "error", message };

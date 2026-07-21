@@ -61,6 +61,7 @@ export interface AuditBoundedInitReplaySummary {
   invalidTransportRetryEvents: number;
   duplicateSourceEffects: number;
   duplicatePageEffects: number;
+  duplicateIndexEffects: number;
   pageRecords: number;
   chunkRecords: number;
   duplicateRecordIds: number;
@@ -150,6 +151,7 @@ const ATTEMPT_LABEL_MARKER = /\b(?:attempt|retry)\s*(?:#|no\.?|number|:|=)?\s*\d
 const PROVIDER_LABEL_MARKER =
   /\b(?:anthropic|azure\s+openai|gemini|groq|litellm|ollama|openai|openrouter|xai)\b/i;
 const MAX_JSONL_LINE_BYTES = WIPE_LOG_LINE_MAX_BYTES;
+const INDEX_EFFECT_FIELDS = new Set(["kind", "domainId", "sourcePath", "stage"]);
 
 interface WipeAudit {
   count: number;
@@ -171,6 +173,7 @@ interface LifecycleAudit {
 interface LifecycleDescriptor {
   id: string;
   callSite: string;
+  action?: string;
   transport?: string;
   attempt?: number;
 }
@@ -195,6 +198,7 @@ interface TransportRetryAudit {
 interface EffectAudit {
   duplicateSources: number;
   duplicatePages: number;
+  duplicateIndexes: number;
   failures: string[];
 }
 
@@ -697,6 +701,7 @@ function auditLifecycles(
     const descriptor: LifecycleDescriptor = {
       id,
       callSite: diagnostics.callSite,
+      action,
     };
     if (diagnostics.transport === undefined) {
       failures.push(`lifecycle ${id} missing diagnostics.transport`);
@@ -771,8 +776,24 @@ function auditLifecycles(
     ) return [];
     return [record.event.lifecycleId];
   }));
+  const retryPredecessorById = new Map<string, string>();
+  for (const [index, event] of lifecycleSequence.entries()) {
+    const next = lifecycleSequence[index + 1];
+    if (
+      event.phase === "retrying"
+      && typeof event.id === "string"
+      && next?.phase === "preparing"
+      && typeof next.id === "string"
+      && next.id !== event.id
+    ) {
+      retryPredecessorById.set(next.id, event.id);
+    }
+  }
   for (const id of calls.keys()) {
-    if (!budgetByRequestId.has(id) && !transportLifecycleIds.has(id)) {
+    const predecessor = retryPredecessorById.get(id);
+    const correlatedRetryBudget = predecessor !== undefined
+      && (budgetByRequestId.has(predecessor) || transportLifecycleIds.has(predecessor));
+    if (!budgetByRequestId.has(id) && !transportLifecycleIds.has(id) && !correlatedRetryBudget) {
       failures.push(`orphan lifecycle ${id} has no prompt_budget`);
     }
   }
@@ -838,6 +859,22 @@ const TRANSPORT_RETRY_KINDS = new Set([
   "transport_retry_recovered",
   "transport_retry_exhausted",
 ]);
+const TEMPORARY_TRANSPORT_ERROR_CLASSES = new Set([
+  "temporary_transport:EAI_AGAIN",
+  "temporary_transport:ECONNREFUSED",
+  "temporary_transport:ECONNRESET",
+  "temporary_transport:EHOSTUNREACH",
+  "temporary_transport:ENETDOWN",
+  "temporary_transport:ENETUNREACH",
+  "temporary_transport:EPIPE",
+  "temporary_transport:ETIMEDOUT",
+]);
+const STATUSLESS_RETRY_ERROR_CLASSES = new Set([
+  "connection",
+  "connection_timeout",
+  ...TEMPORARY_TRANSPORT_ERROR_CLASSES,
+]);
+const HTTP_RETRY_ERROR_CLASSES = new Set(["retryable_http", "provider_retry"]);
 
 function retryableHttpStatus(status: number): boolean {
   return status === 408
@@ -846,12 +883,30 @@ function retryableHttpStatus(status: number): boolean {
     || (status >= 500 && status <= 599);
 }
 
-function operationEffect(event: Record<string, unknown>): boolean {
-  if (["file_done", "domain_updated", "source_path_added"].includes(String(event.kind))) {
-    return true;
+function lifecycleRoot(id: string): string {
+  return id.replace(/(?::retry-\d+)+$/, "");
+}
+
+function successfulOperationEffectIndexes(records: AgentLogRecord[]): Set<number> {
+  const indexes = new Set<number>();
+  let pendingMutation = false;
+  for (const [index, record] of records.entries()) {
+    const event = record.event;
+    if (!isRecord(event)) continue;
+    if (["file_done", "domain_updated", "source_path_added", "index_effect"].includes(String(event.kind))) {
+      indexes.add(index);
+    }
+    if (
+      event.kind === "tool_use"
+      && ["Create", "Update", "Write", "Delete"].includes(String(event.name))
+    ) {
+      pendingMutation = true;
+    } else if (event.kind === "tool_result" && pendingMutation) {
+      if (event.ok === true) indexes.add(index);
+      pendingMutation = false;
+    }
   }
-  return event.kind === "tool_use"
-    && ["Create", "Update", "Write", "Delete"].includes(String(event.name));
+  return indexes;
 }
 
 function auditTransportRetries(
@@ -869,6 +924,7 @@ function auditTransportRetries(
   let scheduled = 0;
   let recovered = 0;
   let exhausted = 0;
+  const operationEffectIndexes = successfulOperationEffectIndexes(records);
 
   const fail = (index: number, message: string): void => {
     invalid.add(index);
@@ -933,15 +989,21 @@ function auditTransportRetries(
     }
     if (typeof event.errorClass !== "string" || event.errorClass.length === 0) {
       fail(index, `${label} missing errorClass`);
-    }
-    if (
-      event.status !== undefined
-      && (
-        !finiteNonnegativeInteger(event.status)
-        || (!retryableHttpStatus(event.status) && event.errorClass !== "provider_retry")
-      )
+    } else if (
+      !STATUSLESS_RETRY_ERROR_CLASSES.has(event.errorClass)
+      && !HTTP_RETRY_ERROR_CLASSES.has(event.errorClass)
     ) {
-      fail(index, `${label} status ${String(event.status)} is not retryable`);
+      fail(index, `${label} errorClass ${event.errorClass} is not retryable`);
+    } else if (STATUSLESS_RETRY_ERROR_CLASSES.has(event.errorClass)) {
+      if (event.status !== undefined) {
+        fail(index, `${label} errorClass ${event.errorClass} must not include status`);
+      }
+    } else if (!finiteNonnegativeInteger(event.status)) {
+      fail(index, `${label} errorClass ${event.errorClass} requires status`);
+    } else if (event.status > 599 || event.status < 100) {
+      fail(index, `${label} status ${event.status} is not a valid HTTP status`);
+    } else if (event.errorClass === "retryable_http" && !retryableHttpStatus(event.status)) {
+      fail(index, `${label} status ${event.status} is not retryable`);
     }
     if (kind === "transport_retry_scheduled") {
       if (!finiteNonnegative(event.delayMs)) fail(index, `${label} has invalid delayMs`);
@@ -995,6 +1057,19 @@ function auditTransportRetries(
       const label = kind.replaceAll("_", " ");
       const lifecycleId = typeof event.lifecycleId === "string" ? event.lifecycleId : "";
       const phases = lifecycle.events.get(lifecycleId) ?? [];
+      const previous = events[eventIndex - 1];
+      if (kind !== "transport_retry_scheduled") {
+        if (!previous || previous.event.kind !== "transport_retry_scheduled") {
+          fail(index, `${label} has no preceding scheduled diagnostic`);
+        } else {
+          if (event.errorClass !== previous.event.errorClass) {
+            fail(index, `${label} changed errorClass for logical request ${logicalRequestId}`);
+          }
+          if (event.status !== previous.event.status) {
+            fail(index, `${label} changed status for logical request ${logicalRequestId}`);
+          }
+        }
+      }
       if (kind === "transport_retry_scheduled") {
         if (!phases.some((phase) => phase.phase === "retrying")) {
           fail(index, `${label} lifecycle ${lifecycleId} is not terminal retrying`);
@@ -1015,30 +1090,43 @@ function auditTransportRetries(
           fail(next.index, `transport retry attempt ${expectedAttempt} must use a fresh lifecycle ID`);
         }
       } else if (kind === "transport_retry_recovered") {
-        const previous = events[eventIndex - 1];
-        if (!previous || previous.event.kind !== "transport_retry_scheduled") {
-          fail(index, `${label} has no preceding scheduled diagnostic`);
-        }
         const producingIndex = records.findIndex((record) =>
           isRecord(record.event)
           && record.event.kind === "llm_lifecycle"
           && record.event.id === lifecycleId
           && record.event.phase === "producing");
-        const continuation = ["validating", "applying", "completed"].map((phase) =>
-          records.findIndex((record, recordIndex) =>
-            recordIndex > index
-            && isRecord(record.event)
-            && record.event.kind === "llm_lifecycle"
-            && record.event.id === lifecycleId
-            && record.event.phase === phase));
-        if (producingIndex < 0 || producingIndex > index || continuation.some((value) => value < 0)) {
-          fail(index, `${label} does not continue through validation, application, and completion`);
+        const recoveredDescriptor = lifecycle.descriptors.get(lifecycleId);
+        const root = lifecycleRoot(lifecycleId || logicalRequestId);
+        let continued = false;
+        for (const [candidateId, descriptor] of lifecycle.descriptors) {
+          if (
+            lifecycleRoot(candidateId) !== root
+            || descriptor.callSite !== recoveredDescriptor?.callSite
+            || descriptor.action !== recoveredDescriptor?.action
+            || descriptor.attempt === undefined
+            || event.attempt === undefined
+            || descriptor.attempt < event.attempt
+          ) continue;
+          const continuation = ["validating", "applying", "completed"].map((phase) =>
+            records.findIndex((record, recordIndex) =>
+              recordIndex > index
+              && isRecord(record.event)
+              && record.event.kind === "llm_lifecycle"
+              && record.event.id === candidateId
+              && record.event.phase === phase));
+          if (continuation.every((value) => value >= 0)) {
+            continued = true;
+            break;
+          }
+        }
+        if (producingIndex < 0 || producingIndex > index || !continued) {
+          fail(index, `${label} does not continue through correlated validation, application, and completion`);
         }
       } else {
         if (!phases.some((phase) => phase.phase === "failed")) {
           fail(index, `${label} lifecycle ${lifecycleId} is not terminal failed`);
         }
-        if (records.slice(index + 1).some((record) => isRecord(record.event) && operationEffect(record.event))) {
+        if ([...operationEffectIndexes].some((effectIndex) => effectIndex > index)) {
           fail(index, `${label} was followed by operation effects`);
         } else {
           fail(index, `${label} ended the replay`);
@@ -1350,16 +1438,43 @@ function auditEffects(records: AgentLogRecord[], wikiFolder: string): EffectAudi
   const sourceStarts = new Map<string, number>();
   const sourceCompletions = new Map<string, number>();
   const pageEffects = new Map<string, number>();
+  const indexEffects = new Map<string, number>();
   const duplicateSourcePaths = new Set<string>();
   const duplicatePagePaths = new Set<string>();
   let duplicateSources = 0;
   let duplicatePages = 0;
+  let duplicateIndexes = 0;
   let currentSource: string | undefined;
+  let pendingPageEffect: { source: string; path: string } | undefined;
+  const failures: string[] = [];
+  const selectedDomainId = records.flatMap((record) => {
+    const event = record.event;
+    return isRecord(event)
+      && event.kind === "domain_created"
+      && isRecord(event.entry)
+      && typeof event.entry.id === "string"
+      ? [event.entry.id]
+      : [];
+  })[0];
+
+  const recordPageEffect = (source: string, pagePath: string): void => {
+    const key = `${source}\0${pagePath}`;
+    const count = (pageEffects.get(key) ?? 0) + 1;
+    pageEffects.set(key, count);
+    if (count > 1) {
+      duplicatePages++;
+      duplicatePagePaths.add(pagePath);
+    }
+  };
 
   for (const record of records) {
     const event = record.event;
     if (!isRecord(event)) continue;
     if (event.kind === "file_start" && typeof event.file === "string") {
+      if (pendingPageEffect) {
+        failures.push(`page mutation ${pendingPageEffect.path} missing correlated tool_result`);
+        pendingPageEffect = undefined;
+      }
       currentSource = event.file;
       const count = (sourceStarts.get(event.file) ?? 0) + 1;
       sourceStarts.set(event.file, count);
@@ -1370,6 +1485,10 @@ function auditEffects(records: AgentLogRecord[], wikiFolder: string): EffectAudi
       continue;
     }
     if (event.kind === "file_done" && typeof event.file === "string") {
+      if (pendingPageEffect) {
+        failures.push(`page mutation ${pendingPageEffect.path} missing correlated tool_result`);
+        pendingPageEffect = undefined;
+      }
       const count = (sourceCompletions.get(event.file) ?? 0) + 1;
       sourceCompletions.set(event.file, count);
       if (count > 1) {
@@ -1379,32 +1498,78 @@ function auditEffects(records: AgentLogRecord[], wikiFolder: string): EffectAudi
       if (currentSource === event.file) currentSource = undefined;
       continue;
     }
+    if (event.kind === "tool_result" && pendingPageEffect) {
+      if (event.ok === true) recordPageEffect(pendingPageEffect.source, pendingPageEffect.path);
+      else if (event.ok !== false) failures.push("page mutation has invalid correlated tool_result");
+      pendingPageEffect = undefined;
+      continue;
+    }
+    if (event.kind === "index_effect") {
+      if (Object.keys(event).some((field) => !INDEX_EFFECT_FIELDS.has(field))) {
+        failures.push("index effect has non-metadata fields");
+        continue;
+      }
+      if (typeof event.stage !== "string" || !["page_reconcile", "final_reconcile"].includes(event.stage)) {
+        failures.push(`index effect has invalid stage ${String(event.stage)}`);
+        continue;
+      }
+      if (typeof event.sourcePath !== "string" || event.sourcePath !== currentSource) {
+        failures.push(
+          `index effect sourcePath ${String(event.sourcePath)} does not match active source ${String(currentSource)}`,
+        );
+        continue;
+      }
+      if (typeof event.domainId !== "string" || event.domainId !== selectedDomainId) {
+        failures.push(
+          `index effect domainId ${String(event.domainId)} does not match selected domain ${String(selectedDomainId)}`,
+        );
+        continue;
+      }
+      const key = `${event.sourcePath}\0${event.stage}`;
+      const count = (indexEffects.get(key) ?? 0) + 1;
+      indexEffects.set(key, count);
+      if (count > 1) duplicateIndexes++;
+      continue;
+    }
     if (
       currentSource === undefined
       || event.kind !== "tool_use"
-      || !["Create", "Update", "Write"].includes(String(event.name))
+      || !["Create", "Update", "Write", "Delete"].includes(String(event.name))
       || !isRecord(event.input)
       || typeof event.input.path !== "string"
       || !event.input.path.startsWith(`${wikiFolder}/`)
       || !event.input.path.endsWith(".md")
     ) continue;
-    const key = `${currentSource}\0${event.input.path}`;
-    const count = (pageEffects.get(key) ?? 0) + 1;
-    pageEffects.set(key, count);
-    if (count > 1) {
-      duplicatePages++;
-      duplicatePagePaths.add(event.input.path);
+    if (pendingPageEffect) {
+      failures.push(`page mutation ${pendingPageEffect.path} missing correlated tool_result`);
     }
+    pendingPageEffect = { source: currentSource, path: event.input.path };
   }
 
-  const failures: string[] = [];
+  if (pendingPageEffect) {
+    failures.push(`page mutation ${pendingPageEffect.path} missing correlated tool_result`);
+  }
   if (duplicateSources > 0) {
     failures.push(`duplicate source effects: ${[...duplicateSourcePaths].sort().join(", ")}`);
   }
   if (duplicatePages > 0) {
     failures.push(`duplicate page effects: ${[...duplicatePagePaths].sort().join(", ")}`);
   }
-  return { duplicateSources, duplicatePages, failures };
+  if (duplicateIndexes > 0) {
+    const duplicates = [...indexEffects]
+      .filter(([, count]) => count > 1)
+      .map(([key]) => key.replace("\0", " "))
+      .sort();
+    failures.push(`duplicate index effects: ${duplicates.join(", ")}`);
+  }
+  for (const source of sourceCompletions.keys()) {
+    for (const stage of ["page_reconcile", "final_reconcile"]) {
+      if (!indexEffects.has(`${source}\0${stage}`)) {
+        failures.push(`missing index effect: ${source} ${stage}`);
+      }
+    }
+  }
+  return { duplicateSources, duplicatePages, duplicateIndexes, failures };
 }
 
 function auditSession(
@@ -1496,6 +1661,7 @@ function auditSession(
     invalidTransportRetryEvents: retryAudit.invalidEvents,
     duplicateSourceEffects: effectAudit.duplicateSources,
     duplicatePageEffects: effectAudit.duplicatePages,
+    duplicateIndexEffects: effectAudit.duplicateIndexes,
     leakedPromptFields,
   };
 }

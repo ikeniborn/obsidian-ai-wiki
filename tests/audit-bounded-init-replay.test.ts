@@ -215,6 +215,21 @@ function transportRetryEvent(
   });
 }
 
+function indexEffect(
+  sourcePath: string,
+  stage: "page_reconcile" | "final_reconcile",
+  overrides: Record<string, unknown> = {},
+  session: string = SESSION,
+): AgentRecord {
+  return agentRecord({
+    kind: "index_effect",
+    domainId: "domain-id",
+    sourcePath,
+    stage,
+    ...overrides,
+  }, session);
+}
+
 function replaceFirstCallWithTransportRetry(
   records: AgentRecord[],
   options: {
@@ -245,6 +260,38 @@ function replaceFirstCallWithTransportRetry(
       ...options.recovered,
     }),
     ...replacement.slice(4),
+  );
+}
+
+function replaceFirstCallWithRecoveredStructuredRepair(
+  records: AgentRecord[],
+  completes: boolean = true,
+): void {
+  const firstLifecycle = records.findIndex((record) =>
+    record.event.kind === "llm_lifecycle" && record.event.id === "call-0");
+  const initial = lifecycleRecords("call-0", 1_000, SESSION, {
+    phases: ["preparing", "sent", "waiting", "retrying"],
+  });
+  const recoveredAttempt = lifecycleRecords("call-0:retry-1", 1_100, SESSION, {
+    attempt: 1,
+    phases: ["preparing", "sent", "waiting", "producing", "validating", "retrying"],
+  });
+  const structuredAttempt = lifecycleRecords("call-0:retry-2", 1_200, SESSION, {
+    attempt: 2,
+    phases: completes
+      ? undefined
+      : ["preparing", "sent", "waiting", "producing", "failed"],
+  });
+  records.splice(
+    firstLifecycle,
+    7,
+    ...initial,
+    transportRetryEvent("transport_retry_scheduled"),
+    ...recoveredAttempt.slice(0, 4),
+    transportRetryEvent("transport_retry_recovered"),
+    ...recoveredAttempt.slice(4),
+    agentRecord(promptBudget({ requestId: "call-0:retry-1" })),
+    ...structuredAttempt,
   );
 }
 
@@ -349,6 +396,8 @@ function sessionRecords(options: {
       ...lifecycleRecords(`call-${index}`, 1_000 + index * 100, session, {
         callSite: index === 0 ? "ingest.evidence-map" : "ingest.synthesize",
       }),
+      indexEffect(source, "page_reconcile", { domainId }, session),
+      indexEffect(source, "final_reconcile", { domainId }, session),
       agentRecord({
         kind: "domain_updated",
         domainId,
@@ -481,6 +530,7 @@ test("success uses domain_created wiki_folder when domainId differs and other do
       invalidTransportRetryEvents: 0,
       duplicateSourceEffects: 0,
       duplicatePageEffects: 0,
+      duplicateIndexEffects: 0,
       pageRecords: 2,
       chunkRecords: 2,
       duplicateRecordIds: 0,
@@ -720,7 +770,7 @@ test("valid 502 transport retry uses one logical request and continues after rec
     kind: "tool_use",
     name: "Create",
     input: { path: "!Wiki/replay-folder/concept/alpha.md" },
-  }));
+  }), agentRecord({ kind: "tool_result", ok: true }));
   const value = await fixture({ records });
   try {
     const summary = await audit(value, { expectedSources: 1 });
@@ -729,6 +779,33 @@ test("valid 502 transport retry uses one logical request and continues after rec
     assert.equal(summary.transportRetryExhausted, 0);
     assert.equal(summary.duplicateSourceEffects, 0);
     assert.equal(summary.duplicatePageEffects, 0);
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("recovered transport may continue through a correlated structured repair lifecycle", async () => {
+  const records = sessionRecords({ sources: ["sources/a.md"] });
+  replaceFirstCallWithRecoveredStructuredRepair(records);
+  const value = await fixture({ records });
+  try {
+    const summary = await audit(value, { expectedSources: 1 });
+    assert.equal(summary.transportRetryRecovered, 1);
+    assert.equal(summary.invalidTransportRetryEvents, 0);
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("recovered transport still requires a correlated successful operation continuation", async () => {
+  const records = sessionRecords({ sources: ["sources/a.md"] });
+  replaceFirstCallWithRecoveredStructuredRepair(records, false);
+  const value = await fixture({ records });
+  try {
+    await assert.rejects(
+      audit(value, { expectedSources: 1 }),
+      /transport retry recovered.*does not continue through.*completion/i,
+    );
   } finally {
     await value.cleanup();
   }
@@ -793,6 +870,101 @@ test("transport retry accepts only the approved HTTP status matrix", async (t) =
       await value.cleanup();
     }
   });
+
+  await t.test("temporary transport retry has no HTTP status", async () => {
+    const records = sessionRecords({ sources: ["sources/a.md"] });
+    replaceFirstCallWithTransportRetry(records, {
+      scheduled: { status: undefined, errorClass: "temporary_transport:ECONNRESET" },
+      recovered: { status: undefined, errorClass: "temporary_transport:ECONNRESET" },
+    });
+    const value = await fixture({ records });
+    try {
+      const summary = await audit(value, { expectedSources: 1 });
+      assert.equal(summary.transportRetryRecovered, 1);
+    } finally {
+      await value.cleanup();
+    }
+  });
+});
+
+test("transport retry rejects unknown, permanent, and class/status-inconsistent diagnostics", async (t) => {
+  for (const [name, scheduled, recovered, expected] of [
+    [
+      "unknown class",
+      { status: undefined, errorClass: "unknown" },
+      { status: undefined, errorClass: "unknown" },
+      /transport retry scheduled.*errorClass unknown.*not retryable/i,
+    ],
+    [
+      "permanent class",
+      { status: 502, errorClass: "permanent_http" },
+      { status: 502, errorClass: "permanent_http" },
+      /transport retry scheduled.*errorClass permanent_http.*not retryable/i,
+    ],
+    [
+      "transport class with status",
+      { status: 502, errorClass: "connection" },
+      { status: 502, errorClass: "connection" },
+      /transport retry scheduled.*connection.*must not include status/i,
+    ],
+    [
+      "HTTP class without status",
+      { status: undefined, errorClass: "retryable_http" },
+      { status: undefined, errorClass: "retryable_http" },
+      /transport retry scheduled.*retryable_http.*requires status/i,
+    ],
+    [
+      "changed failure classification",
+      { status: 502, errorClass: "retryable_http" },
+      { status: 400, errorClass: "provider_retry" },
+      /transport retry recovered.*changed errorClass.*logical request call-0/i,
+    ],
+  ] as Array<[string, Record<string, unknown>, Record<string, unknown>, RegExp]>) {
+    await t.test(name, async () => {
+      const records = sessionRecords({ sources: ["sources/a.md"] });
+      replaceFirstCallWithTransportRetry(records, { scheduled, recovered });
+      const value = await fixture({ records });
+      try {
+        await assert.rejects(audit(value, { expectedSources: 1 }), expected);
+      } finally {
+        await value.cleanup();
+      }
+    });
+  }
+});
+
+test("transport retry exhaustion must match the preceding scheduled failure classification", async () => {
+  const records = sessionRecords({ sources: ["sources/a.md"] });
+  replaceFirstCallWithTransportRetry(records);
+  const replacementStart = records.findIndex((record) =>
+    record.event.kind === "llm_lifecycle" && record.event.id === "call-0:retry-1");
+  const replacementEnd = records.findLastIndex((record) =>
+    (record.event.kind === "llm_lifecycle" && record.event.id === "call-0:retry-1")
+    || record.event.kind === "transport_retry_recovered");
+  records.splice(
+    replacementStart,
+    replacementEnd - replacementStart + 1,
+    ...lifecycleRecords("call-0:retry-1", 1_100, SESSION, {
+      attempt: 1,
+      phases: ["preparing", "sent", "waiting", "failed"],
+    }),
+    transportRetryEvent("transport_retry_exhausted", {
+      lifecycleId: "call-0:retry-1",
+      attempt: 1,
+      errorClass: "connection",
+      status: undefined,
+      meaningfulOutputSeen: false,
+    }),
+  );
+  const value = await fixture({ records });
+  try {
+    await assert.rejects(
+      audit(value, { expectedSources: 1 }),
+      /transport retry exhausted.*changed errorClass.*logical request call-0/i,
+    );
+  } finally {
+    await value.cleanup();
+  }
 });
 
 test("retry exhaustion is terminal and cannot be followed by successful effects", async () => {
@@ -951,12 +1123,15 @@ test("recovered retry rejects duplicate source and page effects", async (t) => {
       "page",
       (records: AgentRecord[]) => {
         const done = records.findIndex((record) => record.event.kind === "file_done");
-        const write = agentRecord({
-          kind: "tool_use",
-          name: "Create",
-          input: { path: "!Wiki/replay-folder/concept/alpha.md" },
-        });
-        records.splice(done, 0, write, structuredClone(write));
+        const write = [
+          agentRecord({
+            kind: "tool_use",
+            name: "Create",
+            input: { path: "!Wiki/replay-folder/concept/alpha.md" },
+          }),
+          agentRecord({ kind: "tool_result", ok: true }),
+        ];
+        records.splice(done, 0, ...write, ...structuredClone(write));
       },
       /duplicate page effects.*alpha\.md/i,
     ],
@@ -965,6 +1140,80 @@ test("recovered retry rejects duplicate source and page effects", async (t) => {
       const records = sessionRecords({ sources: ["sources/a.md"] });
       replaceFirstCallWithTransportRetry(records);
       duplicate(records);
+      const value = await fixture({ records });
+      try {
+        await assert.rejects(audit(value, { expectedSources: 1 }), expected);
+      } finally {
+        await value.cleanup();
+      }
+    });
+  }
+});
+
+test("failed page tool result is not counted as a mutation effect", async () => {
+  const records = sessionRecords({ sources: ["sources/a.md"] });
+  replaceFirstCallWithTransportRetry(records);
+  const done = records.findIndex((record) => record.event.kind === "file_done");
+  const use = agentRecord({
+    kind: "tool_use",
+    name: "Create",
+    input: { path: "!Wiki/replay-folder/concept/alpha.md" },
+  });
+  records.splice(
+    done,
+    0,
+    use,
+    agentRecord({ kind: "tool_result", ok: false }),
+    structuredClone(use),
+    agentRecord({ kind: "tool_result", ok: true }),
+  );
+  const value = await fixture({ records });
+  try {
+    const summary = await audit(value, { expectedSources: 1 });
+    assert.equal(summary.duplicatePageEffects, 0);
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("duplicate correlated index effects are rejected with source and stage", async () => {
+  const records = sessionRecords({ sources: ["sources/a.md"] });
+  const effect = records.find((record) =>
+    record.event.kind === "index_effect" && record.event.stage === "page_reconcile")!;
+  records.splice(records.indexOf(effect) + 1, 0, structuredClone(effect));
+  const value = await fixture({ records });
+  try {
+    await assert.rejects(
+      audit(value, { expectedSources: 1 }),
+      /duplicate index effects.*sources\/a\.md.*page_reconcile/i,
+    );
+  } finally {
+    await value.cleanup();
+  }
+});
+
+test("index effects require explicit current-source, domain, and stage correlation", async (t) => {
+  for (const [name, mutate, expected] of [
+    [
+      "source",
+      (event: Record<string, unknown>) => { event.sourcePath = "sources/other.md"; },
+      /index effect sourcePath sources\/other\.md does not match active source sources\/a\.md/i,
+    ],
+    [
+      "domain",
+      (event: Record<string, unknown>) => { event.domainId = "other-domain"; },
+      /index effect domainId other-domain does not match selected domain domain-id/i,
+    ],
+    [
+      "stage",
+      (event: Record<string, unknown>) => { event.stage = "unknown"; },
+      /index effect has invalid stage unknown/i,
+    ],
+  ] as Array<[string, (event: Record<string, unknown>) => void, RegExp]>) {
+    await t.test(name, async () => {
+      const records = sessionRecords({ sources: ["sources/a.md"] });
+      const event = records.find((record) => record.event.kind === "index_effect")!.event;
+      mutate(event);
       const value = await fixture({ records });
       try {
         await assert.rejects(audit(value, { expectedSources: 1 }), expected);

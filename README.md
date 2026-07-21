@@ -280,6 +280,12 @@ always opts out. HTTP `400`, `401`, `403`, `404`, and `422`, context-limit and s
 failures, cancellation, permanent TLS/certificate errors, and application/index/embedding
 failures are not transport-retried.
 
+Persisted retry diagnostics accept only connection, connection-timeout, allowlisted
+temporary-transport, retryable-HTTP, and explicit provider-override classifications.
+Transport classifications carry no HTTP status; HTTP classifications must carry a
+consistent valid status, and recovered/exhausted diagnostics must match the scheduled
+failure they close.
+
 Retry stops after nonblank reasoning or content, or when the additional-attempt bound is
 exhausted. Connection timeout (`15` seconds), model idle timeout (`300` seconds), and
 retry count (`3`) are independent top-level settings; existing persisted values are
@@ -335,7 +341,11 @@ directory with an owner-only `.replay-provenance` marker that records the resolv
 and replay root. Install the build into its `run` copy, visibly confirm that vault path in
 Obsidian, and only then perform the human Re-init checkpoint. The read-only replay auditor
 rejects duplicate wipe/source/page/index effects, invalid retry lifecycles, timeout drift,
-retry after content, and recovery that does not continue to the next step.
+retry after content, and recovery that does not continue to the next step. A recovered
+transport response may enter a correlated structured-repair lifecycle before successful
+validation/application/completion. Page mutations count only after the matching successful
+`tool_result`; metadata-only index checkpoints correlate both index reconciliation stages
+to the active source and selected domain.
 
 ### Proxy (native-agent only)
 

@@ -764,6 +764,21 @@ test("bounded ingest never exposes raw chunk vectors and emits in-budget telemet
   assert.deepEqual(synthesisLifecycle.map((event) => event.phase), [
     "preparing", "sent", "waiting", "producing", "validating", "applying", "completed",
   ]);
+  const indexEffects = events.filter((event) => event.kind === "index_effect");
+  assert.deepEqual(indexEffects, [
+    {
+      kind: "index_effect",
+      domainId: "demo",
+      sourcePath: SOURCE_PATH,
+      stage: "page_reconcile",
+    },
+    {
+      kind: "index_effect",
+      domainId: "demo",
+      sourcePath: SOURCE_PATH,
+      stage: "final_reconcile",
+    },
+  ]);
 });
 
 test("Ingest abort after synthesis validation cancels once and performs no later write", async () => {

@@ -34,7 +34,8 @@ export const AI_WIKI_VIEW_TYPE = "ai-wiki-view";
 export function isTelemetryOnlyRunEvent(event: RunEvent): boolean {
   return event.kind === "run_config"
     || event.kind === "wipe_manifest_chunk"
-    || event.kind === "wipe_complete";
+    || event.kind === "wipe_complete"
+    || event.kind === "index_effect";
 }
 
 export function formatGraphStatsLines(

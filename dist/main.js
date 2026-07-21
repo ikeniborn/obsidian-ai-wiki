@@ -42872,7 +42872,7 @@ function parseWikiSources(content) {
 // src/view.ts
 var AI_WIKI_VIEW_TYPE = "ai-wiki-view";
 function isTelemetryOnlyRunEvent(event) {
-  return event.kind === "run_config" || event.kind === "wipe_manifest_chunk" || event.kind === "wipe_complete";
+  return event.kind === "run_config" || event.kind === "wipe_manifest_chunk" || event.kind === "wipe_complete" || event.kind === "index_effect";
 }
 function formatGraphStatsLines(ev, agentLogEnabled) {
   if (!agentLogEnabled) {
@@ -55265,6 +55265,12 @@ ${action.content}`,
         domainRoot,
         [...finalPages].map(([path5, content]) => ({ path: path5, content }))
       );
+      yield {
+        kind: "index_effect",
+        domainId: domain.id,
+        sourcePath,
+        stage: "page_reconcile"
+      };
     } catch (error) {
       const message = `ingest: index reconciliation failed \u2014 ${error.message}`;
       yield { kind: "error", message };
@@ -55302,6 +55308,12 @@ ${action.content}`,
         domainRoot,
         [...backlinkPages].map(([path5, content]) => ({ path: path5, content }))
       );
+      yield {
+        kind: "index_effect",
+        domainId: domain.id,
+        sourcePath,
+        stage: "final_reconcile"
+      };
     } catch (error) {
       const message = `ingest: final page inventory failed \u2014 ${error.message}`;
       yield { kind: "error", message };
