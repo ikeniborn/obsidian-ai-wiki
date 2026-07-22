@@ -42,6 +42,14 @@
   max-height: 360px;
   overflow: auto;
 }
+.ai-wiki-scroll-bottom {
+  display: block;
+  margin: 4px 0 0 auto;
+  min-width: 0;
+  padding: 1px 6px;
+  font-size: 11px;
+  line-height: 1.4;
+}
 .ai-wiki-step { padding: 3px 0; border-bottom: 1px dotted transparent; }
 .ai-wiki-step + .ai-wiki-step { border-top: 1px dotted var(--background-modifier-border); }
 .ai-wiki-step-head { display: flex; gap: 6px; align-items: baseline; }

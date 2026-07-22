@@ -321,6 +321,7 @@ export default class LlmWikiPlugin extends Plugin {
     // Миграция: devMode.logDir → удалён (путь фиксирован в коде)
     this.settings.devMode = {
       enabled: this.settings.devMode.enabled,
+      nativeTransportDiagnosticMode: this.settings.devMode.nativeTransportDiagnosticMode,
     };
 
     // Миграция v0.1.65: format.maxTokens 16384 (старый default) → 32768 для native.

@@ -484,6 +484,44 @@ export function chunkMarkdownSource(
   });
 }
 
+export function createSourceChunkForRange(
+  source: string,
+  startLine: number,
+  endLine: number,
+  ordinal: number,
+  headingPath?: string[],
+): SourceChunk {
+  const sourceLines = splitSourceLines(source);
+  if (
+    !Number.isInteger(startLine)
+    || !Number.isInteger(endLine)
+    || !Number.isInteger(ordinal)
+    || startLine < 1
+    || endLine < startLine
+    || endLine > sourceLines.length
+  ) {
+    throw new RangeError(`Source range ${startLine}-${endLine} is outside source lines 1-${sourceLines.length}`);
+  }
+  const lines = scanLines(sourceLines);
+  const range: SourceRange = {
+    startIndex: startLine - 1,
+    endIndex: endLine - 1,
+    headingPath: headingPath ?? [...lines[startLine - 1].headingPath],
+  };
+  const rawMarkdown = rawRangeMarkdown(lines, range.startIndex, range.endIndex);
+  const markdown = renderRangeMarkdown(lines, range);
+  const hash = contentHash(rawMarkdown);
+  return {
+    id: `${ordinal}:${startLine}-${endLine}:${hash}`,
+    headingPath: [...range.headingPath],
+    ordinal,
+    startLine,
+    endLine,
+    markdown,
+    contentHash: hash,
+  };
+}
+
 export function assertCompleteSourceCoverage(source: string, chunks: SourceChunk[]): void {
   const sourceLines = splitSourceLines(source);
   const covered = Array.from({ length: sourceLines.length }, () => false);

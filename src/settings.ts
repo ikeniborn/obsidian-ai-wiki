@@ -142,13 +142,14 @@ export class LlmWikiSettingTab extends PluginSettingTab {
   // the native size lets the user see that e.g. 1-of-1024 is a degenerate truncation.
   // Read-only — does not overwrite the field.
   private async checkDimensions(): Promise<void> {
+    const T = i18n();
     const na = this.plugin.settings.nativeAgent;
     if (!na.baseUrl || !na.embeddingModel) { new Notice("Set Base URL and embedding model first"); return; }
     if (!na.embeddingDimensions) { new Notice("Enter a dimension value to check, or use Default"); return; }
     const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
     const requested = na.embeddingDimensions;
     const result = await probeEmbeddingDimensionsResult(this.plugin.settings.nativeAgent.baseUrl, apiKey, na.embeddingModel, requested);
-    if (!result.probe) { new Notice(`Dimension check failed: ${result.error ?? "unknown error"}`); return; }
+    if (!result.probe) { new Notice(T.settings.embeddingDimensionCheck_failed(result.error ?? "unknown error")); return; }
     const probe = result.probe;
     const nativeProbe = await probeEmbeddingDimensions(na.baseUrl, apiKey, na.embeddingModel);
     const native = nativeProbe?.actual;
@@ -156,14 +157,14 @@ export class LlmWikiSettingTab extends PluginSettingTab {
 
     if (!probe.honored) {
       // Requested size not produced — server ignored or capped it (e.g. > native).
-      new Notice(`Not supported — model returns ${probe.actual} (native ${nativeStr}), not ${requested}. Use Default.`);
+      new Notice(T.settings.embeddingDimensionCheck_notSupported(probe.actual, nativeStr, requested));
     } else if (native != null && requested === native) {
-      new Notice(`OK — native dimension ${native}`);
+      new Notice(T.settings.embeddingDimensionCheck_native(native));
     } else if (native != null && requested < native) {
       // Honored via truncation — valid but lossy; tiny values are effectively useless.
-      new Notice(`Truncated — ${requested} of ${native} native. Smaller dimensions reduce retrieval quality.`);
+      new Notice(T.settings.embeddingDimensionCheck_truncated(requested, native));
     } else {
-      new Notice(`OK — model returns ${probe.actual} (native ${nativeStr}).`);
+      new Notice(T.settings.embeddingDimensionCheck_ok(probe.actual, nativeStr));
     }
   }
 
@@ -219,13 +220,14 @@ export class LlmWikiSettingTab extends PluginSettingTab {
 
   // Verify the embedding model is reachable (a native-dimension probe).
   private async checkEmbeddingModel(): Promise<void> {
+    const T = i18n();
     const na = this.plugin.settings.nativeAgent;
     if (!na.baseUrl || !na.embeddingModel) { new Notice("Set Base URL and embedding model first"); return; }
     const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
     const result = await probeEmbeddingDimensionsResult(na.baseUrl, apiKey, na.embeddingModel);
     new Notice(result.probe
-      ? `OK — embedding model "${na.embeddingModel}" reachable (native dim ${result.probe.actual})`
-      : `Embedding model check failed: ${result.error ?? "unknown error"}`);
+      ? T.settings.embeddingCheck_ok(na.embeddingModel, result.probe.actual)
+      : T.settings.embeddingCheck_failed(result.error ?? "unknown error"));
   }
 
   private openExportOkfModal(domainEntry: DomainEntry): void {
@@ -1177,12 +1179,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       );
 
     if (s.vision.enabled) {
-      addPolicyControls(
-        modelControls.vision.fields,
-        { compressionProfile: s.vision.compressionProfile },
-        { compressionProfile: (next) => { s.vision.compressionProfile = next; } },
-        true,
-      );
       this.addModelControl(
         new Setting(containerEl)
           .setName(T.settings.visionModel_name)

@@ -211,26 +211,25 @@ test("PDF pages batch by fixed media reservation", () => {
   ]);
 });
 
-test("record merge covers every page and governed field for every profile", () => {
+test("record merge covers every page and governed field without compression profiles", () => {
   const records = [record("p1"), record("p2")];
-  for (const profile of ["maximum", "balanced", "minimum"] as const) {
-    const merged = mergeRecognitionRecords(records, profile);
-    for (const page of records) {
-      assert.match(merged, new RegExp(page.pageId));
-      for (const value of [
-        ...page.ocr,
-        ...page.objects,
-        ...page.relationships,
-        ...page.layout,
-        ...page.uncertainty,
-      ]) {
-        assert.match(merged, new RegExp(value));
-      }
+  const merged = mergeRecognitionRecords(records);
+  assert.doesNotMatch(merged, /semantic compression|maximum|balanced|minimum/i);
+  for (const page of records) {
+    assert.match(merged, new RegExp(page.pageId));
+    for (const value of [
+      ...page.ocr,
+      ...page.objects,
+      ...page.relationships,
+      ...page.layout,
+      ...page.uncertainty,
+    ]) {
+      assert.match(merged, new RegExp(value));
     }
   }
 });
 
-test("AgentRunner forwards resolved global and per-operation profiles only to Vision messages", async () => {
+test("AgentRunner keeps Chat compression out of Vision analysis messages", async () => {
   const cases: Array<{
     profile: CompressionProfile;
     perOperation: boolean;
@@ -283,10 +282,7 @@ test("AgentRunner forwards resolved global and per-operation profiles only to Vi
     const formatParams = seen.find((params) => params.stream === true);
     assert.ok(visionParams);
     assert.ok(formatParams);
-    assert.match(
-      JSON.stringify(visionParams.messages),
-      new RegExp(`${item.profile} semantic compression`, "i"),
-    );
+    assert.doesNotMatch(JSON.stringify(visionParams.messages), /semantic compression/i);
     const formatSystem = (
       formatParams.messages as OpenAI.Chat.ChatCompletionMessageParam[]
     ).find((message) => message.role === "system")?.content;
@@ -349,7 +345,6 @@ test("native raster Vision uses bounded prepared structured messages and rejects
       {
         inputBudgetTokens: 20_000,
         maxTokens: 321,
-        compressionProfile: "maximum",
         onEvent: (event) => events.push(event),
       },
     ),
@@ -365,13 +360,13 @@ test("native raster Vision uses bounded prepared structured messages and rejects
       seen[0].messages as OpenAI.Chat.ChatCompletionMessageParam[],
     ) <= 20_000,
   );
-  assert.match(JSON.stringify(seen[0].messages), /maximum semantic compression/i);
+  assert.doesNotMatch(JSON.stringify(seen[0].messages), /semantic compression/i);
   const budgetEvent = events.find((event) => event.kind === "prompt_budget");
   assert.ok(budgetEvent);
   if (budgetEvent?.kind === "prompt_budget") {
     assert.equal(budgetEvent.callSite, "vision.analysis");
     assert.equal(budgetEvent.outputBudget, 321);
-    assert.equal(budgetEvent.compressionProfile, "maximum");
+    assert.equal(Object.hasOwn(budgetEvent, "compressionProfile"), false);
     assert.equal(budgetEvent.actualInputTokens, 123);
   }
   assert.doesNotMatch(JSON.stringify(events), /AQID|visible text|box contains text/);
@@ -409,7 +404,6 @@ test("seven PDF pages stay bounded, retain every record, and resize only the fai
     {
       inputBudgetTokens: 10_000,
       maxTokens: 222,
-      compressionProfile: "minimum",
       onEvent: (event) => events.push(event),
     },
     {
@@ -454,7 +448,7 @@ test("seven PDF pages stay bounded, retain every record, and resize only the fai
       params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
     ) <= 10_000));
   assert.ok(seen.every((params) => params.max_tokens === 222));
-  assert.ok(seen.every((params) => /minimum semantic compression/i.test(JSON.stringify(params.messages))));
+  assert.ok(seen.every((params) => !/semantic compression/i.test(JSON.stringify(params.messages))));
   assert.ok(events.some((event) =>
     event.kind === "prompt_budget"
     && event.callSite === "vision.analysis"
@@ -492,7 +486,6 @@ test("provider-count PDF recovery shrinks the effective budget and deterministic
     "en",
     {
       inputBudgetTokens: 20_000,
-      compressionProfile: "balanced",
       onEvent: (event) => events.push(event),
     },
     {
@@ -549,7 +542,6 @@ test("no-count singleton recovery uses 75 percent budget and one lower render", 
     "en",
     {
       inputBudgetTokens: 12_000,
-      compressionProfile: "balanced",
       onEvent: (event) => events.push(event),
     },
     {
@@ -599,7 +591,6 @@ test("a second context failure after one lower-quality render returns no PDF des
       {
         inputBudgetTokens: 10_000,
         maxTokens: 222,
-        compressionProfile: "balanced",
       },
       {
         loadPdf: async () => ({
@@ -621,7 +612,7 @@ test("a second context failure after one lower-quality render returns no PDF des
   assert.ok(calls <= 3);
 });
 
-test("PDF context recovery exhausts two global repacks with unique bounded requests", async () => {
+test("PDF context recovery exhausts bounded repacks with unique dispatched requests", async () => {
   const seen: Array<{ signature: string; estimate: number }> = [];
   const events: RunEvent[] = [];
   const llm = {
@@ -650,7 +641,6 @@ test("PDF context recovery exhausts two global repacks with unique bounded reque
       "en",
       {
         inputBudgetTokens: 20_000,
-        compressionProfile: "balanced",
         onEvent: (event) => events.push(event),
       },
       {
@@ -669,9 +659,9 @@ test("PDF context recovery exhausts two global repacks with unique bounded reque
   const budgets = events
     .filter((event) => event.kind === "prompt_budget")
     .map((event) => event.kind === "prompt_budget" ? event.effectiveInputBudget : -1);
-  assert.equal(seen.length, 3);
-  assert.equal(new Set(seen.map((call) => call.signature)).size, 3);
-  assert.deepEqual(budgets, [20_000, 15_000, 11_250]);
+  assert.equal(seen.length, 2);
+  assert.equal(new Set(seen.map((call) => call.signature)).size, 2);
+  assert.deepEqual(budgets, [20_000, 15_000]);
   assert.ok(seen.every((call, index) =>
     call.estimate <= budgets[index]));
 });
@@ -743,7 +733,6 @@ test("PDF reservation preflight failure emits no request telemetry before transp
       "en",
       {
         inputBudgetTokens: 100,
-        compressionProfile: "maximum",
         onEvent: (event) => events.push(event),
       },
       {
@@ -997,14 +986,13 @@ test("analyzeAttachments forwards bounded Vision options to every native call", 
     {
       inputBudgetTokens: 20_000,
       maxTokens: 456,
-      compressionProfile: "minimum",
       onEvent: (event) => events.push(event),
     },
   );
 
   assert.equal(seen[0].max_tokens, 456);
   assert.equal(seen[0].stream, false);
-  assert.match(JSON.stringify(seen[0].messages), /minimum semantic compression/i);
+  assert.doesNotMatch(JSON.stringify(seen[0].messages), /semantic compression/i);
   assert.equal(events.some((event) => event.kind === "prompt_budget"), true);
   assert.deepEqual(
     events
@@ -1049,7 +1037,6 @@ test("Vision synchronous invocation failure emits waiting before failed", async 
     "en",
     {
       inputBudgetTokens: 20_000,
-      compressionProfile: "minimum",
       onEvent: (event) => events.push(event),
     },
   ), error);
@@ -1062,7 +1049,7 @@ test("Vision synchronous invocation failure emits waiting before failed", async 
   );
 });
 
-test("Excalidraw uses one media unit with bounded profile and output cap", async () => {
+test("Excalidraw uses one media unit and output cap without compression prompt", async () => {
   const seen: Record<string, unknown>[] = [];
   const llm = {
     chat: {
@@ -1085,7 +1072,6 @@ test("Excalidraw uses one media unit with bounded profile and output cap", async
     {
       inputBudgetTokens: 20_000,
       maxTokens: 654,
-      compressionProfile: "maximum",
     },
   );
 
@@ -1095,7 +1081,7 @@ test("Excalidraw uses one media unit with bounded profile and output cap", async
     .filter((part) => part.type === "image_url");
   assert.equal(mediaParts.length, 1);
   assert.equal(seen[0].max_tokens, 654);
-  assert.match(JSON.stringify(messages), /maximum semantic compression/i);
+  assert.doesNotMatch(JSON.stringify(messages), /semantic compression/i);
 });
 
 test("mobile mode skips PDF and Excalidraw before reads, renders, or calls", async () => {
@@ -1176,7 +1162,6 @@ test("Format propagates Vision budget telemetry and a visible warning on attachm
       enabled: true,
       model: "vision-model",
       language: "en",
-      compressionProfile: "balanced",
     },
   )) {
     events.push(event);
@@ -1377,7 +1362,6 @@ test("Format exposes bounded PDF context exhaustion in its failed Vision tool re
         enabled: true,
         model: "vision-model",
         language: "en",
-        compressionProfile: "balanced",
       },
     )) {
       events.push(event);

@@ -6,6 +6,7 @@ import type OpenAI from "openai";
 import { assertCompleteSourceCoverage } from "../src/markdown-chunks";
 import { estimatePreparedMessages } from "../src/prompt-budget";
 import type {
+  LlmChatCompletionCreateOptions,
   LlmClient,
   RunEvent,
 } from "../src/types";
@@ -414,6 +415,97 @@ function validMapperPacket(
   else mapped.entityType = entityType;
   return mapped;
 }
+
+test("evidence telemetry wrapper preserves native transport diagnostics", async () => {
+  const consumeHttpResponse = (_signal: AbortSignal) => undefined;
+  const consumeTransportTrace = (_signal: AbortSignal) => undefined;
+  const events: RunEvent[] = [];
+  let observedRetry = false;
+  const create = async (
+    params: OpenAI.Chat.ChatCompletionCreateParams,
+    options?: LlmChatCompletionCreateOptions,
+  ): Promise<OpenAI.Chat.ChatCompletion> => {
+    assert.equal(options?.retry?.connectionTimeoutMs, 1_234);
+    assert.equal(options?.retry?.consumeNativeHttpResponseDiagnostic, consumeHttpResponse);
+    assert.equal(options?.retry?.consumeNativeTransportTrace, consumeTransportTrace);
+    observedRetry = true;
+    options?.retry?.onEvent({
+      kind: "native_transport_correlation",
+      logicalRequestId: options.retry.logicalRequestId,
+      lifecycleId: options.retry.lifecycle.current().id,
+      callSite: "ingest.evidence-map",
+      transport: "non-stream",
+      attempt: 0,
+      networkTransport: "desktop-direct",
+      endpointPath: "/v1/chat/completions",
+      diagnosticMode: "connection-close",
+      connectionTimeoutMs: options.retry.connectionTimeoutMs,
+      idleTimeoutMs: options.retry.idleTimeoutMs,
+      clientRequestId: "aiwiki-test-correlation",
+    });
+    options?.retry?.onEvent({
+      kind: "native_transport_trace",
+      stage: "fetch_abort",
+      logicalRequestId: options.retry.logicalRequestId,
+      lifecycleId: options.retry.lifecycle.current().id,
+      callSite: "ingest.evidence-map",
+      transport: "non-stream",
+      attempt: 0,
+      networkTransport: "desktop-direct",
+      endpointPath: "/v1/chat/completions",
+      diagnosticMode: "connection-close",
+      elapsedMs: 10,
+      connectionTimeoutMs: options.retry.connectionTimeoutMs,
+      idleTimeoutMs: options.retry.idleTimeoutMs,
+      errorClass: "AbortError",
+    });
+    const payload = {
+      packets: [validMapperPacket(params.messages)],
+      noEvidence: [],
+    };
+    return {
+      id: "native-evidence-completion",
+      object: "chat.completion",
+      created: 0,
+      model: "mock",
+      choices: [{
+        index: 0,
+        finish_reason: "stop",
+        message: { role: "assistant", content: JSON.stringify(payload), refusal: null },
+        logprobs: null,
+      }],
+    };
+  };
+  const llm: LlmClient = {
+    nativeRequestExecutor: true,
+    nativeConnectionTimeoutMs: 1_234,
+    nativeTransportDiagnostic: {
+      transport: "desktop-direct",
+      diagnosticMode: "connection-close",
+      endpointPath: "/v1/chat/completions",
+    },
+    consumeNativeHttpResponseDiagnostic: consumeHttpResponse,
+    consumeNativeTransportTrace: consumeTransportTrace,
+    chat: { completions: { create: create as LlmClient["chat"]["completions"]["create"] } },
+  };
+  const result = await prepareSourceEvidence(
+    "PostgreSQL source",
+    "demo",
+    evidencePolicy(),
+    {
+      llm,
+      model: "mock",
+      signal: new AbortController().signal,
+      configuredEntityTypes: ["tool"],
+      onEvent: (event) => events.push(event),
+    },
+  );
+
+  assert.equal(result.length, 1);
+  assert.equal(observedRetry, true);
+  assert.equal(events.some((event) => event.kind === "native_transport_correlation"), true);
+  assert.equal(events.some((event) => event.kind === "native_transport_trace"), true);
+});
 
 function realisticReducerPolicy(): EvidencePolicy {
   return {
@@ -966,7 +1058,7 @@ test("bootstrap derives bounded candidate, theme, and language evidence from val
   assert.ok(nextUseEstimate <= 3500, `bootstrap next-use payload ${nextUseEstimate} exceeded 3500`);
 });
 
-test("bootstrap rejects evidence that reconstructs every line of an oversized source", async () => {
+test("bootstrap compresses aggregate evidence payload instead of reconstructing every line", async () => {
   const events: RunEvent[] = [];
   const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
   const runtime = mockRuntime((messages) => {
@@ -986,11 +1078,11 @@ test("bootstrap rejects evidence that reconstructs every line of an oversized so
   const expectedChunks = chunkSourceForEvidence(source, "bootstrap", policy, runtime.opts ?? {}, []);
   assert.ok(expectedChunks.length > 1);
   assertCompleteSourceCoverage(source, expectedChunks);
-  await assert.rejects(
-    prepareBootstrapEvidence(source, "bootstrap", policy, runtime),
-    (error: unknown) => error instanceof EvidenceCoverageError
-      && /Bootstrap evidence payload requires \d+ tokens but budget is 6000/.test(error.message),
-  );
+  const result = await prepareBootstrapEvidence(source, "bootstrap", policy, runtime);
+  const estimated = estimatePreparedMessages([{ role: "user", content: JSON.stringify(result) }]);
+  assert.ok(estimated <= 6000, `bootstrap payload ${estimated} exceeded budget`);
+  assert.ok(result.languageEvidence.length < expectedChunks.length);
+  assert.ok(result.candidates.length > 0);
   assert.equal(requests.length, expectedChunks.length);
 });
 
@@ -1372,6 +1464,46 @@ test("mapper context recovery rechunks into smaller complete child requests", as
     event.kind === "tool_result"
     && event.ok
     && event.preview === "retry scheduled"));
+  assertClosedToolLifecycles(events);
+});
+
+test("mapper structural exhaustion splits the failed source chunk into smaller evidence-map requests", async () => {
+  const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
+  const events: RunEvent[] = [];
+  const source = Array.from({ length: 80 }, (_, index) => `split mapper line ${index + 1}`).join("\n");
+  const runtime = mockRuntime((messages) => {
+    if (isReducerRequest(messages)) return validReduced(reducerInput(messages));
+    const meta = mapperMeta(messages);
+    if (meta.startLine === 1 && meta.endLine === 80) {
+      return {
+        packets: [{ ...validMapperPacket(messages), chunkId: "foreign" }],
+        noEvidence: [],
+      };
+    }
+    return {
+      packets: [{
+        ...validMapperPacket(messages),
+        entityKey: `split-mapper-${meta.startLine}`,
+        exactSourceRanges: [{ startLine: 1, endLine: meta.endLine - meta.startLine + 1 }],
+      }],
+      noEvidence: [],
+    };
+  }, events, requests);
+
+  const result = await prepareSourceEvidence(source, "demo", { ...evidencePolicy(10_000), outputBudgetTokens: 1_000 }, runtime);
+  const mapperRequests = requests.filter((request) => !isReducerRequest(request));
+
+  assert.deepEqual(
+    mapperRequests.map((request) => {
+      const meta = mapperMeta(request);
+      return `${meta.startLine}-${meta.endLine}`;
+    }),
+    ["1-80", "1-80", "1-40", "41-80"],
+  );
+  assert.equal(result.flatMap((entity) => entity.exactSource).map((range) => range.text).join("\n"), source);
+  assert.ok(events.some((event) =>
+    event.kind === "tool_use"
+    && event.name === "Evidence mapper split"));
   assertClosedToolLifecycles(events);
 });
 

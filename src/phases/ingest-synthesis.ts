@@ -10,7 +10,7 @@ import {
   type ReplaceSectionAuthority,
 } from "../section-patches";
 import { contentHash } from "../content-hash";
-import { GENERIC_WIKI_STEM_REGEX } from "../wiki-stem";
+import { GENERIC_WIKI_STEM_REGEX, slugifyEntity } from "../wiki-stem";
 import { validateArticlePath } from "../wiki-path";
 import type { EntityContextBundle, WikiSectionUnit } from "../ingest-context";
 import type { EntityEvidence } from "./ingest-evidence";
@@ -72,6 +72,7 @@ export interface SynthesisBatchInput {
   existingPaths?: ReadonlySet<string>;
   existingPageHashes: ReadonlyMap<string, string>;
   existingPageDescriptions: readonly SynthesisPageDescription[];
+  createPathsByEntityKey?: ReadonlyMap<string, string>;
   tagRegistryUnits: readonly ContextUnit[];
   pathPolicy: SynthesisPathPolicy;
   domainContract: string;
@@ -311,6 +312,42 @@ export function validateSynthesisActions(input: SynthesisActionValidationInput):
   }
 }
 
+function normalizeCreateActionPaths(
+  output: SynthesisOutput,
+  createPathsByEntityKey: ReadonlyMap<string, string> | undefined,
+): SynthesisOutput {
+  if (createPathsByEntityKey === undefined || createPathsByEntityKey.size === 0) return output;
+  let changed = false;
+  const actions = output.actions.map((action) => {
+    if (action.kind !== "create") return action;
+    const canonical = createPathsByEntityKey.get(action.entityKey);
+    if (canonical === undefined || action.path === canonical) return action;
+    if (!createPathStemMatchesEntity(action.path, canonical, action.entityKey)) return action;
+    changed = true;
+    return { ...action, path: canonical };
+  });
+  return changed ? { ...output, actions } : output;
+}
+
+function createPathStemMatchesEntity(path: string, canonical: string, entityKey: string): boolean {
+  const rawStem = path.split("/").at(-1)?.replace(/\.md$/, "") ?? "";
+  const canonicalStem = canonical.split("/").at(-1)?.replace(/\.md$/, "") ?? "";
+  let expectedSlug: string;
+  try {
+    expectedSlug = slugifyEntity(entityKey);
+  } catch {
+    return false;
+  }
+  if (rawStem === canonicalStem) return true;
+  if (rawStem.replace(/-/g, "_") === expectedSlug) return true;
+  const domainPrefix = canonicalStem.endsWith(expectedSlug)
+    ? canonicalStem.slice(0, canonicalStem.length - expectedSlug.length)
+    : "";
+  return domainPrefix.length > 0
+    && rawStem.startsWith(domainPrefix)
+    && rawStem.slice(domainPrefix.length).replace(/-/g, "_") === expectedSlug;
+}
+
 interface BuiltSynthesisRequest {
   messages: OpenAI.Chat.ChatCompletionMessageParam[];
   opts: LlmCallOptions;
@@ -327,7 +364,7 @@ function boundedOptions(
   const opts: LlmCallOptions = {
     ...baseOpts,
     inputBudgetTokens,
-    semanticCompression: { profile: policy.compression, operation: "ingest" },
+    semanticCompression: { profile: policy.compression ?? "balanced", operation: "ingest" },
   };
   if (policy.outputBudgetTokens !== undefined) opts.maxTokens = policy.outputBudgetTokens;
   else delete opts.maxTokens;
@@ -388,7 +425,7 @@ function authorityDto(authority: ReplaceSectionAuthority): Record<string, unknow
     heading: authority.heading,
     sectionOrdinal: authority.sectionOrdinal,
     sectionHash: authority.sectionHash,
-    exactSection: authority.exactSection,
+    exactSectionText: "server-owned; validated internally",
   };
 }
 
@@ -438,6 +475,30 @@ function cloneBundle(bundle: EntityContextBundle): EntityContextBundle {
   };
 }
 
+function truncateForPromptBudget(text: string, minimumLength: number): string {
+  const nextLength = Math.max(minimumLength, Math.floor(text.length / 2));
+  if (nextLength >= text.length) return text;
+  return `${text.slice(0, nextLength)}\n[truncated for prompt budget]`;
+}
+
+function compressLongestUnitTextForPromptBudget(bundle: EntityContextBundle, minimumLength: number): boolean {
+  let longestIndex = -1;
+  let longestLength = minimumLength;
+  for (let index = 0; index < bundle.units.length; index++) {
+    const length = bundle.units[index].text.length;
+    if (length > longestLength) {
+      longestIndex = index;
+      longestLength = length;
+    }
+  }
+  if (longestIndex === -1) return false;
+  const unit = bundle.units[longestIndex];
+  const nextText = truncateForPromptBudget(unit.text, minimumLength);
+  if (nextText === unit.text) return false;
+  bundle.units[longestIndex] = { ...unit, text: nextText };
+  return true;
+}
+
 function compareCodePoints(left: string, right: string): number {
   const a = Array.from(left, (value) => value.codePointAt(0) ?? 0);
   const b = Array.from(right, (value) => value.codePointAt(0) ?? 0);
@@ -464,9 +525,9 @@ function renderSynthesisMessages(
       targets: [...new Set(bundle.units.map((unit) => unit.path))]
         .map((path) => ({ path, pageHash: input.existingPageHashes.get(path) }))
         .filter((target) => target.pageHash !== undefined),
-      page: bundle.units.filter((unit) => unit.required).map(unitDto),
+      requiredPageSections: bundle.units.filter((unit) => unit.required).map(unitDto),
       evidence: evidenceDto(bundle.evidence),
-      units: bundle.units.map(unitDto),
+      contextUnits: bundle.units.filter((unit) => !unit.required).map(unitDto),
       replaceAuthorities: bundle.replaceAuthorities.map(authorityDto),
     }),
   ].join("\n")).join("\n\n");
@@ -482,6 +543,45 @@ function renderSynthesisMessages(
   }];
   void opts;
   return messages;
+}
+
+function renderSemanticRepairPrompt(error: Error): string {
+  return [
+    "Previous response was valid JSON but failed guarded synthesis validation.",
+    error.message,
+    "Fix only the invalid fields and return the full synthesis JSON again.",
+    "Canonical wiki paths must use this shape: !Wiki/<domain>/<allowed-type-folder>/wiki_<domain>_<entity_slug>.md.",
+    "Entity slugs use lowercase letters, digits, and underscores only; replace hyphens, spaces, and punctuation with underscores.",
+    "Return ONLY a single valid JSON object matching the schema. No markdown fences, no commentary.",
+  ].join("\n");
+}
+
+function safeValidationRetryReason(error: Error): string {
+  return error.message.replace(/\s+/g, " ").slice(0, 240);
+}
+
+function emitSynthesisValidationRetry(args: {
+  input: SynthesisBatchInput;
+  requestId: string;
+  bundles: readonly EntityContextBundle[];
+  output: SynthesisOutput;
+  cause: Error;
+  canSplit: boolean;
+  canRepair: boolean;
+}): void {
+  args.input.onEvent({
+    kind: "structured_validation_retry",
+    callSite: "ingest.synthesize",
+    requestId: args.requestId,
+    errorClass: "SynthesisBatchValidationError",
+    safeReason: safeValidationRetryReason(args.cause),
+    bundleCount: args.bundles.length,
+    canSplit: args.canSplit,
+    nextAction: args.canSplit ? "split_batch" : args.canRepair ? "repair_prompt" : "fail",
+    entityKeys: args.bundles.map((bundle) => bundle.entityKey),
+    actionCount: args.output.actions.length,
+    skipCount: args.output.skips.length,
+  });
 }
 
 function existingPathsFor(input: SynthesisBatchInput): ReadonlySet<string> {
@@ -647,6 +747,59 @@ function repackSynthesisBundles(
   }
   if (best !== undefined) return best;
   const exhausted = renderAt(optionalEntries.length);
+  if (source.length === 1) {
+    const compressed = cloneBundle(source[0]);
+    const renderCompressed = (): RepackedSynthesisRequest => {
+      const messages = renderSynthesisMessages(input, [compressed], opts, new Set());
+      const prepared = prepareChatMessages(messages, opts);
+      return {
+        bundles: [compressed],
+        messages,
+        promptHash: contentHash(JSON.stringify(prepared)),
+        estimatedInputTokens: estimatePreparedMessages(prepared),
+      };
+    };
+    let candidate = renderCompressed();
+    const fits = () => candidate.estimatedInputTokens <= effectiveInputBudget
+      && (failedPromptHash === undefined || candidate.promptHash !== failedPromptHash);
+
+    while (!fits() && compressed.evidence.links.length > 0) {
+      compressed.evidence.links.pop();
+      candidate = renderCompressed();
+    }
+    while (!fits() && compressed.evidence.exactSource.length > 1) {
+      compressed.evidence.exactSource.pop();
+      candidate = renderCompressed();
+    }
+    while (!fits() && compressed.evidence.exactSourceRanges.length > 1) {
+      compressed.evidence.exactSourceRanges.pop();
+      candidate = renderCompressed();
+    }
+    while (!fits() && compressed.evidence.facts.length > 1) {
+      compressed.evidence.facts.pop();
+      candidate = renderCompressed();
+    }
+    while (!fits() && compressed.evidence.packetIds.length > 1) {
+      compressed.evidence.packetIds.pop();
+      candidate = renderCompressed();
+    }
+    while (!fits() && compressed.evidence.exactSource.length > 0
+      && compressed.evidence.exactSource[0].text.length > 256) {
+      const text = compressed.evidence.exactSource[0].text;
+      compressed.evidence.exactSource[0].text = truncateForPromptBudget(text, 256);
+      candidate = renderCompressed();
+    }
+    while (!fits() && compressed.evidence.facts.length > 0
+      && compressed.evidence.facts[0].length > 512) {
+      const fact = compressed.evidence.facts[0];
+      compressed.evidence.facts[0] = truncateForPromptBudget(fact, 512);
+      candidate = renderCompressed();
+    }
+    while (!fits() && compressLongestUnitTextForPromptBudget(compressed, 512)) {
+      candidate = renderCompressed();
+    }
+    if (fits()) return candidate;
+  }
   throw new PromptBudgetExceededError(
     effectiveInputBudget,
     exhausted.estimatedInputTokens,
@@ -665,7 +818,7 @@ async function executeSynthesisBatch(
     callSite: "ingest.synthesize",
     configuredInputBudget: input.policy.inputBudgetTokens,
     outputBudget: input.policy.outputBudgetTokens,
-    compressionProfile: input.policy.compression,
+    compressionProfile: input.policy.compression ?? "balanced",
     build: (effectiveInputBudget) => {
       const opts = compressionOptions(input, effectiveInputBudget);
       const repacked = repackSynthesisBundles(input, bundles, effectiveInputBudget, failedPromptHash, opts);
@@ -685,25 +838,81 @@ async function executeSynthesisBatch(
     },
     execute: async (request: BuiltSynthesisRequest) => {
       try {
-        const result = await runStructuredWithRetry({
-          llm: input.llm,
-          model: input.model,
-          baseMessages: request.messages,
-          opts: request.opts,
-          profile: {
-            kind: "json-zod",
-            schema: SynthesisOutputSchema,
-            repairInstruction: synthesisRepairInstruction,
-          },
-          maxRetries,
-          callSite: "ingest.synthesize",
-          lifecycle: createLlmLifecycle("synthesize_wiki_pages"),
-          signal: input.signal,
-          onEvent: input.onEvent,
-          transport: "non-stream",
-          contextErrorsRetry: true,
-        });
-        return { result, request, inputTokens: result.inputTokens };
+        let messages = request.messages;
+        let lastResult: Awaited<ReturnType<typeof runStructuredWithRetry<SynthesisOutput>>> | undefined;
+        for (let semanticAttempt = 0; semanticAttempt <= maxRetries; semanticAttempt++) {
+          const result = await runStructuredWithRetry({
+            llm: input.llm,
+            model: input.model,
+            baseMessages: messages,
+            opts: request.opts,
+            profile: {
+              kind: "json-zod",
+              schema: SynthesisOutputSchema,
+              repairInstruction: synthesisRepairInstruction,
+            },
+            maxRetries: semanticAttempt === 0 ? maxRetries : 0,
+            callSite: "ingest.synthesize",
+            lifecycle: createLlmLifecycle("synthesize_wiki_pages"),
+            signal: input.signal,
+            onEvent: input.onEvent,
+            transport: "non-stream",
+            contextErrorsRetry: true,
+            validationExhaustionPhase: request.bundles.length > 1
+              ? "retrying"
+              : semanticAttempt === maxRetries ? "failed" : "retrying",
+          });
+          lastResult = result;
+          const rawOutput = result.value;
+          const normalizedOutput = normalizeCreateActionPaths(
+            rawOutput,
+            request.bundles.length === 1 ? input.createPathsByEntityKey : undefined,
+          );
+          const output: SynthesisOutput = {
+            ...normalizedOutput,
+            entity_types_delta: normalizeEntityTypeDelta(normalizedOutput.entity_types_delta ?? []),
+          };
+          try {
+            validateSynthesisCoverage(request.bundles.map((bundle) => bundle.entityKey), output);
+            validateSynthesisActions({
+              existingPaths: existingPathsFor(input),
+              existingPageHashes: input.existingPageHashes,
+              replaceAuthorities: authoritiesFor(request.bundles),
+              actions: output.actions,
+              pathPolicy: input.pathPolicy,
+            });
+            return { result, request, inputTokens: result.inputTokens, output };
+          } catch (error) {
+            const cause = error as Error;
+            const canSplit = request.bundles.length > 1;
+            const canRepair = !canSplit && semanticAttempt < maxRetries;
+            emitSynthesisValidationRetry({
+              input,
+              requestId: result.lifecycle.id,
+              bundles: request.bundles,
+              output,
+              cause,
+              canSplit,
+              canRepair,
+            });
+            input.onEvent(lifecycleEvent(result.lifecycle.id, result.lifecycle.action, canSplit || canRepair ? "retrying" : "failed"));
+            if (!canRepair) {
+              throw new SynthesisBatchValidationError(
+                bundles.map((bundle) => bundle.entityKey),
+                cause,
+              );
+            }
+            input.onEvent({ kind: "rule_fired", ruleId: "parseWithRetry", count: 1 });
+            messages = [
+              ...request.messages,
+              { role: "user", content: renderSemanticRepairPrompt(cause) },
+            ];
+          }
+        }
+        throw new SynthesisBatchValidationError(
+          bundles.map((bundle) => bundle.entityKey),
+          lastResult === undefined ? new Error("semantic validation exhausted before synthesis") : new Error("semantic validation exhausted"),
+        );
       } catch (error) {
         if (classifyContextError(error) !== null) failedPromptHash = request.promptHash;
         throw error;
@@ -711,28 +920,7 @@ async function executeSynthesisBatch(
     },
     onEvent: input.onEvent,
 }).then((result) => {
-    const rawOutput = result.result.value;
-    const output: SynthesisOutput = {
-      ...rawOutput,
-      entity_types_delta: normalizeEntityTypeDelta(rawOutput.entity_types_delta ?? []),
-    };
-    try {
-      validateSynthesisCoverage(result.request.bundles.map((bundle) => bundle.entityKey), output);
-      validateSynthesisActions({
-        existingPaths: existingPathsFor(input),
-        existingPageHashes: input.existingPageHashes,
-        replaceAuthorities: authoritiesFor(result.request.bundles),
-        actions: output.actions,
-        pathPolicy: input.pathPolicy,
-      });
-    } catch (error) {
-      input.onEvent(lifecycleEvent(result.result.lifecycle.id, result.result.lifecycle.action, "failed"));
-      throw new SynthesisBatchValidationError(
-        bundles.map((bundle) => bundle.entityKey),
-        error as Error,
-      );
-    }
-    return orderSynthesisOutput(output, result.request.bundles);
+    return orderSynthesisOutput(result.output, result.request.bundles);
   });
 }
 
@@ -823,7 +1011,7 @@ async function executeSingleRegenerationRequest(input: ConflictRegenerationInput
     return input.llm.chat.completions.create(params, requestOptions);
   };
   const guardedLlm: LlmClient = {
-    ...(input.llm.nativeRequestExecutor ? { nativeRequestExecutor: true as const } : {}),
+    ...input.llm,
     chat: {
       completions: {
         create: guardedCreate as LlmClient["chat"]["completions"]["create"],

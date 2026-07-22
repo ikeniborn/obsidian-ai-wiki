@@ -1,0 +1,195 @@
+{
+  "session": "1784668575382",
+  "operation": "init",
+  "startedAt": "2026-07-21T21:16:15.383Z",
+  "finishedAt": "2026-07-21T21:22:39.399Z",
+  "status": "error",
+  "endpointPath": "/v1/chat/completions",
+  "baseUrl": "https://homelab.ikeniborn.ru/v1",
+  "model": "ollama-deepseek-v4-pro-cloud",
+  "requestFingerprint": {
+    "callSite": "init.bootstrap-map",
+    "transport": "non-stream",
+    "estimatedInputTokens": 7202,
+    "outputBudget": 8192,
+    "responseFormatType": "json_schema",
+    "responseFormatName": "init_bootstrap-map",
+    "preparedMessagesHash": "fnv1a:4598fc40"
+  },
+  "diagnosticMode": "off",
+  "timeouts": {
+    "connectionTimeoutMs": 15000,
+    "idleTimeoutMs": 180000
+  },
+  "traceId": "ac3679b1c01f79b064b4473f39484ab1",
+  "attempts": [
+    {
+      "attempt": 0,
+      "clientAttemptId": "aiwiki-mrv5l9z1-1-7c6k4d38dr",
+      "traceparent": "00-ac3679b1c01f79b064b4473f39484ab1-0299b981934d7c73-01",
+      "plugin": {
+        "terminalStage": "body_end",
+        "status": 502,
+        "contentLength": 131,
+        "bodyBytes": 131,
+        "bodyChunks": 1,
+        "retry": "scheduled"
+      },
+      "gpuToolsAudit": {
+        "requestId": "019f8689-56e7-714e-950f-cf4fe87fd73d",
+        "startedAt": "2026-07-21T21:16:15.464194Z",
+        "completedAt": "2026-07-21T21:16:36.614910Z",
+        "statusCode": 502,
+        "outcome": "upstream_error",
+        "terminalState": "upstream_error",
+        "responseOriginalBytes": 131
+      }
+    },
+    {
+      "attempt": 1,
+      "clientAttemptId": "aiwiki-mrv5lqne-2-7s4vadspa7h",
+      "traceparent": "00-ac3679b1c01f79b064b4473f39484ab1-7843e43002fdcf33-01",
+      "plugin": {
+        "terminalStage": "fetch_error",
+        "errorClass": "TypeError",
+        "retry": "scheduled"
+      },
+      "gpuToolsAudit": {
+        "matched": false
+      }
+    },
+    {
+      "attempt": 2,
+      "clientAttemptId": "aiwiki-mrv5lr9d-3-it0g9q6txk",
+      "traceparent": "00-ac3679b1c01f79b064b4473f39484ab1-616703aac685dabe-01",
+      "plugin": {
+        "terminalStage": "body_error",
+        "status": 200,
+        "contentLength": 5134,
+        "bodyBytes": 0,
+        "bodyChunks": 0,
+        "errorClass": "DOMException",
+        "retry": "scheduled"
+      },
+      "gpuToolsAudit": {
+        "requestId": "019f8689-ae50-7ed8-ad48-0f54c1f3b660",
+        "startedAt": "2026-07-21T21:16:37.841315Z",
+        "completedAt": "2026-07-21T21:17:09.269393Z",
+        "statusCode": 200,
+        "outcome": "success",
+        "terminalState": "completed",
+        "responseOriginalBytes": 5134
+      }
+    },
+    {
+      "attempt": 3,
+      "clientAttemptId": "aiwiki-mrv5pncs-4-knosgybfmhg",
+      "traceparent": "00-ac3679b1c01f79b064b4473f39484ab1-0e5e640c0861e6e9-01",
+      "plugin": {
+        "terminalStage": "body_error",
+        "status": 200,
+        "contentLength": 2121,
+        "bodyBytes": 0,
+        "bodyChunks": 0,
+        "errorClass": "DOMException",
+        "retry": "exhausted"
+      },
+      "gpuToolsAudit": {
+        "requestId": "019f868c-7397-78a1-a2b6-4d7954149791",
+        "startedAt": "2026-07-21T21:19:39.416640Z",
+        "completedAt": "2026-07-21T21:19:50.268540Z",
+        "statusCode": 200,
+        "outcome": "success",
+        "terminalState": "completed",
+        "responseOriginalBytes": 2121
+      }
+    }
+  ],
+  "adapterReplay": {
+    "session": "1784693733578",
+    "operation": "init",
+    "startedAt": "2026-07-22T04:15:33.578Z",
+    "finishedAt": "2026-07-22T04:18:02.303Z",
+    "status": "error",
+    "diagnosticMode": "undici-request-adapter",
+    "transportConclusion": {
+      "rendererFetchBodyStallReproduced": false,
+      "adapterCompletedBodyReads": true,
+      "successfulBodyReads": [
+        {
+          "callSite": "init.bootstrap-map",
+          "clientAttemptId": "aiwiki-mrvkki6c-1-w1harlzrrf",
+          "terminalStage": "sdk_complete"
+        },
+        {
+          "callSite": "init.bootstrap",
+          "clientAttemptId": "aiwiki-mrvkkygr-3-j8semm4bi2",
+          "terminalStage": "sdk_complete"
+        },
+        {
+          "callSite": "ingest.evidence-map",
+          "clientAttemptId": "aiwiki-mrvklevc-4-det7mybm3ct",
+          "providerRequestId": "019f8809-dea1-7696-80a7-37184ad74665",
+          "status": 200,
+          "contentLength": 6387,
+          "bodyBytes": 6387,
+          "bodyChunks": 4,
+          "terminalStage": "sdk_complete"
+        },
+        {
+          "callSite": "ingest.synthesize",
+          "clientAttemptId": "aiwiki-mrvkm7xv-5-1ls6q4niioyi",
+          "providerRequestId": "019f880a-71c6-7aeb-b430-c2ddd7205f98",
+          "status": 200,
+          "contentLength": 6358,
+          "bodyBytes": 6358,
+          "bodyChunks": 4,
+          "terminalStage": "sdk_complete"
+        },
+        {
+          "callSite": "ingest.synthesize",
+          "clientAttemptId": "aiwiki-mrvkmwhf-6-22irgkp5gc6",
+          "providerRequestId": "019f880a-ee06-7981-aa2e-5c55703ad03c",
+          "status": 200,
+          "contentLength": 4073,
+          "bodyBytes": 4073,
+          "bodyChunks": 4,
+          "terminalStage": "sdk_complete"
+        },
+        {
+          "callSite": "ingest.synthesize",
+          "clientAttemptId": "aiwiki-mrvkni1g-7-ydtn1z6th9a",
+          "providerRequestId": "019f880b-5b26-741c-9304-2d44bff6c292",
+          "status": 200,
+          "contentLength": 1686,
+          "bodyBytes": 1686,
+          "bodyChunks": 2,
+          "terminalStage": "sdk_complete"
+        }
+      ]
+    },
+    "postTransportFailure": {
+      "callSite": "ingest.synthesize",
+      "message": "ingest: synthesis failed — Synthesis structured output exhausted for alt-linux: path is not a canonical wiki path: !Wiki/os-unix/applications/wiki_os-unix_alt-linux.md",
+      "classification": "semantic synthesis validation failure after complete LLM response",
+      "rootCause": "The model emitted a hyphenated entity slug in a wiki stem; canonical stems allow lowercase letters, digits, and underscores in the entity slug."
+    },
+    "followUpFix": {
+      "implementedAt": "2026-07-22T04:23:03Z",
+      "summary": "Single-entity synthesis now retries semantic validation failures within the configured structured retry budget and sends concrete canonical path feedback.",
+      "test": "tests/ingest-synthesis.test.ts: single-entity synthesis retries semantic path validation with concrete feedback"
+    }
+  },
+  "conclusion": {
+    "correlationWorking": true,
+    "gatewayCompleteForSuccessfulAttempts": true,
+    "failingSegment": "Obsidian Electron renderer native fetch/Undici response body read after headers and before first body chunk",
+    "rejectedCauses": [
+      "missing public-edge correlation headers",
+      "GPU Tools audit correlation gap",
+      "GPU Tools upstream non-completion for attempts 2 and 3",
+      "Traefik/GPU Tools response-body absence for attempts 2 and 3"
+    ],
+    "nextStep": "Run the planned lower-level desktop adapter experiment that bypasses fetch body consumption and uses undici.request in the Obsidian runtime."
+  }
+}

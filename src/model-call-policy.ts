@@ -19,7 +19,7 @@ export interface BackendModelControlDescriptor {
   globalFields: readonly ModelControlField[];
   operations: Record<OpKey, readonly ModelControlField[]>;
   vision: {
-    fields: readonly ["compressionProfile"];
+    fields: readonly ModelControlField[];
     check: boolean;
   };
 }
@@ -38,7 +38,7 @@ export function backendModelControlDescriptor(
         init: fields,
         format: ["inputBudgetTokens"],
       },
-      vision: { fields: ["compressionProfile"], check: false },
+      vision: { fields: [], check: false },
     };
   }
 
@@ -56,7 +56,7 @@ export function backendModelControlDescriptor(
       init: fields,
       format: ["inputBudgetTokens", "maxTokens"],
     },
-    vision: { fields: ["compressionProfile"], check: true },
+    vision: { fields: [], check: true },
   };
 }
 
@@ -175,23 +175,23 @@ export function resolveModelCallPolicy(
   if (settings.backend === "claude-agent") {
     const global = settings.claudeAgent;
     const local = global.perOperation ? global.operations[key] : undefined;
-    const compression = (key === "format"
-      ? compressionProfile(settings.vision.compressionProfile)
-      : undefined)
-      ?? compressionProfile(local?.compressionProfile)
-      ?? compressionProfile(global.compressionProfile)
-      ?? "balanced";
+    const compressionOp = compressionOperation(key);
+    const compression = key === "format"
+      ? undefined
+      : compressionProfile(local?.compressionProfile)
+        ?? compressionProfile(global.compressionProfile)
+        ?? "balanced";
     const policy: ModelCallPolicy = {
       inputBudgetTokens: positiveInt(local?.inputBudgetTokens ?? global.inputBudgetTokens, DEFAULT_INPUT_BUDGET),
-      compression,
+      ...(compression ? { compression } : {}),
     };
     return {
       model: local?.model ?? global.model,
       policy,
       opts: {
         inputBudgetTokens: policy.inputBudgetTokens,
-        semanticCompression: compressionOperation(key)
-          ? { profile: compression, operation: compressionOperation(key)! }
+        semanticCompression: compression && compressionOp
+          ? { profile: compression, operation: compressionOp }
           : undefined,
       },
     };
@@ -199,17 +199,17 @@ export function resolveModelCallPolicy(
 
   const global = settings.nativeAgent;
   const local = global.perOperation ? global.operations[key] : undefined;
-  const compression = (key === "format"
-    ? compressionProfile(settings.vision.compressionProfile)
-    : undefined)
-    ?? compressionProfile(local?.compressionProfile)
-    ?? compressionProfile(global.compressionProfile)
-    ?? "balanced";
+  const compressionOp = compressionOperation(key);
+  const compression = key === "format"
+    ? undefined
+    : compressionProfile(local?.compressionProfile)
+      ?? compressionProfile(global.compressionProfile)
+      ?? "balanced";
   const outputBudget = positiveInt(local?.maxTokens ?? global.maxTokens, 4096);
   const policy: ModelCallPolicy = {
     inputBudgetTokens: positiveInt(local?.inputBudgetTokens ?? global.inputBudgetTokens, DEFAULT_INPUT_BUDGET),
     outputBudgetTokens: outputBudget,
-    compression,
+    ...(compression ? { compression } : {}),
   };
   return {
     model: local?.model ?? global.model,
@@ -220,8 +220,8 @@ export function resolveModelCallPolicy(
       temperature: local?.temperature ?? global.temperature,
       topP: global.topP,
       thinkingBudgetTokens: local?.thinkingBudgetTokens ?? global.thinkingBudgetTokens,
-      semanticCompression: compressionOperation(key)
-        ? { profile: compression, operation: compressionOperation(key)! }
+      semanticCompression: compression && compressionOp
+        ? { profile: compression, operation: compressionOp }
         : undefined,
     },
   };

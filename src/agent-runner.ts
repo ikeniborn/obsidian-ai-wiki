@@ -11,7 +11,6 @@ import { runFormat } from "./phases/format";
 import { runDelete } from "./phases/delete";
 import { VisionTempStore } from "./phases/vision-temp-store";
 import type {
-  CompressionProfile,
   LlmCallOptions,
   LlmClient,
   LlmWikiPluginSettings,
@@ -71,7 +70,7 @@ export class AgentRunner {
   private buildOptsFor(
     op: RunRequest["operation"],
     policyOperation?: RunRequest["policyOperation"],
-  ): { model: string; opts: LlmCallOptions; compressionProfile: CompressionProfile } {
+  ): { model: string; opts: LlmCallOptions } {
     const s = this.settings;
     const resolved = resolveModelCallPolicy(s, op, policyOperation);
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
@@ -80,7 +79,6 @@ export class AgentRunner {
     if (s.backend === "claude-agent") {
       return {
         model: resolved.model,
-        compressionProfile: resolved.policy.compression,
         opts: {
           ...resolved.opts,
           systemPrompt: s.systemPrompt,
@@ -94,7 +92,6 @@ export class AgentRunner {
     const na = s.nativeAgent;
     return {
       model: resolved.model,
-      compressionProfile: resolved.policy.compression,
       opts: {
         ...resolved.opts,
         systemPrompt: s.systemPrompt,
@@ -143,7 +140,6 @@ export class AgentRunner {
     domains: DomainEntry[],
     similarity: PageSimilarityService | undefined,
     visionTempStore?: VisionTempStore,
-    compressionProfile?: CompressionProfile,
   ): AsyncGenerator<RunEvent, void, void> {
     const boilerplateDemotion = DISABLED_BOILERPLATE_DEMOTION;
     const reranker = normalizeRerankerConfig({
@@ -217,7 +213,6 @@ export class AgentRunner {
           model: this.settings.vision?.model ?? "",
           language: this.settings.outputLanguage ?? "auto",
           imageOnly: this.isMobile,
-          compressionProfile,
           nativeRequestRetries: this.settings.llmIdleRetries ?? 3,
           nativeRequestIdleTimeoutMs: (this.settings.llmIdleTimeoutSec ?? 300) * 1000,
         };
@@ -238,7 +233,7 @@ export class AgentRunner {
   }
 
   async *run(req: RunRequest): AsyncGenerator<RunEvent, void, void> {
-    const { model, opts, compressionProfile } = this.buildOptsFor(
+    const { model, opts } = this.buildOptsFor(
       req.operation,
       req.policyOperation,
     );
@@ -324,7 +319,6 @@ export class AgentRunner {
           domains,
           similarity,
           visionTempStore,
-          compressionProfile,
         )) {
           if (
             ev.kind === "llm_call_stats" || ev.kind === "assistant_text" ||

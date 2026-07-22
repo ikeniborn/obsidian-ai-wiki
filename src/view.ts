@@ -36,7 +36,10 @@ export function isTelemetryOnlyRunEvent(event: RunEvent): boolean {
     || event.kind === "wipe_manifest_chunk"
     || event.kind === "wipe_complete"
     || event.kind === "index_effect"
-    || event.kind === "llm_request_fingerprint";
+    || event.kind === "llm_request_fingerprint"
+    || event.kind === "native_transport_correlation"
+    || event.kind === "native_http_response"
+    || event.kind === "native_transport_trace";
 }
 
 export function formatGraphStatsLines(
@@ -117,6 +120,8 @@ export class LlmWikiView extends ItemView {
   private progressToggle!: HTMLElement;
   private progressCount!: HTMLElement;
   private stepsOpen = true;
+  private stepsPinnedToBottom = true;
+  private stepsScrollBottomBtn!: HTMLButtonElement;
   private cancelBtn!: HTMLButtonElement;
   private queryInput!: HTMLTextAreaElement;
   private askDomainBtn!: HTMLButtonElement;
@@ -268,6 +273,21 @@ export class LlmWikiView extends ItemView {
 
     this.stepsEl = root.createDiv("ai-wiki-steps");
     this.stepsEl.addClass("ai-wiki-hidden");
+    this.stepsEl.addEventListener("scroll", () => {
+      this.stepsPinnedToBottom = this.isStepsScrolledToBottom();
+      this.syncStepsScrollButton();
+    });
+    this.stepsScrollBottomBtn = root.createEl("button", {
+      text: T.view.scrollProgressBottom,
+      cls: "ai-wiki-scroll-bottom ai-wiki-hidden",
+      attr: { title: T.view.scrollProgressBottom, "aria-label": T.view.scrollProgressBottom },
+    });
+    this.stepsScrollBottomBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.stepsPinnedToBottom = true;
+      this.stepsEl.scrollTop = this.stepsEl.scrollHeight;
+      this.syncStepsScrollButton();
+    });
 
     this.liveStatusSection = root.createDiv("ai-wiki-live-status ai-wiki-hidden");
     this.liveStatusIconEl = this.liveStatusSection.createSpan("ai-wiki-live-status-icon");
@@ -681,7 +701,9 @@ export class LlmWikiView extends ItemView {
     this.llmStats = [];
     this.resultSpeedEl?.setText("");
     this.stepsOpen = true;
+    this.stepsPinnedToBottom = true;
     this.stepsEl.removeClass("ai-wiki-hidden");
+    this.syncStepsScrollButton();
     this.progressToggle.setText("▼");
     this.updateMetrics();
     if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
@@ -793,6 +815,67 @@ export class LlmWikiView extends ItemView {
       this.renderLlmLifecycle(ev);
       this.stepCount++;
       this.updateMetrics();
+      return;
+    }
+    if (ev.kind === "transport_retry_scheduled") {
+      this.stepCount++;
+      const labels = i18nFor(resolveUiLang()).view;
+      const failedAttempt = ev.attempt + 1;
+      const totalAttempts = ev.maxRetries + 1;
+      const reasonParts = [
+        ev.errorClass || "transport",
+        ev.status === undefined ? undefined : labels.transportRetryHttpStatus(ev.status),
+        labels.transportRetryAttempt(failedAttempt, totalAttempts),
+        ev.delayMs === undefined ? undefined : labels.transportRetryDelay(ev.delayMs),
+      ].filter((part): part is string => !!part);
+      const reason = reasonParts.join(" · ");
+      const step = this.stepsEl.createDiv("ai-wiki-step");
+      const head = step.createDiv("ai-wiki-step-head");
+      head.createSpan({ cls: "ai-wiki-step-icon" }).setText("↻");
+      head.createSpan({ cls: "ai-wiki-step-name" }).setText(labels.transportRetry);
+      head.createSpan({ cls: "ai-wiki-step-arg" }).setText(reason);
+      head.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
+      this.liveStatusIconEl?.setText("↻");
+      this.liveStatusTextEl?.setText(`${labels.transportRetry}: ${reason}`);
+      this.updateMetrics();
+      this.scrollSteps();
+      return;
+    }
+    if (ev.kind === "structural_error" && ev.succeeded !== true) {
+      this.stepCount++;
+      const labels = i18nFor(resolveUiLang()).view;
+      const safeMessage = ev.message.replace(/\s+/g, " ").trim().slice(0, 240) || ev.errorType;
+      const reason = [
+        safeMessage,
+        labels.structuralRetryType(ev.errorType),
+        labels.structuralRetryAttempt(ev.retryAttempt + 1),
+      ].join(" · ");
+      const step = this.stepsEl.createDiv("ai-wiki-step");
+      const head = step.createDiv("ai-wiki-step-head");
+      head.createSpan({ cls: "ai-wiki-step-icon" }).setText("↻");
+      head.createSpan({ cls: "ai-wiki-step-name" }).setText(labels.structuralRetry);
+      head.createSpan({ cls: "ai-wiki-step-arg" }).setText(reason);
+      head.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
+      this.liveStatusIconEl?.setText("↻");
+      this.liveStatusTextEl?.setText(`${labels.structuralRetry}: ${reason}`);
+      this.updateMetrics();
+      this.scrollSteps();
+      return;
+    }
+    if (ev.kind === "structured_validation_retry") {
+      this.stepCount++;
+      const labels = i18nFor(resolveUiLang()).view;
+      const nextLabel = labels[`validationRetryNext_${ev.nextAction}`];
+      const step = this.stepsEl.createDiv("ai-wiki-step");
+      const head = step.createDiv("ai-wiki-step-head");
+      head.createSpan({ cls: "ai-wiki-step-icon" }).setText("↻");
+      head.createSpan({ cls: "ai-wiki-step-name" }).setText(labels.validationRetry);
+      head.createSpan({ cls: "ai-wiki-step-arg" }).setText(`${ev.safeReason} · ${nextLabel}`);
+      head.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
+      this.liveStatusIconEl?.setText("↻");
+      this.liveStatusTextEl?.setText(`${labels.validationRetry}: ${ev.safeReason}`);
+      this.updateMetrics();
+      this.scrollSteps();
       return;
     }
     if (ev.kind === "tool_use" && shouldSuppressLegacyLlmTool(ev.name, this.llmLifecycleState)) {
@@ -1355,9 +1438,11 @@ export class LlmWikiView extends ItemView {
     this.stepsOpen = !this.stepsOpen;
     if (this.stepsOpen) {
       this.stepsEl.removeClass("ai-wiki-hidden");
+      if (this.stepsPinnedToBottom) this.scrollSteps();
     } else {
       this.stepsEl.addClass("ai-wiki-hidden");
     }
+    this.syncStepsScrollButton();
     this.progressToggle.setText(this.stepsOpen ? "▼" : "▶");
   }
 
@@ -1391,7 +1476,25 @@ export class LlmWikiView extends ItemView {
   }
 
   private scrollSteps(): void {
+    if (!this.stepsPinnedToBottom) {
+      this.syncStepsScrollButton();
+      return;
+    }
     this.stepsEl.scrollTop = this.stepsEl.scrollHeight;
+    this.syncStepsScrollButton();
+  }
+
+  private isStepsScrolledToBottom(): boolean {
+    const remaining = this.stepsEl.scrollHeight - this.stepsEl.scrollTop - this.stepsEl.clientHeight;
+    return remaining <= 24;
+  }
+
+  private syncStepsScrollButton(): void {
+    if (!this.stepsOpen || this.stepsPinnedToBottom) {
+      this.stepsScrollBottomBtn.addClass("ai-wiki-hidden");
+      return;
+    }
+    this.stepsScrollBottomBtn.removeClass("ai-wiki-hidden");
   }
 
   private renderLlmLifecycle(ev: LlmLifecycleEvent): void {

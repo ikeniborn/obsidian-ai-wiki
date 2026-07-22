@@ -523,7 +523,7 @@ test("failed multi-source rebuild rolls back durable state and a second run can 
   assert.equal(adapter.files.has(rebuildPage), true);
   assert.deepEqual(
     (await import("../src/utils/raw-frontmatter")).parseResourceFromFm(adapter.files.get(rebuildPage)!),
-    ["other"],
+    ["sources/other.md"],
   );
   assert.equal(adapter.files.has(DELETE_JOURNAL_PATH), false);
 });

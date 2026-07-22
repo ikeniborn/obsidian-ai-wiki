@@ -9184,7 +9184,7 @@ var require_request = __commonJS({
     var { headerNameLowerCasedRecord } = require_constants();
     var invalidPathRegex = /[^\u0021-\u00ff]/;
     var kHandler = /* @__PURE__ */ Symbol("handler");
-    var Request = class {
+    var Request2 = class {
       constructor(origin, {
         path: path5,
         method,
@@ -9486,7 +9486,7 @@ var require_request = __commonJS({
         request.headers.push(key, val);
       }
     }
-    module2.exports = Request;
+    module2.exports = Request2;
   }
 });
 
@@ -15015,7 +15015,7 @@ var require_client = __commonJS({
     var http = require("node:http");
     var util2 = require_util();
     var { channels } = require_diagnostics();
-    var Request = require_request();
+    var Request2 = require_request();
     var DispatcherBase = require_dispatcher_base();
     var {
       InvalidArgumentError,
@@ -15257,7 +15257,7 @@ var require_client = __commonJS({
       }
       [kDispatch](opts, handler) {
         const origin = opts.origin || this[kUrl].origin;
-        const request = new Request(origin, opts, handler);
+        const request = new Request2(origin, opts, handler);
         this[kQueue].push(request);
         if (this[kResuming]) {
         } else if (util2.bodyLength(request.body) == null && util2.isIterable(request.body)) {
@@ -17144,7 +17144,7 @@ var require_api_request = __commonJS({
         if (!opts || typeof opts !== "object") {
           throw new InvalidArgumentError("invalid opts");
         }
-        const { signal, method, opaque, body, onInfo, responseHeaders, throwOnError, highWaterMark } = opts;
+        const { signal, method, opaque, body, onInfo, responseHeaders: responseHeaders2, throwOnError, highWaterMark } = opts;
         try {
           if (typeof callback !== "function") {
             throw new InvalidArgumentError("invalid callback");
@@ -17169,7 +17169,7 @@ var require_api_request = __commonJS({
           throw err;
         }
         this.method = method;
-        this.responseHeaders = responseHeaders || null;
+        this.responseHeaders = responseHeaders2 || null;
         this.opaque = opaque || null;
         this.callback = callback;
         this.res = null;
@@ -17218,15 +17218,15 @@ var require_api_request = __commonJS({
         this.context = context;
       }
       onHeaders(statusCode, rawHeaders, resume, statusMessage) {
-        const { callback, opaque, abort, context, responseHeaders, highWaterMark } = this;
-        const headers = responseHeaders === "raw" ? util2.parseRawHeaders(rawHeaders) : util2.parseHeaders(rawHeaders);
+        const { callback, opaque, abort, context, responseHeaders: responseHeaders2, highWaterMark } = this;
+        const headers = responseHeaders2 === "raw" ? util2.parseRawHeaders(rawHeaders) : util2.parseHeaders(rawHeaders);
         if (statusCode < 200) {
           if (this.onInfo) {
             this.onInfo({ statusCode, headers });
           }
           return;
         }
-        const parsedHeaders = responseHeaders === "raw" ? util2.parseHeaders(rawHeaders) : headers;
+        const parsedHeaders = responseHeaders2 === "raw" ? util2.parseHeaders(rawHeaders) : headers;
         const contentType = parsedHeaders["content-type"];
         const contentLength = parsedHeaders["content-length"];
         const res = new Readable({
@@ -17382,7 +17382,7 @@ var require_api_stream = __commonJS({
         if (!opts || typeof opts !== "object") {
           throw new InvalidArgumentError("invalid opts");
         }
-        const { signal, method, opaque, body, onInfo, responseHeaders, throwOnError } = opts;
+        const { signal, method, opaque, body, onInfo, responseHeaders: responseHeaders2, throwOnError } = opts;
         try {
           if (typeof callback !== "function") {
             throw new InvalidArgumentError("invalid callback");
@@ -17406,7 +17406,7 @@ var require_api_stream = __commonJS({
           }
           throw err;
         }
-        this.responseHeaders = responseHeaders || null;
+        this.responseHeaders = responseHeaders2 || null;
         this.opaque = opaque || null;
         this.factory = factory;
         this.callback = callback;
@@ -17434,8 +17434,8 @@ var require_api_stream = __commonJS({
         this.context = context;
       }
       onHeaders(statusCode, rawHeaders, resume, statusMessage) {
-        const { factory, opaque, context, callback, responseHeaders } = this;
-        const headers = responseHeaders === "raw" ? util2.parseRawHeaders(rawHeaders) : util2.parseHeaders(rawHeaders);
+        const { factory, opaque, context, callback, responseHeaders: responseHeaders2 } = this;
+        const headers = responseHeaders2 === "raw" ? util2.parseRawHeaders(rawHeaders) : util2.parseHeaders(rawHeaders);
         if (statusCode < 200) {
           if (this.onInfo) {
             this.onInfo({ statusCode, headers });
@@ -17445,7 +17445,7 @@ var require_api_stream = __commonJS({
         this.factory = null;
         let res;
         if (this.throwOnError && statusCode >= 400) {
-          const parsedHeaders = responseHeaders === "raw" ? util2.parseHeaders(rawHeaders) : headers;
+          const parsedHeaders = responseHeaders2 === "raw" ? util2.parseHeaders(rawHeaders) : headers;
           const contentType = parsedHeaders["content-type"];
           res = new PassThrough();
           this.callback = null;
@@ -17598,7 +17598,7 @@ var require_api_pipeline = __commonJS({
         if (typeof handler !== "function") {
           throw new InvalidArgumentError("invalid handler");
         }
-        const { signal, method, opaque, onInfo, responseHeaders } = opts;
+        const { signal, method, opaque, onInfo, responseHeaders: responseHeaders2 } = opts;
         if (signal && typeof signal.on !== "function" && typeof signal.addEventListener !== "function") {
           throw new InvalidArgumentError("signal must be an EventEmitter or EventTarget");
         }
@@ -17610,7 +17610,7 @@ var require_api_pipeline = __commonJS({
         }
         super("UNDICI_PIPELINE");
         this.opaque = opaque || null;
-        this.responseHeaders = responseHeaders || null;
+        this.responseHeaders = responseHeaders2 || null;
         this.handler = handler;
         this.abort = null;
         this.context = null;
@@ -17756,12 +17756,12 @@ var require_api_upgrade = __commonJS({
         if (typeof callback !== "function") {
           throw new InvalidArgumentError("invalid callback");
         }
-        const { signal, opaque, responseHeaders } = opts;
+        const { signal, opaque, responseHeaders: responseHeaders2 } = opts;
         if (signal && typeof signal.on !== "function" && typeof signal.addEventListener !== "function") {
           throw new InvalidArgumentError("signal must be an EventEmitter or EventTarget");
         }
         super("UNDICI_UPGRADE");
-        this.responseHeaders = responseHeaders || null;
+        this.responseHeaders = responseHeaders2 || null;
         this.opaque = opaque || null;
         this.callback = callback;
         this.abort = null;
@@ -17848,13 +17848,13 @@ var require_api_connect = __commonJS({
         if (typeof callback !== "function") {
           throw new InvalidArgumentError("invalid callback");
         }
-        const { signal, opaque, responseHeaders } = opts;
+        const { signal, opaque, responseHeaders: responseHeaders2 } = opts;
         if (signal && typeof signal.on !== "function" && typeof signal.addEventListener !== "function") {
           throw new InvalidArgumentError("signal must be an EventEmitter or EventTarget");
         }
         super("UNDICI_CONNECT");
         this.opaque = opaque || null;
-        this.responseHeaders = responseHeaders || null;
+        this.responseHeaders = responseHeaders2 || null;
         this.callback = callback;
         this.abort = null;
         addSignal(this, signal);
@@ -18207,10 +18207,10 @@ var require_mock_utils = __commonJS({
           return;
         }
         const responseData = getResponseData(body);
-        const responseHeaders = generateKeyValues(headers);
+        const responseHeaders2 = generateKeyValues(headers);
         const responseTrailers = generateKeyValues(trailers);
         handler.onConnect?.((err) => handler.onError(err), null);
-        handler.onHeaders?.(statusCode, responseHeaders, resume, getStatusText(statusCode));
+        handler.onHeaders?.(statusCode, responseHeaders2, resume, getStatusText(statusCode));
         handler.onData?.(Buffer.from(responseData));
         handler.onComplete?.(responseTrailers);
         deleteMockDispatch(mockDispatches, key);
@@ -20206,7 +20206,7 @@ var require_request2 = __commonJS({
       }
     }
     var patchMethodWarning = false;
-    var Request = class _Request {
+    var Request2 = class _Request {
       // https://fetch.spec.whatwg.org/#dom-request
       constructor(input, init = {}) {
         webidl.util.markAsUncloneable(this);
@@ -20653,7 +20653,7 @@ var require_request2 = __commonJS({
         return `Request ${nodeUtil.formatWithOptions(options, properties)}`;
       }
     };
-    mixinBody(Request);
+    mixinBody(Request2);
     function makeRequest(init) {
       return {
         method: init.method ?? "GET",
@@ -20704,7 +20704,7 @@ var require_request2 = __commonJS({
       return newRequest;
     }
     function fromInnerRequest(innerRequest, signal, guard) {
-      const request = new Request(kConstruct);
+      const request = new Request2(kConstruct);
       request[kState] = innerRequest;
       request[kSignal] = signal;
       request[kHeaders] = new Headers2(kConstruct);
@@ -20712,7 +20712,7 @@ var require_request2 = __commonJS({
       setHeadersGuard(request[kHeaders], guard);
       return request;
     }
-    Object.defineProperties(Request.prototype, {
+    Object.defineProperties(Request2.prototype, {
       method: kEnumerableProperty,
       url: kEnumerableProperty,
       headers: kEnumerableProperty,
@@ -20739,13 +20739,13 @@ var require_request2 = __commonJS({
       }
     });
     webidl.converters.Request = webidl.interfaceConverter(
-      Request
+      Request2
     );
     webidl.converters.RequestInfo = function(V, prefix, argument) {
       if (typeof V === "string") {
         return webidl.converters.USVString(V, prefix, argument);
       }
-      if (V instanceof Request) {
+      if (V instanceof Request2) {
         return webidl.converters.Request(V, prefix, argument);
       }
       return webidl.converters.USVString(V, prefix, argument);
@@ -20836,7 +20836,7 @@ var require_request2 = __commonJS({
         converter: webidl.converters.any
       }
     ]);
-    module2.exports = { Request, makeRequest, fromInnerRequest, cloneRequest };
+    module2.exports = { Request: Request2, makeRequest, fromInnerRequest, cloneRequest };
   }
 });
 
@@ -20852,7 +20852,7 @@ var require_fetch = __commonJS({
       fromInnerResponse
     } = require_response();
     var { HeadersList } = require_headers();
-    var { Request, cloneRequest } = require_request2();
+    var { Request: Request2, cloneRequest } = require_request2();
     var zlib = require("node:zlib");
     var {
       bytesMatch,
@@ -20947,7 +20947,7 @@ var require_fetch = __commonJS({
       let p = createDeferredPromise();
       let requestObject;
       try {
-        requestObject = new Request(input, init);
+        requestObject = new Request2(input, init);
       } catch (e) {
         p.reject(e);
         return p.promise;
@@ -22769,7 +22769,7 @@ var require_cache = __commonJS({
     var { kEnumerableProperty, isDisturbed } = require_util();
     var { webidl } = require_webidl();
     var { Response: Response2, cloneResponse, fromInnerResponse } = require_response();
-    var { Request, fromInnerRequest } = require_request2();
+    var { Request: Request2, fromInnerRequest } = require_request2();
     var { kState } = require_symbols2();
     var { fetching } = require_fetch();
     var { urlIsHttpHttpsScheme, createDeferredPromise, readAllBytes } = require_util2();
@@ -22843,7 +22843,7 @@ var require_cache = __commonJS({
         }
         const fetchControllers = [];
         for (const request of requests) {
-          const r = new Request(request)[kState];
+          const r = new Request2(request)[kState];
           if (!urlIsHttpHttpsScheme(r.url)) {
             throw webidl.errors.exception({
               header: prefix,
@@ -22927,10 +22927,10 @@ var require_cache = __commonJS({
         request = webidl.converters.RequestInfo(request, prefix, "request");
         response = webidl.converters.Response(response, prefix, "response");
         let innerRequest = null;
-        if (request instanceof Request) {
+        if (request instanceof Request2) {
           innerRequest = request[kState];
         } else {
-          innerRequest = new Request(request)[kState];
+          innerRequest = new Request2(request)[kState];
         }
         if (!urlIsHttpHttpsScheme(innerRequest.url) || innerRequest.method !== "GET") {
           throw webidl.errors.exception({
@@ -23008,14 +23008,14 @@ var require_cache = __commonJS({
         request = webidl.converters.RequestInfo(request, prefix, "request");
         options = webidl.converters.CacheQueryOptions(options, prefix, "options");
         let r = null;
-        if (request instanceof Request) {
+        if (request instanceof Request2) {
           r = request[kState];
           if (r.method !== "GET" && !options.ignoreMethod) {
             return false;
           }
         } else {
           assert(typeof request === "string");
-          r = new Request(request)[kState];
+          r = new Request2(request)[kState];
         }
         const operations = [];
         const operation = {
@@ -23054,13 +23054,13 @@ var require_cache = __commonJS({
         options = webidl.converters.CacheQueryOptions(options, prefix, "options");
         let r = null;
         if (request !== void 0) {
-          if (request instanceof Request) {
+          if (request instanceof Request2) {
             r = request[kState];
             if (r.method !== "GET" && !options.ignoreMethod) {
               return [];
             }
           } else if (typeof request === "string") {
-            r = new Request(request)[kState];
+            r = new Request2(request)[kState];
           }
         }
         const promise = createDeferredPromise();
@@ -23226,13 +23226,13 @@ var require_cache = __commonJS({
       #internalMatchAll(request, options, maxResponses = Infinity) {
         let r = null;
         if (request !== void 0) {
-          if (request instanceof Request) {
+          if (request instanceof Request2) {
             r = request[kState];
             if (r.method !== "GET" && !options.ignoreMethod) {
               return [];
             }
           } else if (typeof request === "string") {
-            r = new Request(request)[kState];
+            r = new Request2(request)[kState];
           }
         }
         const responses = [];
@@ -26272,6 +26272,9 @@ module.exports = __toCommonJS(main_exports);
 var import_obsidian14 = require("obsidian");
 
 // src/types.ts
+var NATIVE_TRANSPORT_ATTEMPT_SIGNAL = /* @__PURE__ */ Symbol("nativeTransportAttemptSignal");
+var NATIVE_TRANSPORT_CLIENT_REQUEST_ID = /* @__PURE__ */ Symbol("nativeTransportClientRequestId");
+var NATIVE_TRANSPORT_TRACEPARENT = /* @__PURE__ */ Symbol("nativeTransportTraceparent");
 var MAX_SAFE_TIMER_MS = 2147e6;
 var MAX_LLM_IDLE_TIMEOUT_SEC = 2146999;
 function integerInput(value) {
@@ -26301,6 +26304,7 @@ function normalizeLlmRuntimeControls(settings) {
     15
   );
   settings.llmIdleTimeoutSec = parseLlmIdleTimeoutSec(settings.llmIdleTimeoutSec, 300);
+  settings.devMode.nativeTransportDiagnosticMode = settings.devMode.nativeTransportDiagnosticMode === "connection-close" || settings.devMode.nativeTransportDiagnosticMode === "undici-request-adapter" ? settings.devMode.nativeTransportDiagnosticMode : "off";
 }
 var DEFAULT_SETTINGS = {
   backend: "native-agent",
@@ -26366,7 +26370,8 @@ var DEFAULT_SETTINGS = {
   },
   proxy: { enabled: false, url: "" },
   devMode: {
-    enabled: false
+    enabled: false,
+    nativeTransportDiagnosticMode: "off"
   },
   lintOptions: {
     useLlm: true
@@ -26394,7 +26399,7 @@ function backendModelControlDescriptor(backend) {
         init: fields2,
         format: ["inputBudgetTokens"]
       },
-      vision: { fields: ["compressionProfile"], check: false }
+      vision: { fields: [], check: false }
     };
   }
   const fields = [
@@ -26411,7 +26416,7 @@ function backendModelControlDescriptor(backend) {
       init: fields,
       format: ["inputBudgetTokens", "maxTokens"]
     },
-    vision: { fields: ["compressionProfile"], check: true }
+    vision: { fields: [], check: true }
   };
 }
 function renderModelControlFields(fields, renderers) {
@@ -26499,28 +26504,30 @@ function resolveModelCallPolicy(settings, operation, parent) {
   if (settings.backend === "claude-agent") {
     const global3 = settings.claudeAgent;
     const local2 = global3.perOperation ? global3.operations[key] : void 0;
-    const compression2 = (key === "format" ? compressionProfile(settings.vision.compressionProfile) : void 0) ?? compressionProfile(local2?.compressionProfile) ?? compressionProfile(global3.compressionProfile) ?? "balanced";
+    const compressionOp2 = compressionOperation(key);
+    const compression2 = key === "format" ? void 0 : compressionProfile(local2?.compressionProfile) ?? compressionProfile(global3.compressionProfile) ?? "balanced";
     const policy2 = {
       inputBudgetTokens: positiveInt(local2?.inputBudgetTokens ?? global3.inputBudgetTokens, DEFAULT_INPUT_BUDGET),
-      compression: compression2
+      ...compression2 ? { compression: compression2 } : {}
     };
     return {
       model: local2?.model ?? global3.model,
       policy: policy2,
       opts: {
         inputBudgetTokens: policy2.inputBudgetTokens,
-        semanticCompression: compressionOperation(key) ? { profile: compression2, operation: compressionOperation(key) } : void 0
+        semanticCompression: compression2 && compressionOp2 ? { profile: compression2, operation: compressionOp2 } : void 0
       }
     };
   }
   const global2 = settings.nativeAgent;
   const local = global2.perOperation ? global2.operations[key] : void 0;
-  const compression = (key === "format" ? compressionProfile(settings.vision.compressionProfile) : void 0) ?? compressionProfile(local?.compressionProfile) ?? compressionProfile(global2.compressionProfile) ?? "balanced";
+  const compressionOp = compressionOperation(key);
+  const compression = key === "format" ? void 0 : compressionProfile(local?.compressionProfile) ?? compressionProfile(global2.compressionProfile) ?? "balanced";
   const outputBudget = positiveInt(local?.maxTokens ?? global2.maxTokens, 4096);
   const policy = {
     inputBudgetTokens: positiveInt(local?.inputBudgetTokens ?? global2.inputBudgetTokens, DEFAULT_INPUT_BUDGET),
     outputBudgetTokens: outputBudget,
-    compression
+    ...compression ? { compression } : {}
   };
   return {
     model: local?.model ?? global2.model,
@@ -26531,7 +26538,7 @@ function resolveModelCallPolicy(settings, operation, parent) {
       temperature: local?.temperature ?? global2.temperature,
       topP: global2.topP,
       thinkingBudgetTokens: local?.thinkingBudgetTokens ?? global2.thinkingBudgetTokens,
-      semanticCompression: compressionOperation(key) ? { profile: compression, operation: compressionOperation(key) } : void 0
+      semanticCompression: compression && compressionOp ? { profile: compression, operation: compressionOp } : void 0
     }
   };
 }
@@ -26724,6 +26731,13 @@ var en = {
     rerankerFlow_desc: "Flow: seedTopK -> graphDepth/bfsTopK -> rerankerTopN -> contextTopN.",
     rerankerInvalidTopN: "Reranker input top-N must be greater than or equal to final context top-N.",
     chatCheck_ok: (model) => `\u2705 Chat model responds: "${model}"`,
+    embeddingCheck_ok: (model, dimensions) => `\u2705 Embedding model responds: "${model}" (native dim ${dimensions})`,
+    embeddingCheck_failed: (message) => `Embedding model check failed: ${message}`,
+    embeddingDimensionCheck_failed: (message) => `Embedding dimension check failed: ${message}`,
+    embeddingDimensionCheck_notSupported: (actual, native, requested) => `\u274C Embedding dimension not supported: model returns ${actual} (native ${native}), not ${requested}. Use Default.`,
+    embeddingDimensionCheck_native: (native) => `\u2705 Embedding dimension OK: native dim ${native}`,
+    embeddingDimensionCheck_truncated: (requested, native) => `\u26A0\uFE0F Embedding dimension supported with truncation: ${requested} of ${native} native. Smaller dimensions reduce retrieval quality.`,
+    embeddingDimensionCheck_ok: (actual, native) => `\u2705 Embedding dimension OK: model returns ${actual} (native ${native})`,
     rerankerCheck_ok: (model) => `\u2705 Reranker model responds: "${model}"`,
     dedupOnIngest_desc: "On creating a near-duplicate page \u2014 merge into the existing one via LLM-merge.",
     dedupThreshold_desc: "Cosine threshold for dedup on ingest (0..1). Default 0.85. \u2191 merges only near-duplicates (safer) \xB7 \u2193 more aggressive, risk of false merges. Recommended 0.83\u20130.90.",
@@ -26785,6 +26799,18 @@ var en = {
     askWikiConfirmTitle: "Ask across all wiki domains?",
     askWikiConfirmBody: "This searches every domain in your wiki and answers from the combined result.",
     cancel: "Cancel",
+    scrollProgressBottom: "Bottom",
+    validationRetry: "Retry reason",
+    validationRetryNext_split_batch: "splitting batch",
+    validationRetryNext_repair_prompt: "asking model to repair",
+    validationRetryNext_fail: "stopping",
+    transportRetry: "Transport retry",
+    transportRetryAttempt: (current, total) => `attempt ${current}/${total}`,
+    transportRetryDelay: (ms) => `pause ${ms} ms`,
+    transportRetryHttpStatus: (status) => `HTTP ${status}`,
+    structuralRetry: "Response format issue",
+    structuralRetryType: (type) => type,
+    structuralRetryAttempt: (attempt) => `attempt ${attempt}`,
     result: "Result",
     history: "History",
     allDomains: "(all)",
@@ -27142,6 +27168,13 @@ var ru = {
     rerankerFlow_desc: "Flow: seedTopK -> graphDepth/bfsTopK -> rerankerTopN -> contextTopN.",
     rerankerInvalidTopN: "Reranker input top-N \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u0431\u043E\u043B\u044C\u0448\u0435 \u0438\u043B\u0438 \u0440\u0430\u0432\u0435\u043D final context top-N.",
     chatCheck_ok: (model) => `\u2705 Chat model \u043E\u0442\u0432\u0435\u0447\u0430\u0435\u0442: "${model}"`,
+    embeddingCheck_ok: (model, dimensions) => `\u2705 Embedding model \u043E\u0442\u0432\u0435\u0447\u0430\u0435\u0442: "${model}" (native dim ${dimensions})`,
+    embeddingCheck_failed: (message) => `\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 Embedding model \u043D\u0435 \u0443\u0434\u0430\u043B\u0430\u0441\u044C: ${message}`,
+    embeddingDimensionCheck_failed: (message) => `\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0440\u0430\u0437\u043C\u0435\u0440\u043D\u043E\u0441\u0442\u0438 Embedding \u043D\u0435 \u0443\u0434\u0430\u043B\u0430\u0441\u044C: ${message}`,
+    embeddingDimensionCheck_notSupported: (actual, native, requested) => `\u274C \u0420\u0430\u0437\u043C\u0435\u0440\u043D\u043E\u0441\u0442\u044C Embedding \u043D\u0435 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u0442\u0441\u044F: \u043C\u043E\u0434\u0435\u043B\u044C \u0432\u043E\u0437\u0432\u0440\u0430\u0449\u0430\u0435\u0442 ${actual} (native ${native}), \u043D\u0435 ${requested}. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 Default.`,
+    embeddingDimensionCheck_native: (native) => `\u2705 \u0420\u0430\u0437\u043C\u0435\u0440\u043D\u043E\u0441\u0442\u044C Embedding OK: native dim ${native}`,
+    embeddingDimensionCheck_truncated: (requested, native) => `\u26A0\uFE0F \u0420\u0430\u0437\u043C\u0435\u0440\u043D\u043E\u0441\u0442\u044C Embedding \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u0442\u0441\u044F \u0441 \u0443\u0441\u0435\u0447\u0435\u043D\u0438\u0435\u043C: ${requested} \u0438\u0437 ${native} native. \u041C\u0435\u043D\u044C\u0448\u0438\u0435 \u0440\u0430\u0437\u043C\u0435\u0440\u043D\u043E\u0441\u0442\u0438 \u0441\u043D\u0438\u0436\u0430\u044E\u0442 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u043E \u043F\u043E\u0438\u0441\u043A\u0430.`,
+    embeddingDimensionCheck_ok: (actual, native) => `\u2705 \u0420\u0430\u0437\u043C\u0435\u0440\u043D\u043E\u0441\u0442\u044C Embedding OK: \u043C\u043E\u0434\u0435\u043B\u044C \u0432\u043E\u0437\u0432\u0440\u0430\u0449\u0430\u0435\u0442 ${actual} (native ${native})`,
     rerankerCheck_ok: (model) => `\u2705 Reranker model \u043E\u0442\u0432\u0435\u0447\u0430\u0435\u0442: "${model}"`,
     dedupOnIngest_desc: "\u041D\u0430 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u0438 near-duplicate \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u2014 \u0441\u043B\u0438\u0442\u044C \u0432 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0443\u044E \u0447\u0435\u0440\u0435\u0437 LLM-merge.",
     dedupThreshold_desc: "\u041F\u043E\u0440\u043E\u0433 \u043A\u043E\u0441\u0438\u043D\u0443\u0441\u0430 \u0434\u043B\u044F \u0434\u0435\u0434\u0443\u043F\u0430 \u043F\u0440\u0438 ingest (0..1). \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 0.85. \u2191 \u0441\u043B\u0438\u0432\u0430\u0435\u0442 \u0442\u043E\u043B\u044C\u043A\u043E near-duplicate (\u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u0435\u0435) \xB7 \u2193 \u0430\u0433\u0440\u0435\u0441\u0441\u0438\u0432\u043D\u0435\u0435, \u0440\u0438\u0441\u043A \u043B\u043E\u0436\u043D\u044B\u0445 merge. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u044E 0.83\u20130.90.",
@@ -27203,6 +27236,18 @@ var ru = {
     askWikiConfirmTitle: "\u0418\u0441\u043A\u0430\u0442\u044C \u043F\u043E \u0432\u0441\u0435\u043C \u0434\u043E\u043C\u0435\u043D\u0430\u043C \u0432\u0438\u043A\u0438?",
     askWikiConfirmBody: "\u041F\u043E\u0438\u0441\u043A \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0441\u044F \u043F\u043E \u0432\u0441\u0435\u043C \u0434\u043E\u043C\u0435\u043D\u0430\u043C \u0432\u0438\u043A\u0438; \u043E\u0442\u0432\u0435\u0442 \u0444\u043E\u0440\u043C\u0438\u0440\u0443\u0435\u0442\u0441\u044F \u0438\u0437 \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0451\u043D\u043D\u043E\u0433\u043E \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u0430.",
     cancel: "\u041E\u0442\u043C\u0435\u043D\u0430",
+    scrollProgressBottom: "\u0412\u043D\u0438\u0437",
+    validationRetry: "\u041F\u0440\u0438\u0447\u0438\u043D\u0430 \u043F\u043E\u0432\u0442\u043E\u0440\u0430",
+    validationRetryNext_split_batch: "\u0434\u0435\u043B\u0438\u043C batch",
+    validationRetryNext_repair_prompt: "\u043F\u0440\u043E\u0441\u0438\u043C \u043C\u043E\u0434\u0435\u043B\u044C \u0438\u0441\u043F\u0440\u0430\u0432\u0438\u0442\u044C \u043E\u0442\u0432\u0435\u0442",
+    validationRetryNext_fail: "\u043E\u0441\u0442\u0430\u043D\u0430\u0432\u043B\u0438\u0432\u0430\u0435\u043C",
+    transportRetry: "\u041F\u043E\u0432\u0442\u043E\u0440 \u0442\u0440\u0430\u043D\u0441\u043F\u043E\u0440\u0442\u0430",
+    transportRetryAttempt: (current, total) => `\u043F\u043E\u043F\u044B\u0442\u043A\u0430 ${current}/${total}`,
+    transportRetryDelay: (ms) => `\u043F\u0430\u0443\u0437\u0430 ${ms} \u043C\u0441`,
+    transportRetryHttpStatus: (status) => `HTTP ${status}`,
+    structuralRetry: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0444\u043E\u0440\u043C\u0430\u0442\u0430 \u043E\u0442\u0432\u0435\u0442\u0430",
+    structuralRetryType: (type) => type,
+    structuralRetryAttempt: (attempt) => `\u043F\u043E\u043F\u044B\u0442\u043A\u0430 ${attempt}`,
     result: "\u0420\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442",
     history: "\u0418\u0441\u0442\u043E\u0440\u0438\u044F",
     allDomains: "(\u0432\u0441\u0435)",
@@ -27559,6 +27604,13 @@ var es = {
     rerankerFlow_desc: "Flow: seedTopK -> graphDepth/bfsTopK -> rerankerTopN -> contextTopN.",
     rerankerInvalidTopN: "Reranker input top-N debe ser mayor o igual que final context top-N.",
     chatCheck_ok: (model) => `\u2705 El modelo Chat responde: "${model}"`,
+    embeddingCheck_ok: (model, dimensions) => `\u2705 El modelo Embedding responde: "${model}" (dim nativa ${dimensions})`,
+    embeddingCheck_failed: (message) => `Fall\xF3 la comprobaci\xF3n del modelo Embedding: ${message}`,
+    embeddingDimensionCheck_failed: (message) => `Fall\xF3 la comprobaci\xF3n de dimensi\xF3n Embedding: ${message}`,
+    embeddingDimensionCheck_notSupported: (actual, native, requested) => `\u274C Dimensi\xF3n Embedding no compatible: el modelo devuelve ${actual} (nativa ${native}), no ${requested}. Usa Default.`,
+    embeddingDimensionCheck_native: (native) => `\u2705 Dimensi\xF3n Embedding OK: dim nativa ${native}`,
+    embeddingDimensionCheck_truncated: (requested, native) => `\u26A0\uFE0F Dimensi\xF3n Embedding compatible con truncado: ${requested} de ${native} nativa. Dimensiones menores reducen la calidad de b\xFAsqueda.`,
+    embeddingDimensionCheck_ok: (actual, native) => `\u2705 Dimensi\xF3n Embedding OK: el modelo devuelve ${actual} (nativa ${native})`,
     rerankerCheck_ok: (model) => `\u2705 El modelo Reranker responde: "${model}"`,
     dedupOnIngest_desc: "Al crear una p\xE1gina casi duplicada \u2014 fusionar con la existente mediante LLM-merge.",
     dedupThreshold_desc: "Umbral de coseno para dedup en ingest (0..1). Por defecto 0.85. \u2191 fusiona solo casi duplicados (m\xE1s seguro) \xB7 \u2193 m\xE1s agresivo, riesgo de fusiones falsas. Recomendado 0.83\u20130.90.",
@@ -27620,6 +27672,18 @@ var es = {
     askWikiConfirmTitle: "\xBFBuscar en todos los dominios del wiki?",
     askWikiConfirmBody: "Busca en todos los dominios del wiki y responde a partir del resultado combinado.",
     cancel: "Cancelar",
+    scrollProgressBottom: "Abajo",
+    validationRetry: "Motivo del reintento",
+    validationRetryNext_split_batch: "dividiendo batch",
+    validationRetryNext_repair_prompt: "pidiendo correcci\xF3n al modelo",
+    validationRetryNext_fail: "deteniendo",
+    transportRetry: "Reintento de transporte",
+    transportRetryAttempt: (current, total) => `intento ${current}/${total}`,
+    transportRetryDelay: (ms) => `pausa ${ms} ms`,
+    transportRetryHttpStatus: (status) => `HTTP ${status}`,
+    structuralRetry: "Problema de formato de respuesta",
+    structuralRetryType: (type) => type,
+    structuralRetryAttempt: (attempt) => `intento ${attempt}`,
     result: "Resultado",
     history: "Historial",
     allDomains: "(todos)",
@@ -28333,7 +28397,7 @@ function parseResourceFromFm(content) {
 }
 var SOURCES_HEADING = "## Sources";
 function ensureSourcesSection(content, sourceStems) {
-  const stems = [...new Set(sourceStems.map((s) => s.trim()).filter((s) => s.length > 0))];
+  const stems = [...new Set(sourceStems.map((s) => s.trim().replace(/\.md$/i, "")).filter((s) => s.length > 0))];
   if (stems.length === 0) return content;
   const lines = content.split("\n");
   const headIdx = lines.findIndex((l) => l.trim().toLowerCase() === SOURCES_HEADING.toLowerCase());
@@ -32953,6 +33017,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
   // the native size lets the user see that e.g. 1-of-1024 is a degenerate truncation.
   // Read-only — does not overwrite the field.
   async checkDimensions() {
+    const T = i18n();
     const na = this.plugin.settings.nativeAgent;
     if (!na.baseUrl || !na.embeddingModel) {
       new import_obsidian5.Notice("Set Base URL and embedding model first");
@@ -32966,7 +33031,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
     const requested = na.embeddingDimensions;
     const result = await probeEmbeddingDimensionsResult(this.plugin.settings.nativeAgent.baseUrl, apiKey, na.embeddingModel, requested);
     if (!result.probe) {
-      new import_obsidian5.Notice(`Dimension check failed: ${result.error ?? "unknown error"}`);
+      new import_obsidian5.Notice(T.settings.embeddingDimensionCheck_failed(result.error ?? "unknown error"));
       return;
     }
     const probe = result.probe;
@@ -32974,13 +33039,13 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
     const native = nativeProbe?.actual;
     const nativeStr = native != null ? String(native) : "?";
     if (!probe.honored) {
-      new import_obsidian5.Notice(`Not supported \u2014 model returns ${probe.actual} (native ${nativeStr}), not ${requested}. Use Default.`);
+      new import_obsidian5.Notice(T.settings.embeddingDimensionCheck_notSupported(probe.actual, nativeStr, requested));
     } else if (native != null && requested === native) {
-      new import_obsidian5.Notice(`OK \u2014 native dimension ${native}`);
+      new import_obsidian5.Notice(T.settings.embeddingDimensionCheck_native(native));
     } else if (native != null && requested < native) {
-      new import_obsidian5.Notice(`Truncated \u2014 ${requested} of ${native} native. Smaller dimensions reduce retrieval quality.`);
+      new import_obsidian5.Notice(T.settings.embeddingDimensionCheck_truncated(requested, native));
     } else {
-      new import_obsidian5.Notice(`OK \u2014 model returns ${probe.actual} (native ${nativeStr}).`);
+      new import_obsidian5.Notice(T.settings.embeddingDimensionCheck_ok(probe.actual, nativeStr));
     }
   }
   async checkReranker() {
@@ -33040,6 +33105,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
   }
   // Verify the embedding model is reachable (a native-dimension probe).
   async checkEmbeddingModel() {
+    const T = i18n();
     const na = this.plugin.settings.nativeAgent;
     if (!na.baseUrl || !na.embeddingModel) {
       new import_obsidian5.Notice("Set Base URL and embedding model first");
@@ -33047,7 +33113,7 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
     }
     const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
     const result = await probeEmbeddingDimensionsResult(na.baseUrl, apiKey, na.embeddingModel);
-    new import_obsidian5.Notice(result.probe ? `OK \u2014 embedding model "${na.embeddingModel}" reachable (native dim ${result.probe.actual})` : `Embedding model check failed: ${result.error ?? "unknown error"}`);
+    new import_obsidian5.Notice(result.probe ? T.settings.embeddingCheck_ok(na.embeddingModel, result.probe.actual) : T.settings.embeddingCheck_failed(result.error ?? "unknown error"));
   }
   openExportOkfModal(domainEntry) {
     const defaultDest = `${this.plugin.controller.cwdOrEmpty()}/okf-export/${domainEntry.wiki_folder}`;
@@ -33821,14 +33887,6 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
       })
     );
     if (s.vision.enabled) {
-      addPolicyControls(
-        modelControls.vision.fields,
-        { compressionProfile: s.vision.compressionProfile },
-        { compressionProfile: (next) => {
-          s.vision.compressionProfile = next;
-        } },
-        true
-      );
       this.addModelControl(
         new import_obsidian5.Setting(containerEl).setName(T.settings.visionModel_name).setDesc(T.settings.visionModel_desc),
         s.vision.model,
@@ -33939,24 +33997,29 @@ function wikiSourceTokens(content) {
   return parseResourceFromFm(content);
 }
 function computeDeletionPlan(sourcePath, pages, sourceStemToPath) {
-  const target = sourceStem(sourcePath);
+  const targetStem = sourceStem(sourcePath);
+  const targetTokens = /* @__PURE__ */ new Set([sourcePath, targetStem]);
   const toDelete = [];
   const toRebuild = [];
-  const remainingStems = /* @__PURE__ */ new Set();
+  const remainingTokens = /* @__PURE__ */ new Set();
   for (const [pagePath, content] of pages) {
     const tokens = wikiSourceTokens(content);
-    if (!tokens.includes(target)) continue;
+    if (!tokens.some((token) => targetTokens.has(token))) continue;
     if (tokens.length === 1) {
       toDelete.push(pagePath);
     } else {
       toRebuild.push(pagePath);
-      for (const t of tokens) if (t !== target) remainingStems.add(t);
+      for (const token of tokens) if (!targetTokens.has(token)) remainingTokens.add(token);
     }
   }
   const remainingSources = [];
-  for (const stem of remainingStems) {
-    const p = sourceStemToPath.get(stem);
-    if (p) remainingSources.push(p);
+  for (const token of remainingTokens) {
+    if (token.endsWith(".md") || token.includes("/")) {
+      remainingSources.push(token);
+      continue;
+    }
+    const path5 = sourceStemToPath.get(token);
+    if (path5) remainingSources.push(path5);
   }
   return { toDelete, toRebuild, remainingSources };
 }
@@ -40965,16 +41028,16 @@ var OpenAI = class {
       return true;
     return false;
   }
-  async retryRequest(options, retriesRemaining, requestLogID, responseHeaders) {
+  async retryRequest(options, retriesRemaining, requestLogID, responseHeaders2) {
     let timeoutMillis;
-    const retryAfterMillisHeader = responseHeaders?.get("retry-after-ms");
+    const retryAfterMillisHeader = responseHeaders2?.get("retry-after-ms");
     if (retryAfterMillisHeader) {
       const timeoutMs = parseFloat(retryAfterMillisHeader);
       if (!Number.isNaN(timeoutMs)) {
         timeoutMillis = timeoutMs;
       }
     }
-    const retryAfterHeader = responseHeaders?.get("retry-after");
+    const retryAfterHeader = responseHeaders2?.get("retry-after");
     if (retryAfterHeader && !timeoutMillis) {
       const timeoutSeconds = parseFloat(retryAfterHeader);
       if (!Number.isNaN(timeoutSeconds)) {
@@ -41323,9 +41386,9 @@ function createPromptBudgetEvent(metadata2) {
     configuredInputBudget: metadata2.configuredInputBudget,
     effectiveInputBudget: metadata2.effectiveInputBudget,
     estimatedInputTokens: metadata2.estimatedInputTokens,
-    compressionProfile: metadata2.compressionProfile,
     contextUnits: metadata2.contextUnits
   };
+  if (metadata2.compressionProfile !== void 0) event.compressionProfile = metadata2.compressionProfile;
   if (metadata2.actualInputTokens !== void 0) event.actualInputTokens = metadata2.actualInputTokens;
   if (metadata2.outputBudget !== void 0) event.outputBudget = metadata2.outputBudget;
   if (metadata2.sourceChunks !== void 0) event.sourceChunks = metadata2.sourceChunks;
@@ -41397,6 +41460,7 @@ async function runWithContextRepack(args) {
       }));
     }
     if (repackSuppressed) throw error.original;
+    if (preflight) throw error;
     if (retryReason === void 0 || attempt === MAX_CONTEXT_REPACKS || effectiveInputBudget <= 1) throw error;
     effectiveInputBudget = shrinkInputBudget(effectiveInputBudget, details ?? {});
   }
@@ -42872,7 +42936,7 @@ function parseWikiSources(content) {
 // src/view.ts
 var AI_WIKI_VIEW_TYPE = "ai-wiki-view";
 function isTelemetryOnlyRunEvent(event) {
-  return event.kind === "run_config" || event.kind === "wipe_manifest_chunk" || event.kind === "wipe_complete" || event.kind === "index_effect" || event.kind === "llm_request_fingerprint";
+  return event.kind === "run_config" || event.kind === "wipe_manifest_chunk" || event.kind === "wipe_complete" || event.kind === "index_effect" || event.kind === "llm_request_fingerprint" || event.kind === "native_transport_correlation" || event.kind === "native_http_response" || event.kind === "native_transport_trace";
 }
 function formatGraphStatsLines(ev, agentLogEnabled) {
   if (!agentLogEnabled) {
@@ -42940,6 +43004,8 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
   progressToggle;
   progressCount;
   stepsOpen = true;
+  stepsPinnedToBottom = true;
+  stepsScrollBottomBtn;
   cancelBtn;
   queryInput;
   askDomainBtn;
@@ -43080,6 +43146,21 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     progressHeader.addEventListener("click", () => this.toggleSteps());
     this.stepsEl = root.createDiv("ai-wiki-steps");
     this.stepsEl.addClass("ai-wiki-hidden");
+    this.stepsEl.addEventListener("scroll", () => {
+      this.stepsPinnedToBottom = this.isStepsScrolledToBottom();
+      this.syncStepsScrollButton();
+    });
+    this.stepsScrollBottomBtn = root.createEl("button", {
+      text: T.view.scrollProgressBottom,
+      cls: "ai-wiki-scroll-bottom ai-wiki-hidden",
+      attr: { title: T.view.scrollProgressBottom, "aria-label": T.view.scrollProgressBottom }
+    });
+    this.stepsScrollBottomBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.stepsPinnedToBottom = true;
+      this.stepsEl.scrollTop = this.stepsEl.scrollHeight;
+      this.syncStepsScrollButton();
+    });
     this.liveStatusSection = root.createDiv("ai-wiki-live-status ai-wiki-hidden");
     this.liveStatusIconEl = this.liveStatusSection.createSpan("ai-wiki-live-status-icon");
     this.liveStatusTextEl = this.liveStatusSection.createSpan("ai-wiki-live-status-text");
@@ -43468,7 +43549,9 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     this.llmStats = [];
     this.resultSpeedEl?.setText("");
     this.stepsOpen = true;
+    this.stepsPinnedToBottom = true;
     this.stepsEl.removeClass("ai-wiki-hidden");
+    this.syncStepsScrollButton();
     this.progressToggle.setText("\u25BC");
     this.updateMetrics();
     if (this.tickHandle !== null) {
@@ -43582,6 +43665,67 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
       this.renderLlmLifecycle(ev);
       this.stepCount++;
       this.updateMetrics();
+      return;
+    }
+    if (ev.kind === "transport_retry_scheduled") {
+      this.stepCount++;
+      const labels = i18nFor(resolveUiLang()).view;
+      const failedAttempt = ev.attempt + 1;
+      const totalAttempts = ev.maxRetries + 1;
+      const reasonParts = [
+        ev.errorClass || "transport",
+        ev.status === void 0 ? void 0 : labels.transportRetryHttpStatus(ev.status),
+        labels.transportRetryAttempt(failedAttempt, totalAttempts),
+        ev.delayMs === void 0 ? void 0 : labels.transportRetryDelay(ev.delayMs)
+      ].filter((part) => !!part);
+      const reason = reasonParts.join(" \xB7 ");
+      const step = this.stepsEl.createDiv("ai-wiki-step");
+      const head = step.createDiv("ai-wiki-step-head");
+      head.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u21BB");
+      head.createSpan({ cls: "ai-wiki-step-name" }).setText(labels.transportRetry);
+      head.createSpan({ cls: "ai-wiki-step-arg" }).setText(reason);
+      head.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
+      this.liveStatusIconEl?.setText("\u21BB");
+      this.liveStatusTextEl?.setText(`${labels.transportRetry}: ${reason}`);
+      this.updateMetrics();
+      this.scrollSteps();
+      return;
+    }
+    if (ev.kind === "structural_error" && ev.succeeded !== true) {
+      this.stepCount++;
+      const labels = i18nFor(resolveUiLang()).view;
+      const safeMessage = ev.message.replace(/\s+/g, " ").trim().slice(0, 240) || ev.errorType;
+      const reason = [
+        safeMessage,
+        labels.structuralRetryType(ev.errorType),
+        labels.structuralRetryAttempt(ev.retryAttempt + 1)
+      ].join(" \xB7 ");
+      const step = this.stepsEl.createDiv("ai-wiki-step");
+      const head = step.createDiv("ai-wiki-step-head");
+      head.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u21BB");
+      head.createSpan({ cls: "ai-wiki-step-name" }).setText(labels.structuralRetry);
+      head.createSpan({ cls: "ai-wiki-step-arg" }).setText(reason);
+      head.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
+      this.liveStatusIconEl?.setText("\u21BB");
+      this.liveStatusTextEl?.setText(`${labels.structuralRetry}: ${reason}`);
+      this.updateMetrics();
+      this.scrollSteps();
+      return;
+    }
+    if (ev.kind === "structured_validation_retry") {
+      this.stepCount++;
+      const labels = i18nFor(resolveUiLang()).view;
+      const nextLabel = labels[`validationRetryNext_${ev.nextAction}`];
+      const step = this.stepsEl.createDiv("ai-wiki-step");
+      const head = step.createDiv("ai-wiki-step-head");
+      head.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u21BB");
+      head.createSpan({ cls: "ai-wiki-step-name" }).setText(labels.validationRetry);
+      head.createSpan({ cls: "ai-wiki-step-arg" }).setText(`${ev.safeReason} \xB7 ${nextLabel}`);
+      head.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
+      this.liveStatusIconEl?.setText("\u21BB");
+      this.liveStatusTextEl?.setText(`${labels.validationRetry}: ${ev.safeReason}`);
+      this.updateMetrics();
+      this.scrollSteps();
       return;
     }
     if (ev.kind === "tool_use" && shouldSuppressLegacyLlmTool(ev.name, this.llmLifecycleState)) {
@@ -44107,9 +44251,11 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     this.stepsOpen = !this.stepsOpen;
     if (this.stepsOpen) {
       this.stepsEl.removeClass("ai-wiki-hidden");
+      if (this.stepsPinnedToBottom) this.scrollSteps();
     } else {
       this.stepsEl.addClass("ai-wiki-hidden");
     }
+    this.syncStepsScrollButton();
     this.progressToggle.setText(this.stepsOpen ? "\u25BC" : "\u25B6");
   }
   toggleChat() {
@@ -44138,7 +44284,23 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     return ms >= 1e3 ? `${(ms / 1e3).toFixed(1)}s` : "";
   }
   scrollSteps() {
+    if (!this.stepsPinnedToBottom) {
+      this.syncStepsScrollButton();
+      return;
+    }
     this.stepsEl.scrollTop = this.stepsEl.scrollHeight;
+    this.syncStepsScrollButton();
+  }
+  isStepsScrolledToBottom() {
+    const remaining = this.stepsEl.scrollHeight - this.stepsEl.scrollTop - this.stepsEl.clientHeight;
+    return remaining <= 24;
+  }
+  syncStepsScrollButton() {
+    if (!this.stepsOpen || this.stepsPinnedToBottom) {
+      this.stepsScrollBottomBtn.addClass("ai-wiki-hidden");
+      return;
+    }
+    this.stepsScrollBottomBtn.removeClass("ai-wiki-hidden");
   }
   renderLlmLifecycle(ev) {
     const reasoning = resetReasoningForLifecycle(
@@ -45151,6 +45313,30 @@ function chunkMarkdownSource(source, options) {
     };
   });
 }
+function createSourceChunkForRange(source, startLine, endLine, ordinal, headingPath) {
+  const sourceLines2 = splitSourceLines(source);
+  if (!Number.isInteger(startLine) || !Number.isInteger(endLine) || !Number.isInteger(ordinal) || startLine < 1 || endLine < startLine || endLine > sourceLines2.length) {
+    throw new RangeError(`Source range ${startLine}-${endLine} is outside source lines 1-${sourceLines2.length}`);
+  }
+  const lines = scanLines(sourceLines2);
+  const range = {
+    startIndex: startLine - 1,
+    endIndex: endLine - 1,
+    headingPath: headingPath ?? [...lines[startLine - 1].headingPath]
+  };
+  const rawMarkdown = rawRangeMarkdown(lines, range.startIndex, range.endIndex);
+  const markdown = renderRangeMarkdown(lines, range);
+  const hash = contentHash(rawMarkdown);
+  return {
+    id: `${ordinal}:${startLine}-${endLine}:${hash}`,
+    headingPath: [...range.headingPath],
+    ordinal,
+    startLine,
+    endLine,
+    markdown,
+    contentHash: hash
+  };
+}
 function assertCompleteSourceCoverage(source, chunks) {
   const sourceLines2 = splitSourceLines(source);
   const covered = Array.from({ length: sourceLines2.length }, () => false);
@@ -45434,12 +45620,47 @@ function batchEntityContexts(bundles, inputBudgetTokens, renderBatch, opts) {
     units: bundle.units.map((unit) => ({ ...unit, duplicatePaths: [...unit.duplicatePaths] })),
     replaceAuthorities: bundle.replaceAuthorities.map((authority) => ({ ...authority }))
   });
-  const renderSnapshot = (items) => renderBatch(items.map(cloneBundle2));
+  const estimateBatch = (items) => estimatePreparedMessages(renderBatch(items.map(cloneBundle2)));
+  const compressSingletonEvidence = (bundle) => {
+    const compressed = cloneBundle2(bundle);
+    if (estimateBatch([compressed]) <= inputBudgetTokens) return compressed;
+    const optionalUnits = compressed.units.map((unit, index) => ({ unit, index })).filter(({ unit }) => !unit.required).sort((a, b) => a.unit.priority - b.unit.priority || b.index - a.index);
+    for (const optional of optionalUnits) {
+      if (estimateBatch([compressed]) <= inputBudgetTokens) break;
+      compressed.units.splice(compressed.units.indexOf(optional.unit), 1);
+    }
+    while (compressed.evidence.links.length > 0 && estimateBatch([compressed]) > inputBudgetTokens) {
+      compressed.evidence.links.pop();
+    }
+    while (compressed.evidence.exactSource.length > 1 && estimateBatch([compressed]) > inputBudgetTokens) {
+      compressed.evidence.exactSource.pop();
+    }
+    while (compressed.evidence.exactSourceRanges.length > 1 && estimateBatch([compressed]) > inputBudgetTokens) {
+      compressed.evidence.exactSourceRanges.pop();
+    }
+    while (compressed.evidence.facts.length > 1 && estimateBatch([compressed]) > inputBudgetTokens) {
+      compressed.evidence.facts.pop();
+    }
+    while (compressed.evidence.packetIds.length > 1 && estimateBatch([compressed]) > inputBudgetTokens) {
+      compressed.evidence.packetIds.pop();
+    }
+    if (compressed.evidence.exactSource.length > 0) {
+      let text = compressed.evidence.exactSource[0].text;
+      while (text.length > 256 && estimateBatch([compressed]) > inputBudgetTokens) {
+        text = text.slice(0, Math.max(256, Math.floor(text.length / 2)));
+        compressed.evidence.exactSource[0].text = `${text}
+[truncated for prompt budget]`;
+      }
+    }
+    compressed.estimatedInputTokens = Math.min(compressed.estimatedInputTokens, inputBudgetTokens);
+    return compressed;
+  };
   const batches = [];
   let current = [];
-  for (const bundle of sorted) {
+  for (const sourceBundle of sorted) {
+    const bundle = compressSingletonEvidence(sourceBundle);
     const candidate = [...current, bundle];
-    const estimated = estimatePreparedMessages(renderSnapshot(candidate));
+    const estimated = estimateBatch(candidate);
     if (estimated <= inputBudgetTokens) {
       current = candidate;
       continue;
@@ -45454,7 +45675,7 @@ function batchEntityContexts(bundles, inputBudgetTokens, renderBatch, opts) {
     }
     batches.push(current);
     current = [];
-    const singletonEstimate = estimatePreparedMessages(renderSnapshot([bundle]));
+    const singletonEstimate = estimateBatch([bundle]);
     if (singletonEstimate > inputBudgetTokens) {
       throw new ContextSplitRequiredError(
         "Entity context bundle exceeds input budget; reduce evidence before batching",
@@ -45679,6 +45900,31 @@ function checkWikiLinks(pages) {
 function tidyAfterRemoval(text) {
   return text.replace(/(\S) {2,}/g, "$1 ").replace(/ +([,.;:)\]])/g, "$1").replace(/[ \t]+$/gm, "");
 }
+function stripEmptyReferenceBullets(text) {
+  const lines = text.split("\n");
+  const out = [];
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    if (!/^##\s+(?:Sources|Related|External links)\s*$/iu.test(line.trim())) {
+      out.push(line);
+      continue;
+    }
+    const section = [];
+    let cursor = index + 1;
+    while (cursor < lines.length && !/^##\s/.test(lines[cursor])) {
+      if (!/^\s*-\s*$/.test(lines[cursor])) section.push(lines[cursor]);
+      cursor++;
+    }
+    while (section.length > 0 && section[0].trim().length === 0) section.shift();
+    while (section.length > 0 && section[section.length - 1].trim().length === 0) section.pop();
+    const hasContent = section.some((item) => item.trim().length > 0);
+    if (hasContent || !/^##\s+Related\s*$/iu.test(line.trim())) {
+      out.push(line, ...section);
+    }
+    index = cursor - 1;
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n");
+}
 function stripDeadLinks(content, knownStems) {
   const parts = splitFrontmatter(content);
   const fm = parts ? parts[0] : null;
@@ -45691,6 +45937,7 @@ function stripDeadLinks(content, knownStems) {
     }
   );
   body = tidyAfterRemoval(body);
+  body = stripEmptyReferenceBullets(body);
   if (fm === null) return body.trim();
   return fm + body;
 }
@@ -45799,7 +46046,7 @@ function visionPromptVersionOf(templates) {
 }
 
 // prompts/ingest.md
-var ingest_default = 'You are a wiki-knowledge synthesis assistant for the domain "{{domain_name}}".\nExtract entities from the source and create/update wiki pages.\n\nDOMAIN ENTITY TYPES:\n{{entity_types_block}}\n{{lang_notes}}\n\nRULES:\n- CREATE: the entity does not exist in the wiki, mentions >= min_mentions_for_page\n- UPDATE: the entity exists \u2192 add new information, do NOT remove the old\n- SKIP: too few mentions or the information is already present\n- The wiki page FILE NAME (stem without `.md`) MUST have the form `wiki_{{domain_id}}_<entity_slug>`:\n  - `<entity_slug>` = the ASCII entity name in lowercase snake_case (only `[a-z0-9_]` characters, no spaces, diacritics, or uppercase letters).\n  - Example: `wiki_{{domain_id}}_neural_networks.md`.\n- The wiki page stem must NOT match any name from the "FORBIDDEN NAMES" section \u2014 those are the source files of this domain. The wiki describes extracted entities, it does not duplicate the source files.\n- The wiki page name must NOT match the name of the current source `{{source_stem}}` (a special case of the previous rule).\n- Synthesis, not copying. Technical configs/SQL may be quoted in code blocks.\n- The article path is determined by the entity type \u2014 use the exact template from the "DOMAIN ENTITY TYPES" section (above, before the RULES block), substituting the entity name for <EntityName>\n- If the entity type is undefined or the domain has no entity_types \u2192 default path: {{wiki_path}}/entities/<EntityName>.md\n- Frontmatter is mandatory: type: <entity type>, resource, timestamp: {{today}}, status: stub|developing|mature\n- tags: hierarchical tags (category/subcategory). Format: lowercase, separated by `/`, no spaces, no `#`. Pick tags in this order:\n  1. The page\'s entity-type tag \u2014 the normalized type of this entity (e.g. `person`). Always include it when the entity type is known.\n  2. Thematic tags reused from the EXISTING DOMAIN TAGS block (provided in the context). Do not invent near-duplicates of listed tags.\n  3. A new thematic tag ONLY when nothing in the block fits. Never start a new top-level category when the block says "reuse only".\n- resource: ONLY sources (files outside !Wiki/) \u2014 plain bare stem, NO `[[ ]]` brackets, no path, no extension: "FileName". Never a wiki page stem.\n- Links live ONLY in body sections \u2014 NEVER in frontmatter. Do NOT emit `outgoing_links:`/`external_links:` frontmatter fields; they do not exist in this schema.\n  - `## Sources` \u2014 the source note(s) this page was extracted from, one `[[SourceName]]` bullet per line (the SAME bare stems as the `resource` frontmatter). This is the ONE body section where a source file is linked. The ingest pipeline also injects this section from `resource`, so keep it consistent.\n  - `## Related` \u2014 outgoing links to OTHER wiki pages (files inside !Wiki/), one `[[wiki_domain_page]]` bullet per line. Never a source file.\n    \u274C FORBIDDEN: `[[CurrentSourceName]]` or `[[AnyOtherSourceFile]]` in `## Related`.\n       The source is already recorded in `resource` \u2014 there is no need to duplicate it in `## Related`.\n       Example: processing "Liquidity farming.md" \u2192 you must NOT put `[[Liquidity farming]]` in `## Related`.\n  - `## External links` \u2014 external URLs, one `[text](url)` bullet per line (`http://` or `https://` only).\n- In article bodies: ONLY [[stem]] \u2014 never [[stem|alias]]. The [[A|B]] syntax is forbidden.\n- Use the mandatory and optional section headings defined in the conventions block (_wiki_schema.md) below, exactly as written there. Each page must include the mandatory characteristics section.\n- For each page, add an `annotation:` header in the `<<<PAGE>>>` frame: a rich description for semantic search (embedding + Jaccard). Structure: <summary 1-2 sentences, covering the MAIN sections of the body, not only the first paragraph> Covers: <entities, tables, systems, Jira IDs, comma-separated>. Type: <type of operation/change>. Terms: <keywords from EVERY section \u2014 synonyms, IDs, terms that are not in the heading>. Aim for ~600\u2013800 characters, all on ONE line without line breaks. Rely on the content of the page itself. Be specific, no filler or boilerplate \u2014 generic phrases raise noise in search.\n- The `annotation:` header is ONLY in the frame header. Do NOT add `annotation:` to the page frontmatter.\n- DEAD LINKS: every [[wiki_domain_slug]] in `## Related` and elsewhere in the article body must\n  either exist among the "Existing wiki pages" (provided in the context), or\n  be present in the pages list of this response. No page \u2014 do not write the link.\n{{schema_block}}\n{{forbidden_stems_block}}\n\nPATH RULE: each article path = !Wiki/<domain>/<entity>/<Article>.md \u2014 exactly 4 segments.\nNot allowed: !Wiki/os/os/network/NFS.md (domain twice), !Wiki/os/network/nfs/NFS.md (5 segments).\nAllowed:  !Wiki/os/network/NFS.md\n\nTYPE ENRICHMENT (entity_types_delta):\nIf, while analyzing the source, you discover:\n- new entity types (the type key is absent from the current list above), or\n- improvements to existing types (a more precise description or additional extraction_cues for an already existing type key) \u2014\nadd an `<<<ENTITY_TYPES_DELTA_JSON>>>` frame containing a JSON array. If nothing is new \u2014 omit this frame.\n\nDUPLICATE MERGING (merge):\nIf among the existing wiki pages you find several describing the same entity:\n- emit one new `<<<PAGE>>>` frame (with merged content and the canonical path)\n- list the old paths as `<<<DELETE>>>` frames\nThe old pages will be deleted, the index cleaned, and backlinks in the current source updated automatically.\n\nOUTPUT FORMAT:\n{{frame_instruction}}\n\nReturn ONLY these frames \u2014 no JSON wrapper, no markdown fence, no text outside frames. If there are no page or delete changes, return `<<<REPORT>>>` and `<<<END>>>` only. Emit `<<<DELETE>>>` and `<<<ENTITY_TYPES_DELTA_JSON>>>` only when needed.\n<<<REPORT>>>\nRationale: which entities were extracted and why\n<<<PAGE>>>\npath: {{wiki_path}}/entities/wiki_{{domain_id}}_entity_name.md\nannotation: The essence of the entity in 1-2 sentences. Covers: related entities, systems, tables. Type: reference entity. Terms: synonyms and keywords for search.\n<<<CONTENT>>>\n---\ntype: <entity type>\nresource: ["{{source_stem}}"]\ntimestamp: {{today}}\nstatus: stub\ntags: []\n---\n# EntityName\n\ncontent...\n\n## Sources\n- [[{{source_stem}}]]\n\n## Related\n- [[wiki_{{domain_id}}_other_entity]]\n\n## External links\n- [Docs](https://example.com)\n<<<END_PAGE>>>\n<<<DELETE>>>\npath: {{wiki_path}}/entities/wiki_{{domain_id}}_old_entity.md\n<<<END_DELETE>>>\n<<<ENTITY_TYPES_DELTA_JSON>>>\n[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]\n<<<END_ENTITY_TYPES_DELTA_JSON>>>\n<<<END>>>\n';
+var ingest_default = 'You are a wiki-knowledge synthesis assistant for the domain "{{domain_name}}".\nExtract entities from the source and create/update wiki pages.\n\nDOMAIN ENTITY TYPES:\n{{entity_types_block}}\n{{lang_notes}}\n\nRULES:\n- CREATE: the entity does not exist in the wiki, mentions >= min_mentions_for_page\n- UPDATE: the entity exists \u2192 add new information, do NOT remove the old\n- SKIP: too few mentions or the information is already present\n- The wiki page FILE NAME (stem without `.md`) MUST have the form `wiki_{{domain_id}}_<entity_slug>`:\n  - `<entity_slug>` = the ASCII entity name in lowercase snake_case (only `[a-z0-9_]` characters, no spaces, diacritics, or uppercase letters).\n  - Example: `wiki_{{domain_id}}_neural_networks.md`.\n- The wiki page stem must NOT match any name from the "FORBIDDEN NAMES" section \u2014 those are the source files of this domain. The wiki describes extracted entities, it does not duplicate the source files.\n- The wiki page name must NOT match the name of the current source `{{source_stem}}` (a special case of the previous rule).\n- Synthesis, not copying. Technical configs/SQL may be quoted in code blocks.\n- The article path is determined by the entity type \u2014 use the exact template from the "DOMAIN ENTITY TYPES" section (above, before the RULES block), substituting the entity name for <EntityName>\n- If the entity type is undefined or the domain has no entity_types \u2192 default path: {{wiki_path}}/entities/<EntityName>.md\n- Frontmatter is mandatory: type: <entity type>, resource, timestamp: {{today}}, status: stub|developing|mature\n- tags: hierarchical tags (category/subcategory). Format: lowercase, separated by `/`, no spaces, no `#`. Pick tags in this order:\n  1. The page\'s entity-type tag \u2014 the normalized type of this entity (e.g. `person`). Always include it when the entity type is known.\n  2. Thematic tags reused from the EXISTING DOMAIN TAGS block (provided in the context). Do not invent near-duplicates of listed tags.\n  3. A new thematic tag ONLY when nothing in the block fits. Never start a new top-level category when the block says "reuse only".\n- resource: ONLY sources (files outside !Wiki/) \u2014 plain vault-relative source paths as strings, NO `[[ ]]` brackets, for example "Sources/Folder/File.md". Never a wiki page stem.\n- Links live ONLY in body sections \u2014 NEVER in frontmatter. Do NOT emit `outgoing_links:`/`external_links:` frontmatter fields; they do not exist in this schema.\n  - `## Sources` \u2014 the source note(s) this page was extracted from, one vault-relative wikilink per line without `.md`, for example `[[Sources/Folder/File]]`. This is the ONE body section where a source file is linked. The ingest pipeline also injects this section from `resource`, so keep it consistent.\n  - `## Related` \u2014 outgoing links to OTHER wiki pages (files inside !Wiki/), one `[[wiki_domain_page]]` bullet per line. Never a source file.\n    \u274C FORBIDDEN: `[[CurrentSourceName]]` or `[[AnyOtherSourceFile]]` in `## Related`.\n       The source is already recorded in `resource` \u2014 there is no need to duplicate it in `## Related`.\n       Example: processing "Liquidity farming.md" \u2192 you must NOT put `[[Liquidity farming]]` in `## Related`.\n  - `## External links` \u2014 external URLs, one `[text](url)` bullet per line (`http://` or `https://` only).\n- In article bodies: ONLY [[stem]] \u2014 never [[stem|alias]]. The [[A|B]] syntax is forbidden.\n- Use the mandatory and optional section headings defined in the conventions block (_wiki_schema.md) below, exactly as written there. Each page must include the mandatory characteristics section.\n- For each page, add an `annotation:` header in the `<<<PAGE>>>` frame: a rich description for semantic search (embedding + Jaccard). Structure: <summary 1-2 sentences, covering the MAIN sections of the body, not only the first paragraph> Covers: <entities, tables, systems, Jira IDs, comma-separated>. Type: <type of operation/change>. Terms: <keywords from EVERY section \u2014 synonyms, IDs, terms that are not in the heading>. Aim for ~600\u2013800 characters, all on ONE line without line breaks. Rely on the content of the page itself. Be specific, no filler or boilerplate \u2014 generic phrases raise noise in search.\n- The `annotation:` header is ONLY in the frame header. Do NOT add `annotation:` to the page frontmatter.\n- DEAD LINKS: every [[wiki_domain_slug]] in `## Related` and elsewhere in the article body must\n  either exist among the "Existing wiki pages" (provided in the context), or\n  be present in the pages list of this response. No page \u2014 do not write the link.\n{{schema_block}}\n{{forbidden_stems_block}}\n\nPATH RULE: each article path = !Wiki/<domain>/<entity>/<Article>.md \u2014 exactly 4 segments.\nNot allowed: !Wiki/os/os/network/NFS.md (domain twice), !Wiki/os/network/nfs/NFS.md (5 segments).\nAllowed:  !Wiki/os/network/NFS.md\n\nTYPE ENRICHMENT (entity_types_delta):\nIf, while analyzing the source, you discover:\n- new entity types (the type key is absent from the current list above), or\n- improvements to existing types (a more precise description or additional extraction_cues for an already existing type key) \u2014\nadd an `<<<ENTITY_TYPES_DELTA_JSON>>>` frame containing a JSON array. If nothing is new \u2014 omit this frame.\n\nDUPLICATE MERGING (merge):\nIf among the existing wiki pages you find several describing the same entity:\n- emit one new `<<<PAGE>>>` frame (with merged content and the canonical path)\n- list the old paths as `<<<DELETE>>>` frames\nThe old pages will be deleted, the index cleaned, and backlinks in the current source updated automatically.\n\nOUTPUT FORMAT:\n{{frame_instruction}}\n\nReturn ONLY these frames \u2014 no JSON wrapper, no markdown fence, no text outside frames. If there are no page or delete changes, return `<<<REPORT>>>` and `<<<END>>>` only. Emit `<<<DELETE>>>` and `<<<ENTITY_TYPES_DELTA_JSON>>>` only when needed.\n<<<REPORT>>>\nRationale: which entities were extracted and why\n<<<PAGE>>>\npath: {{wiki_path}}/entities/wiki_{{domain_id}}_entity_name.md\nannotation: The essence of the entity in 1-2 sentences. Covers: related entities, systems, tables. Type: reference entity. Terms: synonyms and keywords for search.\n<<<CONTENT>>>\n---\ntype: <entity type>\nresource: ["{{source_path}}"]\ntimestamp: {{today}}\nstatus: stub\ntags: []\n---\n# EntityName\n\ncontent...\n\n## Sources\n- [[{{source_path_no_ext}}]]\n\n## Related\n- [[wiki_{{domain_id}}_other_entity]]\n\n## External links\n- [Docs](https://example.com)\n<<<END_PAGE>>>\n<<<DELETE>>>\npath: {{wiki_path}}/entities/wiki_{{domain_id}}_old_entity.md\n<<<END_DELETE>>>\n<<<ENTITY_TYPES_DELTA_JSON>>>\n[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]\n<<<END_ENTITY_TYPES_DELTA_JSON>>>\n<<<END>>>\n';
 
 // templates/_wiki_schema.md
 var wiki_schema_default = '# Wiki Schema\n\n## Language and style\n- Primary language: follow the configured output-language directive (from settings); when it is "auto", match the source/article language.\n- The output language applies to ALL natural-language text, including content copied from the source: table cell values, field values (prompt, expected, notes, descriptions), list items, and quoted sentences. These are content \u2014 translate them. A full sentence in another language (incl. CJK) is never a "term".\n- Verbatim preservation is ONLY for: fenced code blocks, file paths, identifiers, commands, URLs, proper names, and `[[wiki-link]]` targets (they are filenames \u2014 never translate a link target).\n- Do not translate technical terms: SQL, API, LLM, ETL, SCD, TTL, DDL, JSON, YAML\n- System names \u2014 keep the original spelling (RT.DataExporter, CRM B2C, \u0426\u0425\u0414)\n- Expand abbreviations on first use on the page\n- Style: neutral, informative, no value judgements\n- Forbidden: "Obviously...", "The best way...", the pronouns "I", "we", "our"\n\n## File and folder naming\n- Files: kebab-case, Cyrillic allowed, no spaces or special characters except the hyphen\n  - Examples: `\u0432\u0435\u0440\u0441\u0438\u043E\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435-scd.md`, `clickhouse-\u043E\u0431\u0437\u043E\u0440.md`\n- Domain folders: lowercase, Latin script (`ai/`, `databases/`)\n- H1 heading: the page title in the configured output language; a technical term in parentheses when needed\n\n{{section_conventions}}\n\n## Frontmatter\n\n| Field | Rule |\n|------|---------|\n| `type` | Entity type \u2014 the page\'s entity-type subdirectory (e.g. `concept`, or one of the domain\'s configured entity types). Set once when the page is created; do not change on update. |\n| `description` | One-line overview of the page (plain text, no line breaks). This is the sole source of the retrieval overview embedding \u2014 keep it accurate and current. |\n| `resource` | YAML list of plain source-note stems \u2014 no `[[ ]]`, no folder path: `["source-a", "source-b"]`. On UPDATE \u2014 add, do not remove. |\n| `timestamp` | YYYY-MM-DD |\n| `tags` | YAML list: `[category/subcategory, domain/topic]`. Hierarchy via `/`, lowercase, no spaces, no `#`. Reuse tags from existing domain pages; create new ones following the same scheme. Obsidian recognizes the `tags` key automatically \u2014 do not set the type explicitly. |\n| `status` | `stub` (<2 sources, <10 sentences) / `developing` (\u22652 sources, \u226510 sentences, main sections filled in) / `mature` (\u22654 sources, all sections) |\n| `aliases` | Abbreviations, English variants, synonyms |\n\n## Common mistakes (forbidden)\n\n| Mistake | Why it is bad | Correct |\n|--------|-------------|-----------|\n| `tags: - "[[wiki_fin_...]]"` | A WikiLink is not a tag; the validator will remove it | Put it as a `- [[stem]]` bullet under `## Related` |\n| `tags: - {type: ..., name: ...}` | tags \u2014 strings only | `tags: - finance/technical-analysis` |\n| `resource: ["[[source-a]]"]` | `resource` holds plain stems, not WikiLinks | `resource: ["source-a"]` |\n| A link in the body with no matching bullet under `## Related` / `## External links` | The retrieval graph and reference list miss the connection | Add `- [[stem]]` (outgoing) or `- [text](url)` (external) under the matching heading |\n\n## WikiLinks\n\n- Only `[[page-name]]` \u2014 no aliases, no folder paths\n- \u274C Forbidden: `[[Page|alias]]`, `[[folder/page]]`\n- \u2705 Correct: `[[page-name]]`, `[[\u041A\u0438\u0440\u0438\u043B\u043B\u0438\u0446\u0430]]`, `[[Scalability]]`\n- Link only to existing pages; dead links yield a warning\n\n## Source, related, and external links (body sections, not frontmatter)\n\nLinks live in body sections, one bullet per line \u2014 never in frontmatter:\n\n- `## Sources` \u2014 the source note(s) this page was extracted from, as WikiLinks. Same bare stems as the `resource` frontmatter; the ingest pipeline injects this section from `resource`:\n  ```markdown\n  ## Sources\n\n  - [[source-note]]\n  ```\n- `## Related` \u2014 WikiLinks to other wiki pages:\n  ```markdown\n  ## Related\n\n  - [[page-a]]\n  - [[page-b]]\n  ```\n- `## External links` \u2014 external URLs, `[text](url)`:\n  ```markdown\n  ## External links\n\n  - [Example docs](https://example.com/docs)\n  ```\n\nAll three headings are fixed English literals \u2014 do not translate or localize them, even when the page body is in another language. `## Related` and `## External links` are reference data excluded from retrieval embeddings; `## Sources` IS embedded, so the wiki\u2192source connection stays searchable as well as navigable.\n\n## Content\n- Synthesis, not copying \u2014 rework the information from the sources\n- Verbatim quotes only in code blocks (SQL, configurations)\n- Forbidden: placeholder text (TODO, "see source"), empty sections, removing existing information\n- Tables: markdown with alignment (`| Parameter | Value |` + `|----------|----------|`)\n- Code blocks: always specify the language (` ```sql `, ` ```yaml `, ` ```json `)\n';
@@ -51309,6 +51556,7 @@ function retryDelay(headers, retryOrdinal, env = {
 }
 
 // src/native-llm-executor.ts
+var clientRequestCounter = 0;
 function scheduleTimer(callback, delayMs) {
   return setTimeout(callback, delayMs);
 }
@@ -51387,6 +51635,7 @@ function abortableDelay(ms, signal) {
 function createNativeRequestRetryContext(input) {
   return {
     logicalRequestId: input.logicalRequestId ?? input.lifecycle.current().id,
+    traceId: createTraceId(),
     callSite: input.callSite,
     maxRetries: input.opts.nativeRequestRetries ?? 0,
     connectionTimeoutMs: input.llm.nativeRequestExecutor ? input.llm.nativeConnectionTimeoutMs ?? 15e3 : 0,
@@ -51394,6 +51643,9 @@ function createNativeRequestRetryContext(input) {
     signal: input.signal,
     onEvent: input.onEvent,
     lifecycle: input.lifecycle,
+    nativeTransportDiagnostic: input.llm.nativeTransportDiagnostic,
+    consumeNativeHttpResponseDiagnostic: input.llm.consumeNativeHttpResponseDiagnostic,
+    consumeNativeTransportTrace: input.llm.consumeNativeTransportTrace,
     delay: abortableDelay
   };
 }
@@ -51502,6 +51754,114 @@ function metadata(retry, attempt, meaningfulOutputSeen, failure) {
     ...failure
   };
 }
+function createClientRequestId() {
+  clientRequestCounter = (clientRequestCounter + 1) % Number.MAX_SAFE_INTEGER;
+  const randomSource = `${Date.now().toString(36)}-${clientRequestCounter.toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const sanitized = randomSource.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 96);
+  return `aiwiki-${sanitized}`;
+}
+function randomHex(byteLength) {
+  const bytes = new Uint8Array(byteLength);
+  const crypto2 = typeof window === "undefined" ? void 0 : window.crypto;
+  if (crypto2?.getRandomValues) {
+    crypto2.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256);
+    }
+  }
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+function nonZeroRandomHex(byteLength) {
+  let value = randomHex(byteLength);
+  if (/^0+$/.test(value)) value = `1${value.slice(1)}`;
+  return value;
+}
+function createTraceId() {
+  return nonZeroRandomHex(16);
+}
+function createTraceparent(traceId) {
+  return `00-${traceId}-${nonZeroRandomHex(8)}-01`;
+}
+function emitNativeTransportCorrelation(retry, attempt, transport, clientRequestId, traceparent) {
+  const diagnostic = retry.nativeTransportDiagnostic;
+  if (!diagnostic?.endpointPath || !diagnostic.transport) return;
+  retry.onEvent({
+    kind: "native_transport_correlation",
+    logicalRequestId: retry.logicalRequestId,
+    lifecycleId: retry.lifecycle.current().id,
+    callSite: retry.callSite,
+    transport,
+    attempt,
+    endpointPath: diagnostic.endpointPath,
+    networkTransport: diagnostic.transport,
+    diagnosticMode: diagnostic.diagnosticMode,
+    connectionTimeoutMs: retry.connectionTimeoutMs,
+    idleTimeoutMs: retry.idleTimeoutMs,
+    clientRequestId,
+    traceparent
+  });
+}
+function emitNativeHttpResponse(retry, signal, attempt, transport) {
+  const consumed = retry.consumeNativeHttpResponseDiagnostic?.(signal);
+  const diagnostic = consumed?.status === void 0 ? { ...retry.nativeTransportDiagnostic, ...consumed, status: 200 } : consumed;
+  if (!diagnostic?.endpointPath || !diagnostic.transport || diagnostic.status === void 0) return;
+  retry.onEvent({
+    kind: "native_http_response",
+    logicalRequestId: retry.logicalRequestId,
+    lifecycleId: retry.lifecycle.current().id,
+    callSite: retry.callSite,
+    transport,
+    attempt,
+    status: diagnostic.status,
+    endpointPath: diagnostic.endpointPath,
+    networkTransport: diagnostic.transport,
+    connectionTimeoutMs: retry.connectionTimeoutMs,
+    idleTimeoutMs: retry.idleTimeoutMs,
+    ...diagnostic.providerRequestId === void 0 ? {} : { providerRequestId: diagnostic.providerRequestId },
+    ...diagnostic.clientRequestId === void 0 ? {} : { clientRequestId: diagnostic.clientRequestId },
+    ...diagnostic.traceparent === void 0 ? {} : { traceparent: diagnostic.traceparent }
+  });
+}
+function flushNativeTransportTrace(retry, signal, attempt, transport, sdkCompletedAtMs) {
+  const snapshot = retry.consumeNativeTransportTrace?.(signal);
+  if (!snapshot || snapshot.events.length === 0) return;
+  const correlation = {
+    logicalRequestId: retry.logicalRequestId,
+    lifecycleId: retry.lifecycle.current().id,
+    callSite: retry.callSite,
+    transport,
+    attempt,
+    connectionTimeoutMs: retry.connectionTimeoutMs,
+    idleTimeoutMs: retry.idleTimeoutMs
+  };
+  for (const event of snapshot.events) {
+    retry.onEvent({ kind: "native_transport_trace", ...correlation, ...event });
+  }
+  if (sdkCompletedAtMs === void 0) return;
+  const first = snapshot.events[0];
+  const finalTransportElapsedMs = snapshot.events.at(-1)?.elapsedMs ?? 0;
+  retry.onEvent({
+    kind: "native_transport_trace",
+    ...correlation,
+    stage: "sdk_complete",
+    networkTransport: first.networkTransport,
+    endpointPath: first.endpointPath,
+    diagnosticMode: first.diagnosticMode,
+    elapsedMs: Math.max(
+      finalTransportElapsedMs,
+      boundedElapsed(snapshot.startedAtMs, sdkCompletedAtMs)
+    ),
+    ...first.clientRequestId === void 0 ? {} : { clientRequestId: first.clientRequestId },
+    ...first.traceparent === void 0 ? {} : { traceparent: first.traceparent }
+  });
+}
+function boundedElapsed(startedAtMs, finishedAtMs) {
+  return Math.max(
+    0,
+    Math.min(Number.MAX_SAFE_INTEGER, Math.floor(finishedAtMs - startedAtMs))
+  );
+}
 function emitRecovered(retry, attempt, meaningfulOutputSeen, failure) {
   if (attempt === 0 || failure === void 0) return;
   retry.onEvent({
@@ -51517,12 +51877,14 @@ function safeReturn(iterator) {
   } catch {
   }
 }
-async function waitForRetry(retry, error, attempt, transport, meaningfulOutputSeen, lifecycle = retry.lifecycle) {
+async function waitForRetry(retry, error, attempt, transport, meaningfulOutputSeen, clientRequestId, traceparent, lifecycle = retry.lifecycle) {
   const decision2 = classifyNativeRetry(error);
   const failure = {
     errorClass: decision2.errorClass,
     ...decision2.status === void 0 ? {} : { status: decision2.status },
-    ...decision2.providerRequestId === void 0 ? {} : { providerRequestId: decision2.providerRequestId }
+    ...decision2.providerRequestId === void 0 ? {} : { providerRequestId: decision2.providerRequestId },
+    ...clientRequestId === void 0 ? {} : { clientRequestId },
+    ...traceparent === void 0 ? {} : { traceparent }
   };
   const canRetry = decision2.retryable && !meaningfulOutputSeen && attempt < retry.maxRetries;
   if (!canRetry) {
@@ -51570,12 +51932,25 @@ async function executeNonStream(input) {
   retry.lifecycle.begin(0, "non-stream");
   while (true) {
     const scope = attemptScope(retry.signal, retry.idleTimeoutMs);
+    const clientRequestId = createClientRequestId();
+    const traceparent = createTraceparent(retry.traceId);
     try {
       retry.signal.throwIfAborted();
+      emitNativeTransportCorrelation(retry, attempt, "non-stream", clientRequestId, traceparent);
       retry.lifecycle.phase("sent");
       retry.lifecycle.phase("waiting");
       scope.resetIdle();
-      const result = await scope.race(input.create(input.params, { signal: scope.signal }));
+      const result = await scope.race(input.create(input.params, {
+        signal: scope.signal,
+        fetchOptions: {
+          [NATIVE_TRANSPORT_ATTEMPT_SIGNAL]: scope.signal,
+          [NATIVE_TRANSPORT_CLIENT_REQUEST_ID]: clientRequestId,
+          [NATIVE_TRANSPORT_TRACEPARENT]: traceparent
+        }
+      }));
+      const sdkCompletedAtMs = Date.now();
+      emitNativeHttpResponse(retry, scope.signal, attempt, "non-stream");
+      flushNativeTransportTrace(retry, scope.signal, attempt, "non-stream", sdkCompletedAtMs);
       scope.clearIdle();
       retry.signal.throwIfAborted();
       const meaningfulOutputSeen = meaningfulCompletion(result);
@@ -51584,11 +51959,20 @@ async function executeNonStream(input) {
       return result;
     } catch (error) {
       scope.clearIdle();
+      flushNativeTransportTrace(retry, scope.signal, attempt, "non-stream");
       if (retry.signal.aborted || isAbortError2(error)) {
         retry.lifecycle.close("cancelled");
         throw retry.signal.aborted ? abortReason(retry.signal) : error;
       }
-      const failure = await waitForRetry(retry, error, attempt, "non-stream", false);
+      const failure = await waitForRetry(
+        retry,
+        error,
+        attempt,
+        "non-stream",
+        false,
+        clientRequestId,
+        traceparent
+      );
       if (failure === null) throw error;
       priorFailure = failure;
       attempt += 1;
@@ -51614,15 +51998,27 @@ function executeStream(input) {
     try {
       while (true) {
         scope = attemptScope(retry.signal, retry.idleTimeoutMs);
+        const clientRequestId = createClientRequestId();
+        const traceparent = createTraceparent(retry.traceId);
         const buffered = [];
         meaningfulOutputSeen = false;
         let attemptComplete = false;
+        let attemptCleanedUp = false;
         try {
           retry.signal.throwIfAborted();
+          emitNativeTransportCorrelation(retry, attempt, "stream", clientRequestId, traceparent);
           retry.lifecycle.phase("sent");
           retry.lifecycle.phase("waiting");
           scope.resetIdle();
-          const stream = await scope.race(input.create(input.params, { signal: scope.signal }));
+          const stream = await scope.race(input.create(input.params, {
+            signal: scope.signal,
+            fetchOptions: {
+              [NATIVE_TRANSPORT_ATTEMPT_SIGNAL]: scope.signal,
+              [NATIVE_TRANSPORT_CLIENT_REQUEST_ID]: clientRequestId,
+              [NATIVE_TRANSPORT_TRACEPARENT]: traceparent
+            }
+          }));
+          emitNativeHttpResponse(retry, scope.signal, attempt, "stream");
           iterator = stream[Symbol.asyncIterator]();
           let armIdleBeforeNext = true;
           while (true) {
@@ -51632,9 +52028,17 @@ function executeStream(input) {
             }
             const next = await scope.race(Promise.resolve(iterator.next()));
             if (next.done) {
+              const sdkCompletedAtMs = Date.now();
               scope.clearIdle();
               iterator = void 0;
               for (const pending of buffered) yield pending;
+              flushNativeTransportTrace(
+                retry,
+                scope.signal,
+                attempt,
+                "stream",
+                sdkCompletedAtMs
+              );
               emitRecovered(retry, attempt, meaningfulOutputSeen, priorFailure);
               attemptComplete = true;
               requestCompleted = true;
@@ -51656,6 +52060,15 @@ function executeStream(input) {
           scope.clearIdle();
           safeReturn(iterator);
           iterator = void 0;
+          const closingSignal = scope.signal;
+          scope.dispose(new DOMException("Stream attempt closed", "AbortError"));
+          flushNativeTransportTrace(
+            retry,
+            closingSignal,
+            attempt,
+            "stream"
+          );
+          attemptCleanedUp = true;
           if (retry.signal.aborted || isAbortError2(error)) {
             lifecycle.close("cancelled");
             throw retry.signal.aborted ? abortReason(retry.signal) : error;
@@ -51666,13 +52079,24 @@ function executeStream(input) {
             attempt,
             "stream",
             meaningfulOutputSeen,
+            clientRequestId,
+            traceparent,
             lifecycle
           );
           if (failure === null) throw error;
           priorFailure = failure;
           attempt += 1;
         } finally {
-          scope.dispose(attemptComplete ? void 0 : new DOMException("Stream attempt closed", "AbortError"));
+          if (!attemptCleanedUp) {
+            const closingSignal = scope.signal;
+            scope.dispose(attemptComplete ? void 0 : new DOMException("Stream attempt closed", "AbortError"));
+            flushNativeTransportTrace(
+              retry,
+              closingSignal,
+              attempt,
+              "stream"
+            );
+          }
           scope = void 0;
         }
       }
@@ -51858,6 +52282,40 @@ function repairPrompt(profile, lastText, lastError) {
   return profile.repairInstruction ? `${feedback}
 
 ${profile.repairInstruction}` : feedback;
+}
+function compactRepairPrompt(profile, lastError) {
+  const detail = [
+    "Previous response was invalid.",
+    "Previous response was too large to include in the retry prompt.",
+    `Validation error: ${lastError.message.slice(0, 2e3)}`
+  ].join("\n");
+  const feedback = render(repairJson, { detail });
+  if (profile.kind === "framed-zod") {
+    return [
+      detail,
+      profile.repairInstruction,
+      "Return only the required frames. Do not add commentary outside frames."
+    ].join("\n");
+  }
+  return profile.repairInstruction ? `${feedback}
+
+${profile.repairInstruction}` : feedback;
+}
+function repairMessages(baseMessages, profile, fullText, lastError, inputBudgetTokens) {
+  const fullRepair = [
+    ...baseMessages,
+    { role: "assistant", content: fullText },
+    { role: "user", content: repairPrompt(profile, fullText, lastError) }
+  ];
+  if (inputBudgetTokens === void 0 || estimatePreparedMessages(fullRepair) <= inputBudgetTokens) {
+    return fullRepair;
+  }
+  const compactRepair = [
+    ...baseMessages,
+    { role: "user", content: compactRepairPrompt(profile, lastError) }
+  ];
+  if (estimatePreparedMessages(compactRepair) <= inputBudgetTokens) return compactRepair;
+  return fullRepair;
 }
 async function streamOnce(llm, model, messages, opts, signal, onEvent, lifecycle, attempt, callSite) {
   const params = buildChatParams(model, messages, opts, true);
@@ -52147,11 +52605,7 @@ async function runStructuredWithRetry(args) {
           throw new StructuredValidationError(callSite, attempt + 1, lastError);
         }
         lifecycle.close("retrying");
-        messages = [
-          ...messages,
-          { role: "assistant", content: fullText },
-          { role: "user", content: repairPrompt(profile, fullText, lastError) }
-        ];
+        messages = repairMessages(messages, profile, fullText, lastError, args.opts.inputBudgetTokens);
         continue;
       }
       try {
@@ -52179,11 +52633,7 @@ async function runStructuredWithRetry(args) {
           throw new StructuredValidationError(callSite, attempt + 1, lastError);
         }
         lifecycle.close("retrying");
-        messages = [
-          ...messages,
-          { role: "assistant", content: fullText },
-          { role: "user", content: repairPrompt(profile, fullText, lastError) }
-        ];
+        messages = repairMessages(messages, profile, fullText, lastError, args.opts.inputBudgetTokens);
       }
     }
     throw new StructuredValidationError(callSite, maxRetries + 1, lastError);
@@ -52637,6 +53087,42 @@ function unique(values, key) {
     return true;
   });
 }
+function estimateBootstrapPayload(value) {
+  return estimatePreparedMessages([{ role: "user", content: JSON.stringify(value) }]);
+}
+function boundBootstrapPayload(value, budget) {
+  const clone = {
+    candidates: value.candidates.map((candidate) => ({
+      entityKey: candidate.entityKey,
+      packetIds: [...candidate.packetIds],
+      facts: [...candidate.facts],
+      exactSource: candidate.exactSource.map((source) => ({ ...source }))
+    })),
+    domainThemes: [...value.domainThemes],
+    languageEvidence: [...value.languageEvidence]
+  };
+  if (estimateBootstrapPayload(clone) <= budget) return clone;
+  while (clone.languageEvidence.length > 0 && estimateBootstrapPayload(clone) > budget) {
+    clone.languageEvidence.pop();
+  }
+  while (clone.domainThemes.length > 0 && estimateBootstrapPayload(clone) > budget) {
+    clone.domainThemes.pop();
+  }
+  for (const candidate of clone.candidates) {
+    while (candidate.exactSource.length > 1 && estimateBootstrapPayload(clone) > budget) {
+      candidate.exactSource.pop();
+    }
+  }
+  for (const candidate of clone.candidates) {
+    while (candidate.facts.length > 1 && estimateBootstrapPayload(clone) > budget) {
+      candidate.facts.pop();
+    }
+  }
+  while (clone.candidates.length > 1 && estimateBootstrapPayload(clone) > budget) {
+    clone.candidates.pop();
+  }
+  return clone;
+}
 function rangeKey(range) {
   return `${range.startLine}:${range.endLine}`;
 }
@@ -52945,7 +53431,7 @@ function forwardEvidenceStructuredEvent(runtime, event) {
       ...event,
       message: "Structured output validation event"
     });
-  } else if (event.kind === "llm_lifecycle" || event.kind === "assistant_text" || event.kind === "rule_fired" || event.kind === "llm_call_stats" || event.kind === "llm_request_fingerprint" || event.kind === "prompt_budget") {
+  } else if (event.kind === "llm_lifecycle" || event.kind === "assistant_text" || event.kind === "rule_fired" || event.kind === "llm_call_stats" || event.kind === "llm_request_fingerprint" || event.kind === "transport_retry_scheduled" || event.kind === "transport_retry_recovered" || event.kind === "transport_retry_exhausted" || event.kind === "native_transport_correlation" || event.kind === "native_http_response" || event.kind === "native_transport_trace" || event.kind === "prompt_budget") {
     runtime.onEvent?.(event);
   }
 }
@@ -53081,7 +53567,7 @@ function llmWithRequestTelemetry(runtime, metadata2) {
     }
   }
   return {
-    ...runtime.llm.nativeRequestExecutor ? { nativeRequestExecutor: true } : {},
+    ...runtime.llm,
     emitsPromptBudget: true,
     beginPromptBudgetRequest: (requestId) => {
       pendingRequestId = requestId;
@@ -53165,6 +53651,31 @@ async function mapChunk(source, domainId, chunk, totalChunks, policy, runtime, m
       { cause: error }
     );
   }
+}
+function lineCountOf(chunk) {
+  return chunk.endLine - chunk.startLine + 1;
+}
+function isStructuredMapperFailure(error) {
+  return error instanceof EvidenceCoverageError && error.cause instanceof StructuredValidationError;
+}
+function sourceChunkFromRange(source, parent, startLine, endLine, ordinal) {
+  return createSourceChunkForRange(source, startLine, endLine, ordinal, parent.headingPath);
+}
+function normalizeSourceChunksFrom(source, chunks, startIndex) {
+  for (let index = startIndex; index < chunks.length; index++) {
+    const chunk = chunks[index];
+    chunks[index] = createSourceChunkForRange(source, chunk.startLine, chunk.endLine, index, chunk.headingPath);
+  }
+}
+function splitSourceChunkForEvidenceMap(source, chunk, firstOrdinal) {
+  if (lineCountOf(chunk) <= 1) {
+    throw new EvidenceCoverageError(`Mapper chunk ${chunk.id} cannot be split into a smaller source range`);
+  }
+  const splitLine = chunk.startLine + Math.floor(lineCountOf(chunk) / 2) - 1;
+  return [
+    sourceChunkFromRange(source, chunk, chunk.startLine, splitLine, firstOrdinal),
+    sourceChunkFromRange(source, chunk, splitLine + 1, chunk.endLine, firstOrdinal + 1)
+  ];
 }
 function rechunkMapperSourceForRetry(source, domainId, policy, runtime, mode, maximumRawBudget, effectiveInputBudget) {
   const planned = findLargestFeasibleBudget(1, Math.min(maximumRawBudget, effectiveInputBudget), (rawBudget) => {
@@ -53261,23 +53772,43 @@ async function mapChunksWithContextRepack(source, domainId, initialChunks, polic
     },
     execute: async ({ chunks, effectiveInputBudget }) => {
       const effectivePolicy = { ...policy, inputBudgetTokens: effectiveInputBudget };
+      const activeChunks = [...chunks];
       const packets = [];
       const noEvidence = [];
-      for (const chunk of chunks) {
+      for (let index = 0; index < activeChunks.length; index++) {
+        const chunk = activeChunks[index];
         const details = mapperRequestDetails(source, chunk, domainId, mode, effectivePolicy, runtime.opts ?? {});
         let mapped;
         try {
-          mapped = await mapChunk(source, domainId, chunk, chunks.length, effectivePolicy, runtime, mode);
+          mapped = await mapChunk(source, domainId, chunk, activeChunks.length, effectivePolicy, runtime, mode);
         } catch (error) {
           if (classifyContextError(error) !== null) {
             failedMapper = { ...details, id: chunk.id, startLine: chunk.startLine, endLine: chunk.endLine };
+          }
+          if (isStructuredMapperFailure(error) && lineCountOf(chunk) > 1) {
+            const replacements = splitSourceChunkForEvidenceMap(source, chunk, index);
+            activeChunks.splice(index, 1, ...replacements);
+            normalizeSourceChunksFrom(source, activeChunks, index);
+            index -= 1;
+            runtime.onEvent?.({
+              kind: "tool_use",
+              name: "Evidence mapper split",
+              input: {
+                chunkId: chunk.id,
+                startLine: chunk.startLine,
+                endLine: chunk.endLine,
+                replacementChunks: replacements.length
+              }
+            });
+            runtime.onEvent?.({ kind: "tool_result", ok: true, preview: "retry scheduled" });
+            continue;
           }
           throw error;
         }
         if (mapped.length === 0) noEvidence.push({ chunkId: chunk.id, reason: "No domain evidence" });
         packets.push(...mapped);
       }
-      return { chunks, packets, noEvidence };
+      return { chunks: activeChunks, packets, noEvidence };
     },
     onEvent: (event) => forwardContextRepackProgress(runtime, event)
   });
@@ -53547,7 +54078,6 @@ async function prepareBootstrapEvidence(source, provisionalDomainId, policy, run
     evidence.flatMap((item) => item.exactSource.map((range) => range.text)),
     (text) => text
   );
-  const result = { candidates, domainThemes, languageEvidence };
   const payloadBudget = Math.min(
     policy.inputBudgetTokens,
     policy.bootstrapPayloadBudgetTokens ?? policy.inputBudgetTokens
@@ -53555,7 +54085,8 @@ async function prepareBootstrapEvidence(source, provisionalDomainId, policy, run
   if (!Number.isSafeInteger(payloadBudget) || payloadBudget <= 0) {
     throw new EvidenceCoverageError("Bootstrap payload budget must be a positive safe integer");
   }
-  const estimated = estimatePreparedMessages([{ role: "user", content: JSON.stringify(result) }]);
+  const result = boundBootstrapPayload({ candidates, domainThemes, languageEvidence }, payloadBudget);
+  const estimated = estimateBootstrapPayload(result);
   if (estimated > payloadBudget) {
     throw new EvidenceCoverageError(
       `Bootstrap evidence payload requires ${estimated} tokens but budget is ${payloadBudget}`
@@ -53565,7 +54096,7 @@ async function prepareBootstrapEvidence(source, provisionalDomainId, policy, run
 }
 
 // prompts/ingest-synthesis.md
-var ingest_synthesis_default = 'You are a bounded wiki synthesis assistant for the supplied domain.\n\nThe request contains only these contracts and typed inputs:\n- domain contract: {{domain_contract}}\n- output schema contract: {{schema_contract}}\n- canonical path contract: {{path_contract}}\n- complete EntityContextBundle values with validated evidence, selected complete WikiSectionUnit values, and ReplaceSectionAuthority metadata: {{entity_context_bundles}}\n- typed page descriptions: {{page_descriptions}}\n- packed tag-registry units: {{tag_registry_units}}\n\nThe request does not contain serialized service-storage records or machine-only retrieval data. Do not ask for, reproduce, or infer such data.\n\nReturn ONLY one JSON object with these three required root fields and one optional field:\n{"reasoning":"...","actions":[],"skips":[],"entity_types_delta":[]}\n\nDo not return page fields such as `type`, `description`, `resource`, `tags`, `status`,\n`aliases`, or `content` at the root. Put every page mutation inside `actions`.\n\nA create action has exactly this required shape:\n{"kind":"create","entityKey":"exact supplied entityKey","path":"canonical new page path","annotation":"short index description","content":"complete markdown page"}\n\nA patch action has this required outer shape:\n{"kind":"patch","entityKey":"exact supplied entityKey","path":"exact existing page path","expectedPageHash":"exact supplied page hash","sections":[]}\n\nA skip has exactly this shape:\n{"entityKey":"exact supplied entityKey","reason":"why no mutation is needed"}\n\nUse `kind` exactly as `create` or `patch`; never use `create_page`, `update`, or another\nsynonym. Every action requires `entityKey`. Every create requires `annotation`, even\nwhen it is an empty string. Always include `reasoning`, `actions`, and `skips`.\n`entity_types_delta` is optional; include it only for justified domain type updates.\n\nCover every supplied entity exactly once with one action or one skip. Create a complete\npage only for a path that is not an existing page. An existing page may receive only a\npatch or skip. Patch sections must use add, append, or replace. Replace is permitted\nonly when the supplied ReplaceSectionAuthority exactly matches path, normalized heading,\nexpected section ordinal, expected section hash, and exact section text. Every replace\nsection must include expectedSectionOrdinal. Add and append do not require replace\nauthority. Preserve server-owned metadata and do not delete sections.\n';
+var ingest_synthesis_default = 'You are a bounded wiki synthesis assistant for the supplied domain.\n\nThe request contains only these contracts and typed inputs:\n- domain contract: {{domain_contract}}\n- output schema contract: {{schema_contract}}\n- canonical path contract: {{path_contract}}\n- compact EntityContextBundle values with targets, requiredPageSections, validated evidence, optional contextUnits, and ReplaceSectionAuthority metadata: {{entity_context_bundles}}\n- typed page descriptions: {{page_descriptions}}\n- packed tag-registry units: {{tag_registry_units}}\n\nThe request does not contain serialized service-storage records or machine-only retrieval data. Do not ask for, reproduce, or infer such data.\n\nReturn ONLY one JSON object with these three required root fields and one optional field:\n{"reasoning":"...","actions":[],"skips":[],"entity_types_delta":[]}\n\nDo not return page fields such as `type`, `description`, `resource`, `tags`, `status`,\n`aliases`, or `content` at the root. Put every page mutation inside `actions`.\n\nA create action has exactly this required shape:\n{"kind":"create","entityKey":"exact supplied entityKey","path":"canonical new page path","annotation":"short index description","content":"complete markdown page"}\n\nA patch action has this required outer shape:\n{"kind":"patch","entityKey":"exact supplied entityKey","path":"exact existing page path","expectedPageHash":"exact supplied page hash","sections":[]}\n\nA skip has exactly this shape:\n{"entityKey":"exact supplied entityKey","reason":"why no mutation is needed"}\n\nUse `kind` exactly as `create` or `patch`; never use `create_page`, `update`, or another\nsynonym. Every action requires `entityKey`. Every create requires `annotation`, even\nwhen it is an empty string. Always include `reasoning`, `actions`, and `skips`.\n`entity_types_delta` is optional; include it only for justified domain type updates.\n\nCover every supplied entity exactly once with one action or one skip. Create a complete\npage only for a path that is not an existing page. An existing page may receive only a\npatch or skip. Patch sections must use add, append, or replace. Replace is permitted\nonly when the supplied ReplaceSectionAuthority exactly matches path, normalized heading,\nexpected section ordinal, and expected section hash. The server validates exact section\ntext internally; do not reproduce or infer it. Every replace section must include\nexpectedSectionOrdinal. Add and append do not require replace authority. Preserve\nserver-owned metadata and do not delete sections.\n';
 
 // src/phases/ingest-synthesis.ts
 var synthesisRepairInstruction = [
@@ -53765,11 +54296,38 @@ function validateSynthesisActions(input) {
     }
   }
 }
+function normalizeCreateActionPaths(output, createPathsByEntityKey) {
+  if (createPathsByEntityKey === void 0 || createPathsByEntityKey.size === 0) return output;
+  let changed = false;
+  const actions = output.actions.map((action) => {
+    if (action.kind !== "create") return action;
+    const canonical = createPathsByEntityKey.get(action.entityKey);
+    if (canonical === void 0 || action.path === canonical) return action;
+    if (!createPathStemMatchesEntity(action.path, canonical, action.entityKey)) return action;
+    changed = true;
+    return { ...action, path: canonical };
+  });
+  return changed ? { ...output, actions } : output;
+}
+function createPathStemMatchesEntity(path5, canonical, entityKey3) {
+  const rawStem = path5.split("/").at(-1)?.replace(/\.md$/, "") ?? "";
+  const canonicalStem = canonical.split("/").at(-1)?.replace(/\.md$/, "") ?? "";
+  let expectedSlug;
+  try {
+    expectedSlug = slugifyEntity(entityKey3);
+  } catch {
+    return false;
+  }
+  if (rawStem === canonicalStem) return true;
+  if (rawStem.replace(/-/g, "_") === expectedSlug) return true;
+  const domainPrefix = canonicalStem.endsWith(expectedSlug) ? canonicalStem.slice(0, canonicalStem.length - expectedSlug.length) : "";
+  return domainPrefix.length > 0 && rawStem.startsWith(domainPrefix) && rawStem.slice(domainPrefix.length).replace(/-/g, "_") === expectedSlug;
+}
 function boundedOptions(baseOpts, policy, inputBudgetTokens) {
   const opts = {
     ...baseOpts,
     inputBudgetTokens,
-    semanticCompression: { profile: policy.compression, operation: "ingest" }
+    semanticCompression: { profile: policy.compression ?? "balanced", operation: "ingest" }
   };
   if (policy.outputBudgetTokens !== void 0) opts.maxTokens = policy.outputBudgetTokens;
   else delete opts.maxTokens;
@@ -53826,7 +54384,7 @@ function authorityDto(authority) {
     heading: authority.heading,
     sectionOrdinal: authority.sectionOrdinal,
     sectionHash: authority.sectionHash,
-    exactSection: authority.exactSection
+    exactSectionText: "server-owned; validated internally"
   };
 }
 function descriptionDto(description) {
@@ -53867,6 +54425,29 @@ function cloneBundle(bundle) {
     replaceAuthorities: bundle.replaceAuthorities.map((authority) => ({ ...authority }))
   };
 }
+function truncateForPromptBudget(text, minimumLength) {
+  const nextLength = Math.max(minimumLength, Math.floor(text.length / 2));
+  if (nextLength >= text.length) return text;
+  return `${text.slice(0, nextLength)}
+[truncated for prompt budget]`;
+}
+function compressLongestUnitTextForPromptBudget(bundle, minimumLength) {
+  let longestIndex = -1;
+  let longestLength = minimumLength;
+  for (let index = 0; index < bundle.units.length; index++) {
+    const length = bundle.units[index].text.length;
+    if (length > longestLength) {
+      longestIndex = index;
+      longestLength = length;
+    }
+  }
+  if (longestIndex === -1) return false;
+  const unit = bundle.units[longestIndex];
+  const nextText = truncateForPromptBudget(unit.text, minimumLength);
+  if (nextText === unit.text) return false;
+  bundle.units[longestIndex] = { ...unit, text: nextText };
+  return true;
+}
 function compareCodePoints3(left, right) {
   const a = Array.from(left, (value) => value.codePointAt(0) ?? 0);
   const b = Array.from(right, (value) => value.codePointAt(0) ?? 0);
@@ -53883,9 +54464,9 @@ function renderSynthesisMessages(input, bundles, opts, selectedOptionalIds) {
     jsonForPrompt({
       entityKey: bundle.entityKey,
       targets: [...new Set(bundle.units.map((unit) => unit.path))].map((path5) => ({ path: path5, pageHash: input.existingPageHashes.get(path5) })).filter((target) => target.pageHash !== void 0),
-      page: bundle.units.filter((unit) => unit.required).map(unitDto),
+      requiredPageSections: bundle.units.filter((unit) => unit.required).map(unitDto),
       evidence: evidenceDto(bundle.evidence),
-      units: bundle.units.map(unitDto),
+      contextUnits: bundle.units.filter((unit) => !unit.required).map(unitDto),
       replaceAuthorities: bundle.replaceAuthorities.map(authorityDto)
     })
   ].join("\n")).join("\n\n");
@@ -53896,6 +54477,34 @@ Governed path policy: ${jsonForPrompt(pathPolicyDto(input.pathPolicy))}`).replac
   }];
   void opts;
   return messages;
+}
+function renderSemanticRepairPrompt(error) {
+  return [
+    "Previous response was valid JSON but failed guarded synthesis validation.",
+    error.message,
+    "Fix only the invalid fields and return the full synthesis JSON again.",
+    "Canonical wiki paths must use this shape: !Wiki/<domain>/<allowed-type-folder>/wiki_<domain>_<entity_slug>.md.",
+    "Entity slugs use lowercase letters, digits, and underscores only; replace hyphens, spaces, and punctuation with underscores.",
+    "Return ONLY a single valid JSON object matching the schema. No markdown fences, no commentary."
+  ].join("\n");
+}
+function safeValidationRetryReason(error) {
+  return error.message.replace(/\s+/g, " ").slice(0, 240);
+}
+function emitSynthesisValidationRetry(args) {
+  args.input.onEvent({
+    kind: "structured_validation_retry",
+    callSite: "ingest.synthesize",
+    requestId: args.requestId,
+    errorClass: "SynthesisBatchValidationError",
+    safeReason: safeValidationRetryReason(args.cause),
+    bundleCount: args.bundles.length,
+    canSplit: args.canSplit,
+    nextAction: args.canSplit ? "split_batch" : args.canRepair ? "repair_prompt" : "fail",
+    entityKeys: args.bundles.map((bundle) => bundle.entityKey),
+    actionCount: args.output.actions.length,
+    skipCount: args.output.skips.length
+  });
 }
 function existingPathsFor(input) {
   return /* @__PURE__ */ new Set([
@@ -54028,6 +54637,55 @@ function repackSynthesisBundles(input, sourceBundles, effectiveInputBudget, fail
   }
   if (best !== void 0) return best;
   const exhausted = renderAt(optionalEntries.length);
+  if (source.length === 1) {
+    const compressed = cloneBundle(source[0]);
+    const renderCompressed = () => {
+      const messages = renderSynthesisMessages(input, [compressed], opts, /* @__PURE__ */ new Set());
+      const prepared = prepareChatMessages(messages, opts);
+      return {
+        bundles: [compressed],
+        messages,
+        promptHash: contentHash(JSON.stringify(prepared)),
+        estimatedInputTokens: estimatePreparedMessages(prepared)
+      };
+    };
+    let candidate = renderCompressed();
+    const fits = () => candidate.estimatedInputTokens <= effectiveInputBudget && (failedPromptHash === void 0 || candidate.promptHash !== failedPromptHash);
+    while (!fits() && compressed.evidence.links.length > 0) {
+      compressed.evidence.links.pop();
+      candidate = renderCompressed();
+    }
+    while (!fits() && compressed.evidence.exactSource.length > 1) {
+      compressed.evidence.exactSource.pop();
+      candidate = renderCompressed();
+    }
+    while (!fits() && compressed.evidence.exactSourceRanges.length > 1) {
+      compressed.evidence.exactSourceRanges.pop();
+      candidate = renderCompressed();
+    }
+    while (!fits() && compressed.evidence.facts.length > 1) {
+      compressed.evidence.facts.pop();
+      candidate = renderCompressed();
+    }
+    while (!fits() && compressed.evidence.packetIds.length > 1) {
+      compressed.evidence.packetIds.pop();
+      candidate = renderCompressed();
+    }
+    while (!fits() && compressed.evidence.exactSource.length > 0 && compressed.evidence.exactSource[0].text.length > 256) {
+      const text = compressed.evidence.exactSource[0].text;
+      compressed.evidence.exactSource[0].text = truncateForPromptBudget(text, 256);
+      candidate = renderCompressed();
+    }
+    while (!fits() && compressed.evidence.facts.length > 0 && compressed.evidence.facts[0].length > 512) {
+      const fact = compressed.evidence.facts[0];
+      compressed.evidence.facts[0] = truncateForPromptBudget(fact, 512);
+      candidate = renderCompressed();
+    }
+    while (!fits() && compressLongestUnitTextForPromptBudget(compressed, 512)) {
+      candidate = renderCompressed();
+    }
+    if (fits()) return candidate;
+  }
   throw new PromptBudgetExceededError(
     effectiveInputBudget,
     exhausted.estimatedInputTokens,
@@ -54041,7 +54699,7 @@ async function executeSynthesisBatch(input, bundles, maxRetries) {
     callSite: "ingest.synthesize",
     configuredInputBudget: input.policy.inputBudgetTokens,
     outputBudget: input.policy.outputBudgetTokens,
-    compressionProfile: input.policy.compression,
+    compressionProfile: input.policy.compression ?? "balanced",
     build: (effectiveInputBudget) => {
       const opts = compressionOptions(input, effectiveInputBudget);
       const repacked = repackSynthesisBundles(input, bundles, effectiveInputBudget, failedPromptHash, opts);
@@ -54061,25 +54719,79 @@ async function executeSynthesisBatch(input, bundles, maxRetries) {
     },
     execute: async (request) => {
       try {
-        const result = await runStructuredWithRetry({
-          llm: input.llm,
-          model: input.model,
-          baseMessages: request.messages,
-          opts: request.opts,
-          profile: {
-            kind: "json-zod",
-            schema: SynthesisOutputSchema,
-            repairInstruction: synthesisRepairInstruction
-          },
-          maxRetries,
-          callSite: "ingest.synthesize",
-          lifecycle: createLlmLifecycle("synthesize_wiki_pages"),
-          signal: input.signal,
-          onEvent: input.onEvent,
-          transport: "non-stream",
-          contextErrorsRetry: true
-        });
-        return { result, request, inputTokens: result.inputTokens };
+        let messages = request.messages;
+        let lastResult;
+        for (let semanticAttempt = 0; semanticAttempt <= maxRetries; semanticAttempt++) {
+          const result = await runStructuredWithRetry({
+            llm: input.llm,
+            model: input.model,
+            baseMessages: messages,
+            opts: request.opts,
+            profile: {
+              kind: "json-zod",
+              schema: SynthesisOutputSchema,
+              repairInstruction: synthesisRepairInstruction
+            },
+            maxRetries: semanticAttempt === 0 ? maxRetries : 0,
+            callSite: "ingest.synthesize",
+            lifecycle: createLlmLifecycle("synthesize_wiki_pages"),
+            signal: input.signal,
+            onEvent: input.onEvent,
+            transport: "non-stream",
+            contextErrorsRetry: true,
+            validationExhaustionPhase: request.bundles.length > 1 ? "retrying" : semanticAttempt === maxRetries ? "failed" : "retrying"
+          });
+          lastResult = result;
+          const rawOutput = result.value;
+          const normalizedOutput = normalizeCreateActionPaths(
+            rawOutput,
+            request.bundles.length === 1 ? input.createPathsByEntityKey : void 0
+          );
+          const output = {
+            ...normalizedOutput,
+            entity_types_delta: normalizeEntityTypeDelta(normalizedOutput.entity_types_delta ?? [])
+          };
+          try {
+            validateSynthesisCoverage(request.bundles.map((bundle) => bundle.entityKey), output);
+            validateSynthesisActions({
+              existingPaths: existingPathsFor(input),
+              existingPageHashes: input.existingPageHashes,
+              replaceAuthorities: authoritiesFor(request.bundles),
+              actions: output.actions,
+              pathPolicy: input.pathPolicy
+            });
+            return { result, request, inputTokens: result.inputTokens, output };
+          } catch (error) {
+            const cause = error;
+            const canSplit = request.bundles.length > 1;
+            const canRepair = !canSplit && semanticAttempt < maxRetries;
+            emitSynthesisValidationRetry({
+              input,
+              requestId: result.lifecycle.id,
+              bundles: request.bundles,
+              output,
+              cause,
+              canSplit,
+              canRepair
+            });
+            input.onEvent(lifecycleEvent(result.lifecycle.id, result.lifecycle.action, canSplit || canRepair ? "retrying" : "failed"));
+            if (!canRepair) {
+              throw new SynthesisBatchValidationError(
+                bundles.map((bundle) => bundle.entityKey),
+                cause
+              );
+            }
+            input.onEvent({ kind: "rule_fired", ruleId: "parseWithRetry", count: 1 });
+            messages = [
+              ...request.messages,
+              { role: "user", content: renderSemanticRepairPrompt(cause) }
+            ];
+          }
+        }
+        throw new SynthesisBatchValidationError(
+          bundles.map((bundle) => bundle.entityKey),
+          lastResult === void 0 ? new Error("semantic validation exhausted before synthesis") : new Error("semantic validation exhausted")
+        );
       } catch (error) {
         if (classifyContextError(error) !== null) failedPromptHash = request.promptHash;
         throw error;
@@ -54087,28 +54799,7 @@ async function executeSynthesisBatch(input, bundles, maxRetries) {
     },
     onEvent: input.onEvent
   }).then((result) => {
-    const rawOutput = result.result.value;
-    const output = {
-      ...rawOutput,
-      entity_types_delta: normalizeEntityTypeDelta(rawOutput.entity_types_delta ?? [])
-    };
-    try {
-      validateSynthesisCoverage(result.request.bundles.map((bundle) => bundle.entityKey), output);
-      validateSynthesisActions({
-        existingPaths: existingPathsFor(input),
-        existingPageHashes: input.existingPageHashes,
-        replaceAuthorities: authoritiesFor(result.request.bundles),
-        actions: output.actions,
-        pathPolicy: input.pathPolicy
-      });
-    } catch (error) {
-      input.onEvent(lifecycleEvent(result.result.lifecycle.id, result.result.lifecycle.action, "failed"));
-      throw new SynthesisBatchValidationError(
-        bundles.map((bundle) => bundle.entityKey),
-        error
-      );
-    }
-    return orderSynthesisOutput(output, result.request.bundles);
+    return orderSynthesisOutput(result.output, result.request.bundles);
   });
 }
 function renderConflictRegenerationMessages(input, opts) {
@@ -54185,7 +54876,7 @@ async function executeSingleRegenerationRequest(input) {
     return input.llm.chat.completions.create(params, requestOptions);
   };
   const guardedLlm = {
-    ...input.llm.nativeRequestExecutor ? { nativeRequestExecutor: true } : {},
+    ...input.llm,
     chat: {
       completions: {
         create: guardedCreate
@@ -54421,16 +55112,16 @@ function targetPathFor(evidence, domain, domainRoot, existingPaths) {
   const path5 = `${domainRoot}/${effectiveSubfolder(entityType)}/${stem}.md`;
   return existingPaths.has(path5) ? path5 : void 0;
 }
-function processPageContent(content, annotation, path5, domain, domainRoot, sourceStem2, additionalResources = []) {
+function processPageContent(content, annotation, path5, domain, domainRoot, sourcePath, additionalResources = []) {
   const repaired = validateAndRepairWikiPageFrontmatter(content);
   const entityTagged = ensureEntityTypeTag(repaired.content, path5, domain);
   const typed = ensureType(entityTagged.content, entityTypeFromPath(domainRoot, path5));
   const described = ensureDescription(typed, annotation);
-  const sourced = ensureResource(described, sourceStem2);
+  const sourced = ensureResource(described, sourcePath);
   const withSources = reconcilePageProvenance(
     sourced.content,
     null,
-    sourceStem2,
+    sourcePath,
     additionalResources
   );
   return {
@@ -54438,7 +55129,7 @@ function processPageContent(content, annotation, path5, domain, domainRoot, sour
     warnings: [
       ...repaired.warnings,
       ...entityTagged.added && entityTagged.tag ? [`tags: + ${entityTagged.tag}`] : [],
-      ...sourced.injected ? [`resource: + [[${sourceStem2}]]`] : []
+      ...sourced.injected ? [`resource: + ${sourcePath}`] : []
     ],
     tags: parseTagsFromFm(withSources)
   };
@@ -54477,13 +55168,20 @@ function regenerateSourcesSection(content, resources) {
   ].join("\n").replace(/\s*$/, "\n");
   return ensureSourcesSection(withoutManagedSection, [...resources]);
 }
-function reconcilePageProvenance(content, existing, sourceStem2, additionalResources = []) {
+function reconcilePageProvenance(content, existing, sourcePath, additionalResources = []) {
+  const currentStem = sourceStem(sourcePath);
+  const currentPathWithoutExtension = sourcePath.replace(/\.md$/i, "");
+  const canonicalResource = (value) => {
+    const trimmed = value.trim();
+    if (trimmed === currentStem || trimmed === `${currentStem}.md` || trimmed === currentPathWithoutExtension || trimmed === sourcePath) return sourcePath;
+    return trimmed;
+  };
   const resources = [...new Set([
     ...parseResourceFromFm(existing ?? ""),
     ...parseResourceFromFm(content),
     ...additionalResources,
-    sourceStem2
-  ].map((value) => value.trim()).filter(Boolean))].sort(compareCodePoints4);
+    sourcePath
+  ].map(canonicalResource).filter(Boolean))].sort(compareCodePoints4);
   return regenerateSourcesSection(setPageResources(content, resources), resources);
 }
 function normalizedKnowledgeBlocks(markdown) {
@@ -54757,6 +55455,18 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     const registryText = renderTagRegistryBlock(registry, entityTypeNames, maxTagCategories);
     const allowedSubfolders = [...new Set((domain.entity_types ?? []).map(effectiveSubfolder))];
     const pathPolicy = { domainRoot, allowedSubfolders };
+    const createPathsByEntityKey = /* @__PURE__ */ new Map();
+    for (const entity of evidence) {
+      const entityType = domain.entity_types?.find((candidate) => candidate.type === entity.entityType);
+      if (!entityType) continue;
+      try {
+        createPathsByEntityKey.set(
+          entity.entityKey,
+          `${domainRoot}/${effectiveSubfolder(entityType)}/${buildWikiStem(domain.id, entity.entityKey)}.md`
+        );
+      } catch {
+      }
+    }
     const domainContract = [
       `Domain: ${domain.id} (${domain.name})`,
       buildEntityTypesBlock(domain, domainRoot) || "No entity types configured.",
@@ -54829,6 +55539,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
             existingPaths: existingPathSet,
             existingPageHashes,
             existingPageDescriptions: typedDescriptions(domain.id, pageRecords),
+            createPathsByEntityKey,
             tagRegistryUnits: tagRegistryUnits(registryText),
             pathPolicy,
             domainContract,
@@ -55126,7 +55837,7 @@ ${action.content}`,
         effectiveAction.path,
         domain,
         domainRoot,
-        sourceStem2,
+        sourcePath,
         actionDuplicateResources
       );
       if (processed.warnings.length > 0) {
@@ -55307,10 +56018,12 @@ ${action.content}`,
       yield { kind: "error", message };
       return failure("index", message, sourcePath);
     }
+    const sourceResourceTokens = /* @__PURE__ */ new Set([sourcePath, sourceStem2]);
+    const hasCurrentSourceResource = (content) => parseResourceFromFm(content).some((resource) => sourceResourceTokens.has(resource));
     const successfulPaths = [.../* @__PURE__ */ new Set([
       ...created,
       ...updated,
-      ...[...finalPages].filter(([path5, content]) => validateArticlePath(path5, domainRoot) && parseResourceFromFm(content).includes(sourceStem2)).map(([path5]) => path5)
+      ...[...finalPages].filter(([path5, content]) => validateArticlePath(path5, domainRoot) && hasCurrentSourceResource(content)).map(([path5]) => path5)
     ])].sort(compareCodePoints4);
     if (successfulPaths.length > 0) {
       try {
@@ -55351,7 +56064,7 @@ ${action.content}`,
       return failure("index", message, sourcePath);
     }
     const finalStems = new Set([...backlinkPages.keys()].map(pageId));
-    const associatedPaths = [...backlinkPages].filter(([path5, content]) => validateArticlePath(path5, domainRoot) && parseResourceFromFm(content).includes(sourceStem2)).map(([path5]) => path5).sort(compareCodePoints4);
+    const associatedPaths = [...backlinkPages].filter(([path5, content]) => validateArticlePath(path5, domainRoot) && hasCurrentSourceResource(content)).map(([path5]) => path5).sort(compareCodePoints4);
     try {
       yield { kind: "tool_use", name: "Update", input: { path: sourcePath } };
       const freshSource = await vaultTools.read(sourcePath);
@@ -57282,6 +57995,7 @@ var import_path_browserify7 = __toESM(require_path_browserify(), 1);
 
 // src/phases/lint-batches.ts
 var DEFAULT_LINT_ITEM_BUDGET = 12e3;
+var LINT_WORK_ITEM_BUDGET_RATIO = 0.18;
 var PAGE_HEADING = "## Full page";
 function estimateText(text) {
   return new TextEncoder().encode(text).byteLength;
@@ -57352,7 +58066,7 @@ function buildLintWorkItems(pages, itemBudget = DEFAULT_LINT_ITEM_BUDGET) {
   if (!Number.isFinite(itemBudget) || itemBudget <= 0) {
     throw new RangeError("itemBudget must be positive");
   }
-  const effectiveBudget = Math.max(120, Math.floor(itemBudget * 0.25));
+  const effectiveBudget = Math.max(120, Math.floor(itemBudget * LINT_WORK_ITEM_BUDGET_RATIO));
   const items = [];
   for (const [path5, markdown] of [...pages.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     const pageHeading = `# ${h1Heading(markdown)}`;
@@ -60715,21 +61429,16 @@ var fieldLabels = {
   layout: "Layout",
   uncertainty: "Uncertainty"
 };
-function mergeRecognitionRecords(records, profile) {
-  const separator = profile === "minimum" ? "\n\n" : "\n";
+function mergeRecognitionRecords(records) {
   return records.map((record) => {
     const lines = [`## Page ${record.pageId}`];
     for (const field of Object.keys(fieldLabels)) {
       const values = record[field].filter((value) => value.length > 0);
       if (values.length === 0) continue;
-      if (profile === "maximum") {
-        lines.push(`${fieldLabels[field]}: ${values.join("; ")}`);
-      } else {
-        lines.push(`### ${fieldLabels[field]}`, ...values.map((value) => `- ${value}`));
-      }
+      lines.push(`### ${fieldLabels[field]}`, ...values.map((value) => `- ${value}`));
     }
     return lines.join("\n");
-  }).join(separator);
+  }).join("\n");
 }
 
 // src/phases/attachment-analyzer.ts
@@ -60771,7 +61480,6 @@ function resolveVisionOptions(options) {
   return {
     inputBudgetTokens: options?.inputBudgetTokens ?? 16384,
     maxTokens: options?.maxTokens,
-    compressionProfile: options?.compressionProfile ?? "balanced",
     onEvent: options?.onEvent,
     nativeRequestRetries: options?.nativeRequestRetries,
     nativeRequestIdleTimeoutMs: options?.nativeRequestIdleTimeoutMs
@@ -60815,10 +61523,6 @@ function visionCallOptions(options, language, reasoningLanguage, effectiveInputB
     reasoningLanguage,
     nativeRequestRetries: options.nativeRequestRetries,
     nativeRequestIdleTimeoutMs: options.nativeRequestIdleTimeoutMs,
-    semanticCompression: {
-      profile: options.compressionProfile,
-      operation: "vision"
-    },
     jsonMode: "json_schema",
     jsonSchema: {
       name: "vision_analysis",
@@ -60897,7 +61601,6 @@ async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, 
         effectiveInputBudget,
         estimatedInputTokens,
         outputBudget: options.maxTokens,
-        compressionProfile: options.compressionProfile,
         contextUnits: pages.length,
         retryReason: classifyContextError(error) === null ? void 0 : "provider_context_error"
       }));
@@ -60912,7 +61615,6 @@ async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, 
     estimatedInputTokens,
     actualInputTokens: response.usage?.prompt_tokens,
     outputBudget: options.maxTokens,
-    compressionProfile: options.compressionProfile,
     contextUnits: pages.length
   }));
   if (signal.aborted) {
@@ -60963,7 +61665,7 @@ async function analyzeImage(buffer, mimeType, llm, model, signal, language = "au
     reasoningLanguage,
     resolved
   );
-  return mergeRecognitionRecords(records, resolved.compressionProfile);
+  return mergeRecognitionRecords(records);
 }
 async function loadBrowserPdf(buffer) {
   const pdfjs = window.pdfjsLib;
@@ -61133,7 +61835,7 @@ async function analyzePdf(buffer, llm, model, signal, language = "auto", reasoni
     records,
     pages.map((page) => page.pageId)
   );
-  return mergeRecognitionRecords(complete, resolved.compressionProfile);
+  return mergeRecognitionRecords(complete);
 }
 async function analyzeExcalidraw(b64, llm, model, signal, language = "auto", reasoningLanguage = "auto", options) {
   const resolved = resolveVisionOptions(options);
@@ -61147,7 +61849,7 @@ async function analyzeExcalidraw(b64, llm, model, signal, language = "auto", rea
     reasoningLanguage,
     resolved
   );
-  return mergeRecognitionRecords(records, resolved.compressionProfile);
+  return mergeRecognitionRecords(records);
 }
 async function analyzeSingleAttachment(path5, vaultTools, llm, model, signal, sourcePath = "", language = "auto", reasoningLanguage = "auto", visionTempStore, imageOnly = false, usedTemplates, visionOptions) {
   const resolved = vaultTools.resolveLink(path5, sourcePath);
@@ -61580,7 +62282,6 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
             {
               inputBudgetTokens: opts.inputBudgetTokens,
               maxTokens: opts.maxTokens,
-              compressionProfile: visionSettings.compressionProfile ?? opts.semanticCompression?.profile ?? "balanced",
               onEvent: (event) => visionEvents.push(event)
             }
           );
@@ -61669,8 +62370,7 @@ ${tagRegistryBlock}` : ""}`;
   const formatOpts = {
     ...opts,
     jsonMode: false,
-    jsonSchema: void 0,
-    semanticCompression: void 0
+    jsonSchema: void 0
   };
   yield { kind: "assistant_text", delta: progress.analysing(filePath) };
   let lastFinishReason = null;
@@ -61688,7 +62388,6 @@ ${tagRegistryBlock}` : ""}`;
     ),
     actualInputTokens,
     outputBudget: opts.maxTokens,
-    compressionProfile: "balanced",
     contextUnits: context.contextUnits,
     sourceChunks: context.sourceChunks,
     reductionDepth: context.reductionDepth,
@@ -62850,11 +63549,21 @@ async function* runDelete(args, vaultTools, llm, model, domains, vaultRoot, sign
     if (unique2.length === 1) sourceStemToPath.set(stem, unique2[0]);
   }
   const plan = computeDeletionPlan(sourcePath, pages, sourceStemToPath);
+  const targetTokens = /* @__PURE__ */ new Set([sourcePath, targetStem]);
+  const sourcePathSet = new Set(sourceImages.keys());
   for (const [pagePath, content] of pages) {
     const resources = parseResourceFromFm(content);
-    if (!resources.includes(targetStem) || resources.length < 2) continue;
+    if (!resources.some((resource) => targetTokens.has(resource)) || resources.length < 2) continue;
     for (const resource of resources) {
-      if (resource === targetStem) continue;
+      if (targetTokens.has(resource)) continue;
+      if (resource.includes("/") || resource.endsWith(".md")) {
+        if (!sourcePathSet.has(resource)) {
+          throw new Error(
+            `delete: resource ${resource} on ${pagePath} must resolve uniquely; found 0`
+          );
+        }
+        continue;
+      }
       const matches = [...new Set(sourceCandidates.get(resource) ?? [])];
       if (matches.length !== 1) {
         throw new Error(
@@ -63307,7 +64016,6 @@ var AgentRunner = class {
     if (s.backend === "claude-agent") {
       return {
         model: resolved.model,
-        compressionProfile: resolved.policy.compression,
         opts: {
           ...resolved.opts,
           systemPrompt: s.systemPrompt,
@@ -63320,7 +64028,6 @@ var AgentRunner = class {
     const na = s.nativeAgent;
     return {
       model: resolved.model,
-      compressionProfile: resolved.policy.compression,
       opts: {
         ...resolved.opts,
         systemPrompt: s.systemPrompt,
@@ -63356,7 +64063,7 @@ var AgentRunner = class {
       }
     });
   }
-  async *runOperation(req, model, opts, vaultRoot, domains, similarity, visionTempStore, compressionProfile2) {
+  async *runOperation(req, model, opts, vaultRoot, domains, similarity, visionTempStore) {
     const boilerplateDemotion = DISABLED_BOILERPLATE_DEMOTION;
     const reranker = normalizeRerankerConfig({
       enabled: this.settings.nativeAgent.rerankerEnabled,
@@ -63439,7 +64146,6 @@ var AgentRunner = class {
           model: this.settings.vision?.model ?? "",
           language: this.settings.outputLanguage ?? "auto",
           imageOnly: this.isMobile,
-          compressionProfile: compressionProfile2,
           nativeRequestRetries: this.settings.llmIdleRetries ?? 3,
           nativeRequestIdleTimeoutMs: (this.settings.llmIdleTimeoutSec ?? 300) * 1e3
         };
@@ -63459,7 +64165,7 @@ var AgentRunner = class {
     }
   }
   async *run(req) {
-    const { model, opts, compressionProfile: compressionProfile2 } = this.buildOptsFor(
+    const { model, opts } = this.buildOptsFor(
       req.operation,
       req.policyOperation
     );
@@ -63523,8 +64229,7 @@ var AgentRunner = class {
             vaultRoot,
             domains,
             similarity,
-            visionTempStore,
-            compressionProfile2
+            visionTempStore
           )) {
             if (ev.kind === "llm_call_stats" || ev.kind === "assistant_text" || ev.kind === "tool_use" || ev.kind === "tool_result") resetTimer();
             if (ev.kind === "tool_use" && ev.name === "WipeDomain") destructivePreludeSeen = true;
@@ -63691,8 +64396,7 @@ function wrapMobileNoStream(inner) {
     return completionToAsyncIterable(resp);
   });
   return {
-    ...inner.nativeRequestExecutor ? { nativeRequestExecutor: true } : {},
-    ...inner.nativeConnectionTimeoutMs === void 0 ? {} : { nativeConnectionTimeoutMs: inner.nativeConnectionTimeoutMs },
+    ...inner,
     chat: { completions: { create } }
   };
 }
@@ -63726,6 +64430,11 @@ function mkChunk(base, delta, finish_reason = null, usage = null) {
 
 // src/native-openai-transport.ts
 var directDispatchers = /* @__PURE__ */ new Map();
+var MAX_TRACE_BODY_CHUNK_EVENTS = 48;
+var MAX_TRACE_PATH_LENGTH = 256;
+var MAX_TRACE_CONTENT_TYPE_LENGTH = 128;
+var MAX_TRACE_ERROR_CLASS_LENGTH = 64;
+var MAX_PROVIDER_REQUEST_ID_LENGTH = 128;
 function closeAtOpenAiDone(response, undici) {
   if (!response.body || !response.headers.get("content-type")?.toLowerCase().includes("text/event-stream")) {
     return response;
@@ -63812,22 +64521,105 @@ function createDirectDesktopFetch(connectionTimeoutMs = 15e3) {
   };
   return wrapped;
 }
+function createIsolatedDirectDesktopFetch(connectionTimeoutMs, finalizers) {
+  const undici = require_undici();
+  const normalizedTimeout = normalizeConnectionTimeout(connectionTimeoutMs);
+  const wrapped = async (input, init) => {
+    const dispatcher = new undici.Agent({
+      connectTimeout: normalizedTimeout,
+      headersTimeout: 0,
+      bodyTimeout: 0
+    });
+    let closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      void dispatcher.close().catch(() => {
+      });
+    };
+    try {
+      const response = await undici.fetch(
+        input,
+        { ...init, dispatcher }
+      ).then((value) => closeAtOpenAiDone(value, undici));
+      finalizers.set(response, close);
+      return response;
+    } catch (error) {
+      close();
+      throw error;
+    }
+  };
+  return wrapped;
+}
+function createUndiciRequestAdapterFetch(connectionTimeoutMs, finalizers) {
+  const undici = require_undici();
+  const normalizedTimeout = normalizeConnectionTimeout(connectionTimeoutMs);
+  const wrapped = async (input, init) => {
+    const dispatcher = new undici.Agent({
+      connectTimeout: normalizedTimeout,
+      headersTimeout: 0,
+      bodyTimeout: 0
+    });
+    let closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      void dispatcher.close().catch(() => {
+      });
+    };
+    try {
+      const request = requestParts(input, init);
+      const response = await undici.request(request.url, {
+        method: request.method,
+        headers: request.headers,
+        body: request.body,
+        signal: request.signal,
+        dispatcher,
+        headersTimeout: 0,
+        bodyTimeout: 0
+      });
+      const webBody = toWebReadableStream(response.body);
+      const adaptedResponse = closeAtOpenAiDone(new undici.Response(
+        webBody,
+        {
+          status: response.statusCode,
+          statusText: response.statusText,
+          headers: responseHeaders(response.headers)
+        }
+      ), undici);
+      finalizers.set(adaptedResponse, close);
+      return adaptedResponse;
+    } catch (error) {
+      close();
+      throw error;
+    }
+  };
+  return wrapped;
+}
 function selectNativeTransport(options) {
   if (options.isMobile) {
     return {
       fetch: options.mobileFetch,
       diagnostic: {
         transport: "mobile-host",
+        diagnosticMode: "off",
         requestedScope: "dns_tcp_tls_establishment",
         exactConnectTimeoutAvailable: false,
         hostTransportRetained: true
       }
     };
   }
-  if (options.proxyFetch) return { fetch: options.proxyFetch };
-  return { fetch: options.directDesktopFetch() };
+  if (options.proxyFetch) {
+    return { fetch: options.proxyFetch, diagnostic: { transport: "desktop-proxy", diagnosticMode: "off" } };
+  }
+  return {
+    fetch: options.directDesktopFetch(),
+    diagnostic: { transport: "desktop-direct", diagnosticMode: "off" }
+  };
 }
 function createNativeOpenAiFetch(options) {
+  const requestedDiagnosticMode = options.nativeTransportDiagnosticMode === "connection-close" || options.nativeTransportDiagnosticMode === "undici-request-adapter" ? options.nativeTransportDiagnosticMode : "off";
+  const isolatedFinalizers = /* @__PURE__ */ new WeakMap();
   let proxyFetch = null;
   if (!options.isMobile && options.proxyConfig.enabled) {
     try {
@@ -63844,13 +64636,342 @@ function createNativeOpenAiFetch(options) {
     isMobile: options.isMobile,
     mobileFetch: options.mobileFetch,
     proxyFetch,
-    directDesktopFetch: () => createDirectDesktopFetch(options.connectionTimeoutMs)
+    directDesktopFetch: () => {
+      if (requestedDiagnosticMode === "connection-close") {
+        return createIsolatedDirectDesktopFetch(options.connectionTimeoutMs, isolatedFinalizers);
+      }
+      if (requestedDiagnosticMode === "undici-request-adapter") {
+        return createUndiciRequestAdapterFetch(options.connectionTimeoutMs, isolatedFinalizers);
+      }
+      return createDirectDesktopFetch(options.connectionTimeoutMs);
+    }
   });
-  if (selection.diagnostic) options.onTransportDiagnostic?.(selection.diagnostic);
-  return selection.fetch;
+  const effectiveDiagnosticMode = selection.diagnostic?.transport === "desktop-direct" ? requestedDiagnosticMode : "off";
+  const selectedDiagnostic = selection.diagnostic ? { ...selection.diagnostic, diagnosticMode: effectiveDiagnosticMode } : void 0;
+  if (selectedDiagnostic) options.onTransportDiagnostic?.(selectedDiagnostic);
+  const transportKind = selectedDiagnostic?.transport ?? "desktop-direct";
+  const wrapped = async (input, init) => {
+    const taggedInit = init;
+    const attemptSignal = taggedInit?.[NATIVE_TRANSPORT_ATTEMPT_SIGNAL] ?? taggedInit?.signal ?? void 0;
+    const clientRequestId = sanitizeClientRequestId(taggedInit?.[NATIVE_TRANSPORT_CLIENT_REQUEST_ID]);
+    const traceparent = sanitizeTraceparent(taggedInit?.[NATIVE_TRANSPORT_TRACEPARENT]);
+    let forwardedInit = init;
+    if (taggedInit && (NATIVE_TRANSPORT_ATTEMPT_SIGNAL in taggedInit || NATIVE_TRANSPORT_CLIENT_REQUEST_ID in taggedInit || NATIVE_TRANSPORT_TRACEPARENT in taggedInit)) {
+      const clonedInit = { ...taggedInit };
+      delete clonedInit[NATIVE_TRANSPORT_ATTEMPT_SIGNAL];
+      delete clonedInit[NATIVE_TRANSPORT_CLIENT_REQUEST_ID];
+      delete clonedInit[NATIVE_TRANSPORT_TRACEPARENT];
+      if (clientRequestId || traceparent) {
+        clonedInit.headers = headersWithCorrelation(clonedInit.headers, { clientRequestId, traceparent });
+      }
+      forwardedInit = clonedInit;
+    }
+    const startedAtMs = Date.now();
+    const path5 = endpointPath(input);
+    const emit = (event) => {
+      if (!attemptSignal) return;
+      options.onTraceEvent?.(attemptSignal, {
+        networkTransport: transportKind,
+        endpointPath: path5,
+        diagnosticMode: effectiveDiagnosticMode,
+        elapsedMs: event.elapsedMs ?? elapsedSince(startedAtMs),
+        ...clientRequestId ? { clientRequestId } : {},
+        ...traceparent ? { traceparent } : {},
+        ...event
+      });
+    };
+    emit({ stage: "fetch_start", elapsedMs: 0 });
+    let fetchTerminalRecorded = false;
+    const onFetchAbort = () => {
+      if (fetchTerminalRecorded) return;
+      fetchTerminalRecorded = true;
+      emit({
+        stage: "fetch_abort",
+        ...safeErrorMetadata(new DOMException("The operation was aborted", "AbortError"))
+      });
+    };
+    if (attemptSignal?.aborted) onFetchAbort();
+    else attemptSignal?.addEventListener("abort", onFetchAbort, { once: true });
+    let response;
+    try {
+      response = await selection.fetch(input, forwardedInit);
+    } catch (error) {
+      attemptSignal?.removeEventListener("abort", onFetchAbort);
+      const aborted = Boolean(attemptSignal?.aborted || forwardedInit?.signal?.aborted) || error instanceof Error && error.name === "AbortError";
+      if (!fetchTerminalRecorded) {
+        fetchTerminalRecorded = true;
+        emit({
+          stage: aborted ? "fetch_abort" : "fetch_error",
+          ...safeErrorMetadata(error)
+        });
+      }
+      throw error;
+    }
+    attemptSignal?.removeEventListener("abort", onFetchAbort);
+    if (fetchTerminalRecorded) {
+      void response.body?.cancel().catch(() => {
+      });
+      isolatedFinalizers.get(response)?.();
+      throw attemptSignal?.reason instanceof Error ? attemptSignal.reason : new DOMException("The operation was aborted", "AbortError");
+    }
+    if (attemptSignal) {
+      options.onHttpResponse?.(attemptSignal, {
+        transport: transportKind,
+        diagnosticMode: effectiveDiagnosticMode,
+        endpointPath: path5,
+        status: response.status,
+        providerRequestId: providerRequestId(response.headers),
+        ...clientRequestId ? { clientRequestId } : {},
+        ...traceparent ? { traceparent } : {}
+      });
+    }
+    emit({
+      stage: "fetch_headers",
+      status: response.status,
+      ...selectedResponseHeaders(response.headers)
+    });
+    return observeResponseBody(
+      response,
+      attemptSignal,
+      emit,
+      isolatedFinalizers.get(response)
+    );
+  };
+  return wrapped;
 }
 function normalizeConnectionTimeout(timeoutMs) {
   return Number.isFinite(timeoutMs) && timeoutMs > 0 ? Math.floor(timeoutMs) : 15e3;
+}
+function requestParts(input, init) {
+  const request = input instanceof Request ? input : void 0;
+  const headers = new Headers(request?.headers);
+  if (init?.headers) {
+    new Headers(init.headers).forEach((value, key) => headers.set(key, value));
+  }
+  const method = init?.method ?? request?.method ?? "GET";
+  const body = init && "body" in init ? init.body : request?.body;
+  return {
+    url: request ? request.url : input,
+    method,
+    headers: headersRecord(headers),
+    body: method === "GET" || method === "HEAD" ? void 0 : body,
+    signal: init?.signal ?? request?.signal ?? void 0
+  };
+}
+function headersRecord(headers) {
+  const record = {};
+  headers.forEach((value, key) => {
+    record[key] = value;
+  });
+  return record;
+}
+function responseHeaders(headers) {
+  const next = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (value === void 0) continue;
+    next[key] = Array.isArray(value) ? value.join(", ") : value;
+  }
+  return next;
+}
+function toWebReadableStream(body) {
+  if (!body) return null;
+  if (typeof body.getReader === "function") {
+    return body;
+  }
+  const iterator = body[Symbol.asyncIterator]?.();
+  if (!iterator) return null;
+  return new ReadableStream({
+    async pull(controller) {
+      try {
+        const next = await iterator.next();
+        if (next.done) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(chunkToUint8Array(next.value));
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+    async cancel(reason) {
+      await iterator.return?.();
+      body.destroy?.(
+        reason instanceof Error ? reason : void 0
+      );
+    }
+  });
+}
+function chunkToUint8Array(chunk) {
+  if (chunk instanceof Uint8Array) return chunk;
+  if (typeof chunk === "string") return new TextEncoder().encode(chunk);
+  if (chunk instanceof ArrayBuffer) return new Uint8Array(chunk);
+  if (ArrayBuffer.isView(chunk)) {
+    return new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+  }
+  return new TextEncoder().encode(String(chunk));
+}
+function endpointPath(input) {
+  const raw = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  try {
+    const url = new URL(raw);
+    return sanitizeNativeDiagnosticPath(url.pathname);
+  } catch {
+    return "";
+  }
+}
+function sanitizeNativeDiagnosticPath(value) {
+  return boundedString(value, MAX_TRACE_PATH_LENGTH) ?? "";
+}
+function observeResponseBody(response, signal, emit, finalize) {
+  let finalized = false;
+  const finalizeOnce = () => {
+    if (finalized) return;
+    finalized = true;
+    finalize?.();
+  };
+  const knownEmptyBody = response.status === 204 || response.headers.get("content-length")?.trim() === "0";
+  if (!response.body || knownEmptyBody) {
+    emit({ stage: "body_start", bodyBytes: 0, bodyChunks: 0 });
+    emit({ stage: "body_end", bodyBytes: 0, bodyChunks: 0 });
+    if (response.body) void response.body.cancel().catch(() => {
+    });
+    finalizeOnce();
+    return response;
+  }
+  const reader = response.body.getReader();
+  let bodyStarted = false;
+  let bodyBytes = 0;
+  let bodyChunks = 0;
+  let emittedChunkEvents = 0;
+  let terminal = false;
+  let terminalError;
+  const startBody = () => {
+    if (bodyStarted) return;
+    bodyStarted = true;
+    emit({ stage: "body_start", bodyBytes, bodyChunks });
+  };
+  const finish = (stage, error) => {
+    if (terminal) return;
+    terminal = true;
+    terminalError = error;
+    signal?.removeEventListener("abort", onAbort);
+    emit({
+      stage,
+      bodyBytes,
+      bodyChunks,
+      ...stage === "body_error" ? safeErrorMetadata(error) : {}
+    });
+    finalizeOnce();
+  };
+  const onAbort = () => {
+    const error = new DOMException("The operation was aborted", "AbortError");
+    finish("body_error", error);
+    void reader.cancel().catch(() => {
+    });
+  };
+  const errorIfTerminal = (controller) => {
+    if (!terminal) return false;
+    controller.error(terminalError ?? new DOMException("The operation was aborted", "AbortError"));
+    return true;
+  };
+  if (signal?.aborted) onAbort();
+  else signal?.addEventListener("abort", onAbort, { once: true });
+  const body = new ReadableStream({
+    async pull(controller) {
+      if (errorIfTerminal(controller)) return;
+      startBody();
+      try {
+        const next = await reader.read();
+        if (errorIfTerminal(controller)) return;
+        if (next.done) {
+          finish("body_end");
+          controller.close();
+          return;
+        }
+        bodyBytes = Math.min(Number.MAX_SAFE_INTEGER, bodyBytes + next.value.byteLength);
+        bodyChunks = Math.min(Number.MAX_SAFE_INTEGER, bodyChunks + 1);
+        if (emittedChunkEvents < MAX_TRACE_BODY_CHUNK_EVENTS) {
+          emittedChunkEvents += 1;
+          emit({ stage: "body_chunk", bodyBytes, bodyChunks });
+        }
+        controller.enqueue(next.value);
+      } catch (error) {
+        if (errorIfTerminal(controller)) return;
+        finish("body_error", error);
+        controller.error(error);
+      }
+    },
+    async cancel(reason) {
+      if (terminal) {
+        await reader.cancel(reason);
+        return;
+      }
+      startBody();
+      try {
+        await reader.cancel(reason);
+      } finally {
+        finish("body_error", new DOMException("Response body cancelled", "AbortError"));
+      }
+    }
+  }, { highWaterMark: 0 });
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers
+  });
+}
+function elapsedSince(startedAtMs) {
+  return Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(Date.now() - startedAtMs)));
+}
+function selectedResponseHeaders(headers) {
+  const contentType = boundedString(headers.get("content-type"), MAX_TRACE_CONTENT_TYPE_LENGTH);
+  const rawContentLength = headers.get("content-length")?.trim();
+  const parsedContentLength = rawContentLength && /^\d+$/.test(rawContentLength) ? Number(rawContentLength) : void 0;
+  return {
+    ...contentType ? { contentType } : {},
+    ...Number.isSafeInteger(parsedContentLength) && parsedContentLength >= 0 ? { contentLength: parsedContentLength } : {}
+  };
+}
+function safeErrorMetadata(error) {
+  const record = error !== null && typeof error === "object" ? error : void 0;
+  const errorClass = boundedErrorClass(record?.constructor?.name) ?? "Error";
+  return { errorClass };
+}
+function headersWithCorrelation(headers, ids) {
+  const next = new Headers(headers);
+  if (ids.clientRequestId) next.set("x-client-attempt-id", ids.clientRequestId);
+  if (ids.traceparent) next.set("traceparent", ids.traceparent);
+  return next;
+}
+function sanitizeClientRequestId(value) {
+  if (typeof value !== "string") return void 0;
+  const sanitized = value.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, MAX_PROVIDER_REQUEST_ID_LENGTH);
+  return sanitized || void 0;
+}
+function sanitizeTraceparent(value) {
+  if (typeof value !== "string") return void 0;
+  return /^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/.test(value) ? value : void 0;
+}
+function boundedErrorClass(value) {
+  if (typeof value !== "string") return void 0;
+  const sanitized = value.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, MAX_TRACE_ERROR_CLASS_LENGTH);
+  return sanitized || void 0;
+}
+function boundedString(value, maxLength) {
+  if (value === null) return void 0;
+  const sanitized = Array.from(value, (character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint <= 31 || codePoint === 127 ? " " : character;
+  }).join("").trim();
+  return sanitized ? sanitized.slice(0, maxLength) : void 0;
+}
+function providerRequestId(headers) {
+  const raw = headers.get("x-request-id") ?? headers.get("x-requestid") ?? headers.get("request-id") ?? headers.get("cf-ray") ?? void 0;
+  if (raw === void 0) return void 0;
+  const bounded = boundedString(raw, MAX_PROVIDER_REQUEST_ID_LENGTH);
+  if (!bounded) return void 0;
+  const sanitized = bounded.replace(/[^A-Za-z0-9_.:-]/g, "_");
+  return sanitized || void 0;
 }
 
 // src/native-openai-client.ts
@@ -63858,20 +64979,50 @@ function sdkTimeoutForIdleMs(idleTimeoutMs) {
   if (!Number.isFinite(idleTimeoutMs) || idleTimeoutMs <= 0) return MAX_SAFE_TIMER_MS;
   return Math.min(MAX_SAFE_TIMER_MS, Math.floor(idleTimeoutMs) + 1e3);
 }
+function chatCompletionsPath(baseURL) {
+  try {
+    const url = new URL(baseURL);
+    const prefix = url.pathname.replace(/\/+$/, "");
+    return sanitizeNativeDiagnosticPath(
+      `${prefix}/chat/completions`.replace(/\/{2,}/g, "/")
+    );
+  } catch {
+    return "/chat/completions";
+  }
+}
 function createNativeOpenAiClient(options) {
   let nativeTransportDiagnostic;
+  const nativeHttpResponseDiagnostics = /* @__PURE__ */ new WeakMap();
+  const nativeTransportTraces = /* @__PURE__ */ new WeakMap();
   const nativeFetch = createNativeOpenAiFetch({
     baseURL: options.baseURL,
     isMobile: options.isMobile,
     proxyConfig: options.proxyConfig,
     mobileFetch: options.mobileFetch,
     connectionTimeoutMs: options.connectionTimeoutMs,
+    nativeTransportDiagnosticMode: options.nativeTransportDiagnosticMode ?? "off",
     onProxySelected: options.onProxySelected,
     onProxyError: options.onProxyError,
     onTransportDiagnostic: (diagnostic) => {
       nativeTransportDiagnostic = diagnostic;
+    },
+    onHttpResponse: (signal, diagnostic) => {
+      nativeHttpResponseDiagnostics.set(signal, diagnostic);
+    },
+    onTraceEvent: (signal, event) => {
+      if (event.stage === "fetch_start") {
+        nativeTransportTraces.set(signal, { startedAtMs: Date.now(), events: [event] });
+        return;
+      }
+      const trace = nativeTransportTraces.get(signal);
+      if (!trace) return;
+      appendBoundedTraceEvent(trace.events, event);
     }
   });
+  const endpointPath2 = chatCompletionsPath(options.baseURL);
+  if (nativeTransportDiagnostic) {
+    nativeTransportDiagnostic = { ...nativeTransportDiagnostic, endpointPath: endpointPath2 };
+  }
   const raw = new OpenAI({
     baseURL: options.baseURL,
     apiKey: options.apiKey,
@@ -63886,7 +65037,30 @@ function createNativeOpenAiClient(options) {
   const executorClient = createNativeLlmClient(rawCreate, options.connectionTimeoutMs);
   const client = options.isMobile ? wrapMobileNoStream(executorClient) : executorClient;
   if (nativeTransportDiagnostic) client.nativeTransportDiagnostic = nativeTransportDiagnostic;
+  client.consumeNativeHttpResponseDiagnostic = (signal) => {
+    const diagnostic = nativeHttpResponseDiagnostics.get(signal);
+    nativeHttpResponseDiagnostics.delete(signal);
+    return diagnostic;
+  };
+  client.consumeNativeTransportTrace = (signal) => {
+    const trace = nativeTransportTraces.get(signal);
+    nativeTransportTraces.delete(signal);
+    if (!trace) return void 0;
+    return { startedAtMs: trace.startedAtMs, events: trace.events };
+  };
   return client;
+}
+function appendBoundedTraceEvent(events, event) {
+  const maxEvents = 64;
+  if (events.length < maxEvents) {
+    events.push(event);
+    return;
+  }
+  if (event.stage === "body_chunk") return;
+  const chunkIndex = events.findIndex((candidate) => candidate.stage === "body_chunk");
+  if (chunkIndex >= 0) events.splice(chunkIndex, 1);
+  else events.shift();
+  events.push(event);
 }
 
 // src/okf-export.ts
@@ -64666,6 +65840,7 @@ var WikiController = class {
         apiKey: s.nativeAgent.apiKey,
         connectionTimeoutMs: s.llmConnectionTimeoutSec * 1e3,
         idleTimeoutMs: s.llmIdleTimeoutSec * 1e3,
+        nativeTransportDiagnosticMode: s.devMode.nativeTransportDiagnosticMode,
         isMobile: import_obsidian10.Platform.isMobile,
         proxyConfig: s.proxy,
         mobileFetch,
@@ -65920,7 +67095,8 @@ var LlmWikiPlugin = class extends import_obsidian14.Plugin {
       this.settings.agentLogEnabled = legacyLogPath.length > 0;
     }
     this.settings.devMode = {
-      enabled: this.settings.devMode.enabled
+      enabled: this.settings.devMode.enabled,
+      nativeTransportDiagnosticMode: this.settings.devMode.nativeTransportDiagnosticMode
     };
     let formatMaxTokensMigrated = false;
     if (this.settings.nativeAgent.operations.format.maxTokens === 16384) {

@@ -293,7 +293,7 @@ export interface PromptBudgetMetadata {
   estimatedInputTokens: number;
   actualInputTokens?: number;
   outputBudget?: number;
-  compressionProfile: CompressionProfile;
+  compressionProfile?: CompressionProfile;
   contextUnits: number;
   sourceChunks?: number;
   reductionDepth?: number;
@@ -310,9 +310,9 @@ export function createPromptBudgetEvent(metadata: PromptBudgetMetadata): PromptB
     configuredInputBudget: metadata.configuredInputBudget,
     effectiveInputBudget: metadata.effectiveInputBudget,
     estimatedInputTokens: metadata.estimatedInputTokens,
-    compressionProfile: metadata.compressionProfile,
     contextUnits: metadata.contextUnits,
   };
+  if (metadata.compressionProfile !== undefined) event.compressionProfile = metadata.compressionProfile;
   if (metadata.actualInputTokens !== undefined) event.actualInputTokens = metadata.actualInputTokens;
   if (metadata.outputBudget !== undefined) event.outputBudget = metadata.outputBudget;
   if (metadata.sourceChunks !== undefined) event.sourceChunks = metadata.sourceChunks;
@@ -420,6 +420,7 @@ export async function runWithContextRepack<TBuild, TResult>(
     }
 
     if (repackSuppressed) throw error.original;
+    if (preflight) throw error;
     if (
       retryReason === undefined
       || attempt === MAX_CONTEXT_REPACKS

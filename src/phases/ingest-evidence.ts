@@ -1,6 +1,11 @@
 import type OpenAI from "openai";
 import { z } from "zod";
-import { assertCompleteSourceCoverage, chunkMarkdownSource, type SourceChunk } from "../markdown-chunks";
+import {
+  assertCompleteSourceCoverage,
+  chunkMarkdownSource,
+  createSourceChunkForRange,
+  type SourceChunk,
+} from "../markdown-chunks";
 import {
   createPromptBudgetEvent,
   classifyContextError,
@@ -118,6 +123,45 @@ function unique<T>(values: T[], key: (value: T) => string): T[] {
     seen.add(valueKey);
     return true;
   });
+}
+
+function estimateBootstrapPayload(value: BootstrapEvidence): number {
+  return estimatePreparedMessages([{ role: "user", content: JSON.stringify(value) }]);
+}
+
+function boundBootstrapPayload(value: BootstrapEvidence, budget: number): BootstrapEvidence {
+  const clone: BootstrapEvidence = {
+    candidates: value.candidates.map((candidate) => ({
+      entityKey: candidate.entityKey,
+      packetIds: [...candidate.packetIds],
+      facts: [...candidate.facts],
+      exactSource: candidate.exactSource.map((source) => ({ ...source })),
+    })),
+    domainThemes: [...value.domainThemes],
+    languageEvidence: [...value.languageEvidence],
+  };
+  if (estimateBootstrapPayload(clone) <= budget) return clone;
+
+  while (clone.languageEvidence.length > 0 && estimateBootstrapPayload(clone) > budget) {
+    clone.languageEvidence.pop();
+  }
+  while (clone.domainThemes.length > 0 && estimateBootstrapPayload(clone) > budget) {
+    clone.domainThemes.pop();
+  }
+  for (const candidate of clone.candidates) {
+    while (candidate.exactSource.length > 1 && estimateBootstrapPayload(clone) > budget) {
+      candidate.exactSource.pop();
+    }
+  }
+  for (const candidate of clone.candidates) {
+    while (candidate.facts.length > 1 && estimateBootstrapPayload(clone) > budget) {
+      candidate.facts.pop();
+    }
+  }
+  while (clone.candidates.length > 1 && estimateBootstrapPayload(clone) > budget) {
+    clone.candidates.pop();
+  }
+  return clone;
 }
 
 function rangeKey(range: EvidenceRange): string {
@@ -648,6 +692,12 @@ function forwardEvidenceStructuredEvent(
     || event.kind === "rule_fired"
     || event.kind === "llm_call_stats"
     || event.kind === "llm_request_fingerprint"
+    || event.kind === "transport_retry_scheduled"
+    || event.kind === "transport_retry_recovered"
+    || event.kind === "transport_retry_exhausted"
+    || event.kind === "native_transport_correlation"
+    || event.kind === "native_http_response"
+    || event.kind === "native_transport_trace"
     || event.kind === "prompt_budget"
   ) {
     runtime.onEvent?.(event);
@@ -849,7 +899,7 @@ function llmWithRequestTelemetry(
     }
   }
   return {
-    ...(runtime.llm.nativeRequestExecutor ? { nativeRequestExecutor: true as const } : {}),
+    ...runtime.llm,
     emitsPromptBudget: true,
     beginPromptBudgetRequest: (requestId) => {
       pendingRequestId = requestId;
@@ -949,6 +999,47 @@ async function mapChunk(
       { cause: error },
     );
   }
+}
+
+function lineCountOf(chunk: Pick<SourceChunk, "startLine" | "endLine">): number {
+  return chunk.endLine - chunk.startLine + 1;
+}
+
+function isStructuredMapperFailure(error: unknown): boolean {
+  return error instanceof EvidenceCoverageError
+    && error.cause instanceof StructuredValidationError;
+}
+
+function sourceChunkFromRange(
+  source: string,
+  parent: SourceChunk,
+  startLine: number,
+  endLine: number,
+  ordinal: number,
+): SourceChunk {
+  return createSourceChunkForRange(source, startLine, endLine, ordinal, parent.headingPath);
+}
+
+function normalizeSourceChunksFrom(source: string, chunks: SourceChunk[], startIndex: number): void {
+  for (let index = startIndex; index < chunks.length; index++) {
+    const chunk = chunks[index];
+    chunks[index] = createSourceChunkForRange(source, chunk.startLine, chunk.endLine, index, chunk.headingPath);
+  }
+}
+
+function splitSourceChunkForEvidenceMap(
+  source: string,
+  chunk: SourceChunk,
+  firstOrdinal: number,
+): [SourceChunk, SourceChunk] {
+  if (lineCountOf(chunk) <= 1) {
+    throw new EvidenceCoverageError(`Mapper chunk ${chunk.id} cannot be split into a smaller source range`);
+  }
+  const splitLine = chunk.startLine + Math.floor(lineCountOf(chunk) / 2) - 1;
+  return [
+    sourceChunkFromRange(source, chunk, chunk.startLine, splitLine, firstOrdinal),
+    sourceChunkFromRange(source, chunk, splitLine + 1, chunk.endLine, firstOrdinal + 1),
+  ];
 }
 
 function rechunkMapperSourceForRetry(
@@ -1060,23 +1151,43 @@ async function mapChunksWithContextRepack(
     },
     execute: async ({ chunks, effectiveInputBudget }) => {
       const effectivePolicy = { ...policy, inputBudgetTokens: effectiveInputBudget };
+      const activeChunks = [...chunks];
       const packets: VerifiedEvidencePacket[] = [];
       const noEvidence: NoEvidence[] = [];
-      for (const chunk of chunks) {
+      for (let index = 0; index < activeChunks.length; index++) {
+        const chunk = activeChunks[index];
         const details = mapperRequestDetails(source, chunk, domainId, mode, effectivePolicy, runtime.opts ?? {});
         let mapped: VerifiedEvidencePacket[];
         try {
-          mapped = await mapChunk(source, domainId, chunk, chunks.length, effectivePolicy, runtime, mode);
+          mapped = await mapChunk(source, domainId, chunk, activeChunks.length, effectivePolicy, runtime, mode);
         } catch (error) {
           if (classifyContextError(error) !== null) {
             failedMapper = { ...details, id: chunk.id, startLine: chunk.startLine, endLine: chunk.endLine };
+          }
+          if (isStructuredMapperFailure(error) && lineCountOf(chunk) > 1) {
+            const replacements = splitSourceChunkForEvidenceMap(source, chunk, index);
+            activeChunks.splice(index, 1, ...replacements);
+            normalizeSourceChunksFrom(source, activeChunks, index);
+            index -= 1;
+            runtime.onEvent?.({
+              kind: "tool_use",
+              name: "Evidence mapper split",
+              input: {
+                chunkId: chunk.id,
+                startLine: chunk.startLine,
+                endLine: chunk.endLine,
+                replacementChunks: replacements.length,
+              },
+            });
+            runtime.onEvent?.({ kind: "tool_result", ok: true, preview: "retry scheduled" });
+            continue;
           }
           throw error;
         }
         if (mapped.length === 0) noEvidence.push({ chunkId: chunk.id, reason: "No domain evidence" });
         packets.push(...mapped);
       }
-      return { chunks, packets, noEvidence };
+      return { chunks: activeChunks, packets, noEvidence };
     },
     onEvent: (event) => forwardContextRepackProgress(runtime, event),
   });
@@ -1397,7 +1508,6 @@ export async function prepareBootstrapEvidence(
     evidence.flatMap((item) => item.exactSource.map((range) => range.text)),
     (text) => text,
   );
-  const result = { candidates, domainThemes, languageEvidence };
   const payloadBudget = Math.min(
     policy.inputBudgetTokens,
     policy.bootstrapPayloadBudgetTokens ?? policy.inputBudgetTokens,
@@ -1405,7 +1515,8 @@ export async function prepareBootstrapEvidence(
   if (!Number.isSafeInteger(payloadBudget) || payloadBudget <= 0) {
     throw new EvidenceCoverageError("Bootstrap payload budget must be a positive safe integer");
   }
-  const estimated = estimatePreparedMessages([{ role: "user", content: JSON.stringify(result) }]);
+  const result = boundBootstrapPayload({ candidates, domainThemes, languageEvidence }, payloadBudget);
+  const estimated = estimateBootstrapPayload(result);
   if (estimated > payloadBudget) {
     throw new EvidenceCoverageError(
       `Bootstrap evidence payload requires ${estimated} tokens but budget is ${payloadBudget}`,

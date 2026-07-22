@@ -218,6 +218,22 @@ test("no-change entity returns skip and input-only policy omits output cap", asy
   assert.equal("max_tokens" in seen[0], false);
 });
 
+test("missing ingest policy compression falls back to balanced", async () => {
+  const seen: Record<string, unknown>[] = [];
+  const events: RunEvent[] = [];
+  const llm = mockLlm(() => outputFor(["a"]), seen, events);
+
+  await assert.doesNotReject(() => synthesizeEntityBatch(synthesisArgs([bundle("a")], llm, {
+    policy: { inputBudgetTokens: 10000 },
+    onEvent: (event: RunEvent) => events.push(event),
+  })));
+
+  assert.match(JSON.stringify(seen[0].messages), /Use balanced semantic compression/);
+  const budget = events.find((event) => event.kind === "prompt_budget");
+  assert.ok(budget && budget.kind === "prompt_budget");
+  assert.equal(budget.compressionProfile, "balanced");
+});
+
 test("four bundles split into stable whole-bundle halves after provider context failure", async () => {
   const seen: Record<string, unknown>[] = [];
   const llm = mockLlm((params) => {
@@ -311,6 +327,62 @@ test("batch-local partial structured output splits again before merging", async 
   assert.equal(seen.length, 7);
 });
 
+test("multi-bundle semantic validation split is shown as retrying", async () => {
+  const seen: Record<string, unknown>[] = [];
+  const events: RunEvent[] = [];
+  let calls = 0;
+  const llm = mockLlm((params) => {
+    calls++;
+    const text = JSON.stringify(params.messages);
+    const keys = ["a", "b"].filter((key) => text.includes(`entity-${key}`));
+    if (calls === 1) return outputFor([keys[0]]);
+    return outputFor(keys);
+  }, seen, events);
+
+  const result = await synthesizeEntityBatch(synthesisArgs([bundle("a"), bundle("b")], llm, {
+    onEvent: (event: RunEvent) => events.push(event),
+  }));
+
+  assert.deepEqual(result.actions.map((action) => action.entityKey), ["a", "b"]);
+  assert.equal(calls, 3);
+  const lifecycle = events.filter((event) =>
+    event.kind === "llm_lifecycle" && event.action === "synthesize_wiki_pages");
+  const firstId = lifecycle[0]?.id;
+  const firstPhases = lifecycle.filter((event) => event.id === firstId).map((event) => event.phase);
+  assert.equal(firstPhases.at(-1), "retrying");
+  assert.equal(firstPhases.includes("failed"), false);
+});
+
+test("semantic synthesis retry emits safe validation reason without raw model content", async () => {
+  const events: RunEvent[] = [];
+  const llm = mockLlm((params) => {
+    const text = JSON.stringify(params.messages);
+    const keys = ["a", "b"].filter((key) => text.includes(`entity-${key}`));
+    if (keys.length > 1) {
+      return JSON.stringify({
+        reasoning: "LEAK_ME raw model reasoning",
+        actions: [create("a", "!Wiki/d/concept/wiki_d_a.md")],
+        skips: [],
+      });
+    }
+    return outputFor(keys);
+  }, [], events);
+
+  await synthesizeEntityBatch(synthesisArgs([bundle("a"), bundle("b")], llm, {
+    onEvent: (event: RunEvent) => events.push(event),
+  }));
+
+  const retry = events.find((event) => event.kind === "structured_validation_retry");
+  assert.ok(retry);
+  assert.equal(retry.callSite, "ingest.synthesize");
+  assert.equal(retry.errorClass, "SynthesisBatchValidationError");
+  assert.equal(retry.safeReason, "missing entity coverage: b");
+  assert.equal(retry.bundleCount, 2);
+  assert.equal(retry.canSplit, true);
+  assert.equal(retry.nextAction, "split_batch");
+  assert.doesNotMatch(JSON.stringify(retry), /LEAK_ME/);
+});
+
 test("synthesis replace rejects wrong ordinal despite matching hash and span", () => {
   const { inspected, section } = inspectedPage();
   assert.throws(() => validateSynthesisActions({
@@ -326,6 +398,7 @@ test("synthesis replace rejects wrong ordinal despite matching hash and span", (
 
 test("multi-bundle truncated JSON falls back to single-bundle calls", async () => {
   const seen: Record<string, unknown>[] = [];
+  const events: RunEvent[] = [];
   let calls = 0;
   const llm = mockLlm((params) => {
     calls++;
@@ -333,10 +406,18 @@ test("multi-bundle truncated JSON falls back to single-bundle calls", async () =
     if (calls === 1) return '{"reasoning":"cut';
     const key = ["a", "b"].find((value) => text.includes(`entity-${value}`))!;
     return outputFor([key]);
-  }, seen, []);
-  const result = await synthesizeEntityBatch(synthesisArgs([bundle("a"), bundle("b")], llm));
+  }, seen, events);
+  const result = await synthesizeEntityBatch(synthesisArgs([bundle("a"), bundle("b")], llm, {
+    onEvent: (event: RunEvent) => events.push(event),
+  }));
   assert.deepEqual(result.actions.map((action) => action.entityKey), ["a", "b"]);
   assert.equal(calls, 3);
+  const lifecycle = events.filter((event) =>
+    event.kind === "llm_lifecycle" && event.action === "synthesize_wiki_pages");
+  const firstId = lifecycle[0]?.id;
+  const firstPhases = lifecycle.filter((event) => event.id === firstId).map((event) => event.phase);
+  assert.equal(firstPhases.at(-1), "retrying");
+  assert.equal(firstPhases.includes("failed"), false);
 });
 
 test("single-bundle structured exhaustion is typed", async () => {
@@ -395,6 +476,139 @@ test("single bundle that cannot fit is typed as split-required", async () => {
     synthesizeEntityBatch(synthesisArgs([bundle("a")], llm, { policy: { inputBudgetTokens: 1, compression: "balanced" as const } })),
     SynthesisSplitRequiredError,
   );
+});
+
+test("single-bundle synthesis compresses oversized evidence against the real prompt", async () => {
+  const oversized = bundle("a");
+  oversized.evidence = {
+    ...oversized.evidence,
+    packetIds: ["p-a", ...Array.from({ length: 100 }, (_, index) => `p-extra-${index}`)],
+    facts: ["essential fact", "oversized fact ".repeat(1_000)],
+    exactSourceRanges: [
+      { startLine: 1, endLine: 1 },
+      ...Array.from({ length: 100 }, (_, index) => ({ startLine: index + 2, endLine: index + 2 })),
+    ],
+    exactSource: [
+      { startLine: 1, endLine: 1, text: "oversized exact source ".repeat(1_000) },
+      ...Array.from({ length: 50 }, (_, index) => ({
+        startLine: index + 2,
+        endLine: index + 2,
+        text: `extra source ${index} ${"x".repeat(200)}`,
+      })),
+    ],
+    links: Array.from({ length: 100 }, (_, index) => `https://example.com/${index}`),
+  };
+  const seen: Record<string, unknown>[] = [];
+  const llm = mockLlm((params) => {
+    const prompt = JSON.stringify(params.messages);
+    assert.match(prompt, /essential fact/);
+    assert.doesNotMatch(prompt, /extra source 49/);
+    assert.match(prompt, /truncated for prompt budget/);
+    return outputFor(["a"]);
+  }, seen, []);
+
+  const result = await synthesizeEntityBatch(synthesisArgs([oversized], llm, {
+    policy: { inputBudgetTokens: 8_000, outputBudgetTokens: 300, compression: "balanced" as const },
+  }));
+
+  assert.equal(result.actions[0]?.entityKey, "a");
+  assert.equal(seen.length, 1);
+});
+
+test("single-bundle synthesis compresses oversized required retrieved units against the real prompt", async () => {
+  const oversized = bundle("a");
+  oversized.units = [{
+    ...oversized.units[0],
+    required: true,
+    text: "required retrieved context ".repeat(2_000),
+    estimatedTokens: 20_000,
+  }];
+  const seen: Record<string, unknown>[] = [];
+  const llm = mockLlm((params) => {
+    const prompt = JSON.stringify(params.messages);
+    assert.match(prompt, /required retrieved context/);
+    assert.match(prompt, /truncated for prompt budget/);
+    return outputFor(["a"]);
+  }, seen, []);
+
+  const result = await synthesizeEntityBatch(synthesisArgs([oversized], llm, {
+    policy: { inputBudgetTokens: 9_216, outputBudgetTokens: 300, compression: "balanced" as const },
+  }));
+
+  assert.equal(result.actions[0]?.entityKey, "a");
+  assert.equal(seen.length, 1);
+});
+
+test("single-bundle synthesis compacts oversized patch authority exact section before preflight", async () => {
+  const current = inspectPatchablePage(`# A\n\n## Facts\n${"large existing section ".repeat(4_000)}\n`);
+  const oversized = bundle("a", existingPath, current.sections[0]);
+  oversized.units = [{
+    ...oversized.units[0],
+    required: true,
+    text: "compact visible target",
+    estimatedTokens: 8,
+  }];
+  const seen: Record<string, unknown>[] = [];
+  const llm = mockLlm((params) => {
+    const prompt = JSON.stringify(params.messages);
+    assert.match(prompt, /sectionHash/);
+    assert.doesNotMatch(prompt, /large existing section large existing section/);
+    return JSON.stringify({
+      reasoning: "ok",
+      actions: [patchFor(current.sections[0], { expectedPageHash: current.pageHash })],
+      skips: [],
+    });
+  }, seen, []);
+
+  const result = await synthesizeEntityBatch(synthesisArgs([oversized], llm, {
+    existingPaths: new Set([existingPath]),
+    existingPageHashes: new Map([[existingPath, current.pageHash]]),
+    policy: { inputBudgetTokens: 9_216, outputBudgetTokens: 300, compression: "balanced" as const },
+  }));
+
+  assert.equal(result.actions[0]?.kind, "patch");
+  assert.equal(seen.length, 1);
+});
+
+test("synthesis prompt does not duplicate required page sections in context units", async () => {
+  const current = inspectPatchablePage("# A\n\n## Facts\nrequired section text\n");
+  const required = bundle("a", existingPath, current.sections[0]);
+  required.units = [
+    {
+      ...required.units[0],
+      required: true,
+      text: "required section sentinel",
+    },
+    {
+      ...required.units[0],
+      id: `${existingPath}::Optional`,
+      required: false,
+      text: "optional context sentinel",
+      heading: "## Optional",
+    },
+  ];
+  const seen: Record<string, unknown>[] = [];
+  const llm = mockLlm((params) => {
+    const prompt = JSON.stringify(params.messages);
+    assert.match(prompt, /requiredPageSections/);
+    assert.match(prompt, /contextUnits/);
+    assert.equal((prompt.match(/required section sentinel/g) ?? []).length, 1);
+    assert.equal((prompt.match(/optional context sentinel/g) ?? []).length, 1);
+    assert.doesNotMatch(prompt, /"page"/);
+    assert.doesNotMatch(prompt, /"units"/);
+    return JSON.stringify({
+      reasoning: "ok",
+      actions: [patchFor(current.sections[0], { expectedPageHash: current.pageHash })],
+      skips: [],
+    });
+  }, seen, []);
+
+  await synthesizeEntityBatch(synthesisArgs([required], llm, {
+    existingPaths: new Set([existingPath]),
+    existingPageHashes: new Map([[existingPath, current.pageHash]]),
+  }));
+
+  assert.equal(seen.length, 1);
 });
 
 test("conflict regeneration permits exactly one guarded patch and never writes", async () => {
@@ -734,6 +948,141 @@ test("accepted synthesis decisions follow bundle order and sort deltas determini
   assert.deepEqual(result.actions.map((action) => action.entityKey), ["a", "c"]);
   assert.deepEqual(result.skips.map((skip) => skip.entityKey), ["b", "d"]);
   assert.deepEqual(result.entity_types_delta?.map((delta) => delta.type), ["alpha", "zeta"]);
+});
+
+test("single-entity synthesis retries semantic path validation with concrete feedback", async () => {
+  let calls = 0;
+  const seen: Record<string, unknown>[] = [];
+  const osPathPolicy = { domainRoot: "!Wiki/os-unix", allowedSubfolders: ["applications"] };
+  const osCreate = (path: string) => ({
+    kind: "create" as const,
+    entityKey: "alt-linux",
+    path,
+    annotation: "Alt Linux",
+    content: "# Alt Linux\n\n## Facts\nAlt Linux fact.",
+  });
+  const llm = mockLlm(() => {
+    calls++;
+    return JSON.stringify({
+      reasoning: "ok",
+      actions: [osCreate(calls === 1
+        ? "!Wiki/os-unix/applications/wiki_os-unix_alt-linux.md"
+        : "!Wiki/os-unix/applications/wiki_os-unix_alt_linux.md")],
+      skips: [],
+    });
+  }, seen, []);
+
+  const output = await synthesizeEntityBatch(synthesisArgs([bundle("alt-linux")], llm, {
+    pathPolicy: osPathPolicy,
+    opts: { structuredRetries: 1 },
+  }));
+
+  assert.equal(calls, 2);
+  assert.equal(output.actions[0]?.path, "!Wiki/os-unix/applications/wiki_os-unix_alt_linux.md");
+  const repairPrompt = JSON.stringify(seen[1]?.messages ?? []);
+  assert.match(repairPrompt, /path is not a canonical wiki path/);
+  assert.match(repairPrompt, /wiki_os-unix_alt-linux\.md/);
+  assert.match(repairPrompt, /underscores/);
+});
+
+test("single-entity synthesis normalizes create paths from governed entity paths before validation", async () => {
+  let calls = 0;
+  const seen: Record<string, unknown>[] = [];
+  const osPathPolicy = { domainRoot: "!Wiki/os-unix", allowedSubfolders: ["howto"] };
+  const llm = mockLlm(() => {
+    calls++;
+    return JSON.stringify({
+      reasoning: "ok",
+      actions: [{
+        kind: "create",
+        entityKey: "proxy-launcher-wrapper",
+        path: "!Wiki/os-unix/howto/proxy-launcher-wrapper.md",
+        annotation: "Proxy launcher wrapper",
+        content: "# Proxy launcher wrapper\n\n## Facts\nProxy launcher wrapper fact.",
+      }],
+      skips: [],
+    });
+  }, seen, []);
+
+  const output = await synthesizeEntityBatch(synthesisArgs([bundle("proxy-launcher-wrapper")], llm, {
+    pathPolicy: osPathPolicy,
+    createPathsByEntityKey: new Map([[
+      "proxy-launcher-wrapper",
+      "!Wiki/os-unix/howto/wiki_os-unix_proxy_launcher_wrapper.md",
+    ]]),
+    opts: { structuredRetries: 1 },
+  }));
+
+  assert.equal(calls, 1);
+  assert.equal(output.actions[0]?.path, "!Wiki/os-unix/howto/wiki_os-unix_proxy_launcher_wrapper.md");
+});
+
+test("semantic synthesis retry does not replay the full invalid assistant output", async () => {
+  let calls = 0;
+  const seen: Record<string, unknown>[] = [];
+  const osPathPolicy = { domainRoot: "!Wiki/os-unix", allowedSubfolders: ["applications"] };
+  const osCreate = (path: string, content: string) => ({
+    kind: "create" as const,
+    entityKey: "alt-linux",
+    path,
+    annotation: "Alt Linux",
+    content,
+  });
+  const llm = mockLlm(() => {
+    calls++;
+    return JSON.stringify({
+      reasoning: "ok",
+      actions: [calls === 1
+        ? osCreate("!Wiki/os-unix/applications/wiki_os-unix_alt-linux.md", `# Alt Linux\n\n${"HUGE".repeat(5000)}`)
+        : osCreate("!Wiki/os-unix/applications/wiki_os-unix_alt_linux.md", "# Alt Linux\n\n## Facts\nAlt Linux fact.")],
+      skips: [],
+    });
+  }, seen, []);
+
+  const output = await synthesizeEntityBatch(synthesisArgs([bundle("alt-linux")], llm, {
+    pathPolicy: osPathPolicy,
+    opts: { structuredRetries: 1 },
+  }));
+
+  assert.equal(calls, 2);
+  assert.equal(output.actions[0]?.path, "!Wiki/os-unix/applications/wiki_os-unix_alt_linux.md");
+  const repairPrompt = JSON.stringify(seen[1]?.messages ?? []);
+  assert.doesNotMatch(repairPrompt, /HUGE/);
+  assert.match(repairPrompt, /wiki_os-unix_alt-linux\.md/);
+});
+
+test("semantic synthesis repair marks intermediate validation exhaustion as retrying", async () => {
+  let calls = 0;
+  const events: RunEvent[] = [];
+  const llm = mockLlm(() => {
+    calls++;
+    return JSON.stringify({
+      reasoning: "ok",
+      actions: [{
+        kind: "create",
+        entityKey: "alt-linux",
+        path: calls === 1
+          ? "!Wiki/os-unix/applications/wiki_os-unix_alt-linux.md"
+          : "!Wiki/os-unix/applications/wiki_os-unix_alt_linux.md",
+        annotation: "Alt Linux",
+        content: "# Alt Linux\n\n## Facts\nAlt Linux fact.",
+      }],
+      skips: [],
+    });
+  }, [], events);
+
+  await synthesizeEntityBatch(synthesisArgs([bundle("alt-linux")], llm, {
+    pathPolicy: { domainRoot: "!Wiki/os-unix", allowedSubfolders: ["applications"] },
+    opts: { structuredRetries: 1 },
+    onEvent: (event: RunEvent) => events.push(event),
+  }));
+
+  const lifecycle = events.filter((event) =>
+    event.kind === "llm_lifecycle" && event.action === "synthesize_wiki_pages");
+  const ids = [...new Set(lifecycle.map((event) => event.id))];
+  const firstAttempt = lifecycle.filter((event) => event.id === ids[0]).map((event) => event.phase);
+  assert.equal(firstAttempt.at(-1), "retrying");
+  assert.equal(firstAttempt.includes("failed"), false);
 });
 
 test("recursive synthesis keeps stable bundle order after split", async () => {

@@ -3,6 +3,11 @@ import { APIConnectionTimeoutError, APIError } from "openai";
 
 import { classifyNativeRetry, retryDelay } from "./native-request-retry";
 import { createReplacementAttemptLifecycle, lifecycleEvent } from "./llm-lifecycle";
+import {
+  NATIVE_TRANSPORT_ATTEMPT_SIGNAL,
+  NATIVE_TRANSPORT_CLIENT_REQUEST_ID,
+  NATIVE_TRANSPORT_TRACEPARENT,
+} from "./types";
 import type {
   LlmCallOptions,
   LlmClient,
@@ -35,6 +40,8 @@ interface FailureDetails {
   errorClass: string;
   status?: number;
   providerRequestId?: string;
+  clientRequestId?: string;
+  traceparent?: string;
 }
 
 interface AttemptScope {
@@ -46,6 +53,7 @@ interface AttemptScope {
 }
 
 type NativeTimer = ReturnType<typeof setTimeout>;
+let clientRequestCounter = 0;
 
 function scheduleTimer(callback: () => void, delayMs: number): NativeTimer {
   // eslint-disable-next-line obsidianmd/prefer-window-timers -- Shared production seam must also run without window in Node.
@@ -157,6 +165,7 @@ export function createNativeRequestRetryContext(input: {
 }): NativeRequestRetryContext {
   return {
     logicalRequestId: input.logicalRequestId ?? input.lifecycle.current().id,
+    traceId: createTraceId(),
     callSite: input.callSite,
     maxRetries: input.opts.nativeRequestRetries ?? 0,
     connectionTimeoutMs: input.llm.nativeRequestExecutor
@@ -166,6 +175,9 @@ export function createNativeRequestRetryContext(input: {
     signal: input.signal,
     onEvent: input.onEvent,
     lifecycle: input.lifecycle,
+    nativeTransportDiagnostic: input.llm.nativeTransportDiagnostic,
+    consumeNativeHttpResponseDiagnostic: input.llm.consumeNativeHttpResponseDiagnostic,
+    consumeNativeTransportTrace: input.llm.consumeNativeTransportTrace,
     delay: abortableDelay,
   };
 }
@@ -309,6 +321,148 @@ function metadata(
   };
 }
 
+function createClientRequestId(): string {
+  clientRequestCounter = (clientRequestCounter + 1) % Number.MAX_SAFE_INTEGER;
+  const randomSource = `${Date.now().toString(36)}-${clientRequestCounter.toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const sanitized = randomSource.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 96);
+  return `aiwiki-${sanitized}`;
+}
+
+function randomHex(byteLength: number): string {
+  const bytes = new Uint8Array(byteLength);
+  const crypto = typeof window === "undefined" ? undefined : window.crypto;
+  if (crypto?.getRandomValues) {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256);
+    }
+  }
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function nonZeroRandomHex(byteLength: number): string {
+  let value = randomHex(byteLength);
+  if (/^0+$/.test(value)) value = `1${value.slice(1)}`;
+  return value;
+}
+
+function createTraceId(): string {
+  return nonZeroRandomHex(16);
+}
+
+function createTraceparent(traceId: string): string {
+  return `00-${traceId}-${nonZeroRandomHex(8)}-01`;
+}
+
+function emitNativeTransportCorrelation(
+  retry: NativeRequestRetryContext,
+  attempt: number,
+  transport: "stream" | "non-stream",
+  clientRequestId: string,
+  traceparent: string,
+): void {
+  const diagnostic = retry.nativeTransportDiagnostic;
+  if (!diagnostic?.endpointPath || !diagnostic.transport) return;
+  retry.onEvent({
+    kind: "native_transport_correlation",
+    logicalRequestId: retry.logicalRequestId,
+    lifecycleId: retry.lifecycle.current().id,
+    callSite: retry.callSite,
+    transport,
+    attempt,
+    endpointPath: diagnostic.endpointPath,
+    networkTransport: diagnostic.transport,
+    diagnosticMode: diagnostic.diagnosticMode,
+    connectionTimeoutMs: retry.connectionTimeoutMs,
+    idleTimeoutMs: retry.idleTimeoutMs,
+    clientRequestId,
+    traceparent,
+  });
+}
+
+function emitNativeHttpResponse(
+  retry: NativeRequestRetryContext,
+  signal: AbortSignal,
+  attempt: number,
+  transport: "stream" | "non-stream",
+): void {
+  const consumed = retry.consumeNativeHttpResponseDiagnostic?.(signal);
+  const diagnostic = consumed?.status === undefined
+    ? { ...retry.nativeTransportDiagnostic, ...consumed, status: 200 }
+    : consumed;
+  if (!diagnostic?.endpointPath || !diagnostic.transport || diagnostic.status === undefined) return;
+  retry.onEvent({
+    kind: "native_http_response",
+    logicalRequestId: retry.logicalRequestId,
+    lifecycleId: retry.lifecycle.current().id,
+    callSite: retry.callSite,
+    transport,
+    attempt,
+    status: diagnostic.status,
+    endpointPath: diagnostic.endpointPath,
+    networkTransport: diagnostic.transport,
+    connectionTimeoutMs: retry.connectionTimeoutMs,
+    idleTimeoutMs: retry.idleTimeoutMs,
+    ...(diagnostic.providerRequestId === undefined
+      ? {}
+      : { providerRequestId: diagnostic.providerRequestId }),
+    ...(diagnostic.clientRequestId === undefined
+      ? {}
+      : { clientRequestId: diagnostic.clientRequestId }),
+    ...(diagnostic.traceparent === undefined
+      ? {}
+      : { traceparent: diagnostic.traceparent }),
+  });
+}
+
+function flushNativeTransportTrace(
+  retry: NativeRequestRetryContext,
+  signal: AbortSignal,
+  attempt: number,
+  transport: "stream" | "non-stream",
+  sdkCompletedAtMs?: number,
+): void {
+  const snapshot = retry.consumeNativeTransportTrace?.(signal);
+  if (!snapshot || snapshot.events.length === 0) return;
+  const correlation = {
+    logicalRequestId: retry.logicalRequestId,
+    lifecycleId: retry.lifecycle.current().id,
+    callSite: retry.callSite,
+    transport,
+    attempt,
+    connectionTimeoutMs: retry.connectionTimeoutMs,
+    idleTimeoutMs: retry.idleTimeoutMs,
+  };
+  for (const event of snapshot.events) {
+    retry.onEvent({ kind: "native_transport_trace", ...correlation, ...event });
+  }
+  if (sdkCompletedAtMs === undefined) return;
+  const first = snapshot.events[0];
+  const finalTransportElapsedMs = snapshot.events.at(-1)?.elapsedMs ?? 0;
+  retry.onEvent({
+    kind: "native_transport_trace",
+    ...correlation,
+    stage: "sdk_complete",
+    networkTransport: first.networkTransport,
+    endpointPath: first.endpointPath,
+    diagnosticMode: first.diagnosticMode,
+    elapsedMs: Math.max(
+      finalTransportElapsedMs,
+      boundedElapsed(snapshot.startedAtMs, sdkCompletedAtMs),
+    ),
+    ...(first.clientRequestId === undefined ? {} : { clientRequestId: first.clientRequestId }),
+    ...(first.traceparent === undefined ? {} : { traceparent: first.traceparent }),
+  });
+}
+
+function boundedElapsed(startedAtMs: number, finishedAtMs: number): number {
+  return Math.max(
+    0,
+    Math.min(Number.MAX_SAFE_INTEGER, Math.floor(finishedAtMs - startedAtMs)),
+  );
+}
+
 function emitRecovered(
   retry: NativeRequestRetryContext,
   attempt: number,
@@ -337,6 +491,8 @@ async function waitForRetry(
   attempt: number,
   transport: "stream" | "non-stream",
   meaningfulOutputSeen: boolean,
+  clientRequestId?: string,
+  traceparent?: string,
   lifecycle: CloseOnceLifecycle = retry.lifecycle,
 ): Promise<FailureDetails | null> {
   const decision = classifyNativeRetry(error);
@@ -346,6 +502,8 @@ async function waitForRetry(
     ...(decision.providerRequestId === undefined
       ? {}
       : { providerRequestId: decision.providerRequestId }),
+    ...(clientRequestId === undefined ? {} : { clientRequestId }),
+    ...(traceparent === undefined ? {} : { traceparent }),
   };
   const canRetry = decision.retryable
     && !meaningfulOutputSeen
@@ -400,12 +558,25 @@ async function executeNonStream(
   retry.lifecycle.begin(0, "non-stream");
   while (true) {
     const scope = attemptScope(retry.signal, retry.idleTimeoutMs);
+    const clientRequestId = createClientRequestId();
+    const traceparent = createTraceparent(retry.traceId);
     try {
       retry.signal.throwIfAborted();
+      emitNativeTransportCorrelation(retry, attempt, "non-stream", clientRequestId, traceparent);
       retry.lifecycle.phase("sent");
       retry.lifecycle.phase("waiting");
       scope.resetIdle();
-      const result = await scope.race(input.create(input.params, { signal: scope.signal }));
+      const result = await scope.race(input.create(input.params, {
+        signal: scope.signal,
+        fetchOptions: {
+          [NATIVE_TRANSPORT_ATTEMPT_SIGNAL]: scope.signal,
+          [NATIVE_TRANSPORT_CLIENT_REQUEST_ID]: clientRequestId,
+          [NATIVE_TRANSPORT_TRACEPARENT]: traceparent,
+        },
+      }));
+      const sdkCompletedAtMs = Date.now();
+      emitNativeHttpResponse(retry, scope.signal, attempt, "non-stream");
+      flushNativeTransportTrace(retry, scope.signal, attempt, "non-stream", sdkCompletedAtMs);
       scope.clearIdle();
       retry.signal.throwIfAborted();
       const meaningfulOutputSeen = meaningfulCompletion(result);
@@ -414,11 +585,20 @@ async function executeNonStream(
       return result;
     } catch (error) {
       scope.clearIdle();
+      flushNativeTransportTrace(retry, scope.signal, attempt, "non-stream");
       if (retry.signal.aborted || isAbortError(error)) {
         retry.lifecycle.close("cancelled");
         throw retry.signal.aborted ? abortReason(retry.signal) : error;
       }
-      const failure = await waitForRetry(retry, error, attempt, "non-stream", false);
+      const failure = await waitForRetry(
+        retry,
+        error,
+        attempt,
+        "non-stream",
+        false,
+        clientRequestId,
+        traceparent,
+      );
       if (failure === null) throw error;
       priorFailure = failure;
       attempt += 1;
@@ -447,15 +627,27 @@ function executeStream(
     try {
       while (true) {
         scope = attemptScope(retry.signal, retry.idleTimeoutMs);
+        const clientRequestId = createClientRequestId();
+        const traceparent = createTraceparent(retry.traceId);
         const buffered: OpenAI.Chat.ChatCompletionChunk[] = [];
         meaningfulOutputSeen = false;
         let attemptComplete = false;
+        let attemptCleanedUp = false;
         try {
           retry.signal.throwIfAborted();
+          emitNativeTransportCorrelation(retry, attempt, "stream", clientRequestId, traceparent);
           retry.lifecycle.phase("sent");
           retry.lifecycle.phase("waiting");
           scope.resetIdle();
-          const stream = await scope.race(input.create(input.params, { signal: scope.signal }));
+          const stream = await scope.race(input.create(input.params, {
+            signal: scope.signal,
+            fetchOptions: {
+              [NATIVE_TRANSPORT_ATTEMPT_SIGNAL]: scope.signal,
+              [NATIVE_TRANSPORT_CLIENT_REQUEST_ID]: clientRequestId,
+              [NATIVE_TRANSPORT_TRACEPARENT]: traceparent,
+            },
+          }));
+          emitNativeHttpResponse(retry, scope.signal, attempt, "stream");
           iterator = stream[Symbol.asyncIterator]();
           let armIdleBeforeNext = true;
           while (true) {
@@ -465,9 +657,17 @@ function executeStream(
             }
             const next = await scope.race(Promise.resolve(iterator.next()));
             if (next.done) {
+              const sdkCompletedAtMs = Date.now();
               scope.clearIdle();
               iterator = undefined;
               for (const pending of buffered) yield pending;
+              flushNativeTransportTrace(
+                retry,
+                scope.signal,
+                attempt,
+                "stream",
+                sdkCompletedAtMs,
+              );
               emitRecovered(retry, attempt, meaningfulOutputSeen, priorFailure);
               attemptComplete = true;
               requestCompleted = true;
@@ -489,6 +689,15 @@ function executeStream(
           scope.clearIdle();
           safeReturn(iterator);
           iterator = undefined;
+          const closingSignal = scope.signal;
+          scope.dispose(new DOMException("Stream attempt closed", "AbortError"));
+          flushNativeTransportTrace(
+            retry,
+            closingSignal,
+            attempt,
+            "stream",
+          );
+          attemptCleanedUp = true;
           if (retry.signal.aborted || isAbortError(error)) {
             lifecycle.close("cancelled");
             throw retry.signal.aborted ? abortReason(retry.signal) : error;
@@ -499,15 +708,26 @@ function executeStream(
             attempt,
             "stream",
             meaningfulOutputSeen,
+            clientRequestId,
+            traceparent,
             lifecycle,
           );
           if (failure === null) throw error;
           priorFailure = failure;
           attempt += 1;
         } finally {
-          scope.dispose(attemptComplete
-            ? undefined
-            : new DOMException("Stream attempt closed", "AbortError"));
+          if (!attemptCleanedUp) {
+            const closingSignal = scope.signal;
+            scope.dispose(attemptComplete
+              ? undefined
+              : new DOMException("Stream attempt closed", "AbortError"));
+            flushNativeTransportTrace(
+              retry,
+              closingSignal,
+              attempt,
+              "stream",
+            );
+          }
           scope = undefined;
         }
       }

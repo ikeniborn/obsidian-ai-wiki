@@ -1,4 +1,3 @@
-import type { CompressionProfile } from "../types";
 import { PromptBudgetExceededError } from "../prompt-budget";
 import { VisionRecognitionRecordSchema } from "./zod-schemas";
 
@@ -79,20 +78,14 @@ const fieldLabels: Record<keyof Omit<VisionRecognitionRecord, "pageId">, string>
 
 export function mergeRecognitionRecords(
   records: readonly VisionRecognitionRecord[],
-  profile: CompressionProfile,
 ): string {
-  const separator = profile === "minimum" ? "\n\n" : "\n";
   return records.map((record) => {
     const lines = [`## Page ${record.pageId}`];
     for (const field of Object.keys(fieldLabels) as Array<keyof typeof fieldLabels>) {
       const values = record[field].filter((value) => value.length > 0);
       if (values.length === 0) continue;
-      if (profile === "maximum") {
-        lines.push(`${fieldLabels[field]}: ${values.join("; ")}`);
-      } else {
-        lines.push(`### ${fieldLabels[field]}`, ...values.map((value) => `- ${value}`));
-      }
+      lines.push(`### ${fieldLabels[field]}`, ...values.map((value) => `- ${value}`));
     }
     return lines.join("\n");
-  }).join(separator);
+  }).join("\n");
 }

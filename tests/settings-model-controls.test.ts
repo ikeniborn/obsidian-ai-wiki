@@ -114,6 +114,29 @@ test("runtime controls keep top-level 3/15/300 defaults", () => {
   assert.equal("llmIdleTimeoutSec" in DEFAULT_SETTINGS.nativeAgent, false);
 });
 
+test("native transport diagnostic mode defaults and normalizes to off without Settings UI", () => {
+  const normalize = runtimeControls.normalizeLlmRuntimeControls as (
+    value: LlmWikiPluginSettings,
+  ) => void;
+  assert.equal(DEFAULT_SETTINGS.devMode.nativeTransportDiagnosticMode, "off");
+  assert.doesNotMatch(settingsSource, /nativeTransportDiagnosticMode/);
+
+  const valid = structuredClone(DEFAULT_SETTINGS);
+  valid.devMode.nativeTransportDiagnosticMode = "connection-close";
+  normalize(valid);
+  assert.equal(valid.devMode.nativeTransportDiagnosticMode, "connection-close");
+
+  const undiciAdapter = structuredClone(DEFAULT_SETTINGS);
+  undiciAdapter.devMode.nativeTransportDiagnosticMode = "undici-request-adapter";
+  normalize(undiciAdapter);
+  assert.equal(undiciAdapter.devMode.nativeTransportDiagnosticMode, "undici-request-adapter");
+
+  const invalid = structuredClone(DEFAULT_SETTINGS);
+  (invalid.devMode as { nativeTransportDiagnosticMode: unknown }).nativeTransportDiagnosticMode = "invalid";
+  normalize(invalid);
+  assert.equal(invalid.devMode.nativeTransportDiagnosticMode, "off");
+});
+
 test("persisted top-level runtime controls round-trip and saved idle 600 survives", () => {
   const normalize = runtimeControls.normalizeLlmRuntimeControls;
   assert.equal(typeof normalize, "function");
@@ -215,7 +238,7 @@ test("backend descriptors expose exact Task15 fields and Format exclusions", () 
   assert.deepEqual(native.operations.init, native.globalFields);
   assert.deepEqual(native.operations.format, ["inputBudgetTokens", "maxTokens"]);
   assert.deepEqual(native.vision, {
-    fields: ["compressionProfile"],
+    fields: [],
     check: true,
   });
 
@@ -227,7 +250,7 @@ test("backend descriptors expose exact Task15 fields and Format exclusions", () 
   assert.deepEqual(claude.operations.init, claude.globalFields);
   assert.deepEqual(claude.operations.format, ["inputBudgetTokens"]);
   assert.deepEqual(claude.vision, {
-    fields: ["compressionProfile"],
+    fields: [],
     check: false,
   });
 });
@@ -542,17 +565,18 @@ test("model suggestion updates current value and commits through existing callba
   assert.deepEqual(checked, ["suggested"]);
 });
 
-test("Vision compression override is part of persisted settings", () => {
+test("Vision compression override is legacy-only and ignored by Format policy", () => {
   const settings: LlmWikiPluginSettings = structuredClone(DEFAULT_SETTINGS);
   settings.vision.compressionProfile = "maximum";
+  settings.nativeAgent.compressionProfile = "minimum";
   assert.equal(settings.vision.compressionProfile, "maximum");
 
   const format = resolveModelCallPolicy(settings, "format");
-  assert.equal(format.policy.compression, "maximum");
+  assert.equal(format.policy.compression, undefined);
   assert.equal(format.opts.semanticCompression, undefined);
 });
 
-test("Format compression fields are ignored and Vision Use global uses the global profile", () => {
+test("Format compression fields are ignored and no compression policy is produced", () => {
   const settings = structuredClone(DEFAULT_SETTINGS);
   settings.nativeAgent.perOperation = true;
   settings.nativeAgent.compressionProfile = "minimum";
@@ -560,9 +584,29 @@ test("Format compression fields are ignored and Vision Use global uses the globa
 
   normalizePersistedModelControls(settings);
   const format = resolveModelCallPolicy(settings, "format");
-  assert.equal(format.policy.compression, "minimum");
+  assert.equal(format.policy.compression, undefined);
   assert.equal(format.opts.semanticCompression, undefined);
 
   assert.equal(settings.nativeAgent.operations.format.compressionProfile, undefined);
   assert.equal(settings.claudeAgent.operations.format.compressionProfile, undefined);
+});
+
+test("Embedding Check uses localized success and failure notices", () => {
+  assert.match(settingsSource, /T\.settings\.embeddingCheck_ok\(na\.embeddingModel, result\.probe\.actual\)/);
+  assert.match(settingsSource, /T\.settings\.embeddingCheck_failed\(result\.error \?\? "unknown error"\)/);
+  assert.match(settingsSource, /T\.settings\.embeddingDimensionCheck_failed\(result\.error \?\? "unknown error"\)/);
+  assert.match(settingsSource, /T\.settings\.embeddingDimensionCheck_notSupported\(probe\.actual, nativeStr, requested\)/);
+  assert.match(settingsSource, /T\.settings\.embeddingDimensionCheck_native\(native\)/);
+  assert.match(settingsSource, /T\.settings\.embeddingDimensionCheck_truncated\(requested, native\)/);
+  assert.match(settingsSource, /T\.settings\.embeddingDimensionCheck_ok\(probe\.actual, nativeStr\)/);
+  for (const lang of ["en", "ru", "es"] as const) {
+    const labels = i18nFor(lang).settings;
+    assert.equal(typeof labels.embeddingCheck_ok("embedding-model", 1024), "string");
+    assert.equal(typeof labels.embeddingCheck_failed("boom"), "string");
+    assert.equal(typeof labels.embeddingDimensionCheck_failed("boom"), "string");
+    assert.equal(typeof labels.embeddingDimensionCheck_notSupported(768, "1024", 1536), "string");
+    assert.equal(typeof labels.embeddingDimensionCheck_native(1024), "string");
+    assert.equal(typeof labels.embeddingDimensionCheck_truncated(512, 1024), "string");
+    assert.equal(typeof labels.embeddingDimensionCheck_ok(1024, "1024"), "string");
+  }
 });

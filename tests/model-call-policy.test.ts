@@ -80,14 +80,14 @@ test("invalid per-operation compression profiles use the valid global profile", 
   }
 });
 
-test("format resolves compression policy without semantic compression options", () => {
+test("format resolves no compression policy and no semantic compression options", () => {
   for (const backend of ["native-agent", "claude-agent"] as const) {
     const s = settings();
     s.backend = backend;
     const global = backend === "native-agent" ? s.nativeAgent : s.claudeAgent;
     global.compressionProfile = "maximum";
     const resolved = resolveModelCallPolicy(s, "format");
-    assert.equal(resolved.policy.compression, "maximum");
+    assert.equal(resolved.policy.compression, undefined);
     assert.equal(resolved.opts.semanticCompression, undefined);
   }
 });

@@ -1,7 +1,7 @@
 ---
 review:
-  plan_hash: 2170b83ff543ae41
-  last_run: 2026-07-20
+  plan_hash: 7c198ab3a5ff6490
+  last_run: 2026-07-22
   phases:
     structure: { status: passed }
     coverage: { status: passed }
@@ -65,6 +65,8 @@ chain:
   deterministic delay calculation, and retry telemetry types.
 - `src/native-llm-executor.ts`: stream/non-stream request attempts, meaningful-output
   guard, idle timing, cancellation, and lifecycle/event callbacks.
+- `src/native-openai-transport.ts`: native fetch selection, response-boundary tracing,
+  and the developer-only desktop connection-isolation mode.
 - `src/proxy.ts`: desktop direct/proxy DNS/TCP/TLS connection timeout wiring.
 - Existing phase files remain orchestration owners and delegate to these focused modules.
 
@@ -84,16 +86,16 @@ chain:
 | R10 Semantic Compression Invariants | Tasks 2, 7, 11-16 |
 | R11 Settings Compatibility | Tasks 1, 16 |
 | R12 Native Vision Availability Check | Task 16 |
-| R13 Safe Diagnostics | Tasks 3, 17 |
+| R13 Safe Diagnostics | Tasks 3, 17, 28 |
 | R14 Backend Boundaries | Tasks 1, 3, 11, 16 |
-| R15 Documentation and Acceptance | Task 17 |
+| R15 Documentation and Acceptance | Tasks 17, 28 |
 | R16 Bounded Non-Ingest Operations | Tasks 11-15, 17 |
 | R17 Human-Readable Model Progress | Tasks 18-20, 22 |
 | R18 Complete Destructive Re-init Wipe | Tasks 21-22 |
 | R19 Native Request-Scoped Transient Recovery | Tasks 23-25, 27 |
 | R20 Retry Safety and Error Precision | Tasks 23-25 |
-| R21 Independent Native Timeout Controls | Tasks 26-27 |
-| R22 Retry Lifecycle and Diagnostics | Tasks 24-27 |
+| R21 Independent Native Timeout Controls | Tasks 26-28 |
+| R22 Retry Lifecycle and Diagnostics | Tasks 24-28 |
 
 ## Phase 1: Shared Policy and Prompt Governance
 
@@ -3480,6 +3482,293 @@ git commit -m "docs(llm): document native transient request recovery"
 Invoke `$check-chain result docs/superpowers/plans/2026-07-16-bounded-ingest-model-controls-plan.md`.
 Close `docs/TODO.md` only when R1-R22 and the protected replay produce verdict `OK`.
 
+### Task 28: Trace Obsidian Response Completion and Isolate Connection Reuse
+
+**Requirements:** R13, R15, R21, R22
+
+**User problem closed:** Gateway and Traefik logs prove that the affected Re-init requests
+return HTTP 200 with complete response bytes, while the Obsidian attempt remains in
+`waiting` until its idle timeout. Existing `native_http_response` evidence is emitted only
+after the OpenAI SDK call resolves, so it cannot distinguish fetch/header arrival, body
+completion, body failure/abort, and SDK completion. The experiment must also isolate pooled
+desktop connection reuse without changing model, endpoint, request payload, retry policy,
+or sidebar output.
+
+**Files:**
+- Modify: `src/types.ts`
+- Modify: `src/native-openai-transport.ts`
+- Modify: `src/native-openai-client.ts`
+- Modify: `src/native-llm-executor.ts`
+- Modify: `src/main.ts`
+- Modify: `src/controller.ts`
+- Modify: `src/view.ts`
+- Modify: `tests/native-openai-transport.test.ts`
+- Modify: `tests/view-llm-lifecycle.test.ts`
+- Create at diagnostic run: `docs/superpowers/evals/obsidian-native-transport-diagnostic.json`
+- Modify through iwiki MCP: `architecture/native-transport-diagnostics`
+
+- [x] **Step 1: Write failing transport-boundary and mode tests**
+
+Add local HTTP fixtures for successful non-stream JSON, delayed/chunked JSON, body abort,
+and two sequential requests. Assert metadata-only stages in order:
+`fetch_start -> fetch_headers -> body_start -> body_chunk* -> body_end -> sdk_complete`,
+or a terminal `fetch_error`, `fetch_abort`, or `body_error`. Assert byte/chunk totals,
+status, content type/length, endpoint path, durations, and diagnostic mode without request
+or response content, host, API key, authorization, model, or prompt fields.
+
+The one supported diagnostic mode is `connection-close`. It is developer-only, defaults to
+`off`, applies only to desktop-direct native OpenAI-compatible requests, and forces each
+request onto an isolated non-reused Undici connection. Proxy, Mobile, Claude, endpoint
+resolution, timeout values, retry classification, and payload stay unchanged.
+
+```bash
+node --import tsx --test tests/native-openai-transport.test.ts
+```
+
+Expected RED: response-boundary events, per-attempt consumption, and the
+`connection-close` mode do not exist.
+
+- [x] **Step 2: Implement metadata-only response-boundary tracing**
+
+Record transport stages at the injected-fetch boundary before SDK parsing. Correlate the
+buffer with the exact attempt `AbortSignal` so concurrent requests cannot consume each
+other's events. Observe response body reads without pre-consuming or duplicating the body.
+Flush the correlated stages from `native-llm-executor` on success and every failure path,
+then emit `sdk_complete` only after the SDK Promise resolves. Treat the trace event as
+telemetry-only in `view.ts`. Bound event count and string fields; never include headers
+wholesale or any body/request content.
+
+- [x] **Step 3: Implement the single `connection-close` experiment mode**
+
+Add `devMode.nativeTransportDiagnosticMode: "off" | "connection-close"`, preserve it when
+`main.ts` rebuilds the persisted `devMode` object, normalize invalid persisted values to
+`off`, and pass it only to the native desktop-direct transport. In
+`connection-close`, use one isolated Undici dispatcher per HTTP request and close it after
+body completion, body error/cancel, or fetch failure. Keep the current pooled dispatcher
+path byte-for-byte equivalent when mode is `off`.
+
+- [x] **Step 4: Verify focused runtime contracts**
+
+```bash
+node --import tsx --test tests/native-openai-transport.test.ts tests/native-llm-executor.test.ts tests/settings-model-controls.test.ts tests/view-llm-lifecycle.test.ts
+npx tsc --noEmit --pretty false
+npm run build
+```
+
+Expected GREEN: exact stage ordering and terminal cleanup pass; retries receive fresh
+attempt correlation; mode `off` retains pooling; `connection-close` prevents reuse; no
+diagnostic field reaches sidebar rendering.
+
+- [x] **Step 5: Build and deploy only to the protected replay vault**
+
+Use the Task 27 protected-root checks, copy the production bundle, and set only the replay
+vault's `devMode.nativeTransportDiagnosticMode` to `connection-close`. Preserve a copy of
+the previous replay plugin settings and bundle so the experiment is reversible. Never
+enable this mode or run Re-init in the working vault.
+
+- [x] **Step 6: Run one protected Obsidian Re-init experiment and capture evidence**
+
+Restart Obsidian on the protected replay vault, run one explicit full Re-init, then extract
+the latest Init session from `agent.jsonl` into
+`docs/superpowers/evals/obsidian-native-transport-diagnostic.json`. The evidence file is
+metadata-only and compares each attempt's request fingerprint with ordered transport stages,
+retry/idle outcome, and server request ID when available.
+
+Run the existing read-only replay auditor against the same session:
+
+```bash
+node --import tsx scripts/audit-bounded-init-replay.ts --vault "$RUN_VAULT" --session latest-init --expected-sources 22
+```
+
+Expected diagnostic decision:
+- `fetch_headers` without `body_end` identifies response-body/Undici completion;
+- `body_end` without `sdk_complete` identifies SDK parse/completion after body delivery;
+- no `fetch_headers` despite server 200 identifies fetch/dispatcher Promise completion;
+- successful `connection-close` where pooled mode failed identifies connection reuse;
+- identical failure under `connection-close` rejects connection reuse and keeps the next
+  investigation at the observed terminal boundary.
+
+- [x] **Step 7: Document evidence and restore default mode**
+
+Update `architecture/native-transport-diagnostics` with the exact stage contract and the
+experiment result, run `wiki_lint`, restore the replay setting to `off`, and rerun the
+focused tests/build. Do not claim a production fix: this task ends with a supported root-
+cause decision or a narrower failing boundary for the next change.
+
+### Task 29: Correlate Failing Obsidian Transport and Select the Production Adapter
+
+**Requirements:** R13, R15, R19, R21, R22
+
+**User problem closed:** Task 28 narrowed the failure to the Obsidian Electron renderer
+receiving HTTP 200 headers and `Content-Length`, then reading zero response-body bytes
+until idle timeout. `connection-close` rejected pooled connection reuse. The remaining
+decision must be evidence-led: first correlate the exact failing Obsidian attempt with
+upstream completion, then compare a lower-level desktop adapter in the same Obsidian
+runtime before changing production transport.
+
+**Files:**
+- Modify: `src/types.ts`
+- Modify: `src/native-openai-transport.ts`
+- Modify: `src/native-openai-client.ts`
+- Modify: `src/native-llm-executor.ts`
+- Modify: `src/main.ts`
+- Modify: `src/controller.ts`
+- Modify: `tests/native-openai-transport.test.ts`
+- Modify: `tests/native-llm-executor.test.ts`
+- Create at diagnostic run: `docs/superpowers/evals/obsidian-native-transport-correlation.json`
+- Modify through iwiki MCP: `architecture/native-transport-diagnostics`
+
+- [x] **Step 1: Write failing correlation tests**
+
+Add tests that prove every native attempt emits one bounded, metadata-only
+`native_transport_correlation` event before body consumption. The event must include
+`logicalRequestId`, `lifecycleId`, `callSite`, `attempt`, `transport`, `endpointPath`,
+`networkTransport`, `diagnosticMode`, a locally generated `clientRequestId`, and a W3C
+`traceparent`. The OpenAI-compatible HTTP request must send the product-neutral
+`x-client-attempt-id` header, must not send the legacy AI Wiki-specific correlation
+header, and must preserve `traceparent` for generic gateways such as GPU Tools, LiteLLM,
+and Ollama. The event must not include request body, response body, prompt text, model
+name, host, API key, or authorization.
+
+```ts
+assert.equal(correlation.kind, "native_transport_correlation");
+assert.match(correlation.clientRequestId, /^[A-Za-z0-9_.:-]{1,128}$/);
+assert.match(correlation.traceparent, /^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/);
+assert.equal(correlation.endpointPath, "/v1/chat/completions");
+assert.equal("host" in correlation, false);
+assert.equal("model" in correlation, false);
+assert.equal("authorization" in correlation, false);
+```
+
+Run:
+
+```bash
+node --import tsx --test tests/native-openai-transport.test.ts tests/native-llm-executor.test.ts
+```
+
+Expected: FAIL because per-attempt client correlation events do not exist.
+
+- [x] **Step 2: Implement exact attempt correlation**
+
+Generate one sanitized client request ID per native attempt at the executor boundary and
+tag it on the attempt signal next to `NATIVE_TRANSPORT_ATTEMPT_SIGNAL`. Generate one W3C
+trace ID per logical native request and a fresh span ID per retry attempt, then pass the
+full `traceparent` through the same fetch-options seam. The transport must send the
+attempt ID only as the generic `x-client-attempt-id` header, never as an AI Wiki-specific
+header, and must send `traceparent` for standard distributed tracing. Emit both IDs into
+`native_transport_trace`, `native_http_response`, retry diagnostics, and
+`native_transport_correlation`. Preserve current behavior when the backend, proxy, or
+platform drops either header.
+
+- [x] **Step 3: Run one protected correlation replay and record the result**
+
+Deploy only to the protected replay vault, run one full Re-init attempt, and compare the
+plugin `clientRequestId` with gateway logs for response status, body bytes, and completion.
+Store only metadata in:
+
+```bash
+docs/superpowers/evals/obsidian-native-transport-correlation.json
+```
+
+Decision gate:
+- If gateway confirms complete body for the exact failing Obsidian attempt, mark upstream
+  gateway/model as rejected for that attempt and continue to Step 4.
+- If gateway does not confirm body completion for the exact failing Obsidian attempt, stop
+  production adapter work and report the exact upstream failure evidence.
+- If no exact correlation reaches the gateway, fix correlation propagation before any
+  transport workaround.
+
+Result recorded in `docs/superpowers/evals/obsidian-native-transport-correlation.json`:
+exact correlation works through the public edge and GPU Tools audit. Attempts 2 and 3
+completed successfully in GPU Tools with captured response bodies, while Obsidian received
+HTTP 200 headers and then read zero response-body bytes until the 180 s idle timeout.
+This rejects gateway/upstream non-completion for those attempts and selects Step 4.
+
+- [x] **Step 4: Write failing lower-level adapter tests**
+
+Add transport tests for a developer-only diagnostic mode
+`undici-request-adapter`. The mode applies only to desktop-direct native
+OpenAI-compatible requests. It must use `undici.request`, consume Node/Web body chunks
+explicitly, preserve stream and non-stream response semantics for the OpenAI SDK, close
+resources on body end/error/cancel, and emit the same trace/correlation events as the
+current fetch wrapper.
+
+Run:
+
+```bash
+node --import tsx --test tests/native-openai-transport.test.ts
+```
+
+Expected: FAIL because `undici-request-adapter` mode does not exist.
+
+- [x] **Step 5: Implement the diagnostic `undici.request` adapter**
+
+Add `devMode.nativeTransportDiagnosticMode:
+"off" | "connection-close" | "undici-request-adapter"`. In the new mode, use a fresh
+desktop-direct Undici agent per request, call `undici.request`, convert the response into
+a standards-compatible `Response`, and keep endpoint resolution, payload, retry policy,
+timeouts, proxy behavior, Mobile behavior, Claude behavior, and sidebar output unchanged.
+
+Implemented and reviewed. Tests cover non-stream SDK response, SSE stream consumption,
+desktop-only mode selection, generic correlation headers, and dispatcher cleanup on body
+end, body error, body cancel, and request failure.
+
+- [x] **Step 6: Run one protected adapter A/B replay and record the result**
+
+Run the same protected Re-init request with `undici-request-adapter`. Compare its
+fingerprint with Task 28 and Step 3. Record status, headers, body chunks, body bytes,
+SDK completion, retry outcome, and final operation outcome in the same evidence file.
+
+Decision gate:
+- If `undici-request-adapter` completes in Obsidian where renderer fetch stalls, plan the
+  production desktop-direct migration to the adapter.
+- If `undici-request-adapter` also stalls after confirmed upstream body completion, stop
+  and plan Electron main-process transport or external-runtime handoff.
+- If the adapter completes transport but fails later on prompt budget/schema validation,
+  keep transport as solved and continue with the post-transport failure as a separate
+  bounded-ingest task.
+
+Result recorded in `docs/superpowers/evals/obsidian-native-transport-correlation.json`:
+`undici-request-adapter` completed body reads and `sdk_complete` for bootstrap,
+evidence-map, and synthesis calls in the Obsidian runtime. The previous renderer
+fetch body stall did not reproduce. The run then failed after complete LLM responses on
+semantic synthesis validation: the model emitted
+`!Wiki/os-unix/applications/wiki_os-unix_alt-linux.md`, while canonical entity slugs use
+underscores. A targeted post-transport fix now retries single-entity synthesis semantic
+validation failures with concrete canonical path feedback within the configured
+structured retry budget.
+
+- [ ] **Step 7: Promote only the proven fix**
+
+If Step 6 proves the lower-level adapter, remove its developer-only restriction by making
+it the default desktop-direct native OpenAI-compatible transport. Keep
+`connection-close` as a diagnostic mode only if it still adds evidence value. Preserve the
+retry, idle timeout, connection timeout, endpoint path, SSE, and metadata-only diagnostics
+contracts.
+
+- [ ] **Step 8: Verify focused and full contracts**
+
+Run:
+
+```bash
+node --import tsx --test tests/native-openai-transport.test.ts tests/native-llm-executor.test.ts tests/settings-model-controls.test.ts tests/view-llm-lifecycle.test.ts
+npx tsc --noEmit --pretty false
+npm run lint
+npm run build
+git diff --check
+```
+
+Expected: GREEN. Existing lint warnings are acceptable only if they are the known
+pre-existing Node import warnings.
+
+- [ ] **Step 9: Update docs and reconcile next steps**
+
+Update `architecture/native-transport-diagnostics` with the correlation evidence, adapter
+A/B result, and final production decision. Run `wiki_lint`. Update this plan's checkboxes,
+then adjust or delete any later steps whose premise was disproved by the recorded
+evidence. Do not close `bounded-ingest-model-controls` until the final evidence checklist
+and protected replay acceptance pass.
+
 ## Final Evidence Checklist
 
 - [ ] Every R1-R22 row maps to passing test or replay evidence.
@@ -3502,4 +3791,7 @@ Close `docs/TODO.md` only when R1-R22 and the protected replay produce verdict `
 - [ ] Existing top-level retry/idle values round-trip; missing settings resolve to 3/15/300.
 - [ ] A healthy native generation longer than 15 seconds is not treated as a connection timeout.
 - [ ] Retry scheduled/recovered/exhausted evidence is complete in `agent.jsonl` and technical details stay out of sidebar labels.
+- [ ] Obsidian runtime diagnostics distinguish fetch headers, body completion/error/abort,
+  and SDK completion; the one `connection-close` replay experiment records a root-cause
+  decision without content/secrets and the replay setting is restored to `off` afterward.
 - [ ] Full tests, lint, build, diff check, safe replay audit, iwiki update, and `wiki_lint` pass.

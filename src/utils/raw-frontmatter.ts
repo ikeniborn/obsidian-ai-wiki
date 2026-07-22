@@ -570,15 +570,17 @@ const SOURCES_HEADING = "## Sources";
 
 /**
  * Ensure the page body carries a `## Sources` section listing each source note
- * as a navigable `[[stem]]` wikilink. OKF keeps links in body sections, not
- * frontmatter: the plain `resource` frontmatter records provenance, while this
- * section makes the wiki→source link clickable (the source note lives outside
- * `!Wiki/`, so its bare stem resolves to a real vault note). Idempotent —
- * existing links are kept and new ones unioned; an empty stem list is a no-op.
+ * as a navigable wikilink. OKF keeps links in body sections, not frontmatter:
+ * the plain `resource` frontmatter records provenance, while this section makes
+ * the wiki→source link clickable. Source resources are vault-relative paths;
+ * wikilinks omit the `.md` suffix. Idempotent — existing links are kept and new
+ * ones unioned; an empty source list is a no-op.
  * Heading is a fixed English literal, mirroring `## Related` / `## External links`.
  */
 export function ensureSourcesSection(content: string, sourceStems: string[]): string {
-  const stems = [...new Set(sourceStems.map((s) => s.trim()).filter((s) => s.length > 0))];
+  const stems = [...new Set(sourceStems
+    .map((s) => s.trim().replace(/\.md$/i, ""))
+    .filter((s) => s.length > 0))];
   if (stems.length === 0) return content;
 
   const lines = content.split("\n");

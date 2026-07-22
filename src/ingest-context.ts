@@ -342,12 +342,50 @@ export function batchEntityContexts(
     units: bundle.units.map((unit) => ({ ...unit, duplicatePaths: [...unit.duplicatePaths] })),
     replaceAuthorities: bundle.replaceAuthorities.map((authority) => ({ ...authority })),
   });
-  const renderSnapshot = (items: EntityContextBundle[]) => renderBatch(items.map(cloneBundle));
+  const estimateBatch = (items: EntityContextBundle[]) => estimatePreparedMessages(renderBatch(items.map(cloneBundle)));
+  const compressSingletonEvidence = (bundle: EntityContextBundle): EntityContextBundle => {
+    const compressed = cloneBundle(bundle);
+    if (estimateBatch([compressed]) <= inputBudgetTokens) return compressed;
+
+    const optionalUnits = compressed.units
+      .map((unit, index) => ({ unit, index }))
+      .filter(({ unit }) => !unit.required)
+      .sort((a, b) => a.unit.priority - b.unit.priority || b.index - a.index);
+    for (const optional of optionalUnits) {
+      if (estimateBatch([compressed]) <= inputBudgetTokens) break;
+      compressed.units.splice(compressed.units.indexOf(optional.unit), 1);
+    }
+    while (compressed.evidence.links.length > 0 && estimateBatch([compressed]) > inputBudgetTokens) {
+      compressed.evidence.links.pop();
+    }
+    while (compressed.evidence.exactSource.length > 1 && estimateBatch([compressed]) > inputBudgetTokens) {
+      compressed.evidence.exactSource.pop();
+    }
+    while (compressed.evidence.exactSourceRanges.length > 1 && estimateBatch([compressed]) > inputBudgetTokens) {
+      compressed.evidence.exactSourceRanges.pop();
+    }
+    while (compressed.evidence.facts.length > 1 && estimateBatch([compressed]) > inputBudgetTokens) {
+      compressed.evidence.facts.pop();
+    }
+    while (compressed.evidence.packetIds.length > 1 && estimateBatch([compressed]) > inputBudgetTokens) {
+      compressed.evidence.packetIds.pop();
+    }
+    if (compressed.evidence.exactSource.length > 0) {
+      let text = compressed.evidence.exactSource[0].text;
+      while (text.length > 256 && estimateBatch([compressed]) > inputBudgetTokens) {
+        text = text.slice(0, Math.max(256, Math.floor(text.length / 2)));
+        compressed.evidence.exactSource[0].text = `${text}\n[truncated for prompt budget]`;
+      }
+    }
+    compressed.estimatedInputTokens = Math.min(compressed.estimatedInputTokens, inputBudgetTokens);
+    return compressed;
+  };
   const batches: EntityContextBundle[][] = [];
   let current: EntityContextBundle[] = [];
-  for (const bundle of sorted) {
+  for (const sourceBundle of sorted) {
+    const bundle = compressSingletonEvidence(sourceBundle);
     const candidate = [...current, bundle];
-    const estimated = estimatePreparedMessages(renderSnapshot(candidate));
+    const estimated = estimateBatch(candidate);
     if (estimated <= inputBudgetTokens) {
       current = candidate;
       continue;
@@ -362,7 +400,7 @@ export function batchEntityContexts(
     }
     batches.push(current);
     current = [];
-    const singletonEstimate = estimatePreparedMessages(renderSnapshot([bundle]));
+    const singletonEstimate = estimateBatch([bundle]);
     if (singletonEstimate > inputBudgetTokens) {
       throw new ContextSplitRequiredError(
         "Entity context bundle exceeds input budget; reduce evidence before batching",

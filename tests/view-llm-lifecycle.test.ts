@@ -329,6 +329,84 @@ test("view routes lifecycle before tools and no longer starts waiting from tool_
   assert.match(appendEvent, /popToolRenderFrame/);
 });
 
+test("view renders structured validation retry reasons in progress", () => {
+  const source = readFileSync(new URL("../src/view.ts", import.meta.url), "utf8");
+  const appendEvent = source.slice(
+    source.indexOf("appendEvent(ev: RunEvent): void"),
+    source.indexOf("private renderQueryStats"),
+  );
+  const branch = appendEvent.slice(
+    appendEvent.indexOf('ev.kind === "structured_validation_retry"'),
+    appendEvent.indexOf('ev.kind === "tool_use"'),
+  );
+
+  assert.match(branch, /labels\.validationRetry/);
+  assert.match(branch, /ev\.safeReason/);
+  assert.match(branch, /validationRetryNext_/);
+  assert.match(branch, /this\.stepsEl\.createDiv\("ai-wiki-step"\)/);
+  assert.doesNotMatch(branch, /assistant_text|delta|content/);
+  for (const locale of ["en", "ru", "es"] as const) {
+    const view = i18nFor(locale).view;
+    assert.ok(view.validationRetry.length > 0);
+    assert.ok(view.validationRetryNext_split_batch.length > 0);
+    assert.ok(view.validationRetryNext_repair_prompt.length > 0);
+    assert.ok(view.validationRetryNext_fail.length > 0);
+  }
+});
+
+test("view renders transport retry causes in progress", () => {
+  const source = readFileSync(new URL("../src/view.ts", import.meta.url), "utf8");
+  const appendEvent = source.slice(
+    source.indexOf("appendEvent(ev: RunEvent): void"),
+    source.indexOf("private renderQueryStats"),
+  );
+  const branch = appendEvent.slice(
+    appendEvent.indexOf('ev.kind === "transport_retry_scheduled"'),
+    appendEvent.indexOf('ev.kind === "structured_validation_retry"'),
+  );
+
+  assert.match(branch, /labels\.transportRetry/);
+  assert.match(branch, /ev\.errorClass/);
+  assert.match(branch, /ev\.status/);
+  assert.match(branch, /ev\.delayMs/);
+  assert.match(branch, /transportRetryAttempt/);
+  assert.match(branch, /this\.stepsEl\.createDiv\("ai-wiki-step"\)/);
+  assert.doesNotMatch(branch, /prompt|body|apiKey|content/);
+  for (const locale of ["en", "ru", "es"] as const) {
+    const view = i18nFor(locale).view;
+    assert.ok(view.transportRetry.length > 0);
+    assert.ok(view.transportRetryAttempt(1, 3).length > 0);
+    assert.ok(view.transportRetryDelay(500).length > 0);
+    assert.ok(view.transportRetryHttpStatus(503).length > 0);
+  }
+});
+
+test("view renders structural retry causes in progress without raw content", () => {
+  const source = readFileSync(new URL("../src/view.ts", import.meta.url), "utf8");
+  const appendEvent = source.slice(
+    source.indexOf("appendEvent(ev: RunEvent): void"),
+    source.indexOf("private renderQueryStats"),
+  );
+  const branch = appendEvent.slice(
+    appendEvent.indexOf('ev.kind === "structural_error"'),
+    appendEvent.indexOf('ev.kind === "structured_validation_retry"'),
+  );
+
+  assert.match(branch, /labels\.structuralRetry/);
+  assert.match(branch, /ev\.message\.replace/);
+  assert.match(branch, /ev\.errorType/);
+  assert.match(branch, /ev\.retryAttempt/);
+  assert.match(branch, /ev\.succeeded !== true/);
+  assert.match(branch, /slice\(0, 240\)/);
+  assert.doesNotMatch(branch, /fullText|assistant_text|delta|apiKey/);
+  for (const locale of ["en", "ru", "es"] as const) {
+    const view = i18nFor(locale).view;
+    assert.ok(view.structuralRetry.length > 0);
+    assert.ok(view.structuralRetryType("json_parse").length > 0);
+    assert.ok(view.structuralRetryAttempt(1).length > 0);
+  }
+});
+
 test("view drops telemetry-only events before waiting, step, or DOM mutation", () => {
   const source = readFileSync(new URL("../src/view.ts", import.meta.url), "utf8");
   const appendEvent = source.slice(
@@ -348,6 +426,30 @@ test("view drops telemetry-only events before waiting, step, or DOM mutation", (
     source,
     /run_config.*wipe_manifest_chunk.*wipe_complete/s,
   );
+  assert.match(source, /event\.kind === "native_transport_correlation"/);
+  assert.match(source, /event\.kind === "native_transport_trace"/);
+  assert.equal(appendEvent.includes("native_transport_correlation"), false);
+  assert.equal(appendEvent.includes("native_transport_trace"), false);
+});
+
+test("progress scroll preserves manual position and exposes return-to-bottom control", () => {
+  const source = readFileSync(new URL("../src/view.ts", import.meta.url), "utf8");
+  const scrollSteps = source.slice(
+    source.indexOf("private scrollSteps"),
+    source.indexOf("private renderLlmLifecycle"),
+  );
+
+  assert.match(source, /stepsPinnedToBottom/);
+  assert.match(source, /stepsScrollBottomBtn/);
+  assert.match(source, /syncStepsScrollButton/);
+  assert.doesNotMatch(source, /text: "↓"/);
+  assert.match(source, /text: T\.view\.scrollProgressBottom/);
+  for (const locale of ["en", "ru", "es"] as const) {
+    assert.equal(typeof i18nFor(locale).view.scrollProgressBottom, "string");
+    assert.ok(i18nFor(locale).view.scrollProgressBottom.length > 0);
+  }
+  assert.match(scrollSteps, /if \(!this\.stepsPinnedToBottom\) \{[\s\S]*?return;/);
+  assert.match(scrollSteps, /this\.stepsEl\.scrollTop = this\.stepsEl\.scrollHeight/);
 });
 
 test("view clears all lifecycle timers at reset, finish, and close", () => {

@@ -10,6 +10,7 @@ import {
 } from "../section-patches";
 
 const DEFAULT_LINT_ITEM_BUDGET = 12_000;
+const LINT_WORK_ITEM_BUDGET_RATIO = 0.18;
 const PAGE_HEADING = "## Full page";
 
 export interface LintWorkItem {
@@ -137,7 +138,7 @@ export function buildLintWorkItems(
   if (!Number.isFinite(itemBudget) || itemBudget <= 0) {
     throw new RangeError("itemBudget must be positive");
   }
-  const effectiveBudget = Math.max(120, Math.floor(itemBudget * 0.25));
+  const effectiveBudget = Math.max(120, Math.floor(itemBudget * LINT_WORK_ITEM_BUDGET_RATIO));
   const items: LintWorkItem[] = [];
   for (const [path, markdown] of [...pages.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     const pageHeading = `# ${h1Heading(markdown)}`;

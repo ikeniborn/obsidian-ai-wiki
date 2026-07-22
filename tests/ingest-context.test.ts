@@ -396,6 +396,72 @@ test("oversized bundle directs caller to evidence reducer", () => {
   assert.throws(() => batchEntityContexts([bundle("a", 100)], 10, () => [{ role: "user", content: "oversized" }], {}), ContextSplitRequiredError);
 });
 
+test("oversized singleton evidence is compressed before batching fails", () => {
+  const source = bundle("a", 100);
+  source.evidence = {
+    ...source.evidence,
+    packetIds: ["p1", "p2", "p3"],
+    facts: ["primary fact", "secondary fact", "third fact"],
+    exactSourceRanges: [
+      { startLine: 1, endLine: 1 },
+      { startLine: 2, endLine: 2 },
+      { startLine: 3, endLine: 3 },
+    ],
+    exactSource: [
+      { startLine: 1, endLine: 1, text: "primary source " + "x".repeat(2000) },
+      { startLine: 2, endLine: 2, text: "secondary source " + "y".repeat(2000) },
+      { startLine: 3, endLine: 3, text: "third source " + "z".repeat(2000) },
+    ],
+    links: ["https://example.invalid/a", "https://example.invalid/b"],
+  };
+  const renderForTest = (items: EntityContextBundle[]) => [{
+    role: "user" as const,
+    content: JSON.stringify(items.map((item) => item.evidence)),
+  }];
+  const budget = estimatePreparedMessages(renderForTest([{ ...source, evidence: { ...source.evidence, exactSource: [source.evidence.exactSource[0]], facts: ["primary fact"], packetIds: ["p1"], links: [] } }])) + 20;
+
+  const result = batchEntityContexts([source], budget, renderForTest, {});
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0][0].entityKey, "a");
+  assert.ok(estimatePreparedMessages(renderForTest(result[0])) <= budget);
+  assert.equal(result[0][0].evidence.exactSource.length, 1);
+  assert.equal(source.evidence.exactSource.length, 3);
+});
+
+test("oversized singleton batching drops optional units before failing", () => {
+  const source = bundle("guide", 100);
+  source.units = [
+    {
+      id: "required", source: "wiki", text: "required target context", required: true, priority: 10, estimatedTokens: 10,
+      pageId: "required", path: "!Wiki/d/concept/wiki_d_required.md", heading: "## Required", sectionHash: "required",
+      score: 1, sourceOrdinal: 0, duplicatePaths: ["!Wiki/d/concept/wiki_d_required.md"],
+    },
+    {
+      id: "optional", source: "wiki", text: "optional context " + "x".repeat(4000), required: false, priority: 1, estimatedTokens: 4000,
+      pageId: "optional", path: "!Wiki/d/concept/wiki_d_optional.md", heading: "## Optional", sectionHash: "optional",
+      score: 0.1, sourceOrdinal: 1, duplicatePaths: ["!Wiki/d/concept/wiki_d_optional.md"],
+    },
+  ];
+  const renderForTest = (items: EntityContextBundle[]) => [{
+    role: "user" as const,
+    content: JSON.stringify(items.map((item) => ({
+      evidence: item.evidence,
+      units: item.units,
+      replaceAuthorities: item.replaceAuthorities,
+    }))),
+  }];
+  const withoutOptional = { ...source, units: source.units.filter((unit) => unit.required) };
+  const budget = estimatePreparedMessages(renderForTest([withoutOptional])) + 20;
+
+  const result = batchEntityContexts([source], budget, renderForTest, {});
+
+  assert.equal(result.length, 1);
+  assert.deepEqual(result[0][0].units.map((unit) => unit.id), ["required"]);
+  assert.equal(source.units.length, 2);
+  assert.ok(estimatePreparedMessages(renderForTest(result[0])) <= budget);
+});
+
 test("duplicate entity keys are rejected before rendering", () => {
   assert.throws(() => batchEntityContexts([bundle("a", 1), bundle("a", 1)], 500, () => {
     throw new Error("renderer must not run");

@@ -175,6 +175,83 @@ type TransportRetryMetadata = {
   connectionTimeoutMs: number;
   idleTimeoutMs: number;
   providerRequestId?: string;
+  clientRequestId?: string;
+  traceparent?: string;
+};
+
+export type NativeNetworkTransport = "desktop-direct" | "desktop-proxy" | "mobile-host";
+export type NativeTransportDiagnosticMode = "off" | "connection-close" | "undici-request-adapter";
+export type NativeTransportTraceStage =
+  | "fetch_start"
+  | "fetch_headers"
+  | "body_start"
+  | "body_chunk"
+  | "body_end"
+  | "fetch_error"
+  | "fetch_abort"
+  | "body_error"
+  | "sdk_complete";
+
+export type NativeTransportTraceRecord = {
+  stage: NativeTransportTraceStage;
+  networkTransport: NativeNetworkTransport;
+  endpointPath: string;
+  diagnosticMode: NativeTransportDiagnosticMode;
+  elapsedMs: number;
+  status?: number;
+  contentType?: string;
+  contentLength?: number;
+  bodyBytes?: number;
+  bodyChunks?: number;
+  errorClass?: string;
+  clientRequestId?: string;
+  traceparent?: string;
+};
+
+export type NativeTransportTraceSnapshot = {
+  startedAtMs: number;
+  events: NativeTransportTraceRecord[];
+};
+
+type NativeTransportTraceMetadata = NativeTransportTraceRecord & {
+  logicalRequestId: string;
+  lifecycleId: string;
+  callSite: string;
+  transport: "stream" | "non-stream";
+  attempt: number;
+  connectionTimeoutMs: number;
+  idleTimeoutMs: number;
+};
+
+type NativeHttpResponseMetadata = {
+  logicalRequestId: string;
+  lifecycleId: string;
+  callSite: string;
+  transport: "stream" | "non-stream";
+  attempt: number;
+  status: number;
+  endpointPath: string;
+  networkTransport: NativeNetworkTransport;
+  connectionTimeoutMs: number;
+  idleTimeoutMs: number;
+  providerRequestId?: string;
+  clientRequestId?: string;
+  traceparent?: string;
+};
+
+type NativeTransportCorrelationMetadata = {
+  logicalRequestId: string;
+  lifecycleId: string;
+  callSite: string;
+  transport: "stream" | "non-stream";
+  attempt: number;
+  endpointPath: string;
+  networkTransport: NativeNetworkTransport;
+  diagnosticMode: NativeTransportDiagnosticMode;
+  connectionTimeoutMs: number;
+  idleTimeoutMs: number;
+  clientRequestId: string;
+  traceparent: string;
 };
 
 export type RunEvent =
@@ -243,11 +320,24 @@ export type RunEvent =
       estimatedInputTokens: number;
       actualInputTokens?: number;
       outputBudget?: number;
-      compressionProfile: CompressionProfile;
+      compressionProfile?: CompressionProfile;
       contextUnits: number;
       sourceChunks?: number;
       reductionDepth?: number;
       retryReason?: string;
+    }
+  | {
+      kind: "structured_validation_retry";
+      callSite: StructuredCallSite;
+      requestId: string;
+      errorClass: string;
+      safeReason: string;
+      bundleCount: number;
+      canSplit: boolean;
+      nextAction: "split_batch" | "repair_prompt" | "fail";
+      entityKeys?: string[];
+      actionCount?: number;
+      skipCount?: number;
     }
   | {
       kind: "llm_request_fingerprint";
@@ -271,6 +361,9 @@ export type RunEvent =
   | ({ kind: "transport_retry_scheduled" } & TransportRetryMetadata)
   | ({ kind: "transport_retry_recovered" } & TransportRetryMetadata)
   | ({ kind: "transport_retry_exhausted" } & TransportRetryMetadata)
+  | ({ kind: "native_transport_correlation" } & NativeTransportCorrelationMetadata)
+  | ({ kind: "native_http_response" } & NativeHttpResponseMetadata)
+  | ({ kind: "native_transport_trace" } & NativeTransportTraceMetadata)
   | {
       kind: "query_stats";
       crossDomain: boolean;
@@ -365,7 +458,7 @@ export interface SemanticCompression {
 export interface ModelCallPolicy {
   inputBudgetTokens: number;
   outputBudgetTokens?: number;
-  compression: CompressionProfile;
+  compression?: CompressionProfile;
 }
 
 export interface LlmCallOptions {
@@ -392,8 +485,17 @@ export interface LlmCallOptions {
   nativeRequestIdleTimeoutMs?: number;
 }
 
+export const NATIVE_TRANSPORT_ATTEMPT_SIGNAL = Symbol("nativeTransportAttemptSignal");
+export const NATIVE_TRANSPORT_CLIENT_REQUEST_ID = Symbol("nativeTransportClientRequestId");
+export const NATIVE_TRANSPORT_TRACEPARENT = Symbol("nativeTransportTraceparent");
+
 export interface NativeChatCompletionCreateOptions {
   signal: AbortSignal;
+  fetchOptions?: RequestInit & {
+    [NATIVE_TRANSPORT_ATTEMPT_SIGNAL]?: AbortSignal;
+    [NATIVE_TRANSPORT_CLIENT_REQUEST_ID]?: string;
+    [NATIVE_TRANSPORT_TRACEPARENT]?: string;
+  };
 }
 
 export interface LlmChatCompletionCreateOptions {
@@ -421,6 +523,7 @@ export interface NativeRequestLifecycle {
 
 export interface NativeRequestRetryContext {
   logicalRequestId: string;
+  traceId: string;
   callSite: string;
   maxRetries: number;
   connectionTimeoutMs: number;
@@ -428,6 +531,9 @@ export interface NativeRequestRetryContext {
   signal: AbortSignal;
   onEvent: (event: RunEvent) => void;
   lifecycle: NativeRequestLifecycle;
+  nativeTransportDiagnostic?: NativeTransportDiagnostic;
+  consumeNativeHttpResponseDiagnostic?: (signal: AbortSignal) => NativeTransportDiagnostic | undefined;
+  consumeNativeTransportTrace?: (signal: AbortSignal) => NativeTransportTraceSnapshot | undefined;
   delay: (ms: number, signal: AbortSignal) => Promise<void>;
 }
 
@@ -450,6 +556,8 @@ export type LlmClient = {
   /** Configured native DNS/TCP/TLS establishment timeout carried into retry diagnostics. */
   nativeConnectionTimeoutMs?: number;
   nativeTransportDiagnostic?: NativeTransportDiagnostic;
+  consumeNativeHttpResponseDiagnostic?: (signal: AbortSignal) => NativeTransportDiagnostic | undefined;
+  consumeNativeTransportTrace?: (signal: AbortSignal) => NativeTransportTraceSnapshot | undefined;
   emitsPromptBudget?: boolean;
   beginPromptBudgetRequest?: (requestId: string) => void;
   chat: {
@@ -467,10 +575,16 @@ export type LlmClient = {
 };
 
 export type NativeTransportDiagnostic = {
-  transport: "mobile-host";
-  requestedScope: "dns_tcp_tls_establishment";
-  exactConnectTimeoutAvailable: false;
-  hostTransportRetained: true;
+  transport: NativeNetworkTransport;
+  diagnosticMode: NativeTransportDiagnosticMode;
+  endpointPath?: string;
+  status?: number;
+  providerRequestId?: string;
+  clientRequestId?: string;
+  traceparent?: string;
+  requestedScope?: "dns_tcp_tls_establishment";
+  exactConnectTimeoutAvailable?: false;
+  hostTransportRetained?: true;
 };
 
 export type OutputLanguage = "auto" | "ru" | "en" | "es";
@@ -567,6 +681,7 @@ export interface LlmWikiPluginSettings {
   };
   devMode: {
     enabled: boolean;
+    nativeTransportDiagnosticMode: NativeTransportDiagnosticMode;
   };
   lintOptions: {
     useLlm: boolean;
@@ -617,6 +732,11 @@ export function normalizeLlmRuntimeControls(settings: LlmWikiPluginSettings): vo
     15,
   );
   settings.llmIdleTimeoutSec = parseLlmIdleTimeoutSec(settings.llmIdleTimeoutSec, 300);
+  settings.devMode.nativeTransportDiagnosticMode =
+    settings.devMode.nativeTransportDiagnosticMode === "connection-close"
+      || settings.devMode.nativeTransportDiagnosticMode === "undici-request-adapter"
+      ? settings.devMode.nativeTransportDiagnosticMode
+      : "off";
 }
 
 export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
@@ -683,6 +803,7 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   proxy: { enabled: false, url: "" },
   devMode: {
     enabled: false,
+    nativeTransportDiagnosticMode: "off",
   },
   lintOptions: {
     useLlm: true,

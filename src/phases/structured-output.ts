@@ -300,6 +300,49 @@ function repairPrompt<T>(profile: StructuredProfile<T>, lastText: string, lastEr
     : feedback;
 }
 
+function compactRepairPrompt<T>(profile: StructuredProfile<T>, lastError: Error): string {
+  const detail = [
+    "Previous response was invalid.",
+    "Previous response was too large to include in the retry prompt.",
+    `Validation error: ${lastError.message.slice(0, 2000)}`,
+  ].join("\n");
+  const feedback = render(repairJson, { detail });
+  if (profile.kind === "framed-zod") {
+    return [
+      detail,
+      profile.repairInstruction,
+      "Return only the required frames. Do not add commentary outside frames.",
+    ].join("\n");
+  }
+  return profile.repairInstruction
+    ? `${feedback}\n\n${profile.repairInstruction}`
+    : feedback;
+}
+
+function repairMessages<T>(
+  baseMessages: OpenAI.Chat.ChatCompletionMessageParam[],
+  profile: StructuredProfile<T>,
+  fullText: string,
+  lastError: Error,
+  inputBudgetTokens: number | undefined,
+): OpenAI.Chat.ChatCompletionMessageParam[] {
+  const fullRepair = [
+    ...baseMessages,
+    { role: "assistant" as const, content: fullText },
+    { role: "user" as const, content: repairPrompt(profile, fullText, lastError) },
+  ];
+  if (inputBudgetTokens === undefined || estimatePreparedMessages(fullRepair) <= inputBudgetTokens) {
+    return fullRepair;
+  }
+
+  const compactRepair = [
+    ...baseMessages,
+    { role: "user" as const, content: compactRepairPrompt(profile, lastError) },
+  ];
+  if (estimatePreparedMessages(compactRepair) <= inputBudgetTokens) return compactRepair;
+  return fullRepair;
+}
+
 async function streamOnce(
   llm: LlmClient,
   model: string,
@@ -655,11 +698,7 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
           throw new StructuredValidationError(callSite, attempt + 1, lastError);
         }
         lifecycle.close("retrying");
-        messages = [
-          ...messages,
-          { role: "assistant", content: fullText },
-          { role: "user", content: repairPrompt(profile, fullText, lastError) },
-        ];
+        messages = repairMessages(messages, profile, fullText, lastError, args.opts.inputBudgetTokens);
         continue;
       }
 
@@ -688,11 +727,7 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
           throw new StructuredValidationError(callSite, attempt + 1, lastError);
         }
         lifecycle.close("retrying");
-        messages = [
-          ...messages,
-          { role: "assistant", content: fullText },
-          { role: "user", content: repairPrompt(profile, fullText, lastError) },
-        ];
+        messages = repairMessages(messages, profile, fullText, lastError, args.opts.inputBudgetTokens);
       }
     }
     throw new StructuredValidationError(callSite, maxRetries + 1, lastError);

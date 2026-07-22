@@ -4,7 +4,7 @@ The request contains only these contracts and typed inputs:
 - domain contract: {{domain_contract}}
 - output schema contract: {{schema_contract}}
 - canonical path contract: {{path_contract}}
-- complete EntityContextBundle values with validated evidence, selected complete WikiSectionUnit values, and ReplaceSectionAuthority metadata: {{entity_context_bundles}}
+- compact EntityContextBundle values with targets, requiredPageSections, validated evidence, optional contextUnits, and ReplaceSectionAuthority metadata: {{entity_context_bundles}}
 - typed page descriptions: {{page_descriptions}}
 - packed tag-registry units: {{tag_registry_units}}
 
@@ -34,6 +34,7 @@ Cover every supplied entity exactly once with one action or one skip. Create a c
 page only for a path that is not an existing page. An existing page may receive only a
 patch or skip. Patch sections must use add, append, or replace. Replace is permitted
 only when the supplied ReplaceSectionAuthority exactly matches path, normalized heading,
-expected section ordinal, expected section hash, and exact section text. Every replace
-section must include expectedSectionOrdinal. Add and append do not require replace
-authority. Preserve server-owned metadata and do not delete sections.
+expected section ordinal, and expected section hash. The server validates exact section
+text internally; do not reproduce or infer it. Every replace section must include
+expectedSectionOrdinal. Add and append do not require replace authority. Preserve
+server-owned metadata and do not delete sections.

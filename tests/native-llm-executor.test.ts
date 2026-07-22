@@ -14,11 +14,13 @@ import {
   lifecycleEvent,
   reduceLlmLifecycle,
 } from "../src/llm-lifecycle";
+import { NATIVE_TRANSPORT_TRACEPARENT } from "../src/types";
 import type {
   LlmLifecycleAction,
   NativeChatCompletionCreate,
   NativeRequestLifecycle,
   NativeRequestRetryContext,
+  NativeTransportTraceSnapshot,
   RunEvent,
 } from "../src/types";
 
@@ -192,6 +194,7 @@ function retryContext(
   const onEvent = overrides.onEvent ?? (() => {});
   return {
     logicalRequestId: "logical-1",
+    traceId: "11111111111111111111111111111111",
     callSite: "query.answer",
     maxRetries: 1,
     connectionTimeoutMs: 15_000,
@@ -242,6 +245,212 @@ function terminalPhases(events: RunEvent[]): string[] {
     .map((event) => event.phase);
 }
 
+function streamTraceSnapshot(
+  terminal: "body_end" | "body_error",
+): NativeTransportTraceSnapshot {
+  const common = {
+    networkTransport: "desktop-direct" as const,
+    endpointPath: "/v1/chat/completions",
+    diagnosticMode: "off" as const,
+  };
+  return {
+    startedAtMs: Date.now() - 5,
+    events: [{ stage: "fetch_start", elapsedMs: 0, ...common }, {
+      stage: "fetch_headers",
+      elapsedMs: 1,
+      status: 200,
+      contentType: "text/event-stream",
+      ...common,
+    }, {
+      stage: "body_start",
+      elapsedMs: 2,
+      bodyBytes: 0,
+      bodyChunks: 0,
+      ...common,
+    }, {
+      stage: terminal,
+      elapsedMs: 3,
+      bodyBytes: 8,
+      bodyChunks: 1,
+      ...(terminal === "body_error" ? { errorClass: "AbortError" } : {}),
+      ...common,
+    }],
+  };
+}
+
+test("non-stream executor flushes the exact attempt trace and appends sdk_complete only after SDK resolve", async () => {
+  const events: RunEvent[] = [];
+  const sdkResult = deferred<NativeResult>();
+  let attemptSignal: AbortSignal | undefined;
+  let consumedSignal: AbortSignal | undefined;
+  const startedAtMs = Date.now() - 10;
+  const operation = executeNativeLlmRequest({
+    create: sequence([async (signal) => {
+      attemptSignal = signal;
+      return sdkResult.promise;
+    }]),
+    params: nonStreamParams,
+    retry: retryContext({
+      maxRetries: 0,
+      onEvent: (event) => events.push(event),
+      lifecycle: lifecycleRecorder((event) => events.push(event)),
+      consumeNativeTransportTrace: (signal: AbortSignal) => {
+        consumedSignal = signal;
+        return {
+          startedAtMs,
+          events: [{
+            stage: "fetch_start",
+            networkTransport: "desktop-direct",
+            endpointPath: "/v1/chat/completions",
+            diagnosticMode: "off",
+            elapsedMs: 0,
+          }, {
+            stage: "fetch_headers",
+            networkTransport: "desktop-direct",
+            endpointPath: "/v1/chat/completions",
+            diagnosticMode: "off",
+            elapsedMs: 1,
+            status: 200,
+            contentType: "application/json",
+            contentLength: 2,
+          }, {
+            stage: "body_start",
+            networkTransport: "desktop-direct",
+            endpointPath: "/v1/chat/completions",
+            diagnosticMode: "off",
+            elapsedMs: 2,
+            bodyBytes: 0,
+            bodyChunks: 0,
+          }, {
+            stage: "body_end",
+            networkTransport: "desktop-direct",
+            endpointPath: "/v1/chat/completions",
+            diagnosticMode: "off",
+            elapsedMs: 3,
+            bodyBytes: 2,
+            bodyChunks: 1,
+          }],
+        };
+      },
+    } as Partial<NativeRequestRetryContext>),
+  });
+
+  await Promise.resolve();
+  assert.ok(attemptSignal);
+  assert.equal(events.some((event) => event.kind === "native_transport_trace"), false);
+
+  sdkResult.resolve(completion("ok"));
+  await operation;
+
+  assert.equal(consumedSignal, attemptSignal);
+  const trace = events.filter((event) => event.kind === "native_transport_trace") as unknown as Array<{
+    stage: string;
+    logicalRequestId: string;
+    lifecycleId: string;
+    attempt: number;
+    transport: string;
+    elapsedMs: number;
+  }>;
+  assert.deepEqual(trace.map((event) => event.stage), [
+    "fetch_start", "fetch_headers", "body_start", "body_end", "sdk_complete",
+  ]);
+  assert.equal(trace.every((event) => event.logicalRequestId === "logical-1"), true);
+  assert.equal(trace.every((event) => event.lifecycleId === "attempt-0"), true);
+  assert.equal(trace.every((event) => event.attempt === 0), true);
+  assert.equal(trace.every((event) => event.transport === "non-stream"), true);
+  assert.ok((trace.at(-1)?.elapsedMs ?? -1) >= 0);
+});
+
+test("sdk_complete clamps one-millisecond clock-origin skew to final transport elapsed", async () => {
+  const events: RunEvent[] = [];
+  const originalDateNow = Date.now;
+  Date.now = () => 10_000;
+  try {
+    await executeNativeLlmRequest({
+      create: sequence([completion("ok")]),
+      params: nonStreamParams,
+      retry: retryContext({
+        maxRetries: 0,
+        onEvent: (event) => events.push(event),
+        lifecycle: lifecycleRecorder((event) => events.push(event)),
+        consumeNativeTransportTrace: () => ({
+          startedAtMs: 9_999,
+          events: [{
+            stage: "fetch_start",
+            networkTransport: "desktop-direct",
+            endpointPath: "/v1/chat/completions",
+            diagnosticMode: "off",
+            elapsedMs: 0,
+          }, {
+            stage: "body_end",
+            networkTransport: "desktop-direct",
+            endpointPath: "/v1/chat/completions",
+            diagnosticMode: "off",
+            elapsedMs: 2,
+            bodyBytes: 0,
+            bodyChunks: 0,
+          }],
+        }),
+      }),
+    });
+  } finally {
+    Date.now = originalDateNow;
+  }
+
+  const trace = events.filter((event) => event.kind === "native_transport_trace");
+  assert.deepEqual(trace.map((event) => [event.stage, event.elapsedMs]), [
+    ["fetch_start", 0],
+    ["body_end", 2],
+    ["sdk_complete", 2],
+  ]);
+});
+
+test("non-stream executor flushes a failed attempt trace without sdk_complete", async () => {
+  const events: RunEvent[] = [];
+  let attemptSignal: AbortSignal | undefined;
+  let consumedSignal: AbortSignal | undefined;
+
+  await assert.rejects(executeNativeLlmRequest({
+    create: sequence([async (signal) => {
+      attemptSignal = signal;
+      throw apiError(400);
+    }]),
+    params: nonStreamParams,
+    retry: retryContext({
+      maxRetries: 0,
+      onEvent: (event) => events.push(event),
+      lifecycle: lifecycleRecorder((event) => events.push(event)),
+      consumeNativeTransportTrace: (signal: AbortSignal) => {
+        consumedSignal = signal;
+        return {
+          startedAtMs: Date.now() - 5,
+          events: [{
+            stage: "fetch_start",
+            networkTransport: "desktop-direct",
+            endpointPath: "/v1/chat/completions",
+            diagnosticMode: "off",
+            elapsedMs: 0,
+          }, {
+            stage: "fetch_error",
+            networkTransport: "desktop-direct",
+            endpointPath: "/v1/chat/completions",
+            diagnosticMode: "off",
+            elapsedMs: 4,
+            errorClass: "TypeError",
+          }],
+        };
+      },
+    } as Partial<NativeRequestRetryContext>),
+  }), APIError);
+
+  assert.equal(consumedSignal, attemptSignal);
+  const stages = events
+    .filter((event) => event.kind === "native_transport_trace")
+    .map((event) => (event as unknown as { stage: string }).stage);
+  assert.deepEqual(stages, ["fetch_start", "fetch_error"]);
+  assert.equal(stages.includes("sdk_complete"), false);
+});
+
 test("non-stream retries 502 and returns the one raw completion with identical params", async () => {
   const expected = completion("ok");
   const seenParams: object[] = [];
@@ -262,6 +471,32 @@ test("non-stream retries 502 and returns the one raw completion with identical p
   assert.equal(seenParams[0], nonStreamParams);
   assert.equal(seenParams[1], nonStreamParams);
   assert.equal(delays.length, 1);
+});
+
+test("non-stream retries keep one trace id and create a fresh attempt span", async () => {
+  const traceparents: string[] = [];
+  let attempts = 0;
+  await executeNativeLlmRequest({
+    create: (async (_params: object, options: { fetchOptions?: Record<symbol, string> }) => {
+      attempts += 1;
+      const traceparent = options.fetchOptions?.[NATIVE_TRANSPORT_TRACEPARENT];
+      if (traceparent) traceparents.push(traceparent);
+      if (attempts === 1) throw apiError(502);
+      return completion("ok");
+    }) as NativeChatCompletionCreate,
+    params: nonStreamParams,
+    retry: retryContext({ maxRetries: 1 }),
+  });
+
+  assert.equal(traceparents.length, 2);
+  const parsed = traceparents.map((traceparent) => {
+    const match = /^00-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$/.exec(traceparent);
+    assert.ok(match);
+    return { traceId: match[1], spanId: match[2] };
+  });
+  assert.equal(parsed[0]?.traceId, "11111111111111111111111111111111");
+  assert.equal(parsed[1]?.traceId, "11111111111111111111111111111111");
+  assert.notEqual(parsed[0]?.spanId, parsed[1]?.spanId);
 });
 
 test("non-stream exhaustion throws the final error after maxRetries plus one attempts", async () => {
@@ -396,6 +631,125 @@ test("stream retries connection failure before the first chunk and exposes one i
 
   assert.equal(values[0]?.choices[0]?.delta.content, "ok");
   assert.equal(events.filter((event) => event.kind === "transport_retry_recovered").length, 1);
+});
+
+test("successful stream trace appends sdk_complete after body_end", async () => {
+  const events: RunEvent[] = [];
+  let consumed = false;
+  await consume(executeNativeLlmRequest({
+    create: sequence([streamOf(chunk({ content: "ok" }))]),
+    params: streamParams,
+    retry: retryContext({
+      maxRetries: 0,
+      onEvent: (event) => events.push(event),
+      lifecycle: lifecycleRecorder((event) => events.push(event)),
+      consumeNativeTransportTrace: () => {
+        if (consumed) return undefined;
+        consumed = true;
+        return streamTraceSnapshot("body_end");
+      },
+    }),
+  }));
+
+  const stages = events
+    .filter((event) => event.kind === "native_transport_trace")
+    .map((event) => event.stage);
+  assert.deepEqual(stages.slice(-2), ["body_end", "sdk_complete"]);
+});
+
+test("failed stream trace leaves body_error terminal and omits sdk_complete", async () => {
+  const failure = new APIConnectionError({ message: "stream disconnected" });
+  const events: RunEvent[] = [];
+  let consumed = false;
+  await assert.rejects(consume(executeNativeLlmRequest({
+    create: sequence([failingStream([], failure)]),
+    params: streamParams,
+    retry: retryContext({
+      maxRetries: 0,
+      onEvent: (event) => events.push(event),
+      lifecycle: lifecycleRecorder((event) => events.push(event)),
+      consumeNativeTransportTrace: () => {
+        if (consumed) return undefined;
+        consumed = true;
+        return streamTraceSnapshot("body_error");
+      },
+    }),
+  })), (error) => error === failure);
+
+  const stages = events
+    .filter((event) => event.kind === "native_transport_trace")
+    .map((event) => event.stage);
+  assert.equal(stages.at(-1), "body_error");
+  assert.equal(stages.includes("sdk_complete"), false);
+});
+
+test("cancelled stream trace leaves body_error terminal and omits sdk_complete", async () => {
+  const events: RunEvent[] = [];
+  let consumed = false;
+  const result = await executeNativeLlmRequest({
+    create: sequence([streamOf(chunk({ content: "partial" }))]),
+    params: streamParams,
+    retry: retryContext({
+      maxRetries: 0,
+      onEvent: (event) => events.push(event),
+      lifecycle: lifecycleRecorder((event) => events.push(event)),
+      consumeNativeTransportTrace: () => {
+        if (consumed) return undefined;
+        consumed = true;
+        return streamTraceSnapshot("body_error");
+      },
+    }),
+  });
+  const iterator = (result as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>)[Symbol.asyncIterator]();
+  assert.equal((await iterator.next()).done, false);
+  await iterator.return?.();
+
+  const stages = events
+    .filter((event) => event.kind === "native_transport_trace")
+    .map((event) => event.stage);
+  assert.equal(stages.at(-1), "body_error");
+  assert.equal(stages.includes("sdk_complete"), false);
+});
+
+test("stream retry cleanup trace keeps the old attempt and lifecycle attribution", async () => {
+  const events: RunEvent[] = [];
+  const seenSignals: AbortSignal[] = [];
+  let oldConsumed = false;
+  let replacementConsumed = false;
+  const values = await consume(executeNativeLlmRequest({
+    create: sequence([
+      failingStream([], new APIConnectionError({ message: "stream disconnected" })),
+      streamOf(chunk({ content: "ok" })),
+    ], [], seenSignals),
+    params: streamParams,
+    retry: retryContext({
+      maxRetries: 1,
+      onEvent: (event) => events.push(event),
+      lifecycle: lifecycleRecorder((event) => events.push(event)),
+      consumeNativeTransportTrace: (signal) => {
+        const signalAttempt = seenSignals.indexOf(signal);
+        if (signalAttempt === 0) {
+          if (!signal.aborted || oldConsumed) return undefined;
+          oldConsumed = true;
+          return streamTraceSnapshot("body_error");
+        }
+        if (signalAttempt === 1 && !replacementConsumed) {
+          replacementConsumed = true;
+          return streamTraceSnapshot("body_end");
+        }
+        return undefined;
+      },
+    }),
+  }));
+
+  assert.equal(values[0]?.choices[0]?.delta.content, "ok");
+  const trace = events.filter((event) => event.kind === "native_transport_trace");
+  const oldTerminal = trace.find((event) => event.stage === "body_error");
+  const replacementTerminal = trace.find((event) => event.stage === "body_end");
+  assert.equal(oldTerminal?.attempt, 0);
+  assert.equal(oldTerminal?.lifecycleId, "attempt-0");
+  assert.equal(replacementTerminal?.attempt, 1);
+  assert.equal(replacementTerminal?.lifecycleId, "attempt-0:retry-1");
 });
 
 test("role, usage, whitespace, and empty chunks do not block a pre-output stream retry", async () => {
@@ -551,6 +905,8 @@ test("retry telemetry keeps one logical ID, fresh lifecycle IDs, and provider re
   assert.equal(retryEvents[1]?.lifecycleId, "attempt-0:retry-1");
   assert.equal(retryEvents[0]?.providerRequestId, "provider-502");
   assert.equal(retryEvents[1]?.providerRequestId, "provider-502");
+  assert.match(retryEvents[0]?.traceparent ?? "", /^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/);
+  assert.equal(retryEvents[1]?.traceparent, retryEvents[0]?.traceparent);
   assert.equal(retryEvents[0]?.delayMs, 25);
   assert.equal(retryEvents[0]?.delaySource, "retry-after-ms");
   assert.equal("source" in retryEvents[0], false);

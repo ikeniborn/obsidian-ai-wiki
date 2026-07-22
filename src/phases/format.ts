@@ -1,7 +1,6 @@
 import type OpenAI from "openai";
 import type {
   ChatMessage,
-  CompressionProfile,
   LlmCallOptions,
   LlmClient,
   RunEvent,
@@ -183,7 +182,6 @@ export async function* runFormat(
     model: string;
     language?: "auto" | "ru" | "en" | "es";
     imageOnly?: boolean;
-    compressionProfile?: CompressionProfile;
   } = { enabled: false, model: "" },
   visionTempStore?: VisionTempStore,
   progress: FormatProgress = enFormatProgressFallback,
@@ -250,10 +248,6 @@ export async function* runFormat(
             {
               inputBudgetTokens: opts.inputBudgetTokens,
               maxTokens: opts.maxTokens,
-              compressionProfile:
-                visionSettings.compressionProfile
-                ?? opts.semanticCompression?.profile
-                ?? "balanced",
               onEvent: (event) => visionEvents.push(event),
             },
           );
@@ -349,7 +343,6 @@ export async function* runFormat(
     ...opts,
     jsonMode: false,
     jsonSchema: undefined,
-    semanticCompression: undefined,
   };
 
   yield { kind: "assistant_text", delta: progress.analysing(filePath) };
@@ -381,7 +374,6 @@ export async function* runFormat(
     ),
     actualInputTokens,
     outputBudget: opts.maxTokens,
-    compressionProfile: "balanced",
     contextUnits: context.contextUnits,
     sourceChunks: context.sourceChunks,
     reductionDepth: context.reductionDepth,

@@ -402,6 +402,36 @@ test("context recovery rebuilds twice at most and emits one event per attempt", 
   assert.equal(events[2].actualInputTokens, 321);
 });
 
+test("local preflight budget errors are not retried with a smaller effective budget", async () => {
+  const budgets: number[] = [];
+  let attempts = 0;
+  const preflightError = new PromptBudgetExceededError(1_000, 1_200, ["required"]);
+
+  await assert.rejects(runWithContextRepack({
+    callSite: "ingest.synthesize",
+    configuredInputBudget: 1_000,
+    outputBudget: 256,
+    compressionProfile: "balanced",
+    build: (effectiveInputBudget) => {
+      budgets.push(effectiveInputBudget);
+      return {
+        value: effectiveInputBudget,
+        estimatedInputTokens: 1_200,
+        contextUnits: 1,
+      };
+    },
+    execute: async () => {
+      attempts += 1;
+      throw preflightError;
+    },
+    requestId: () => `request-${attempts}`,
+    onEvent: () => {},
+  }), preflightError);
+
+  assert.deepEqual(budgets, [1_000]);
+  assert.equal(attempts, 1);
+});
+
 test("event callback failure is delivered once and is not treated as execution failure", async () => {
   const callbackError = new Error("event sink failed");
   let deliveries = 0;

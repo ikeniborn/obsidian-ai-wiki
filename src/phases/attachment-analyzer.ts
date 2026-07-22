@@ -1,6 +1,5 @@
 import type { VaultTools } from "../vault-tools";
 import type {
-  CompressionProfile,
   LlmClient,
   OutputLanguage,
   RunEvent,
@@ -114,7 +113,6 @@ export function isVisionSupportedOnMobile(path: string): boolean {
 export interface VisionAnalysisOptions {
   inputBudgetTokens?: number;
   maxTokens?: number;
-  compressionProfile?: CompressionProfile;
   onEvent?: (event: RunEvent) => void;
   nativeRequestRetries?: number;
   nativeRequestIdleTimeoutMs?: number;
@@ -123,7 +121,6 @@ export interface VisionAnalysisOptions {
 interface ResolvedVisionAnalysisOptions {
   inputBudgetTokens: number;
   maxTokens?: number;
-  compressionProfile: CompressionProfile;
   onEvent?: (event: RunEvent) => void;
   nativeRequestRetries?: number;
   nativeRequestIdleTimeoutMs?: number;
@@ -135,7 +132,6 @@ function resolveVisionOptions(
   return {
     inputBudgetTokens: options?.inputBudgetTokens ?? 16_384,
     maxTokens: options?.maxTokens,
-    compressionProfile: options?.compressionProfile ?? "balanced",
     onEvent: options?.onEvent,
     nativeRequestRetries: options?.nativeRequestRetries,
     nativeRequestIdleTimeoutMs: options?.nativeRequestIdleTimeoutMs,
@@ -198,10 +194,6 @@ function visionCallOptions(
     reasoningLanguage,
     nativeRequestRetries: options.nativeRequestRetries,
     nativeRequestIdleTimeoutMs: options.nativeRequestIdleTimeoutMs,
-    semanticCompression: {
-      profile: options.compressionProfile,
-      operation: "vision" as const,
-    },
     jsonMode: "json_schema" as const,
     jsonSchema: {
       name: "vision_analysis",
@@ -296,7 +288,6 @@ async function callVisionLlm(
         effectiveInputBudget,
         estimatedInputTokens,
         outputBudget: options.maxTokens,
-        compressionProfile: options.compressionProfile,
         contextUnits: pages.length,
         retryReason: classifyContextError(error) === null
           ? undefined
@@ -314,7 +305,6 @@ async function callVisionLlm(
     estimatedInputTokens,
     actualInputTokens: response.usage?.prompt_tokens,
     outputBudget: options.maxTokens,
-    compressionProfile: options.compressionProfile,
     contextUnits: pages.length,
   }));
   if (signal.aborted) {
@@ -378,7 +368,7 @@ export async function analyzeImage(
     reasoningLanguage,
     resolved,
   );
-  return mergeRecognitionRecords(records, resolved.compressionProfile);
+  return mergeRecognitionRecords(records);
 }
 
 interface PdfjsPage {
@@ -597,7 +587,7 @@ export async function analyzePdf(
     records,
     pages.map((page) => page.pageId),
   );
-  return mergeRecognitionRecords(complete, resolved.compressionProfile);
+  return mergeRecognitionRecords(complete);
 }
 
 export async function analyzeExcalidraw(
@@ -620,7 +610,7 @@ export async function analyzeExcalidraw(
     reasoningLanguage,
     resolved,
   );
-  return mergeRecognitionRecords(records, resolved.compressionProfile);
+  return mergeRecognitionRecords(records);
 }
 
 /** Route a single embed path to the right analyzer. Returns description or null for unknown ext. */

@@ -821,6 +821,40 @@ test("schema retry recovery emits succeeded structural_error event", async () =>
   );
 });
 
+test("schema repair retry stays within input budget by compacting previous invalid output", async () => {
+  const events: RunEvent[] = [];
+  const seenParams: Record<string, unknown>[] = [];
+  const largeInvalid = JSON.stringify({ value: 42, noise: "x".repeat(3_000) });
+
+  const result = await runStructuredWithRetry({
+    llm: llmFromAttempts([largeInvalid, '{"value":"recovered"}'], seenParams),
+    model: "m",
+    baseMessages: [{ role: "user", content: "x".repeat(650) }],
+    opts: { inputBudgetTokens: 3_000 },
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 1,
+    callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
+    signal: new AbortController().signal,
+    onEvent: (ev) => events.push(ev),
+  });
+
+  assert.equal(result.value.value, "recovered");
+  assert.equal(seenParams.length, 2);
+  const retryMessages = seenParams[1].messages as OpenAI.Chat.ChatCompletionMessageParam[];
+  const retryText = JSON.stringify(retryMessages);
+  assert.equal(retryText.includes("x".repeat(3_000)), false);
+  assert.match(retryText, /Previous response was too large to include/);
+  assert.equal(
+    events.some((ev) =>
+      ev.kind === "structural_error"
+      && ev.errorType === "schema_validate"
+      && ev.retryAttempt === 1
+      && ev.succeeded === true),
+    true,
+  );
+});
+
 test("json-zod repair instruction is profile-local and absent by default", async () => {
   const defaultRequests: Record<string, unknown>[] = [];
   await runStructuredWithRetry({

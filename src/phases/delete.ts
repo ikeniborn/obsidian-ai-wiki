@@ -747,11 +747,21 @@ export async function* runDelete(
   }
 
   const plan = computeDeletionPlan(sourcePath, pages, sourceStemToPath);
+  const targetTokens = new Set([sourcePath, targetStem]);
+  const sourcePathSet = new Set(sourceImages.keys());
   for (const [pagePath, content] of pages) {
     const resources = parseResourceFromFm(content);
-    if (!resources.includes(targetStem) || resources.length < 2) continue;
+    if (!resources.some((resource) => targetTokens.has(resource)) || resources.length < 2) continue;
     for (const resource of resources) {
-      if (resource === targetStem) continue;
+      if (targetTokens.has(resource)) continue;
+      if (resource.includes("/") || resource.endsWith(".md")) {
+        if (!sourcePathSet.has(resource)) {
+          throw new Error(
+            `delete: resource ${resource} on ${pagePath} must resolve uniquely; found 0`,
+          );
+        }
+        continue;
+      }
       const matches = [...new Set(sourceCandidates.get(resource) ?? [])];
       if (matches.length !== 1) {
         throw new Error(

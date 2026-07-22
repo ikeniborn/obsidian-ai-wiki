@@ -74,6 +74,7 @@ import { GENERIC_WIKI_STEM_REGEX, buildWikiStem, stemRegex } from "../wiki-stem"
 import { ensureDomainConfig } from "../domain-config";
 import { i18nFor, resolveLang } from "../i18n";
 import { promptVersionOf } from "../prompt-version";
+import { sourceStem } from "../source-deletion";
 import ingestTemplate from "../../prompts/ingest.md";
 import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
@@ -217,18 +218,18 @@ function processPageContent(
   path: string,
   domain: DomainEntry,
   domainRoot: string,
-  sourceStem: string,
+  sourcePath: string,
   additionalResources: readonly string[] = [],
 ): { content: string; warnings: string[]; tags: string[] } {
   const repaired = validateAndRepairWikiPageFrontmatter(content);
   const entityTagged = ensureEntityTypeTag(repaired.content, path, domain);
   const typed = ensureType(entityTagged.content, entityTypeFromPath(domainRoot, path));
   const described = ensureDescription(typed, annotation);
-  const sourced = ensureResource(described, sourceStem);
+  const sourced = ensureResource(described, sourcePath);
   const withSources = reconcilePageProvenance(
     sourced.content,
     null,
-    sourceStem,
+    sourcePath,
     additionalResources,
   );
   return {
@@ -236,7 +237,7 @@ function processPageContent(
     warnings: [
       ...repaired.warnings,
       ...(entityTagged.added && entityTagged.tag ? [`tags: + ${entityTagged.tag}`] : []),
-      ...(sourced.injected ? [`resource: + [[${sourceStem}]]`] : []),
+      ...(sourced.injected ? [`resource: + ${sourcePath}`] : []),
     ],
     tags: parseTagsFromFm(withSources),
   };
@@ -280,15 +281,25 @@ function regenerateSourcesSection(content: string, resources: readonly string[])
 function reconcilePageProvenance(
   content: string,
   existing: string | null,
-  sourceStem: string,
+  sourcePath: string,
   additionalResources: readonly string[] = [],
 ): string {
+  const currentStem = sourceStem(sourcePath);
+  const currentPathWithoutExtension = sourcePath.replace(/\.md$/i, "");
+  const canonicalResource = (value: string): string => {
+    const trimmed = value.trim();
+    if (trimmed === currentStem
+      || trimmed === `${currentStem}.md`
+      || trimmed === currentPathWithoutExtension
+      || trimmed === sourcePath) return sourcePath;
+    return trimmed;
+  };
   const resources = [...new Set([
     ...parseResourceFromFm(existing ?? ""),
     ...parseResourceFromFm(content),
     ...additionalResources,
-    sourceStem,
-  ].map((value) => value.trim()).filter(Boolean))].sort(compareCodePoints);
+    sourcePath,
+  ].map(canonicalResource).filter(Boolean))].sort(compareCodePoints);
   return regenerateSourcesSection(setPageResources(content, resources), resources);
 }
 
@@ -637,6 +648,19 @@ export async function* runIngest(
   const registryText = renderTagRegistryBlock(registry, entityTypeNames, maxTagCategories);
   const allowedSubfolders = [...new Set((domain.entity_types ?? []).map(effectiveSubfolder))];
   const pathPolicy: SynthesisPathPolicy = { domainRoot, allowedSubfolders };
+  const createPathsByEntityKey = new Map<string, string>();
+  for (const entity of evidence) {
+    const entityType = domain.entity_types?.find((candidate) => candidate.type === entity.entityType);
+    if (!entityType) continue;
+    try {
+      createPathsByEntityKey.set(
+        entity.entityKey,
+        `${domainRoot}/${effectiveSubfolder(entityType)}/${buildWikiStem(domain.id, entity.entityKey)}.md`,
+      );
+    } catch {
+      // Evidence validation reports invalid entity keys before synthesis.
+    }
+  }
   const domainContract = [
     `Domain: ${domain.id} (${domain.name})`,
     buildEntityTypesBlock(domain, domainRoot) || "No entity types configured.",
@@ -713,6 +737,7 @@ export async function* runIngest(
           existingPaths: existingPathSet,
           existingPageHashes,
           existingPageDescriptions: typedDescriptions(domain.id, pageRecords),
+          createPathsByEntityKey,
           tagRegistryUnits: tagRegistryUnits(registryText),
           pathPolicy,
           domainContract,
@@ -1028,7 +1053,7 @@ export async function* runIngest(
       effectiveAction.path,
       domain,
       domainRoot,
-      sourceStem,
+      sourcePath,
       actionDuplicateResources,
     );
     if (processed.warnings.length > 0) {
@@ -1229,13 +1254,17 @@ export async function* runIngest(
     return failure("index", message, sourcePath);
   }
 
+  const sourceResourceTokens = new Set([sourcePath, sourceStem]);
+  const hasCurrentSourceResource = (content: string): boolean =>
+    parseResourceFromFm(content).some((resource) => sourceResourceTokens.has(resource));
+
   const successfulPaths = [...new Set([
     ...created,
     ...updated,
     ...[...finalPages]
       .filter(([path, content]) =>
         validateArticlePath(path, domainRoot)
-        && parseResourceFromFm(content).includes(sourceStem))
+        && hasCurrentSourceResource(content))
       .map(([path]) => path),
   ])].sort(compareCodePoints);
 
@@ -1284,7 +1313,7 @@ export async function* runIngest(
   const associatedPaths = [...backlinkPages]
       .filter(([path, content]) =>
         validateArticlePath(path, domainRoot)
-        && parseResourceFromFm(content).includes(sourceStem))
+        && hasCurrentSourceResource(content))
       .map(([path]) => path)
       .sort(compareCodePoints);
   try {
