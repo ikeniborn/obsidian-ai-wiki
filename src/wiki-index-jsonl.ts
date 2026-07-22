@@ -1,4 +1,4 @@
-import { parseJsonl, stringifyJsonl } from "./jsonl";
+import { JsonlParseError, parseJsonl, stringifyJsonl } from "./jsonl";
 
 export interface PageIndexRecord {
   kind: "page";
@@ -50,16 +50,62 @@ export interface NumberVectorCache {
   entries: Record<string, { chunks: ChunkRecordInput[] }>;
 }
 
-export function isPageIndexRecord(record: WikiIndexRecord): record is PageIndexRecord {
-  return record.kind === "page";
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
 }
 
-export function isChunkIndexRecord(record: WikiIndexRecord): record is ChunkIndexRecord {
-  return record.kind === "chunk";
+export function isPageIndexRecord(record: unknown): record is PageIndexRecord {
+  if (record === null || typeof record !== "object" || Array.isArray(record)) return false;
+  const value = record as Record<string, unknown>;
+  return value.kind === "page" &&
+    value.schemaVersion === 1 &&
+    typeof value.articleId === "string" &&
+    typeof value.path === "string" &&
+    typeof value.type === "string" &&
+    typeof value.description === "string" &&
+    isStringArray(value.resource) &&
+    (value.timestamp === undefined || typeof value.timestamp === "string") &&
+    (value.tags === undefined || isStringArray(value.tags)) &&
+    typeof value.bodyHash === "string" &&
+    typeof value.descriptionHash === "string";
+}
+
+export function isChunkIndexRecord(record: unknown): record is ChunkIndexRecord {
+  if (record === null || typeof record !== "object" || Array.isArray(record)) return false;
+  const value = record as Record<string, unknown>;
+  return value.kind === "chunk" &&
+    value.schemaVersion === 1 &&
+    typeof value.articleId === "string" &&
+    typeof value.path === "string" &&
+    typeof value.heading === "string" &&
+    Number.isInteger(value.ordinal) && Number(value.ordinal) >= 0 &&
+    typeof value.bodyHash === "string" &&
+    typeof value.embedTextHash === "string" &&
+    Array.isArray(value.vector) && value.vector.every((entry) => typeof entry === "number" && Number.isFinite(entry)) &&
+    typeof value.vectorModel === "string" &&
+    Number.isInteger(value.dimensions) && Number(value.dimensions) >= 0 &&
+    value.vector.length === value.dimensions &&
+    typeof value.updatedAt === "string";
 }
 
 export function parseWikiIndexJsonl(text: string, path: string): WikiIndexRecord[] {
-  return parseJsonl<WikiIndexRecord>(text, path);
+  const records = parseJsonl<WikiIndexRecord>(text, path);
+  let recordIndex = 0;
+  const lines = text.split(/\r?\n/);
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    if (!lines[lineIndex].trim()) continue;
+    const record = records[recordIndex++];
+    if (record === null || typeof record !== "object" || Array.isArray(record)) continue;
+    const value = record as Record<string, unknown>;
+    if (value.schemaVersion !== 1) continue;
+    if (value.kind === "page" && !isPageIndexRecord(record)) {
+      throw new JsonlParseError(path, lineIndex + 1, new Error("Invalid current page record"));
+    }
+    if (value.kind === "chunk" && !isChunkIndexRecord(record)) {
+      throw new JsonlParseError(path, lineIndex + 1, new Error("Invalid current chunk record"));
+    }
+  }
+  return records;
 }
 
 export function stringifyWikiIndexJsonl(records: WikiIndexRecord[]): string {
@@ -126,4 +172,44 @@ export function collectPageDescriptions(records: WikiIndexRecord[]): Map<string,
     if (isPageIndexRecord(record)) descriptions.set(record.articleId, record.description);
   }
   return descriptions;
+}
+
+export function upsertPageRecord(
+  records: WikiIndexRecord[],
+  incoming: PageIndexRecord,
+): WikiIndexRecord[] {
+  let replaced = false;
+  const next: WikiIndexRecord[] = [];
+  for (const record of records) {
+    if (isPageIndexRecord(record) && record.articleId === incoming.articleId) {
+      if (!replaced) {
+        next.push(incoming);
+        replaced = true;
+      }
+      continue;
+    }
+    next.push(record);
+  }
+  if (!replaced) next.push(incoming);
+  return next;
+}
+
+export function removePageRecord(records: WikiIndexRecord[], articleId: string): WikiIndexRecord[] {
+  return records.filter((record) => !(isPageIndexRecord(record) && record.articleId === articleId));
+}
+
+export function removeArticleRecords(records: WikiIndexRecord[], articleId: string): WikiIndexRecord[] {
+  return records.filter((record) => {
+    if (isPageIndexRecord(record) || isChunkIndexRecord(record)) return record.articleId !== articleId;
+    return true;
+  });
+}
+
+export function reconcilePageRecords(
+  records: WikiIndexRecord[],
+  pages: PageIndexRecord[],
+): WikiIndexRecord[] {
+  const nonPages = records.filter((record) => !isPageIndexRecord(record));
+  return [...nonPages, ...[...pages].sort((a, b) =>
+    a.articleId < b.articleId ? -1 : a.articleId > b.articleId ? 1 : 0)];
 }

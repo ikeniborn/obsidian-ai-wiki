@@ -3,21 +3,24 @@ import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { parseWithRetry } from "./parse-with-retry";
+import { createLlmLifecycle } from "./structured-output";
+import { lifecycleEvent } from "../llm-lifecycle";
 import { SeedsSchema } from "./zod-schemas";
 import queryTemplate from "../../prompts/query.md";
 import querySeedsTemplate from "../../prompts/query-seeds.md";
 import { render } from "./template";
-import { domainWikiFolder, domainIndexPath, isWikiPagePath } from "../wiki-path";
+import { domainWikiFolder, isWikiPagePath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
 import { pageId, bfsExpandRanked } from "../wiki-graph";
 import { fuseVectorGraph } from "../fusion";
 import { graphCache } from "../wiki-graph-cache";
 import { selectSeeds } from "../wiki-seeds";
 import { collectDescriptions } from "../wiki-index";
-import { PageSimilarityService, renderContextChunks, type SelectedChunk } from "../page-similarity";
+import { PageSimilarityService, type SelectedChunk } from "../page-similarity";
 import { seedPassesGate } from "../retrieval-diag";
 import type { RetrievalMode, SeedFallbackReason } from "../retrieval-diag";
 import { promptVersionOf } from "../prompt-version";
+import { runWithLiveEvents } from "./llm-utils";
 import {
   DEFAULT_BOILERPLATE_DEMOTION_FACTOR,
   demoteBoilerplateRankedIds,
@@ -57,8 +60,7 @@ export interface DomainCandidates {
   seedScores: Record<string, number>;
   expandedScores: Record<string, number>;
   graph: Map<string, Set<string>>;
-  annotations: Map<string, string>;  // index annotations of candidates
-  indexContent: string;              // raw _index.md content
+  annotations: Map<string, string>;  // structured page descriptions of candidates
   retrievalMode: RetrievalMode;
   denseMax: number;
   seedFallback: "none" | "jaccard" | "llm";
@@ -68,7 +70,7 @@ export interface DomainCandidates {
 }
 
 /**
- * Read index → glob → read pages → select seeds (vector gate → jaccard → optional llm)
+ * Read pages → select seeds (vector gate → jaccard → optional llm)
  * → build graph → BFS-rank. Pages are read before seed selection because seeds now score
  * against each page's frontmatter `description` (collected from the page bodies), not the
  * `_index.md` annotation line. Yields the existing progress events; returns the candidate
@@ -92,14 +94,11 @@ export async function* retrieveDomainCandidates(
   }
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
 
-  yield { kind: "tool_use", name: "Read", input: { path: domainIndexPath(wikiVaultPath) } };
   await ensureDomainConfig(vaultTools, wikiVaultPath);
-  const indexContent = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
   if (signal.aborted) return null;
-  yield { kind: "tool_result", ok: true, preview: indexContent ? "read" : "empty" };
 
   // The retrieval overview map now comes from each page's frontmatter `description`
-  // (collectDescriptions), not the cheap _index.md text — so the full page set has to
+  // (collectDescriptions), not serialized index records — so the full page set has to
   // be read before seeds can be scored. This gives up the previous "skip the read when
   // a domain has no seeds" fast path in exchange for a single source of truth for the
   // overview text (docs/superpowers/plans/2026-07-09-okf-integration-plan.md Task 5b).
@@ -166,10 +165,40 @@ export async function* retrieveDomainCandidates(
     const allAnnotatedIds = [...indexAnnotations.keys()];
     yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allAnnotatedIds.length } };
     const seedOpts = { ...llmSeedFallback.opts, thinkingBudgetTokens: undefined };
-    const seedRes = await llmSelectSeeds(question, indexAnnotations, allAnnotatedIds, llmSeedFallback.llm, llmSeedFallback.model, seedOpts, signal);
+    const seedRes = yield* runWithLiveEvents((emit, operationSignal) =>
+      llmSelectSeeds(
+        question,
+        indexAnnotations,
+        allAnnotatedIds,
+        llmSeedFallback.llm,
+        llmSeedFallback.model,
+        seedOpts,
+        operationSignal,
+        emit,
+      ), signal);
+    if (signal.aborted) {
+      if (seedRes.lifecycle) {
+        yield lifecycleEvent(seedRes.lifecycle.id, seedRes.lifecycle.action, "cancelled");
+      }
+      return null;
+    }
+    signal.throwIfAborted();
     seeds = seedRes.seeds;
     seedOutputTokens += seedRes.outputTokens;
+    if (seedRes.lifecycle) {
+      signal.throwIfAborted();
+      yield lifecycleEvent(seedRes.lifecycle.id, seedRes.lifecycle.action, "applying");
+    }
+    if (signal.aborted) {
+      if (seedRes.lifecycle) {
+        yield lifecycleEvent(seedRes.lifecycle.id, seedRes.lifecycle.action, "cancelled");
+      }
+      return null;
+    }
     yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
+    if (seedRes.lifecycle) {
+      yield lifecycleEvent(seedRes.lifecycle.id, seedRes.lifecycle.action, "completed");
+    }
   }
   if (signal.aborted) return null;
 
@@ -240,7 +269,7 @@ export async function* retrieveDomainCandidates(
 
   return {
     domainId: domain.id, pages: candidatePages, seeds, candidateIds: selectedIds,
-    seedScores, expandedScores, graph: graphResult.graph, annotations, indexContent,
+    seedScores, expandedScores, graph: graphResult.graph, annotations,
     retrievalMode, denseMax, seedFallback, seedFallbackReason, seedOutputTokens,
     pagesScanned: files.length,
   };
@@ -339,35 +368,44 @@ export async function* runQuery(
   if (signal.aborted) return;
 
   const contextChunks = reranked.chunks.slice(0, contextLimit);
-  const contextBlock = renderContextChunks(contextChunks);
-  const finalSelectedIds = new Set(contextChunks.map((chunk) => chunk.articleId));
-  const selectedIndexLines = [...finalSelectedIds]
-    .map((id) => {
-      const annotation = cand.annotations.get(id);
-      return annotation ? `${id}: ${annotation}` : undefined;
-    })
-    .filter((line): line is string => line !== undefined);
-  const indexBlock = selectedIndexLines.length > 0
-    ? `\nWiki index (selected candidates):\n${selectedIndexLines.join("\n")}`
-    : "";
-
   const entityTypesBlock = buildEntityTypesBlock(domain);
+  const systemPrompt = (packedChunks: readonly SelectedChunk[]): string => {
+    const packedIds = new Set(packedChunks.map((chunk) => chunk.articleId));
+    const selectedIndexLines = [...packedIds]
+      .map((id) => {
+        const annotation = cand.annotations.get(id);
+        return annotation ? `${id}: ${annotation}` : undefined;
+      })
+      .filter((line): line is string => line !== undefined);
+    const indexBlock = selectedIndexLines.length > 0
+      ? `\nWiki index (selected candidates):\n${selectedIndexLines.join("\n")}`
+      : "";
+    const wikiFirst = [...packedIds].sort((a, b) =>
+      Number(b.startsWith("wiki_")) - Number(a.startsWith("wiki_")));
+    const availableLinksBlock = wikiFirst.length === 0 ? "" : [
+      "Valid WikiLink targets (use EXACTLY these, copy verbatim):",
+      ...wikiFirst.map((id) => `- ${id}`),
+      "ONLY link to a target from this list. Never invent or abbreviate stems.",
+    ].join("\n");
+    return render(queryTemplate, {
+      domain_name: domain.name,
+      available_links_block: availableLinksBlock,
+      entity_types_block: entityTypesBlock,
+      index_block: indexBlock,
+    });
+  };
 
-  const wikiFirst = [...finalSelectedIds].sort((a, b) =>
-    Number(b.startsWith("wiki_")) - Number(a.startsWith("wiki_")));
-  const availableLinksBlock = wikiFirst.length === 0 ? "" : [
-    "Valid WikiLink targets (use EXACTLY these, copy verbatim):",
-    ...wikiFirst.map((s) => `- ${s}`),
-    "ONLY link to a target from this list. Never invent or abbreviate stems.",
-  ].join("\n");
-
-  const systemPrompt = render(queryTemplate, {
-    domain_name: domain.name,
-    available_links_block: availableLinksBlock,
-    entity_types_block: entityTypesBlock,
-    index_block: indexBlock,
+  const ans = yield* answerFromContext({
+    llm, model, opts, signal,
+    systemPrompt, question, chunks: contextChunks,
+    wikiLinkValidationRetries,
+    deferLlmCallStats: true,
   });
-
+  if (signal.aborted) return;          // restore prior behavior: no eval_meta/result on abort
+  let answer = ans.answer;
+  outputTokens += ans.outputTokens;
+  const finalContextChunks = ans.selectedChunks;
+  const finalSelectedIds = new Set(finalContextChunks.map((chunk) => chunk.articleId));
   const seedCount = [...finalSelectedIds].filter((id) => seedSet.has(id)).length;
   const graphCount = finalSelectedIds.size - seedCount;
   const rerankerDiagnostics = {
@@ -385,7 +423,7 @@ export async function* runQuery(
     pagesScanned: cand.pagesScanned,
     pagesSelected: finalSelectedIds.size,
     candidatePages: selectedIds.size,
-    chunksSelected: contextChunks.length,
+    chunksSelected: finalContextChunks.length,
     seedCount,
     graphCount,
     rerankerEnabled: rerankerRuntime.config.enabled,
@@ -394,16 +432,7 @@ export async function* runQuery(
     chunkDupsDropped,
     reranker: rerankerDiagnostics,
   };
-  if (signal.aborted) return;
-
-  const ans = yield* answerFromContext({
-    llm, model, opts, signal,
-    systemPrompt, question, contextBlock, selectedIds: finalSelectedIds,
-    wikiLinkValidationRetries,
-  });
-  if (signal.aborted) return;          // restore prior behavior: no eval_meta/result on abort
-  let answer = ans.answer;
-  outputTokens += ans.outputTokens;
+  if (ans.llmCallStats) yield ans.llmCallStats;
 
   yield {
     kind: "eval_meta",
@@ -411,7 +440,7 @@ export async function* runQuery(
       question,
       answer,
       found_pages: [...finalSelectedIds],
-      found_chunks: contextChunks.map((chunk) => ({
+      found_chunks: finalContextChunks.map((chunk) => ({
         articleId: chunk.articleId,
         heading: chunk.heading,
         score: chunk.score,
@@ -465,10 +494,6 @@ export async function* runQuery(
   }
 }
 
-async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
-  try { return await vaultTools.read(path); } catch { return ""; }
-}
-
 async function llmSelectSeeds(
   question: string,
   indexAnnotations: Map<string, string>,
@@ -477,7 +502,12 @@ async function llmSelectSeeds(
   model: string,
   opts: LlmCallOptions,
   signal: AbortSignal,
-): Promise<{ seeds: string[]; outputTokens: number }> {
+  onEvent: (event: RunEvent) => void,
+): Promise<{
+  seeds: string[];
+  outputTokens: number;
+  lifecycle?: ReturnType<typeof createLlmLifecycle>;
+}> {
   const example = JSON.stringify({
     reasoning: "PageA matches keyword X; PageB referenced by index.",
     seeds: ["PageA", "PageB"],
@@ -506,10 +536,16 @@ async function llmSelectSeeds(
       schema: SeedsSchema,
       maxRetries: opts.structuredRetries ?? 1,
       callSite: "query.seeds",
+      lifecycle: createLlmLifecycle("select_relevant_pages"),
       signal,
-      onEvent: () => { /* helper has no yield channel; counter still fires */ },
+      onEvent,
+      transport: "non-stream",
     });
-    return { seeds: r.value.seeds, outputTokens: r.outputTokens };
+    return {
+      seeds: r.value.seeds,
+      outputTokens: r.outputTokens,
+      lifecycle: r.lifecycle,
+    };
   } catch {
     return { seeds: [], outputTokens: 0 };
   }

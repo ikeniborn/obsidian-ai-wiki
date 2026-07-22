@@ -150,6 +150,34 @@ function tidyAfterRemoval(text: string): string {
     .replace(/[ \t]+$/gm, "");        // trim trailing spaces per line
 }
 
+function stripEmptyReferenceBullets(text: string): string {
+  const lines = text.split("\n");
+  const out: string[] = [];
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    if (!/^##\s+(?:Sources|Related|External links)\s*$/iu.test(line.trim())) {
+      out.push(line);
+      continue;
+    }
+
+    const section: string[] = [];
+    let cursor = index + 1;
+    while (cursor < lines.length && !/^##\s/.test(lines[cursor])) {
+      if (!/^\s*-\s*$/.test(lines[cursor])) section.push(lines[cursor]);
+      cursor++;
+    }
+    while (section.length > 0 && section[0].trim().length === 0) section.shift();
+    while (section.length > 0 && section[section.length - 1].trim().length === 0) section.pop();
+    const hasContent = section.some((item) => item.trim().length > 0);
+    if (hasContent || !/^##\s+Related\s*$/iu.test(line.trim())) {
+      out.push(line, ...section);
+    }
+    index = cursor - 1;
+  }
+  return out.join("\n")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
 // Remove [[links]] whose trailing stem is not in knownStems (dead links) from the
 // body. Frontmatter is left untouched — the `## Related` body section is the
 // canonical outgoing-link list, not a frontmatter field.
@@ -167,6 +195,7 @@ export function stripDeadLinks(content: string, knownStems: Set<string>): string
     },
   );
   body = tidyAfterRemoval(body);
+  body = stripEmptyReferenceBullets(body);
 
   if (fm === null) return body.trim();
   return fm + body;

@@ -1,9 +1,27 @@
 import type OpenAI from "openai";
-import type { LlmCallOptions, RunEvent, LlmClient, ChatMessage } from "../types";
+import type {
+  ChatMessage,
+  LlmCallOptions,
+  LlmClient,
+  RunEvent,
+} from "../types";
 import type { FormatProgress } from "../i18n";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas, extractUsage, wrapStreamWithStats, buildLlmCallStatsEvent } from "./llm-utils";
+import {
+  buildChatParams,
+  buildLlmCallStatsEvent,
+  completionReasoning,
+  extractStreamDeltas,
+  extractUsage,
+  runWithLiveEvents,
+  shouldFallbackStreamToNonStream,
+  wrapStreamWithStats,
+} from "./llm-utils";
+import { classifyContextError, createPromptBudgetEvent, estimatePreparedMessages, PromptBudgetExceededError } from "../prompt-budget";
+import { createLlmLifecycle } from "./structured-output";
+import { lifecycleEvent } from "../llm-lifecycle";
 import formatTemplate from "../../prompts/format.md";
+import formatSegmentTemplate from "../../prompts/format-segment.md";
 import { promptVersionOf, visionPromptVersionOf } from "../prompt-version";
 import restoreTokensTemplate from "../../prompts/format-restore-tokens.md";
 import formatSchemaDefault from "../../templates/_format_schema.md";
@@ -11,7 +29,7 @@ import { render } from "./template";
 import { missingTokensWithContext, appendMissingLines, restoreObsidianEmbeds, missingObsidianEmbeds, stripSentinelMarkers } from "./format-utils";
 import { fixWikiLinks } from "../wiki-link-validator";
 import { restoreSourceFrontmatter } from "../utils/raw-frontmatter";
-import { FormatOutputSchema, FormatWithVisionSchema } from "./zod-schemas";
+import { FormatOutputSchema, FormatSegmentOutputSchema, FormatWithVisionSchema } from "./zod-schemas";
 import { parseFormatFrames } from "./framed-output";
 import { structuralErrorCounter } from "../structural-error-counter";
 import { extractObsidianEmbedPaths, analyzeSingleAttachment } from "./attachment-analyzer";
@@ -19,6 +37,12 @@ import type { VisionTempStore } from "./vision-temp-store";
 import type { DomainEntry } from "../domain";
 import { collectDomainTags, renderTagRegistryBlock, DEFAULT_MAX_TAG_CATEGORIES } from "../utils/tag-registry";
 import { domainWikiFolder } from "../wiki-path";
+import { reassembleFormatSegments, segmentFormatInput, splitFormatSegment, type FormatSegment } from "./format-segments";
+import {
+  createNativeRequestLifecycle,
+  createNativeRequestRetryContext,
+  isNativeLlmClient,
+} from "../native-llm-executor";
 
 function parseFormatOutput(
   text: string,
@@ -43,6 +67,42 @@ function parseFormatOutput(
   return { data: null, hint, truncated: parsedFrames.truncated };
 }
 
+function parseFormatSegmentOutput(
+  text: string,
+): { data: import("./zod-schemas").FormatSegmentModelOutput | null; hint: string; truncated: boolean } {
+  const endIdx = text.indexOf("<<<END>>>");
+  const segmentIdIdx = text.indexOf("<<<SEGMENT_ID>>>");
+  const reportIdx = text.indexOf("<<<REPORT>>>");
+  const formattedIdx = text.indexOf("<<<FORMATTED>>>");
+  if (segmentIdIdx === -1 || reportIdx === -1 || formattedIdx === -1) {
+    return { data: null, hint: "segment sentinel markers not found", truncated: endIdx === -1 };
+  }
+  const formattedEnd = endIdx === -1 ? text.length : endIdx;
+  const raw = {
+    segmentId: cleanFrameScalar(text.slice(segmentIdIdx + "<<<SEGMENT_ID>>>".length, reportIdx)),
+    report: cleanFrameScalar(text.slice(reportIdx + "<<<REPORT>>>".length, formattedIdx)),
+    formatted: cleanFrameContent(text.slice(formattedIdx + "<<<FORMATTED>>>".length, formattedEnd)),
+  };
+  const result = FormatSegmentOutputSchema.safeParse(raw);
+  if (result.success) return { data: result.data, hint: "", truncated: endIdx === -1 };
+  return {
+    data: null,
+    hint: result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
+    truncated: endIdx === -1,
+  };
+}
+
+function cleanFrameScalar(text: string): string {
+  return text.trim();
+}
+
+function cleanFrameContent(text: string): string {
+  let out = text;
+  if (out.startsWith("\n")) out = out.slice(1);
+  if (out.endsWith("\n")) out = out.slice(0, -1);
+  return out;
+}
+
 function extractImagePaths(md: string): string[] {
   const out: string[] = [];
   for (const m of md.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)) {
@@ -50,6 +110,36 @@ function extractImagePaths(md: string): string[] {
     if (!url.startsWith("http")) out.push(url);
   }
   return out;
+}
+
+function rawFrontmatter(text: string): string | null {
+  return /^(?:\uFEFF)?---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/.exec(text)?.[0] ?? null;
+}
+
+function restoreRawSourceFrontmatter(original: string, formatted: string): string {
+  const raw = rawFrontmatter(original);
+  if (!raw) return formatted;
+  const body = formatted.slice(rawFrontmatter(formatted)?.length ?? 0);
+  return `${raw}${body}`;
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function restoreSegmentedBasenameEmbeds(original: string, formatted: string): string {
+  let result = formatted;
+  for (const match of original.matchAll(/!\[\[([^\]]+)\]\]/g)) {
+    const embedSrc = match[0];
+    if (result.includes(embedSrc)) continue;
+    const innerPath = match[1];
+    const pipeIdx = innerPath.indexOf("|");
+    const filePath = pipeIdx >= 0 ? innerPath.slice(0, pipeIdx) : innerPath;
+    const baseName = filePath.split("/").pop() ?? filePath;
+    if (!baseName || baseName === filePath) continue;
+    result = result.replace(new RegExp(`!\\[\\[${escapeRegExp(baseName)}(?:\\|[^\\]]+)?\\]\\]`, "g"), embedSrc);
+  }
+  return result;
 }
 
 function truncationHint(backend: "claude-agent" | "native-agent", p: FormatProgress): string {
@@ -87,7 +177,12 @@ export async function* runFormat(
   backend: "claude-agent" | "native-agent" = "native-agent",
   wikiVaultPath?: string,
   wikiLinkValidationRetries: number = 3,
-  visionSettings: { enabled: boolean; model: string; language?: "auto" | "ru" | "en" | "es"; imageOnly?: boolean } = { enabled: false, model: "" },
+  visionSettings: {
+    enabled: boolean;
+    model: string;
+    language?: "auto" | "ru" | "en" | "es";
+    imageOnly?: boolean;
+  } = { enabled: false, model: "" },
   visionTempStore?: VisionTempStore,
   progress: FormatProgress = enFormatProgressFallback,
   formatDomain?: DomainEntry,
@@ -135,8 +230,29 @@ export async function* runFormat(
           yield { kind: "tool_result", ok: true, preview: cached };
           continue;
         }
+        const visionEvents: RunEvent[] = [];
+        let visionEventsEmitted = false;
         try {
-          const description = await analyzeSingleAttachment(path, vaultTools, llm, visionSettings.model, signal, filePath, lang, opts.reasoningLanguage, visionTempStore, visionSettings.imageOnly ?? false, usedVisionTemplates);
+          const description = await analyzeSingleAttachment(
+            path,
+            vaultTools,
+            llm,
+            visionSettings.model,
+            signal,
+            filePath,
+            lang,
+            opts.reasoningLanguage,
+            visionTempStore,
+            visionSettings.imageOnly ?? false,
+            usedVisionTemplates,
+            {
+              inputBudgetTokens: opts.inputBudgetTokens,
+              maxTokens: opts.maxTokens,
+              onEvent: (event) => visionEvents.push(event),
+            },
+          );
+          for (const event of visionEvents) yield event;
+          visionEventsEmitted = true;
           if (description !== null) {
             visionDescriptions.set(path, description);
             await visionTempStore?.putDescription(path, description);
@@ -147,6 +263,9 @@ export async function* runFormat(
             yield { kind: "info_text", icon: "⚠️", summary: "Vision skipped", details: [`${path} — ${why}`] };
           }
         } catch (e) {
+          if (!visionEventsEmitted) {
+            for (const event of visionEvents) yield event;
+          }
           yield { kind: "tool_result", ok: false, preview: (e as Error)?.message ?? "failed" };
           yield { kind: "info_text", icon: "⚠️", summary: "Vision skipped", details: [path] };
         }
@@ -201,7 +320,8 @@ export async function* runFormat(
 
   const userInitial = `Source file: ${filePath}\n---\n${original}${visionBlock}${tagRegistryBlock ? `\n---\n${tagRegistryBlock}` : ""}`;
 
-  const imagePaths = hasVision ? extractImagePaths(original) : [];
+  const directImagePaths = extractImagePaths(original);
+  const imagePaths = hasVision ? directImagePaths : [];
 
   const userContent: OpenAI.Chat.ChatCompletionContentPart[] | string =
     imagePaths.length > 0
@@ -219,107 +339,663 @@ export async function* runFormat(
     { role: "user", content: userContent },
     ...chatHistory.map((m) => ({ role: m.role, content: m.content })),
   ];
-  const formatOpts: LlmCallOptions = { ...opts, jsonMode: false, jsonSchema: undefined };
+  const formatOpts: LlmCallOptions = {
+    ...opts,
+    jsonMode: false,
+    jsonSchema: undefined,
+  };
 
   yield { kind: "assistant_text", delta: progress.analysing(filePath) };
 
-  const baseParams = buildChatParams(model, messages, formatOpts, true);
-
   let lastFinishReason: string | null = null;
   let outputTokens = 0;
+  let lastInputTokens: number | undefined;
+  let activeFormatLifecycle: ReturnType<typeof createLlmLifecycle> | null = null;
+  let formatRequestAttempt = 0;
+  interface FormatBudgetContext {
+    callSite: "format.output" | "format.segment";
+    contextUnits: number;
+    sourceChunks?: number;
+    reductionDepth?: number;
+  }
+  const formatBudgetEvent = (
+    requestId: string,
+    params: Record<string, unknown>,
+    context: FormatBudgetContext,
+    actualInputTokens?: number,
+    retryReason?: "provider_context_error",
+  ): RunEvent => createPromptBudgetEvent({
+    requestId,
+    callSite: context.callSite,
+    configuredInputBudget: opts.inputBudgetTokens ?? 0,
+    effectiveInputBudget: opts.inputBudgetTokens ?? 0,
+    estimatedInputTokens: estimatePreparedMessages(
+      params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+    ),
+    actualInputTokens,
+    outputBudget: opts.maxTokens,
+    contextUnits: context.contextUnits,
+    sourceChunks: context.sourceChunks,
+    reductionDepth: context.reductionDepth,
+    retryReason,
+  });
+  const closeActiveFormatLifecycle = (
+    phase: "retrying" | "failed" | "cancelled",
+  ): RunEvent | null => {
+    const current = activeFormatLifecycle;
+    if (!current) return null;
+    activeFormatLifecycle = null;
+    return lifecycleEvent(current.id, current.action, phase);
+  };
+  const createFormatStream = (
+    params: Record<string, unknown>,
+    requestSignal: AbortSignal,
+    onEvent: (event: RunEvent) => void,
+    lifecycle: ReturnType<typeof createNativeRequestLifecycle>,
+    callSite: FormatBudgetContext["callSite"],
+  ) => llm.chat.completions.create(
+    { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
+    {
+      signal: requestSignal,
+      retry: createNativeRequestRetryContext({
+        llm,
+        callSite,
+        opts,
+        signal: requestSignal,
+        onEvent,
+        lifecycle,
+      }),
+    },
+  );
+  const createFormatCompletion = (
+    params: Record<string, unknown>,
+    requestSignal: AbortSignal,
+    onEvent: (event: RunEvent) => void,
+    lifecycle: ReturnType<typeof createNativeRequestLifecycle>,
+    callSite: FormatBudgetContext["callSite"],
+  ) => llm.chat.completions.create(
+    { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+    {
+      signal: requestSignal,
+      retry: createNativeRequestRetryContext({
+        llm,
+        callSite,
+        opts,
+        signal: requestSignal,
+        onEvent,
+        lifecycle,
+      }),
+    },
+  );
 
-  async function* callOnce(p: Record<string, unknown>): AsyncGenerator<RunEvent, string> {
+  async function* callOnce(
+    p: Record<string, unknown>,
+    fallback: { allowContextFallback: boolean } = { allowContextFallback: true },
+    budgetContext: FormatBudgetContext = { callSite: "format.output", contextUnits: 1 },
+  ): AsyncGenerator<RunEvent, string> {
+    if (activeFormatLifecycle) {
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "applying");
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "completed");
+    }
+    activeFormatLifecycle = createLlmLifecycle("format_note");
+    const streamAttempt = formatRequestAttempt++;
+    if (!isNativeLlmClient(llm)) {
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing", Date.now(), {
+        callSite: budgetContext.callSite,
+        transport: "stream",
+        attempt: streamAttempt,
+      });
+    }
+    let requestLifecycle = createNativeRequestLifecycle({
+      initial: activeFormatLifecycle,
+      callSite: budgetContext.callSite,
+      onEvent: () => {},
+      attemptOffset: streamAttempt,
+    });
     let acc = "";
     lastFinishReason = null;
+    lastInputTokens = undefined;
+    const requestStartMs = Date.now();
+    let streamChunkConsumed = false;
     try {
-      const requestStartMs = Date.now();
-      const rawStream = await llm.chat.completions.create(
-        { ...p, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-        { signal },
-      );
-      const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs);
-      for await (const chunk of stream) {
-        const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
-        if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
-        if (content) { acc += content; yield { kind: "assistant_text", delta: content }; }
-        if (tok !== undefined) outputTokens += tok;
-        const fr = chunk.choices[0]?.finish_reason;
-        if (fr) lastFinishReason = fr;
+      if (!isNativeLlmClient(llm)) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
       }
-      const callStats = getStats();
+      let callStats: ReturnType<ReturnType<typeof wrapStreamWithStats>["getStats"]>;
+      if (isNativeLlmClient(llm)) {
+        callStats = yield* runWithLiveEvents(async (emit, operationSignal) => {
+          const liveLifecycle = createNativeRequestLifecycle({
+            initial: activeFormatLifecycle!,
+            callSite: budgetContext.callSite,
+            onEvent: emit,
+            attemptOffset: streamAttempt,
+          });
+          requestLifecycle = liveLifecycle;
+          const rawStream = await createFormatStream(
+            p,
+            operationSignal,
+            emit,
+            liveLifecycle,
+            budgetContext.callSite,
+          );
+          const { stream, getStats } = wrapStreamWithStats(
+            rawStream,
+            requestStartMs,
+            operationSignal,
+          );
+          for await (const chunk of stream) {
+            streamChunkConsumed = true;
+            const deltas = extractStreamDeltas(chunk);
+            if (deltas.reasoning) {
+              emit({ kind: "assistant_text", delta: deltas.reasoning, isReasoning: true });
+            }
+            if (deltas.content) {
+              acc += deltas.content;
+              emit({ kind: "assistant_text", delta: deltas.content });
+            }
+            if (deltas.outputTokens !== undefined) outputTokens += deltas.outputTokens;
+            if (deltas.inputTokens !== undefined) lastInputTokens = deltas.inputTokens;
+            const finishReason = chunk.choices[0]?.finish_reason;
+            if (finishReason) lastFinishReason = finishReason;
+          }
+          activeFormatLifecycle = liveLifecycle.current();
+          return getStats();
+        }, signal);
+      } else {
+        const request = createFormatStream(
+          p,
+          signal,
+          () => {},
+          requestLifecycle,
+          budgetContext.callSite,
+        );
+        const rawStream = await request;
+        const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, signal);
+        let producing = false;
+        for await (const chunk of stream) {
+          streamChunkConsumed = true;
+          const { reasoning, content, outputTokens: tok, inputTokens: inTok } = extractStreamDeltas(chunk);
+          if (!producing && (reasoning.trim() || content.trim())) {
+            yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "producing");
+            producing = true;
+          }
+          if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
+          if (content) { acc += content; yield { kind: "assistant_text", delta: content }; }
+          if (tok !== undefined) outputTokens += tok;
+          if (inTok !== undefined) lastInputTokens = inTok;
+          const fr = chunk.choices[0]?.finish_reason;
+          if (fr) lastFinishReason = fr;
+        }
+        callStats = getStats();
+      }
+      yield formatBudgetEvent(
+        activeFormatLifecycle.id,
+        p,
+        budgetContext,
+        callStats?.inputTokens ?? lastInputTokens,
+      );
       if (callStats) yield buildLlmCallStatsEvent(callStats);
     } catch (e) {
-      if (signal.aborted || (e as Error).name === "AbortError") return acc;
-      const resp = await llm.chat.completions.create(
-        { ...p, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+      if (isNativeLlmClient(llm)) activeFormatLifecycle = requestLifecycle.current();
+      yield formatBudgetEvent(
+        activeFormatLifecycle.id,
+        p,
+        budgetContext,
+        undefined,
+        classifyContextError(e) === null ? undefined : "provider_context_error",
       );
-      acc = resp.choices[0]?.message?.content ?? "";
-      const tok = extractUsage(resp);
-      if (tok !== undefined) outputTokens += tok;
+      if (signal.aborted || (e as Error).name === "AbortError") {
+        if (!isNativeLlmClient(llm)) {
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "cancelled");
+        }
+        activeFormatLifecycle = null;
+        return acc;
+      }
+      if (streamChunkConsumed) {
+        if (!isNativeLlmClient(llm)) {
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
+        }
+        activeFormatLifecycle = null;
+        throw e;
+      }
+      if (!fallback.allowContextFallback && classifyContextError(e) !== null) {
+        if (!isNativeLlmClient(llm)) {
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+        }
+        activeFormatLifecycle = null;
+        throw e;
+      }
+      if (!shouldFallbackStreamToNonStream(e, signal)) {
+        if (!isNativeLlmClient(llm)) {
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
+        }
+        activeFormatLifecycle = null;
+        throw e;
+      }
+      if (!isNativeLlmClient(llm)) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+      }
+      activeFormatLifecycle = createLlmLifecycle("format_note");
+      const fallbackAttempt = formatRequestAttempt++;
+      if (!isNativeLlmClient(llm)) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "preparing", Date.now(), {
+          callSite: budgetContext.callSite,
+          transport: "non-stream",
+          attempt: fallbackAttempt,
+        });
+      }
+      let fallbackLifecycle = createNativeRequestLifecycle({
+        initial: activeFormatLifecycle,
+        callSite: budgetContext.callSite,
+        onEvent: () => {},
+        attemptOffset: fallbackAttempt,
+      });
+      const fallbackStartMs = Date.now();
+      let resp: OpenAI.Chat.ChatCompletion;
+      try {
+        if (!isNativeLlmClient(llm)) {
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "sent");
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "waiting");
+        }
+        if (isNativeLlmClient(llm)) {
+          resp = yield* runWithLiveEvents(async (emit, operationSignal) => {
+            const liveLifecycle = createNativeRequestLifecycle({
+              initial: activeFormatLifecycle!,
+              callSite: budgetContext.callSite,
+              onEvent: emit,
+              attemptOffset: fallbackAttempt,
+            });
+            fallbackLifecycle = liveLifecycle;
+            const response = await createFormatCompletion(
+              p,
+              operationSignal,
+              emit,
+              liveLifecycle,
+              budgetContext.callSite,
+            );
+            activeFormatLifecycle = liveLifecycle.current();
+            return response;
+          }, signal);
+        } else {
+          resp = await createFormatCompletion(
+            p,
+            signal,
+            () => {},
+            fallbackLifecycle,
+            budgetContext.callSite,
+          );
+        }
+      } catch (fallbackError) {
+        if (isNativeLlmClient(llm)) activeFormatLifecycle = fallbackLifecycle.current();
+        yield formatBudgetEvent(
+          activeFormatLifecycle.id,
+          p,
+          budgetContext,
+          undefined,
+          classifyContextError(fallbackError) === null
+            ? undefined
+            : "provider_context_error",
+        );
+        if (!isNativeLlmClient(llm)) {
+          yield lifecycleEvent(
+            activeFormatLifecycle.id,
+            activeFormatLifecycle.action,
+            signal.aborted || (fallbackError as Error).name === "AbortError"
+              ? "cancelled"
+              : classifyContextError(fallbackError) !== null
+                ? "retrying"
+                : "failed",
+          );
+        }
+        activeFormatLifecycle = null;
+        throw fallbackError;
+      }
+      const fallbackMessage = resp.choices[0]?.message;
+      const fallbackReasoning = completionReasoning(fallbackMessage);
+      acc = fallbackMessage?.content ?? "";
+      if ((fallbackReasoning.trim() || acc.trim()) && !isNativeLlmClient(llm)) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "producing");
+      }
+      if (fallbackReasoning) {
+        yield { kind: "assistant_text", delta: fallbackReasoning, isReasoning: true };
+      }
+      const completionTokens = extractUsage(resp);
+      const promptTokens = resp.usage?.prompt_tokens;
+      if (completionTokens !== undefined) outputTokens += completionTokens;
+      if (promptTokens !== undefined) lastInputTokens = promptTokens;
+      yield formatBudgetEvent(
+        activeFormatLifecycle.id,
+        p,
+        budgetContext,
+        promptTokens,
+      );
       lastFinishReason = resp.choices[0]?.finish_reason ?? null;
+      if (completionTokens !== undefined) {
+        const elapsed = Math.max(1, Date.now() - fallbackStartMs);
+        yield buildLlmCallStatsEvent({
+          inputTokens: promptTokens,
+          outputTokens: completionTokens,
+          ttftMs: fallbackStartMs - requestStartMs,
+          llmDurationMs: elapsed,
+        });
+      }
+    }
+    if (activeFormatLifecycle) {
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "validating");
     }
     return acc;
   }
 
-  yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
-  let fullText = yield* callOnce(baseParams);
-  if (signal.aborted) return;
-
-  let parsedResult = parseFormatOutput(fullText, visionDescriptions.size > 0);
-  let parsed = parsedResult.data;
-
-  if (parsedResult.truncated) {
-    yield {
-      kind: "info_text", icon: "⚠️",
-      summary: progress.truncatedSalvageSummary,
-      details: [progress.truncatedSalvageDetail],
-    };
-    yield { kind: "rule_fired", ruleId: "formatSalvage", count: 1 };
-  }
-
-  const truncated = !parsed && lastFinishReason === "length";
-  if (!parsed && truncated) {
-    yield { kind: "tool_result", ok: false, preview: "response truncated" };
-    yield { kind: "error", message: progress.outputTruncated(truncationHint(backend, progress)) };
-    yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
-    return;
-  }
-
-  if (!parsed) {
-    yield { kind: "tool_result", ok: false, preview: "invalid sentinel — retrying" };
-    yield { kind: "assistant_text", delta: progress.sentinelInvalidRetry };
-    const zodHint = parsedResult.hint;
-    const retrySystemContent = systemContent + `\n\nThe previous attempt failed: ${zodHint}. Fix it and return again using the markers <<<REPORT>>>...<<<END>>>.`;
-    const retryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      { role: "system", content: retrySystemContent },
-      { role: "user", content: userContent },
+  function segmentMessagesWithHint(segment: FormatSegment, retryHint = ""): OpenAI.Chat.ChatCompletionMessageParam[] {
+    const segmentVisionBlock = segment.visionDescriptions.size > 0
+      ? [
+          "",
+          "---",
+          "ATTACHMENT DESCRIPTIONS FOR THIS SEGMENT ONLY:",
+          ...[...segment.visionDescriptions].map(([path, desc]) => `### ![[${path}]]\n${desc}`),
+        ].join("\n")
+      : "";
+    const headingPath = segment.headingPath.length > 0 ? segment.headingPath.join(" > ") : "(preamble)";
+    const segmentUser = [
+      `Source file: ${filePath}`,
+      `Segment ID: ${segment.id}`,
+      `Segment ordinal: ${segment.ordinal + 1}`,
+      `Source lines: ${segment.startLine}-${segment.endLine}`,
+      `Heading path: ${headingPath}`,
+      "Format only the bounded source segment below.",
+      "<<<SOURCE_SEGMENT>>>",
+      `${segment.markdown}`,
+      "<<<END_SOURCE_SEGMENT>>>",
+      segmentVisionBlock,
+      tagRegistryBlock ? `---\n${tagRegistryBlock}` : "",
+    ].filter((part) => part.length > 0).join("\n");
+    const system = retryHint
+      ? `${render(formatSegmentTemplate, { format_schema: formatSchema })}\n\nThe previous segment attempt failed: ${retryHint}. Return the same segment again using the exact segment id and markers.`
+      : render(formatSegmentTemplate, { format_schema: formatSchema });
+    return [
+      { role: "system", content: system },
+      { role: "user", content: segmentUser },
+      ...chatHistory.map((m) => ({ role: m.role, content: m.content })),
     ];
-    const retryParams = buildChatParams(model, retryMessages, formatOpts, true);
-    yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
-    fullText = yield* callOnce(retryParams);
-    if (signal.aborted) return;
-    parsedResult = parseFormatOutput(fullText, visionDescriptions.size > 0);
-    parsed = parsedResult.data;
-    if (parsedResult.truncated) {
-      yield {
-        kind: "info_text", icon: "⚠️",
-        summary: progress.truncatedSalvageRetrySummary,
-        details: [progress.truncatedSalvageDetail],
+  }
+
+  function buildSegmentParams(
+    segment: FormatSegment,
+    retryHint = "",
+  ): Record<string, unknown> {
+    const params = buildChatParams(model, segmentMessagesWithHint(segment, retryHint), formatOpts, true);
+    return params;
+  }
+
+  async function* splitSegmentAfterProviderContext(
+    segment: FormatSegment,
+    params: Record<string, unknown>,
+    maxMarkdownChars: number,
+    sourceChunks: number,
+  ): AsyncGenerator<RunEvent, import("./zod-schemas").FormatSegmentModelOutput> {
+    const nextMaxMarkdownChars = Math.max(1, Math.floor(maxMarkdownChars / 2));
+    const children = splitFormatSegment(segment, nextMaxMarkdownChars);
+    if (children.length <= 1) {
+      throw new Error(`Format: segment ${segment.id} hit provider context limit and cannot be split further`);
+    }
+    const childOutputs = [];
+    for (const child of children) childOutputs.push(yield* formatSegmentRecursive(child, nextMaxMarkdownChars, sourceChunks));
+    return {
+      segmentId: segment.id,
+      report: childOutputs.map((output) => output.report).join("\n"),
+      formatted: childOutputs.map((output) => output.formatted).join(""),
+    };
+  }
+
+  async function* formatSegmentRecursive(
+    segment: FormatSegment,
+    maxMarkdownChars: number,
+    sourceChunks: number,
+  ): AsyncGenerator<RunEvent, import("./zod-schemas").FormatSegmentModelOutput> {
+    let params: Record<string, unknown>;
+    try {
+      signal.throwIfAborted();
+      params = buildSegmentParams(segment);
+    } catch (e) {
+      if (!(e instanceof PromptBudgetExceededError)) throw e;
+      const children = splitFormatSegment(segment, Math.max(1, Math.floor(maxMarkdownChars / 2)));
+      if (children.length <= 1) {
+        throw new Error(`Format: segment ${segment.id} exceeds the configured input budget; raise format inputBudgetTokens`);
+      }
+      const childOutputs = [];
+      for (const child of children) childOutputs.push(yield* formatSegmentRecursive(child, Math.max(1, Math.floor(maxMarkdownChars / 2)), sourceChunks));
+      return {
+        segmentId: segment.id,
+        report: childOutputs.map((output) => output.report).join("\n"),
+        formatted: childOutputs.map((output) => output.formatted).join(""),
       };
-      yield { kind: "rule_fired", ruleId: "formatSalvage", count: 1 };
+    }
+
+    yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath, segment: segment.id } };
+    let text: string;
+    try {
+      text = yield* callOnce(params, { allowContextFallback: false }, {
+        callSite: "format.segment",
+        contextUnits: 1,
+        sourceChunks,
+        reductionDepth: Math.max(0, segment.id.split("-").length - 2),
+      });
+    } catch (e) {
+      if (classifyContextError(e) === null) throw e;
+      return yield* splitSegmentAfterProviderContext(segment, params, maxMarkdownChars, sourceChunks);
+    }
+    if (signal.aborted) {
+      if (activeFormatLifecycle) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "cancelled");
+        activeFormatLifecycle = null;
+      }
+      return { segmentId: segment.id, report: "aborted", formatted: segment.markdown };
+    }
+    const parsedSegment = parseFormatSegmentOutput(text);
+    if (parsedSegment.data && parsedSegment.data.segmentId === segment.id && !parsedSegment.truncated) {
+      yield { kind: "tool_result", ok: true, preview: `${segment.id}: ${parsedSegment.data.formatted.length} chars` };
+      return parsedSegment.data;
+    }
+
+    const shouldSplit = parsedSegment.truncated || lastFinishReason === "length";
+    if (shouldSplit) {
+      const children = splitFormatSegment(segment, Math.max(1, Math.floor(maxMarkdownChars / 2)));
+      if (children.length > 1) {
+        if (activeFormatLifecycle) {
+          yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+          activeFormatLifecycle = null;
+        }
+        yield { kind: "tool_result", ok: false, preview: `${segment.id}: response truncated — splitting` };
+        const childOutputs = [];
+        for (const child of children) childOutputs.push(yield* formatSegmentRecursive(child, Math.max(1, Math.floor(maxMarkdownChars / 2)), sourceChunks));
+        return {
+          segmentId: segment.id,
+          report: childOutputs.map((output) => output.report).join("\n"),
+          formatted: childOutputs.map((output) => output.formatted).join(""),
+        };
+      }
+      if (activeFormatLifecycle) {
+        yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "failed");
+        activeFormatLifecycle = null;
+      }
+      throw new Error(`Format: segment ${segment.id} response was truncated and cannot be split further`);
+    }
+
+    const hint = parsedSegment.data && parsedSegment.data.segmentId !== segment.id
+      ? `segment id mismatch: expected ${segment.id}, got ${parsedSegment.data.segmentId}`
+      : parsedSegment.hint;
+
+    const retryParams = buildSegmentParams(segment, hint);
+    if (activeFormatLifecycle) {
+      yield lifecycleEvent(activeFormatLifecycle.id, activeFormatLifecycle.action, "retrying");
+      activeFormatLifecycle = null;
+    }
+    yield { kind: "tool_result", ok: false, preview: `${segment.id}: invalid sentinel — retrying` };
+    yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath, segment: segment.id, retry: 1 } };
+    let retryText: string;
+    try {
+      retryText = yield* callOnce(retryParams, { allowContextFallback: false }, {
+        callSite: "format.segment",
+        contextUnits: 1,
+        sourceChunks,
+        reductionDepth: Math.max(0, segment.id.split("-").length - 2),
+      });
+    } catch (e) {
+      if (classifyContextError(e) === null) throw e;
+      return yield* splitSegmentAfterProviderContext(segment, retryParams, maxMarkdownChars, sourceChunks);
+    }
+    const retryParsed = parseFormatSegmentOutput(retryText);
+    if (retryParsed.data && retryParsed.data.segmentId === segment.id && !retryParsed.truncated) {
+      yield { kind: "tool_result", ok: true, preview: `${segment.id}: ${retryParsed.data.formatted.length} chars` };
+      return retryParsed.data;
+    }
+    const retryHint = retryParsed.data && retryParsed.data.segmentId !== segment.id
+      ? `segment id mismatch: expected ${segment.id}, got ${retryParsed.data.segmentId}`
+      : retryParsed.hint;
+    const failedEvent = closeActiveFormatLifecycle("failed");
+    if (failedEvent) yield failedEvent;
+    throw new Error(`Format: segment ${segment.id} failed: ${retryHint || hint}`);
+  }
+
+  let fullText = "";
+  let parsed: import("./zod-schemas").FormatOutput | null = null;
+  let segmented = false;
+
+  async function* runSegmentedFormatting(): AsyncGenerator<RunEvent, import("./zod-schemas").FormatOutput | null> {
+    try {
+      const initialMaxMarkdownChars = Math.max(120, Math.floor((opts.inputBudgetTokens ?? original.length) / 4));
+      let segments = segmentFormatInput(original, visionDescriptions, initialMaxMarkdownChars);
+      if (segments.length === 1 && segments[0].markdown === original) {
+        segments = segmentFormatInput(original, visionDescriptions, Math.max(1, Math.floor(original.length / 2)));
+      }
+      const outputs = [];
+      for (const segment of segments) outputs.push(yield* formatSegmentRecursive(segment, initialMaxMarkdownChars, segments.length));
+      return reassembleFormatSegments(original, segments, outputs);
+    } catch (e) {
+      const terminal = closeActiveFormatLifecycle(
+        signal.aborted || (e as Error).name === "AbortError" ? "cancelled" : "failed",
+      );
+      if (terminal) yield terminal;
+      const msg = (e as Error).message || "Format: segmented formatting failed";
+      yield { kind: "tool_result", ok: false, preview: msg };
+      yield { kind: "error", message: msg };
+      yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
+      return null;
     }
   }
 
-  if (!parsed) {
-    const retryTruncated = lastFinishReason === "length";
-    const msg = retryTruncated
-      ? progress.outputTruncatedAfterRetry(truncationHint(backend, progress))
-      : progress.sentinelInvalidAfterRetry;
-    yield { kind: "tool_result", ok: false, preview: msg };
-    yield { kind: "error", message: msg };
-    yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
-    return;
+  let baseParams: Record<string, unknown> | null = null;
+  try {
+    baseParams = buildChatParams(model, messages, formatOpts, true);
+  } catch (e) {
+    if (!(e instanceof PromptBudgetExceededError)) throw e;
+    if (directImagePaths.length > 0) {
+      const msg = "Format: note exceeds the format input budget and contains direct Markdown image attachments; segmentation is disabled for this vision path";
+      yield { kind: "tool_result", ok: false, preview: msg };
+      yield { kind: "error", message: msg };
+      yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
+      return;
+    }
+    segmented = true;
   }
+
+  if (baseParams) {
+    yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
+    try {
+      fullText = yield* callOnce(baseParams, { allowContextFallback: false });
+    } catch (e) {
+      if (classifyContextError(e) === null) throw e;
+      if (directImagePaths.length > 0) {
+        const msg = "Format: note hit the provider context limit and contains direct Markdown image attachments; segmentation is disabled for this vision path";
+        yield { kind: "tool_result", ok: false, preview: msg };
+        yield { kind: "error", message: msg };
+        yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
+        return;
+      }
+      segmented = true;
+      parsed = yield* runSegmentedFormatting();
+      if (!parsed) return;
+    }
+    if (signal.aborted) {
+      const cancelledEvent = closeActiveFormatLifecycle("cancelled");
+      if (cancelledEvent) yield cancelledEvent;
+      return;
+    }
+
+    if (!segmented) {
+      let parsedResult = parseFormatOutput(fullText, visionDescriptions.size > 0);
+      parsed = parsedResult.data;
+
+      if (parsedResult.truncated) {
+        yield {
+          kind: "info_text", icon: "⚠️",
+          summary: progress.truncatedSalvageSummary,
+          details: [progress.truncatedSalvageDetail],
+        };
+        yield { kind: "rule_fired", ruleId: "formatSalvage", count: 1 };
+      }
+
+      const truncated = !parsed && lastFinishReason === "length";
+      if (!parsed && truncated) {
+        const failedEvent = closeActiveFormatLifecycle("failed");
+        if (failedEvent) yield failedEvent;
+        yield { kind: "tool_result", ok: false, preview: "response truncated" };
+        yield { kind: "error", message: progress.outputTruncated(truncationHint(backend, progress)) };
+        yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
+        return;
+      }
+
+      if (!parsed) {
+        const retryEvent = closeActiveFormatLifecycle("retrying");
+        if (retryEvent) yield retryEvent;
+        yield { kind: "tool_result", ok: false, preview: "invalid sentinel — retrying" };
+        yield { kind: "assistant_text", delta: progress.sentinelInvalidRetry };
+        const zodHint = parsedResult.hint;
+        const retrySystemContent = systemContent + `\n\nThe previous attempt failed: ${zodHint}. Fix it and return again using the markers <<<REPORT>>>...<<<END>>>.`;
+        const retryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+          { role: "system", content: retrySystemContent },
+          { role: "user", content: userContent },
+        ];
+        const retryParams = buildChatParams(model, retryMessages, formatOpts, true);
+        yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
+        fullText = yield* callOnce(retryParams);
+        if (signal.aborted) {
+          const cancelledEvent = closeActiveFormatLifecycle("cancelled");
+          if (cancelledEvent) yield cancelledEvent;
+          return;
+        }
+        parsedResult = parseFormatOutput(fullText, visionDescriptions.size > 0);
+        parsed = parsedResult.data;
+        if (parsedResult.truncated) {
+          yield {
+            kind: "info_text", icon: "⚠️",
+            summary: progress.truncatedSalvageRetrySummary,
+            details: [progress.truncatedSalvageDetail],
+          };
+          yield { kind: "rule_fired", ruleId: "formatSalvage", count: 1 };
+        }
+      }
+
+      if (!parsed) {
+        const retryTruncated = lastFinishReason === "length";
+        const msg = retryTruncated
+          ? progress.outputTruncatedAfterRetry(truncationHint(backend, progress))
+          : progress.sentinelInvalidAfterRetry;
+        const failedEvent = closeActiveFormatLifecycle("failed");
+        if (failedEvent) yield failedEvent;
+        yield { kind: "tool_result", ok: false, preview: msg };
+        yield { kind: "error", message: msg };
+        yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
+        return;
+      }
+    }
+  } else if (segmented) {
+    parsed = yield* runSegmentedFormatting();
+    if (!parsed) return;
+  }
+
+  if (!parsed) return;
   yield { kind: "tool_result", ok: true, preview: `${parsed.formatted.length} chars` };
 
   const lastSlash = filePath.lastIndexOf("/");
@@ -332,7 +1008,9 @@ export async function* runFormat(
   let finalReport = parsed.report;
   const missing1 = missingTokensWithContext(original, parsed.formatted);
 
-  if (missing1.length > 0 && !signal.aborted) {
+  if (missing1.length > 0 && segmented) {
+    finalFormatted = appendMissingLines(finalFormatted, missing1);
+  } else if (missing1.length > 0 && !signal.aborted) {
     const tokenList = missing1.map((m) => `\`${m.token}\``).join(", ");
     const restoreMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       ...messages,
@@ -342,18 +1020,31 @@ export async function* runFormat(
         content: render(restoreTokensTemplate, { tokens: tokenList }),
       },
     ];
-    const restoreParams = buildChatParams(model, restoreMessages, formatOpts, true);
+    let restoreParams: Record<string, unknown>;
+    try {
+      signal.throwIfAborted();
+      restoreParams = buildChatParams(model, restoreMessages, formatOpts, true);
+    } catch (e) {
+      const aborted = signal.aborted || (e as Error).name === "AbortError";
+      const terminal = closeActiveFormatLifecycle(aborted ? "cancelled" : "failed");
+      if (terminal) yield terminal;
+      if (!aborted) {
+        const message = `Format: token restoration request failed — ${(e as Error).message}`;
+        yield { kind: "error", message };
+        yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
+      }
+      return;
+    }
     yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
     const fullText2 = yield* callOnce(restoreParams);
-    if (!signal.aborted) {
-      const parsed2Result = parseFormatOutput(fullText2, visionDescriptions.size > 0);
-      const parsed2 = parsed2Result.data;
-      if (parsed2) {
-        finalFormatted = parsed2.formatted;
-        finalReport = parsed2.report;
-      }
-      yield { kind: "tool_result", ok: true, preview: "tokens restored" };
+    if (signal.aborted) return;
+    const parsed2Result = parseFormatOutput(fullText2, visionDescriptions.size > 0);
+    const parsed2 = parsed2Result.data;
+    if (parsed2) {
+      finalFormatted = parsed2.formatted;
+      finalReport = parsed2.report;
     }
+    yield { kind: "tool_result", ok: true, preview: "tokens restored" };
     const missing2 = missingTokensWithContext(original, finalFormatted);
     if (missing2.length > 0) {
       finalFormatted = appendMissingLines(finalFormatted, missing2);
@@ -361,12 +1052,15 @@ export async function* runFormat(
   }
 
   finalFormatted = restoreObsidianEmbeds(original, finalFormatted);
-  const embedWarnings = missingObsidianEmbeds(original, finalFormatted);
 
   const wlFix = fixWikiLinks(new Map([[filePath, finalFormatted]]), wikiLinkValidationRetries);
   finalFormatted = wlFix.fixed.get(filePath) ?? finalFormatted;
+  if (segmented) finalFormatted = restoreSegmentedBasenameEmbeds(original, restoreObsidianEmbeds(original, finalFormatted));
+  const embedWarnings = missingObsidianEmbeds(original, finalFormatted);
 
-  finalFormatted = restoreSourceFrontmatter(original, finalFormatted);
+  finalFormatted = segmented
+    ? restoreRawSourceFrontmatter(original, finalFormatted)
+    : restoreSourceFrontmatter(original, finalFormatted);
 
   // Final defensive sweep: no sentinel marker may reach the written note.
   const swept = stripSentinelMarkers(finalFormatted);
@@ -384,6 +1078,8 @@ export async function* runFormat(
   try {
     await vaultTools.write(tempPath, finalFormatted);
   } catch (e) {
+    const failedEvent = closeActiveFormatLifecycle("failed");
+    if (failedEvent) yield failedEvent;
     yield { kind: "error", message: progress.writeFailed((e as Error).message) };
     return;
   }
@@ -396,7 +1092,15 @@ export async function* runFormat(
   }
 
   const missingFinal = missingTokensWithContext(original, finalFormatted);
+  const previewLifecycle = activeFormatLifecycle as ReturnType<typeof createLlmLifecycle> | null;
+  if (previewLifecycle) {
+    yield lifecycleEvent(previewLifecycle.id, previewLifecycle.action, "applying");
+  }
   yield { kind: "format_preview", tempPath, report: finalReport, missingTokens: missingFinal, visionCount: visionDescriptions.size };
+  if (previewLifecycle) {
+    yield lifecycleEvent(previewLifecycle.id, previewLifecycle.action, "completed");
+    activeFormatLifecycle = null;
+  }
   const visionOn = visionDescriptions.size > 0;
   yield {
     kind: "eval_meta",

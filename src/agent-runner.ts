@@ -10,7 +10,15 @@ import { runInit } from "./phases/init";
 import { runFormat } from "./phases/format";
 import { runDelete } from "./phases/delete";
 import { VisionTempStore } from "./phases/vision-temp-store";
-import type { LlmCallOptions, LlmClient, LlmWikiPluginSettings, RunEvent, RunRequest } from "./types";
+import type {
+  LlmCallOptions,
+  LlmClient,
+  LlmWikiPluginSettings,
+  OpKey,
+  RunEvent,
+  RunRequest,
+  WikiOperation,
+} from "./types";
 import type { VaultTools } from "./vault-tools";
 import { domainWikiFolder } from "./wiki-path";
 import { writeEvalRecord, type EvalRecord, type EvalMetaFields, type LlmError } from "./eval-log";
@@ -18,8 +26,32 @@ import { PageSimilarityService, DEFAULT_CHUNKING } from "./page-similarity";
 import { resolveLang, i18nFor } from "./i18n";
 import type { BoilerplateDemotionConfig } from "./boilerplate-demotion";
 import { normalizeRerankerConfig } from "./reranker";
+import { resolveModelCallPolicy } from "./model-call-policy";
+
+declare const require: NodeJS.Require;
 
 const DISABLED_BOILERPLATE_DEMOTION: BoilerplateDemotionConfig = { enabled: false, factor: 0 };
+
+type NodeTimers = typeof import("node:timers");
+
+function loadDesktopTimers(): NodeTimers {
+  // eslint-disable-next-line import/no-nodejs-modules -- Electron exposes Node builtins through require.
+  if (typeof require === "function") return require("node:timers") as NodeTimers;
+
+  const getBuiltinModule = (process as NodeJS.Process & {
+    getBuiltinModule?: (id: string) => unknown;
+  }).getBuiltinModule;
+  if (typeof getBuiltinModule === "function") {
+    const timers = getBuiltinModule("node:timers") ?? getBuiltinModule("timers");
+    if (timers) return timers;
+  }
+
+  throw new Error("Desktop idle watchdog requires access to the Node.js timers module");
+}
+
+export function resolveFollowUpPolicyOperation(parent: WikiOperation): OpKey {
+  return parent === "query" ? "query" : "lint";
+}
 
 export class AgentRunner {
   private llm: LlmClient;
@@ -35,32 +67,46 @@ export class AgentRunner {
     this.llm = llm;
   }
 
-  private buildOptsFor(op: RunRequest["operation"]): { model: string; opts: LlmCallOptions } {
-    // delete rebuilds pages by reusing ingest, so it borrows ingest's per-operation config.
-    const key = (op === "chat" || op === "lint-chat" ? "lint" : op === "delete" ? "ingest" : op);
+  private buildOptsFor(
+    op: RunRequest["operation"],
+    policyOperation?: RunRequest["policyOperation"],
+  ): { model: string; opts: LlmCallOptions } {
     const s = this.settings;
+    const resolved = resolveModelCallPolicy(s, op, policyOperation);
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
     const mergeDeleteWarnThreshold = s.nativeAgent.mergeDeleteWarnThreshold;
 
     if (s.backend === "claude-agent") {
-      // claude-agent: maxTokens задаётся на уровне iclaude.sh (env CLAUDE_CODE_MAX_OUTPUT_TOKENS),
-      // плагин его не плумит — параметр был бы избыточным.
-      const c = s.claudeAgent.perOperation ? s.claudeAgent.operations[key] : undefined;
-      const model = c ? c.model : s.claudeAgent.model;
-      return { model, opts: { systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, structuredRetries, mergeDeleteWarnThreshold } };
+      return {
+        model: resolved.model,
+        opts: {
+          ...resolved.opts,
+          systemPrompt: s.systemPrompt,
+          outputLanguage: s.outputLanguage,
+          structuredRetries,
+          mergeDeleteWarnThreshold,
+        },
+      };
     }
 
     const na = s.nativeAgent;
-    const c = na.perOperation ? na.operations[key] : undefined;
-    const budgetTokens = c?.thinkingBudgetTokens ?? na.thinkingBudgetTokens;
-    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, reasoningLanguage: s.reasoningLanguage, structuredRetries, mergeDeleteWarnThreshold,
-      dedupOnIngest: na.dedupOnIngest, dedupThreshold: na.dedupThreshold,
-      lintNearDuplicate: na.lintNearDuplicate, nearDupThreshold: na.nearDupThreshold,
-    } };
-    return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, reasoningLanguage: s.reasoningLanguage, structuredRetries, mergeDeleteWarnThreshold,
-      dedupOnIngest: na.dedupOnIngest, dedupThreshold: na.dedupThreshold,
-      lintNearDuplicate: na.lintNearDuplicate, nearDupThreshold: na.nearDupThreshold,
-    } };
+    return {
+      model: resolved.model,
+      opts: {
+        ...resolved.opts,
+        systemPrompt: s.systemPrompt,
+        outputLanguage: s.outputLanguage,
+        reasoningLanguage: s.reasoningLanguage,
+        structuredRetries,
+        mergeDeleteWarnThreshold,
+        dedupOnIngest: na.dedupOnIngest,
+        dedupThreshold: na.dedupThreshold,
+        lintNearDuplicate: na.lintNearDuplicate,
+        nearDupThreshold: na.nearDupThreshold,
+        nativeRequestRetries: s.llmIdleRetries ?? 3,
+        nativeRequestIdleTimeoutMs: (s.llmIdleTimeoutSec ?? 300) * 1000,
+      },
+    };
   }
 
   private buildSimilarity(): PageSimilarityService | undefined {
@@ -167,6 +213,8 @@ export class AgentRunner {
           model: this.settings.vision?.model ?? "",
           language: this.settings.outputLanguage ?? "auto",
           imageOnly: this.isMobile,
+          nativeRequestRetries: this.settings.llmIdleRetries ?? 3,
+          nativeRequestIdleTimeoutMs: (this.settings.llmIdleTimeoutSec ?? 300) * 1000,
         };
         const visionSettings = noVision ? { ...baseVisionSettings, enabled: false } : baseVisionSettings;
         const progress = i18nFor(resolveLang(this.settings.outputLanguage)).formatProgress;
@@ -185,7 +233,17 @@ export class AgentRunner {
   }
 
   async *run(req: RunRequest): AsyncGenerator<RunEvent, void, void> {
-    const { model, opts } = this.buildOptsFor(req.operation);
+    const { model, opts } = this.buildOptsFor(
+      req.operation,
+      req.policyOperation,
+    );
+    const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1000;
+    const connectionTimeoutMs = (this.settings.llmConnectionTimeoutSec ?? 15) * 1000;
+    yield {
+      kind: "run_config",
+      llmConnectionTimeoutMs: connectionTimeoutMs,
+      llmIdleTimeoutMs: idleTimeoutMs,
+    };
     const baseUrlHint = this.settings.backend === "native-agent"
       ? ` @ ${this.settings.nativeAgent.baseUrl}`
       : "";
@@ -199,13 +257,29 @@ export class AgentRunner {
       : this.domains;
 
     const similarity = this.buildSimilarity();
-    const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1000;
-    const maxRetries = this.settings.llmIdleRetries ?? 3;
+    const operationWatchdogEnabled = this.settings.backend === "claude-agent" && idleTimeoutMs > 0;
+    const maxRetries = this.settings.backend === "claude-agent"
+      ? this.settings.llmIdleRetries ?? 3
+      : 0;
+    const desktopTimers = !operationWatchdogEnabled || this.isMobile ? null : loadDesktopTimers();
+    type IdleTimer = number | NodeJS.Timeout;
+    const scheduleIdleAbort = (callback: () => void): IdleTimer => desktopTimers
+      ? desktopTimers.setTimeout(callback, idleTimeoutMs)
+      : window.setTimeout(callback, idleTimeoutMs);
+    const clearIdleAbort = (timer: IdleTimer): void => {
+      if (desktopTimers) desktopTimers.clearTimeout(timer as NodeJS.Timeout);
+      else window.clearTimeout(timer as number);
+    };
     let attempt = 0;
     let destructivePreludeSeen = false;
+    let visibleAssistantTextSeen = false;
 
     const idleAfterDestructivePreludeAbort = () => new DOMException(
       `LLM idle timeout (${Math.round(idleTimeoutMs / 1000)}s) after destructive prelude; refusing to replay operation`,
+      "AbortError",
+    );
+    const idleAfterVisibleOutputAbort = () => new DOMException(
+      `LLM idle timeout (${Math.round(idleTimeoutMs / 1000)}s) after visible output; refusing to replay operation`,
       "AbortError",
     );
 
@@ -223,26 +297,37 @@ export class AgentRunner {
     while (true) {
       const idleCtrl = new AbortController();
       const signalAny = (AbortSignal as unknown as { any(this: void, signals: AbortSignal[]): AbortSignal }).any;
-      const combined = idleTimeoutMs > 0
+      const combined = operationWatchdogEnabled
         ? signalAny([req.signal, idleCtrl.signal])
         : req.signal;
-      let idleTimer: number | null =
-        idleTimeoutMs > 0 ? window.setTimeout(() => idleCtrl.abort(), idleTimeoutMs) : null;
+      let idleTimer: IdleTimer | null =
+        operationWatchdogEnabled ? scheduleIdleAbort(() => idleCtrl.abort()) : null;
 
       const resetTimer = () => {
         if (!idleTimer) return;
-        window.clearTimeout(idleTimer);
-        idleTimer = window.setTimeout(() => idleCtrl.abort(), idleTimeoutMs);
+        clearIdleAbort(idleTimer);
+        idleTimer = scheduleIdleAbort(() => idleCtrl.abort());
       };
 
       let finalResultText = "";
       try {
-        for await (const ev of this.runOperation({ ...req, signal: combined }, model, opts, vaultRoot, domains, similarity, visionTempStore)) {
+        for await (const ev of this.runOperation(
+          { ...req, signal: combined },
+          model,
+          opts,
+          vaultRoot,
+          domains,
+          similarity,
+          visionTempStore,
+        )) {
           if (
             ev.kind === "llm_call_stats" || ev.kind === "assistant_text" ||
             ev.kind === "tool_use" || ev.kind === "tool_result"
           ) resetTimer();
           if (ev.kind === "tool_use" && ev.name === "WipeDomain") destructivePreludeSeen = true;
+          if (ev.kind === "assistant_text" && !ev.isReasoning && ev.delta.length > 0) {
+            visibleAssistantTextSeen = true;
+          }
           if (ev.kind === "result") finalResultText = ev.text;
           if (ev.kind === "error") {
             llmErrors.push({ kind: "error", message: ev.message });
@@ -257,10 +342,10 @@ export class AgentRunner {
           }
           yield ev;
         }
-        if (idleTimer) window.clearTimeout(idleTimer);
         // Phases swallow AbortError silently (return instead of throw).
         // Detect silent idle abort by checking if idleCtrl fired but user didn't cancel.
         if (idleCtrl.signal.aborted && !req.signal.aborted) {
+          if (visibleAssistantTextSeen) throw idleAfterVisibleOutputAbort();
           if (attempt < maxRetries) {
             if (destructivePreludeSeen) throw idleAfterDestructivePreludeAbort();
             attempt++;
@@ -293,9 +378,9 @@ export class AgentRunner {
         }
         return;
       } catch (err) {
-        if (idleTimer) window.clearTimeout(idleTimer);
         const isIdleAbort = !req.signal.aborted && (err as Error).name === "AbortError";
         if (isIdleAbort && attempt < maxRetries) {
+          if (visibleAssistantTextSeen) throw err;
           if (destructivePreludeSeen) throw idleAfterDestructivePreludeAbort();
           attempt++;
           const sec = Math.round(idleTimeoutMs / 1000);
@@ -303,6 +388,11 @@ export class AgentRunner {
           continue;
         }
         throw err;
+      } finally {
+        if (idleTimer) {
+          clearIdleAbort(idleTimer);
+          idleTimer = null;
+        }
       }
     }
     } finally {

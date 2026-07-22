@@ -1,6 +1,8 @@
 import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "./domain";
 import type { EvalMetaFields } from "./eval-log";
+import type { FileMutation } from "./file-transaction";
+import type { IngestLogEntry } from "./wiki-log";
 
 export type WikiOperation =
   | "ingest"
@@ -12,11 +14,128 @@ export type WikiOperation =
   | "format"
   | "delete";
 
+export type StructuredCallSite =
+  | "init.bootstrap"
+  | "init.bootstrap-map"
+  | "init.delta"
+  | "lint.patch"
+  | "lint.fix"
+  | "lint.batch"
+  | "lint-chat.fix"
+  | "lint-chat.patch"
+  | "query.seeds"
+  | "query.answer"
+  | "ingest.entities"
+  | "ingest.evidence-map"
+  | "ingest.evidence-reduce"
+  | "ingest.pages"
+  | "ingest.synthesize"
+  | "ingest.merge"
+  | "ingest.classify"
+  | "format.output"
+  | "format.segment"
+  | "vision.analysis";
+
+export type LlmLifecyclePhase =
+  | "preparing"
+  | "sent"
+  | "waiting"
+  | "producing"
+  | "validating"
+  | "applying"
+  | "completed"
+  | "retrying"
+  | "failed"
+  | "cancelled";
+
+export type LlmLifecycleAction =
+  | "bootstrap_domain"
+  | "extract_source_facts"
+  | "reduce_source_evidence"
+  | "synthesize_wiki_pages"
+  | "select_relevant_pages"
+  | "answer_question"
+  | "check_wiki_quality"
+  | "apply_lint_fixes"
+  | "format_note"
+  | "analyze_attachments"
+  | "retry_model_request";
+
+export interface LlmLifecycleDiagnostics {
+  callSite?: StructuredCallSite;
+  transport?: "stream" | "non-stream" | "claude";
+  attempt?: number;
+  configuredInputBudget?: number;
+  effectiveInputBudget?: number;
+  provider?: string;
+}
+
 export type OnFileError = (
   file: string,
   err: Error,
   canRetry: boolean,
 ) => Promise<"skip" | "retry" | "stop">;
+
+export interface IngestDeferredEffects {
+  domainPatch?: { entity_types: EntityType[] };
+  sourcePathAdded?: { domainId: string; path: string };
+  log?: {
+    sourcePath: string;
+    entries: IngestLogEntry[];
+    outputTokens: number;
+  };
+  manifestComplete: boolean;
+  mutations: FileMutation[];
+}
+
+/** Internal delete-rebuild mode; never derived from user-configurable settings. */
+export interface IngestInternalExecution {
+  deferCommitEffects: true;
+  transaction: {
+    readonly manifestComplete: boolean;
+    readonly mutations: FileMutation[];
+  };
+}
+
+export interface DeleteEntityTypeDelta {
+  type: string;
+  before?: EntityType;
+  after?: EntityType;
+}
+
+export interface DeleteStateCommitEvent {
+  kind: "delete_state_commit";
+  domainId: string;
+  journalPath: string;
+  journalHash: string;
+  /** Exact SHA-256 of the controller-persisted published journal receipt. */
+  receiptHash?: string;
+  metadataPath: string;
+  sourcePathAdds: string[];
+  sourcePathRemoved: string;
+  analyzedRemoval: { path: string; beforeHash?: string };
+  entityTypeDeltas: DeleteEntityTypeDelta[];
+}
+
+export type IngestOutcome =
+  | {
+      ok: true;
+      sourcePath: string;
+      created: string[];
+      updated: string[];
+      deleted: string[];
+      outputTokens: number;
+      sourceBodyHash: string;
+      deferred?: IngestDeferredEffects;
+    }
+  | {
+      ok: false;
+      sourcePath?: string;
+      stage: "read" | "evidence" | "context" | "synthesis" | "patch" | "write" | "index" | "embedding" | "backlink";
+      message: string;
+      retryable: boolean;
+      deferred?: IngestDeferredEffects;
+    };
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -27,6 +146,7 @@ export type WikiDomain = string;
 
 export interface RunRequest {
   operation: WikiOperation;
+  policyOperation?: OpKey;
   args: string[];
   cwd: string | undefined;
   signal: AbortSignal;
@@ -41,23 +161,209 @@ export interface RunRequest {
   lintOpts?: { useLlm: boolean; entityTypeFilter: string[] };
 }
 
+type TransportRetryMetadata = {
+  logicalRequestId: string;
+  lifecycleId: string;
+  callSite: string;
+  attempt: number;
+  maxRetries: number;
+  errorClass?: string;
+  status?: number;
+  delayMs?: number;
+  delaySource?: "retry-after-ms" | "retry-after" | "backoff";
+  meaningfulOutputSeen: boolean;
+  connectionTimeoutMs: number;
+  idleTimeoutMs: number;
+  providerRequestId?: string;
+  clientRequestId?: string;
+  traceparent?: string;
+};
+
+export type NativeNetworkTransport = "desktop-direct" | "desktop-proxy" | "mobile-host";
+export type NativeTransportDiagnosticMode = "off" | "connection-close" | "undici-request-adapter";
+export type NativeTransportTraceStage =
+  | "fetch_start"
+  | "fetch_headers"
+  | "body_start"
+  | "body_chunk"
+  | "body_end"
+  | "fetch_error"
+  | "fetch_abort"
+  | "body_error"
+  | "sdk_complete";
+
+export type NativeTransportTraceRecord = {
+  stage: NativeTransportTraceStage;
+  networkTransport: NativeNetworkTransport;
+  endpointPath: string;
+  diagnosticMode: NativeTransportDiagnosticMode;
+  elapsedMs: number;
+  status?: number;
+  contentType?: string;
+  contentLength?: number;
+  bodyBytes?: number;
+  bodyChunks?: number;
+  errorClass?: string;
+  clientRequestId?: string;
+  traceparent?: string;
+};
+
+export type NativeTransportTraceSnapshot = {
+  startedAtMs: number;
+  events: NativeTransportTraceRecord[];
+};
+
+type NativeTransportTraceMetadata = NativeTransportTraceRecord & {
+  logicalRequestId: string;
+  lifecycleId: string;
+  callSite: string;
+  transport: "stream" | "non-stream";
+  attempt: number;
+  connectionTimeoutMs: number;
+  idleTimeoutMs: number;
+};
+
+type NativeHttpResponseMetadata = {
+  logicalRequestId: string;
+  lifecycleId: string;
+  callSite: string;
+  transport: "stream" | "non-stream";
+  attempt: number;
+  status: number;
+  endpointPath: string;
+  networkTransport: NativeNetworkTransport;
+  connectionTimeoutMs: number;
+  idleTimeoutMs: number;
+  providerRequestId?: string;
+  clientRequestId?: string;
+  traceparent?: string;
+};
+
+type NativeTransportCorrelationMetadata = {
+  logicalRequestId: string;
+  lifecycleId: string;
+  callSite: string;
+  transport: "stream" | "non-stream";
+  attempt: number;
+  endpointPath: string;
+  networkTransport: NativeNetworkTransport;
+  diagnosticMode: NativeTransportDiagnosticMode;
+  connectionTimeoutMs: number;
+  idleTimeoutMs: number;
+  clientRequestId: string;
+  traceparent: string;
+};
+
 export type RunEvent =
   | { kind: "system"; message: string; sessionId?: string }
+  | {
+      kind: "run_config";
+      llmConnectionTimeoutMs: number;
+      llmIdleTimeoutMs: number;
+      nativeTransport?: NativeTransportDiagnostic;
+    }
+  | {
+      kind: "wipe_manifest_chunk";
+      domainId: string;
+      transactionId: string;
+      chunkIndex: number;
+      chunkCount: number;
+      hashAlgorithm: "sha256-v2";
+      entries: Array<{ path: string; hash?: string }>;
+      chunkHash: string;
+    }
+  | {
+      kind: "wipe_complete";
+      domainId: string;
+      transactionId: string;
+      chunkCount: number;
+      totalCount: number;
+      hashAlgorithm: "sha256-v2";
+      manifestHash: string;
+      atMs: number;
+    }
+  | {
+      kind: "llm_lifecycle";
+      id: string;
+      action: LlmLifecycleAction;
+      phase: LlmLifecyclePhase;
+      atMs: number;
+      diagnostics?: LlmLifecycleDiagnostics;
+    }
   | { kind: "tool_use"; name: string; input: unknown }
   | { kind: "tool_result"; ok: boolean; preview?: string }
+  | {
+      kind: "index_effect";
+      domainId: string;
+      sourcePath: string;
+      stage: "page_reconcile" | "final_reconcile";
+    }
   | { kind: "assistant_text"; delta: string; isReasoning?: boolean }
   | { kind: "assistant_replace"; text: string }
   | { kind: "info_text"; icon: string; summary: string; details?: string[] }
   | { kind: "result"; durationMs: number; text: string; outputTokens?: number }
   | {
       kind: "llm_call_stats";
-      inputTokens: number;
+      inputTokens?: number;
       outputTokens: number;
       ttftMs: number;
       llmDurationMs: number;
       inTokPerSec: number;
       outTokPerSec: number;
     }
+  | {
+      kind: "prompt_budget";
+      requestId?: string;
+      callSite: StructuredCallSite;
+      configuredInputBudget: number;
+      effectiveInputBudget: number;
+      estimatedInputTokens: number;
+      actualInputTokens?: number;
+      outputBudget?: number;
+      compressionProfile?: CompressionProfile;
+      contextUnits: number;
+      sourceChunks?: number;
+      reductionDepth?: number;
+      retryReason?: string;
+    }
+  | {
+      kind: "structured_validation_retry";
+      callSite: StructuredCallSite;
+      requestId: string;
+      errorClass: string;
+      safeReason: string;
+      bundleCount: number;
+      canSplit: boolean;
+      nextAction: "split_batch" | "repair_prompt" | "fail";
+      entityKeys?: string[];
+      actionCount?: number;
+      skipCount?: number;
+    }
+  | {
+      kind: "llm_request_fingerprint";
+      requestId: string;
+      callSite: StructuredCallSite;
+      transport: "stream" | "non-stream";
+      attempt: number;
+      model: string;
+      stream: boolean;
+      messageCount: number;
+      messageCharLengths: number[];
+      estimatedInputTokens: number;
+      outputBudget?: number;
+      responseFormatType?: string;
+      responseFormatName?: string;
+      temperature?: number;
+      topP?: number;
+      hasThinking: boolean;
+      preparedMessagesHash: string;
+    }
+  | ({ kind: "transport_retry_scheduled" } & TransportRetryMetadata)
+  | ({ kind: "transport_retry_recovered" } & TransportRetryMetadata)
+  | ({ kind: "transport_retry_exhausted" } & TransportRetryMetadata)
+  | ({ kind: "native_transport_correlation" } & NativeTransportCorrelationMetadata)
+  | ({ kind: "native_http_response" } & NativeHttpResponseMetadata)
+  | ({ kind: "native_transport_trace" } & NativeTransportTraceMetadata)
   | {
       kind: "query_stats";
       crossDomain: boolean;
@@ -90,6 +396,7 @@ export type RunEvent =
   | { kind: "source_path_added"; domainId: string; path: string }
   | { kind: "source_path_removed"; domainId: string; path: string }
   | { kind: "domain_updated"; domainId: string; patch: { entity_types?: EntityType[]; language_notes?: string; wiki_folder?: string; analyzed_sources?: Record<string, string> } }
+  | DeleteStateCommitEvent
   | { kind: "rule_fired"; ruleId: string; count: number }
   | { kind: "eval_meta"; fields: EvalMetaFields }
   | { kind: "init_start"; totalFiles: number; phase?: "analysis" | "ingest" }
@@ -99,7 +406,7 @@ export type RunEvent =
   | { kind: "format_applied"; path: string }
   | { kind: "format_cancelled" }
   | { kind: "structural_error";
-      callSite: "init.bootstrap" | "init.delta" | "lint.patch" | "lint.fix" | "lint-chat.fix" | "query.seeds" | "query.answer" | "ingest.entities" | "ingest.pages" | "ingest.merge" | "ingest.classify" | "format.output";
+      callSite: StructuredCallSite;
       errorType: "json_parse" | "schema_validate" | "empty_output" | "response_format_fallback" | "frame_parse" | "idle_abort";
       retryAttempt: number;
       succeeded: boolean | null;
@@ -140,8 +447,23 @@ export interface RunHistoryEntry {
   steps: Array<{ kind: "tool_use" | "tool_result"; label: string }>;
 }
 
+export type CompressionProfile = "maximum" | "balanced" | "minimum";
+export type CompressionOperation = "ingest" | "query" | "lint" | "vision";
+
+export interface SemanticCompression {
+  profile: CompressionProfile;
+  operation: CompressionOperation;
+}
+
+export interface ModelCallPolicy {
+  inputBudgetTokens: number;
+  outputBudgetTokens?: number;
+  compression?: CompressionProfile;
+}
+
 export interface LlmCallOptions {
   temperature?: number;
+  inputBudgetTokens?: number;
   maxTokens?: number;
   topP?: number | null;
   systemPrompt?: string;
@@ -156,22 +478,113 @@ export interface LlmCallOptions {
   dedupThreshold?: number;
   lintNearDuplicate?: boolean;
   nearDupThreshold?: number;
+  semanticCompression?: SemanticCompression;
+  /** Internal native transport policy resolved from existing top-level settings. */
+  nativeRequestRetries?: number;
+  /** Internal native transport policy resolved from existing top-level settings. */
+  nativeRequestIdleTimeoutMs?: number;
 }
+
+export const NATIVE_TRANSPORT_ATTEMPT_SIGNAL = Symbol("nativeTransportAttemptSignal");
+export const NATIVE_TRANSPORT_CLIENT_REQUEST_ID = Symbol("nativeTransportClientRequestId");
+export const NATIVE_TRANSPORT_TRACEPARENT = Symbol("nativeTransportTraceparent");
+
+export interface NativeChatCompletionCreateOptions {
+  signal: AbortSignal;
+  fetchOptions?: RequestInit & {
+    [NATIVE_TRANSPORT_ATTEMPT_SIGNAL]?: AbortSignal;
+    [NATIVE_TRANSPORT_CLIENT_REQUEST_ID]?: string;
+    [NATIVE_TRANSPORT_TRACEPARENT]?: string;
+  };
+}
+
+export interface LlmChatCompletionCreateOptions {
+  signal?: AbortSignal;
+  retry?: NativeRequestRetryContext;
+}
+
+export interface NativeChatCompletionCreate {
+  (
+    params: OpenAI.Chat.ChatCompletionCreateParamsStreaming,
+    options: NativeChatCompletionCreateOptions,
+  ): Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk>>;
+  (
+    params: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+    options: NativeChatCompletionCreateOptions,
+  ): Promise<OpenAI.Chat.ChatCompletion>;
+}
+
+export interface NativeRequestLifecycle {
+  begin(attempt: number, transport: "stream" | "non-stream"): void;
+  phase(phase: "sent" | "waiting" | "producing" | "validating"): void;
+  close(phase: "retrying" | "failed" | "cancelled"): void;
+  current(): { id: string; action: LlmLifecycleAction };
+}
+
+export interface NativeRequestRetryContext {
+  logicalRequestId: string;
+  traceId: string;
+  callSite: string;
+  maxRetries: number;
+  connectionTimeoutMs: number;
+  idleTimeoutMs: number;
+  signal: AbortSignal;
+  onEvent: (event: RunEvent) => void;
+  lifecycle: NativeRequestLifecycle;
+  nativeTransportDiagnostic?: NativeTransportDiagnostic;
+  consumeNativeHttpResponseDiagnostic?: (signal: AbortSignal) => NativeTransportDiagnostic | undefined;
+  consumeNativeTransportTrace?: (signal: AbortSignal) => NativeTransportTraceSnapshot | undefined;
+  delay: (ms: number, signal: AbortSignal) => Promise<void>;
+}
+
+export type NativeLlmExecutionInput =
+  | {
+      create: NativeChatCompletionCreate;
+      params: OpenAI.Chat.ChatCompletionCreateParamsStreaming;
+      retry: NativeRequestRetryContext;
+    }
+  | {
+      create: NativeChatCompletionCreate;
+      params: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming;
+      retry: NativeRequestRetryContext;
+    };
 
 /** Минимальный интерфейс OpenAI-клиента, используемый фазами. */
 export type LlmClient = {
+  /** True only for the executor-backed native adapter; absent for Claude and test clients. */
+  nativeRequestExecutor?: true;
+  /** Configured native DNS/TCP/TLS establishment timeout carried into retry diagnostics. */
+  nativeConnectionTimeoutMs?: number;
+  nativeTransportDiagnostic?: NativeTransportDiagnostic;
+  consumeNativeHttpResponseDiagnostic?: (signal: AbortSignal) => NativeTransportDiagnostic | undefined;
+  consumeNativeTransportTrace?: (signal: AbortSignal) => NativeTransportTraceSnapshot | undefined;
+  emitsPromptBudget?: boolean;
+  beginPromptBudgetRequest?: (requestId: string) => void;
   chat: {
     completions: {
       create(
         params: OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-        opts?: { signal?: AbortSignal },
+        opts?: LlmChatCompletionCreateOptions,
       ): Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk>>;
       create(
         params: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-        opts?: { signal?: AbortSignal },
+        opts?: LlmChatCompletionCreateOptions,
       ): Promise<OpenAI.Chat.ChatCompletion>;
     };
   };
+};
+
+export type NativeTransportDiagnostic = {
+  transport: NativeNetworkTransport;
+  diagnosticMode: NativeTransportDiagnosticMode;
+  endpointPath?: string;
+  status?: number;
+  providerRequestId?: string;
+  clientRequestId?: string;
+  traceparent?: string;
+  requestedScope?: "dns_tcp_tls_establishment";
+  exactConnectTimeoutAvailable?: false;
+  hostTransportRetained?: true;
 };
 
 export type OutputLanguage = "auto" | "ru" | "en" | "es";
@@ -182,13 +595,17 @@ export type OpMap<T> = Record<OpKey, T>;
 export interface ClaudeOperationConfig {
   model: string;
   effort?: "low" | "medium" | "high" | "xhigh" | "max";
+  inputBudgetTokens: number;
+  compressionProfile?: CompressionProfile;
 }
 
 export interface NativeOperationConfig {
   model: string;
+  inputBudgetTokens: number;
   maxTokens: number;
   temperature: number;
   thinkingBudgetTokens?: number;
+  compressionProfile?: CompressionProfile;
 }
 
 export interface LlmWikiPluginSettings {
@@ -213,6 +630,8 @@ export interface LlmWikiPluginSettings {
   history: RunHistoryEntry[];
   claudeAgent: {
     model: string;
+    inputBudgetTokens: number;
+    compressionProfile: CompressionProfile;
     allowedTools: string;
     perOperation: boolean;
     effort?: "low" | "medium" | "high" | "xhigh" | "max";
@@ -222,7 +641,9 @@ export interface LlmWikiPluginSettings {
     baseUrl: string;
     apiKey: string;
     model: string;
+    inputBudgetTokens: number;
     maxTokens: number;
+    compressionProfile: CompressionProfile;
     temperature: number;
     topP: number | null;
     perOperation: boolean;
@@ -260,6 +681,7 @@ export interface LlmWikiPluginSettings {
   };
   devMode: {
     enabled: boolean;
+    nativeTransportDiagnosticMode: NativeTransportDiagnosticMode;
   };
   lintOptions: {
     useLlm: boolean;
@@ -267,9 +689,54 @@ export interface LlmWikiPluginSettings {
   vision: {
     enabled: boolean;
     model: string;
+    compressionProfile?: CompressionProfile;
   };
+  llmConnectionTimeoutSec: number;
   llmIdleTimeoutSec: number;
   llmIdleRetries: number;
+}
+
+export const MAX_SAFE_TIMER_MS = 2_147_000_000;
+export const MAX_LLM_IDLE_TIMEOUT_SEC = 2_146_999;
+
+function integerInput(value: unknown): number | undefined {
+  if (typeof value === "number") {
+    return Number.isSafeInteger(value) ? value : undefined;
+  }
+  if (typeof value !== "string" || !/^\d+$/.test(value.trim())) return undefined;
+  const parsed = Number(value.trim());
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+export function parseLlmRetryCount(value: unknown, previous: number): number {
+  const parsed = integerInput(value);
+  return parsed !== undefined && parsed >= 0 ? parsed : previous;
+}
+
+export function parseLlmConnectionTimeoutSec(value: unknown, previous: number): number {
+  const parsed = integerInput(value);
+  return parsed !== undefined && parsed >= 1 ? parsed : previous;
+}
+
+export function parseLlmIdleTimeoutSec(value: unknown, previous: number): number {
+  const parsed = integerInput(value);
+  return parsed !== undefined && parsed >= 0 && parsed <= MAX_LLM_IDLE_TIMEOUT_SEC
+    ? parsed
+    : previous;
+}
+
+export function normalizeLlmRuntimeControls(settings: LlmWikiPluginSettings): void {
+  settings.llmIdleRetries = parseLlmRetryCount(settings.llmIdleRetries, 3);
+  settings.llmConnectionTimeoutSec = parseLlmConnectionTimeoutSec(
+    settings.llmConnectionTimeoutSec,
+    15,
+  );
+  settings.llmIdleTimeoutSec = parseLlmIdleTimeoutSec(settings.llmIdleTimeoutSec, 300);
+  settings.devMode.nativeTransportDiagnosticMode =
+    settings.devMode.nativeTransportDiagnosticMode === "connection-close"
+      || settings.devMode.nativeTransportDiagnosticMode === "undici-request-adapter"
+      ? settings.devMode.nativeTransportDiagnosticMode
+      : "off";
 }
 
 export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
@@ -288,30 +755,34 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   history: [],
   claudeAgent: {
     model: "sonnet",
+    inputBudgetTokens: 16384,
+    compressionProfile: "balanced",
     allowedTools: "",
     perOperation: false,
     operations: {
-      ingest: { model: "haiku" },
-      query:  { model: "sonnet" },
-      lint:   { model: "sonnet" },
-      init:   { model: "sonnet" },
-      format: { model: "sonnet" },
+      ingest: { model: "haiku", inputBudgetTokens: 16384 },
+      query:  { model: "sonnet", inputBudgetTokens: 16384 },
+      lint:   { model: "sonnet", inputBudgetTokens: 16384 },
+      init:   { model: "sonnet", inputBudgetTokens: 16384 },
+      format: { model: "sonnet", inputBudgetTokens: 16384 },
     },
   },
   nativeAgent: {
     baseUrl: "http://localhost:11434/v1",
     apiKey: "ollama",
     model: "llama3.2",
+    inputBudgetTokens: 16384,
     maxTokens: 4096,
+    compressionProfile: "balanced",
     temperature: 0.2,
     topP: null,
     perOperation: false,
     operations: {
-      ingest: { model: "llama3.2", maxTokens: 4096, temperature: 0.2 },
-      query:  { model: "llama3.2", maxTokens: 4096, temperature: 0.2 },
-      lint:   { model: "llama3.2", maxTokens: 8192, temperature: 0.2 },
-      init:   { model: "llama3.2", maxTokens: 8192, temperature: 0.2 },
-      format: { model: "llama3.2", maxTokens: 32768, temperature: 0.2 },
+      ingest: { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 4096, temperature: 0.2 },
+      query:  { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 4096, temperature: 0.2 },
+      lint:   { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 8192, temperature: 0.2 },
+      init:   { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 8192, temperature: 0.2 },
+      format: { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 32768, temperature: 0.2 },
     },
     structuredRetries: 1,
     rerankerEnabled: false,
@@ -332,6 +803,7 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   proxy: { enabled: false, url: "" },
   devMode: {
     enabled: false,
+    nativeTransportDiagnosticMode: "off",
   },
   lintOptions: {
     useLlm: true,
@@ -340,6 +812,7 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
     enabled: false,
     model: "",
   },
+  llmConnectionTimeoutSec: 15,
   llmIdleTimeoutSec: 300,
   llmIdleRetries: 3,
 };

@@ -3,16 +3,21 @@ import { join } from "path-browserify";
 import { AI_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
 import { validateDomainId, type DomainEntry, type AddDomainInput } from "./domain";
 import type LlmWikiPlugin from "./main";
-import type { RunEvent, RunHistoryEntry, WikiOperation, OnFileError } from "./types";
-import { AgentRunner } from "./agent-runner";
+import type {
+  NativeTransportDiagnostic,
+  OnFileError,
+  RunEvent,
+  RunHistoryEntry,
+  WikiOperation,
+} from "./types";
+import { AgentRunner, resolveFollowUpPolicyOperation } from "./agent-runner";
 import type { ChatMessage } from "./types";
 import { VaultTools, type VaultAdapter } from "./vault-tools";
 import { arrayBufferToBase64, stripImageDataUriPrefix } from "./phases/attachment-analyzer";
 import { ClaudeCliClient } from "./claude-cli-client";
-import OpenAI from "openai";
-import { createProxyFetch, parseNoProxy, shouldBypass, maskProxyUrl } from "./proxy";
+import { maskProxyUrl } from "./proxy";
 import { mobileFetch } from "./mobile-fetch";
-import { wrapMobileNoStream } from "./mobile-llm-wrap";
+import { createNativeOpenAiClient } from "./native-openai-client";
 import { i18n } from "./i18n";
 import { resolveEffective } from "./effective-settings";
 import { applyDomainEvent } from "./domain";
@@ -23,15 +28,68 @@ import type { LlmWikiPluginSettings } from "./types";
 import { DeleteSourceModal, FileErrorModal, FormatVisionModal, InfoModal, ShellConsentModal } from "./modals";
 import { computeDeletionPlan, sourceStem } from "./source-deletion";
 import { domainWikiFolder, domainIndexPath, domainLogPath } from "./wiki-path";
-import { parseIndexAnnotations } from "./wiki-index";
 import { collectPageDescriptions, parseWikiIndexJsonl } from "./wiki-index-jsonl";
 import { buildOkfBundle } from "./okf-export";
 import { writeOkfBundle } from "./okf-export-fs";
+import {
+  assertBoundedWipeIdentifier,
+  WIPE_LOG_LINE_MAX_BYTES,
+} from "./wipe-proof";
+
+const AGENT_LOG_LINE_MAX_BYTES = WIPE_LOG_LINE_MAX_BYTES;
+const AGENT_LOG_REASONING_CHUNK_BYTES = 128 * 1024;
+/** Maximum reasoning retained in agent.jsonl per operation. */
+export const AGENT_LOG_REASONING_TOTAL_BYTES = 4 * 1024 * 1024;
+
+function utf8ByteLength(value: string): number {
+  let bytes = 0;
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    bytes += codePoint <= 0x7f ? 1 : codePoint <= 0x7ff ? 2 : codePoint <= 0xffff ? 3 : 4;
+  }
+  return bytes;
+}
+
+function takeUtf8Prefix(value: string, maxBytes: number): {
+  prefix: string;
+  rest: string;
+  prefixBytes: number;
+} {
+  let bytes = 0;
+  let end = 0;
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    const characterBytes =
+      codePoint <= 0x7f ? 1 : codePoint <= 0x7ff ? 2 : codePoint <= 0xffff ? 3 : 4;
+    if (bytes + characterBytes > maxBytes) break;
+    bytes += characterBytes;
+    end += character.length;
+  }
+  return {
+    prefix: value.slice(0, end),
+    rest: value.slice(end),
+    prefixBytes: bytes,
+  };
+}
+
+export function boundAgentLogField(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  try {
+    assertBoundedWipeIdentifier(value, "agent log envelope field");
+    return value;
+  } catch {
+    return "[invalid]";
+  }
+}
 import { restoreSourceFrontmatter } from "./utils/raw-frontmatter";
 import { graphCache } from "./wiki-graph-cache";
 import { collectMdInPaths, parseWikiSources } from "./utils/vault-walk";
 import { computeChangedSources, hashSource, type SourceFileInfo } from "./incremental-sources";
 import { updateEvalRating, readEvalRecord, updateEvalComment, type RatingAxis, type Rating } from "./eval-log";
+import {
+  persistDeleteStateCommitEvent,
+} from "./phases/delete";
+import { processDeleteStateCommitForDispatch } from "./delete-state-dispatch";
 
 /** Minimal surface of the host obsidian-excalidraw-plugin's ExcalidrawAutomate. */
 interface ExcalidrawAutomateLike {
@@ -51,8 +109,13 @@ export class WikiController {
   private _currentClaudeClient: ClaudeCliClient | null = null;
   private _pendingFormat: { originalPath: string; tempPath: string; chat: ChatMessage[] } | null = null;
   private _currentLogMeta: { backend: string; model: string; agentLogEnabled: boolean } | null = null;
+  private _currentNativeTransportDiagnostic: NativeTransportDiagnostic | undefined;
   private _llmCallIndex = 0;
   private _reasoningBuf = "";
+  private _reasoningBufBytes = 0;
+  private _reasoningRetainedBytes = 0;
+  private _reasoningOmittedBytes = 0;
+  private _reasoningTruncationReported = false;
   constructor(
     private app: App,
     private plugin: LlmWikiPlugin,
@@ -257,10 +320,16 @@ export class WikiController {
     if (!view) return;
 
     const vaultRoot = this.cwdOrEmpty();
+    const policyOperation = resolveFollowUpPolicyOperation(operation);
 
     let agentRunner: AgentRunner;
     try {
-      agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId, "chat", this.plugin.settings.timeouts.lint);
+      agentRunner = await this.buildAgentRunner(
+        vaultRoot,
+        undefined,
+        policyOperation,
+        this.plugin.settings.timeouts.lint,
+      );
     } catch (e) {
       new Notice(i18n().ctrl.errorPrefix((e as Error).message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
@@ -275,6 +344,12 @@ export class WikiController {
     const lastMsg = chatMessages[chatMessages.length - 1]?.content ?? "";
     let finalText = "";
     let status: "done" | "error" | "cancelled" = "done";
+    this._llmCallIndex = 0;
+    this._reasoningBuf = "";
+    this._reasoningBufBytes = 0;
+    this._reasoningRetainedBytes = 0;
+    this._reasoningOmittedBytes = 0;
+    this._reasoningTruncationReported = false;
 
     await this.logEvent(vaultRoot, sessionId, "chat", domainId, {
       kind: "system",
@@ -293,7 +368,8 @@ export class WikiController {
     const timeoutMs = this.plugin.settings.timeouts.lint * 1000;
     const runGen = agentRunner.run({
       operation: "chat", args: [], cwd: vaultRoot,
-      signal: ctrl.signal, timeoutMs, domainId, context, chatMessages, operationHeader, runId: sessionId,
+      signal: ctrl.signal, timeoutMs, domainId, context, chatMessages,
+      operationHeader, policyOperation, runId: sessionId,
     });
 
     try {
@@ -388,7 +464,6 @@ export class WikiController {
     try {
       const indexRaw = await this.app.vault.adapter.read(domainIndexPath(wikiFolder));
       descriptions = collectPageDescriptions(parseWikiIndexJsonl(indexRaw, domainIndexPath(wikiFolder)));
-      if (descriptions.size === 0) descriptions = parseIndexAnnotations(indexRaw);
     } catch { /* no index */ }
     try { log = await this.app.vault.adapter.read(domainLogPath(wikiFolder)); } catch { /* no log */ }
     const bundle = buildOkfBundle(pages, descriptions, log);
@@ -662,86 +737,146 @@ export class WikiController {
     } else {
       this._currentClaudeClient = null;
 
-      const proxyCfg = s.proxy;
-      let proxyFetch: typeof fetch | null = null;
-      if (proxyCfg.enabled && Platform.isMobile) {
+      if (s.proxy.enabled && Platform.isMobile) {
         new Notice(i18n().settings.proxy_mobile_warning);
-      } else if (proxyCfg.enabled) {
-        try {
-          const baseHost = new URL(s.nativeAgent.baseUrl).hostname;
-          const noProxyList = parseNoProxy(proxyCfg.noProxy);
-          if (!shouldBypass(baseHost, noProxyList)) {
-            proxyFetch = createProxyFetch(proxyCfg);
-            if (proxyFetch) console.debug(`[ai-wiki] using proxy ${maskProxyUrl(proxyCfg.url)}`);
-          }
-        } catch (e) {
-          new Notice(i18n().settings.proxy_invalid((e as Error).message));
-        }
       }
 
-      const openaiClient = new OpenAI({
+      llm = createNativeOpenAiClient({
         baseURL: s.nativeAgent.baseUrl,
         apiKey: s.nativeAgent.apiKey,
-        timeout: timeoutSec > 0 ? timeoutSec * 1000 : undefined,
-        dangerouslyAllowBrowser: true,
-        fetch: Platform.isMobile ? mobileFetch : (proxyFetch ?? undefined),
+        connectionTimeoutMs: s.llmConnectionTimeoutSec * 1000,
+        idleTimeoutMs: s.llmIdleTimeoutSec * 1000,
+        nativeTransportDiagnosticMode: s.devMode.nativeTransportDiagnosticMode,
+        isMobile: Platform.isMobile,
+        proxyConfig: s.proxy,
+        mobileFetch,
+        onProxySelected: (config) => {
+          console.debug(`[ai-wiki] using proxy ${maskProxyUrl(config.url)}`);
+        },
+        onProxyError: (error) => {
+          new Notice(i18n().settings.proxy_invalid((error as Error).message));
+        },
       });
-      llm = Platform.isMobile
-        ? wrapMobileNoStream(openaiClient)
-        : openaiClient;
     }
 
+    this._currentNativeTransportDiagnostic = llm.nativeTransportDiagnostic;
     return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`, Platform.isMobile);
   }
 
   private async logEvent(_vaultRoot: string, sessionId: string, op: WikiOperation, domainId: string | undefined, ev: RunEvent): Promise<void> {
-    if (!(this._currentLogMeta?.agentLogEnabled ?? this.plugin.settings.agentLogEnabled)) return;
-
-    // Reasoning chunks (assistant_text + isReasoning) accumulate into a buffer and
-    // are flushed as ONE consolidated line when the next non-assistant_text event
-    // arrives. Non-reasoning assistant_text (progress chatter) stays dropped — the
-    // final answer is already captured by the `result` event.
-    if (ev.kind === "assistant_text") {
-      if (ev.isReasoning) this._reasoningBuf += ev.delta;
-      return;
+    if (ev.kind === "run_config" && this._currentNativeTransportDiagnostic) {
+      ev.nativeTransport = this._currentNativeTransportDiagnostic;
     }
+    if (!(this._currentLogMeta?.agentLogEnabled ?? this.plugin.settings.agentLogEnabled)) return;
 
     const adapter = this.app.vault.adapter;
     // Agent log lives in the plugin dir (NOT the synced wiki tree). The pluginDir
     // always exists (the plugin loads from it), so no folder creation is needed.
     const path = `${this.pluginDir()}/agent.jsonl`;
-    try {
-      const appendLine = async (record: unknown): Promise<void> => {
-        const line = JSON.stringify(record) + "\n";
+    const appendLine = async (line: string): Promise<void> => {
+      try {
         if (await adapter.exists(path)) await adapter.append(path, line);
         else await adapter.write(path, line);
-      };
-      const envelope = {
-        session: sessionId, op, domainId,
-        backend: this._currentLogMeta?.backend,
-        model: this._currentLogMeta?.model,
-      };
-
-      // Flush accumulated reasoning as one line, stamped with the current call index,
-      // before writing the event that triggered the flush.
-      if (this._reasoningBuf) {
-        await appendLine({
-          ts: new Date().toISOString(),
-          ...envelope,
-          event: { kind: "reasoning", text: this._reasoningBuf },
-          callIndex: this._llmCallIndex,
-        });
-        this._reasoningBuf = "";
-      }
-
-      const extra = ev.kind === "llm_call_stats" ? { callIndex: this._llmCallIndex++ } : {};
-      await appendLine({
+      } catch { /* не блокируем операцию */ }
+    };
+    const envelope = {
+      session: sessionId, op, domainId,
+      backend: boundAgentLogField(this._currentLogMeta?.backend),
+      model: boundAgentLogField(this._currentLogMeta?.model),
+    };
+    const appendRecord = async (
+      event: Record<string, unknown> | RunEvent,
+      extra: Record<string, unknown> = {},
+    ): Promise<void> => {
+      const record = {
         ts: new Date().toISOString(),
         ...envelope,
-        event: ev,
+        event,
         ...extra,
+      };
+      const line = JSON.stringify(record) + "\n";
+      const encodedByteLength = new TextEncoder().encode(line).length;
+      if (encodedByteLength <= AGENT_LOG_LINE_MAX_BYTES) {
+        await appendLine(line);
+        return;
+      }
+      const omitted = JSON.stringify({
+        ts: new Date().toISOString(),
+        ...envelope,
+        event: {
+          kind: "log_record_omitted",
+          eventKind: typeof event.kind === "string" ? event.kind : "unknown",
+          byteCount: encodedByteLength,
+          reason: "agent_log_line_limit",
+        },
+        ...extra,
+      }) + "\n";
+      await appendLine(omitted);
+    };
+
+    // Reasoning stays bounded in memory and on disk. Full chunks are detached before
+    // writes; a failed adapter call therefore cannot replay the same buffered text.
+    if (ev.kind === "assistant_text") {
+      if (!ev.isReasoning) return;
+      const deltaBytes = utf8ByteLength(ev.delta);
+      const remaining = Math.max(
+        0,
+        AGENT_LOG_REASONING_TOTAL_BYTES - this._reasoningRetainedBytes,
+      );
+      const retained = deltaBytes <= remaining
+        ? { prefix: ev.delta, rest: "", prefixBytes: deltaBytes }
+        : takeUtf8Prefix(ev.delta, remaining);
+      this._reasoningRetainedBytes += retained.prefixBytes;
+      this._reasoningBuf += retained.prefix;
+      this._reasoningBufBytes += retained.prefixBytes;
+      if (!this._reasoningTruncationReported) {
+        this._reasoningOmittedBytes += deltaBytes - retained.prefixBytes;
+      }
+      const chunks: string[] = [];
+      while (this._reasoningBufBytes >= AGENT_LOG_REASONING_CHUNK_BYTES) {
+        const chunk = takeUtf8Prefix(
+          this._reasoningBuf,
+          AGENT_LOG_REASONING_CHUNK_BYTES,
+        );
+        chunks.push(chunk.prefix);
+        this._reasoningBuf = chunk.rest;
+        this._reasoningBufBytes -= chunk.prefixBytes;
+      }
+      for (const chunk of chunks) {
+        await appendRecord(
+          { kind: "assistant_text", delta: chunk, isReasoning: true },
+          { callIndex: this._llmCallIndex },
+        );
+      }
+      return;
+    }
+
+    const reasoning = this._reasoningBuf;
+    const omittedReasoningBytes = this._reasoningOmittedBytes;
+    this._reasoningBuf = "";
+    this._reasoningBufBytes = 0;
+    this._reasoningOmittedBytes = 0;
+    const reportTruncation =
+      omittedReasoningBytes > 0 && !this._reasoningTruncationReported;
+    if (reportTruncation) this._reasoningTruncationReported = true;
+
+    if (reasoning) {
+      await appendRecord(
+        { kind: "assistant_text", delta: reasoning, isReasoning: true },
+        { callIndex: this._llmCallIndex },
+      );
+    }
+    if (reportTruncation) {
+      await appendRecord({
+        kind: "reasoning_omitted",
+        truncated: true,
+        omittedByteCount: omittedReasoningBytes,
+        retainedByteLimit: AGENT_LOG_REASONING_TOTAL_BYTES,
       });
-    } catch { /* не блокируем операцию */ }
+    }
+
+    const extra = ev.kind === "llm_call_stats" ? { callIndex: this._llmCallIndex++ } : {};
+    await appendRecord(ev, extra);
   }
 
   private async dispatch(op: WikiOperation, args: string[], domainId?: string, context?: string, instruction?: string, onFileError?: OnFileError, chatMessages?: ChatMessage[], lintOpts?: { useLlm: boolean; entityTypeFilter: string[] }): Promise<void> {
@@ -803,6 +938,10 @@ export class WikiController {
     const startedAt = Date.now();
     this._llmCallIndex = 0;
     this._reasoningBuf = "";
+    this._reasoningBufBytes = 0;
+    this._reasoningRetainedBytes = 0;
+    this._reasoningOmittedBytes = 0;
+    this._reasoningTruncationReported = false;
     const sessionId = String(startedAt);
     const steps: RunHistoryEntry["steps"] = [];
     let finalText = "";
@@ -820,8 +959,41 @@ export class WikiController {
 
     try {
       for await (const ev of runGen) {
-        await this.logEvent(vaultRoot, sessionId, op, domainId, ev);
-        this.activeView()?.appendEvent(ev);
+        if (ev.kind === "delete_state_commit") {
+          const publication = await processDeleteStateCommitForDispatch(ev, {
+            persist: async () => {
+              const stateVaultTools = new VaultTools(
+                this.app.vault.adapter,
+                vaultRoot,
+                this.app.vault,
+              );
+              return persistDeleteStateCommitEvent(
+                this.domainStore,
+                stateVaultTools,
+                ev,
+                vaultRoot,
+              );
+            },
+            log: async (event) => this.logEvent(
+              vaultRoot,
+              sessionId,
+              op,
+              domainId,
+              event,
+            ),
+            append: (event) => this.activeView()?.appendEvent(event),
+          });
+          if (!publication.ok) {
+            finalText = publication.error.message;
+            status = "error";
+            this.collectStep(publication.error, steps);
+            ctrl.abort();
+            break;
+          }
+        } else {
+          await this.logEvent(vaultRoot, sessionId, op, domainId, ev);
+          this.activeView()?.appendEvent(ev);
+        }
         if (ev.kind === "domain_created" || ev.kind === "domain_updated" || ev.kind === "source_path_added" || ev.kind === "source_path_removed") {
           try {
             const cur = await this.domainStore.load();

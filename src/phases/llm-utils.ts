@@ -1,8 +1,19 @@
 import type OpenAI from "openai";
+import {
+  APIConnectionError,
+  APIUserAbortError,
+} from "openai";
 import type { LlmCallOptions, RunEvent } from "../types";
+import {
+  classifyContextError,
+  estimatePreparedMessages,
+  PromptBudgetExceededError,
+} from "../prompt-budget";
+import { compressionInstruction } from "../semantic-compression";
 import baseContract from "../../prompts/base.md";
 import { jsonrepair } from "jsonrepair";
 import { resolveLang, resolveReasoningLang } from "../i18n";
+import { RunEventBridge } from "../run-event-bridge";
 
 /** Maps a concrete output language to a reply directive for the system prompt. */
 export function langInstruction(lang: "ru" | "en" | "es"): string {
@@ -123,16 +134,41 @@ export function extractUsage(resp: OpenAI.Chat.ChatCompletion): number | undefin
   return typeof tok === "number" ? tok : undefined;
 }
 
+/** Extract reasoning from native and OpenAI-compatible non-stream messages. */
+export function completionReasoning(message: unknown): string {
+  if (message === null || typeof message !== "object") return "";
+  const record = message as Record<string, unknown>;
+  if (typeof record.reasoning === "string") return record.reasoning;
+  return typeof record.reasoning_content === "string" ? record.reasoning_content : "";
+}
+
+export async function* runWithLiveEvents<T>(
+  work: (
+    emit: (event: RunEvent) => void,
+    signal: AbortSignal,
+  ) => Promise<T>,
+  callerSignal: AbortSignal,
+): AsyncGenerator<RunEvent, T> {
+  const bridge = new RunEventBridge();
+  return yield* bridge.forwardAbortable(
+    callerSignal,
+    (signal) => work((event) => bridge.push(event), signal),
+  );
+}
+
 export function buildChatParams(
   model: string,
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   opts: LlmCallOptions,
   stream: boolean = false,
 ): Record<string, unknown> {
-  let msgs = prependBaseContract(messages);
-  if (opts.outputLanguage) msgs = injectLanguageDirective(msgs, resolveLang(opts.outputLanguage));
-  msgs = injectReasoningDirective(msgs, resolveReasoningLang(opts.reasoningLanguage, opts.outputLanguage));
-  msgs = opts.systemPrompt ? injectSystemPrompt(msgs, opts.systemPrompt) : msgs;
+  const msgs = prepareChatMessages(messages, opts);
+  if (opts.inputBudgetTokens !== undefined) {
+    const estimated = estimatePreparedMessages(msgs);
+    if (estimated > opts.inputBudgetTokens) {
+      throw new PromptBudgetExceededError(opts.inputBudgetTokens, estimated, []);
+    }
+  }
   const params: Record<string, unknown> = { model, messages: msgs };
   if (opts.temperature !== undefined) params.temperature = opts.temperature;
   if (opts.maxTokens != null) params.max_tokens = opts.maxTokens;
@@ -158,6 +194,18 @@ export function buildChatParams(
   return params;
 }
 
+export function prepareChatMessages(
+  messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  opts: LlmCallOptions,
+): OpenAI.Chat.ChatCompletionMessageParam[] {
+  let msgs = prependBaseContract(messages);
+  if (opts.outputLanguage) msgs = injectLanguageDirective(msgs, resolveLang(opts.outputLanguage));
+  msgs = injectReasoningDirective(msgs, resolveReasoningLang(opts.reasoningLanguage, opts.outputLanguage));
+  msgs = opts.systemPrompt ? injectSystemPrompt(msgs, opts.systemPrompt) : msgs;
+  if (opts.semanticCompression) msgs = appendSystemSection(msgs, compressionInstruction(opts.semanticCompression));
+  return msgs;
+}
+
 function prependBaseContract(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
@@ -165,7 +213,7 @@ function prependBaseContract(
   if (firstSystem >= 0) {
     const updated = [...messages];
     const existing: string = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
-    updated[firstSystem] = { role: "system", content: `${baseContract}\n\n${existing}` };
+    updated[firstSystem] = { ...updated[firstSystem], role: "system", content: `${baseContract}\n\n${existing}` };
     return updated;
   }
   return [{ role: "system", content: baseContract }, ...messages];
@@ -177,14 +225,7 @@ function injectLanguageDirective(
   lang: "ru" | "en" | "es",
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const directive = `## Language\n${langInstruction(lang)}`;
-  const firstSystem = messages.findIndex((m) => m.role === "system");
-  if (firstSystem >= 0) {
-    const updated = [...messages];
-    const existing = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
-    updated[firstSystem] = { role: "system", content: `${existing}\n\n${directive}` };
-    return updated;
-  }
-  return [{ role: "system", content: directive }, ...messages];
+  return appendSystemSection(messages, directive);
 }
 
 const REASONING_LANG_NAME: Record<"ru" | "en" | "es", string> = {
@@ -213,15 +254,7 @@ function injectReasoningDirective(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   lang: "ru" | "en" | "es",
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
-  const directive = reasoningDirective(lang);
-  const firstSystem = messages.findIndex((m) => m.role === "system");
-  if (firstSystem >= 0) {
-    const updated = [...messages];
-    const existing = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
-    updated[firstSystem] = { role: "system", content: `${existing}\n\n${directive}` };
-    return updated;
-  }
-  return [{ role: "system", content: directive }, ...messages];
+  return appendSystemSection(messages, reasoningDirective(lang));
 }
 
 const JSON_MODE_KEYWORDS = ["response_format", "json_object", "json mode", "unsupported"];
@@ -243,32 +276,129 @@ export function isJsonModeError(e: unknown): boolean {
   return JSON_MODE_KEYWORDS.some((kw) => msg.includes(kw));
 }
 
+export function shouldFallbackStreamToNonStream(
+  error: unknown,
+  signal?: AbortSignal,
+): boolean {
+  if (signal?.aborted) return false;
+  if (error instanceof APIUserAbortError || error instanceof APIConnectionError) {
+    return false;
+  }
+  if (error instanceof Error && error.name === "AbortError") return false;
+  if (isTransportFailure(error)) return false;
+  if (error && typeof error === "object") {
+    const status = (error as { status?: unknown }).status;
+    if (typeof status === "number" && Number.isFinite(status)) return false;
+  }
+  if (classifyContextError(error) !== null) return false;
+  return true;
+}
+
+function isTransportFailure(error: unknown): boolean {
+  const seen = new Set<object>();
+  let current = error;
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    const typed = current as {
+      cause?: unknown;
+      code?: unknown;
+      message?: unknown;
+      name?: unknown;
+    };
+    const code = typeof typed.code === "string" ? typed.code.toUpperCase() : "";
+    if (
+      code.startsWith("UND_ERR_")
+      || code.startsWith("ECONN")
+      || ["EPIPE", "ETIMEDOUT", "ENETUNREACH", "EHOSTUNREACH", "ENOTFOUND", "EAI_AGAIN"]
+        .includes(code)
+    ) {
+      return true;
+    }
+    const name = typeof typed.name === "string" ? typed.name : "";
+    const message = typeof typed.message === "string" ? typed.message : "";
+    if (current instanceof TypeError && /^(terminated|fetch failed)$/i.test(message.trim())) {
+      return true;
+    }
+    if (/socket/i.test(name) || /socket/i.test(message)) return true;
+    current = typed.cause;
+  }
+  return false;
+}
+
 function injectSystemPrompt(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   systemPrompt: string,
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   if (!systemPrompt) return messages;
-  const section = `## Clarification\n${systemPrompt}`;
+  return appendSystemSection(messages, `## Clarification\n${systemPrompt}`);
+}
+
+function appendSystemSection(
+  messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  section: string,
+): OpenAI.Chat.ChatCompletionMessageParam[] {
   const firstSystem = messages.findIndex((m) => m.role === "system");
   if (firstSystem >= 0) {
     const updated = [...messages];
-    const existing: string = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
-    updated[firstSystem] = { role: "system", content: `${existing}\n\n${section}` };
+    const existing = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
+    updated[firstSystem] = { ...updated[firstSystem], role: "system", content: `${existing}\n\n${section}` };
     return updated;
   }
   return [{ role: "system", content: section }, ...messages];
 }
 
 export interface LlmStreamStats {
-  inputTokens: number;
+  inputTokens?: number;
   outputTokens: number;
   ttftMs: number;
   llmDurationMs: number;
 }
 
+type ClosableAsyncIterator<T> = AsyncIterator<T> & {
+  cancel?: () => unknown;
+};
+
+function streamAbortError(): DOMException {
+  return new DOMException("The operation was aborted", "AbortError");
+}
+
+function closeStreamIterator<T>(iterator: ClosableAsyncIterator<T>): void {
+  const close = typeof iterator.return === "function"
+    ? () => iterator.return?.()
+    : typeof iterator.cancel === "function"
+      ? () => iterator.cancel?.()
+      : undefined;
+  if (!close) return;
+  try {
+    void Promise.resolve(close()).catch(() => {});
+  } catch {
+    // Best-effort close must not mask the abort.
+  }
+}
+
+async function nextStreamChunk<T>(
+  iterator: ClosableAsyncIterator<T>,
+  signal: AbortSignal,
+): Promise<IteratorResult<T>> {
+  if (signal.aborted) throw streamAbortError();
+
+  let rejectAbort!: (error: DOMException) => void;
+  const aborted = new Promise<never>((_, reject) => {
+    rejectAbort = reject;
+  });
+  const onAbort = () => rejectAbort(streamAbortError());
+  signal.addEventListener("abort", onAbort, { once: true });
+  try {
+    return await Promise.race([iterator.next(), aborted]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+}
+
 export function wrapStreamWithStats(
   stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>,
   requestStartMs: number,
+  signal: AbortSignal,
 ): {
   stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
   getStats(this: void): LlmStreamStats | undefined;
@@ -276,24 +406,36 @@ export function wrapStreamWithStats(
   let ttftMs: number | undefined;
   let firstChunkMs: number | undefined;
   let llmDurationMs: number | undefined;
-  let inputTokens = 0;
+  let inputTokens: number | undefined;
   let outputTokens = 0;
   let yielded = false;
 
   async function* wrapped(): AsyncIterable<OpenAI.Chat.ChatCompletionChunk> {
-    for await (const chunk of stream) {
-      if (!yielded) {
-        ttftMs = Date.now() - requestStartMs;
-        firstChunkMs = Date.now();
-        yielded = true;
+    const iterator = stream[Symbol.asyncIterator]() as ClosableAsyncIterator<OpenAI.Chat.ChatCompletionChunk>;
+    let completed = false;
+    try {
+      while (true) {
+        const next = await nextStreamChunk(iterator, signal);
+        if (next.done) {
+          completed = true;
+          break;
+        }
+        const chunk = next.value;
+        if (!yielded) {
+          ttftMs = Date.now() - requestStartMs;
+          firstChunkMs = Date.now();
+          yielded = true;
+        }
+        const { outputTokens: tok, inputTokens: inTok } = extractStreamDeltas(chunk);
+        if (tok !== undefined) outputTokens = tok;
+        if (inTok !== undefined) inputTokens = inTok;
+        yield chunk;
       }
-      const { outputTokens: tok, inputTokens: inTok } = extractStreamDeltas(chunk);
-      if (tok !== undefined) outputTokens = tok;
-      if (inTok !== undefined) inputTokens = inTok;
-      yield chunk;
-    }
-    if (yielded && firstChunkMs !== undefined) {
-      llmDurationMs = Date.now() - firstChunkMs;
+      if (yielded && firstChunkMs !== undefined) {
+        llmDurationMs = Date.now() - firstChunkMs;
+      }
+    } finally {
+      if (!completed) closeStreamIterator(iterator);
     }
   }
 
@@ -316,17 +458,19 @@ export function buildLlmCallStatsEvent(s: LlmStreamStats): RunEvent {
   return {
     kind: "llm_call_stats",
     ...s,
-    inTokPerSec: durS > 0 ? Math.round(s.inputTokens / durS) : 0,
+    inTokPerSec: durS > 0 && s.inputTokens !== undefined
+      ? Math.round(s.inputTokens / durS)
+      : 0,
     outTokPerSec: durS > 0 ? Math.round(s.outputTokens / durS) : 0,
   };
 }
 
 export function computeSpeedText(stats: Array<{
-  inputTokens: number; outputTokens: number;
+  inputTokens?: number; outputTokens: number;
   ttftMs: number; llmDurationMs: number;
 }>): string {
   if (!stats.length) return "";
-  const totalIn = stats.reduce((s, x) => s + x.inputTokens, 0);
+  const totalIn = stats.reduce((s, x) => s + (x.inputTokens ?? 0), 0);
   const totalOut = stats.reduce((s, x) => s + x.outputTokens, 0);
   const totalDurS = stats.reduce((s, x) => s + x.llmDurationMs, 0) / 1000;
   const sorted = [...stats.map(x => x.ttftMs)].sort((a, b) => a - b);
@@ -334,5 +478,8 @@ export function computeSpeedText(stats: Array<{
   if (totalDurS <= 0) return "";
   const inS = Math.round(totalIn / totalDurS);
   const outS = Math.round(totalOut / totalDurS);
-  return ` in: ${totalIn} tok (${inS} tok/s) · out: ${totalOut} tok (${outS} tok/s) · latency: ${medTtft}ms`;
+  const inputText = stats.some((value) => value.inputTokens === undefined)
+    ? "in: n/a"
+    : `in: ${totalIn} tok (${inS} tok/s)`;
+  return ` ${inputText} · out: ${totalOut} tok (${outS} tok/s) · latency: ${medTtft}ms`;
 }

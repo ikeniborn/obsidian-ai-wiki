@@ -4,21 +4,24 @@ import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { parseWithRetry } from "./parse-with-retry";
-import { lintOutputProfile } from "./framed-output";
-import { runStructuredWithRetry } from "./structured-output";
-import { EntityTypesDeltaSchema } from "./zod-schemas";
-import type { LintOutput } from "./zod-schemas";
+import { createLlmLifecycle, runStructuredWithRetry } from "./structured-output";
+import { lifecycleEvent } from "../llm-lifecycle";
+import { runWithContextRepack, classifyContextError, PromptBudgetExceededError } from "../prompt-budget";
+import { applyPagePatch } from "../section-patches";
+import { buildLintBatchMessages, buildLintRelatedSections, buildLintWorkItems, lintReplaceAuthorities, mergeLintFindings, validateLintBatchOutput, validateLintCoverage, type LintBatchOutput, type LintFinding, type LintWorkItem } from "./lint-batches";
+import { EntityTypesDeltaSchema, LintBatchOutputSchema } from "./zod-schemas";
 import lintTemplate from "../../prompts/lint.md";
 import lintActualizeTemplate from "../../prompts/lint-actualize.md";
 import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
-import { wikiSections } from "./llm-utils";
-import { domainWikiFolder, domainIndexPath, WIKI_ROOT, isWikiPagePath, effectiveSubfolder } from "../wiki-path";
+import { runWithLiveEvents, wikiSections } from "./llm-utils";
+import { domainWikiFolder, WIKI_ROOT, isWikiPagePath, effectiveSubfolder } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseResourceFromFm, validateAndRepairWikiPageFrontmatter, stripInvalidWikiArticles } from "../utils/raw-frontmatter";
-import { checkGraphStructure, pageId, bfsExpand } from "../wiki-graph";
+import { checkGraphStructure, pageId } from "../wiki-graph";
 import { checkWikiLinks, fixWikiLinks, stripDeadLinks } from "../wiki-link-validator";
 import { graphCache } from "../wiki-graph-cache";
-import { upsertIndexAnnotation, parseIndexAnnotations, reconcileIndex, removeIndexAnnotation, collectDescriptions } from "../wiki-index";
+import { collectDescriptions, pageIndexRecordFromMarkdown } from "../wiki-index";
+import { readPageDescriptions, reconcilePageIndex, removeArticleIndex, upsertPageIndex } from "../wiki-index-store";
 import { appendWikiLog } from "../wiki-log";
 import { ensureDomainConfig } from "../domain-config";
 import type { PageSimilarityService } from "../page-similarity";
@@ -41,16 +44,28 @@ export async function cleanupInvalidPages(
   for (const f of candidates) {
     const stem = f.split("/").pop()!.replace(/\.md$/, "");
     if (!GENERIC_WIKI_STEM_REGEX.test(stem)) {
-      try { await vaultTools.remove(f); deleted++; } catch { /* skip */ }
+      try {
+        await vaultTools.remove(f);
+      } catch { /* skip */ }
+      if (await vaultTools.exists(f)) continue;
+      deleted++;
+      await removeArticleIndex(vaultTools, wikiVaultPath, pageId(f));
       continue;
     }
+    let content: string;
     try {
-      const content = await vaultTools.read(f);
-      if (!/resource:/m.test(content)) {
+      content = await vaultTools.read(f);
+    } catch { /* skip unreadable */
+      continue;
+    }
+    if (!/resource:/m.test(content)) {
+      try {
         await vaultTools.remove(f);
-        deleted++;
-      }
-    } catch { /* skip unreadable */ }
+      } catch { /* skip */ }
+      if (await vaultTools.exists(f)) continue;
+      deleted++;
+      await removeArticleIndex(vaultTools, wikiVaultPath, pageId(f));
+    }
   }
   return { deleted };
 }
@@ -148,6 +163,184 @@ export function validateWikiSources(
   return result;
 }
 
+function compactFindingReport(findings: readonly LintFinding[]): string {
+  if (findings.length === 0) return "No findings.";
+  return findings.map((finding) =>
+    `- [${finding.severity}] ${finding.path} :: ${finding.heading} :: ${finding.rule} :: ${finding.text}`
+    + (finding.repairInstruction ? ` — ${finding.repairInstruction}` : "")
+  ).join("\n");
+}
+
+function structuralFindings(allStructuralIssues: string, pages: Map<string, string>): LintFinding[] {
+  const findings: LintFinding[] = [];
+  for (const line of allStructuralIssues.split("\n").map((entry) => entry.trim()).filter(Boolean)) {
+    const path = [...pages.keys()].find((candidate) => line.includes(candidate)
+      || line.includes(candidate.split("/").pop() ?? candidate));
+    if (!path) continue;
+    findings.push({
+      path,
+      heading: "## Page",
+      rule: "programmatic-structure",
+      severity: "error",
+      text: line.replace(/^-\s*/, ""),
+      repairInstruction: "Repair the deterministic lint issue without changing unrelated sections.",
+    });
+  }
+  return findings;
+}
+
+function packLintWorkBatches(
+  items: readonly LintWorkItem[],
+  domainName: string,
+  schema: string,
+  inputBudgetTokens: number,
+): LintWorkItem[][] {
+  const batches: LintWorkItem[][] = [];
+  let current: LintWorkItem[] = [];
+  for (const item of items) {
+    const candidate = [...current, item];
+    const messages = buildLintBatchMessages({
+      domainName,
+      schema,
+      workItems: candidate,
+      relatedSections: [],
+    });
+    if (estimateMessages(messages) <= inputBudgetTokens || current.length === 0) {
+      current = candidate;
+      continue;
+    }
+    batches.push(current);
+    current = [item];
+  }
+  if (current.length > 0) batches.push(current);
+  return batches;
+}
+
+function estimateMessages(messages: OpenAI.Chat.ChatCompletionMessageParam[]): number {
+  return new TextEncoder().encode(JSON.stringify(messages)).byteLength;
+}
+
+async function runLintBatchWithSplit(args: {
+  items: readonly LintWorkItem[];
+  allItems?: readonly LintWorkItem[];
+  pages: Map<string, string>;
+  domainName: string;
+  schema: string;
+  llm: LlmClient;
+  model: string;
+  opts: LlmCallOptions;
+  signal: AbortSignal;
+  onEvent: (event: RunEvent) => void;
+}): Promise<{
+  output: LintBatchOutput;
+  outputTokens: number;
+  lifecycles: ReturnType<typeof createLlmLifecycle>[];
+}> {
+  try {
+    const result = await runWithContextRepack({
+      requestBudgetsEmittedByExecute: true,
+      callSite: "lint.batch",
+      configuredInputBudget: args.opts.inputBudgetTokens ?? 16_384,
+      outputBudget: args.opts.maxTokens,
+      compressionProfile: args.opts.semanticCompression?.profile ?? "balanced",
+      build: (effectiveInputBudget) => {
+        let relatedSections = buildLintRelatedSections(
+          args.allItems ?? args.items,
+          args.items,
+          args.pages,
+          Math.floor(effectiveInputBudget * 0.25),
+        );
+        let messages = buildLintBatchMessages({
+          domainName: args.domainName,
+          schema: args.schema,
+          workItems: args.items,
+          relatedSections,
+        });
+        let estimatedInputTokens = estimateMessages(messages);
+        while (estimatedInputTokens > effectiveInputBudget && relatedSections.length > 0) {
+          relatedSections = relatedSections.slice(0, -1);
+          messages = buildLintBatchMessages({
+            domainName: args.domainName,
+            schema: args.schema,
+            workItems: args.items,
+            relatedSections,
+          });
+          estimatedInputTokens = estimateMessages(messages);
+        }
+        if (estimatedInputTokens > effectiveInputBudget) {
+          throw new PromptBudgetExceededError(
+            effectiveInputBudget,
+            estimatedInputTokens,
+            args.items.map((item) => item.id),
+          );
+        }
+        return {
+          value: messages,
+          estimatedInputTokens,
+          contextUnits: args.items.length,
+        };
+      },
+      execute: async (messages) => {
+        const r = await runStructuredWithRetry({
+          llm: args.llm,
+          model: args.model,
+          baseMessages: messages,
+          opts: {
+            ...args.opts,
+            jsonMode: false,
+            inputBudgetTokens: args.opts.inputBudgetTokens ?? 16_384,
+          },
+          profile: { kind: "json-zod", schema: LintBatchOutputSchema },
+          maxRetries: args.opts.structuredRetries ?? 1,
+          callSite: "lint.batch",
+          lifecycle: createLlmLifecycle("check_wiki_quality"),
+          signal: args.signal,
+          onEvent: args.onEvent,
+          transport: "non-stream",
+          contextErrorsRetry: true,
+        });
+        const output = {
+          ...r.value,
+          deletes: r.value.deletes ?? [],
+        } as unknown as LintBatchOutput;
+        try {
+          validateLintBatchOutput(args.items, args.pages, output);
+        } catch (error) {
+          args.onEvent(lifecycleEvent(r.lifecycle.id, r.lifecycle.action, "failed"));
+          throw error;
+        }
+        return {
+          output,
+          outputTokens: r.outputTokens,
+          inputTokens: r.inputTokens,
+          lifecycles: [r.lifecycle],
+        };
+      },
+      onEvent: args.onEvent,
+    });
+    return result;
+  } catch (error) {
+    const canSplit = args.items.length > 1
+      && (classifyContextError(error) !== null
+        || error instanceof PromptBudgetExceededError
+        || /coveredWorkIds|not submitted|section_hash_mismatch/i.test((error as Error).message));
+    if (!canSplit) throw error;
+    const middle = Math.ceil(args.items.length / 2);
+    const left = await runLintBatchWithSplit({ ...args, items: args.items.slice(0, middle) });
+    const right = await runLintBatchWithSplit({ ...args, items: args.items.slice(middle) });
+    return {
+      output: {
+        coveredWorkIds: [...left.output.coveredWorkIds, ...right.output.coveredWorkIds],
+        findings: mergeLintFindings([left.output.findings, right.output.findings]),
+        patches: [...left.output.patches, ...right.output.patches],
+        deletes: [...left.output.deletes, ...right.output.deletes],
+      },
+      outputTokens: left.outputTokens + right.outputTokens,
+      lifecycles: [...left.lifecycles, ...right.lifecycles],
+    };
+  }
+}
+
 export async function* runLint(
   args: string[],
   vaultTools: VaultTools,
@@ -229,9 +422,8 @@ export async function* runLint(
       allMdPaths.map(p => [p.split("/").pop()!.replace(/\.md$/, ""), p])
     );
 
-    // Index annotations + article iteration order
-    const indexRaw = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
-    const annotations = parseIndexAnnotations(indexRaw);
+    // Structured page descriptions + article iteration order
+    const annotations = await readPageDescriptions(vaultTools, wikiVaultPath);
     const pidToPath = new Map(files.map(p => [pageId(p), p]));
     const articlePaths = [...new Set([
       ...[...annotations.keys()].map(pid => pidToPath.get(pid)!).filter(Boolean),
@@ -281,133 +473,151 @@ export async function* runLint(
     const writtenPaths: string[] = [];
     const skippedArticles: string[] = [];
     let effectiveEntityTypes: EntityType[] = domain.entity_types ?? [];
+    let mergedFindings: LintFinding[] = structuralFindings(allStructuralIssues, pages);
 
     if (useLlm) {
-      const loopPaths = filteredArticlePaths;
-      const total = loopPaths.length;
-
-    // ── Per-article loop ──────────────────────────────────────────────────────
-    for (let i = 0; i < total; i++) {
-      if (signal.aborted) return;
-
-      const targetPath = loopPaths[i];
-      const articleName = targetPath.split("/").pop()!.replace(/\.md$/, "");
-      const articleContent = pages.get(targetPath) ?? "";
-
-      // Context selection: top-K similar + BFS expansion
-      const otherPaths = files.filter(p => p !== targetPath && pages.has(p));
-      const topKPaths = similarity
-        ? await similarity.selectRelevant(articleContent, annotations, otherPaths)
-        : [];
-      const seeds = [pageId(targetPath), ...topKPaths.map(p => pageId(p))];
-      const expanded = bfsExpand(seeds, graph, 1);
-      const contextPaths = [...expanded]
-        .map(pid => pidToPath.get(pid))
-        .filter((p): p is string => !!p && p !== targetPath && pages.has(p));
-
-      // Per-article structural issues
-      const articleIssues = allStructuralIssues
-        .split("\n")
-        .filter(l => l.includes(articleName) || l.includes(targetPath))
-        .join("\n") || "None.";
-
-      // Build user message
-      const contextBlock = contextPaths
-        .map(p => `--- ${p} ---\n${pages.get(p) ?? ""}`)
-        .join("\n\n");
-      const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-        { role: "system", content: systemContent },
-        {
-          role: "user",
-          content: [
-            `Domain: ${domain.id} (${domain.name})`,
-            `Article under analysis: ${targetPath}`,
-            `Automatic issues:\n${articleIssues}`,
-            "",
-            `--- ${targetPath} ---`,
-            articleContent,
-            "",
-            contextBlock ? `--- Context (related articles) ---\n${contextBlock}` : "",
-          ].filter(l => l !== undefined).join("\n"),
-        },
-      ];
-
-      yield { kind: "info_text", icon: "🔍", summary: `Checking ${i + 1}/${total}: ${articleName}` };
-      yield { kind: "tool_use", name: "Analysing wiki", input: { article: articleName, context: contextPaths.length } };
-
-      const pwtEvents: RunEvent[] = [];
-      let lintResult: { value: LintOutput; outputTokens: number };
-      try {
-        lintResult = await runStructuredWithRetry({
-          llm, model,
-          baseMessages: messages,
-          opts: { ...opts, jsonMode: false },
-          profile: lintOutputProfile(),
-          maxRetries: opts.structuredRetries ?? 1,
-          callSite: "lint.fix",
-          signal,
-          onEvent: (ev) => pwtEvents.push(ev),
-        });
-        const delCount = (lintResult.value.deletes ?? []).length;
-        yield { kind: "tool_result", ok: true, preview: `${lintResult.value.fixes.length} fixes${delCount ? `, ${delCount} deleted` : ""}` };
-      } catch (e) {
-        if (signal.aborted || (e as Error).name === "AbortError") return;
-        const errMsg = (e as Error).message ?? "";
-        const isTokenLimit = errMsg.toLowerCase().includes("context_length") || errMsg.toLowerCase().includes("too large");
-        const preview = isTokenLimit ? `Article too large — skipped: ${targetPath}` : errMsg;
-        yield { kind: "tool_result", ok: false, preview };
-        for (const ev of pwtEvents) yield ev;
-        skippedArticles.push(articleName);
-        continue;
-      }
-      for (const ev of pwtEvents) yield ev;
-      if (signal.aborted) return;
-
-      outputTokens += lintResult.outputTokens;
-      const { fixes, deletes = [] } = lintResult.value;
-
-      yield { kind: "assistant_text", delta: lintResult.value.report };
-      reportParts.push(`### ${articleName}\n${lintResult.value.report}`);
-
-      // Apply fixes (fixWikiLinks per-step)
-      if (fixes.length > 0) {
-        const fixesMapThisStep = new Map(fixes.map(p => [p.path, p.content]));
-        const wlFixResult = fixWikiLinks(fixesMapThisStep, wikiLinkValidationRetries, knownStems);
-        if (wlFixResult.warnings.length > 0) {
-          yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: wlFixResult.warnings };
+      const lintPages = new Map(filteredArticlePaths.map((path) => [path, pages.get(path) ?? ""]));
+      const workItems = buildLintWorkItems(lintPages, opts.inputBudgetTokens ?? 16_384);
+      validateLintCoverage(lintPages, workItems);
+      const batches = packLintWorkBatches(workItems, domain.name, systemContent, opts.inputBudgetTokens ?? 16_384);
+      const batchOutputs: LintBatchOutput[] = [];
+      const batchLifecycles: ReturnType<typeof createLlmLifecycle>[] = [];
+      const pendingBatchLifecycles = new Map<string, ReturnType<typeof createLlmLifecycle>>();
+      let batchApplying = false;
+      let batchWriteSucceeded = false;
+      let batchWriteFailed = false;
+      const closePendingBatchLifecycles = (
+        phase: "completed" | "failed" | "cancelled",
+      ): RunEvent[] => {
+        const events = [...pendingBatchLifecycles.values()]
+          .map((lifecycle) => lifecycleEvent(lifecycle.id, lifecycle.action, phase));
+        pendingBatchLifecycles.clear();
+        return events;
+      };
+      const trackBatchLifecycle = (event: RunEvent): void => {
+        if (event.kind !== "llm_lifecycle") return;
+        if (event.phase === "validating") {
+          pendingBatchLifecycles.set(event.id, { id: event.id, action: event.action });
+        } else if (["completed", "failed", "cancelled", "retrying"].includes(event.phase)) {
+          pendingBatchLifecycles.delete(event.id);
         }
-        for (const fix of fixes) {
-          yield { kind: "assistant_text", delta: `  • ${fix.path.split("/").pop()}...\n` };
-          if (!fix.path.startsWith(wikiVaultPath + "/")) {
-            yield { kind: "tool_use", name: "Write", input: { path: fix.path } };
-            yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
+      };
+
+      try {
+        for (let i = 0; i < batches.length; i++) {
+          if (signal.aborted) return;
+          const batch = batches[i];
+          yield { kind: "info_text", icon: "🔍", summary: `Checking batch ${i + 1}/${batches.length}: ${batch.length} work item(s)` };
+          yield { kind: "tool_use", name: "Analysing wiki", input: { batch: i + 1, workItems: batch.length } };
+          try {
+            const result = yield* runWithLiveEvents((emit, operationSignal) => runLintBatchWithSplit({
+              items: batch,
+              pages,
+              domainName: domain.name,
+              schema: systemContent,
+              allItems: workItems,
+              llm,
+              model,
+              opts,
+              signal: operationSignal,
+              onEvent: (event) => {
+                trackBatchLifecycle(event);
+                emit(event);
+              },
+            }), signal);
+            outputTokens += result.outputTokens;
+            batchOutputs.push(result.output);
+            batchLifecycles.push(...result.lifecycles);
+            if (signal.aborted) return;
+            yield { kind: "tool_result", ok: true, preview: `${result.output.findings.length} findings, ${result.output.patches.length} patches` };
+          } catch (e) {
+            if (signal.aborted || (e as Error).name === "AbortError") return;
+            yield { kind: "tool_result", ok: false, preview: (e as Error).message };
+            skippedArticles.push(...batch.map((item) => item.id));
             continue;
           }
-          yield { kind: "tool_use", name: "Update", input: { path: fix.path } };
-          try {
-            const rawFixed = wlFixResult.fixed.get(fix.path) ?? fix.content;
-            const originalContent = pages.get(fix.path) ?? "";
-            const wikiStems = new Set([...pages.keys()].map(p => p.split("/").pop()!.replace(/\.md$/, "")));
-            const fixedContent = validateWikiSources(rawFixed, originalContent, knownStems, titleMap, wikiStems);
-            await vaultTools.write(fix.path, fixedContent);
-            writtenPaths.push(fix.path);
-            pages.set(fix.path, fixedContent);
-            if (fix.annotation) {
-              annotations.set(pageId(fix.path), fix.annotation);
-              try {
-                await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(fix.path), fix.annotation, fix.path);
-              } catch { /* non-critical */ }
-            }
-            yield { kind: "tool_result", ok: true };
-          } catch (e) {
-            yield { kind: "tool_result", ok: false, preview: (e as Error).message };
-          }
         }
-        reportParts.push(`#### Исправлено: ${fixes.length} страниц`);
+
+        const allBatchFindings = batchOutputs.map((output) => output.findings);
+        mergedFindings = mergeLintFindings([mergedFindings, ...allBatchFindings]);
+        const findingsReport = compactFindingReport(mergedFindings);
+        const allPatches = batchOutputs.flatMap((output) => output.patches);
+        if (allPatches.length === 0) {
+          if (signal.aborted) return;
+          for (const lifecycle of batchLifecycles) {
+            yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
+          }
+          if (signal.aborted) return;
+        }
+        yield { kind: "assistant_text", delta: findingsReport };
+        if (allPatches.length === 0) {
+          if (signal.aborted) return;
+          for (const event of closePendingBatchLifecycles("completed")) yield event;
+        }
+        reportParts.push(`### ${domain.id} lint findings\n${findingsReport}`);
+
+        const patchPaths = new Set(allPatches.map((patch) => patch.path));
+        if (allPatches.length > 0) {
+          const previewContents = new Map<string, string>();
+          for (const patch of allPatches) {
+            const current = pages.get(patch.path);
+            if (current === undefined) continue;
+            const authorities = lintReplaceAuthorities(
+              workItems.filter((item) => item.path === patch.path),
+              pages,
+            );
+            const applied = applyPagePatch(current, patch, authorities);
+            if (!applied.ok) {
+              yield { kind: "tool_use", name: "Update", input: { path: patch.path } };
+              yield { kind: "tool_result", ok: false, preview: applied.reason };
+              continue;
+            }
+            previewContents.set(patch.path, applied.content);
+          }
+          const wlFixResult = fixWikiLinks(previewContents, wikiLinkValidationRetries, knownStems);
+          if (wlFixResult.warnings.length > 0) {
+            yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: wlFixResult.warnings };
+          }
+          for (const path of patchPaths) {
+            if (signal.aborted) return;
+            const fixed = wlFixResult.fixed.get(path) ?? previewContents.get(path);
+            if (fixed === undefined) continue;
+            yield { kind: "tool_use", name: "Update", input: { path } };
+            try {
+              const originalContent = pages.get(path) ?? "";
+              const wikiStems = new Set([...pages.keys()].map(p => p.split("/").pop()!.replace(/\.md$/, "")));
+              const fixedContent = validateWikiSources(fixed, originalContent, knownStems, titleMap, wikiStems);
+              if (signal.aborted) return;
+              if (!batchApplying) {
+                for (const lifecycle of batchLifecycles) {
+                  yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
+                }
+                batchApplying = true;
+              }
+              if (signal.aborted) return;
+              await vaultTools.write(path, fixedContent);
+              writtenPaths.push(path);
+              pages.set(path, fixedContent);
+              const record = pageIndexRecordFromMarkdown(wikiVaultPath, path, fixedContent);
+              annotations.set(record.articleId, record.description);
+              await upsertPageIndex(vaultTools, wikiVaultPath, record);
+              batchWriteSucceeded = true;
+              yield { kind: "tool_result", ok: true };
+            } catch (e) {
+              batchWriteFailed = true;
+              yield { kind: "tool_result", ok: false, preview: (e as Error).message };
+            }
+          }
+          const terminal = batchWriteFailed || !batchWriteSucceeded ? "failed" : "completed";
+          for (const event of closePendingBatchLifecycles(terminal)) yield event;
+          reportParts.push(`#### Исправлено: ${allPatches.length} patch(es)`);
+        }
+      } finally {
+        const terminal = signal.aborted ? "cancelled" : "failed";
+        for (const event of closePendingBatchLifecycles(terminal)) yield event;
       }
 
-      // Process deletes
-      for (const { path: delPath, redirect_to } of deletes) {
+      for (const { path: delPath, redirect_to } of batchOutputs.flatMap((output) => output.deletes)) {
         const deletedName = pageId(delPath);
         const redirectName = redirect_to ? pageId(redirect_to) : null;
 
@@ -420,6 +630,7 @@ export async function* runLint(
           }
           pages.delete(delPath);
           annotations.delete(deletedName);
+          await removeArticleIndex(vaultTools, wikiVaultPath, deletedName);
 
           // Rewrite [[deletedName]] links in all wiki pages
           for (const [wikiPath, wikiContent] of pages) {
@@ -429,6 +640,11 @@ export async function* runLint(
                 : wikiContent.replaceAll(`[[${deletedName}]]`, "");
               await vaultTools.write(wikiPath, newContent);
               pages.set(wikiPath, newContent);
+              await upsertPageIndex(
+                vaultTools,
+                wikiVaultPath,
+                pageIndexRecordFromMarkdown(wikiVaultPath, wikiPath, newContent),
+              );
             }
           }
 
@@ -439,7 +655,6 @@ export async function* runLint(
         }
       }
 
-      // Rebuild graph + refresh vectors after state changes
       ({ graph } = graphCache.get(domain.id, pages));
       if (similarity) {
         const pageBodies = new Map<string, string>();
@@ -450,8 +665,6 @@ export async function* runLint(
           yield { kind: "info_text", icon: "📤", summary: `обновлено векторов: ${updated}` };
         }
       }
-    }
-    // ── End per-article loop ──────────────────────────────────────────────────
 
     // Post-loop: delete wiki pages that ended up with no valid resource.
     // Pushes their stems into deletedRefs so the backlink rewrite below removes
@@ -467,6 +680,7 @@ export async function* runLint(
           }
         } catch { /* non-critical — page already gone */ }
         pages.delete(wikiPath);
+        await removeArticleIndex(vaultTools, wikiVaultPath, stem);
         deletedRefs.push({ deletedName: stem, redirectName: null });
         yield {
           kind: "info_text" as const,
@@ -487,14 +701,50 @@ export async function* runLint(
     // actualizeDomainConfig (runs once after loop)
     yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).lintProgress.actualizing(domain.id) };
     yield { kind: "tool_use", name: "Updating config", input: {} };
-    const patchRes = await actualizeDomainConfig(domain, pages, llm, model, opts, signal);
+    const patchRes = yield* runWithLiveEvents((emit, operationSignal) =>
+      actualizeDomainConfig(domain, mergedFindings, llm, model, opts, operationSignal, emit), signal);
+    if (signal.aborted) {
+      if (patchRes.lifecycle) {
+        yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "cancelled");
+      }
+      return;
+    }
     yield { kind: "tool_result", ok: true, preview: patchRes.patch ? "config updated" : "no changes" };
+    if (signal.aborted) {
+      if (patchRes.lifecycle) {
+        yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "cancelled");
+      }
+      return;
+    }
     outputTokens += patchRes.outputTokens;
     const patch = patchRes.patch;
     if (patch) {
       const diffReport = computeEntityDiff(domain.entity_types ?? [], patch.entity_types ?? domain.entity_types ?? []);
       reportParts.push(diffReport);
+      if (patchRes.lifecycle) {
+        if (signal.aborted) {
+          yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "cancelled");
+          return;
+        }
+        yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "applying");
+      }
+      if (signal.aborted) {
+        if (patchRes.lifecycle) {
+          yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "cancelled");
+        }
+        return;
+      }
       yield { kind: "domain_updated", domainId: domain.id, patch };
+      if (patchRes.lifecycle) {
+        yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "completed");
+      }
+    } else if (patchRes.lifecycle) {
+      yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "applying");
+      if (signal.aborted) {
+        yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "cancelled");
+        return;
+      }
+      yield lifecycleEvent(patchRes.lifecycle.id, patchRes.lifecycle.action, "completed");
     }
     if (patch?.entity_types) effectiveEntityTypes = patch.entity_types;
 
@@ -613,26 +863,19 @@ export async function* runLint(
       reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
     }
 
-    // Full bidirectional index reconciliation — cure: add pages missing from the
-    // index (fallback annotation when none), drop orphan entries. Runs without LLM.
-    try {
-      const reconPages = [...pages.entries()].map(([path, content]) => {
-        const pid = pageId(path);
-        const ann = annotations.get(pid);
-        return ann ? { path, content, annotation: ann } : { path, content };
-      });
-      const currentIndex = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
-      const recon = reconcileIndex(currentIndex, wikiVaultPath, reconPages);
-      for (const a of recon.adds) {
-        await upsertIndexAnnotation(vaultTools, wikiVaultPath, a.pid, a.annotation, a.fullPath);
-      }
-      for (const pid of recon.removes) {
-        await removeIndexAnnotation(vaultTools, wikiVaultPath, pid);
-      }
-      if (recon.adds.length || recon.removes.length) {
-        reportParts.push(`Index reconciled: +${recon.adds.length} / -${recon.removes.length}`);
-      }
-    } catch { /* non-critical */ }
+    // Full page-record reconciliation preserves chunk/future records. Runs without LLM.
+    const before = new Set((await readPageDescriptions(vaultTools, wikiVaultPath)).keys());
+    const after = new Set([...pages.keys()].map(pageId));
+    const adds = [...after].filter((id) => !before.has(id)).length;
+    const removes = [...before].filter((id) => !after.has(id)).length;
+    await reconcilePageIndex(
+      vaultTools,
+      wikiVaultPath,
+      [...pages].map(([path, content]) => ({ path, content })),
+    );
+    if (adds || removes) {
+      reportParts.push(`Index reconciled: +${adds} / -${removes}`);
+    }
 
     try {
       await appendWikiLog(vaultTools, wikiVaultPath, domain.id, {
@@ -696,26 +939,25 @@ function computeEntityDiff(oldTypes: EntityType[], newTypes: EntityType[]): stri
   return lines.join("\n");
 }
 
-async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
-  try { return await vaultTools.read(path); } catch { return ""; }
-}
-
 async function actualizeDomainConfig(
   domain: DomainEntry,
-  pages: Map<string, string>,
+  findings: readonly LintFinding[],
   llm: LlmClient,
   model: string,
   opts: LlmCallOptions,
   signal: AbortSignal,
-): Promise<{ patch: { entity_types?: EntityType[]; language_notes?: string } | null; outputTokens: number }> {
+  onEvent: (event: RunEvent) => void,
+): Promise<{
+  patch: { entity_types?: EntityType[]; language_notes?: string } | null;
+  outputTokens: number;
+  lifecycle?: ReturnType<typeof createLlmLifecycle>;
+}> {
   const currentConfig = JSON.stringify({
     entity_types: domain.entity_types ?? [],
     language_notes: domain.language_notes ?? "",
   }, null, 2);
 
-  const pagesSnippet = [...pages.entries()]
-    .map(([p, c]) => `${p}:\n${c}`)
-    .join("\n\n");
+  const compactFindings = compactFindingReport(findings).slice(0, 24_000);
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     {
@@ -732,8 +974,8 @@ async function actualizeDomainConfig(
         currentConfig,
         `\`\`\``,
         ``,
-        `Wiki pages (snippets):`,
-        pagesSnippet || "(no pages)",
+        `Compact lint findings:`,
+        compactFindings,
       ].join("\n"),
     },
   ];
@@ -749,21 +991,26 @@ async function actualizeDomainConfig(
   }, null, 2);
   messages[0] = { role: "system", content: systemContent };
 
-  const collected: RunEvent[] = [];
   try {
     const r = await parseWithRetry({
       llm, model, baseMessages: messages, opts,
       schema: EntityTypesDeltaSchema,
       maxRetries: opts.structuredRetries ?? 1,
       callSite: "lint.patch",
+      lifecycle: createLlmLifecycle("check_wiki_quality"),
       signal,
-      onEvent: (e) => collected.push(e),
+      onEvent,
+      transport: "non-stream",
     });
     const parsed = r.value;
     const patch: { entity_types?: EntityType[]; language_notes?: string } = {};
     if (Array.isArray(parsed.entity_types)) patch.entity_types = parsed.entity_types;
     if (typeof parsed.language_notes === "string") patch.language_notes = parsed.language_notes;
-    return { patch: Object.keys(patch).length > 0 ? patch : null, outputTokens: r.outputTokens };
+    return {
+      patch: Object.keys(patch).length > 0 ? patch : null,
+      outputTokens: r.outputTokens,
+      lifecycle: r.lifecycle,
+    };
   } catch {
     return { patch: null, outputTokens: 0 };
   }

@@ -1,6 +1,7 @@
 import { domainLogPath } from "./wiki-path";
 import type { VaultTools } from "./vault-tools";
 import { stringifyJsonl } from "./jsonl";
+import { readFileImage, TransactionVaultTools } from "./file-transaction";
 
 export interface IngestLogEntry {
   path: string;
@@ -95,7 +96,12 @@ export async function appendWikiLog(
   event: LogOperation,
 ): Promise<void> {
   const logPath = domainLogPath(domainFolder);
-  let existing = "";
-  try { existing = await vaultTools.read(logPath); } catch { /* new file */ }
-  await vaultTools.write(logPath, existing + stringifyJsonl([buildLogRecord(domainId, event)]));
+  const before = await readFileImage(vaultTools, logPath);
+  const content = (before.exists ? before.content : "")
+    + stringifyJsonl([buildLogRecord(domainId, event)]);
+  if (vaultTools instanceof TransactionVaultTools) {
+    await vaultTools.writeIfCurrent(logPath, before, content);
+  } else {
+    await vaultTools.write(logPath, content);
+  }
 }

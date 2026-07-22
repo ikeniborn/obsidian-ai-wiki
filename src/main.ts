@@ -1,5 +1,11 @@
 import { Plugin, WorkspaceLeaf, Platform, Notice } from "obsidian";
-import { DEFAULT_SETTINGS, type LlmWikiPluginSettings, type RunHistoryEntry } from "./types";
+import {
+  DEFAULT_SETTINGS,
+  normalizeLlmRuntimeControls,
+  type LlmWikiPluginSettings,
+  type RunHistoryEntry,
+} from "./types";
+import { normalizeModelCallPolicySettings } from "./model-call-policy";
 import type { DomainEntry } from "./domain";
 import { LlmWikiSettingTab } from "./settings";
 import { AI_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
@@ -237,6 +243,8 @@ export default class LlmWikiPlugin extends Plugin {
       proxy: { ...DEFAULT_SETTINGS.proxy, ...((data?.proxy as object) ?? {}) },
       history: (data?.history as RunHistoryEntry[]) ?? [],
     };
+    normalizeModelCallPolicySettings(this.settings);
+    normalizeLlmRuntimeControls(this.settings);
 
     // Schema v2: systemPrompt promoted to top-level
     if (!data?.systemPrompt && (caData.systemPrompt || naData.systemPrompt))
@@ -313,6 +321,7 @@ export default class LlmWikiPlugin extends Plugin {
     // Миграция: devMode.logDir → удалён (путь фиксирован в коде)
     this.settings.devMode = {
       enabled: this.settings.devMode.enabled,
+      nativeTransportDiagnosticMode: this.settings.devMode.nativeTransportDiagnosticMode,
     };
 
     // Миграция v0.1.65: format.maxTokens 16384 (старый default) → 32768 для native.

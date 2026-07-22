@@ -1,15 +1,46 @@
 import type { VaultTools } from "../vault-tools";
-import type { LlmClient } from "../types";
-import type { OutputLanguage } from "../types";
-import { langInstruction, reasoningDirective } from "./llm-utils";
-import { resolveLang, resolveReasoningLang } from "../i18n";
+import type {
+  LlmClient,
+  OutputLanguage,
+  RunEvent,
+} from "../types";
+import {
+  buildChatParams,
+  completionReasoning,
+  langInstruction,
+  parseStructured,
+  prepareChatMessages,
+} from "./llm-utils";
+import { resolveLang } from "../i18n";
 import type OpenAI from "openai";
 import { render } from "./template";
-import visionStructure from "../../prompts/vision-structure.md";
 import visionImage from "../../prompts/vision-image.md";
 import visionPdf from "../../prompts/vision-pdf.md";
 import visionExcalidraw from "../../prompts/vision-excalidraw.md";
 import type { VisionTempStore } from "./vision-temp-store";
+import { zodToJsonSchema } from "zod-to-json-schema";
+import {
+  classifyContextError,
+  createPromptBudgetEvent,
+  estimatePreparedMessages,
+  shrinkInputBudget,
+  type ContextErrorDetails,
+} from "../prompt-budget";
+import { createLlmLifecycle } from "./structured-output";
+import { lifecycleEvent } from "../llm-lifecycle";
+import { VisionRecognitionBatchSchema } from "./zod-schemas";
+import {
+  createNativeRequestLifecycle,
+  createNativeRequestRetryContext,
+  isNativeLlmClient,
+} from "../native-llm-executor";
+import {
+  batchPdfPages,
+  mergeRecognitionRecords,
+  validateRecognitionCoverage,
+  type VisionMediaPage,
+  type VisionRecognitionRecord,
+} from "./vision-recognition";
 
 export function extractObsidianEmbedPaths(md: string): string[] {
   const paths: string[] = [];
@@ -79,37 +110,240 @@ export function isVisionSupportedOnMobile(path: string): boolean {
   return getMimeType(path) !== null; // png/jpg/jpeg/webp; PDF/Excalidraw need rendering
 }
 
+export interface VisionAnalysisOptions {
+  inputBudgetTokens?: number;
+  maxTokens?: number;
+  onEvent?: (event: RunEvent) => void;
+  nativeRequestRetries?: number;
+  nativeRequestIdleTimeoutMs?: number;
+}
+
+interface ResolvedVisionAnalysisOptions {
+  inputBudgetTokens: number;
+  maxTokens?: number;
+  onEvent?: (event: RunEvent) => void;
+  nativeRequestRetries?: number;
+  nativeRequestIdleTimeoutMs?: number;
+}
+
+function resolveVisionOptions(
+  options: VisionAnalysisOptions | undefined,
+): ResolvedVisionAnalysisOptions {
+  return {
+    inputBudgetTokens: options?.inputBudgetTokens ?? 16_384,
+    maxTokens: options?.maxTokens,
+    onEvent: options?.onEvent,
+    nativeRequestRetries: options?.nativeRequestRetries,
+    nativeRequestIdleTimeoutMs: options?.nativeRequestIdleTimeoutMs,
+  };
+}
+
+function visionContextRecoveryError(
+  options: ResolvedVisionAnalysisOptions,
+  effectiveInputBudget: number,
+  details: ContextErrorDetails,
+): Error {
+  const facts: string[] = [];
+  if (details.promptTokens !== undefined) {
+    facts.push(`promptTokens=${details.promptTokens}`);
+  }
+  if (details.maxContextTokens !== undefined) {
+    facts.push(`maxContextTokens=${details.maxContextTokens}`);
+  }
+  const reason = facts.length > 0
+    ? `provider context limit (${facts.join(", ")})`
+    : "provider context limit";
+  return new Error(
+    "vision.analysis context recovery exhausted "
+    + `(configuredInputBudget=${options.inputBudgetTokens}, `
+    + `finalEffectiveInputBudget=${effectiveInputBudget}): ${reason}`,
+  );
+}
+
+function visionMessages(
+  systemPrompt: string,
+  pages: readonly VisionMediaPage[],
+): OpenAI.Chat.ChatCompletionMessageParam[] {
+  const pageIds = pages.map((page) => page.pageId);
+  const content: OpenAI.Chat.ChatCompletionContentPart[] = [
+    {
+      type: "text",
+      text: `Return one recognition record for each exact pageId: ${pageIds.join(", ")}`,
+    },
+    ...pages.map((page) => ({
+      type: "image_url" as const,
+      image_url: { url: page.dataUrl },
+    })),
+  ];
+  return [
+    { role: "system", content: systemPrompt },
+    { role: "user", content },
+  ];
+}
+
+function visionCallOptions(
+  options: ResolvedVisionAnalysisOptions,
+  language: OutputLanguage,
+  reasoningLanguage: OutputLanguage,
+  effectiveInputBudget: number = options.inputBudgetTokens,
+) {
+  return {
+    inputBudgetTokens: effectiveInputBudget,
+    maxTokens: options.maxTokens,
+    outputLanguage: language,
+    reasoningLanguage,
+    nativeRequestRetries: options.nativeRequestRetries,
+    nativeRequestIdleTimeoutMs: options.nativeRequestIdleTimeoutMs,
+    jsonMode: "json_schema" as const,
+    jsonSchema: {
+      name: "vision_analysis",
+      schema: zodToJsonSchema(VisionRecognitionBatchSchema, { $refStrategy: "none" }),
+    },
+  };
+}
+
 async function callVisionLlm(
   llm: LlmClient,
   model: string,
   systemPrompt: string,
-  contentParts: OpenAI.Chat.ChatCompletionContentPart[],
+  pages: readonly VisionMediaPage[],
   signal: AbortSignal,
-): Promise<string> {
-  const resp = await llm.chat.completions.create({
-    model,
-    stream: false,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: contentParts },
-    ],
-  } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming, { signal });
-  return resp.choices[0]?.message?.content ?? "";
+  language: OutputLanguage,
+  reasoningLanguage: OutputLanguage,
+  options: ResolvedVisionAnalysisOptions,
+  effectiveInputBudget: number = options.inputBudgetTokens,
+  attempt = 0,
+): Promise<VisionRecognitionRecord[]> {
+  if (signal.aborted) {
+    signal.throwIfAborted();
+  }
+  const callOptions = visionCallOptions(
+    options,
+    language,
+    reasoningLanguage,
+    effectiveInputBudget,
+  );
+  const params = buildChatParams(model, visionMessages(systemPrompt, pages), callOptions);
+
+  let lifecycle = createLlmLifecycle("analyze_attachments");
+  const onEvent = options.onEvent ?? (() => {});
+  if (!isNativeLlmClient(llm)) {
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "preparing", Date.now(), {
+      callSite: "vision.analysis",
+      transport: "non-stream",
+      attempt,
+    }));
+  }
+  const requestLifecycle = createNativeRequestLifecycle({
+    initial: lifecycle,
+    callSite: "vision.analysis",
+    onEvent,
+    attemptOffset: attempt,
+  });
+  const estimatedInputTokens = estimatePreparedMessages(
+    params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+  );
+  let providerDispatched = false;
+  let response: OpenAI.Chat.ChatCompletion;
+  try {
+    signal.throwIfAborted();
+    if (!isNativeLlmClient(llm)) {
+      options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "sent"));
+      options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "waiting"));
+    }
+    providerDispatched = true;
+    const request = llm.chat.completions.create(
+      { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+      {
+        signal,
+        retry: createNativeRequestRetryContext({
+          llm,
+          callSite: "vision.analysis",
+          opts: callOptions,
+          signal,
+          onEvent,
+          lifecycle: requestLifecycle,
+        }),
+      },
+    );
+    response = await request;
+    if (isNativeLlmClient(llm)) lifecycle = requestLifecycle.current();
+  } catch (error) {
+    if (!isNativeLlmClient(llm)) {
+      options.onEvent?.(lifecycleEvent(
+        lifecycle.id,
+        lifecycle.action,
+        signal.aborted || (error as Error).name === "AbortError"
+          ? "cancelled"
+          : classifyContextError(error) !== null
+            ? "retrying"
+            : "failed",
+      ));
+    }
+    if (providerDispatched) {
+      options.onEvent?.(createPromptBudgetEvent({
+        requestId: lifecycle.id,
+        callSite: "vision.analysis",
+        configuredInputBudget: options.inputBudgetTokens,
+        effectiveInputBudget,
+        estimatedInputTokens,
+        outputBudget: options.maxTokens,
+        contextUnits: pages.length,
+        retryReason: classifyContextError(error) === null
+          ? undefined
+          : "provider_context_error",
+      }));
+    }
+    throw error;
+  }
+
+  options.onEvent?.(createPromptBudgetEvent({
+    requestId: lifecycle.id,
+    callSite: "vision.analysis",
+    configuredInputBudget: options.inputBudgetTokens,
+    effectiveInputBudget,
+    estimatedInputTokens,
+    actualInputTokens: response.usage?.prompt_tokens,
+    outputBudget: options.maxTokens,
+    contextUnits: pages.length,
+  }));
+  if (signal.aborted) {
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "cancelled"));
+    signal.throwIfAborted();
+  }
+  const message = response.choices[0]?.message;
+  const reasoning = completionReasoning(message);
+  const content = message?.content ?? "";
+  if ((reasoning.trim() || content.trim()) && !isNativeLlmClient(llm)) {
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "producing"));
+  }
+  if (reasoning) {
+    options.onEvent?.({ kind: "assistant_text", delta: reasoning, isReasoning: true });
+  }
+  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "validating"));
+  let records: VisionRecognitionRecord[];
+  try {
+    const parsed = VisionRecognitionBatchSchema.parse(parseStructured(content));
+    records = validateRecognitionCoverage(parsed.records, pages.map((page) => page.pageId));
+  } catch (error) {
+    options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "failed"));
+    throw error;
+  }
+  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "applying"));
+  options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "completed"));
+  return records;
 }
 
-function imageSystem(language: OutputLanguage, reasoningLanguage: OutputLanguage): string {
-  const base = render(visionImage, { structure_rules: visionStructure, lang: langInstruction(resolveLang(language)) });
-  return `${base}\n\n${reasoningDirective(resolveReasoningLang(reasoningLanguage, language))}`;
+function imageSystem(language: OutputLanguage): string {
+  return render(visionImage, { lang: langInstruction(resolveLang(language)) });
 }
 
-function pdfSystem(language: OutputLanguage, reasoningLanguage: OutputLanguage): string {
-  const base = render(visionPdf, { structure_rules: visionStructure, lang: langInstruction(resolveLang(language)) });
-  return `${base}\n\n${reasoningDirective(resolveReasoningLang(reasoningLanguage, language))}`;
+function pdfSystem(language: OutputLanguage): string {
+  return render(visionPdf, { lang: langInstruction(resolveLang(language)) });
 }
 
-function excalidrawSystem(language: OutputLanguage, reasoningLanguage: OutputLanguage): string {
-  const base = render(visionExcalidraw, { lang: langInstruction(resolveLang(language)) });
-  return `${base}\n\n${reasoningDirective(resolveReasoningLang(reasoningLanguage, language))}`;
+function excalidrawSystem(language: OutputLanguage): string {
+  return render(visionExcalidraw, { lang: langInstruction(resolveLang(language)) });
 }
 
 export async function analyzeImage(
@@ -120,11 +354,21 @@ export async function analyzeImage(
   signal: AbortSignal,
   language: OutputLanguage = "auto",
   reasoningLanguage: OutputLanguage = "auto",
+  options?: VisionAnalysisOptions,
 ): Promise<string> {
   const b64 = arrayBufferToBase64(buffer);
-  return callVisionLlm(llm, model, imageSystem(language, reasoningLanguage), [
-    { type: "image_url", image_url: { url: `data:${mimeType};base64,${b64}` } },
-  ], signal);
+  const resolved = resolveVisionOptions(options);
+  const records = await callVisionLlm(
+    llm,
+    model,
+    imageSystem(language),
+    [{ pageId: "image", dataUrl: `data:${mimeType};base64,${b64}` }],
+    signal,
+    language,
+    reasoningLanguage,
+    resolved,
+  );
+  return mergeRecognitionRecords(records);
 }
 
 interface PdfjsPage {
@@ -139,6 +383,45 @@ interface PdfjsLib {
   getDocument(opts: { data: ArrayBuffer }): { promise: Promise<PdfjsDoc> };
 }
 
+export interface PdfDocumentRenderer {
+  numPages: number;
+  renderPage(
+    pageNumber: number,
+    options: { scale: number; quality: number },
+  ): Promise<VisionMediaPage>;
+}
+
+export interface PdfAnalysisDependencies {
+  loadPdf?: (buffer: ArrayBuffer) => Promise<PdfDocumentRenderer>;
+}
+
+async function loadBrowserPdf(buffer: ArrayBuffer): Promise<PdfDocumentRenderer> {
+  const pdfjs = (window as unknown as { pdfjsLib?: PdfjsLib }).pdfjsLib;
+  if (!pdfjs) throw new Error("pdfjsLib unavailable");
+  const doc = await pdfjs.getDocument({ data: buffer }).promise;
+  return {
+    numPages: doc.numPages,
+    renderPage: async (pageNumber, options) => {
+      const page = await doc.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: options.scale });
+      const canvas = new OffscreenCanvas(
+        Math.round(viewport.width),
+        Math.round(viewport.height),
+      );
+      const ctx = canvas.getContext("2d") as unknown as CanvasRenderingContext2D;
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      const blob = await canvas.convertToBlob({
+        type: "image/jpeg",
+        quality: options.quality,
+      });
+      return {
+        pageId: `p${pageNumber}`,
+        dataUrl: `data:image/jpeg;base64,${arrayBufferToBase64(await blob.arrayBuffer())}`,
+      };
+    },
+  };
+}
+
 export async function analyzePdf(
   buffer: ArrayBuffer,
   llm: LlmClient,
@@ -146,26 +429,165 @@ export async function analyzePdf(
   signal: AbortSignal,
   language: OutputLanguage = "auto",
   reasoningLanguage: OutputLanguage = "auto",
+  options?: VisionAnalysisOptions,
+  dependencies: PdfAnalysisDependencies = {},
 ): Promise<string> {
-  const pdfjs = (window as unknown as { pdfjsLib?: PdfjsLib }).pdfjsLib;
-  if (!pdfjs) throw new Error("pdfjsLib unavailable");
-
-  const doc = await pdfjs.getDocument({ data: buffer }).promise;
-  const parts: OpenAI.Chat.ChatCompletionContentPart[] = [];
-
-  for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
-    const page = await doc.getPage(pageNum);
-    const viewport = page.getViewport({ scale: 1.5 });
-    const canvas = new OffscreenCanvas(Math.round(viewport.width), Math.round(viewport.height));
-    const ctx = canvas.getContext("2d") as unknown as CanvasRenderingContext2D;
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 });
-    const pageBuf = await blob.arrayBuffer();
-    const b64 = arrayBufferToBase64(pageBuf);
-    parts.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${b64}` } });
+  const resolved = resolveVisionOptions(options);
+  signal.throwIfAborted();
+  const renderer = await (dependencies.loadPdf ?? loadBrowserPdf)(buffer);
+  signal.throwIfAborted();
+  const pages: VisionMediaPage[] = [];
+  const pageNumbers = new Map<string, number>();
+  for (let pageNumber = 1; pageNumber <= renderer.numPages; pageNumber++) {
+    signal.throwIfAborted();
+    const page = await renderer.renderPage(pageNumber, { scale: 1.5, quality: 0.85 });
+    signal.throwIfAborted();
+    pages.push(page);
+    pageNumbers.set(page.pageId, pageNumber);
   }
 
-  return callVisionLlm(llm, model, pdfSystem(language, reasoningLanguage), parts, signal);
+  const systemPrompt = pdfSystem(language);
+  const fixedMessages = prepareChatMessages(
+    visionMessages(systemPrompt, []).map((message) => {
+      if (message.role !== "user") return message;
+      return {
+        ...message,
+        content: [{
+          type: "text" as const,
+          text: `Return one recognition record for each exact pageId: ${pages.map((page) => page.pageId).join(", ")}`,
+        }],
+      };
+    }),
+    visionCallOptions(resolved, language, reasoningLanguage),
+  );
+  const fixedEstimatedTokens = estimatePreparedMessages(fixedMessages);
+  const resizedPages = new Set<string>();
+  let visionAttempt = 0;
+
+  const recognize = (
+    batch: readonly VisionMediaPage[],
+    effectiveInputBudget: number,
+  ) => callVisionLlm(
+    llm,
+    model,
+    systemPrompt,
+    batch,
+    signal,
+    language,
+    reasoningLanguage,
+    resolved,
+    effectiveInputBudget,
+    visionAttempt++,
+  );
+  const resize = async (
+    page: VisionMediaPage,
+  ): Promise<VisionMediaPage> => {
+    if (resizedPages.has(page.pageId)) {
+      throw new Error(`Vision page ${page.pageId} cannot be resized twice`);
+    }
+    resizedPages.add(page.pageId);
+    const pageNumber = pageNumbers.get(page.pageId);
+    if (pageNumber === undefined) throw new Error(`Unknown PDF page ${page.pageId}`);
+    signal.throwIfAborted();
+    const resized = await renderer.renderPage(pageNumber, { scale: 1, quality: 0.65 });
+    signal.throwIfAborted();
+    if (resized.pageId !== page.pageId) {
+      throw new Error(`Resized PDF page identity changed from ${page.pageId} to ${resized.pageId}`);
+    }
+    return resized;
+  };
+
+  const records: VisionRecognitionRecord[] = [];
+  let pending = [...pages];
+  let effectiveInputBudget = resolved.inputBudgetTokens;
+  let repacks = 0;
+  let failedSignature: string | undefined;
+  let originalContextDetails: ContextErrorDetails | undefined;
+  let lastContextDetails: ContextErrorDetails = {};
+  const signature = (batch: readonly VisionMediaPage[]) =>
+    batch.map((page) => `${page.pageId}:${page.dataUrl}`).join("\n");
+
+  while (pending.length > 0) {
+    signal.throwIfAborted();
+    let batches: VisionMediaPage[][];
+    try {
+      batches = batchPdfPages(pending, {
+        inputBudgetTokens: effectiveInputBudget,
+        fixedEstimatedTokens,
+        mediaReservationTokens: 4096,
+      });
+    } catch (error) {
+      if (originalContextDetails !== undefined) {
+        throw visionContextRecoveryError(
+          resolved,
+          effectiveInputBudget,
+          originalContextDetails,
+        );
+      }
+      throw error;
+    }
+
+    if (failedSignature !== undefined && signature(batches[0]) === failedSignature) {
+      if (repacks >= 2) {
+        throw visionContextRecoveryError(
+          resolved,
+          effectiveInputBudget,
+          originalContextDetails ?? lastContextDetails,
+        );
+      }
+      effectiveInputBudget = shrinkInputBudget(effectiveInputBudget, lastContextDetails);
+      repacks++;
+      continue;
+    }
+
+    let repack = false;
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      const batch = batches[batchIndex];
+      signal.throwIfAborted();
+      try {
+        records.push(...await recognize(batch, effectiveInputBudget));
+        signal.throwIfAborted();
+      } catch (error) {
+        const details = classifyContextError(error);
+        if (details === null) throw error;
+        originalContextDetails ??= details;
+        if (repacks >= 2) {
+          throw visionContextRecoveryError(
+            resolved,
+            effectiveInputBudget,
+            originalContextDetails,
+          );
+        }
+
+        const remaining = batches.slice(batchIndex).flat();
+        failedSignature = signature(batch);
+        lastContextDetails = details;
+        if (batch.length === 1) {
+          if (resizedPages.has(batch[0].pageId)) {
+            throw visionContextRecoveryError(
+              resolved,
+              effectiveInputBudget,
+              originalContextDetails,
+            );
+          }
+          remaining[0] = await resize(batch[0]);
+        }
+        pending = remaining;
+        effectiveInputBudget = shrinkInputBudget(effectiveInputBudget, details);
+        repacks++;
+        repack = true;
+        break;
+      }
+    }
+    if (!repack) pending = [];
+  }
+
+  signal.throwIfAborted();
+  const complete = validateRecognitionCoverage(
+    records,
+    pages.map((page) => page.pageId),
+  );
+  return mergeRecognitionRecords(complete);
 }
 
 export async function analyzeExcalidraw(
@@ -175,10 +597,20 @@ export async function analyzeExcalidraw(
   signal: AbortSignal,
   language: OutputLanguage = "auto",
   reasoningLanguage: OutputLanguage = "auto",
+  options?: VisionAnalysisOptions,
 ): Promise<string> {
-  return callVisionLlm(llm, model, excalidrawSystem(language, reasoningLanguage), [
-    { type: "image_url", image_url: { url: `data:image/png;base64,${b64}` } },
-  ], signal);
+  const resolved = resolveVisionOptions(options);
+  const records = await callVisionLlm(
+    llm,
+    model,
+    excalidrawSystem(language),
+    [{ pageId: "excalidraw", dataUrl: `data:image/png;base64,${b64}` }],
+    signal,
+    language,
+    reasoningLanguage,
+    resolved,
+  );
+  return mergeRecognitionRecords(records);
 }
 
 /** Route a single embed path to the right analyzer. Returns description or null for unknown ext. */
@@ -194,6 +626,7 @@ export async function analyzeSingleAttachment(
   visionTempStore?: VisionTempStore,
   imageOnly: boolean = false,
   usedTemplates?: Set<string>,
+  visionOptions?: VisionAnalysisOptions,
 ): Promise<string | null> {
   const resolved = vaultTools.resolveLink(path, sourcePath);
   // Skip embeds Obsidian can't resolve to an indexed vault file — a traversal
@@ -208,20 +641,43 @@ export async function analyzeSingleAttachment(
     if (!b64) return null;            // no host plugin / render failed → skip
     await visionTempStore?.putPng(path, b64);
     usedTemplates?.add(visionExcalidraw);
-    return analyzeExcalidraw(b64, llm, model, signal, language, reasoningLanguage);
+    return analyzeExcalidraw(
+      b64,
+      llm,
+      model,
+      signal,
+      language,
+      reasoningLanguage,
+      visionOptions,
+    );
   }
   if (ext === "pdf") {
     const buf = await vaultTools.readBinary(resolved);
     usedTemplates?.add(visionPdf);
-    usedTemplates?.add(visionStructure);
-    return analyzePdf(buf, llm, model, signal, language, reasoningLanguage);
+    return analyzePdf(
+      buf,
+      llm,
+      model,
+      signal,
+      language,
+      reasoningLanguage,
+      visionOptions,
+    );
   }
   const mimeType = getMimeType(resolved);
   if (mimeType) {
     const buf = await vaultTools.readBinary(resolved);
     usedTemplates?.add(visionImage);
-    usedTemplates?.add(visionStructure);
-    return analyzeImage(buf, mimeType, llm, model, signal, language, reasoningLanguage);
+    return analyzeImage(
+      buf,
+      mimeType,
+      llm,
+      model,
+      signal,
+      language,
+      reasoningLanguage,
+      visionOptions,
+    );
   }
   return null;
 }
@@ -235,16 +691,26 @@ export async function analyzeAttachments(
   sourcePath: string = "",
   language: OutputLanguage = "auto",
   reasoningLanguage: OutputLanguage = "auto",
+  visionOptions?: VisionAnalysisOptions,
 ): Promise<Map<string, string>> {
   const result = new Map<string, string>();
   for (const path of [...new Set(embedPaths)]) {
     if (signal.aborted) break;
-    try {
-      const description = await analyzeSingleAttachment(path, vaultTools, llm, model, signal, sourcePath, language, reasoningLanguage);
-      if (description !== null) result.set(path, description);
-    } catch {
-      // Per-attachment failure — skip, don't block format
-    }
+    const description = await analyzeSingleAttachment(
+      path,
+      vaultTools,
+      llm,
+      model,
+      signal,
+      sourcePath,
+      language,
+      reasoningLanguage,
+      undefined,
+      false,
+      undefined,
+      visionOptions,
+    );
+    if (description !== null) result.set(path, description);
   }
   return result;
 }

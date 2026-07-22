@@ -52,7 +52,7 @@ export function domainEntryToMetadataRecords(entry: DomainEntry): MetadataRecord
   setIfDefined(domain, "max_tag_categories", entry.max_tag_categories);
   setIfDefined(domain, "pageNameVersion", entry.pageNameVersion);
 
-  const types = (entry.entity_types ?? []).map((type) => ({ kind: "entity_type" as const, ...type }));
+  const types = (entry.entity_types ?? []).map((type) => ({ ...type, kind: "entity_type" as const }));
   const sources = Object.entries(entry.analyzed_sources ?? {})
     .map(([path, hash]) => ({ kind: "source_state" as const, path, hash }));
   return [domain, ...types, ...sources];

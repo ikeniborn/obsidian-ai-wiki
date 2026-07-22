@@ -1,6 +1,6 @@
 import type OpenAI from "openai";
 import type { z } from "zod";
-import type { LlmCallOptions, LlmClient, RunEvent } from "../types";
+import type { LlmCallOptions, LlmClient, LlmLifecycleAction, RunEvent } from "../types";
 import {
   formatZodFeedback,
   runStructuredWithRetry,
@@ -20,8 +20,10 @@ export interface ParseWithRetryArgs<T> {
   schema: z.ZodSchema<T>;
   maxRetries: number;
   callSite: CallSite;
+  lifecycle: { id: string; action: LlmLifecycleAction };
   signal: AbortSignal;
   onEvent: (ev: RunEvent) => void;
+  transport?: "stream" | "non-stream";
 }
 
 export type ParseWithRetryResult<T> = RunStructuredResult<T>;
@@ -35,7 +37,9 @@ export async function parseWithRetry<T>(args: ParseWithRetryArgs<T>): Promise<Pa
     profile: { kind: "json-zod", schema: args.schema },
     maxRetries: args.maxRetries,
     callSite: args.callSite,
+    lifecycle: args.lifecycle,
     signal: args.signal,
     onEvent: args.onEvent,
+    transport: args.transport,
   });
 }

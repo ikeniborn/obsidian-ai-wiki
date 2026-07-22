@@ -20,12 +20,12 @@ AI Wiki reads your notes and maintains a structured knowledge base (wiki) alongs
 
 | Feature | What it does |
 |---|---|
-| **Ingest** | Reads an open note, extracts key topics (people, tools, processes, terms), creates or updates wiki pages. Tags are standardized: pages reuse the domain's existing tag vocabulary, carry their entity-type tag, and the set of thematic tag categories is bounded per domain |
+| **Ingest** | Reads an open note, extracts key topics (people, tools, processes, terms), creates pages or updates existing pages with guarded section patches. Oversized Markdown is processed as bounded chunks with complete evidence coverage. Tags are standardized: pages reuse the domain's existing tag vocabulary, carry their entity-type tag, and the set of thematic tag categories is bounded per domain |
 | **Query** | Answers a question using your wiki as context; results shown in the sidebar with cross-links |
 | **Lint** | Reviews wiki pages for gaps, outdated content, and broken links; shows a report in the sidebar |
 | **Fix** | After Lint — send an instruction in the sidebar chat to apply corrections |
 | **Init** | Sets up a new knowledge area (domain) with the folder structure and index files |
-| **Re-init** | Wipes and rebuilds a domain from scratch — useful after major source changes |
+| **Re-init** | Removes and recreates the complete domain tree, including metadata and empty folders, then rebuilds it from sources |
 | **Format** | Cleans up any open markdown note (outside the wiki): headings, tables, frontmatter, image captions. Shows a preview before applying. Invariant: never adds or removes facts — only improves clarity. When the note belongs to a configured domain, tags are reused from that domain's existing tag vocabulary |
 | **Chat** | Interactive follow-up in the sidebar after Query or Lint |
 | **Export OKF** | Serialize a domain into a Google [Open Knowledge Format](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing/) bundle — a folder of markdown with OKF frontmatter, a generated `index.md`/`log.md`, and standard `[text](link.md)` links — for sharing with external AI agents and tools. Desktop only |
@@ -93,7 +93,9 @@ Settings → AI Wiki:
 | API Key | `ollama` |
 | Model | `llama3.2` |
 | Temperature | `0.2` |
-| Max tokens | `4096` |
+| Input budget tokens | `16384` |
+| Output budget tokens | `4096` |
+| Semantic compression | `Balanced` |
 
 ### 5. Create a knowledge area (domain)
 
@@ -156,7 +158,7 @@ The sidebar is the main interface for AI Wiki. Open it via the ribbon (🧠 icon
 - Domain selector — choose which domain to work with
 - **↻** refresh the domain list
 - **📁+** manage source folders (add or remove)
-- **♻** re-init: wipe all wiki pages and rebuild from sources
+- **♻** full re-init: remove and recreate the complete domain tree, then rebuild from sources
 - 📜 open the domain log file
 - 🗒 open the domain index file
 - **Ingest** — process the currently open note
@@ -164,6 +166,36 @@ The sidebar is the main interface for AI Wiki. Open it via the ribbon (🧠 icon
 - **Format** — clean up the currently open note's formatting
 
 **Query** — type a question and click **Ask**. The answer appears in the sidebar with wiki cross-links. Use the **Chat** section below the result to refine or follow up.
+
+### Model progress and Re-init
+
+Each model request uses one human-readable sidebar lifecycle: **Preparing request → Request
+sent to model → Waiting for model response → Model is producing a response → Validating
+response → Applying result → Completed** (or a terminal retry, failure, or cancellation).
+Reasoning remains available in its expandable block. Call sites, transport details,
+attempts, budgets, and provider data stay in `agent.jsonl`, not sidebar labels. The waiting
+timer shows UI elapsed time; it is not a provider heartbeat and does not extend the idle
+deadline. Agent-log reasoning is retained in ordered bounded records up to 4 MiB per
+operation; excess text is replaced by a metadata-only truncation marker.
+
+For Native Agent, a replacement transport attempt starts a fresh human lifecycle at
+**Preparing request**. The sidebar does not show retry counters or HTTP details.
+`agent.jsonl` records metadata-only `transport_retry_scheduled`,
+`transport_retry_recovered`, and `transport_retry_exhausted` events with the logical
+request ID, lifecycle ID, status/classification, delay, attempt bound, and timeout values;
+request bodies, response content, authorization headers, and API keys are never retry
+diagnostics.
+
+Background structured work—Init bootstrap, evidence map/reduce, Ingest synthesis, and
+bounded Lint batches—uses atomic non-stream responses. Interactive Chat, the Query answer,
+and Format use SSE so reasoning or answer text can appear as it arrives.
+
+Full Re-init validates bootstrap output and source snapshots before mutation, then removes
+the entire `!Wiki/<domain>` tree exactly once: pages, metadata, indexes, logs, temporary
+content, nested type folders, and obsolete empty directories. It recreates fresh metadata
+and index state before ingest. A deletion or concurrent-write conflict aborts source ingest;
+the transaction restores the prior snapshot when safe and never overwrites a concurrently
+recreated domain tree.
 
 ---
 
@@ -189,6 +221,8 @@ The sidebar is the main interface for AI Wiki. Open it via the ribbon (🧠 icon
 |---|---|---|
 | User prompt | Added to the system prompt of every operation | empty |
 | Timeouts (seconds) | `ingest/query/lint/init/format`, slash-separated | `300/300/900/3600/600` |
+| LLM idle timeout | Maximum silence between meaningful native model events; `0` disables the executor idle deadline | `300` s |
+| Retry count | Backend-specific: native additional attempts per request; Claude guarded idle retries per operation | `3` |
 | History limit | Max operations in sidebar history | `20` |
 | Agent log (JSONL) | Log agent events to plugin-local `agent.jsonl` (desktop only) | off |
 
@@ -208,9 +242,16 @@ List of created domains with **Edit** / **Delete** buttons. Domain map is stored
 |---|---|---|
 | Path to Claude Code | Full absolute path to `iclaude.sh` / `iclaude` / `claude` | — |
 | Model | Preset (`opus`/`sonnet`/`haiku`) or explicit ID (`claude-sonnet-4-6`). Shown when per-operation is off | claude default |
+| Input budget tokens | Maximum estimated size of the packed prompt. This is configured explicitly; the plugin does not discover the model's context window | `16384` |
+| Semantic compression | Prompt-density profile (`Maximum`/`Balanced`/`Minimum`) with operation-specific preservation rules | `Balanced` |
 | Allowed tools | Comma-separated list passed to `--tools`. Empty = no restriction | `Read,Edit,Write,Glob,Grep` |
-| Per-operation models | When on, configure model per operation (ingest/query/lint/init/format) | off |
+| Per-operation models | When on, configure model, input budget, compression, and effort per operation (ingest/query/lint/init/format). Format has an input budget but no semantic-compression control | off |
 | Per-operation: Model | Model for the specific operation | — |
+
+Claude output limits are owned by the external Claude CLI configuration. AI Wiki bounds
+and packs Claude input, but does not send or expose a plugin-owned Claude output budget.
+Claude keeps its existing guarded operation-level idle retry behavior; it does not use
+Native Agent's request executor, HTTP status matrix, or connection-timeout transport.
 
 ### Native Agent
 
@@ -218,10 +259,93 @@ List of created domains with **Edit** / **Delete** buttons. Domain map is stored
 |---|---|---|
 | Base URL | OpenAI-compatible endpoint. Ollama: `http://localhost:11434/v1` | `http://localhost:11434/v1` |
 | API key | `ollama` for Ollama; `sk-...` for OpenAI | `ollama` |
+| Connection timeout | Desktop DNS/TCP/TLS establishment only; it does not cap response headers, body, or generation | `15` s |
+| Input budget tokens | Maximum estimated size of the packed prompt. This is configured explicitly; the plugin does not discover the model's context window | `16384` |
+| Output budget tokens | Response cap sent through the existing `maxTokens`/API `max_tokens` setting | `4096` |
+| Semantic compression | Prompt-density profile (`Maximum`/`Balanced`/`Minimum`) with operation-specific preservation rules | `Balanced` |
 | Model | Model name (`llama3.2`, `mistral`, `gpt-4o`, …). Shown when per-operation is off | `llama3.2` |
+| Thinking budget tokens | Separate native model reasoning allowance; `0` or empty disables it. It does not increase the input budget | off |
 | Temperature | `0.0`–`1.0`. Low values (`0.1`–`0.3`) give more precise, factual answers | `0.2` |
-| Per-operation models | When on, configure `model`/`maxTokens`/`temperature` per operation | off |
+| Per-operation models | When on, configure model, input/output budgets, compression, thinking budget, and temperature per operation. Format keeps numeric budgets but has no semantic-compression control | off |
 | Output repair retries | Retries for invalid JSON or invalid framed output after Zod validation (0–3). Higher = more reliable on weaker models | `1` |
+
+### Native transient request recovery
+
+Native Agent retries only the current identical OpenAI-compatible request, up to the
+configured number of additional attempts. It never replays Init, Re-init, Ingest, a source
+read, `WipeDomain`, completed evidence, or page/index application. Eligible failures are
+connection errors/timeouts and HTTP `408`, `409`, `429`, and `5xx`. Provider
+`x-should-retry: true` can opt in another transient response; `x-should-retry: false`
+always opts out. HTTP `400`, `401`, `403`, `404`, and `422`, context-limit and schema
+failures, cancellation, permanent TLS/certificate errors, and application/index/embedding
+failures are not transport-retried.
+
+Persisted retry diagnostics accept only connection, connection-timeout, allowlisted
+temporary-transport, retryable-HTTP, and explicit provider-override classifications.
+Transport classifications carry no HTTP status; HTTP classifications must carry a
+consistent valid status, and recovered/exhausted diagnostics must match the scheduled
+failure they close.
+
+Retry stops after nonblank reasoning or content, or when the additional-attempt bound is
+exhausted. Connection timeout (`15` seconds), model idle timeout (`300` seconds), and
+retry count (`3`) are independent top-level settings; existing persisted values are
+preserved. A healthy response may take longer than 15 seconds because that value applies
+only to desktop connection establishment. On Mobile, Native Agent keeps the host-provided
+transport, so an exact DNS/TCP/TLS-only timeout cannot be guaranteed; request retry and
+model-idle handling remain separate from that limitation.
+
+### Vision
+
+| Setting | Description | Default |
+|---|---|---|
+| Enable image analysis | Analyze supported images and PDF pages during Format | off |
+| Semantic compression | Vision-specific override; preserves OCR, objects, relationships, layout, page identity, and uncertainty | Use global |
+| Vision model | Multimodal model used for image analysis | — |
+| Vision Check | Native Agent only: sends one real, tiny 1×1 inline PNG request with a short prompt and a 16-token output cap. Reports success/failure without changing settings or vault files. Claude Agent exposes no Check | — |
+
+### Bounded processing and storage
+
+These controls cover different parts of a call: **Input budget tokens** bound the prepared
+request, **Output budget tokens** cap the generated response, and **Thinking budget
+tokens** separately allow native-model reasoning when the provider supports it. Native
+Agent owns all three controls; Claude input is governed by AI Wiki while Claude output
+remains CLI-owned.
+
+The input budget governs the complete prepared request, including system/schema
+instructions—not just note text. When content does not fit, AI Wiki packs complete context
+units and uses operation-specific batching or splitting instead of silently truncating
+required content. Provider context errors can trigger a smaller repack. The configured
+budget remains explicit; AI Wiki does not automatically discover a model's context
+window.
+
+Ingest splits oversized Markdown at stable section, paragraph, line-window, and fenced-code
+boundaries. Bounded map calls produce source-anchored evidence; reduction calls preserve
+coverage before synthesis. New pages are complete documents. Existing pages receive
+page/section-hash-guarded `add`, `append`, or `replace` patches, so untouched sections are
+preserved and stale content is not overwritten.
+
+`index.jsonl` is structured storage: `page` records hold retrieval metadata, while `chunk`
+records hold embedding metadata and vectors. Serialized vectors and raw index records never
+enter model prompts; prompt builders project only the selected evidence, Markdown sections,
+and allowlisted metadata they need. Unchanged chunk embeddings are reused when their
+embedding-text hash, model, and dimensions still match.
+
+Small sources keep the short path. Oversized sources, pages, histories, notes, or PDFs can
+require extra bounded model calls, increasing latency and provider cost in exchange for
+complete processing within the configured input budget. Vision Check is also a real
+provider request and may incur a small charge.
+
+Destructive Re-init acceptance must use a private copied vault, never the working vault.
+The protected replay root must be a recent `/tmp/ai-wiki-bounded-ingest-replay.*`
+directory with an owner-only `.replay-provenance` marker that records the resolved source
+and replay root. Install the build into its `run` copy, visibly confirm that vault path in
+Obsidian, and only then perform the human Re-init checkpoint. The read-only replay auditor
+rejects duplicate wipe/source/page/index effects, invalid retry lifecycles, timeout drift,
+retry after content, and recovery that does not continue to the next step. A recovered
+transport response may enter a correlated structured-repair lifecycle before successful
+validation/application/completion. Page mutations count only after the matching successful
+`tool_result`; metadata-only index checkpoints correlate both index reconciliation stages
+to the active source and selected domain.
 
 ### Proxy (native-agent only)
 
@@ -275,6 +399,7 @@ Real-world measurements from a homelab inference server running **`deepseek-v4-f
 - **Model** — smaller/quantized models are faster; larger models produce better wiki quality
 - **Inference server** — a local GPU is fastest; cloud APIs add network latency
 - **Domain size** — Init and Lint time grows linearly with the number of files
+- **Oversized inputs** — bounded map/reduce, batching, and segmentation add calls to preserve complete coverage
 
 ---
 

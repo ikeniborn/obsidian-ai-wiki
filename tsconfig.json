@@ -11,5 +11,5 @@
     "lib": ["ES2022", "DOM"],
     "types": ["node"]
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "tests/prompt-call-site.type-test.ts"]
 }

@@ -3,7 +3,7 @@ import { fuseVectorGraph } from "../fusion";
 import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { PageSimilarityService, renderContextChunks, type SelectedChunk } from "../page-similarity";
+import { PageSimilarityService, type SelectedChunk } from "../page-similarity";
 import { retrieveDomainCandidates, type RetrieveCfg } from "./query";
 import { answerFromContext } from "./query-answer";
 import { render } from "./template";
@@ -161,27 +161,49 @@ export async function* runCrossDomainQuery(
   if (signal.aborted) return;
 
   const contextChunks = reranked.chunks.slice(0, contextLimit);
-  const contextBlock = renderContextChunks(contextChunks);
-  const finalChunkIds = new Set(contextChunks.map((chunk) => chunk.articleId));
+  const domainsForChunks = (packedChunks: readonly SelectedChunk[]): string[] => {
+    const packedIds = new Set(packedChunks.map((chunk) => chunk.articleId));
+    return [...new Set(
+      poolList
+        .filter((candidate) =>
+          [...candidate.candidateIds].some((id) => packedIds.has(id)))
+        .map((candidate) => candidate.domainId)
+    )];
+  };
+  const systemPrompt = (packedChunks: readonly SelectedChunk[]): string => {
+    const packedIds = new Set(packedChunks.map((chunk) => chunk.articleId));
+    const packedDomains = domainsForChunks(packedChunks);
+    const packedNames = packedDomains.map((id) =>
+      domains.find((domain) => domain.id === id)?.name ?? id);
+    const wikiFirst = [...packedIds].sort((a, b) =>
+      Number(b.startsWith("wiki_")) - Number(a.startsWith("wiki_")));
+    const availableLinksBlock = wikiFirst.length === 0 ? "" : [
+      "Valid WikiLink targets (use EXACTLY these, copy verbatim):",
+      ...wikiFirst.map((id) => `- ${id}`),
+      "ONLY link to a target from this list. Never invent or abbreviate stems.",
+    ].join("\n");
+    const entityTypesBlock = buildCrossDomainEntityTypes(domains, packedDomains);
+    const indexBlock = buildCrossDomainIndexBlock(merged.mergedAnnotations, [...packedIds]);
+    return render(queryTemplate, {
+      domain_name: `All domains (${packedDomains.length}): ${packedNames.join(", ")}`,
+      available_links_block: availableLinksBlock,
+      entity_types_block: entityTypesBlock,
+      index_block: indexBlock ? `\nWiki index (candidates):\n${indexBlock}` : "",
+    });
+  };
 
-  // Domains whose candidates survive into the final capped set (robust to underscores in domain ids).
-  const finalDomains = [...new Set(
-    poolList
-      .filter((candidate) => [...candidate.candidateIds].some((id) => finalChunkIds.has(id)))
-      .map((candidate) => candidate.domainId)
-  )];
-  const finalNames = finalDomains.map((id) => domains.find((d) => d.id === id)?.name ?? id);
-  const domainName = `All domains (${finalDomains.length}): ${finalNames.join(", ")}`;
-
-  const wikiFirst = [...finalChunkIds].sort((a, b) => Number(b.startsWith("wiki_")) - Number(a.startsWith("wiki_")));
-  const availableLinksBlock = wikiFirst.length === 0 ? "" : [
-    "Valid WikiLink targets (use EXACTLY these, copy verbatim):",
-    ...wikiFirst.map((s) => `- ${s}`),
-    "ONLY link to a target from this list. Never invent or abbreviate stems.",
-  ].join("\n");
-
-  const entityTypesBlock = buildCrossDomainEntityTypes(domains, finalDomains);
-  const indexBlock = buildCrossDomainIndexBlock(merged.mergedAnnotations, [...finalChunkIds]);
+  const ans = yield* answerFromContext({
+    llm, model, opts, signal, systemPrompt, question: q,
+    chunks: contextChunks, wikiLinkValidationRetries,
+    deferLlmCallStats: true,
+  });
+  outputTokens += ans.outputTokens;
+  if (signal.aborted) return;
+  const finalContextChunks = ans.selectedChunks;
+  const finalChunkIds = new Set(finalContextChunks.map((chunk) => chunk.articleId));
+  const finalDomains = domainsForChunks(finalContextChunks);
+  const finalNames = finalDomains.map((id) =>
+    domains.find((domain) => domain.id === id)?.name ?? id);
   const rerankerDiagnostics = {
     enabled: rerankerRuntime.config.enabled,
     candidates: reranked.candidates,
@@ -189,13 +211,6 @@ export async function* runCrossDomainQuery(
     durationMs: reranked.durationMs,
     fallbackReason: reranked.fallbackReason,
   };
-
-  const systemPrompt = render(queryTemplate, {
-    domain_name: domainName,
-    available_links_block: availableLinksBlock,
-    entity_types_block: entityTypesBlock,
-    index_block: indexBlock ? `\nWiki index (candidates):\n${indexBlock}` : "",
-  });
 
   yield {
     kind: "query_stats",
@@ -206,21 +221,14 @@ export async function* runCrossDomainQuery(
     pagesScanned: poolList.reduce((sum, candidate) => sum + candidate.pagesScanned, 0),
     pagesSelected: finalChunkIds.size,
     candidatePages: finalSet.size,
-    chunksSelected: contextChunks.length,
+    chunksSelected: finalContextChunks.length,
     rerankerEnabled: rerankerRuntime.config.enabled,
     rerankerTopN: rerankerRuntime.config.rerankerTopN,
     contextTopN: rerankerRuntime.config.contextTopN,
     chunkDupsDropped,
     reranker: rerankerDiagnostics,
   };
-  if (signal.aborted) return;
-
-  const ans = yield* answerFromContext({
-    llm, model, opts, signal, systemPrompt, question: q,
-    contextBlock, selectedIds: finalChunkIds, wikiLinkValidationRetries,
-  });
-  outputTokens += ans.outputTokens;
-  if (signal.aborted) return;
+  if (ans.llmCallStats) yield ans.llmCallStats;
 
   yield {
     kind: "eval_meta",
@@ -228,7 +236,7 @@ export async function* runCrossDomainQuery(
       question: q,
       answer: ans.answer,
       found_pages: [...finalChunkIds],
-      found_chunks: contextChunks.map((chunk) => ({
+      found_chunks: finalContextChunks.map((chunk) => ({
         articleId: chunk.articleId,
         heading: chunk.heading,
         score: chunk.score,

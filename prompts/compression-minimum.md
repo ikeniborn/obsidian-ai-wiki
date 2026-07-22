@@ -1,0 +1,1 @@
+Use minimum semantic compression. Retain detailed explanations and useful context, but do not repeat facts or invent details. Never omit governed evidence or fields named by the preservation rules below.

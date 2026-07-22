@@ -1,0 +1,149 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-07-21T16:39:12Z",
+  "topic": "bounded-ingest-model-controls",
+  "scope": {
+    "vault": "protected-replay",
+    "operation": "init",
+    "domain": "os-unix",
+    "callSite": "init.bootstrap-map",
+    "endpointPath": "/v1/chat/completions",
+    "networkTransport": "desktop-direct",
+    "diagnosticMode": "connection-close"
+  },
+  "runtime": {
+    "obsidian": "1.12.7",
+    "electron": "34.3.0",
+    "chrome": "132.0.6834.210",
+    "node": "20.18.3",
+    "bundledUndici": "6.27.0"
+  },
+  "requestFingerprint": {
+    "preparedMessagesHash": "fnv1a:4598fc40",
+    "messageCount": 2,
+    "messageCharLengths": [
+      3800,
+      2950
+    ],
+    "estimatedInputTokens": 7202,
+    "outputBudget": 8192,
+    "responseFormatType": "json_schema",
+    "responseFormatName": "init_bootstrap-map",
+    "stream": false,
+    "hasThinking": false
+  },
+  "obsidianExperiment": {
+    "sessionId": "1784651468148",
+    "attempts": [
+      {
+        "attempt": 0,
+        "status": 200,
+        "contentType": "application/json",
+        "contentLength": 3098,
+        "stages": [
+          {
+            "stage": "fetch_start",
+            "elapsedMs": 0
+          },
+          {
+            "stage": "fetch_headers",
+            "elapsedMs": 37476
+          },
+          {
+            "stage": "body_start",
+            "elapsedMs": 37477,
+            "bodyBytes": 0,
+            "bodyChunks": 0
+          },
+          {
+            "stage": "body_error",
+            "elapsedMs": 179999,
+            "bodyBytes": 0,
+            "bodyChunks": 0,
+            "errorClass": "DOMException"
+          }
+        ],
+        "outcome": "idle-timeout",
+        "retryScheduled": true
+      },
+      {
+        "attempt": 1,
+        "status": 200,
+        "contentType": "application/json",
+        "contentLength": 1532,
+        "stages": [
+          {
+            "stage": "fetch_start",
+            "elapsedMs": 0
+          },
+          {
+            "stage": "fetch_headers",
+            "elapsedMs": 23246
+          },
+          {
+            "stage": "body_start",
+            "elapsedMs": 23247,
+            "bodyBytes": 0,
+            "bodyChunks": 0
+          },
+          {
+            "stage": "body_error",
+            "elapsedMs": 65348,
+            "bodyBytes": 0,
+            "bodyChunks": 0,
+            "errorClass": "DOMException"
+          }
+        ],
+        "outcome": "operator-cancelled-after-reproduction"
+      }
+    ],
+    "providerRequestId": null,
+    "finalStatus": "cancelled-after-diagnostic-decision"
+  },
+  "isolatedNodeControl": {
+    "eventLog": "isolated-native-transport-control.jsonl",
+    "preparedMessagesHash": "fnv1a:4598fc40",
+    "estimatedInputTokens": 7202,
+    "outputBudget": 8192,
+    "status": 200,
+    "contentType": "application/json",
+    "contentLength": 4369,
+    "bodyBytes": 4369,
+    "bodyChunks": 4,
+    "headersMs": 37096,
+    "bodyEndMs": 37100,
+    "sdkCompleteMs": 37100,
+    "transportOutcome": "completed",
+    "postTransportOutcome": "bootstrap-evidence-budget-validation-error"
+  },
+  "auditor": {
+    "sessionId": "1784651468148",
+    "expectedSources": 22,
+    "exitCode": 1,
+    "result": "inconclusive",
+    "reason": "selected-domain-index-ambiguous-before-wipe",
+    "candidateCount": 3
+  },
+  "decision": {
+    "connectionReuseCause": "rejected",
+    "gatewayOrModelCauseForObservedRequest": "not-excluded-without-exact-attempt-server-correlation",
+    "sdkPostBodyCause": "rejected",
+    "observedClientBoundary": "obsidian-electron-renderer-undici-response-body-read-after-headers-before-first-chunk",
+    "rootCause": "unresolved",
+    "confidence": "high-for-observed-client-boundary-medium-for-runtime-causality",
+    "evidence": [
+      "Two fresh isolated Obsidian connections received HTTP 200 headers and explicit Content-Length values but yielded zero body bytes and zero body chunks.",
+      "The exact bootstrap request fingerprint completed outside Electron with four body chunks, body_end, and sdk_complete.",
+      "The connection-close experiment reproduced the pooled-mode timeout, so keep-alive reuse is not causal.",
+      "The isolated Node control was a later request and the Obsidian attempts had no provider request ID, so their upstream server-side completion is not correlated."
+    ],
+    "recommendedNextExperiment": "First correlate one failing Obsidian attempt with gateway body-byte and completion evidence by provider request ID; then compare a lower-level undici.request Node-stream adapter or a main-process transport against renderer undici.fetch while preserving the current retry and timeout contracts."
+  },
+  "privacy": {
+    "requestContentCaptured": false,
+    "responseContentCaptured": false,
+    "apiKeyCaptured": false,
+    "authorizationCaptured": false,
+    "hostCaptured": false
+  }
+}

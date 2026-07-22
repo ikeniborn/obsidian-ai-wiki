@@ -2,7 +2,14 @@ import { AbstractInputSuggest, App, DropdownComponent, Notice, Platform, PluginS
 import { ConfirmModal, EditDomainModal, ExportOkfModal, ShellConsentModal } from "./modals";
 import { probeClaudeBinary } from "./claude-cli-client";
 import type LlmWikiPlugin from "./main";
-import type { LlmWikiPluginSettings, OpKey } from "./types";
+import {
+  parseLlmConnectionTimeoutSec,
+  parseLlmIdleTimeoutSec,
+  parseLlmRetryCount,
+  type CompressionProfile,
+  type LlmWikiPluginSettings,
+  type OpKey,
+} from "./types";
 import type { DomainEntry } from "./domain";
 import { removeDomainFolder } from "./domain-store";
 import { i18n } from "./i18n";
@@ -10,6 +17,14 @@ import { resolveEffective } from "./effective-settings";
 import { DEFAULT_CHUNKING, probeEmbeddingDimensions, probeEmbeddingDimensionsResult } from "./page-similarity";
 import type { LocalConfig } from "./local-config";
 import { probeRerankerModel, normalizeRerankerConfig } from "./reranker";
+import {
+  backendModelControlDescriptor,
+  createLiveModelControl,
+  parsePositiveBudgetInput,
+  renderModelControlFields,
+  type ModelControlField,
+} from "./model-call-policy";
+import { createRequestUrlVisionTransport, runNativeVisionModelCheck } from "./vision-probe";
 
 async function checkNativeAvailability(baseUrl: string, apiKey: string, model: string): Promise<void> {
   let timerId: number | undefined;
@@ -127,13 +142,14 @@ export class LlmWikiSettingTab extends PluginSettingTab {
   // the native size lets the user see that e.g. 1-of-1024 is a degenerate truncation.
   // Read-only — does not overwrite the field.
   private async checkDimensions(): Promise<void> {
+    const T = i18n();
     const na = this.plugin.settings.nativeAgent;
     if (!na.baseUrl || !na.embeddingModel) { new Notice("Set Base URL and embedding model first"); return; }
     if (!na.embeddingDimensions) { new Notice("Enter a dimension value to check, or use Default"); return; }
     const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
     const requested = na.embeddingDimensions;
     const result = await probeEmbeddingDimensionsResult(this.plugin.settings.nativeAgent.baseUrl, apiKey, na.embeddingModel, requested);
-    if (!result.probe) { new Notice(`Dimension check failed: ${result.error ?? "unknown error"}`); return; }
+    if (!result.probe) { new Notice(T.settings.embeddingDimensionCheck_failed(result.error ?? "unknown error")); return; }
     const probe = result.probe;
     const nativeProbe = await probeEmbeddingDimensions(na.baseUrl, apiKey, na.embeddingModel);
     const native = nativeProbe?.actual;
@@ -141,48 +157,77 @@ export class LlmWikiSettingTab extends PluginSettingTab {
 
     if (!probe.honored) {
       // Requested size not produced — server ignored or capped it (e.g. > native).
-      new Notice(`Not supported — model returns ${probe.actual} (native ${nativeStr}), not ${requested}. Use Default.`);
+      new Notice(T.settings.embeddingDimensionCheck_notSupported(probe.actual, nativeStr, requested));
     } else if (native != null && requested === native) {
-      new Notice(`OK — native dimension ${native}`);
+      new Notice(T.settings.embeddingDimensionCheck_native(native));
     } else if (native != null && requested < native) {
       // Honored via truncation — valid but lossy; tiny values are effectively useless.
-      new Notice(`Truncated — ${requested} of ${native} native. Smaller dimensions reduce retrieval quality.`);
+      new Notice(T.settings.embeddingDimensionCheck_truncated(requested, native));
     } else {
-      new Notice(`OK — model returns ${probe.actual} (native ${nativeStr}).`);
+      new Notice(T.settings.embeddingDimensionCheck_ok(probe.actual, nativeStr));
     }
   }
 
   private async checkReranker(): Promise<void> {
+    const T = i18n();
     const na = this.plugin.settings.nativeAgent;
     if (!na.baseUrl || !na.rerankerModel) { new Notice("Set Base URL and reranker model first"); return; }
+    const model = na.rerankerModel;
     const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
-    const config = normalizeRerankerConfig({ enabled: true, model: na.rerankerModel });
+    const config = normalizeRerankerConfig({ enabled: true, model });
     const r = await probeRerankerModel(na.baseUrl, apiKey, config);
-    new Notice(r.ok ? `OK — reranker "${na.rerankerModel}" reachable` : `Reranker check failed: ${r.error}`);
+    new Notice(r.ok ? T.settings.rerankerCheck_ok(model) : `Reranker check failed: ${r.error}`);
   }
 
   // Verify the chat model responds (a minimal /chat/completions probe).
   private async checkChatModel(): Promise<void> {
+    const T = i18n();
     const na = this.plugin.settings.nativeAgent;
     if (!na.baseUrl || !na.model) { new Notice("Set Base URL and model first"); return; }
+    const model = na.model;
     const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
     try {
-      await checkNativeAvailability(na.baseUrl, apiKey, na.model);
-      new Notice(`OK — chat model "${na.model}" reachable`);
+      await checkNativeAvailability(na.baseUrl, apiKey, model);
+      new Notice(T.settings.chatCheck_ok(model));
     } catch (e) {
       new Notice(`Chat model check failed: ${(e as Error).message}`);
     }
   }
 
+  private async checkVisionModel(model: string): Promise<void> {
+    const T = i18n();
+    const na = this.plugin.settings.nativeAgent;
+    await runNativeVisionModelCheck({
+      baseUrl: na.baseUrl,
+      apiKey: this.localCache.nativeAgent?.apiKey ?? "",
+      model,
+      timeoutMs: 30_000,
+      request: createRequestUrlVisionTransport(requestUrl),
+      messages: {
+        missing: T.settings.visionCheck_missing,
+        success: T.settings.visionCheck_ok(model),
+        details: {
+          timeout: T.settings.visionCheck_timeout,
+          http: T.settings.visionCheck_http,
+          malformed: T.settings.visionCheck_malformed,
+          empty: T.settings.visionCheck_empty,
+        },
+        failure: T.settings.visionCheck_failed,
+      },
+      notify: (message) => { new Notice(message); },
+    });
+  }
+
   // Verify the embedding model is reachable (a native-dimension probe).
   private async checkEmbeddingModel(): Promise<void> {
+    const T = i18n();
     const na = this.plugin.settings.nativeAgent;
     if (!na.baseUrl || !na.embeddingModel) { new Notice("Set Base URL and embedding model first"); return; }
     const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
     const result = await probeEmbeddingDimensionsResult(na.baseUrl, apiKey, na.embeddingModel);
     new Notice(result.probe
-      ? `OK — embedding model "${na.embeddingModel}" reachable (native dim ${result.probe.actual})`
-      : `Embedding model check failed: ${result.error ?? "unknown error"}`);
+      ? T.settings.embeddingCheck_ok(na.embeddingModel, result.probe.actual)
+      : T.settings.embeddingCheck_failed(result.error ?? "unknown error"));
   }
 
   private openExportOkfModal(domainEntry: DomainEntry): void {
@@ -214,12 +259,13 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     currentValue: string,
     onChange: (v: string) => Promise<void>,
     saveOnTyping = false,
-    check?: { tooltip: string; run: () => void | Promise<void> },
+    check?: { tooltip: string; run: (currentValue: string) => void | Promise<void> },
   ): void {
+    const live = createLiveModelControl(currentValue, onChange, saveOnTyping);
     if (check) {
       s.addButton((b) =>
         b.setButtonText("Check").setTooltip(check.tooltip)
-          .onClick(() => { void check.run(); }),
+          .onClick(() => { void live.check(check.run); }),
       );
     }
     s.addButton((b) =>
@@ -231,10 +277,13 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       t.inputEl.addEventListener("focus", () => {
         if (this._availableModels.length === 0) void this.fetchModels();
       });
-      if (saveOnTyping) {
-        t.onChange((v) => { void onChange(v); });
-      }
-      new ModelInputSuggest(this.app, t.inputEl, () => this._availableModels, (v) => { void onChange(v); });
+      t.onChange((v) => { void live.type(v); });
+      new ModelInputSuggest(
+        this.app,
+        t.inputEl,
+        () => this._availableModels,
+        (v) => { void live.select(v); },
+      );
     });
   }
 
@@ -251,6 +300,90 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     const s = this.plugin.settings;
     const eff = resolveEffective(s, this.localCache);
     const T = i18n();
+    const modelControls = backendModelControlDescriptor(eff.backend);
+    const addBudgetControl = (
+      setting: Setting,
+      value: number,
+      update: (next: number) => void,
+    ): void => {
+      let previous = value;
+      setting.addText((text) =>
+        text.setValue(String(value)).onChange(async (raw) => {
+          const next = parsePositiveBudgetInput(raw, previous);
+          if (next === previous) return;
+          update(next);
+          previous = next;
+          await this.plugin.saveSettings();
+        }),
+      );
+    };
+    const addCompressionControl = (
+      setting: Setting,
+      value: CompressionProfile | undefined,
+      useGlobal: boolean,
+      update: (next: CompressionProfile | undefined) => void,
+    ): void => {
+      setting.addDropdown((dropdown) => {
+        if (useGlobal) dropdown.addOption("", T.settings.compressionUseGlobal);
+        dropdown
+          .addOption("maximum", T.settings.compressionMaximum)
+          .addOption("balanced", T.settings.compressionBalanced)
+          .addOption("minimum", T.settings.compressionMinimum)
+          .setValue(value ?? "")
+          .onChange(async (raw) => {
+            update((raw || undefined) as CompressionProfile | undefined);
+            await this.plugin.saveSettings();
+          });
+      });
+    };
+    const addPolicyControls = (
+      fields: readonly ModelControlField[],
+      values: {
+        inputBudgetTokens?: number;
+        maxTokens?: number;
+        compressionProfile?: CompressionProfile;
+      },
+      updates: {
+        inputBudgetTokens?: (next: number) => void;
+        maxTokens?: (next: number) => void;
+        compressionProfile?: (next: CompressionProfile | undefined) => void;
+      },
+      useGlobalCompression: boolean,
+    ): void => {
+      renderModelControlFields(fields, {
+        inputBudgetTokens: () => {
+          if (values.inputBudgetTokens === undefined || !updates.inputBudgetTokens) return;
+          addBudgetControl(
+            new Setting(containerEl)
+              .setName(T.settings.inputBudgetTokens_name)
+              .setDesc(T.settings.inputBudgetTokens_desc),
+            values.inputBudgetTokens,
+            updates.inputBudgetTokens,
+          );
+        },
+        maxTokens: () => {
+          if (values.maxTokens === undefined || !updates.maxTokens) return;
+          addBudgetControl(
+            new Setting(containerEl)
+              .setName(T.settings.outputBudgetTokens_name)
+              .setDesc(T.settings.outputBudgetTokens_desc),
+            values.maxTokens,
+            updates.maxTokens,
+          );
+        },
+        compressionProfile: () => {
+          if (!updates.compressionProfile) return;
+          addCompressionControl(
+            new Setting(containerEl)
+              .setName(T.settings.compressionProfile_name)
+              .setDesc(T.settings.compressionProfile_desc),
+            values.compressionProfile,
+            useGlobalCompression,
+            updates.compressionProfile,
+          );
+        },
+      });
+    };
 
     const busy = this.plugin.controller.running;
 
@@ -305,31 +438,48 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           }),
       );
 
+    if (eff.backend === "native-agent") {
+      new Setting(containerEl)
+        .setName(T.settings.llmConnectionTimeout_name)
+        .setDesc(T.settings.llmConnectionTimeout_desc)
+        .addText((t) =>
+          t.setPlaceholder("15")
+            .setValue(String(s.llmConnectionTimeoutSec))
+            .onChange(async (v) => {
+              const next = parseLlmConnectionTimeoutSec(v, 0);
+              if (next >= 1) {
+                s.llmConnectionTimeoutSec = next;
+                await this.plugin.saveSettings();
+              }
+            }),
+        );
+    }
+
     new Setting(containerEl)
-      .setName(T.settings.llmIdleTimeout_name)
-      .setDesc(T.settings.llmIdleTimeout_desc)
+      .setName(eff.backend === "native-agent" ? T.settings.llmRequestIdleTimeout_name : T.settings.llmIdleTimeout_name)
+      .setDesc(eff.backend === "native-agent" ? T.settings.llmRequestIdleTimeout_desc : T.settings.llmIdleTimeout_desc)
       .addText((t) =>
         t.setPlaceholder("300")
           .setValue(String(s.llmIdleTimeoutSec))
           .onChange(async (v) => {
-            const n = Number(v);
-            if (Number.isFinite(n) && n >= 0) {
-              s.llmIdleTimeoutSec = Math.floor(n);
+            const next = parseLlmIdleTimeoutSec(v, -1);
+            if (next >= 0) {
+              s.llmIdleTimeoutSec = next;
               await this.plugin.saveSettings();
             }
           }),
       );
 
     new Setting(containerEl)
-      .setName(T.settings.llmIdleRetries_name)
-      .setDesc(T.settings.llmIdleRetries_desc)
+      .setName(eff.backend === "native-agent" ? T.settings.llmRequestRetries_name : T.settings.llmIdleRetries_name)
+      .setDesc(eff.backend === "native-agent" ? T.settings.llmRequestRetries_desc : T.settings.llmIdleRetries_desc)
       .addText((t) =>
         t.setPlaceholder("3")
           .setValue(String(s.llmIdleRetries))
           .onChange(async (v) => {
-            const n = Number(v);
-            if (Number.isInteger(n) && n >= 0) {
-              s.llmIdleRetries = n;
+            const next = parseLlmRetryCount(v, -1);
+            if (next >= 0) {
+              s.llmIdleRetries = next;
               await this.plugin.saveSettings();
             }
           }),
@@ -475,6 +625,19 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           return b;
         });
 
+      new Setting(containerEl)
+        .setName(T.settings.allowedTools_name)
+        .setDesc(T.settings.allowedTools_desc)
+        .addText((t) =>
+          t.setPlaceholder("Bash,read,write")
+            .setValue(eff.claudeAgent.allowedTools)
+            .onChange(async (v) => { s.claudeAgent.allowedTools = v.trim(); await this.plugin.saveSettings(); }),
+        );
+
+      new Setting(containerEl)
+        .setName(T.settings.h3_defaultChatModel)
+        .setHeading();
+
       if (!s.claudeAgent.perOperation) {
         new Setting(containerEl)
           .setName(T.settings.model_name)
@@ -486,14 +649,18 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           );
       }
 
-      new Setting(containerEl)
-        .setName(T.settings.allowedTools_name)
-        .setDesc(T.settings.allowedTools_desc)
-        .addText((t) =>
-          t.setPlaceholder("Bash,read,write")
-            .setValue(eff.claudeAgent.allowedTools)
-            .onChange(async (v) => { s.claudeAgent.allowedTools = v.trim(); await this.plugin.saveSettings(); }),
-        );
+      addPolicyControls(
+        modelControls.globalFields,
+        {
+          inputBudgetTokens: s.claudeAgent.inputBudgetTokens,
+          compressionProfile: s.claudeAgent.compressionProfile,
+        },
+        {
+          inputBudgetTokens: (next) => { s.claudeAgent.inputBudgetTokens = next; },
+          compressionProfile: (next) => { s.claudeAgent.compressionProfile = next ?? "balanced"; },
+        },
+        false,
+      );
 
       new Setting(containerEl)
         .setName("Effort level")
@@ -533,6 +700,18 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               t.setValue(s.claudeAgent.operations[key].model)
                 .onChange(async (v) => { s.claudeAgent.operations[key].model = v.trim(); await this.plugin.saveSettings(); }),
             );
+          addPolicyControls(
+            modelControls.operations[key],
+            {
+              inputBudgetTokens: s.claudeAgent.operations[key].inputBudgetTokens,
+              compressionProfile: s.claudeAgent.operations[key].compressionProfile,
+            },
+            {
+              inputBudgetTokens: (next) => { s.claudeAgent.operations[key].inputBudgetTokens = next; },
+              compressionProfile: (next) => { s.claudeAgent.operations[key].compressionProfile = next; },
+            },
+            true,
+          );
           new Setting(containerEl)
             .setName("Effort level")
             .addDropdown(d => {
@@ -569,9 +748,11 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             .onChange(async (v) => { await this.patchLocalNativeApiKey(v.trim()); }),
         );
 
-      if (!s.nativeAgent.perOperation) {
-        new Setting(containerEl).setName(T.settings.h3_defaultChatModel).setHeading();
+      new Setting(containerEl)
+        .setName(T.settings.h3_defaultChatModel)
+        .setHeading();
 
+      if (!s.nativeAgent.perOperation) {
         this.addModelControl(
           new Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native),
           eff.nativeAgent.model,
@@ -579,21 +760,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           false,
           { tooltip: "Verify the chat model is reachable", run: () => this.checkChatModel() },
         );
-
-        new Setting(containerEl)
-          .setName(T.settings.maxTokens_name)
-          .setDesc(T.settings.maxTokens_desc)
-          .addText((t) =>
-            t.setPlaceholder("4096")
-              .setValue(String(s.nativeAgent.maxTokens))
-              .onChange(async (v) => {
-                const n = Number(v);
-                if (Number.isFinite(n) && n > 0) {
-                  s.nativeAgent.maxTokens = Math.floor(n);
-                  await this.plugin.saveSettings();
-                }
-              }),
-          );
 
         new Setting(containerEl)
           .setName("Thinking budget tokens")
@@ -607,7 +773,24 @@ export class LlmWikiSettingTab extends PluginSettingTab {
                 await this.plugin.saveSettings();
               })
           );
+      }
 
+      addPolicyControls(
+        modelControls.globalFields,
+        {
+          inputBudgetTokens: s.nativeAgent.inputBudgetTokens,
+          maxTokens: s.nativeAgent.maxTokens,
+          compressionProfile: s.nativeAgent.compressionProfile,
+        },
+        {
+          inputBudgetTokens: (next) => { s.nativeAgent.inputBudgetTokens = next; },
+          maxTokens: (next) => { s.nativeAgent.maxTokens = next; },
+          compressionProfile: (next) => { s.nativeAgent.compressionProfile = next ?? "balanced"; },
+        },
+        false,
+      );
+
+      if (!s.nativeAgent.perOperation) {
         new Setting(containerEl)
           .setName(T.settings.temperature_name)
           .setDesc(T.settings.temperature_desc)
@@ -676,16 +859,20 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             s.nativeAgent.operations[key].model,
             async (v) => { s.nativeAgent.operations[key].model = v; await this.plugin.saveSettings(); },
           );
-          new Setting(containerEl)
-            .setName(T.settings.opMaxTokens_name)
-            .setDesc(T.settings.opMaxTokens_desc)
-            .addText((t) =>
-              t.setValue(String(s.nativeAgent.operations[key].maxTokens))
-                .onChange(async (v) => {
-                  const n = Number(v);
-                  if (Number.isFinite(n) && n > 0) { s.nativeAgent.operations[key].maxTokens = Math.floor(n); await this.plugin.saveSettings(); }
-                }),
-            );
+          addPolicyControls(
+            modelControls.operations[key],
+            {
+              inputBudgetTokens: s.nativeAgent.operations[key].inputBudgetTokens,
+              maxTokens: s.nativeAgent.operations[key].maxTokens,
+              compressionProfile: s.nativeAgent.operations[key].compressionProfile,
+            },
+            {
+              inputBudgetTokens: (next) => { s.nativeAgent.operations[key].inputBudgetTokens = next; },
+              maxTokens: (next) => { s.nativeAgent.operations[key].maxTokens = next; },
+              compressionProfile: (next) => { s.nativeAgent.operations[key].compressionProfile = next; },
+            },
+            true,
+          );
           new Setting(containerEl)
             .setName("Thinking budget tokens")
             .addText(t =>
@@ -998,6 +1185,10 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           .setDesc(T.settings.visionModel_desc),
         s.vision.model,
         async (v) => { s.vision.model = v; await this.plugin.saveSettings(); },
+        false,
+        modelControls.vision.check
+          ? { tooltip: T.settings.visionCheck_tooltip, run: (model) => this.checkVisionModel(model) }
+          : undefined,
       );
 
     }

@@ -1,48 +1,394 @@
-import { isAbsolute, join, relative, dirname } from "path-browserify";
-import type OpenAI from "openai";
+import { dirname, isAbsolute, join, relative } from "path-browserify";
+import { parse as yamlParse, stringify as yamlStringify } from "yaml";
 import type { DomainEntry } from "../domain";
 import { mergeEntityTypes } from "../domain";
-import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
+import { EmbeddingUnavailableError } from "../embedding-error";
+import { contentHash } from "../content-hash";
+import { hashSource } from "../incremental-sources";
+import {
+  batchEntityContexts,
+  buildEntityContext,
+  type EntityContextBundle,
+} from "../ingest-context";
+import type { ContextUnit } from "../prompt-budget";
+import {
+  applyPagePatch,
+  inspectPatchablePage,
+  normalizeSectionHeading,
+  type ReplaceSectionAuthority,
+} from "../section-patches";
+import type {
+  IngestOutcome,
+  IngestInternalExecution,
+  LlmCallOptions,
+  LlmClient,
+  ModelCallPolicy,
+  RunEvent,
+} from "../types";
+import {
+  ensureDescription,
+  ensureResource,
+  ensureSourcesSection,
+  ensureType,
+  entityTypeFromPath,
+  filterStaleWikiLinks,
+  normalizeTag,
+  parseResourceFromFm,
+  parseTagsFromFm,
+  recoverSourceFrontmatter,
+  stripInvalidWikiArticles,
+  upsertRawFrontmatter,
+  validateAndRepairSourceFrontmatter,
+  validateAndRepairWikiPageFrontmatter,
+} from "../utils/raw-frontmatter";
+import {
+  DEFAULT_MAX_TAG_CATEGORIES,
+  ensureEntityTypeTag,
+  renderTagRegistryBlock,
+  thematicCategories,
+  type TagRegistry,
+} from "../utils/tag-registry";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas, wikiSections } from "./llm-utils";
-import { EntitiesOutputSchema, TypeAssignmentsSchema } from "./zod-schemas";
-import type { WikiPagesOutput, EntitiesOutput, MergedPageOutput, TypeAssignments } from "./zod-schemas";
-import { routeAndValidatePages, type TypeClassifier } from "./entity-routing";
-import classifyTypesTemplate from "../../prompts/ingest-classify-types.md";
-import { mergeContentFrameInstruction, mergedPageProfile, parseWikiPageRepairFramesOrJson, wikiPagesFrameInstruction, wikiPagesProfile } from "./framed-output";
-import { runStructuredStreaming, type StructuredSink } from "./structured-output";
-import ingestTemplate from "../../prompts/ingest.md";
-import ingestMerge from "../../prompts/ingest-merge.md";
-import { ensureIncomingSections } from "../merge-sections";
-import ingestEntitiesTemplate from "../../prompts/ingest-entities.md";
-import fixPathsTemplate from "../../prompts/ingest-fix-paths.md";
-import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
-import { render } from "./template";
-import { domainWikiFolder, validateArticlePath, domainIndexPath, isWikiPagePath, effectiveSubfolder } from "../wiki-path";
-import { ensureDomainConfig } from "../domain-config";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureType, ensureDescription, entityTypeFromPath, ensureResource, ensureSourcesSection, parseResourceFromFm, stripInvalidWikiArticles, recoverSourceFrontmatter, parseTagsFromFm, normalizeTag } from "../utils/raw-frontmatter";
-import { collectDomainTags, renderTagRegistryBlock, thematicCategories, ensureEntityTypeTag, DEFAULT_MAX_TAG_CATEGORIES } from "../utils/tag-registry";
-import { upsertIndexAnnotation, parseIndexAnnotations, removeIndexAnnotation, deriveFallbackDescription, reconcileIndex, collectDescriptions } from "../wiki-index";
 import { pageId } from "../wiki-graph";
-import type { PageSimilarityService, ExtractedEntity } from "../page-similarity";
-import { appendWikiLog } from "../wiki-log";
-import type { IngestLogEntry } from "../wiki-log";
+import {
+  readPageDescriptions,
+  reconcilePageIndex,
+  removeArticleIndexWithAuthority,
+  restoreArticleIndexAuthority,
+} from "../wiki-index-store";
+import type { PageIndexRecord, WikiIndexRecord } from "../wiki-index-jsonl";
+import { pageIndexRecordFromMarkdown } from "../wiki-index";
 import { fixWikiLinks, stripDeadLinks } from "../wiki-link-validator";
-import { GENERIC_WIKI_STEM_REGEX, stemRegex, buildWikiStem } from "../wiki-stem";
+import { appendWikiLog, type IngestLogEntry } from "../wiki-log";
+import {
+  domainWikiFolder,
+  effectiveSubfolder,
+  isWikiPagePath,
+  validateArticlePath,
+} from "../wiki-path";
+import {
+  fileImage,
+  TransactionVaultTools,
+} from "../file-transaction";
+import { GENERIC_WIKI_STEM_REGEX, buildWikiStem, stemRegex } from "../wiki-stem";
+import { ensureDomainConfig } from "../domain-config";
 import { i18nFor, resolveLang } from "../i18n";
 import { promptVersionOf } from "../prompt-version";
-import { EmbeddingUnavailableError } from "../embedding-error";
-
-function deriveSectionForPath(wikiFolder: string, fullPath: string): string {
-  const prefix = wikiFolder + "/";
-  const rel = fullPath.startsWith(prefix) ? fullPath.slice(prefix.length) : fullPath;
-  const parts = rel.split("/");
-  return parts.length >= 2 ? parts[0] : "general";
-}
+import { sourceStem } from "../source-deletion";
+import ingestTemplate from "../../prompts/ingest.md";
+import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
+import { render } from "./template";
+import { wikiSections } from "./llm-utils";
+import {
+  EvidenceCoverageError,
+  EvidenceReducerError,
+  prepareSourceEvidence,
+  type EntityEvidence,
+} from "./ingest-evidence";
+import {
+  ConflictRegenerationExhaustedError,
+  ConflictStillStaleError,
+  mergeSynthesisBatchOutputs,
+  regenerateConflictedPatch,
+  SynthesisSplitRequiredError,
+  SynthesisStructuredError,
+  synthesizeEntityBatch,
+  type SynthesisPageDescription,
+  type SynthesisPathPolicy,
+} from "./ingest-synthesis";
+import type { SynthesisAction, SynthesisOutput } from "./zod-schemas";
+import { routeAndValidatePages } from "./entity-routing";
+import { PageSimilarityService, type ExtractedEntity } from "../page-similarity";
+import { RunEventBridge } from "../run-event-bridge";
+import { lifecycleEvent } from "../llm-lifecycle";
 
 function parseWikiStatus(content: string): string {
-  const m = /^---\n[\s\S]*?^status:[ \t]*(.+)$/m.exec(content);
-  return m ? m[1].trim() : "unknown";
+  const match = /^---\n[\s\S]*?^status:[ \t]*(.+)$/m.exec(content);
+  return match ? match[1].trim() : "unknown";
+}
+
+async function readPagesStrict(vaultTools: VaultTools, paths: string[]): Promise<Map<string, string>> {
+  return new Map(await Promise.all(paths.map(async (path) =>
+    [path, await vaultTools.read(path)] as const)));
+}
+
+function makeFailure(
+  stage: Extract<IngestOutcome, { ok: false }>["stage"],
+  message: string,
+  sourcePath?: string,
+  retryable = true,
+): IngestOutcome {
+  return {
+    ok: false,
+    ...(sourcePath === undefined ? {} : { sourcePath }),
+    stage,
+    message,
+    retryable,
+  };
+}
+
+function modelPolicy(opts: LlmCallOptions): ModelCallPolicy {
+  return {
+    inputBudgetTokens: opts.inputBudgetTokens ?? 16_384,
+    ...(opts.maxTokens === undefined ? {} : { outputBudgetTokens: opts.maxTokens }),
+    compression: opts.semanticCompression?.profile ?? "balanced",
+  };
+}
+
+function pageEntityKey(domainId: string, record: PageIndexRecord): string {
+  const prefix = `wiki_${domainId}_`;
+  return record.articleId.startsWith(prefix)
+    ? record.articleId.slice(prefix.length)
+    : record.articleId;
+}
+
+function typedDescriptions(
+  domainId: string,
+  records: readonly PageIndexRecord[],
+): SynthesisPageDescription[] {
+  return records.map((record) => ({
+    entityKey: pageEntityKey(domainId, record),
+    path: record.path,
+    description: record.description,
+    entityType: record.type,
+  }));
+}
+
+function registryFromRecords(records: readonly PageIndexRecord[], sourceContent: string): TagRegistry {
+  const categories = new Map<string, Map<string, number>>();
+  const tags = [
+    ...records.flatMap((record) => record.tags ?? []),
+    ...parseTagsFromFm(sourceContent),
+  ];
+  for (const raw of tags) {
+    const tag = normalizeTag(raw);
+    if (!tag) continue;
+    const category = tag.split("/")[0];
+    const values = categories.get(category) ?? new Map<string, number>();
+    values.set(tag, (values.get(tag) ?? 0) + 1);
+    categories.set(category, values);
+  }
+  return {
+    categories,
+    total: [...categories.values()].reduce((sum, values) => sum + values.size, 0),
+  };
+}
+
+function tagRegistryUnits(text: string): ContextUnit[] {
+  if (!text) return [];
+  return [{
+    id: "domain-tag-registry",
+    source: "registry",
+    text,
+    required: false,
+    priority: 1,
+    estimatedTokens: new TextEncoder().encode(text).byteLength,
+  }];
+}
+
+function actionAuthorities(
+  bundles: readonly EntityContextBundle[],
+  path: string,
+): ReplaceSectionAuthority[] {
+  return bundles.flatMap((bundle) =>
+    bundle.replaceAuthorities.filter((authority) => authority.path === path));
+}
+
+function targetPathFor(
+  evidence: EntityEvidence,
+  domain: DomainEntry,
+  domainRoot: string,
+  existingPaths: ReadonlySet<string>,
+): string | undefined {
+  const entityType = domain.entity_types?.find((candidate) => candidate.type === evidence.entityType);
+  if (!entityType) return undefined;
+  let stem: string;
+  try {
+    stem = buildWikiStem(domain.id, evidence.entityKey);
+  } catch {
+    return undefined;
+  }
+  const path = `${domainRoot}/${effectiveSubfolder(entityType)}/${stem}.md`;
+  return existingPaths.has(path) ? path : undefined;
+}
+
+function processPageContent(
+  content: string,
+  annotation: string,
+  path: string,
+  domain: DomainEntry,
+  domainRoot: string,
+  sourcePath: string,
+  additionalResources: readonly string[] = [],
+): { content: string; warnings: string[]; tags: string[] } {
+  const repaired = validateAndRepairWikiPageFrontmatter(content);
+  const entityTagged = ensureEntityTypeTag(repaired.content, path, domain);
+  const typed = ensureType(entityTagged.content, entityTypeFromPath(domainRoot, path));
+  const described = ensureDescription(typed, annotation);
+  const sourced = ensureResource(described, sourcePath);
+  const withSources = reconcilePageProvenance(
+    sourced.content,
+    null,
+    sourcePath,
+    additionalResources,
+  );
+  return {
+    content: withSources,
+    warnings: [
+      ...repaired.warnings,
+      ...(entityTagged.added && entityTagged.tag ? [`tags: + ${entityTagged.tag}`] : []),
+      ...(sourced.injected ? [`resource: + ${sourcePath}`] : []),
+    ],
+    tags: parseTagsFromFm(withSources),
+  };
+}
+
+function compareCodePoints(left: string, right: string): number {
+  const a = Array.from(left, (value) => value.codePointAt(0) ?? 0);
+  const b = Array.from(right, (value) => value.codePointAt(0) ?? 0);
+  for (let index = 0; index < Math.min(a.length, b.length); index++) {
+    if (a[index] !== b[index]) return a[index] - b[index];
+  }
+  return a.length - b.length;
+}
+
+function setPageResources(content: string, resources: readonly string[]): string {
+  const match = /^---\n([\s\S]*?)\n---\n?/.exec(content);
+  if (!match) return content;
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = (yamlParse(match[1]) as Record<string, unknown>) ?? {};
+  } catch {
+    return content;
+  }
+  parsed.resource = [...resources];
+  return `---\n${yamlStringify(parsed)}---\n${content.slice(match[0].length)}`;
+}
+
+function regenerateSourcesSection(content: string, resources: readonly string[]): string {
+  const lines = content.split("\n");
+  const start = lines.findIndex((line) => line.trim().toLowerCase() === "## sources");
+  if (start < 0) return ensureSourcesSection(content, [...resources]);
+  const next = lines.findIndex((line, index) => index > start && /^##\s/.test(line));
+  const end = next < 0 ? lines.length : next;
+  const withoutManagedSection = [
+    ...lines.slice(0, start),
+    ...lines.slice(end),
+  ].join("\n").replace(/\s*$/, "\n");
+  return ensureSourcesSection(withoutManagedSection, [...resources]);
+}
+
+function reconcilePageProvenance(
+  content: string,
+  existing: string | null,
+  sourcePath: string,
+  additionalResources: readonly string[] = [],
+): string {
+  const currentStem = sourceStem(sourcePath);
+  const currentPathWithoutExtension = sourcePath.replace(/\.md$/i, "");
+  const canonicalResource = (value: string): string => {
+    const trimmed = value.trim();
+    if (trimmed === currentStem
+      || trimmed === `${currentStem}.md`
+      || trimmed === currentPathWithoutExtension
+      || trimmed === sourcePath) return sourcePath;
+    return trimmed;
+  };
+  const resources = [...new Set([
+    ...parseResourceFromFm(existing ?? ""),
+    ...parseResourceFromFm(content),
+    ...additionalResources,
+    sourcePath,
+  ].map(canonicalResource).filter(Boolean))].sort(compareCodePoints);
+  return regenerateSourcesSection(setPageResources(content, resources), resources);
+}
+
+function normalizedKnowledgeBlocks(markdown: string): string[] {
+  const blocks = markdown
+    .normalize("NFC")
+    .replace(/\r\n?/g, "\n")
+    .trim()
+    .split(/\n[ \t]*\n+/)
+    .map((block) => block.split("\n")
+      .map((line) => line.trim().replace(/[ \t]+/g, " "))
+      .filter(Boolean))
+    .filter((lines) => lines.length > 0);
+  return blocks.flatMap((lines) => {
+    const isSet = lines.every((line) => /^(?:[-+*]|\d+[.)])\s+/.test(line));
+    return isSet ? lines : [lines.join("\n")];
+  });
+}
+
+function metadataValueIsRepresented(canonical: unknown, duplicate: unknown): boolean {
+  if (Array.isArray(duplicate)) {
+    if (!Array.isArray(canonical)) return false;
+    return duplicate.every((duplicateItem) =>
+      canonical.some((canonicalItem) => metadataValueIsRepresented(canonicalItem, duplicateItem)));
+  }
+  if (duplicate !== null && typeof duplicate === "object") {
+    if (canonical === null || typeof canonical !== "object" || Array.isArray(canonical)) return false;
+    return Object.entries(duplicate).every(([key, value]) =>
+      Object.prototype.hasOwnProperty.call(canonical, key)
+      && metadataValueIsRepresented((canonical as Record<string, unknown>)[key], value));
+  }
+  if (typeof duplicate === "string") {
+    return typeof canonical === "string"
+      && canonical.normalize("NFC").trim().replace(/\s+/g, " ")
+        === duplicate.normalize("NFC").trim().replace(/\s+/g, " ");
+  }
+  return Object.is(canonical, duplicate);
+}
+
+function pageMetadata(content: string): Record<string, unknown> | null {
+  const match = /^---\n([\s\S]*?)\n---\n?/.exec(content);
+  if (!match) return {};
+  try {
+    const parsed: unknown = yamlParse(match[1]);
+    return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function preambleWithoutFrontmatter(content: string): string {
+  const preamble = inspectPatchablePage(content).preamble;
+  return preamble.replace(/^---\n[\s\S]*?\n---\n?/, "");
+}
+
+function duplicateEvidenceIsRepresented(canonical: string, duplicate: string): boolean {
+  const canonicalMetadata = pageMetadata(canonical);
+  const duplicateMetadata = pageMetadata(duplicate);
+  if (canonicalMetadata === null || duplicateMetadata === null) return false;
+  for (const [key, value] of Object.entries(duplicateMetadata)) {
+    if (key.trim().toLowerCase() === "resource") continue;
+    if (!Object.prototype.hasOwnProperty.call(canonicalMetadata, key)
+      || !metadataValueIsRepresented(canonicalMetadata[key], value)) return false;
+  }
+
+  const canonicalPreamble = new Set(normalizedKnowledgeBlocks(preambleWithoutFrontmatter(canonical)));
+  const duplicatePreamble = normalizedKnowledgeBlocks(preambleWithoutFrontmatter(duplicate));
+  if (!duplicatePreamble.every((block) => canonicalPreamble.has(block))) return false;
+
+  const canonicalSections = new Map<string, Set<string>>();
+  for (const section of inspectPatchablePage(canonical).sections) {
+    const heading = normalizeSectionHeading(section.heading);
+    const blocks = canonicalSections.get(heading) ?? new Set<string>();
+    const body = section.span.replace(/^[^\r\n]*(?:\r\n|\n|\r)?/, "");
+    normalizedKnowledgeBlocks(body).forEach((block) => blocks.add(block));
+    canonicalSections.set(heading, blocks);
+  }
+  let representedBlocks = duplicatePreamble.length;
+  for (const section of inspectPatchablePage(duplicate).sections) {
+    const heading = normalizeSectionHeading(section.heading);
+    const body = section.span.replace(/^[^\r\n]*(?:\r\n|\n|\r)?/, "");
+    const duplicateBlocks = normalizedKnowledgeBlocks(body);
+    representedBlocks += duplicateBlocks.length;
+    const canonicalBlocks = canonicalSections.get(heading);
+    if (duplicateBlocks.some((block) => !canonicalBlocks?.has(block))) return false;
+  }
+  return representedBlocks > 0;
 }
 
 export async function collectSourceStems(
@@ -51,16 +397,14 @@ export async function collectSourceStems(
   vaultRoot: string,
 ): Promise<Set<string>> {
   const stems = new Set<string>();
-  for (const sp of domain.source_paths ?? []) {
-    const vaultPath = isAbsolute(sp)
-      ? vaultTools.toVaultPath(sp) ?? ""
-      : (sp.endsWith("/") ? sp.slice(0, -1) : sp);
+  for (const sourcePath of domain.source_paths ?? []) {
+    const vaultPath = isAbsolute(sourcePath)
+      ? vaultTools.toVaultPath(sourcePath) ?? ""
+      : (sourcePath.endsWith("/") ? sourcePath.slice(0, -1) : sourcePath);
     if (!vaultPath) continue;
-    const files = await vaultTools.listFiles(vaultPath).catch(() => [] as string[]);
-    for (const f of files) {
-      if (f.endsWith(".md")) {
-        stems.add(f.split("/").pop()!.replace(/\.md$/, ""));
-      }
+    const files = await vaultTools.listFiles(vaultPath);
+    for (const file of files) {
+      if (file.endsWith(".md")) stems.add(file.split("/").pop()!.replace(/\.md$/, ""));
     }
   }
   return stems;
@@ -77,489 +421,945 @@ export async function* runIngest(
   opts: LlmCallOptions = {},
   similarity?: PageSimilarityService,
   cachedAnnotations?: Map<string, string>,
-  graphDepth: number = 1,
-  wikiLinkValidationRetries: number = 3,
-): AsyncGenerator<RunEvent> {
-  const filePath = args[0];
-  if (!filePath) {
-    yield { kind: "error", message: "ingest: file path required" };
-    return;
+  graphDepth = 1,
+  wikiLinkValidationRetries = 3,
+  internal?: IngestInternalExecution,
+): AsyncGenerator<RunEvent, IngestOutcome> {
+  void graphDepth;
+  const deferred = (
+    effects: Omit<NonNullable<Extract<IngestOutcome, { ok: true }>["deferred"]>, "manifestComplete" | "mutations"> = {},
+  ): NonNullable<Extract<IngestOutcome, { ok: true }>["deferred"]> | undefined => internal === undefined
+    ? undefined
+    : {
+        ...effects,
+        manifestComplete: internal.transaction.manifestComplete,
+        mutations: internal.transaction.mutations,
+      };
+  const failure = (
+    stage: Extract<IngestOutcome, { ok: false }>["stage"],
+    message: string,
+    sourcePath?: string,
+    retryable = true,
+  ): IngestOutcome => {
+    const outcome = makeFailure(stage, message, sourcePath, retryable);
+    const effects = deferred();
+    return effects === undefined ? outcome : { ...outcome, deferred: effects };
+  };
+  const requestedPath = args[0];
+  if (!requestedPath) {
+    const message = "ingest: file path required";
+    yield { kind: "error", message };
+    return failure("read", message, undefined, false);
   }
 
-  const absSource = isAbsolute(filePath) ? filePath : join(vaultRoot, filePath);
-  const sourceVaultPath = vaultTools.toVaultPath(absSource);
-  if (!sourceVaultPath) {
-    yield { kind: "error", message: `Source file ${filePath} is outside the vault.` };
-    return;
+  const absoluteSource = isAbsolute(requestedPath) ? requestedPath : join(vaultRoot, requestedPath);
+  const sourcePath = vaultTools.toVaultPath(absoluteSource);
+  if (!sourcePath) {
+    const message = `Source file ${requestedPath} is outside the vault.`;
+    yield { kind: "error", message };
+    return failure("read", message, undefined, false);
   }
 
-  yield { kind: "tool_use", name: "Read", input: { path: sourceVaultPath } };
+  yield { kind: "tool_use", name: "Read", input: { path: sourcePath } };
   let sourceContent: string;
   try {
-    sourceContent = await vaultTools.read(sourceVaultPath);
-  } catch (e) {
-    yield { kind: "error", message: `Cannot read ${sourceVaultPath}: ${(e as Error).message}` };
-    return;
+    sourceContent = await vaultTools.read(sourcePath);
+  } catch (error) {
+    const message = `Cannot read ${sourcePath}: ${(error as Error).message}`;
+    yield { kind: "tool_result", ok: false, preview: message };
+    yield { kind: "error", message };
+    return failure("read", message, sourcePath);
   }
   yield { kind: "tool_result", ok: true, preview: sourceContent.slice(0, 100) };
+  const processedSourceBodyHash = hashSource(sourceContent);
 
-  const domain = detectDomain(absSource, domains, vaultRoot);
+  const domain = detectDomain(absoluteSource, domains, vaultRoot);
   if (!domain) {
-    yield { kind: "error", message: "No domain found for this file. Configure domain-map." };
-    return;
+    const message = "No domain found for this file. Configure domain-map.";
+    yield { kind: "error", message };
+    return failure("context", message, sourcePath, false);
+  }
+  const domainRoot = vaultTools.toVaultPath(join(vaultRoot, domainWikiFolder(domain.wiki_folder)));
+  if (!domainRoot) {
+    const message = `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.`;
+    yield { kind: "error", message };
+    return failure("context", message, sourcePath, false);
   }
 
-  const absWiki = join(vaultRoot, domainWikiFolder(domain.wiki_folder));
-  const wikiVaultPath = vaultTools.toVaultPath(absWiki);
-  if (!wikiVaultPath) {
-    yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
-    return;
-  }
-
-  const domainRoot = wikiVaultPath;
-
-  await ensureDomainConfig(vaultTools, domainRoot);
-  void graphDepth;
-  const schemaContent = render(wikiSchemaTemplate, { section_conventions: wikiSections(resolveLang(opts.outputLanguage)) });
-  const indexContent = await tryRead(vaultTools, domainIndexPath(domainRoot));
-  const existingPaths = await vaultTools.listFiles(wikiVaultPath);
-  const nonMetaPaths = existingPaths.filter(isWikiPagePath);
-  const annotations = cachedAnnotations ?? parseIndexAnnotations(indexContent);
-
-  yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).ingestProgress.synthesizing(domain.id) };
-  const start = Date.now();
-
-  // === LLM #1: extract entities =========================================
-  const messages_extract = buildExtractMessages(sourceVaultPath, sourceContent, domain);
-  yield { kind: "tool_use", name: "Extracting entities", input: {} };
-  const extractSink: StructuredSink<EntitiesOutput> = {};
-  let entitiesResult: { value: EntitiesOutput; outputTokens: number };
-  try {
-    for await (const ev of runStructuredStreaming({
-      llm, model, baseMessages: messages_extract, opts,
-      profile: { kind: "json-zod", schema: EntitiesOutputSchema },
-      maxRetries: opts.structuredRetries ?? 1,
-      callSite: "ingest.entities",
-      signal,
-      onEvent: () => {},
-    }, extractSink)) {
-      yield ev;
-    }
-    entitiesResult = { value: extractSink.value!, outputTokens: extractSink.outputTokens ?? 0 };
-    yield { kind: "tool_result", ok: true, preview: `${entitiesResult.value.entities.length} entities` };
-  } catch (e) {
-    if (signal.aborted || (e as Error).name === "AbortError") return;
-    yield { kind: "tool_result", ok: false, preview: (e as Error).message };
-    yield { kind: "error", message: `ingest: entity extraction failed — ${(e as Error).message}` };
-    yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: 0 };
-    return;
-  }
-  if (signal.aborted) return;
-
-  // === Per-entity top-K retrieval =======================================
-  const foundPages: string[] = [];
-  let existingPages: Map<string, string>;
-  const retrievalDetails: string[] = [];
-  if (similarity) {
-    await similarity.loadCache(domainRoot, vaultTools);
-    const { results: entityMap, allFailed, failReason } = await similarity.selectByEntities(
-      entitiesResult.value.entities, annotations, nonMetaPaths,
-    );
-
-    if (allFailed && entitiesResult.value.entities.length > 0 && nonMetaPaths.length > 0) {
-      throw new EmbeddingUnavailableError(failReason ?? "per-entity retrieval failed for all entities");
-    }
-
-    const union = new Set<string>();
-    for (let i = 0; i < entitiesResult.value.entities.length; i++) {
-      const e = entitiesResult.value.entities[i];
-      const key = `${e.name}::${e.type ?? ""}`;
-      const paths = entityMap.get(key) ?? [];
-      retrievalDetails.push(
-        `${i + 1}/${entitiesResult.value.entities.length} ${e.name}` +
-        `${e.type ? ` (${e.type})` : ""} → ${paths.length ? paths.join(", ") : "—"}`,
-      );
-      for (const p of paths) union.add(p);
-    }
-    foundPages.push(...union);
-
-    yield {
-      kind: "info_text",
-      icon: similarity.config.mode === "embedding" ? "🔍" : "📋",
-      summary: `${union.size}/${nonMetaPaths.length} pages retrieved (${similarity.config.mode}, ${entitiesResult.value.entities.length} entities)`,
-      details: retrievalDetails,
-    };
-
-    existingPages = await vaultTools.readAll([...union]);
-  } else {
-    existingPages = await vaultTools.readAll(nonMetaPaths);
-  }
-
-  // Delete pages missing resource — invalid regardless of naming.
-  const noSources = [...existingPages.entries()]
-    .filter(([, content]) => !/resource:/m.test(content))
-    .map(([path]) => path);
-  for (const p of noSources) {
-    try { await vaultTools.remove(p); } catch { /* skip */ }
-  }
-  if (noSources.length > 0) {
-    yield {
-      kind: "info_text", icon: "🗑️",
-      summary: `Deleted ${noSources.length} wiki page(s) missing resource.`,
-      details: noSources.slice(0, 10),
-    };
-  }
-  for (const p of noSources) existingPages.delete(p);
-
-  const sourceStems = await collectSourceStems(domain, vaultTools, vaultRoot);
-  const tagRegistry = await collectDomainTags(vaultTools, wikiVaultPath, domain.source_paths ?? []);
-  const entityTypeNames = (domain.entity_types ?? []).map((e) => e.type);
-  const maxTagCategories = domain.max_tag_categories ?? DEFAULT_MAX_TAG_CATEGORIES;
-  const tagRegistryBlock = renderTagRegistryBlock(tagRegistry, entityTypeNames, maxTagCategories);
-  const writtenTagCats = new Set<string>();
-
-  // Pre-migration cleanup: delete legacy unprefixed wiki pages.
-  if ((domain.pageNameVersion ?? 0) < 1) {
-    const unprefixed = nonMetaPaths.filter((p) => {
-      if (!p.endsWith(".md")) return false;
-      const name = p.split("/").pop()!;
-      if (name.startsWith("_")) return false;
-      return !GENERIC_WIKI_STEM_REGEX.test(name.replace(/\.md$/, ""));
-    });
-    for (const p of unprefixed) {
-      try { await vaultTools.remove(p); } catch { /* skip */ }
-    }
-    if (unprefixed.length > 0) {
-      yield {
-        kind: "info_text", icon: "🗑️",
-        summary: `Deleted ${unprefixed.length} legacy page(s) without wiki_<domain>_<entity> prefix.`,
-        details: unprefixed.slice(0, 10),
-      };
-    }
-  }
-
-  const messages = buildIngestMessages(
-    sourceVaultPath, sourceContent, domain, wikiVaultPath,
-    existingPages, schemaContent, indexContent,
-    entitiesResult.value.entities, sourceStems, tagRegistryBlock,
-  );
-
-  const inputChars = messages.reduce((s, m) => s + (typeof m.content === "string" ? m.content.length : JSON.stringify(m.content).length), 0);
-  const inputTokEst = Math.round(inputChars / 4);
-  const inputTokFmt = inputTokEst >= 1000 ? `~${(inputTokEst / 1000).toFixed(1)}k` : `~${inputTokEst}`;
-
-  yield { kind: "tool_use", name: "Synthesising pages", input: {} };
-  const pwtSink: StructuredSink<WikiPagesOutput> = {};
-  let parseResult: { value: WikiPagesOutput; outputTokens: number };
-  try {
-    for await (const ev of runStructuredStreaming({
-      llm, model, baseMessages: messages, opts: { ...opts, jsonMode: false },
-      profile: wikiPagesProfile(),
-      maxRetries: opts.structuredRetries ?? 1,
-      callSite: "ingest.pages",
-      signal,
-      onEvent: () => {},
-    }, pwtSink)) {
-      yield ev;
-    }
-    parseResult = { value: pwtSink.value!, outputTokens: pwtSink.outputTokens ?? 0 };
-    yield { kind: "tool_result", ok: true, preview: `${existingPages.size} pages · ${inputTokFmt} tokens sent` };
-  } catch (e) {
-    if (signal.aborted || (e as Error).name === "AbortError") return;
-    yield { kind: "tool_result", ok: false, preview: (e as Error).message };
-    yield { kind: "error", message: `ingest: LLM output failed validation — ${(e as Error).message}` };
-    yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: 0 };
-    return;
-  }
-  if (signal.aborted) return;
-
-  const outputTokens = parseResult.outputTokens;
-  yield { kind: "assistant_text", delta: parseResult.value.reasoning, isReasoning: true };
-  let pages = parseResult.value.pages;
-
-  // --- Path validation + one retry ---
-  const { valid, invalid } = splitByPathValidity(pages, wikiVaultPath);
-  if (invalid.length > 0) {
-    yield {
-      kind: "assistant_text",
-      delta: `⚠ Пути нарушают правило 4 сегментов, запрашиваю исправление: ${invalid.map((p) => p.path).join(", ")}\n`,
-    };
-    const retryText = await retryInvalidPaths(llm, model, messages, invalid, signal, opts);
-    if (signal.aborted) return;
-    const retried = retryText ? parseWikiPageRepairFramesOrJson(retryText) : [];
-    if (retried.length > 0) {
-      const { valid: retriedValid, invalid: retriedInvalid } = splitByPathValidity(retried, wikiVaultPath);
-      // Emit ok:false for paths still invalid after retry
-      for (const p of retriedInvalid) {
-        yield { kind: "tool_use", name: "Write", input: { path: p.path } };
-        yield { kind: "tool_result", ok: false, preview: `Path violates 4-level rule (!Wiki/<d>/<e>/<f>.md): ${p.path}` };
+  const startedAt = Date.now();
+  const policy = modelPolicy(opts);
+  const eventBridge = new RunEventBridge();
+  const pendingSynthesisLifecycles = new Map<string, Extract<RunEvent, { kind: "llm_lifecycle" }>>();
+  let synthesisLifecycleCompleted = false;
+  let outputTokens = 0;
+  let deferredSourcePathAdded: { domainId: string; path: string } | undefined;
+  let deferredLog: {
+    sourcePath: string;
+    entries: IngestLogEntry[];
+    outputTokens: number;
+  } | undefined;
+  const captureEvent = (event: RunEvent): void => {
+    if (event.kind === "llm_call_stats") outputTokens += event.outputTokens;
+    if (event.kind === "llm_lifecycle" && event.action === "synthesize_wiki_pages") {
+      if (event.phase === "validating") pendingSynthesisLifecycles.set(event.id, event);
+      if (["completed", "retrying", "failed", "cancelled"].includes(event.phase)) {
+        pendingSynthesisLifecycles.delete(event.id);
       }
-      pages = [...valid, ...retriedValid];
-    } else {
-      // No usable retry pages — skip all original invalid pages.
-      for (const p of invalid) {
-        yield { kind: "tool_use", name: "Write", input: { path: p.path } };
-        yield { kind: "tool_result", ok: false, preview: `Path violates 4-level rule (!Wiki/<d>/<e>/<f>.md): ${p.path}` };
-      }
-      pages = valid;
     }
-  }
-
-  // Stem mask guard: enforce wiki_<domain>_<entity> + reject source collisions.
-  const stemMaskRe = stemRegex(domain.id);
-  const stemValid: typeof pages = [];
-  for (const p of pages) {
-    const stem = p.path.split("/").pop()!.replace(/\.md$/, "");
-    if (!stemMaskRe.test(stem)) {
-      yield { kind: "tool_use", name: "Write", input: { path: p.path } };
-      yield { kind: "tool_result", ok: false, preview: `stem violates mask wiki_${domain.id}_<entity>: ${stem}` };
-      continue;
-    }
-    if (sourceStems.has(stem)) {
-      yield { kind: "tool_use", name: "Write", input: { path: p.path } };
-      yield { kind: "tool_result", ok: false, preview: `stem collides with source filename: ${stem}` };
-      continue;
-    }
-    stemValid.push(p);
-  }
-  pages = stemValid;
-
-  // --- Type-enforced routing: each page lands in its entity type's subfolder ---
-  // Weak local models copy the prompt's example path for every page, so the
-  // subfolder is decided server-side from the entity's type. Types are validated
-  // BEFORE writing; a page whose type is unknown is re-asked from the model
-  // (classifier fallback) and, if still unresolved, rejected — never dumped into
-  // a generic `entities/` bucket.
-  const stemToName = new Map<string, string>();
-  for (const e of entitiesResult.value.entities) {
-    try { stemToName.set(buildWikiStem(domain.id, e.name), e.name); } catch { /* unsluggable name */ }
-  }
-  const classifyTypes: TypeClassifier = async (stems) => {
-    const typeBlock = (domain.entity_types ?? []).map((et) => `- ${et.type}: ${et.description}`).join("\n");
-    const entityLines = stems.map((s) => `- stem: ${s} | name: ${stemToName.get(s) ?? s}`).join("\n");
-    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      { role: "system", content: render(classifyTypesTemplate, { type_block: typeBlock, entity_lines: entityLines }) },
-    ];
-    const sink: StructuredSink<TypeAssignments> = {};
-    try {
-      // Fallback classification — drain events without streaming to the panel.
-      const gen = runStructuredStreaming({
-        llm, model, baseMessages: messages, opts,
-        profile: { kind: "json-zod", schema: TypeAssignmentsSchema },
-        maxRetries: opts.structuredRetries ?? 1,
-        callSite: "ingest.classify", signal, onEvent: () => {},
-      }, sink);
-      while (!(await gen.next()).done) { /* drain */ }
-    } catch { return new Map(); }
-    const out = new Map<string, string>();
-    for (const a of sink.value?.assignments ?? []) out.set(a.stem, a.type);
-    return out;
+    eventBridge.push(event);
   };
-  {
-    const { routed, rejected } = await routeAndValidatePages(
-      pages, entitiesResult.value.entities, domain, wikiVaultPath, classifyTypes,
+  const finalizeSynthesisLifecycles = (
+    phase: "completed" | "failed" | "cancelled",
+  ): RunEvent[] => {
+    const events = [...pendingSynthesisLifecycles.values()].map((lifecycle) =>
+      lifecycleEvent(lifecycle.id, lifecycle.action, phase));
+    pendingSynthesisLifecycles.clear();
+    return events;
+  };
+
+  try {
+  let pagePaths: string[];
+  let pageRecords: PageIndexRecord[];
+  try {
+    await ensureDomainConfig(vaultTools, domainRoot);
+    pagePaths = (await vaultTools.listFiles(domainRoot))
+      .filter((path) => isWikiPagePath(path) && validateArticlePath(path, domainRoot));
+    const actualPages = await readPagesStrict(vaultTools, pagePaths);
+    pageRecords = [...actualPages].map(([path, content]) =>
+      pageIndexRecordFromMarkdown(domainRoot, path, content));
+    await reconcilePageIndex(
+      vaultTools,
+      domainRoot,
+      [...actualPages].map(([path, content]) => ({ path, content })),
     );
-    for (const r of rejected) {
-      yield { kind: "tool_use", name: "Write", input: { path: r.page.path } };
-      yield { kind: "tool_result", ok: false, preview: `rejected — ${r.reason}` };
-    }
-    pages = routed;
+  } catch (error) {
+    const message = `ingest: context loading failed — ${(error as Error).message}`;
+    yield { kind: "error", message };
+    return failure("context", message, sourcePath);
   }
 
-  // Programmatic WikiLink fix (always run; maxPasses=0 only warns)
-  const pagesMap = new Map(pages.map((p) => [p.path, p.content]));
-  const allVaultPaths = await vaultTools.listFiles("").catch(() => [] as string[]);
-  const knownStems = new Set([
-    ...allVaultPaths.filter(p => p.endsWith(".md")).map(p => p.split("/").pop()!.replace(/\.md$/, "")),
-    ...[...pagesMap.keys()].map((p) => p.split("/").pop()!.replace(/\.md$/, "")),
-  ]);
-  const wlFixResult = fixWikiLinks(pagesMap, wikiLinkValidationRetries, knownStems);
-  pages = pages.map((p) => {
-    const fixed = wlFixResult.fixed.get(p.path) ?? p.content;
-    return { ...p, content: stripDeadLinks(fixed, knownStems) };
-  });
+  const annotations = cachedAnnotations ?? new Map<string, string>();
+  annotations.clear();
+  for (const record of pageRecords) annotations.set(record.articleId, record.description);
 
-  // --- A2 reorder: the source frontmatter is written BEFORE the wiki pages so
-  // that, after ingest, every wiki page's mtime is >= the source's. This keeps
-  // incremental re-init honest: an unchanged source is not re-flagged. Backlinks
-  // are therefore computed from the PLANNED page/delete sets (results are not yet
-  // known). See docs/superpowers/specs/2026-06-24-incremental-reinit-design.md.
-  const plannedDeletes = (parseResult.value.deletes ?? []).filter((d) => {
-    const hasTraversal = d.path.split("/").some((seg) => seg === ".." || seg === ".");
-    return !hasTraversal && validateArticlePath(d.path, wikiVaultPath);
-  });
-  const plannedDeletePaths = new Set(plannedDeletes.map((d) => d.path));
-  const plannedDeleteStems = new Set([...plannedDeletePaths].map((p) => p.split("/").pop()!.replace(/\.md$/, "")));
-  const plannedPagePaths = pages.map((p) => p.path);
+  yield {
+    kind: "assistant_text",
+    delta: i18nFor(resolveLang(opts.outputLanguage)).ingestProgress.synthesizing(domain.id),
+  };
 
-  if (pages.length > 0 || plannedDeletePaths.size > 0) {
-    const normalizedSource = recoverSourceFrontmatter(sourceContent);
-    const existingArticles = parseWikiArticlesFromFm(normalizedSource).filter((link) => {
-      const stem = link.replace(/^\[\[/, "").replace(/\]\]$/, "");
-      return !plannedDeleteStems.has(stem);
-    });
-    const writtenLinks = plannedPagePaths.map((p) => `[[${p.split("/").pop()!.replace(/\.md$/, "")}]]`);
-    const mergedArticles = [...new Set([...existingArticles, ...writtenLinks])];
-    const updatedSource = upsertRawFrontmatter(normalizedSource, {
-      wiki_articles: mergedArticles,
-    });
-    const { content: repairedSource, warnings: sourceWarnings } =
-      validateAndRepairSourceFrontmatter(updatedSource);
-    const wikiFileStems = new Set(
-      [...existingPaths, ...plannedPagePaths]
-        .filter((p) => !plannedDeletePaths.has(p) && isWikiPagePath(p))
-        .map((p) => p.split("/").pop()!.replace(/\.md$/, "")),
-    );
-    const { content: wikiArticlesFiltered, warnings: wikiArticlesWarnings } =
-      stripInvalidWikiArticles(repairedSource, wikiFileStems);
-    const { content: filteredSource, warnings: relatedWarnings } =
-      filterStaleWikiLinks(wikiArticlesFiltered, wikiFileStems, ["related"]);
-    const allSourceWarnings = [...sourceWarnings, ...wikiArticlesWarnings, ...relatedWarnings];
-    if (allSourceWarnings.length > 0) {
-      yield { kind: "info_text", icon: "⚠️", summary: "Source frontmatter repaired", details: allSourceWarnings };
+  let evidence: EntityEvidence[];
+  try {
+    evidence = yield* eventBridge.forwardAbortable(signal, (operationSignal) =>
+      prepareSourceEvidence(sourceContent, domain.id, {
+      inputBudgetTokens: policy.inputBudgetTokens,
+      outputBudgetTokens: policy.outputBudgetTokens,
+      compressionProfile: policy.compression,
+      mapperRetries: opts.structuredRetries ?? 1,
+      reducerRetries: opts.structuredRetries ?? 1,
+    }, {
+      llm,
+      model,
+      opts,
+      signal: operationSignal,
+      configuredEntityTypes: (domain.entity_types ?? []).map((entityType) => entityType.type),
+      onEvent: captureEvent,
+    }));
+  } catch (error) {
+    if (signal.aborted || (error as Error).name === "AbortError") {
+      return failure("evidence", "ingest cancelled", sourcePath);
     }
-    yield { kind: "tool_use", name: "Update", input: { path: sourceVaultPath } };
+    const message = `ingest: evidence preparation failed — ${(error as Error).message}`;
+    yield { kind: "error", message };
+    yield { kind: "result", durationMs: Date.now() - startedAt, text: "", outputTokens: 0 };
+    return failure("evidence", message, sourcePath,
+      error instanceof EvidenceCoverageError || error instanceof EvidenceReducerError);
+  }
+
+  const service = similarity ?? new PageSimilarityService({ mode: "jaccard", topK: 20 });
+  const extracted: ExtractedEntity[] = evidence.map((entity) => ({
+    name: entity.entityKey,
+    type: entity.entityType,
+    context_snippet: entity.facts.join(" "),
+  }));
+  const existingPathSet = new Set(pagePaths);
+  const foundPages = new Set<string>();
+  const candidatePathsByEntity = new Map<string, string[]>();
+  const targetPathByEntity = new Map<string, string>();
+  try {
+    await service.loadCache(domainRoot, vaultTools);
+    const selected = await service.selectByEntities(extracted, annotations, pagePaths);
+    if (selected.allFailed && extracted.length > 0 && pagePaths.length > 0) {
+      throw new EmbeddingUnavailableError(selected.failReason ?? "per-entity retrieval failed");
+    }
+    for (let index = 0; index < evidence.length; index++) {
+      const entity = extracted[index];
+      const key = `${entity.name}::${entity.type ?? ""}`;
+      const candidates = new Set(selected.results.get(key) ?? []);
+      const targetPath = targetPathFor(evidence[index], domain, domainRoot, existingPathSet);
+      if (targetPath) candidates.add(targetPath);
+      const governed = [...candidates].filter((path) =>
+        existingPathSet.has(path) && validateArticlePath(path, domainRoot));
+      candidatePathsByEntity.set(evidence[index].entityKey, governed);
+      const contextTarget = targetPath ?? governed[0];
+      if (contextTarget) targetPathByEntity.set(evidence[index].entityKey, contextTarget);
+      governed.forEach((path) => foundPages.add(path));
+    }
+  } catch (error) {
+    const message = `ingest: candidate retrieval failed — ${(error as Error).message}`;
+    yield { kind: "error", message };
+    return failure(
+      error instanceof EmbeddingUnavailableError || (error as Error).name === "EmbeddingUnavailableError"
+        ? "embedding"
+        : "context",
+      message,
+      sourcePath,
+    );
+  }
+
+  yield {
+    kind: "info_text",
+    icon: service.config.mode === "embedding" ? "🔍" : "📋",
+    summary: `${foundPages.size}/${pagePaths.length} pages retrieved (${service.config.mode}, ${evidence.length} entities)`,
+  };
+
+  const candidateBodies = new Map<string, string>();
+  try {
+    for (const path of foundPages) candidateBodies.set(path, await vaultTools.read(path));
+  } catch (error) {
+    const message = `ingest: candidate context read failed — ${(error as Error).message}`;
+    yield { kind: "error", message };
+    return failure("context", message, sourcePath);
+  }
+
+  const schemaContent = render(wikiSchemaTemplate, {
+    section_conventions: wikiSections(resolveLang(opts.outputLanguage)),
+  });
+  let sourceStems: Set<string>;
+  try {
+    sourceStems = await collectSourceStems(domain, vaultTools, vaultRoot);
+  } catch (error) {
+    const message = `ingest: source inventory failed — ${(error as Error).message}`;
+    yield { kind: "error", message };
+    return failure("context", message, sourcePath);
+  }
+  const entityTypeNames = (domain.entity_types ?? []).map((entityType) => entityType.type);
+  const maxTagCategories = domain.max_tag_categories ?? DEFAULT_MAX_TAG_CATEGORIES;
+  const registry = registryFromRecords(pageRecords, sourceContent);
+  const registryText = renderTagRegistryBlock(registry, entityTypeNames, maxTagCategories);
+  const allowedSubfolders = [...new Set((domain.entity_types ?? []).map(effectiveSubfolder))];
+  const pathPolicy: SynthesisPathPolicy = { domainRoot, allowedSubfolders };
+  const createPathsByEntityKey = new Map<string, string>();
+  for (const entity of evidence) {
+    const entityType = domain.entity_types?.find((candidate) => candidate.type === entity.entityType);
+    if (!entityType) continue;
     try {
-      await vaultTools.write(sourceVaultPath, filteredSource);
-      yield { kind: "tool_result", ok: true, preview: `backlinks → ${sourceVaultPath}` };
-    } catch (e) {
-      yield { kind: "tool_result", ok: false, preview: `backlink write failed: ${(e as Error).message}` };
+      createPathsByEntityKey.set(
+        entity.entityKey,
+        `${domainRoot}/${effectiveSubfolder(entityType)}/${buildWikiStem(domain.id, entity.entityKey)}.md`,
+      );
+    } catch {
+      // Evidence validation reports invalid entity keys before synthesis.
     }
-    const parentPath = extractParentSourcePath(absSource, vaultRoot);
-    yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
+  }
+  const domainContract = [
+    `Domain: ${domain.id} (${domain.name})`,
+    buildEntityTypesBlock(domain, domainRoot) || "No entity types configured.",
+    domain.language_notes ? `Language rules: ${domain.language_notes}` : "",
+    `Source: ${sourcePath}`,
+  ].filter(Boolean).join("\n");
+  const pathContract = `Use exactly !Wiki/${domain.id}/<allowed-type-folder>/wiki_${domain.id}_<entity>.md.`;
+
+  const bundles: EntityContextBundle[] = [];
+  const existingPageHashes = new Map<string, string>();
+  try {
+    for (const entity of evidence) {
+      const paths = candidatePathsByEntity.get(entity.entityKey) ?? [];
+      const pages = new Map(paths.map((path) => [path, candidateBodies.get(path)!]));
+      const targetPath = targetPathByEntity.get(entity.entityKey);
+      const context = buildEntityContext({
+        evidence: entity,
+        candidatePages: pages,
+        targetPath,
+        inputBudgetTokens: policy.inputBudgetTokens,
+        fixedMessages: [{ role: "system", content: domainContract }],
+        opts,
+      });
+      for (const path of pages.keys()) existingPageHashes.set(path, contentHash(pages.get(path)!));
+      bundles.push({
+        entityKey: entity.entityKey,
+        evidence: entity,
+        units: context.units,
+        replaceAuthorities: context.replaceAuthorities,
+        estimatedInputTokens: context.estimatedInputTokens,
+      });
+    }
+  } catch (error) {
+    const message = `ingest: entity context failed — ${(error as Error).message}`;
+    yield { kind: "error", message };
+    return failure("context", message, sourcePath);
   }
 
-  const written: string[] = [];
-  const logEntries: IngestLogEntry[] = [];
-  const dedupOn = (opts.dedupOnIngest ?? false) && (opts.dedupThreshold ?? 0) > 0 && !!similarity;
-  const dedupThreshold = opts.dedupThreshold ?? 0.85;
-  const pidToPath = new Map(nonMetaPaths.map((p) => [pageId(p), p]));
-  const createdThisRun = new Set<string>();
-  if (dedupOn && similarity.config.mode === "jaccard") similarity.setJaccardCorpus(annotations);
-  for (const page of pages) {
-    if (!page.path.startsWith(wikiVaultPath + "/")) {
-      yield { kind: "tool_use", name: "Write", input: { path: page.path } };
-      yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
+  let synthesis: SynthesisOutput = {
+    reasoning: "",
+    actions: [],
+    skips: [],
+    entity_types_delta: [],
+  };
+  if (bundles.length > 0) {
+    let batches: EntityContextBundle[][];
+    try {
+      batches = batchEntityContexts(
+        bundles,
+        policy.inputBudgetTokens,
+        (items) => [{
+          role: "user",
+          content: JSON.stringify(items.map((item) => ({
+            entityKey: item.entityKey,
+            evidence: item.evidence,
+            units: item.units,
+            replaceAuthorities: item.replaceAuthorities,
+          }))),
+        }],
+        opts,
+      );
+    } catch (error) {
+      const message = `ingest: context batching failed — ${(error as Error).message}`;
+      yield { kind: "error", message };
+      return failure("context", message, sourcePath);
+    }
+
+    const outputs: SynthesisOutput[] = [];
+    try {
+      for (const batch of batches) {
+        const output = yield* eventBridge.forwardAbortable(signal, (operationSignal) =>
+          synthesizeEntityBatch({
+          bundles: batch,
+          existingPaths: existingPathSet,
+          existingPageHashes,
+          existingPageDescriptions: typedDescriptions(domain.id, pageRecords),
+          createPathsByEntityKey,
+          tagRegistryUnits: tagRegistryUnits(registryText),
+          pathPolicy,
+          domainContract,
+          schemaContract: schemaContent,
+          pathContract,
+          llm,
+          model,
+          policy,
+          opts,
+          signal: operationSignal,
+          onEvent: captureEvent,
+        }));
+        signal.throwIfAborted();
+        outputs.push(output);
+      }
+      synthesis = mergeSynthesisBatchOutputs(outputs);
+    } catch (error) {
+      if (signal.aborted || (error as Error).name === "AbortError") {
+        return failure("synthesis", "ingest cancelled", sourcePath);
+      }
+      const message = `ingest: synthesis failed — ${(error as Error).message}`;
+      yield { kind: "error", message };
+      yield { kind: "result", durationMs: Date.now() - startedAt, text: "", outputTokens: 0 };
+      return failure(
+        error instanceof SynthesisSplitRequiredError
+          ? "context"
+          : "synthesis",
+        message,
+        sourcePath,
+        error instanceof SynthesisStructuredError,
+      );
+    }
+  }
+
+  if (synthesis.reasoning) {
+    yield { kind: "assistant_text", delta: synthesis.reasoning, isReasoning: true };
+  }
+
+  const routingEntities = evidence.map((entity) => ({
+    name: entity.entityKey,
+    type: entity.entityType,
+  }));
+  const pageRecordByPath = new Map(pageRecords.map((record) => [record.path, record]));
+  const validDomainTypes = new Set((domain.entity_types ?? []).map((entityType) => entityType.type));
+  const routeableActions: SynthesisAction[] = [];
+  const routeableIndexes: number[] = [];
+  const preservedPatches = new Map<number, SynthesisAction>();
+  const authoritativeRejected: Array<{ page: SynthesisAction; reason: string }> = [];
+  for (let index = 0; index < synthesis.actions.length; index++) {
+    const action = synthesis.actions[index];
+    const record = action.kind === "patch" ? pageRecordByPath.get(action.path) : undefined;
+    if (record === undefined) {
+      routeableActions.push(action);
+      routeableIndexes.push(index);
       continue;
     }
+    if (!validDomainTypes.has(record.type)) {
+      authoritativeRejected.push({
+        page: action,
+        reason: `fresh page type "${record.type}" is not configured for domain ${domain.id}`,
+      });
+      continue;
+    }
+    preservedPatches.set(index, action);
+  }
+  const routedResult = await routeAndValidatePages(
+    routeableActions,
+    routingEntities,
+    domain,
+    domainRoot,
+    async () => new Map(),
+  );
+  const rejectedActions = [...authoritativeRejected, ...routedResult.rejected];
+  if (rejectedActions.length > 0) {
+    for (const rejected of rejectedActions) {
+      yield { kind: "tool_use", name: "Write", input: { path: rejected.page.path } };
+      yield { kind: "tool_result", ok: false, preview: `rejected — ${rejected.reason}` };
+    }
+    const message = `ingest: ${rejectedActions.length} action(s) failed strict type routing`;
+    yield { kind: "error", message };
+    return failure("patch", message, sourcePath);
+  }
+  const routedByIndex = new Map(routeableIndexes.map((index, offset) =>
+    [index, routedResult.routed[offset]] as const));
+  const orderedRoutedActions = synthesis.actions.map((_, index) =>
+    preservedPatches.get(index) ?? routedByIndex.get(index)!);
 
-    let existingContent: string | null = null;
-    try { existingContent = await vaultTools.read(page.path); } catch { /* new page */ }
+  const stemMask = stemRegex(domain.id);
+  const routedActions: SynthesisAction[] = [];
+  const routedPaths = new Set<string>();
+  for (const action of orderedRoutedActions) {
+    const stem = pageId(action.path);
+    const invalid = !validateArticlePath(action.path, domainRoot)
+      || !stemMask.test(stem)
+      || sourceStems.has(stem)
+      || routedPaths.has(action.path);
+    if (invalid) {
+      yield { kind: "tool_use", name: "Write", input: { path: action.path } };
+      yield { kind: "tool_result", ok: false, preview: `strict path/source collision guard rejected ${action.path}` };
+      const message = `ingest: strict path validation rejected ${action.path}`;
+      yield { kind: "error", message };
+      return failure("patch", message, sourcePath, false);
+    }
+    routedPaths.add(action.path);
+    routedActions.push(action);
+  }
 
-    if (dedupOn && existingContent === null) {
-      const candidateText = `${page.annotation ?? ""}\n\n${page.content}`;
-      const exclude = new Set<string>([pageId(page.path), ...createdThisRun]);
-      const hit = await similarity.maxSimilarityToExisting(candidateText, exclude);
-      if (hit.pid && hit.score >= dedupThreshold) {
-        const targetPath = pidToPath.get(hit.pid);
-        let existingTarget: string | null = null;
-        if (targetPath) { try { existingTarget = await vaultTools.read(targetPath); } catch { /* gone */ } }
-        if (targetPath && existingTarget !== null) {
-          yield { kind: "info_text", icon: "🔁",
-            summary: `Дубль: ${pageId(page.path)} ≈ ${hit.pid} (cosine ${hit.score.toFixed(2)}) → merge`,
-            details: [targetPath] };
-          const mergeMsgs = [{ role: "user" as const, content:
-            render(ingestMerge, { existing: existingTarget, incoming: page.content, frame_instruction: mergeContentFrameInstruction }) }];
-          const mergeSink: StructuredSink<MergedPageOutput> = {};
+  const sourceStem = sourcePath.split("/").pop()!.replace(/\.md$/, "");
+  const prepared = new Map<string, { content: string; action: SynthesisAction; existing: string | null }>();
+  const pendingDuplicateDeletes = new Map<string, {
+    canonicalPath: string;
+    duplicateContent: string;
+    duplicateHash: string;
+  }>();
+  const writtenTagCategories = new Set<string>();
+  for (const action of routedActions) {
+    const actionDuplicateResources: string[] = [];
+    let existing: string | null = null;
+    if (await vaultTools.exists(action.path)) {
+      try {
+        existing = await vaultTools.read(action.path);
+      } catch (error) {
+        const message = `ingest: cannot read action target ${action.path} — ${(error as Error).message}`;
+        yield { kind: "error", message };
+        return failure("context", message, sourcePath);
+      }
+    }
+    if (action.kind === "create" && existing !== null) {
+      const message = `ingest: create collided with existing page ${action.path}`;
+      yield { kind: "error", message };
+      return failure("patch", message, sourcePath, false);
+    }
+    if (action.kind === "patch" && existing === null) {
+      const message = `ingest: patch target is missing ${action.path}`;
+      yield { kind: "error", message };
+      return failure("patch", message, sourcePath);
+    }
+
+    let nextContent: string;
+    let effectiveAction = action;
+    if (action.kind === "create") {
+      nextContent = action.content;
+      if ((opts.dedupOnIngest ?? false) && (opts.dedupThreshold ?? 0) > 0) {
+        if (service.config.mode === "jaccard") service.setJaccardCorpus(annotations);
+        const hit = await service.maxSimilarityToExisting(
+          `${action.annotation}\n\n${action.content}`,
+          new Set([pageId(action.path)]),
+        );
+        if (hit.pid && hit.score >= (opts.dedupThreshold ?? 0.85)) {
+          const targetPath = pageRecords.find((record) => record.articleId === hit.pid)?.path
+            ?? pagePaths.find((path) => pageId(path) === hit.pid);
+          const entity = evidence.find((candidate) => candidate.entityKey === action.entityKey);
+          if (!targetPath || !entity || !existingPathSet.has(targetPath)) {
+            const message = `ingest: duplicate target ${hit.pid} is not an existing governed page`;
+            yield { kind: "error", message };
+            return failure("patch", message, sourcePath, false);
+          }
+          yield {
+            kind: "info_text",
+            icon: "🔁",
+            summary: `ingest: merging ${action.path} into ${targetPath} (${hit.score.toFixed(2)})`,
+          };
           try {
-            for await (const ev of runStructuredStreaming({
-              llm, model, baseMessages: mergeMsgs, opts: { ...opts, jsonMode: false },
-              profile: mergedPageProfile(),
-              maxRetries: opts.structuredRetries ?? 1,
-              callSite: "ingest.merge", signal, onEvent: () => {},
-            }, mergeSink)) {
-              yield ev;
+            const fresh = await vaultTools.read(targetPath);
+            const freshContext = buildEntityContext({
+              evidence: entity,
+              candidatePages: new Map([[targetPath, fresh]]),
+              targetPath,
+              inputBudgetTokens: policy.inputBudgetTokens,
+              fixedMessages: [{ role: "system", content: domainContract }],
+              opts,
+              linkSectionPurpose: "duplicate-merge",
+            });
+            const inspected = inspectPatchablePage(fresh);
+            effectiveAction = yield* eventBridge.forwardAbortable(signal, (operationSignal) =>
+              regenerateConflictedPatch({
+              entityKey: action.entityKey,
+              evidence: entity,
+              targetPath,
+              pageHash: inspected.pageHash,
+              targetSections: freshContext.units.filter((unit) => unit.path === targetPath),
+              replaceAuthorities: freshContext.replaceAuthorities,
+              pathPolicy,
+              domainContract,
+              schemaContract: schemaContent,
+              pathContract,
+              llm,
+              model,
+              policy,
+              opts,
+              signal: operationSignal,
+              onEvent: captureEvent,
+            }));
+            signal.throwIfAborted();
+            if (effectiveAction.kind !== "patch") {
+              throw new ConflictStillStaleError(action.entityKey, new Error("duplicate regeneration did not return a patch"));
             }
-            const merged = { value: mergeSink.value! };
-            yield { kind: "tool_use", name: "Update", input: { path: targetPath } };
-            const guardedContent = ensureIncomingSections(merged.value.content, page.content);
-            await vaultTools.write(targetPath, guardedContent);
-            written.push(targetPath);
-            yield { kind: "tool_result", ok: true, preview: `merged ← ${pageId(page.path)}` };
-            const relTarget = targetPath.slice(wikiVaultPath.length + 1);
-            logEntries.push({ path: relTarget, action: "MERGED" });
-            if (merged.value.annotation) {
-              try { await upsertIndexAnnotation(vaultTools, wikiVaultPath, hit.pid, merged.value.annotation, targetPath); } catch { /* non-critical */ }
+            const regenerated = applyPagePatch(fresh, effectiveAction, freshContext.replaceAuthorities);
+            if (!regenerated.ok) {
+              throw new ConflictStillStaleError(action.entityKey, new Error(regenerated.reason));
             }
-            continue; // skip the normal create
-          } catch (e) {
-            // merge failed — fall through to a normal create rather than lose the new content
-            yield { kind: "info_text", icon: "⚠️", summary: `merge не удался, создаю отдельно: ${(e as Error).message}` };
+            existing = fresh;
+            nextContent = regenerated.content;
+
+            const excluded = new Set([pageId(action.path), hit.pid]);
+            for (let candidateIndex = 0; candidateIndex < pagePaths.length; candidateIndex++) {
+              const duplicateHit = await service.maxSimilarityToExisting(
+                `${action.annotation}\n\n${action.content}`,
+                excluded,
+              );
+              if (!duplicateHit.pid
+                || duplicateHit.score < (opts.dedupThreshold ?? 0.85)
+                || excluded.has(duplicateHit.pid)) break;
+              excluded.add(duplicateHit.pid);
+              const duplicatePath = pageRecords.find((record) => record.articleId === duplicateHit.pid)?.path
+                ?? pagePaths.find((path) => pageId(path) === duplicateHit.pid);
+              const hasTraversal = duplicatePath?.split("/").some((segment) => segment === "." || segment === "..");
+              if (!duplicatePath
+                || hasTraversal
+                || !validateArticlePath(duplicatePath, domainRoot)
+                || !stemMask.test(pageId(duplicatePath))
+                || sourceStems.has(pageId(duplicatePath))
+                || routedPaths.has(duplicatePath)
+                || duplicatePath === targetPath) {
+                yield { kind: "tool_use", name: "Delete", input: { path: duplicatePath ?? duplicateHit.pid } };
+                yield { kind: "tool_result", ok: false, preview: "strict canonical-merge delete path rejected" };
+                continue;
+              }
+              const duplicateContent = await vaultTools.read(duplicatePath);
+              if (duplicateEvidenceIsRepresented(nextContent, duplicateContent)) {
+                pendingDuplicateDeletes.set(duplicatePath, {
+                  canonicalPath: targetPath,
+                  duplicateContent,
+                  duplicateHash: contentHash(duplicateContent),
+                });
+                actionDuplicateResources.push(...parseResourceFromFm(duplicateContent));
+              }
+            }
+          } catch (error) {
+            const message = `ingest: duplicate merge regeneration failed — ${(error as Error).message}`;
+            yield { kind: "error", message };
+            return failure("patch", message, sourcePath,
+              error instanceof ConflictRegenerationExhaustedError || error instanceof ConflictStillStaleError);
           }
         }
       }
+    } else {
+      const initial = applyPagePatch(existing!, action, actionAuthorities(bundles, action.path));
+      if (initial.ok) {
+        nextContent = initial.content;
+      } else {
+        const entity = evidence.find((candidate) => candidate.entityKey === action.entityKey);
+        if (!entity) {
+          const message = `ingest: patch authority entity missing for ${action.path}`;
+          yield { kind: "error", message };
+          return failure("patch", message, sourcePath, false);
+        }
+        try {
+          const fresh = await vaultTools.read(action.path);
+          const freshContext = buildEntityContext({
+            evidence: entity,
+            candidatePages: new Map([[action.path, fresh]]),
+            targetPath: action.path,
+            inputBudgetTokens: policy.inputBudgetTokens,
+            fixedMessages: [{ role: "system", content: domainContract }],
+            opts,
+          });
+          const inspected = inspectPatchablePage(fresh);
+          effectiveAction = yield* eventBridge.forwardAbortable(signal, (operationSignal) =>
+            regenerateConflictedPatch({
+            entityKey: action.entityKey,
+            evidence: entity,
+            targetPath: action.path,
+            pageHash: inspected.pageHash,
+            targetSections: freshContext.units.filter((unit) => unit.path === action.path),
+            replaceAuthorities: freshContext.replaceAuthorities,
+            pathPolicy,
+            domainContract,
+            schemaContract: schemaContent,
+            pathContract,
+            llm,
+            model,
+            policy,
+            opts,
+            signal: operationSignal,
+            onEvent: captureEvent,
+          }));
+          signal.throwIfAborted();
+          if (effectiveAction.kind !== "patch") {
+            throw new ConflictStillStaleError(action.entityKey, new Error("regeneration did not return a patch"));
+          }
+          const regenerated = applyPagePatch(fresh, effectiveAction, freshContext.replaceAuthorities);
+          if (!regenerated.ok) throw new ConflictStillStaleError(action.entityKey, new Error(regenerated.reason));
+          existing = fresh;
+          nextContent = regenerated.content;
+        } catch (error) {
+          const message = `ingest: patch conflict regeneration failed — ${(error as Error).message}`;
+          yield { kind: "error", message };
+          return failure("patch", message, sourcePath,
+            error instanceof ConflictRegenerationExhaustedError || error instanceof ConflictStillStaleError);
+        }
+      }
     }
-    if (existingContent === null) createdThisRun.add(pageId(page.path));
 
-    const { content: repairedPage, warnings: pageWarnings } =
-      validateAndRepairWikiPageFrontmatter(page.content);
-    if (pageWarnings.length > 0) {
+    if (prepared.has(effectiveAction.path)) {
+      const message = `ingest: multiple actions resolved to ${effectiveAction.path}`;
+      yield { kind: "error", message };
+      return failure("patch", message, sourcePath, false);
+    }
+    const processed = processPageContent(
+      nextContent,
+      effectiveAction.annotation ?? "",
+      effectiveAction.path,
+      domain,
+      domainRoot,
+      sourcePath,
+      actionDuplicateResources,
+    );
+    if (processed.warnings.length > 0) {
       yield {
         kind: "info_text",
         icon: "⚠️",
-        summary: `Frontmatter repaired: ${page.path}`,
-        details: pageWarnings,
+        summary: `Page guards applied: ${effectiveAction.path}`,
+        details: processed.warnings,
       };
     }
-    const { content: entityTagged, added: entityTagAdded, tag: entityTag } =
-      ensureEntityTypeTag(repairedPage, page.path, domain);
-    if (entityTagAdded) {
-      yield {
-        kind: "info_text",
-        icon: "🏷️",
-        summary: `Entity tag added: ${page.path}`,
-        details: [`tags: + ${entityTag} (derived from wiki_subfolder)`],
-      };
-    }
-    const okfType = entityTypeFromPath(wikiVaultPath, page.path);
-    const typed = ensureType(entityTagged, okfType);
-    const described = ensureDescription(typed, page.annotation ?? "");
-    const sourceStem = sourceVaultPath.split("/").pop()!.replace(/\.md$/, "");
-    const { content: sourcedPage, injected } = ensureResource(described, sourceStem);
-    if (injected) {
-      yield {
-        kind: "info_text", icon: "⚠️",
-        summary: `resource injected: ${page.path}`,
-        details: [`Added [[${sourceStem}]] — LLM did not emit resource`],
-      };
-    }
-    // OKF: navigable source links live in a body `## Sources` section (not
-    // frontmatter). Derive it server-side from the governed `resource` stems so
-    // the wiki→source link is always present regardless of what the LLM emitted.
-    const withSources = ensureSourcesSection(sourcedPage, parseResourceFromFm(sourcedPage));
-    yield { kind: "tool_use", name: existingContent === null ? "Create" : "Update", input: { path: page.path } };
+    processed.tags.forEach((tag) => writtenTagCategories.add(tag.split("/")[0]));
+    prepared.set(effectiveAction.path, { content: processed.content, action: effectiveAction, existing });
+  }
+
+  let allVaultPaths: string[];
+  try {
+    allVaultPaths = await vaultTools.listFiles("");
+  } catch (error) {
+    const message = `ingest: global link inventory failed — ${(error as Error).message}`;
+    yield { kind: "error", message };
+    return failure("context", message, sourcePath);
+  }
+  const knownStems = new Set([
+    ...allVaultPaths.filter((path) => path.endsWith(".md")).map((path) => pageId(path)),
+    ...[...prepared.keys()].map(pageId),
+  ]);
+  const linkFix = fixWikiLinks(
+    new Map([...prepared].map(([path, value]) => [path, value.content])),
+    wikiLinkValidationRetries,
+    knownStems,
+  );
+  for (const [path, value] of prepared) {
+    value.content = stripDeadLinks(linkFix.fixed.get(path) ?? value.content, knownStems);
+  }
+
+  const created: string[] = [];
+  const updated: string[] = [];
+  const deleted: string[] = [];
+  const logEntries: IngestLogEntry[] = [];
+  const synthesisLifecycles = [...pendingSynthesisLifecycles.values()];
+  let synthesisApplying = false;
+  for (const [path, value] of prepared) {
+    signal.throwIfAborted();
+    yield { kind: "tool_use", name: value.existing === null ? "Create" : "Update", input: { path } };
     try {
-      await vaultTools.write(page.path, withSources);
-      written.push(page.path);
-      for (const t of parseTagsFromFm(withSources)) writtenTagCats.add(t.split("/")[0]);
-      yield { kind: "tool_result", ok: true };
-
-      const relPath = page.path.startsWith(wikiVaultPath + "/")
-        ? page.path.slice(wikiVaultPath.length + 1)
-        : page.path;
-      const statusTo = parseWikiStatus(repairedPage);
-      if (existingContent === null) {
-        logEntries.push({ path: relPath, action: "CREATED", statusTo });
+      if (value.existing === null) {
+        if (await vaultTools.exists(path)) {
+          throw new Error(`create conflict: path now exists ${path}`);
+        }
       } else {
-        logEntries.push({ path: relPath, action: "UPDATED", statusFrom: parseWikiStatus(existingContent), statusTo });
+        if (!await vaultTools.exists(path)) {
+          throw new Error(`update conflict: path disappeared ${path}`);
+        }
+        const actual = await vaultTools.read(path);
+        if (actual !== value.existing || contentHash(actual) !== contentHash(value.existing)) {
+          throw new Error(`update conflict: page changed after patch preparation ${path}`);
+        }
       }
-
-      try {
-        const annotation = (page.annotation && page.annotation.trim())
-          ? page.annotation
-          : deriveFallbackDescription(sourcedPage, deriveSectionForPath(wikiVaultPath, page.path));
-        await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), annotation, page.path);
-      } catch { /* non-critical */ }
-    } catch (e) {
-      yield { kind: "tool_result", ok: false, preview: (e as Error).message };
+      if (!synthesisApplying) {
+        for (const lifecycle of synthesisLifecycles) {
+          yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
+        }
+        synthesisApplying = true;
+      }
+      signal.throwIfAborted();
+      if (vaultTools instanceof TransactionVaultTools) {
+        await vaultTools.writeIfCurrent(
+          path,
+          value.existing === null ? { exists: false } : fileImage(value.existing),
+          value.content,
+        );
+      } else {
+        await vaultTools.write(path, value.content);
+      }
+    } catch (error) {
+      const message = `ingest: page write failed for ${path} — ${(error as Error).message}`;
+      yield { kind: "tool_result", ok: false, preview: message };
+      yield { kind: "error", message };
+      return failure("write", message, sourcePath);
+    }
+    yield { kind: "tool_result", ok: true };
+    const relativePath = path.slice(domainRoot.length + 1);
+    if (value.existing === null) {
+      created.push(path);
+      logEntries.push({ path: relativePath, action: "CREATED", statusTo: parseWikiStatus(value.content) });
+    } else {
+      updated.push(path);
+      logEntries.push({
+        path: relativePath,
+        action: "UPDATED",
+        statusFrom: parseWikiStatus(value.existing),
+        statusTo: parseWikiStatus(value.content),
+      });
     }
   }
 
-  // Soft category-limit check: warn once per run; tags are never dropped for limit reasons.
-  const entityCatSet = new Set(entityTypeNames.map((t) => normalizeTag(t)));
-  const thematicAfter = new Set(thematicCategories(tagRegistry, entityTypeNames));
-  for (const cat of writtenTagCats) {
-    if (!entityCatSet.has(cat)) thematicAfter.add(cat);
+  const deleteThreshold = opts.mergeDeleteWarnThreshold ?? 5;
+  if (pendingDuplicateDeletes.size > deleteThreshold) {
+    yield {
+      kind: "info_text",
+      icon: "⚠️",
+      summary: `Large merge: ${pendingDuplicateDeletes.size} deletion${pendingDuplicateDeletes.size === 1 ? "" : "s"}`,
+      details: [...pendingDuplicateDeletes.keys()],
+    };
+  }
+  for (const [path, authority] of pendingDuplicateDeletes) {
+    yield { kind: "tool_use", name: "Delete", input: { path } };
+    let removedIndexRecords: WikiIndexRecord[] | undefined;
+    try {
+      const pathHasTraversal = path.split("/").some((segment) => segment === "." || segment === "..");
+      const canonicalHasTraversal = authority.canonicalPath
+        .split("/").some((segment) => segment === "." || segment === "..");
+      if (pathHasTraversal
+        || canonicalHasTraversal
+        || !validateArticlePath(path, domainRoot)
+        || !validateArticlePath(authority.canonicalPath, domainRoot)
+        || !stemMask.test(pageId(path))
+        || !stemMask.test(pageId(authority.canonicalPath))
+        || sourceStems.has(pageId(path))
+        || sourceStems.has(pageId(authority.canonicalPath))
+        || routedPaths.has(path)
+        || path === authority.canonicalPath) {
+        throw new Error("stale canonical duplicate authority failed strict path validation");
+      }
+      const [actualDuplicate, actualCanonical] = await Promise.all([
+        vaultTools.read(path),
+        vaultTools.read(authority.canonicalPath),
+      ]);
+      if (actualDuplicate !== authority.duplicateContent
+        || contentHash(actualDuplicate) !== authority.duplicateHash) {
+        throw new Error("stale canonical duplicate content changed before deletion");
+      }
+      if (!duplicateEvidenceIsRepresented(actualCanonical, actualDuplicate)) {
+        throw new Error("stale canonical duplicate evidence is not represented on disk");
+      }
+      removedIndexRecords = await removeArticleIndexWithAuthority(
+        vaultTools,
+        domainRoot,
+        pageId(path),
+      );
+      const [postIndexDuplicate, postIndexCanonical] = await Promise.all([
+        vaultTools.read(path),
+        vaultTools.read(authority.canonicalPath),
+      ]);
+      if (postIndexDuplicate !== actualDuplicate
+        || contentHash(postIndexDuplicate) !== authority.duplicateHash
+        || postIndexCanonical !== actualCanonical
+        || !duplicateEvidenceIsRepresented(postIndexCanonical, postIndexDuplicate)) {
+        throw new Error("stale canonical duplicate authority changed during index removal");
+      }
+      if (vaultTools instanceof TransactionVaultTools) {
+        await vaultTools.removeIfCurrent(path, fileImage(postIndexDuplicate));
+      } else {
+        await vaultTools.remove(path);
+      }
+      if (await vaultTools.exists(path)) throw new Error(`duplicate page still exists after removal: ${path}`);
+      deleted.push(path);
+      logEntries.push({
+        path: path.slice(domainRoot.length + 1),
+        action: "DELETED",
+      });
+      yield { kind: "tool_result", ok: true };
+    } catch (error) {
+      if (removedIndexRecords !== undefined && await vaultTools.exists(path)) {
+        await restoreArticleIndexAuthority(
+          vaultTools,
+          domainRoot,
+          pageId(path),
+          removedIndexRecords,
+        );
+      }
+      const message = `ingest: canonical duplicate deletion failed for ${path} — ${(error as Error).message}`;
+      yield { kind: "tool_result", ok: false, preview: message };
+      yield { kind: "error", message };
+      return failure("write", message, sourcePath);
+    }
+  }
+
+  let finalPages: Map<string, string>;
+  try {
+    const finalPaths = (await vaultTools.listFiles(domainRoot))
+      .filter((path) => isWikiPagePath(path) && validateArticlePath(path, domainRoot));
+    finalPages = await readPagesStrict(vaultTools, finalPaths);
+    await reconcilePageIndex(
+      vaultTools,
+      domainRoot,
+      [...finalPages].map(([path, content]) => ({ path, content })),
+    );
+    yield {
+      kind: "index_effect",
+      domainId: domain.id,
+      sourcePath,
+      stage: "page_reconcile",
+    };
+  } catch (error) {
+    const message = `ingest: index reconciliation failed — ${(error as Error).message}`;
+    yield { kind: "error", message };
+    return failure("index", message, sourcePath);
+  }
+
+  const sourceResourceTokens = new Set([sourcePath, sourceStem]);
+  const hasCurrentSourceResource = (content: string): boolean =>
+    parseResourceFromFm(content).some((resource) => sourceResourceTokens.has(resource));
+
+  const successfulPaths = [...new Set([
+    ...created,
+    ...updated,
+    ...[...finalPages]
+      .filter(([path, content]) =>
+        validateArticlePath(path, domainRoot)
+        && hasCurrentSourceResource(content))
+      .map(([path]) => path),
+  ])].sort(compareCodePoints);
+
+  if (successfulPaths.length > 0) {
+    try {
+      const descriptions = await readPageDescriptions(vaultTools, domainRoot);
+      const changedBodies = new Map<string, string>();
+      for (const path of successfulPaths) {
+        const body = finalPages.get(path);
+        if (body !== undefined) changedBodies.set(pageId(path), body);
+      }
+      const refreshed = await service.refreshCache(domainRoot, vaultTools, descriptions, changedBodies);
+      if (refreshed.failed > 0) {
+        throw new EmbeddingUnavailableError(`${refreshed.failed} required embedding chunk(s) failed`);
+      }
+    } catch (error) {
+      const message = `ingest: embedding refresh failed — ${(error as Error).message}`;
+      yield { kind: "error", message };
+      return failure("embedding", message, sourcePath);
+    }
+  }
+
+  let backlinkPages: Map<string, string>;
+  try {
+    const backlinkPaths = (await vaultTools.listFiles(domainRoot))
+      .filter((path) => isWikiPagePath(path) && validateArticlePath(path, domainRoot));
+    backlinkPages = await readPagesStrict(vaultTools, backlinkPaths);
+    await reconcilePageIndex(
+      vaultTools,
+      domainRoot,
+      [...backlinkPages].map(([path, content]) => ({ path, content })),
+    );
+    yield {
+      kind: "index_effect",
+      domainId: domain.id,
+      sourcePath,
+      stage: "final_reconcile",
+    };
+  } catch (error) {
+    const message = `ingest: final page inventory failed — ${(error as Error).message}`;
+    yield { kind: "error", message };
+    return failure("index", message, sourcePath);
+  }
+
+  const finalStems = new Set([...backlinkPages.keys()].map(pageId));
+  const associatedPaths = [...backlinkPages]
+      .filter(([path, content]) =>
+        validateArticlePath(path, domainRoot)
+        && hasCurrentSourceResource(content))
+      .map(([path]) => path)
+      .sort(compareCodePoints);
+  try {
+    yield { kind: "tool_use", name: "Update", input: { path: sourcePath } };
+    const freshSource = await vaultTools.read(sourcePath);
+    if (hashSource(freshSource) !== processedSourceBodyHash) {
+      throw new Error("source body changed after evidence preparation");
+    }
+    const normalizedSource = recoverSourceFrontmatter(freshSource);
+    const updatedSource = upsertRawFrontmatter(normalizedSource, {
+      wiki_articles: associatedPaths.map((path) => `[[${pageId(path)}]]`),
+    });
+    const repaired = validateAndRepairSourceFrontmatter(updatedSource);
+    const validArticles = stripInvalidWikiArticles(repaired.content, finalStems);
+    const filtered = filterStaleWikiLinks(validArticles.content, finalStems, ["related"]);
+    const warnings = [...repaired.warnings, ...validArticles.warnings, ...filtered.warnings];
+    if (filtered.content !== freshSource) {
+      if (vaultTools instanceof TransactionVaultTools) {
+        await vaultTools.writeIfCurrent(sourcePath, fileImage(freshSource), filtered.content);
+      } else {
+        await vaultTools.write(sourcePath, filtered.content);
+      }
+    }
+    if (warnings.length > 0) {
+      yield { kind: "info_text", icon: "⚠️", summary: "Source frontmatter repaired", details: warnings };
+    }
+    yield { kind: "tool_result", ok: true, preview: `backlinks → ${sourcePath}` };
+    if (associatedPaths.length > 0) {
+      const sourcePathAdded = {
+        domainId: domain.id,
+        path: extractParentSourcePath(absoluteSource, vaultRoot),
+      };
+      if (internal === undefined) yield { kind: "source_path_added", ...sourcePathAdded };
+      else deferredSourcePathAdded = sourcePathAdded;
+    }
+  } catch (error) {
+    const message = `ingest: source backlink reconciliation failed — ${(error as Error).message}`;
+    yield { kind: "tool_result", ok: false, preview: message };
+    yield { kind: "error", message };
+    return failure("backlink", message, sourcePath);
+  }
+
+  const entityCategorySet = new Set(entityTypeNames.map(normalizeTag));
+  const thematicAfter = new Set(thematicCategories(registry, entityTypeNames));
+  for (const category of writtenTagCategories) {
+    if (!entityCategorySet.has(category)) thematicAfter.add(category);
   }
   if (thematicAfter.size > maxTagCategories) {
     yield {
@@ -569,118 +1369,104 @@ export async function* runIngest(
       details: [...thematicAfter].sort(),
     };
   }
+  if (linkFix.warnings.length > 0) {
+    yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: linkFix.warnings };
+  }
 
-  // === Delete loop (merge cleanup) ======================================
-  const deletes = parseResult.value.deletes ?? [];
-  const threshold = opts.mergeDeleteWarnThreshold ?? 5;
-  if (deletes.length > threshold) {
-    yield {
-      kind: "info_text",
-      icon: "⚠️",
-      summary: `Large merge: ${deletes.length} deletions`,
-      details: deletes.map((d) => d.path),
+  if (logEntries.length > 0) {
+    const log = {
+      sourcePath,
+      entries: logEntries,
+      outputTokens,
     };
-  }
-
-  const deletedPaths: string[] = [];
-  for (const d of deletes) {
-    // Reject path traversal: deletes come from LLM JSON output and must stay
-    // inside the wiki folder. startsWith alone is bypassable with ".." segments,
-    // so enforce the same strict shape as writes plus an explicit traversal check.
-    const hasTraversal = d.path.split("/").some((seg) => seg === ".." || seg === ".");
-    if (hasTraversal || !validateArticlePath(d.path, wikiVaultPath)) {
-      yield { kind: "tool_use", name: "Delete", input: { path: d.path } };
-      yield { kind: "tool_result", ok: false, preview: `invalid path, outside wiki folder (${wikiVaultPath})` };
-      continue;
-    }
-    yield { kind: "tool_use", name: "Delete", input: { path: d.path } };
-    try {
-      await vaultTools.remove(d.path);
-      try { await removeIndexAnnotation(vaultTools, wikiVaultPath, pageId(d.path)); } catch { /* non-critical */ }
-      deletedPaths.push(d.path);
-      const relPath = d.path.slice(wikiVaultPath.length + 1);
-      logEntries.push({ path: relPath, action: "DELETED" });
-      yield { kind: "tool_result", ok: true };
-    } catch (e) {
-      yield { kind: "tool_result", ok: false, preview: (e as Error).message };
-    }
-  }
-
-  // Full bidirectional index reconciliation: add any page missing from the index
-  // (legacy un-annotated pages get a deterministic fallback) and drop orphan
-  // entries whose file no longer exists. Non-critical.
-  try {
-    const finalPaths = (await vaultTools.listFiles(wikiVaultPath)).filter(isWikiPagePath);
-    const finalPages = await vaultTools.readAll(finalPaths);
-    const currentIndex = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
-    const recon = reconcileIndex(
-      currentIndex, wikiVaultPath,
-      [...finalPages].map(([path, content]) => ({ path, content })),
-    );
-    for (const a of recon.adds) {
-      await upsertIndexAnnotation(vaultTools, wikiVaultPath, a.pid, a.annotation, a.fullPath);
-    }
-    for (const pid of recon.removes) {
-      await removeIndexAnnotation(vaultTools, wikiVaultPath, pid);
-    }
-  } catch { /* non-critical */ }
-
-  const createdCount = logEntries.filter(e => e.action === "CREATED").length;
-  const updatedCount = logEntries.filter(e => e.action === "UPDATED").length;
-  const mergedCount  = logEntries.filter(e => e.action === "DELETED").length;
-  const dedupMergedCount = logEntries.filter(e => e.action === "MERGED").length;
-  const resultText = buildIngestSummary(domain.id, sourceVaultPath, createdCount, updatedCount, mergedCount, dedupMergedCount, pages.length);
-  yield { kind: "assistant_text", delta: resultText };
-
-  if (written.length > 0 || deletedPaths.length > 0) {
-    if (logEntries.length > 0) {
+    if (internal !== undefined) {
+      deferredLog = log;
+    } else {
       try {
         await appendWikiLog(vaultTools, domainRoot, domain.id, {
           op: "ingest",
-          sourcePath: sourceVaultPath,
-          entries: logEntries,
-          outputTokens,
+          ...log,
         });
-      } catch { /* non-critical */ }
+      } catch {
+        // Operation logging remains non-critical user-visible metadata.
+      }
     }
   }
 
-  const delta = parseResult.value.entity_types_delta;
-  if (delta?.length) {
-    const merged = mergeEntityTypes(domain.entity_types ?? [], delta);
-    yield { kind: "domain_updated", domainId: domain.id, patch: { entity_types: merged } };
+  const delta = synthesis.entity_types_delta;
+  if (!synthesisApplying) {
+    for (const lifecycle of synthesisLifecycles) {
+      yield lifecycleEvent(lifecycle.id, lifecycle.action, "applying");
+    }
+  }
+  for (const event of finalizeSynthesisLifecycles("completed")) {
+    yield event;
+  }
+  synthesisLifecycleCompleted = true;
+  const domainPatch = delta?.length
+    ? { entity_types: mergeEntityTypes(domain.entity_types ?? [], delta) }
+    : undefined;
+  if (domainPatch !== undefined && internal === undefined) {
+    yield {
+      kind: "domain_updated",
+      domainId: domain.id,
+      patch: domainPatch,
+    };
   }
 
-  if (similarity && written.length > 0) {
-    try {
-      // Read back the final on-disk content (frontmatter description included) rather
-      // than reusing `pages` (pre-processing LLM output, description not yet injected).
-      const writtenPages = await vaultTools.readAll(written);
-      const descriptions = collectDescriptions([...writtenPages].map(([path, content]) => ({ path, content })));
-      const pageBodies = new Map<string, string>();
-      for (const [path, content] of writtenPages) pageBodies.set(pageId(path), content);
-      await similarity.refreshCache(domainRoot, vaultTools, descriptions, pageBodies);
-    } catch { /* non-critical */ }
+  const resultText = buildIngestSummary(
+    domain.id,
+    sourcePath,
+    created.length,
+    updated.length,
+    deleted.length,
+    0,
+    synthesis.actions.length,
+  );
+  if (internal === undefined) {
+    yield { kind: "assistant_text", delta: resultText };
+    yield {
+      kind: "eval_meta",
+      fields: {
+        source_paths: [sourcePath],
+        created_pages: created,
+        updated_pages: updated,
+        found_pages: [...foundPages],
+        promptVersion: promptVersionOf(ingestTemplate),
+      },
+    };
+    yield {
+      kind: "result",
+      durationMs: Date.now() - startedAt,
+      text: resultText,
+      outputTokens: outputTokens || undefined,
+    };
   }
-
-  if (wlFixResult.warnings.length > 0) {
-    yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: wlFixResult.warnings };
-  }
-
-  const createdPages = written.filter((p) => createdThisRun.has(pageId(p)));
-  const updatedPages = written.filter((p) => !createdThisRun.has(pageId(p)));
-  yield {
-    kind: "eval_meta",
-    fields: {
-      source_paths: [sourceVaultPath],
-      created_pages: createdPages,
-      updated_pages: updatedPages,
-      found_pages: foundPages,
-      promptVersion: promptVersionOf(ingestTemplate),
-    },
+  return {
+    ok: true,
+    sourcePath,
+    created,
+    updated,
+    deleted,
+    outputTokens,
+    sourceBodyHash: processedSourceBodyHash,
+    ...(internal === undefined
+      ? {}
+      : {
+          deferred: deferred({
+            ...(domainPatch === undefined ? {} : { domainPatch }),
+            ...(deferredSourcePathAdded === undefined ? {} : { sourcePathAdded: deferredSourcePathAdded }),
+            ...(deferredLog === undefined ? {} : { log: deferredLog }),
+          })!,
+        }),
   };
-
-  yield { kind: "result", durationMs: Date.now() - start, text: resultText, outputTokens: outputTokens || undefined };
+  } finally {
+    if (!synthesisLifecycleCompleted) {
+      for (const event of finalizeSynthesisLifecycles(signal.aborted ? "cancelled" : "failed")) {
+        yield event;
+      }
+    }
+  }
 }
 
 function buildIngestSummary(
@@ -692,228 +1478,73 @@ function buildIngestSummary(
   dedupMergedCount: number,
   total: number,
 ): string {
-  const src = sourcePath.split("/").pop() ?? sourcePath;
+  const sourceName = sourcePath.split("/").pop() ?? sourcePath;
   const totalActed = createdCount + updatedCount + mergedCount + dedupMergedCount;
   if (totalActed === 0) {
-    return `Источник «${src}» обработан — новых или изменённых страниц нет.`;
+    return `Источник «${sourceName}» обработан — новых или изменённых страниц нет.`;
   }
   const parts: string[] = [];
   if (createdCount > 0) parts.push(`создано ${createdCount}`);
   if (updatedCount > 0) parts.push(`обновлено ${updatedCount}`);
-  if (mergedCount  > 0) parts.push(`объединено ${mergedCount}`);
+  if (mergedCount > 0) parts.push(`объединено ${mergedCount}`);
   if (dedupMergedCount > 0) parts.push(`дублей объединено ${dedupMergedCount}`);
-  const countStr = parts.length === 1 ? `${parts[0]} стр.` : parts.join(", ");
+  const count = parts.length === 1 ? `${parts[0]} стр.` : parts.join(", ");
   const skipped = total - (createdCount + updatedCount + dedupMergedCount);
-  const errStr = skipped > 0 ? `, ошибок ${skipped}` : "";
-  return `Источник «${src}» → домен «${domainId}»: ${countStr}${errStr}`;
+  return `Источник «${sourceName}» → домен «${domainId}»: ${count}${skipped > 0 ? `, ошибок ${skipped}` : ""}`;
 }
 
-/** Match a file to a domain by source_paths prefix; null when nothing matches (no fallback). */
-export function detectDomainStrict(absFilePath: string, domains: DomainEntry[], vaultRoot: string): DomainEntry | null {
-  for (const d of domains) {
-    const matched = d.source_paths?.some((sp) => {
-      const abs = isAbsolute(sp) ? sp : join(vaultRoot, sp);
-      const prefix = abs.endsWith("/") ? abs : abs + "/";
-      return absFilePath === abs || absFilePath.startsWith(prefix);
+/** Match a file to a domain by source_paths prefix; null when nothing matches. */
+export function detectDomainStrict(
+  absoluteFilePath: string,
+  domains: DomainEntry[],
+  vaultRoot: string,
+): DomainEntry | null {
+  for (const domain of domains) {
+    const matched = domain.source_paths?.some((sourcePath) => {
+      const absolute = isAbsolute(sourcePath) ? sourcePath : join(vaultRoot, sourcePath);
+      const prefix = absolute.endsWith("/") ? absolute : `${absolute}/`;
+      return absoluteFilePath === absolute || absoluteFilePath.startsWith(prefix);
     });
-    if (matched) return d;
+    if (matched) return domain;
   }
   return null;
 }
 
-export function detectDomain(absFilePath: string, domains: DomainEntry[], vaultRoot: string): DomainEntry | null {
-  return detectDomainStrict(absFilePath, domains, vaultRoot) ?? domains[0] ?? null;
-}
-
-async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
-  try { return await vaultTools.read(path); } catch { return ""; }
-}
-
-export function extractParentSourcePath(
-  absSource: string,
+export function detectDomain(
+  absoluteFilePath: string,
+  domains: DomainEntry[],
   vaultRoot: string,
-): string {
-  const parentAbs = dirname(absSource);
-  // Clamp: не выходить выше vault root
-  const normedVault = vaultRoot.endsWith("/") ? vaultRoot : vaultRoot + "/";
-  const clamped = (parentAbs + "/").startsWith(normedVault) ? parentAbs : vaultRoot;
-  const rel = relative(vaultRoot, clamped);
-  return (rel || ".") + "/";
+): DomainEntry | null {
+  return detectDomainStrict(absoluteFilePath, domains, vaultRoot) ?? domains[0] ?? null;
 }
 
-function splitByPathValidity(
-  pages: Array<{ path: string; content: string; annotation?: string }>,
-  wikiVaultPath: string,
-): {
-  valid: Array<{ path: string; content: string; annotation?: string }>;
-  invalid: Array<{ path: string; content: string; annotation?: string }>;
-} {
-  const valid: typeof pages = [];
-  const invalid: typeof pages = [];
-  for (const p of pages) {
-    const filename = p.path.split("/").pop() ?? "";
-    const isSystemFile = filename.startsWith("_") && filename.endsWith(".md");
-    if (!isSystemFile && validateArticlePath(p.path, wikiVaultPath)) {
-      valid.push(p);
-    } else {
-      invalid.push(p);
-    }
-  }
-  return { valid, invalid };
-}
-
-async function retryInvalidPaths(
-  llm: LlmClient,
-  model: string,
-  originalMessages: OpenAI.Chat.ChatCompletionMessageParam[],
-  invalidPages: Array<{ path: string; content: string; annotation?: string }>,
-  signal: AbortSignal,
-  opts: LlmCallOptions,
-): Promise<string> {
-  const invalidList = invalidPages.map((p) => p.path).join(", ");
-  const invalidFrames = renderPageRepairFrames(invalidPages);
-  const retryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-    ...originalMessages,
-    {
-      role: "user",
-      content: render(fixPathsTemplate, { paths: invalidList, pages: invalidFrames }),
-    },
-  ];
-  const retryParams = buildChatParams(model, retryMessages, { ...opts, jsonMode: false, jsonSchema: undefined }, false);
-  try {
-    let text = "";
-    const stream = await llm.chat.completions.create(
-      { ...retryParams, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-      { signal },
-    );
-    for await (const chunk of stream) {
-      const { content } = extractStreamDeltas(chunk);
-      if (content) text += content;
-    }
-    return text;
-  } catch {
-    return "";
-  }
-}
-
-function renderPageRepairFrames(pages: Array<{ path: string; content: string; annotation?: string }>): string {
-  return [
-    "<<<REPORT>>>",
-    "Pages needing corrected paths.",
-    ...pages.flatMap((p) => [
-      "<<<PAGE>>>",
-      `path: ${p.path}`,
-      ...(p.annotation ? [`annotation: ${p.annotation}`] : []),
-      "<<<CONTENT>>>",
-      p.content,
-      "<<<END_PAGE>>>",
-    ]),
-    "<<<END>>>",
-  ].join("\n");
+export function extractParentSourcePath(absoluteSource: string, vaultRoot: string): string {
+  const parent = dirname(absoluteSource);
+  const normalizedRoot = vaultRoot.endsWith("/") ? vaultRoot : `${vaultRoot}/`;
+  const clamped = `${parent}/`.startsWith(normalizedRoot) ? parent : vaultRoot;
+  const relativePath = relative(vaultRoot, clamped);
+  return `${relativePath || "."}/`;
 }
 
 export function buildEntityTypesBlock(domain: DomainEntry, wikiVaultPath: string): string {
   if (!domain.entity_types?.length) return "";
-  return domain.entity_types.map((et) => {
-    const sub = effectiveSubfolder(et);
+  return domain.entity_types.map((entityType) => {
+    const subfolder = effectiveSubfolder(entityType);
     return [
-      `### Type: ${et.type}`,
-      `Description: ${et.description}`,
-      `Keywords: ${et.extraction_cues.join(", ")}`,
-      et.min_mentions_for_page != null ? `Min. mentions for a page: ${et.min_mentions_for_page}` : "",
-      `Wiki subfolder: ${sub}`,
-      `Path for entities of this type: ${wikiVaultPath}/${sub}/<EntityName>.md`,
+      `### Type: ${entityType.type}`,
+      `Description: ${entityType.description}`,
+      `Keywords: ${entityType.extraction_cues.join(", ")}`,
+      entityType.min_mentions_for_page == null
+        ? ""
+        : `Min. mentions for a page: ${entityType.min_mentions_for_page}`,
+      `Wiki subfolder: ${subfolder}`,
+      `Path for entities of this type: ${wikiVaultPath}/${subfolder}/<EntityName>.md`,
     ].filter(Boolean).join("\n");
   }).join("\n\n");
 }
 
-function buildExtractMessages(
-  sourcePath: string,
-  sourceContent: string,
-  domain: DomainEntry,
-): OpenAI.Chat.ChatCompletionMessageParam[] {
-  const entityTypesBlock = buildEntityTypesBlock(domain, "");
-  const langNotes = domain.language_notes ? `Language rules: ${domain.language_notes}` : "";
-  const systemContent = render(ingestEntitiesTemplate, {
-    domain_name: domain.name,
-    entity_types_block: entityTypesBlock || "(none defined)",
-    lang_notes: langNotes,
-  });
-  return [
-    { role: "system", content: systemContent },
-    { role: "user", content: `Source: ${sourcePath}\n\n${sourceContent}` },
-  ];
-}
-
-function buildIngestMessages(
-  sourcePath: string,
-  sourceContent: string,
-  domain: DomainEntry,
-  wikiVaultPath: string,
-  existingPages: Map<string, string>,
-  schemaContent: string,
-  indexContent: string,
-  entities: ExtractedEntity[],
-  sourceStems: Set<string> = new Set(),
-  tagRegistryBlock: string = "",
-): OpenAI.Chat.ChatCompletionMessageParam[] {
-  const existing = existingPages.size > 0
-    ? [...existingPages.entries()].map(([p, c]) => `${p}:\n${c}`).join("\n\n")
-    : "None.";
-
-  const today = new Date().toISOString().slice(0, 10);
-  const entityTypesBlock = buildEntityTypesBlock(domain, wikiVaultPath);
-  const langNotes = domain.language_notes ? `Language rules: ${domain.language_notes}` : "";
-
-  const forbiddenStemsBlock = sourceStems.size > 0
-    ? `FORBIDDEN NAMES (sources in this domain):\n${[...sourceStems].sort().map((s) => `- ${s}`).join("\n")}`
-    : "";
-
-  const systemContent = render(ingestTemplate, {
-    domain_name: domain.name,
-    domain_id: domain.id,
-    entity_types_block: entityTypesBlock || "(none defined)",
-    lang_notes: langNotes,
-    wiki_path: wikiVaultPath,
-    today,
-    schema_block: schemaContent ? `CONVENTIONS (_wiki_schema.md):\n${schemaContent}` : "",
-    source_path: sourcePath,
-    source_stem: sourcePath.split("/").pop()!.replace(/\.md$/, ""),
-    forbidden_stems_block: forbiddenStemsBlock,
-    frame_instruction: wikiPagesFrameInstruction,
-  });
-
-  const existingPathSet = new Set(existingPages.keys());
-  const entityLines = entities.map((e) => {
-    const matching = [...existingPathSet].filter((p) => {
-      const stem = p.split("/").pop()!.replace(/\.md$/, "");
-      return stem.toLowerCase() === e.name.toLowerCase();
-    });
-    const head = `- ${e.name}${e.type ? ` (${e.type})` : ""}`;
-    const snippet = e.context_snippet ? ` — ${e.context_snippet}` : "";
-    const tail = ` [existing: ${matching.length > 0 ? matching.join(", ") : "—"}]`;
-    return head + snippet + tail;
-  });
-  const entitiesBlock = entityLines.length > 0
-    ? `\nExtracted entities:\n${entityLines.join("\n")}\n`
-    : "";
-
-  return [
-    { role: "system", content: systemContent },
-    {
-      role: "user",
-      content: [
-        `Domain: ${domain.id} (${domain.name})`,
-        `Wiki folder: ${wikiVaultPath}`,
-        ``,
-        `Source: ${sourcePath}`,
-        sourceContent,
-        ``,
-        `Existing wiki pages:\n${existing}`,
-        tagRegistryBlock ? `\n${tagRegistryBlock}` : "",
-        entitiesBlock,
-        indexContent ? `\nWiki index (_index.md):\n${indexContent}` : "",
-      ].filter(Boolean).join("\n"),
-    },
-  ];
+export function isLegacyUnprefixedPage(path: string): boolean {
+  if (!isWikiPagePath(path)) return false;
+  const name = path.split("/").pop()!.replace(/\.md$/, "");
+  return !name.startsWith("_") && !GENERIC_WIKI_STEM_REGEX.test(name);
 }

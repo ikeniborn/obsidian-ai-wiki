@@ -1,7 +1,19 @@
 import assert from "node:assert/strict";
+import { register } from "node:module";
 import test from "node:test";
-import { DEFAULT_CHUNKING, PageSimilarityService } from "../src/page-similarity";
-import { chunkRecordToEmbeddingChunk, embeddingChunkToChunkRecord } from "../src/wiki-index-jsonl";
+import { contentHash } from "../src/content-hash";
+import { buildChunkInputs, DEFAULT_CHUNKING, PageSimilarityService } from "../src/page-similarity";
+import { VaultTools, type VaultAdapter } from "../src/vault-tools";
+import { upsertPageIndex } from "../src/wiki-index-store";
+import {
+  chunkRecordToEmbeddingChunk,
+  embeddingChunkToChunkRecord,
+  parseWikiIndexJsonl,
+  type ChunkIndexRecord,
+  type PageIndexRecord,
+} from "../src/wiki-index-jsonl";
+
+register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 
 test("embedding chunks convert to index chunk records with vector metadata", () => {
   const record = embeddingChunkToChunkRecord({
@@ -17,6 +29,18 @@ test("embedding chunks convert to index chunk records with vector metadata", () 
     updatedAt: "2026-07-11T00:00:00.000Z",
   });
   assert.deepEqual(chunkRecordToEmbeddingChunk(record).vector, [0.1, 0.2]);
+});
+
+test("summary and first section use distinct persistent chunk identities", () => {
+  const inputs = buildChunkInputs(
+    "Alpha description",
+    "# Alpha\n\n## Facts\nAlpha facts.",
+    DEFAULT_CHUNKING,
+  );
+
+  assert.deepEqual(inputs.map((input) => input.ordinal), [0, 1]);
+  const records = chunkRecords(pageRecord("a"), inputs);
+  assert.equal(new Set(records.map((record) => `${record.articleId}:${record.ordinal}`)).size, records.length);
 });
 
 test("jaccard chunk fallback prefers heading and path evidence", async () => {
@@ -84,3 +108,528 @@ test("hybrid sparse side uses weighted lexical page score", async () => {
 
   assert.equal(scored[0].path, "!Wiki/hld/pages/export-s3-clickhouse.md");
 });
+
+test("unchanged chunks make zero embedding calls and preserve governed records", async () => {
+  const domainRoot = "!Wiki/d";
+  const indexPath = `${domainRoot}/index.jsonl`;
+  const page: PageIndexRecord = {
+    kind: "page",
+    schemaVersion: 1,
+    articleId: "a",
+    path: "!Wiki/d/concept/a.md",
+    type: "concept",
+    description: "Alpha description",
+    resource: ["source"],
+    bodyHash: "page-body",
+    descriptionHash: "page-description",
+  };
+  const body = "# Alpha\n\n## Facts\nAlpha facts.";
+  page.bodyHash = contentHash(body);
+  const inputs = buildChunkInputs(page.description, body, DEFAULT_CHUNKING);
+  const vector = [...new Float32Array([0.1, 0.2])];
+  const chunks: ChunkIndexRecord[] = inputs.map((input, ordinal) => ({
+    kind: "chunk",
+    schemaVersion: 1,
+    articleId: "a",
+    path: page.path,
+    heading: input.heading ?? "",
+    ordinal: input.ordinal ?? ordinal,
+    bodyHash: input.hash,
+    embedTextHash: input.hash,
+    vector,
+    vectorModel: "m",
+    dimensions: 2,
+    updatedAt: "2026-07-16T00:00:00.000Z",
+  }));
+  const stale: ChunkIndexRecord = { ...chunks[0], articleId: "stale", path: "!Wiki/d/concept/stale.md" };
+  const adapter = new MemoryAdapter(new Map([
+    [indexPath, [page, ...chunks, stale].map((record) => JSON.stringify(record)).join("\n") + "\n"],
+  ]));
+  const service = new PageSimilarityService({
+    mode: "embedding",
+    topK: 2,
+    model: "m",
+    dimensions: 2,
+    baseUrl: "http://unused",
+  });
+
+  const originalFetch = globalThis.fetch;
+  let embeddingCalls = 0;
+  globalThis.fetch = async () => {
+    embeddingCalls++;
+    throw new Error("embedding request was not expected");
+  };
+  let result;
+  try {
+    result = await service.refreshCache(
+      domainRoot,
+      new VaultTools(adapter, ""),
+      new Map([["a", page.description]]),
+      new Map([["a", body]]),
+      { fullCorpus: true },
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.deepEqual(result, { updated: 0, failed: 0 });
+  assert.equal(embeddingCalls, 0);
+  const records = parseWikiIndexJsonl(adapter.files.get(indexPath)!, indexPath);
+  assert.deepEqual(records.find((record) => record.kind === "page"), page);
+  assert.equal(records.filter((record) => record.kind === "chunk").every((record) => record.path === page.path), true);
+});
+
+test("chunk refresh rejects malformed JSONL and preserves exact index bytes", async () => {
+  const domainRoot = "!Wiki/d";
+  const indexPath = `${domainRoot}/index.jsonl`;
+  const page = pageRecord("a");
+  const original = `${JSON.stringify(page)}\r\n{bad}\r\n`;
+  const adapter = new MemoryAdapter(new Map([[indexPath, original]]));
+  const service = embeddingService();
+
+  await assert.rejects(
+    service.refreshCache(
+      domainRoot,
+      new VaultTools(adapter, ""),
+      new Map([["a", page.description]]),
+      new Map([["a", "# Alpha\n\n## Facts\nAlpha facts."]]),
+      { fullCorpus: true },
+    ),
+    (error: Error) => error.name === "JsonlParseError" && error.message.includes(`${indexPath}:2:`),
+  );
+  assert.equal(adapter.files.get(indexPath), original);
+});
+
+test("chunk refresh rejects atomically when a pending embedding batch fails", async () => {
+  const domainRoot = "!Wiki/d";
+  const indexPath = `${domainRoot}/index.jsonl`;
+  const page = pageRecord("a");
+  const oldBody = "# Alpha\n\n## Facts\nOld alpha facts.";
+  const oldChunks = chunkRecords(page, buildChunkInputs(page.description, oldBody, DEFAULT_CHUNKING));
+  const future = { kind: "future", value: { preserve: true } };
+  const original = [page, future, ...oldChunks].map((record) => JSON.stringify(record)).join("\r\n") + "\r\n";
+  const adapter = new MemoryAdapter(new Map([[indexPath, original]]));
+
+  let completed = false;
+  await assert.rejects(
+    embeddingService().refreshCache(
+      domainRoot,
+      new VaultTools(adapter, ""),
+      new Map([[page.articleId, "Changed description requiring a new vector"]]),
+      new Map([[page.articleId, "# Alpha\n\n## Facts\nChanged alpha facts requiring a new vector."]]),
+      { fullCorpus: true },
+    ).then(() => { completed = true; }),
+    (error: Error) => error.name === "EmbeddingUnavailableError" && /embedding/i.test(error.message),
+  );
+
+  assert.equal(completed, false);
+  assert.equal(adapter.files.get(indexPath), original);
+});
+
+test("model change incremental refresh preserves old-model chunks for pages without bodies", async () => {
+  const domainRoot = "!Wiki/d";
+  const indexPath = `${domainRoot}/index.jsonl`;
+  const pageA = pageRecord("a");
+  const pageB = pageRecord("b");
+  const bodyA = "# Alpha\n\n## Facts\nChanged alpha facts.";
+  const bodyB = "# Beta\n\n## Facts\nBeta facts.\n\n## Detail\nUnique beta detail.";
+  const newChunksA = chunkRecords(pageA, buildChunkInputs(pageA.description, bodyA, DEFAULT_CHUNKING))
+    .map((record) => ({ ...record, vectorModel: "new-model" }));
+  const oldChunksB = chunkRecords(pageB, buildChunkInputs(pageB.description, bodyB, DEFAULT_CHUNKING))
+    .map((record) => ({ ...record, vectorModel: "old-model" }));
+  const original = [pageA, pageB, ...newChunksA, ...oldChunksB]
+    .map((record) => JSON.stringify(record)).join("\n") + "\n";
+  const adapter = new MemoryAdapter(new Map([[indexPath, original]]));
+  const service = new PageSimilarityService({
+    mode: "embedding",
+    topK: 2,
+    model: "new-model",
+    dimensions: 2,
+    baseUrl: "http://unused",
+  });
+  const result = await service.refreshCache(
+    domainRoot,
+    new VaultTools(adapter, ""),
+    new Map([
+      [pageA.articleId, pageA.description],
+      [pageB.articleId, pageB.description],
+    ]),
+    new Map([[pageA.articleId, bodyA]]),
+  );
+
+  assert.deepEqual(result, { updated: 0, failed: 0 });
+  const records = parseWikiIndexJsonl(adapter.files.get(indexPath)!, indexPath);
+  assert.deepEqual(
+    records.filter((record) => record.kind === "chunk" && record.articleId === pageB.articleId),
+    oldChunksB,
+  );
+  assert.equal(
+    records.filter((record) => record.kind === "chunk" && record.articleId === pageA.articleId)
+      .every((record) => record.vectorModel === "new-model"),
+    true,
+  );
+});
+
+test("full-corpus model refresh requires every page body before mutating index", async () => {
+  const domainRoot = "!Wiki/d";
+  const indexPath = `${domainRoot}/index.jsonl`;
+  const pageA = pageRecord("a");
+  const pageB = pageRecord("b");
+  const oldChunks = [
+    ...chunkRecords(pageA, buildChunkInputs(pageA.description, "# Alpha\n\n## Facts\nA.", DEFAULT_CHUNKING)),
+    ...chunkRecords(pageB, buildChunkInputs(pageB.description, "# Beta\n\n## Facts\nB.", DEFAULT_CHUNKING)),
+  ].map((record) => ({ ...record, vectorModel: "old-model" }));
+  const original = [pageA, pageB, ...oldChunks]
+    .map((record) => JSON.stringify(record)).join("\r\n") + "\r\n";
+  const adapter = new MemoryAdapter(new Map([[indexPath, original]]));
+  await assert.rejects(
+    new PageSimilarityService({
+      mode: "embedding",
+      topK: 2,
+      model: "new-model",
+      dimensions: 2,
+      baseUrl: "http://unused",
+    }).refreshCache(
+      domainRoot,
+      new VaultTools(adapter, ""),
+      new Map([
+        [pageA.articleId, pageA.description],
+        [pageB.articleId, pageB.description],
+      ]),
+      new Map([[pageA.articleId, "# Alpha\n\n## Facts\nChanged A."]]),
+      { fullCorpus: true },
+    ),
+    /missing page body.*b/i,
+  );
+
+  assert.equal(adapter.files.get(indexPath), original);
+});
+
+test("cache load rejects malformed JSONL instead of treating it as missing", async () => {
+  const domainRoot = "!Wiki/d";
+  const indexPath = `${domainRoot}/index.jsonl`;
+  const original = `${JSON.stringify(pageRecord("a"))}\n{bad}\n`;
+  const adapter = new MemoryAdapter(new Map([[indexPath, original]]));
+
+  await assert.rejects(
+    embeddingService().loadCache(domainRoot, new VaultTools(adapter, "")),
+    (error: Error) => error.name === "JsonlParseError" && error.message.includes(`${indexPath}:2:`),
+  );
+  assert.equal(adapter.files.get(indexPath), original);
+});
+
+test("queued chunk refresh and page upsert preserve both mutations", async () => {
+  const domainRoot = "!Wiki/d";
+  const indexPath = `${domainRoot}/index.jsonl`;
+  const pageA = pageRecord("a");
+  const pageB = pageRecord("b");
+  const future = { kind: "future", value: 1 };
+  const body = "# Alpha\n\n## Facts\nAlpha facts.";
+  pageA.bodyHash = contentHash(body);
+  const inputs = buildChunkInputs(pageA.description, body, DEFAULT_CHUNKING);
+  const chunks = chunkRecords(pageA, inputs);
+  const stale = { ...chunks[0], articleId: "stale", path: "!Wiki/d/concept/stale.md" };
+  const adapter = new MemoryAdapter(new Map([
+    [indexPath, [pageA, future, ...chunks, stale].map((record) => JSON.stringify(record)).join("\n") + "\n"],
+  ]));
+  const gate = adapter.pauseNextWrite(indexPath);
+  const vaultTools = new VaultTools(adapter, "");
+
+  const refresh = embeddingService().refreshCache(
+    domainRoot,
+    vaultTools,
+    new Map([["a", pageA.description]]),
+    new Map([["a", body]]),
+    { fullCorpus: true },
+  );
+  await gate.started;
+  const pageUpsert = upsertPageIndex(vaultTools, domainRoot, pageB);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  gate.release();
+  await Promise.all([refresh, pageUpsert]);
+
+  const records = parseWikiIndexJsonl(adapter.files.get(indexPath)!, indexPath);
+  assert.deepEqual(records.find((record) => record.kind === "page" && record.articleId === "a"), pageA);
+  assert.deepEqual(records.find((record) => record.kind === "page" && record.articleId === "b"), pageB);
+  assert.deepEqual(records.find((record) => record.kind === "future"), future);
+  assert.equal(records.some((record) => record.kind === "chunk" && record.articleId === "a"), true);
+  assert.equal(records.some((record) => record.kind === "chunk" && record.articleId === "stale"), false);
+});
+
+test("concurrent refreshes through different VaultTools wrappers merge changed article chunks", async () => {
+  const domainRoot = "!Wiki/d";
+  const indexPath = `${domainRoot}/index.jsonl`;
+  const pageA = pageRecord("a");
+  const pageB = pageRecord("b");
+  const future = { kind: "future", value: { keep: true } };
+  const bodyA = "# Alpha\n\n## Facts\nAlpha facts.";
+  const bodyB = "# Beta\n\n## Facts\nBeta facts.";
+  pageA.bodyHash = contentHash(bodyA);
+  pageB.bodyHash = contentHash(bodyB);
+  const desiredA = chunkRecords(pageA, buildChunkInputs(pageA.description, bodyA, DEFAULT_CHUNKING));
+  const desiredB = chunkRecords(pageB, buildChunkInputs(pageB.description, bodyB, DEFAULT_CHUNKING));
+  const staleA = { ...desiredA[0], heading: "## Stale A", ordinal: 99, bodyHash: "stale-a", embedTextHash: "stale-a" };
+  const staleB = { ...desiredB[0], heading: "## Stale B", ordinal: 99, bodyHash: "stale-b", embedTextHash: "stale-b" };
+  const adapter = new MemoryAdapter(new Map([
+    [indexPath, [pageA, pageB, future, ...desiredA, staleA, ...desiredB, staleB]
+      .map((record) => JSON.stringify(record)).join("\n") + "\n"],
+  ]));
+  const gate = adapter.pauseNextWrite(indexPath);
+  const annotations = new Map([
+    [pageA.articleId, pageA.description],
+    [pageB.articleId, pageB.description],
+  ]);
+
+  const refreshA = embeddingService().refreshCache(
+    domainRoot,
+    new VaultTools(adapter, ""),
+    annotations,
+    new Map([[pageA.articleId, bodyA]]),
+  );
+  await gate.started;
+  const refreshB = embeddingService().refreshCache(
+    domainRoot,
+    new VaultTools(adapter, ""),
+    annotations,
+    new Map([[pageB.articleId, bodyB]]),
+  );
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  gate.release();
+  await Promise.all([refreshA, refreshB]);
+
+  const records = parseWikiIndexJsonl(adapter.files.get(indexPath)!, indexPath);
+  assert.deepEqual(records.filter((record) => record.kind === "page"), [pageA, pageB]);
+  assert.deepEqual(records.find((record) => record.kind === "future"), future);
+  assert.deepEqual(
+    records.filter((record) => record.kind === "chunk" && record.articleId === "a").map((record) => record.ordinal),
+    desiredA.map((record) => record.ordinal),
+  );
+  assert.deepEqual(
+    records.filter((record) => record.kind === "chunk" && record.articleId === "b").map((record) => record.ordinal),
+    desiredB.map((record) => record.ordinal),
+  );
+});
+
+test("older same-page embedding refresh cannot overwrite newer page chunks", async () => {
+  const domainRoot = "!Wiki/d";
+  const indexPath = `${domainRoot}/index.jsonl`;
+  const oldBody = "# Alpha\n\n## Facts\nOld facts requiring vectors.";
+  const newBody = "# Alpha\n\n## Facts\nNew facts requiring vectors.";
+  const oldStarted = deferred();
+  const releaseOld = deferred();
+  const page = {
+    ...pageRecord("a"),
+    bodyHash: contentHash(oldBody),
+  };
+  const adapter = new MemoryAdapter(new Map([
+    [indexPath, `${JSON.stringify(page)}\n`],
+  ]));
+  const service = embeddingService();
+  const globalWithRequest = globalThis as typeof globalThis & {
+    __obsidianRequestUrlForTest?: (options: { body: string }) => Promise<{
+      status: number;
+      text: string;
+    }>;
+  };
+  globalWithRequest.__obsidianRequestUrlForTest = async ({ body }) => {
+    const request = JSON.parse(body) as { input: string[] };
+    if (request.input.some((input) => input.includes("Old facts"))) {
+      oldStarted.resolve();
+      await releaseOld.promise;
+    }
+    return {
+      status: 200,
+      text: JSON.stringify({
+        data: request.input.map((input) => ({
+          embedding: input.includes("Old facts") ? [0.1, 0.2] : [0.8, 0.9],
+        })),
+      }),
+    };
+  };
+
+  try {
+    const older = service.refreshCache(
+      domainRoot,
+      new VaultTools(adapter, ""),
+      new Map([["a", page.description]]),
+      new Map([["a", oldBody]]),
+    );
+    await oldStarted.promise;
+    await upsertPageIndex(
+      new VaultTools(adapter, ""),
+      domainRoot,
+      { ...page, bodyHash: contentHash(newBody) },
+    );
+    const newer = service.refreshCache(
+      domainRoot,
+      new VaultTools(adapter, ""),
+      new Map([["a", page.description]]),
+      new Map([["a", newBody]]),
+    );
+    await newer;
+    releaseOld.resolve();
+    await assert.rejects(older, /stale page body/i);
+  } finally {
+    releaseOld.resolve();
+    delete globalWithRequest.__obsidianRequestUrlForTest;
+  }
+
+  const records = parseWikiIndexJsonl(adapter.files.get(indexPath)!, indexPath);
+  const latestPage = records.find((record) => record.kind === "page" && record.articleId === "a");
+  assert.equal(latestPage?.kind === "page" ? latestPage.bodyHash : undefined, contentHash(newBody));
+  const chunks = records.filter((record) => record.kind === "chunk" && record.articleId === "a");
+  assert.equal(chunks.length > 0, true);
+  assert.equal(chunks.every((record) => Math.abs(record.vector[0] - 0.8) < 0.0001), true);
+});
+
+test("full-corpus removal cannot erase chunks for a concurrently created same PID", async () => {
+  const domainRoot = "!Wiki/d";
+  const indexPath = `${domainRoot}/index.jsonl`;
+  const stalePage = pageRecord("stale");
+  const staleBody = "# Stale\n\n## Facts\nOriginal stale facts.";
+  const staleChunks = chunkRecords(
+    stalePage,
+    buildChunkInputs(stalePage.description, staleBody, DEFAULT_CHUNKING),
+  );
+  const keptPage = pageRecord("kept");
+  const keptBody = "# Kept\n\n## Facts\nFresh kept facts requiring vectors.";
+  keptPage.bodyHash = contentHash(keptBody);
+  const adapter = new MemoryAdapter(new Map([
+    [indexPath, [keptPage, ...staleChunks]
+      .map((record) => JSON.stringify(record)).join("\n") + "\n"],
+  ]));
+  const requestStarted = deferred();
+  const releaseRequest = deferred();
+  const globalWithRequest = globalThis as typeof globalThis & {
+    __obsidianRequestUrlForTest?: (options: { body: string }) => Promise<{
+      status: number;
+      text: string;
+    }>;
+  };
+  globalWithRequest.__obsidianRequestUrlForTest = async ({ body }) => {
+    requestStarted.resolve();
+    await releaseRequest.promise;
+    const request = JSON.parse(body) as { input: string[] };
+    return {
+      status: 200,
+      text: JSON.stringify({
+        data: request.input.map(() => ({ embedding: [0.7, 0.8] })),
+      }),
+    };
+  };
+
+  try {
+    const refresh = embeddingService().refreshCache(
+      domainRoot,
+      new VaultTools(adapter, ""),
+      new Map([[keptPage.articleId, keptPage.description]]),
+      new Map([[keptPage.articleId, keptBody]]),
+      { fullCorpus: true },
+    );
+    await requestStarted.promise;
+    await upsertPageIndex(
+      new VaultTools(adapter, ""),
+      domainRoot,
+      { ...stalePage, bodyHash: "concurrent-new-body" },
+    );
+    releaseRequest.resolve();
+    await assert.rejects(refresh, /concurrent page.*stale|expected absent/i);
+  } finally {
+    releaseRequest.resolve();
+    delete globalWithRequest.__obsidianRequestUrlForTest;
+  }
+
+  const records = parseWikiIndexJsonl(adapter.files.get(indexPath)!, indexPath);
+  assert.equal(records.some((record) =>
+    record.kind === "page"
+    && record.articleId === "stale"
+    && record.bodyHash === "concurrent-new-body"), true);
+  assert.equal(records.some((record) =>
+    record.kind === "chunk" && record.articleId === "stale"), true);
+});
+
+function pageRecord(id: string): PageIndexRecord {
+  return {
+    kind: "page",
+    schemaVersion: 1,
+    articleId: id,
+    path: `!Wiki/d/concept/${id}.md`,
+    type: "concept",
+    description: `${id} description`,
+    resource: ["source"],
+    bodyHash: `body-${id}`,
+    descriptionHash: `description-${id}`,
+  };
+}
+
+function chunkRecords(page: PageIndexRecord, inputs: ReturnType<typeof buildChunkInputs>): ChunkIndexRecord[] {
+  const vector = [...new Float32Array([0.1, 0.2])];
+  return inputs.map((input, ordinal) => ({
+    kind: "chunk",
+    schemaVersion: 1,
+    articleId: page.articleId,
+    path: page.path,
+    heading: input.heading ?? "",
+    ordinal: input.ordinal ?? ordinal,
+    bodyHash: input.hash,
+    embedTextHash: input.hash,
+    vector,
+    vectorModel: "m",
+    dimensions: 2,
+    updatedAt: "2026-07-16T00:00:00.000Z",
+  }));
+}
+
+function embeddingService(): PageSimilarityService {
+  return new PageSimilarityService({
+    mode: "embedding",
+    topK: 2,
+    model: "m",
+    dimensions: 2,
+    baseUrl: "http://unused",
+  });
+}
+
+class MemoryAdapter implements VaultAdapter {
+  private pausedWrite?: {
+    path: string;
+    started: () => void;
+    release: Promise<void>;
+  };
+
+  constructor(readonly files: Map<string, string>) {}
+
+  async read(path: string): Promise<string> {
+    const value = this.files.get(path);
+    if (value === undefined) throw new Error(`ENOENT: ${path}`);
+    return value;
+  }
+  async write(path: string, data: string): Promise<void> {
+    const pause = this.pausedWrite;
+    if (pause?.path === path) {
+      this.pausedWrite = undefined;
+      pause.started();
+      await pause.release;
+    }
+    this.files.set(path, data);
+  }
+  async append(path: string, data: string): Promise<void> { this.files.set(path, (this.files.get(path) ?? "") + data); }
+  async list(): Promise<{ files: string[]; folders: string[] }> { return { files: [], folders: [] }; }
+  async exists(path: string): Promise<boolean> { return this.files.has(path); }
+  async mkdir(): Promise<void> {}
+
+  pauseNextWrite(path: string): { started: Promise<void>; release: () => void } {
+    let markStarted!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    const released = new Promise<void>((resolve) => { release = resolve; });
+    this.pausedWrite = { path, started: markStarted, release: released };
+    return { started, release };
+  }
+}
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => { resolve = done; });
+  return { promise, resolve };
+}

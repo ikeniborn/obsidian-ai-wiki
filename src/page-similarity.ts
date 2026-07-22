@@ -8,10 +8,13 @@ import { domainIndexPath, legacyDomainEmbeddingsPath } from "./wiki-path";
 import {
   embeddingChunkToChunkRecord,
   isChunkIndexRecord,
-  parseWikiIndexJsonl,
-  stringifyWikiIndexJsonl,
+  isPageIndexRecord,
+  type PageIndexRecord,
   type WikiIndexRecord,
 } from "./wiki-index-jsonl";
+import { EmbeddingUnavailableError } from "./embedding-error";
+import { contentHash } from "./content-hash";
+import { readWikiIndexRecords, transformWikiIndexRecords } from "./wiki-index-store";
 import { rrf } from "./rrf";
 import type { SeedDiag } from "./retrieval-diag";
 
@@ -99,7 +102,7 @@ function cacheFromIndexRecords(
     const chunk: EmbeddingChunk = {
       vector: numbersToVector(record.vector),
       hash: record.embedTextHash,
-      kind: "section",
+      kind: record.ordinal === 0 && record.heading === "" ? "summary" : "section",
       heading: record.heading,
       ordinal: record.ordinal,
     };
@@ -108,20 +111,27 @@ function cacheFromIndexRecords(
   return { version: 3, model, dimensions, entries };
 }
 
-function chunkRecordsFromCache(
+function replaceChunkRecordsFromCache(
   cacheFile: EmbeddingCacheFile,
   domainRoot: string,
   existingRecords: WikiIndexRecord[],
+  articleIds: Set<string>,
 ): WikiIndexRecord[] {
-  const preserved = existingRecords.filter((record) => !isChunkIndexRecord(record));
+  const preserved = existingRecords.filter((record) =>
+    !isChunkIndexRecord(record) || !articleIds.has(record.articleId));
+  const pagePaths = new Map(
+    existingRecords.filter(isPageIndexRecord).map((record) => [record.articleId, record.path]),
+  );
   const now = new Date().toISOString();
   const chunkRecords: WikiIndexRecord[] = [];
-  for (const [pid, entry] of Object.entries(cacheFile.entries)) {
+  for (const pid of articleIds) {
+    const entry = cacheFile.entries[pid];
+    if (!entry) continue;
     for (const chunk of entry.chunks) {
       if (!chunk.vector) continue;
       chunkRecords.push(embeddingChunkToChunkRecord({
         articleId: pid,
-        path: fallbackChunkPath(domainRoot, pid),
+        path: pagePaths.get(pid) ?? fallbackChunkPath(domainRoot, pid),
         heading: chunk.heading ?? "",
         ordinal: chunk.ordinal ?? 0,
         bodyHash: chunk.hash,
@@ -149,6 +159,15 @@ function annotationHash(s: string): string {
     h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
   }
   return (h >>> 0).toString(36);
+}
+
+function compareCodePoints(left: string, right: string): number {
+  const a = Array.from(left, (value) => value.codePointAt(0) ?? 0);
+  const b = Array.from(right, (value) => value.codePointAt(0) ?? 0);
+  for (let index = 0; index < Math.min(a.length, b.length); index++) {
+    if (a[index] !== b[index]) return a[index] - b[index];
+  }
+  return a.length - b.length;
 }
 
 export interface SectionWindow { heading: string; window: string; }
@@ -282,7 +301,7 @@ export function buildChunkInputs(
   chunking: ChunkingConfig,
 ): ChunkInput[] {
   const inputs: ChunkInput[] = [
-    { kind: "summary", embedText: annotation, hash: annotationHash(`summary\n${annotation}`) },
+    { kind: "summary", embedText: annotation, hash: annotationHash(`summary\n${annotation}`), ordinal: 0 },
   ];
   splitSections(body, chunking).forEach(({ heading, window }, ordinal) => {
     const embedText = `${heading}\n${window}`.trim();
@@ -292,10 +311,21 @@ export function buildChunkInputs(
       hash: annotationHash(`section\n${ordinal}\n${embedText}`),
       heading,
       window,
-      ordinal,
+      ordinal: ordinal + 1,
     });
   });
   return inputs;
+}
+
+function sameChunkSet(left: EmbeddingChunk[], right: EmbeddingChunk[]): boolean {
+  return left.length === right.length && left.every((chunk, index) => {
+    const other = right[index];
+    return other !== undefined &&
+      chunk.hash === other.hash &&
+      chunk.kind === other.kind &&
+      (chunk.heading ?? "") === (other.heading ?? "") &&
+      chunk.ordinal === other.ordinal;
+  });
 }
 
 function collectCandidateSections(
@@ -333,10 +363,10 @@ function sortSelectedChunks(items: SelectedChunk[]): SelectedChunk[] {
     (b.score - a.score) ||
     (Number(b.source === "seed") - Number(a.source === "seed")) ||
     ((b.articleScore ?? 0) - (a.articleScore ?? 0)) ||
-    a.articleId.localeCompare(b.articleId) ||
+    compareCodePoints(a.articleId, b.articleId) ||
     (a.ordinal - b.ordinal) ||
-    a.path.localeCompare(b.path) ||
-    a.heading.localeCompare(b.heading)
+    compareCodePoints(a.path, b.path) ||
+    compareCodePoints(a.heading, b.heading)
   );
 }
 
@@ -554,6 +584,7 @@ export class PageSimilarityService {
   setJaccardCorpus(corpus: Map<string, string>): void { this.jaccardCorpus = corpus; }
 
   setCacheForTest(cache: EmbeddingCacheFile): void { this.cache = cache; }
+  invalidateCache(): void { this.cache = null; }
 
   withBoilerplateDemotion(boilerplateDemotion?: BoilerplateDemotionConfig): PageSimilarityService {
     const service = new PageSimilarityService({ ...this.config, boilerplateDemotion });
@@ -1124,10 +1155,11 @@ export class PageSimilarityService {
     if (this.cache) return;
     const { model, dimensions } = this.config;
     if (!model || !dimensions) return;
-    try {
-      const raw = await vaultTools.read(domainIndexPath(domainRoot));
-      this.cache = cacheFromIndexRecords(parseWikiIndexJsonl(raw, domainIndexPath(domainRoot)), model, dimensions);
-    } catch { /* cache missing or unreadable — stay null */ }
+    this.cache = cacheFromIndexRecords(
+      await readWikiIndexRecords(vaultTools, domainRoot),
+      model,
+      dimensions,
+    );
   }
 
   async refreshCache(
@@ -1136,50 +1168,72 @@ export class PageSimilarityService {
     indexAnnotations: Map<string, string>,
     pageBodies: Map<string, string>,
     opts: { fullCorpus?: boolean } = {},
-  ): Promise<{ updated: number }> {
+  ): Promise<{ updated: number; failed: number }> {
     // Persist the embeddings cache for both embedding and hybrid modes — hybrid's dense
     // side reuses it on every query. Only pure jaccard has no vectors to write.
-    if (this.config.mode === "jaccard") return { updated: 0 };
+    if (this.config.mode === "jaccard") return { updated: 0, failed: 0 };
     const { baseUrl, apiKey, model, dimensions } = this.config;
-    if (!baseUrl || !model || !dimensions) return { updated: 0 };
+    if (!baseUrl || !model || !dimensions) return { updated: 0, failed: 0 };
     const chunking = this.config.chunking ?? DEFAULT_CHUNKING;
 
     const cachePath = domainIndexPath(domainRoot);
     let cacheFile: EmbeddingCacheFile;
-    let indexRecords: WikiIndexRecord[] = [];
-    try {
-      indexRecords = parseWikiIndexJsonl(await vaultTools.read(cachePath), cachePath);
+    const hasStructuredIndex = await vaultTools.exists(cachePath);
+    const indexRecords = await readWikiIndexRecords(vaultTools, domainRoot);
+    if (hasStructuredIndex) {
       cacheFile = cacheFromIndexRecords(indexRecords, model, dimensions);
-    } catch {
-      try {
-        const parsed = JSON.parse(await vaultTools.read(legacyDomainEmbeddingsPath(domainRoot))) as EmbeddingCacheFile;
+    } else {
+      const legacyPath = legacyDomainEmbeddingsPath(domainRoot);
+      if (await vaultTools.exists(legacyPath)) {
+        const parsed = JSON.parse(await vaultTools.read(legacyPath)) as EmbeddingCacheFile;
         cacheFile =
           parsed.version === 3 && parsed.model === model && parsed.dimensions === dimensions
             ? parsed
             : { version: 3, model, dimensions, entries: {} };
-      } catch {
+      } else {
         cacheFile = { version: 3, model, dimensions, entries: {} };
       }
     }
 
     // Build the desired chunk set per pid, reusing cached vectors whose hash matches.
     const desired = new Map<string, EmbeddingChunk[]>();
+    const expectedPageBodyHashes = new Map<string, string>();
+    const removalPageAuthorities = new Map<string, PageIndexRecord | undefined>();
     const pending: Pending[] = [];
     // Tracks chunk-count change so a write is triggered even when nothing is pending
     // (e.g. a section deleted: surviving hashes all hit oldByHash, but count shrinks).
-    let changed = opts.fullCorpus === true &&
-      Object.keys(cacheFile.entries).some((pid) => !indexAnnotations.has(pid));
+    const changedArticleIds = new Set<string>();
+    let changed = false;
+    if (opts.fullCorpus === true) {
+      for (const pid of indexAnnotations.keys()) {
+        if (!pageBodies.has(pid)) {
+          throw new Error(`Full-corpus embedding refresh missing page body for ${pid}`);
+        }
+      }
+      for (const pid of Object.keys(cacheFile.entries)) {
+        if (!indexAnnotations.has(pid)) {
+          changedArticleIds.add(pid);
+          removalPageAuthorities.set(
+            pid,
+            indexRecords.find((record) =>
+              isPageIndexRecord(record) && record.articleId === pid) as PageIndexRecord | undefined,
+          );
+          changed = true;
+        }
+      }
+    }
 
     for (const [pid, annotation] of indexAnnotations) {
-      // A caller may refresh only a subset (incremental ingest supplies bodies only for the
-      // pages it rewrote). For a pid with no supplied body, keep its cached chunks untouched
-      // rather than rebuilding from an empty body — otherwise unchanged pages lose their
-      // section vectors. A pid genuinely present with an empty-string body still rebuilds.
-      if (!pageBodies.has(pid) && cacheFile.entries[pid]) {
-        desired.set(pid, cacheFile.entries[pid].chunks);
+      // Incremental callers supply bodies only for governed pages. A missing body means
+      // "not part of this refresh", even when the configured model changed and therefore
+      // cacheFile cannot see that page's old-model chunks. Leaving the pid out of
+      // changedArticleIds preserves every existing index record byte-for-byte.
+      if (!pageBodies.has(pid)) {
         continue;
       }
+      changedArticleIds.add(pid);
       const body = pageBodies.get(pid) ?? "";
+      expectedPageBodyHashes.set(pid, contentHash(body));
       const inputs = buildChunkInputs(annotation, body, chunking);
       const oldByHash = new Map(
         (cacheFile.entries[pid]?.chunks ?? []).map((chunk) => [chunk.hash, chunk]),
@@ -1196,7 +1250,7 @@ export class PageSimilarityService {
         });
         if (reuse === undefined) pending.push({ pid, idx: chunks.length - 1, embedText });
       }
-      if ((cacheFile.entries[pid]?.chunks.length ?? 0) !== chunks.length) changed = true;
+      if (!sameChunkSet(cacheFile.entries[pid]?.chunks ?? [], chunks)) changed = true;
       desired.set(pid, chunks);
     }
 
@@ -1206,25 +1260,59 @@ export class PageSimilarityService {
       let vecs: Float32Array[];
       try {
         vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, batch.map((p) => p.embedText), dimensions);
-      } catch {
-        continue;
+      } catch (error) {
+        throw new EmbeddingUnavailableError(`Embedding refresh failed: ${(error as Error).message}`);
+      }
+      if (vecs.length !== batch.length || vecs.some((vec) => !isUsableVector(vec, dimensions))) {
+        throw new EmbeddingUnavailableError("Embedding refresh failed: response did not contain one valid vector per pending chunk");
       }
       for (let j = 0; j < batch.length; j++) {
-        if (vecs[j]) desired.get(batch[j].pid)![batch[j].idx].vector = encodeVector(vecs[j]);
+        desired.get(batch[j].pid)![batch[j].idx].vector = encodeVector(vecs[j]);
       }
     }
 
-    if (pending.length === 0 && !changed) return { updated: 0 };
+    if (pending.length === 0 && !changed) return { updated: 0, failed: 0 };
 
-    if (opts.fullCorpus === true) cacheFile.entries = {};
-    for (const [pid, chunks] of desired) {
+    for (const pid of changedArticleIds) {
+      const chunks = desired.get(pid) ?? [];
       const filled = chunks.filter((c) => c.vector !== "");
       if (filled.length > 0) cacheFile.entries[pid] = { chunks: filled };
+      else delete cacheFile.entries[pid];
     }
 
-    await vaultTools.write(cachePath, stringifyWikiIndexJsonl(chunkRecordsFromCache(cacheFile, domainRoot, indexRecords)));
-    this.cache = cacheFile;
-    return { updated: pending.length };
+    let committedRecords: WikiIndexRecord[] | undefined;
+    await transformWikiIndexRecords(
+      vaultTools,
+      domainRoot,
+      (latestRecords) => {
+        for (const [pid, expectedBodyHash] of expectedPageBodyHashes) {
+          const latestPage = latestRecords.find((record) =>
+            isPageIndexRecord(record) && record.articleId === pid);
+          if (!latestPage || latestPage.bodyHash !== expectedBodyHash) {
+            throw new EmbeddingUnavailableError(`Stale page body for ${pid}; embedding refresh was not committed`);
+          }
+        }
+        for (const [pid, expectedPage] of removalPageAuthorities) {
+          const latestPage = latestRecords.find((record) =>
+            isPageIndexRecord(record) && record.articleId === pid);
+          if (expectedPage === undefined ? latestPage !== undefined
+            : JSON.stringify(latestPage) !== JSON.stringify(expectedPage)) {
+            throw new EmbeddingUnavailableError(
+              `Concurrent page creation or change for expected-absent ${pid}; embedding refresh was not committed`,
+            );
+          }
+        }
+        committedRecords = replaceChunkRecordsFromCache(
+          cacheFile,
+          domainRoot,
+          latestRecords,
+          changedArticleIds,
+        );
+        return committedRecords;
+      },
+    );
+    this.cache = cacheFromIndexRecords(committedRecords ?? [], model, dimensions);
+    return { updated: pending.length, failed: 0 };
   }
 }
 

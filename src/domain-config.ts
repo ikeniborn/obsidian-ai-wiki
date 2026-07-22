@@ -1,5 +1,6 @@
 import type { VaultTools } from "./vault-tools";
 import { domainIndexPath, domainLogPath, legacyDomainIndexPath, legacyDomainLogPath } from "./wiki-path";
+import { readFileImage, TransactionVaultTools } from "./file-transaction";
 
 export async function ensureDomainConfig(vaultTools: VaultTools, domainFolder: string): Promise<void> {
   await migrateLegacy(vaultTools, legacyDomainIndexPath(domainFolder), domainIndexPath(domainFolder));
@@ -7,10 +8,19 @@ export async function ensureDomainConfig(vaultTools: VaultTools, domainFolder: s
 }
 
 async function migrateLegacy(vaultTools: VaultTools, oldPath: string, newPath: string): Promise<void> {
-  if (!(await vaultTools.exists(oldPath))) return;
-  if (!(await vaultTools.exists(newPath))) {
-    const content = await vaultTools.read(oldPath);
-    await vaultTools.write(newPath, content);
+  const oldImage = await readFileImage(vaultTools, oldPath);
+  if (!oldImage.exists) return;
+  const newImage = await readFileImage(vaultTools, newPath);
+  if (!newImage.exists) {
+    if (vaultTools instanceof TransactionVaultTools) {
+      await vaultTools.writeIfCurrent(newPath, newImage, oldImage.content);
+    } else {
+      await vaultTools.write(newPath, oldImage.content);
+    }
   }
-  await vaultTools.remove(oldPath);
+  if (vaultTools instanceof TransactionVaultTools) {
+    await vaultTools.removeIfCurrent(oldPath, oldImage);
+  } else {
+    await vaultTools.remove(oldPath);
+  }
 }

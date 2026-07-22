@@ -3,7 +3,10 @@ import { readFile } from "node:fs/promises";
 const OBSIDIAN_STUB = `
 export const moment = { locale: () => "en" };
 export const Platform = { isDesktopApp: true, isMobile: false };
-export async function requestUrl() {
+export async function requestUrl(options) {
+  if (typeof globalThis.__obsidianRequestUrlForTest === "function") {
+    return globalThis.__obsidianRequestUrlForTest(options);
+  }
   throw new Error("obsidian.requestUrl is not available in this test");
 }
 `;

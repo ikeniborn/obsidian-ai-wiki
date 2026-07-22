@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { register } from "node:module";
 import test from "node:test";
 import type { LlmClient, RunEvent } from "../src/types";
+import { mockChatResponse } from "./openai-mock-response";
 
 const pathBrowserifyLoader = `
 export async function resolve(specifier, context, nextResolve) {
@@ -21,15 +22,35 @@ function usageChunk() {
 function chunk(content: string) {
   return { id: "c", object: "chat.completion.chunk", created: 0, model: "m", choices: [{ index: 0, delta: { content }, finish_reason: null }] };
 }
-// Every LLM call returns a valid entities payload (bootstrap is skipped via isResuming).
+// The bounded mapper succeeds; configured retrieval then fails before synthesis.
 function entitiesLlm(): LlmClient {
-  const body = JSON.stringify({ reasoning: "", entities: [{ name: "X", type: "Concept" }] });
   return {
-    chat: { completions: { create: async () => (async function* () { yield chunk(body); yield usageChunk(); })() } },
+    chat: { completions: { create: async (params: unknown) => {
+      const prompt = JSON.stringify(params);
+      const chunkId = prompt.match(/CHUNK_ID ([^\s\\"]+)/)?.[1];
+      if (!chunkId) throw new Error("unexpected synthesis call");
+      const body = JSON.stringify({
+        packets: [{
+          id: `packet-${chunkId}`,
+          chunkId,
+          entityKey: "x",
+          entityType: "Concept",
+          facts: ["X"],
+          exactSourceRanges: [{ startLine: 1, endLine: 1 }],
+          links: [],
+          sourceAnchor: "src:1",
+        }],
+        noEvidence: [],
+      });
+      return mockChatResponse(params, body, { promptTokens: 1, completionTokens: 1 });
+    } } },
   } as unknown as LlmClient;
 }
 function adapter() {
-  const files = new Map<string, string>();
+  const files = new Map<string, string>([
+    ["src/a.md", "X source A."],
+    ["src/b.md", "X source B."],
+  ]);
   return {
     read: async (p: string) => files.get(p) ?? "",
     write: async (p: string, v: string) => { files.set(p, v); },
@@ -66,7 +87,10 @@ test("embedding failure stops the whole init run once and does not mark files an
     events.push(ev);
   }
 
-  assert.ok(events.some((e) => e.kind === "error" && /embedding endpoint failed/i.test(e.message)));
+  assert.ok(
+    events.some((e) => e.kind === "error" && /embedding endpoint failed/i.test(e.message)),
+    JSON.stringify(events),
+  );
   assert.equal(events.filter((e) => e.kind === "file_start").length, 1); // stopped before file b
   const analyzedPatch = events.some(
     (e) => e.kind === "domain_updated" && (e.patch as { analyzed_sources?: Record<string, string> }).analyzed_sources
