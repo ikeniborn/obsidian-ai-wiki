@@ -29033,13 +29033,13 @@ var AddDomainModal = class extends import_obsidian2.Modal {
     this.sourcePathsContainer.empty();
     const T = i18n().modal;
     const header = this.sourcePathsContainer.createDiv({ cls: "ai-wiki-sp-header" });
-    header.createEl("span", { text: T.addDomainSourcePathsLabel, cls: "ai-wiki-sp-label" });
+    header.createSpan({ text: T.addDomainSourcePathsLabel, cls: "ai-wiki-sp-label" });
     const listEl = this.sourcePathsContainer.createDiv({ cls: "ai-wiki-sp-list" });
     const rerender = () => {
       listEl.empty();
       this.input.sourcePaths.forEach((p, i) => {
         const row = listEl.createDiv({ cls: "ai-wiki-sp-row" });
-        row.createEl("span", { text: p, cls: "ai-wiki-sp-path", attr: { title: p } });
+        row.createSpan({ text: p, cls: "ai-wiki-sp-path", attr: { title: p } });
         const removeBtn = row.createEl("button", { text: "\xD7", cls: "ai-wiki-sp-remove" });
         removeBtn.addEventListener("click", () => {
           this.input.sourcePaths.splice(i, 1);
@@ -29171,7 +29171,7 @@ var EditDomainModal = class extends import_obsidian2.Modal {
     container.empty();
     const T = i18n().modal;
     const header = container.createDiv({ cls: "ai-wiki-et-header" });
-    header.createEl("span", { text: T.entityTypesLabel, cls: "ai-wiki-et-label" });
+    header.createSpan({ text: T.entityTypesLabel, cls: "ai-wiki-et-label" });
     const toggleBtn = header.createEl("button", {
       text: this.entityTypesMode === "cards" ? T.entityTypesEditJson : T.entityTypesBackToCards
     });
@@ -29219,13 +29219,13 @@ var EditDomainModal = class extends import_obsidian2.Modal {
     container.empty();
     const T = i18n().modal;
     const header = container.createDiv({ cls: "ai-wiki-sp-header" });
-    header.createEl("span", { text: T.sourcePathsLabel, cls: "ai-wiki-sp-label" });
+    header.createSpan({ text: T.sourcePathsLabel, cls: "ai-wiki-sp-label" });
     const listEl = container.createDiv({ cls: "ai-wiki-sp-list" });
     const rerender = () => {
       listEl.empty();
       this.sourcePathsList.forEach((p, i) => {
         const row = listEl.createDiv({ cls: "ai-wiki-sp-row" });
-        row.createEl("span", { text: p, cls: "ai-wiki-sp-path", attr: { title: p } });
+        row.createSpan({ text: p, cls: "ai-wiki-sp-path", attr: { title: p } });
         const removeBtn = row.createEl("button", { text: "\xD7", cls: "ai-wiki-sp-remove" });
         removeBtn.addEventListener("click", () => {
           this.sourcePathsList.splice(i, 1);
@@ -29257,8 +29257,8 @@ var EditDomainModal = class extends import_obsidian2.Modal {
   renderEntityTypeCard(container, et) {
     const card = container.createDiv({ cls: "ai-wiki-et-card" });
     const head = card.createDiv({ cls: "ai-wiki-et-card-head" });
-    head.createEl("span", { text: et.type, cls: "ai-wiki-et-card-type" });
-    head.createEl("span", { text: effectiveSubfolder(et) + "/", cls: "ai-wiki-et-card-subfolder" });
+    head.createSpan({ text: et.type, cls: "ai-wiki-et-card-type" });
+    head.createSpan({ text: effectiveSubfolder(et) + "/", cls: "ai-wiki-et-card-subfolder" });
     const body = card.createDiv({ cls: "ai-wiki-et-card-body" });
     if (et.description) {
       body.createEl("p", { text: et.description, cls: "ai-wiki-et-card-desc" });
@@ -29266,7 +29266,7 @@ var EditDomainModal = class extends import_obsidian2.Modal {
     if (et.extraction_cues?.length) {
       const tags = body.createDiv({ cls: "ai-wiki-et-card-tags" });
       for (const cue of et.extraction_cues) {
-        tags.createEl("span", { text: cue, cls: "ai-wiki-et-card-tag" });
+        tags.createSpan({ text: cue, cls: "ai-wiki-et-card-tag" });
       }
     }
     if (et.min_mentions_for_page != null) {
@@ -29335,13 +29335,13 @@ var ManageSourcesModal = class extends import_obsidian2.Modal {
     container.empty();
     const T = i18n().modal;
     const header = container.createDiv({ cls: "ai-wiki-sp-header" });
-    header.createEl("span", { text: T.sourcePathsLabel, cls: "ai-wiki-sp-label" });
+    header.createSpan({ text: T.sourcePathsLabel, cls: "ai-wiki-sp-label" });
     const listEl = container.createDiv({ cls: "ai-wiki-sp-list" });
     const rerender = () => {
       listEl.empty();
       this.sourcePathsList.forEach((p, i) => {
         const row = listEl.createDiv({ cls: "ai-wiki-sp-row" });
-        row.createEl("span", { text: p, cls: "ai-wiki-sp-path", attr: { title: p } });
+        row.createSpan({ text: p, cls: "ai-wiki-sp-path", attr: { title: p } });
         const removeBtn = row.createEl("button", { text: "\xD7", cls: "ai-wiki-sp-remove" });
         removeBtn.addEventListener("click", () => {
           this.sourcePathsList.splice(i, 1);
@@ -29559,7 +29559,7 @@ var LintOptionsModal = class extends import_obsidian2.Modal {
         const setting = new import_obsidian2.Setting(contentEl).setName(et.type);
         const countVal = this.articleCounts.get(et.type);
         if (countVal !== void 0) {
-          setting.nameEl.createEl("span", {
+          setting.nameEl.createSpan({
             text: ` (${countVal})`,
             cls: "ai-wiki-count-muted"
           });
@@ -33492,9 +33492,9 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
     );
     new import_obsidian5.Setting(containerEl).setName(T.settings.domains_heading).setHeading();
     if (busy) {
-      containerEl.createEl("div", {
+      containerEl.createDiv({
         cls: "ai-wiki-settings-busy-banner"
-      }).createEl("span", { text: `\u26A0 ${T.settings.busyBanner}` });
+      }).createSpan({ text: `\u26A0 ${T.settings.busyBanner}` });
     }
     const domains = this.cachedDomains;
     if (domains.length === 0) {
@@ -51975,14 +51975,20 @@ function retryDelay(headers, retryOrdinal, env = {
   };
 }
 
+// src/runtime-timers.ts
+function runtimeTimerHost() {
+  if (typeof global !== "undefined") return global;
+  return window;
+}
+function scheduleRuntimeTimeout(callback, delayMs) {
+  return runtimeTimerHost().setTimeout(callback, delayMs);
+}
+function cancelRuntimeTimeout(timer) {
+  runtimeTimerHost().clearTimeout(timer);
+}
+
 // src/native-llm-executor.ts
 var clientRequestCounter = 0;
-function scheduleTimer(callback, delayMs) {
-  return setTimeout(callback, delayMs);
-}
-function cancelTimer(timer) {
-  clearTimeout(timer);
-}
 function isNativeLlmClient(llm) {
   return llm.nativeRequestExecutor === true;
 }
@@ -52039,9 +52045,9 @@ function createNativeRequestLifecycle(input) {
 function abortableDelay(ms, signal) {
   if (signal.aborted) return Promise.reject(abortReason(signal));
   return new Promise((resolve, reject) => {
-    const timer = scheduleTimer(finish, ms);
+    const timer = scheduleRuntimeTimeout(finish, ms);
     const onAbort = () => {
-      cancelTimer(timer);
+      cancelRuntimeTimeout(timer);
       signal.removeEventListener("abort", onAbort);
       reject(abortReason(signal));
     };
@@ -52086,7 +52092,7 @@ function attemptScope(callerSignal, idleTimeoutMs) {
   else callerSignal.addEventListener("abort", onCallerAbort, { once: true });
   const clearIdle = () => {
     if (timer === void 0) return;
-    cancelTimer(timer);
+    cancelRuntimeTimeout(timer);
     timer = void 0;
   };
   const abortPromise = new Promise((_resolve, reject) => {
@@ -52107,7 +52113,7 @@ function attemptScope(callerSignal, idleTimeoutMs) {
       timer = void 0;
       controller.abort(timeoutError());
     };
-    timer = scheduleTimer(callback, timeoutMs);
+    timer = scheduleRuntimeTimeout(callback, timeoutMs);
   };
   const dispose = (reason) => {
     clearIdle();
@@ -62280,9 +62286,9 @@ function waitForBootstrapTransportSettle(signal, delayMs = 1500) {
   if (signal.aborted) return Promise.reject(bootstrapAbortError(signal));
   let onAbort;
   const pending = new Promise((resolve, reject) => {
-    const timer = setTimeout(resolve, delayMs);
+    const timer = scheduleRuntimeTimeout(resolve, delayMs);
     onAbort = () => {
-      clearTimeout(timer);
+      cancelRuntimeTimeout(timer);
       reject(bootstrapAbortError(signal));
     };
     signal.addEventListener("abort", onAbort, { once: true });
@@ -66459,15 +66465,6 @@ var VisionTempStore = class {
 
 // src/agent-runner.ts
 var DISABLED_BOILERPLATE_DEMOTION = { enabled: false, factor: 0 };
-function loadDesktopTimers() {
-  if (typeof require === "function") return require("node:timers");
-  const getBuiltinModule = process.getBuiltinModule;
-  if (typeof getBuiltinModule === "function") {
-    const timers = getBuiltinModule("node:timers") ?? getBuiltinModule("timers");
-    if (timers) return timers;
-  }
-  throw new Error("Desktop idle watchdog requires access to the Node.js timers module");
-}
 function resolveFollowUpPolicyOperation(parent) {
   return parent === "query" ? "query" : "lint";
 }
@@ -66679,11 +66676,9 @@ var AgentRunner = class {
     const similarity = this.buildSimilarity();
     const operationWatchdogEnabled = this.settings.backend === "claude-agent" && idleTimeoutMs > 0;
     const maxRetries = this.settings.backend === "claude-agent" ? this.settings.llmIdleRetries ?? 3 : 0;
-    const desktopTimers = !operationWatchdogEnabled || this.isMobile ? null : loadDesktopTimers();
-    const scheduleIdleAbort = (callback) => desktopTimers ? desktopTimers.setTimeout(callback, idleTimeoutMs) : window.setTimeout(callback, idleTimeoutMs);
+    const scheduleIdleAbort = (callback) => scheduleRuntimeTimeout(callback, idleTimeoutMs);
     const clearIdleAbort = (timer) => {
-      if (desktopTimers) desktopTimers.clearTimeout(timer);
-      else window.clearTimeout(timer);
+      cancelRuntimeTimeout(timer);
     };
     let attempt = 0;
     let destructivePreludeSeen = false;
@@ -67280,7 +67275,7 @@ function readResponseBodyWithin(body, signal, timeoutMs, stopAtCompleteJson) {
     const chunks = [];
     let byteLength = 0;
     const cleanup = () => {
-      clearTimeout(timer);
+      cancelRuntimeTimeout(timer);
       signal?.removeEventListener("abort", onAbort);
     };
     const finish = (complete) => {
@@ -67314,7 +67309,7 @@ function readResponseBodyWithin(body, signal, timeoutMs, stopAtCompleteJson) {
       void reader.cancel().catch(() => {
       });
     };
-    const timer = setTimeout(() => {
+    const timer = scheduleRuntimeTimeout(() => {
       const partial = byteLength > 0 ? combinedBody() : null;
       if (!finish(() => resolve(partial))) return;
       void reader.cancel().catch(() => {

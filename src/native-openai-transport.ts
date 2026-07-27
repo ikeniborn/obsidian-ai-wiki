@@ -1,4 +1,5 @@
 import { buildProxyUrl, parseNoProxy, shouldBypass, type ProxyConfig } from "./proxy";
+import { cancelRuntimeTimeout, scheduleRuntimeTimeout } from "./runtime-timers";
 import {
   NATIVE_TRANSPORT_ATTEMPT_SIGNAL,
   NATIVE_TRANSPORT_CLIENT_REQUEST_ID,
@@ -458,8 +459,7 @@ function readResponseBodyWithin(
     const chunks: Uint8Array[] = [];
     let byteLength = 0;
     const cleanup = (): void => {
-      // eslint-disable-next-line obsidianmd/prefer-window-timers -- Native transport also runs in Node.
-      clearTimeout(timer);
+      cancelRuntimeTimeout(timer);
       signal?.removeEventListener("abort", onAbort);
     };
     const finish = (complete: () => void): boolean => {
@@ -494,8 +494,7 @@ function readResponseBodyWithin(
         : new DOMException("The operation was aborted", "AbortError")))) return;
       void reader.cancel().catch(() => {});
     };
-    // eslint-disable-next-line obsidianmd/prefer-window-timers -- Native transport also runs in Node.
-    const timer = setTimeout(() => {
+    const timer = scheduleRuntimeTimeout(() => {
       const partial = byteLength > 0 ? combinedBody() : null;
       if (!finish(() => resolve(partial))) return;
       void reader.cancel().catch(() => {});

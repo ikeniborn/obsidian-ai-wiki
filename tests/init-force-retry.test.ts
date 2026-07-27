@@ -91,14 +91,16 @@ test("runner emits effective idle timeout as machine-readable run configuration"
   );
 });
 
-test("desktop idle timers use Electron-compatible synchronous require", () => {
+test("desktop idle timers use platform-neutral runtime timers", () => {
   const source = readFileSync(new URL("../src/agent-runner.ts", import.meta.url), "utf8");
 
   assert.doesNotMatch(source, /await\s+import\(["']node:timers["']\)/);
-  assert.match(source, /require\(["']node:timers["']\)/);
+  assert.doesNotMatch(source, /require\(["']node:timers["']\)/);
+  assert.match(source, /scheduleRuntimeTimeout/);
+  assert.match(source, /cancelRuntimeTimeout/);
 });
 
-test("desktop idle watchdog falls back to process.getBuiltinModule in Node ESM", async () => {
+test("desktop idle watchdog works without window timers or Node require", async () => {
   const idleSettings = claudeSettings();
   idleSettings.llmIdleRetries = 0;
   const runner = new AgentRunner(
@@ -162,7 +164,7 @@ test("desktop idle watchdog falls back to process.getBuiltinModule in Node ESM",
   }
 });
 
-test("mobile idle timers do not evaluate desktop require", async () => {
+test("mobile idle timers do not require Node timers", async () => {
   const runner = new AgentRunner(
     { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
     claudeSettings(),

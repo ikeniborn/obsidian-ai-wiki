@@ -508,9 +508,9 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName(T.settings.domains_heading).setHeading();
 
     if (busy) {
-      containerEl.createEl("div", {
+      containerEl.createDiv({
         cls: "ai-wiki-settings-busy-banner",
-      }).createEl("span", { text: `⚠ ${T.settings.busyBanner}` });
+      }).createSpan({ text: `⚠ ${T.settings.busyBanner}` });
     }
 
     const domains = this.cachedDomains;
