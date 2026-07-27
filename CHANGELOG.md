@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.2.0 — 2026-07-27
+
+### New
+- feat(settings): add operation-specific model policies, configurable budgets, separate connection and idle timeouts, and Vision diagnostics
+- feat(prompts): add semantic compression profiles for bounded context preparation
+- feat(llm): enforce prompt governance and add request-scoped native retry execution
+- feat(ingest): add lossless Markdown chunking and guarded section patches
+- feat(ingest): add bounded evidence map-reduce synthesis with deterministic context packing
+- feat(query): bound answer and chat context
+- feat(lint): batch findings within prompt budgets
+- feat(format): segment oversized notes safely
+- feat(vision): batch recognition records within model limits
+- feat(progress): show human-readable model request lifecycle states
+
+### Fixes
+- fix(llm): harden prompt budgets, compact repairs, retries, cancellation, desktop transport, and operation-aware generation
+- fix(ingest): preserve technical evidence, canonical routing, section structure, and field-framed Markdown boundaries
+- fix(query): improve context selection, grounding validation, WikiLink reuse, and response completion
+- fix(init): make reinitialization transactional with quarantine, exact rollback, and bounded wipe ownership
+- fix(storage): isolate structured index records and preserve index integrity
+- fix(progress): preserve reasoning state and close failed, cancelled, and validated operations correctly
+- fix(claude): harden stream transport, final reasoning delivery, and temporary prompt cleanup
+- fix(audit): correlate requests and retries while bounding telemetry, manifests, and wipe proofs
+- fix(settings): validate model policies and scope operation controls correctly
+- fix(ui): localize progress states and distinguish local acceptance, repair, and domain rejection
+- fix(vision): use a reliable nondegenerate model probe
+- fix(log): isolate oversized agent records
+
+---
+
 ## 0.1.204 — 2026-07-16
 
 ### New
