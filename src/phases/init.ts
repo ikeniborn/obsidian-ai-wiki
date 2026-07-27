@@ -41,6 +41,7 @@ import {
   wipeProofHash,
   type WipeManifestEntry,
 } from "../wipe-proof";
+import { cancelRuntimeTimeout, scheduleRuntimeTimeout } from "../runtime-timers";
 
 async function* forwardIngest(
   generator: AsyncGenerator<RunEvent, IngestOutcome>,
@@ -86,11 +87,9 @@ function waitForBootstrapTransportSettle(signal: AbortSignal, delayMs = 1_500): 
   if (signal.aborted) return Promise.reject(bootstrapAbortError(signal));
   let onAbort: (() => void) | undefined;
   const pending = new Promise<void>((resolve, reject) => {
-    // eslint-disable-next-line obsidianmd/prefer-window-timers -- Shared phase code also runs in Node tests.
-    const timer = setTimeout(resolve, delayMs);
+    const timer = scheduleRuntimeTimeout(resolve, delayMs);
     onAbort = (): void => {
-      // eslint-disable-next-line obsidianmd/prefer-window-timers -- Shared phase code also runs in Node tests.
-      clearTimeout(timer);
+      cancelRuntimeTimeout(timer);
       reject(bootstrapAbortError(signal));
     };
     signal.addEventListener("abort", onAbort, { once: true });

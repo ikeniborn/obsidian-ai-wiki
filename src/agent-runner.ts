@@ -27,27 +27,9 @@ import { resolveLang, i18nFor } from "./i18n";
 import type { BoilerplateDemotionConfig } from "./boilerplate-demotion";
 import { normalizeRerankerConfig } from "./reranker";
 import { resolveModelCallPolicy } from "./model-call-policy";
-
-declare const require: NodeJS.Require;
+import { cancelRuntimeTimeout, scheduleRuntimeTimeout, type RuntimeTimer } from "./runtime-timers";
 
 const DISABLED_BOILERPLATE_DEMOTION: BoilerplateDemotionConfig = { enabled: false, factor: 0 };
-
-type NodeTimers = typeof import("node:timers");
-
-function loadDesktopTimers(): NodeTimers {
-  // eslint-disable-next-line import/no-nodejs-modules -- Electron exposes Node builtins through require.
-  if (typeof require === "function") return require("node:timers") as NodeTimers;
-
-  const getBuiltinModule = (process as NodeJS.Process & {
-    getBuiltinModule?: (id: string) => unknown;
-  }).getBuiltinModule;
-  if (typeof getBuiltinModule === "function") {
-    const timers = getBuiltinModule("node:timers") ?? getBuiltinModule("timers");
-    if (timers) return timers;
-  }
-
-  throw new Error("Desktop idle watchdog requires access to the Node.js timers module");
-}
 
 export function resolveFollowUpPolicyOperation(parent: WikiOperation): OpKey {
   return parent === "query" ? "query" : "lint";
@@ -279,14 +261,10 @@ export class AgentRunner {
     const maxRetries = this.settings.backend === "claude-agent"
       ? this.settings.llmIdleRetries ?? 3
       : 0;
-    const desktopTimers = !operationWatchdogEnabled || this.isMobile ? null : loadDesktopTimers();
-    type IdleTimer = number | NodeJS.Timeout;
-    const scheduleIdleAbort = (callback: () => void): IdleTimer => desktopTimers
-      ? desktopTimers.setTimeout(callback, idleTimeoutMs)
-      : window.setTimeout(callback, idleTimeoutMs);
-    const clearIdleAbort = (timer: IdleTimer): void => {
-      if (desktopTimers) desktopTimers.clearTimeout(timer as NodeJS.Timeout);
-      else window.clearTimeout(timer as number);
+    const scheduleIdleAbort = (callback: () => void): RuntimeTimer =>
+      scheduleRuntimeTimeout(callback, idleTimeoutMs);
+    const clearIdleAbort = (timer: RuntimeTimer): void => {
+      cancelRuntimeTimeout(timer);
     };
     let attempt = 0;
     let destructivePreludeSeen = false;
@@ -318,7 +296,7 @@ export class AgentRunner {
       const combined = operationWatchdogEnabled
         ? signalAny([req.signal, idleCtrl.signal])
         : req.signal;
-      let idleTimer: IdleTimer | null =
+      let idleTimer: RuntimeTimer | null =
         operationWatchdogEnabled ? scheduleIdleAbort(() => idleCtrl.abort()) : null;
 
       const resetTimer = () => {

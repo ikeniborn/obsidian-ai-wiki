@@ -282,14 +282,14 @@ export class AddDomainModal extends Modal {
     const T = i18n().modal;
 
     const header = this.sourcePathsContainer.createDiv({ cls: "ai-wiki-sp-header" });
-    header.createEl("span", { text: T.addDomainSourcePathsLabel, cls: "ai-wiki-sp-label" });
+    header.createSpan({ text: T.addDomainSourcePathsLabel, cls: "ai-wiki-sp-label" });
 
     const listEl = this.sourcePathsContainer.createDiv({ cls: "ai-wiki-sp-list" });
     const rerender = () => {
       listEl.empty();
       this.input.sourcePaths.forEach((p, i) => {
         const row = listEl.createDiv({ cls: "ai-wiki-sp-row" });
-        row.createEl("span", { text: p, cls: "ai-wiki-sp-path", attr: { title: p } });
+        row.createSpan({ text: p, cls: "ai-wiki-sp-path", attr: { title: p } });
         const removeBtn = row.createEl("button", { text: "×", cls: "ai-wiki-sp-remove" });
         removeBtn.addEventListener("click", () => {
           this.input.sourcePaths.splice(i, 1);
@@ -436,7 +436,7 @@ export class EditDomainModal extends Modal {
     const T = i18n().modal;
 
     const header = container.createDiv({ cls: "ai-wiki-et-header" });
-    header.createEl("span", { text: T.entityTypesLabel, cls: "ai-wiki-et-label" });
+    header.createSpan({ text: T.entityTypesLabel, cls: "ai-wiki-et-label" });
     const toggleBtn = header.createEl("button", {
       text: this.entityTypesMode === "cards" ? T.entityTypesEditJson : T.entityTypesBackToCards,
     });
@@ -487,7 +487,7 @@ export class EditDomainModal extends Modal {
     const T = i18n().modal;
 
     const header = container.createDiv({ cls: "ai-wiki-sp-header" });
-    header.createEl("span", { text: T.sourcePathsLabel, cls: "ai-wiki-sp-label" });
+    header.createSpan({ text: T.sourcePathsLabel, cls: "ai-wiki-sp-label" });
 
     const listEl = container.createDiv({ cls: "ai-wiki-sp-list" });
 
@@ -495,7 +495,7 @@ export class EditDomainModal extends Modal {
       listEl.empty();
       this.sourcePathsList.forEach((p, i) => {
         const row = listEl.createDiv({ cls: "ai-wiki-sp-row" });
-        row.createEl("span", { text: p, cls: "ai-wiki-sp-path", attr: { title: p } });
+        row.createSpan({ text: p, cls: "ai-wiki-sp-path", attr: { title: p } });
         const removeBtn = row.createEl("button", { text: "×", cls: "ai-wiki-sp-remove" });
         removeBtn.addEventListener("click", () => {
           this.sourcePathsList.splice(i, 1);
@@ -530,8 +530,8 @@ export class EditDomainModal extends Modal {
   private renderEntityTypeCard(container: HTMLElement, et: EntityType): void {
     const card = container.createDiv({ cls: "ai-wiki-et-card" });
     const head = card.createDiv({ cls: "ai-wiki-et-card-head" });
-    head.createEl("span", { text: et.type, cls: "ai-wiki-et-card-type" });
-    head.createEl("span", { text: effectiveSubfolder(et) + "/", cls: "ai-wiki-et-card-subfolder" });
+    head.createSpan({ text: et.type, cls: "ai-wiki-et-card-type" });
+    head.createSpan({ text: effectiveSubfolder(et) + "/", cls: "ai-wiki-et-card-subfolder" });
     const body = card.createDiv({ cls: "ai-wiki-et-card-body" });
     if (et.description) {
       body.createEl("p", { text: et.description, cls: "ai-wiki-et-card-desc" });
@@ -539,7 +539,7 @@ export class EditDomainModal extends Modal {
     if (et.extraction_cues?.length) {
       const tags = body.createDiv({ cls: "ai-wiki-et-card-tags" });
       for (const cue of et.extraction_cues) {
-        tags.createEl("span", { text: cue, cls: "ai-wiki-et-card-tag" });
+        tags.createSpan({ text: cue, cls: "ai-wiki-et-card-tag" });
       }
     }
     if (et.min_mentions_for_page != null) {
@@ -617,14 +617,14 @@ export class ManageSourcesModal extends Modal {
     const T = i18n().modal;
 
     const header = container.createDiv({ cls: "ai-wiki-sp-header" });
-    header.createEl("span", { text: T.sourcePathsLabel, cls: "ai-wiki-sp-label" });
+    header.createSpan({ text: T.sourcePathsLabel, cls: "ai-wiki-sp-label" });
 
     const listEl = container.createDiv({ cls: "ai-wiki-sp-list" });
     const rerender = () => {
       listEl.empty();
       this.sourcePathsList.forEach((p, i) => {
         const row = listEl.createDiv({ cls: "ai-wiki-sp-row" });
-        row.createEl("span", { text: p, cls: "ai-wiki-sp-path", attr: { title: p } });
+        row.createSpan({ text: p, cls: "ai-wiki-sp-path", attr: { title: p } });
         const removeBtn = row.createEl("button", { text: "×", cls: "ai-wiki-sp-remove" });
         removeBtn.addEventListener("click", () => {
           this.sourcePathsList.splice(i, 1);
@@ -866,7 +866,7 @@ export class LintOptionsModal extends Modal {
         const setting = new Setting(contentEl).setName(et.type);
         const countVal = this.articleCounts.get(et.type);
         if (countVal !== undefined) {
-          setting.nameEl.createEl("span", {
+          setting.nameEl.createSpan({
             text: ` (${countVal})`,
             cls: "ai-wiki-count-muted",
           });
