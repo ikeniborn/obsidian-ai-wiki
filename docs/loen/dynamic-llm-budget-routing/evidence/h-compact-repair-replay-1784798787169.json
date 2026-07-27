@@ -1,0 +1,40 @@
+{
+  "variant": "h-compact-repair-replay",
+  "session": "1784798787169",
+  "firstTs": "2026-07-23T09:26:27.169Z",
+  "lastTs": "2026-07-23T09:39:18.661Z",
+  "status": "running",
+  "diagnosticMode": "undici-request-adapter",
+  "transport": "desktop-direct",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrxb4617-1",
+    "estimatedInputTokens": 7097,
+    "outputBudget": 16384,
+    "responseFormatType": "json_schema",
+    "hash": "fnv1a:e3ef7c65"
+  },
+  "firstHttpMs": 8144,
+  "firstFileMs": 25511,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 7097,
+    "outputBudget": 16384
+  },
+  "transportRetries": 1,
+  "transportRecovered": 1,
+  "structuralRetries": 6,
+  "structuralSummary": [
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"custom\",\n    \"message\": \"Unknown source chunk 0:1-64:fnv1a:f7c171dd\",\n    \"path\": []\n  }\n]",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"custom\",\n    \"message\": \"Unknown source chunk 0:1-64:fnv1a:f7c171dd\",\n    \"path\": []\n  }\n]",
+    "ingest.synthesize:empty_output:Empty structured output",
+    "ingest.synthesize:response_format_fallback:json_schema -> json_object",
+    "ingest.synthesize:empty_output:Empty structured output",
+    "ingest.synthesize:response_format_fallback:json_schema -> json_object"
+  ],
+  "createdPages": 6,
+  "resultTexts": [
+    "Источник «Настройка прокси.md» → домен «os-unix»: создано 6 стр.",
+    ""
+  ],
+  "finalError": "ingest: synthesis failed — duplicate replace authority record"
+}

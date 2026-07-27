@@ -1,0 +1,37 @@
+{
+  "variant": "d-undici-adapter-4096-partial",
+  "session": "1784781335222",
+  "firstTs": "2026-07-23T04:35:35.222Z",
+  "lastTs": "2026-07-23T04:40:39.064Z",
+  "status": "running",
+  "diagnosticMode": "undici-request-adapter",
+  "transport": "desktop-direct",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrx0q41l-1",
+    "estimatedInputTokens": 7069,
+    "outputBudget": 4096,
+    "responseFormatType": "json_schema",
+    "hash": "fnv1a:749fb1bd"
+  },
+  "firstHttpMs": 39413,
+  "firstFileMs": 52430,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 7069,
+    "outputBudget": 4096
+  },
+  "transportRetries": 1,
+  "transportRecovered": 1,
+  "structuralRetries": 5,
+  "structuralSummary": [
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"number\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"packets\",\n      1,\n      \"exactSourceRanges\",\n      0,\n      \"endLine\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"end\"\n    ],\n    \"path\": [\n      \"packets\",\n      1,\n      \"exactSourceRanges\",\n      0\n    ],\n    \"message\": \"Unrecognized key(s) in object: 'end'\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"packets\",\n      1,\n      \"links\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"packets\",\n      1,\n      \"sourceAnchor\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"noEvidence\"\n    ],\n    \"message\": \"Required\"\n  }\n]",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"noEvidence\"\n    ],\n    \"message\": \"Required\"\n  }\n]",
+    "ingest.synthesize:json_parse:No JSON object found",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"packets\",\n      2,\n      \"links\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"packets\",\n      2,\n      \"sourceAnchor\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"noEvidence\"\n    ],\n    \"message\": \"Required\"\n  }\n]",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"packets\",\n      7,\n      \"entityKey\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"packets\",\n      7,\n      \"facts\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"packets\",\n      7,\n      \"exactSourceRanges\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"packets\",\n      7,\n      \"links\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"packets\",\n      7,\n      \"sourceAnchor\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"noEvidence\"\n    ],\n    \"message\": \"Required\"\n  }\n]"
+  ],
+  "createdPages": 6,
+  "resultTexts": [
+    "Источник «Настройка прокси.md» → домен «os-unix»: создано 6 стр."
+  ]
+}

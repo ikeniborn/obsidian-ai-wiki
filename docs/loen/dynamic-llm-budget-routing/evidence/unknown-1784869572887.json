@@ -1,0 +1,37 @@
+{
+  "variant": "unknown",
+  "session": "1784869572887",
+  "firstTs": "2026-07-24T05:06:12.887Z",
+  "lastTs": "2026-07-24T05:12:34.890Z",
+  "status": "running",
+  "diagnosticMode": "off",
+  "transport": "desktop-hybrid",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mryh9cmz-1",
+    "estimatedInputTokens": 7189,
+    "outputBudget": 4096,
+    "hash": "fnv1a:ef215376"
+  },
+  "firstHttpMs": 40393,
+  "firstFileMs": 87954,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 7189,
+    "outputBudget": 4096
+  },
+  "transportRetries": 0,
+  "transportRecovered": 0,
+  "structuralRetries": 4,
+  "structuralSummary": [
+    "init.bootstrap-map:output_limit:Output limit consumed without usable content (4096/4096 tokens)",
+    "ingest.evidence-map:output_limit:Output limit consumed without usable content (4096/4096 tokens)",
+    "ingest.evidence-map:output_limit:Output limit consumed without usable content (4096/4096 tokens)",
+    "ingest.synthesize:frame_parse:Unexpected token '#', \"## CREATE\n\"... is not valid JSON"
+  ],
+  "createdPages": 6,
+  "resultTexts": [
+    "Источник «Настройка прокси.md» → домен «os-unix»: создано 6 стр.",
+    ""
+  ],
+  "finalError": "ingest: synthesis failed — Prompt requires 16973 estimated tokens but budget is 16384"
+}

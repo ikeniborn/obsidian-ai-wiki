@@ -1,4 +1,5 @@
 import type OpenAI from "openai";
+import { z } from "zod";
 import {
   SynthesisActionSchema,
   SynthesisOutputSchema,
@@ -6,11 +7,12 @@ import {
   type SynthesisAction,
 } from "./zod-schemas";
 import {
+  inspectPatchablePage,
   normalizeSectionHeading,
   type ReplaceSectionAuthority,
 } from "../section-patches";
 import { contentHash } from "../content-hash";
-import { GENERIC_WIKI_STEM_REGEX, slugifyEntity } from "../wiki-stem";
+import { GENERIC_WIKI_STEM_REGEX } from "../wiki-stem";
 import { validateArticlePath } from "../wiki-path";
 import type { EntityContextBundle, WikiSectionUnit } from "../ingest-context";
 import type { EntityEvidence } from "./ingest-evidence";
@@ -32,14 +34,35 @@ import { prepareChatMessages } from "./llm-utils";
 import { createLlmLifecycle, runStructuredWithRetry, StructuredOutputTruncatedError, StructuredValidationError } from "./structured-output";
 import { lifecycleEvent } from "../llm-lifecycle";
 import synthesisPrompt from "../../prompts/ingest-synthesis.md";
+import { synthesisFrameInstruction, synthesisFrameProfile } from "./framed-output";
+import type { SynthesisEvidenceLedgerItem } from "./synthesis-evidence-ledger";
 
 const synthesisRepairInstruction = [
-  "Use these required root fields and optional delta: {\"reasoning\":\"...\",\"actions\":[],\"skips\":[],\"entity_types_delta\":[]}.",
-  "Do not return page fields at the root; put mutations inside actions.",
-  "Create action: {\"kind\":\"create\",\"entityKey\":\"exact supplied entityKey\",\"path\":\"canonical new page path\",\"annotation\":\"short index description\",\"content\":\"complete markdown page\"}.",
-  "Patch action: {\"kind\":\"patch\",\"entityKey\":\"exact supplied entityKey\",\"path\":\"exact existing page path\",\"expectedPageHash\":\"exact supplied page hash\",\"sections\":[]}.",
-  "Use kind exactly as create or patch. Every action requires entityKey; every create requires annotation. entity_types_delta is optional.",
+  "Use only CREATE, PATCH, SECTION, CONTENT, END_CONTENT, SKIP, optional ENTITY_TYPES_DELTA_JSON, and END frames.",
+  "Every create needs entityKey, path, annotation, and one raw Markdown CONTENT block closed by END_CONTENT.",
+  "Every patch needs entityKey, path, expectedPageHash, and SECTION blocks.",
+  "Every section needs operation, heading, and raw Markdown CONTENT closed by END_CONTENT. Replace also needs expectedSectionOrdinal and expectedSectionHash.",
+  "Every skip needs entityKey and reason. Cover every supplied entity exactly once.",
+  "Never put a protocol marker inside Markdown content.",
 ].join("\n");
+
+const SYNTHESIS_COMPACT_REPAIR_THRESHOLD_TOKENS = 0;
+export const SYNTHESIS_COMPACT_REPAIR_MAX_RESERVE_TOKENS = 2_048;
+const SYNTHESIS_COMPACT_REPAIR_MIN_RESERVE_TOKENS = 512;
+const SYNTHESIS_COMPACT_REPAIR_RESERVE_RATIO = 0.05;
+export const SYNTHESIS_MAX_OPTIONAL_WIKI_UNITS_PER_BUNDLE = 3;
+export const SYNTHESIS_EXACT_SOURCE_TEXT_LIMIT = 192;
+
+export function synthesisCompactRepairReserveTokens(inputBudgetTokens: number): number {
+  if (!Number.isFinite(inputBudgetTokens) || inputBudgetTokens <= 0) return 0;
+  return Math.min(
+    SYNTHESIS_COMPACT_REPAIR_MAX_RESERVE_TOKENS,
+    Math.max(
+      SYNTHESIS_COMPACT_REPAIR_MIN_RESERVE_TOKENS,
+      Math.floor(inputBudgetTokens * SYNTHESIS_COMPACT_REPAIR_RESERVE_RATIO),
+    ),
+  );
+}
 
 export interface SynthesisCoverage {
   actions: readonly SynthesisAction[];
@@ -74,6 +97,7 @@ export interface SynthesisBatchInput {
   existingPageDescriptions: readonly SynthesisPageDescription[];
   createPathsByEntityKey?: ReadonlyMap<string, string>;
   tagRegistryUnits: readonly ContextUnit[];
+  technicalEvidenceByEntityKey?: ReadonlyMap<string, readonly SynthesisEvidenceLedgerItem[]>;
   pathPolicy: SynthesisPathPolicy;
   domainContract: string;
   schemaContract: string;
@@ -271,6 +295,38 @@ export function validateSynthesisCoverage(
   if (missing.length > 0) throw new TypeError(`missing entity coverage: ${missing.join(", ")}`);
 }
 
+function validateBundleActionTargets(
+  bundles: readonly EntityContextBundle[],
+  actions: readonly SynthesisAction[],
+  createPathsByEntityKey: ReadonlyMap<string, string> | undefined,
+): void {
+  const byEntityKey = new Map(bundles.map((bundle) => [normalizeEntityKey(bundle.entityKey), bundle]));
+  for (const action of actions) {
+    const bundle = byEntityKey.get(normalizeEntityKey(action.entityKey));
+    if (bundle === undefined) continue;
+    const targetPaths = new Set([
+      ...bundle.units.filter((unit) => unit.required).map((unit) => unit.path),
+      ...bundle.replaceAuthorities.map((authority) => authority.path),
+    ]);
+    if (targetPaths.size > 0) {
+      if (action.kind === "create") {
+        throw new TypeError(`create is not allowed for existing canonical target: ${bundle.entityKey}`);
+      }
+      if (!targetPaths.has(action.path)) {
+        throw new TypeError(`patch path is not the canonical target for entity: ${bundle.entityKey}`);
+      }
+      continue;
+    }
+    if (action.kind === "patch") {
+      throw new TypeError(`patch is not allowed without exact target context: ${bundle.entityKey}`);
+    }
+    if (createPathsByEntityKey !== undefined
+      && createPathsByEntityKey.get(bundle.entityKey) === undefined) {
+      throw new TypeError(`create is not allowed without a server-owned path: ${bundle.entityKey}`);
+    }
+  }
+}
+
 export function validateSynthesisActions(input: SynthesisActionValidationInput): void {
   const pathPolicy = input.pathPolicy;
   validatePathPolicy(pathPolicy);
@@ -317,35 +373,138 @@ function normalizeCreateActionPaths(
   createPathsByEntityKey: ReadonlyMap<string, string> | undefined,
 ): SynthesisOutput {
   if (createPathsByEntityKey === undefined || createPathsByEntityKey.size === 0) return output;
+  const canonicalByNormalizedKey = new Map(
+    [...createPathsByEntityKey].map(([entityKey, path]) => [normalizeEntityKey(entityKey), path]),
+  );
   let changed = false;
   const actions = output.actions.map((action) => {
     if (action.kind !== "create") return action;
-    const canonical = createPathsByEntityKey.get(action.entityKey);
+    const canonical = canonicalByNormalizedKey.get(normalizeEntityKey(action.entityKey));
     if (canonical === undefined || action.path === canonical) return action;
-    if (!createPathStemMatchesEntity(action.path, canonical, action.entityKey)) return action;
     changed = true;
     return { ...action, path: canonical };
   });
   return changed ? { ...output, actions } : output;
 }
 
-function createPathStemMatchesEntity(path: string, canonical: string, entityKey: string): boolean {
-  const rawStem = path.split("/").at(-1)?.replace(/\.md$/, "") ?? "";
-  const canonicalStem = canonical.split("/").at(-1)?.replace(/\.md$/, "") ?? "";
-  let expectedSlug: string;
-  try {
-    expectedSlug = slugifyEntity(entityKey);
-  } catch {
-    return false;
+function canonicalizeSingleBundleCoverage(
+  output: SynthesisOutput,
+  bundles: readonly EntityContextBundle[],
+  createPathsByEntityKey: ReadonlyMap<string, string> | undefined,
+): SynthesisOutput {
+  if (bundles.length !== 1) return output;
+  const bundle = bundles[0];
+  const entityKey = bundle.entityKey;
+  const targetPath = createPathsByEntityKey?.get(entityKey);
+  const actions = output.actions.map((action) =>
+    action.kind === "create" && targetPath !== undefined
+      ? { ...action, entityKey, path: targetPath }
+      : { ...action, entityKey });
+  const skips = output.skips.map((skip) => ({ ...skip, entityKey }));
+  if (actions.length === 0) {
+    return skips.length <= 1
+      ? { ...output, skips }
+      : { ...output, skips: [{ ...skips[0], reason: skips.map((skip) => skip.reason).join("; ") }] };
   }
-  if (rawStem === canonicalStem) return true;
-  if (rawStem.replace(/-/g, "_") === expectedSlug) return true;
-  const domainPrefix = canonicalStem.endsWith(expectedSlug)
-    ? canonicalStem.slice(0, canonicalStem.length - expectedSlug.length)
-    : "";
-  return domainPrefix.length > 0
-    && rawStem.startsWith(domainPrefix)
-    && rawStem.slice(domainPrefix.length).replace(/-/g, "_") === expectedSlug;
+  const patchActions = actions.filter((action) => action.kind === "patch");
+  if (patchActions.length === actions.length) {
+    const first = patchActions[0];
+    const canMerge = patchActions.every((action) =>
+      action.path === first.path && action.expectedPageHash === first.expectedPageHash);
+    if (canMerge) {
+      return {
+        ...output,
+        actions: [{
+          ...first,
+          sections: patchActions.flatMap((action) => action.sections),
+        }],
+        skips: [],
+      };
+    }
+    return {
+      ...output,
+      actions: [patchActions.reduce((best, action) =>
+        action.sections.length > best.sections.length ? action : best, first)],
+      skips: [],
+    };
+  }
+  const createActions = actions.filter((action) => action.kind === "create");
+  if (createActions.length > 0) {
+    const first = createActions[0];
+    return {
+      ...output,
+      actions: [createActions.reduce((best, action) =>
+        action.content.length > best.content.length ? action : best, first)],
+      skips: [],
+    };
+  }
+  return { ...output, actions: [actions[0]], skips: [] };
+}
+
+function sectionBody(markdown: string): string {
+  return markdown.replace(/^[^\r\n]*(?:\r\n|\n|\r)?/, "").trim();
+}
+
+function hasOnlyArticleScaffolding(preamble: string): boolean {
+  const frontmatter = /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/.exec(preamble)?.[0] ?? "";
+  const contentLines = preamble.slice(frontmatter.length)
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim().length > 0);
+  return contentLines.length === 1
+    && /^ {0,3}#(?:[ \t]+\S.*|[^#\s].*)$/.test(contentLines[0]);
+}
+
+function canonicalizeSingleExistingTargetAction(
+  output: SynthesisOutput,
+  bundles: readonly EntityContextBundle[],
+  existingPageHashes: ReadonlyMap<string, string>,
+): SynthesisOutput {
+  if (bundles.length !== 1 || output.actions.length !== 1) return output;
+  const action = output.actions[0];
+  if (action.kind !== "create") return output;
+  const bundle = bundles[0];
+  const targetPaths = new Set([
+    ...bundle.units.filter((unit) => unit.required).map((unit) => unit.path),
+    ...bundle.replaceAuthorities.map((authority) => authority.path),
+  ]);
+  if (targetPaths.size !== 1) return output;
+  const path = [...targetPaths][0];
+  const expectedPageHash = existingPageHashes.get(path);
+  if (expectedPageHash === undefined) return output;
+
+  const article = inspectPatchablePage(action.content);
+  if (!hasOnlyArticleScaffolding(article.preamble)) return output;
+  const sections = article.sections
+    .filter((section) => normalizeSectionHeading(section.heading) !== "sources")
+    .map((section) => {
+      const authorities = bundle.replaceAuthorities.filter((authority) =>
+        authority.path === path
+        && normalizeSectionHeading(authority.heading) === normalizeSectionHeading(section.heading));
+      const content = sectionBody(section.span);
+      if (authorities.length !== 1) {
+        return { heading: section.heading, operation: "add" as const, content };
+      }
+      const authority = authorities[0];
+      return {
+        heading: section.heading,
+        operation: "replace" as const,
+        expectedSectionOrdinal: authority.sectionOrdinal,
+        expectedSectionHash: authority.sectionHash,
+        content,
+      };
+    });
+  if (sections.length === 0) return output;
+  return {
+    ...output,
+    actions: [{
+      kind: "patch",
+      entityKey: bundle.entityKey,
+      path,
+      expectedPageHash,
+      sections,
+    }],
+  };
 }
 
 interface BuiltSynthesisRequest {
@@ -354,6 +513,7 @@ interface BuiltSynthesisRequest {
   bundles: EntityContextBundle[];
   promptHash: string;
   estimatedInputTokens: number;
+  promptBreakdown: Extract<RunEvent, { kind: "prompt_breakdown" }>;
 }
 
 function boundedOptions(
@@ -364,6 +524,8 @@ function boundedOptions(
   const opts: LlmCallOptions = {
     ...baseOpts,
     inputBudgetTokens,
+    repairInputBudgetTokens: policy.repairInputBudgetTokens,
+    outputRetryBudgetTokens: policy.outputRetryBudgetTokens,
     semanticCompression: { profile: policy.compression ?? "balanced", operation: "ingest" },
   };
   if (policy.outputBudgetTokens !== undefined) opts.maxTokens = policy.outputBudgetTokens;
@@ -377,6 +539,10 @@ function compressionOptions(input: SynthesisBatchInput, inputBudgetTokens: numbe
 
 function jsonForPrompt(value: unknown): string {
   return JSON.stringify(value, null, 2);
+}
+
+function estimatePromptFragmentTokens(label: string, value: unknown): number {
+  return estimatePreparedMessages([{ role: "user", content: `${label}:\n${jsonForPrompt(value)}` }]);
 }
 
 function pathPolicyDto(policy: SynthesisPathPolicy): Record<string, unknown> {
@@ -395,10 +561,34 @@ function evidenceDto(evidence: EntityEvidence): Record<string, unknown> {
     facts: [...evidence.facts],
     exactSourceRanges: evidence.exactSourceRanges.map((range) => ({ startLine: range.startLine, endLine: range.endLine })),
     exactSource: evidence.exactSource.map((source) => ({
-      startLine: source.startLine, endLine: source.endLine, text: source.text,
+      startLine: source.startLine, endLine: source.endLine, text: truncateTextForSynthesis(source.text, SYNTHESIS_EXACT_SOURCE_TEXT_LIMIT),
     })),
     links: [...evidence.links],
   };
+}
+
+function technicalEvidenceFor(
+  input: SynthesisBatchInput,
+  bundles: readonly EntityContextBundle[],
+): SynthesisEvidenceLedgerItem[] {
+  return bundles.flatMap((bundle) =>
+    input.technicalEvidenceByEntityKey?.get(bundle.entityKey) ?? []);
+}
+
+function technicalEvidenceDto(item: SynthesisEvidenceLedgerItem): Record<string, unknown> {
+  return {
+    id: item.id,
+    kind: item.kind,
+    startLine: item.startLine,
+    endLine: item.endLine,
+    markdown: item.markdown,
+  };
+}
+
+function truncateTextForSynthesis(text: string, limit: number): string {
+  if (text.length <= limit) return text;
+  const marker = "\n[truncated; exact line range validated server-side]";
+  return `${text.slice(0, Math.max(0, limit - marker.length))}${marker}`;
 }
 
 function unitDto(unit: WikiSectionUnit): Record<string, unknown> {
@@ -449,6 +639,16 @@ function registryDto(unit: ContextUnit): Record<string, unknown> {
   };
 }
 
+function allowedEntityKeysDto(
+  bundles: readonly EntityContextBundle[],
+  createPathsByEntityKey: ReadonlyMap<string, string> | undefined,
+): Record<string, unknown>[] {
+  return bundles.map((bundle) => ({
+    entityKey: bundle.entityKey,
+    createPath: createPathsByEntityKey?.get(bundle.entityKey),
+  }));
+}
+
 function relevantPageDescriptions(
   input: SynthesisBatchInput,
   bundles: readonly EntityContextBundle[],
@@ -471,14 +671,40 @@ function cloneBundle(bundle: EntityContextBundle): EntityContextBundle {
       links: [...bundle.evidence.links],
     },
     units: bundle.units.map((unit) => ({ ...unit, duplicatePaths: [...unit.duplicatePaths] })),
-    replaceAuthorities: bundle.replaceAuthorities.map((authority) => ({ ...authority })),
+    replaceAuthorities: uniqueReplaceAuthorities(bundle.replaceAuthorities).map((authority) => ({ ...authority })),
+    ...(bundle.consolidatedEntityKeys === undefined
+      ? {}
+      : { consolidatedEntityKeys: [...bundle.consolidatedEntityKeys] }),
   };
+}
+
+function compactBundleForSynthesis(bundle: EntityContextBundle): EntityContextBundle {
+  const cloned = cloneBundle(bundle);
+  cloned.evidence = {
+    ...cloned.evidence,
+    exactSource: cloned.evidence.exactSource.map((source) => ({
+      ...source,
+      text: truncateTextForSynthesis(source.text, SYNTHESIS_EXACT_SOURCE_TEXT_LIMIT),
+    })),
+  };
+  const required = cloned.units.filter((unit) => unit.required);
+  const optional = cloned.units
+    .filter((unit) => !unit.required)
+    .sort((left, right) => right.priority - left.priority
+      || right.score - left.score
+      || compareCodePoints(left.path, right.path)
+      || left.sourceOrdinal - right.sourceOrdinal)
+    .slice(0, SYNTHESIS_MAX_OPTIONAL_WIKI_UNITS_PER_BUNDLE);
+  cloned.units = [...required, ...optional];
+  return cloned;
 }
 
 function truncateForPromptBudget(text: string, minimumLength: number): string {
   const nextLength = Math.max(minimumLength, Math.floor(text.length / 2));
   if (nextLength >= text.length) return text;
-  return `${text.slice(0, nextLength)}\n[truncated for prompt budget]`;
+  const marker = "\n[truncated for prompt budget]";
+  const contentLength = Math.max(0, nextLength - marker.length);
+  return `${text.slice(0, contentLength)}${marker}`;
 }
 
 function compressLongestUnitTextForPromptBudget(bundle: EntityContextBundle, minimumLength: number): boolean {
@@ -522,13 +748,19 @@ function renderSynthesisMessages(
     `Entity bundle: entity-${bundle.entityKey}`,
     jsonForPrompt({
       entityKey: bundle.entityKey,
+      ...(bundle.consolidatedEntityKeys === undefined
+        ? {}
+        : { consolidatedEntityKeys: bundle.consolidatedEntityKeys }),
+      serverOwnedCreatePath: input.createPathsByEntityKey?.get(bundle.entityKey),
       targets: [...new Set(bundle.units.map((unit) => unit.path))]
         .map((path) => ({ path, pageHash: input.existingPageHashes.get(path) }))
         .filter((target) => target.pageHash !== undefined),
       requiredPageSections: bundle.units.filter((unit) => unit.required).map(unitDto),
       evidence: evidenceDto(bundle.evidence),
+      mustPreserveTechnicalEvidence: (input.technicalEvidenceByEntityKey?.get(bundle.entityKey) ?? [])
+        .map(technicalEvidenceDto),
       contextUnits: bundle.units.filter((unit) => !unit.required).map(unitDto),
-      replaceAuthorities: bundle.replaceAuthorities.map(authorityDto),
+      replaceAuthorities: uniqueReplaceAuthorities(bundle.replaceAuthorities).map(authorityDto),
     }),
   ].join("\n")).join("\n\n");
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [{
@@ -536,7 +768,7 @@ function renderSynthesisMessages(
     content: synthesisPrompt
       .replace("{{domain_contract}}", input.domainContract)
       .replace("{{schema_contract}}", input.schemaContract)
-      .replace("{{path_contract}}", `${input.pathContract}\nGoverned path policy: ${jsonForPrompt(pathPolicyDto(input.pathPolicy))}`)
+      .replace("{{path_contract}}", `${input.pathContract}\nGoverned path policy: ${jsonForPrompt(pathPolicyDto(input.pathPolicy))}\nAllowed entity keys and server-owned create paths: ${jsonForPrompt(allowedEntityKeysDto(bundles, input.createPathsByEntityKey))}`)
       .replace("{{entity_context_bundles}}", bundleText)
       .replace("{{page_descriptions}}", jsonForPrompt(relevantDescriptions.map(descriptionDto)))
       .replace("{{tag_registry_units}}", jsonForPrompt(registryUnits.map(registryDto))),
@@ -545,14 +777,68 @@ function renderSynthesisMessages(
   return messages;
 }
 
-function renderSemanticRepairPrompt(error: Error): string {
+function synthesisPromptBreakdown(
+  input: SynthesisBatchInput,
+  bundles: readonly EntityContextBundle[],
+  selectedOptionalIds: ReadonlySet<string> | undefined,
+  estimatedInputTokens: number,
+): Extract<RunEvent, { kind: "prompt_breakdown" }> {
+  const relevantDescriptions = relevantPageDescriptions(input, bundles)
+    .filter((description) => selectedOptionalIds === undefined || selectedOptionalIds.has(`description:${description.path}`));
+  const registryUnits = input.tagRegistryUnits
+    .filter((unit) => unit.required || selectedOptionalIds === undefined || selectedOptionalIds.has(`registry:${unit.id}`));
+  const evidence = bundles.map((bundle) => evidenceDto(bundle.evidence));
+  const technicalEvidence = technicalEvidenceFor(input, bundles).map(technicalEvidenceDto);
+  const contextUnits = bundles.flatMap((bundle) => bundle.units.map(unitDto));
+  const contracts = {
+    domainContract: input.domainContract,
+    schemaContract: input.schemaContract,
+    pathContract: input.pathContract,
+    pathPolicy: pathPolicyDto(input.pathPolicy),
+    allowedEntityKeys: allowedEntityKeysDto(bundles, input.createPathsByEntityKey),
+  };
+  return {
+    kind: "prompt_breakdown",
+    callSite: "ingest.synthesize",
+    estimatedInputTokens,
+    breakdown: {
+      contractsTokens: estimatePromptFragmentTokens("contracts", contracts),
+      evidenceTokens: estimatePromptFragmentTokens("evidence", evidence),
+      contextTokens: estimatePromptFragmentTokens("contextUnits", contextUnits),
+      pageDescriptionsTokens: estimatePromptFragmentTokens("pageDescriptions", relevantDescriptions.map(descriptionDto)),
+      registryTokens: estimatePromptFragmentTokens("tagRegistryUnits", registryUnits.map(registryDto)),
+      ...(technicalEvidence.length === 0
+        ? {}
+        : { technicalEvidenceTokens: estimatePromptFragmentTokens("mustPreserveTechnicalEvidence", technicalEvidence) }),
+    },
+    counts: {
+      bundles: bundles.length,
+      entities: new Set(bundles.map((bundle) => normalizeEntityKey(bundle.entityKey))).size,
+      wikiSections: bundles.reduce((sum, bundle) => sum + bundle.units.length, 0),
+      requiredWikiSections: bundles.reduce((sum, bundle) => sum + bundle.units.filter((unit) => unit.required).length, 0),
+      optionalWikiSections: bundles.reduce((sum, bundle) => sum + bundle.units.filter((unit) => !unit.required).length, 0),
+      pageDescriptions: relevantDescriptions.length,
+      registryUnits: registryUnits.length,
+      facts: bundles.reduce((sum, bundle) => sum + bundle.evidence.facts.length, 0),
+      exactSourceRanges: bundles.reduce((sum, bundle) => sum + bundle.evidence.exactSourceRanges.length, 0),
+      exactSourceTexts: bundles.reduce((sum, bundle) => sum + bundle.evidence.exactSource.length, 0),
+      links: bundles.reduce((sum, bundle) => sum + bundle.evidence.links.length, 0),
+      ...(technicalEvidence.length === 0 ? {} : { technicalEvidenceBlocks: technicalEvidence.length }),
+    },
+  };
+}
+
+function renderSemanticRepairPrompt(error: Error, bundles: readonly EntityContextBundle[]): string {
   return [
-    "Previous response was valid JSON but failed guarded synthesis validation.",
+    "Previous field-framed response failed guarded synthesis validation.",
     error.message,
-    "Fix only the invalid fields and return the full synthesis JSON again.",
+    "Fix only the invalid fields and return the complete field-framed synthesis output again.",
+    `Allowed entity keys: ${jsonForPrompt(bundles.map((bundle) => bundle.entityKey))}.`,
+    "Do not introduce new entityKey values. If an invalid action uses an unknown entityKey, rewrite it to one allowed key when it is clearly the same entity, otherwise replace that action with a skip for the allowed key.",
     "Canonical wiki paths must use this shape: !Wiki/<domain>/<allowed-type-folder>/wiki_<domain>_<entity_slug>.md.",
     "Entity slugs use lowercase letters, digits, and underscores only; replace hyphens, spaces, and punctuation with underscores.",
-    "Return ONLY a single valid JSON object matching the schema. No markdown fences, no commentary.",
+    synthesisFrameInstruction,
+    "Return frames only. Close every Markdown block with <<<END_CONTENT>>> and never place protocol markers inside Markdown.",
   ].join("\n");
 }
 
@@ -599,6 +885,28 @@ function validateServerOwnedInputs(input: SynthesisBatchInput): void {
   for (const description of input.existingPageDescriptions) normalizedPath(description.path, input.pathPolicy);
 }
 
+function replaceAuthorityRecordKey(authority: ReplaceSectionAuthority): string {
+  return [
+    authority.path,
+    normalizeSectionHeading(authority.heading),
+    authority.sectionOrdinal,
+    authority.sectionHash,
+    authority.exactSection,
+  ].join("\u0000");
+}
+
+function uniqueReplaceAuthorities(records: readonly ReplaceSectionAuthority[]): ReplaceSectionAuthority[] {
+  const seen = new Set<string>();
+  const unique: ReplaceSectionAuthority[] = [];
+  for (const record of records) {
+    const key = replaceAuthorityRecordKey(record);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(record);
+  }
+  return unique;
+}
+
 function authoritiesFor(bundles: readonly EntityContextBundle[]): ReadonlyMap<string, readonly ReplaceSectionAuthority[]> {
   const map = new Map<string, ReplaceSectionAuthority[]>();
   for (const bundle of bundles) {
@@ -608,6 +916,7 @@ function authoritiesFor(bundles: readonly EntityContextBundle[]): ReadonlyMap<st
       map.set(authority.path, records);
     }
   }
+  for (const [path, records] of map) map.set(path, uniqueReplaceAuthorities(records));
   return map;
 }
 
@@ -685,16 +994,17 @@ interface RepackedSynthesisRequest {
   messages: OpenAI.Chat.ChatCompletionMessageParam[];
   promptHash: string;
   estimatedInputTokens: number;
+  promptBreakdown: Extract<RunEvent, { kind: "prompt_breakdown" }>;
 }
 
 function repackSynthesisBundles(
   input: SynthesisBatchInput,
   sourceBundles: readonly EntityContextBundle[],
-  effectiveInputBudget: number,
+  packingInputBudget: number,
   failedPromptHash: string | undefined,
   opts: LlmCallOptions,
 ): RepackedSynthesisRequest {
-  const source = sourceBundles.map(cloneBundle);
+  const source = sourceBundles.map(compactBundleForSynthesis);
   const optionalEntries = [
     ...source.flatMap((bundle, bundleIndex) => bundle.units
       .filter((unit) => !unit.required)
@@ -725,10 +1035,16 @@ function repackSynthesisBundles(
     const prepared = prepareChatMessages(messages, opts);
     const estimatedInputTokens = estimatePreparedMessages(prepared);
     const promptHash = contentHash(JSON.stringify(prepared));
-    return { bundles: selected, messages, promptHash, estimatedInputTokens };
+    return {
+      bundles: selected,
+      messages,
+      promptHash,
+      estimatedInputTokens,
+      promptBreakdown: synthesisPromptBreakdown(input, selected, selectedOptionalIds, estimatedInputTokens),
+    };
   };
   const initial = renderAt(0);
-  if (initial.estimatedInputTokens <= effectiveInputBudget
+  if (initial.estimatedInputTokens <= packingInputBudget
     && (failedPromptHash === undefined || initial.promptHash !== failedPromptHash)) return initial;
 
   let low = 1;
@@ -737,7 +1053,7 @@ function repackSynthesisBundles(
   while (low <= high) {
     const middle = Math.floor((low + high) / 2);
     const candidate = renderAt(middle);
-    if (candidate.estimatedInputTokens <= effectiveInputBudget
+    if (candidate.estimatedInputTokens <= packingInputBudget
       && (failedPromptHash === undefined || candidate.promptHash !== failedPromptHash)) {
       best = candidate;
       high = middle - 1;
@@ -757,10 +1073,11 @@ function repackSynthesisBundles(
         messages,
         promptHash: contentHash(JSON.stringify(prepared)),
         estimatedInputTokens: estimatePreparedMessages(prepared),
+        promptBreakdown: synthesisPromptBreakdown(input, [compressed], new Set(), estimatePreparedMessages(prepared)),
       };
     };
     let candidate = renderCompressed();
-    const fits = () => candidate.estimatedInputTokens <= effectiveInputBudget
+    const fits = () => candidate.estimatedInputTokens <= packingInputBudget
       && (failedPromptHash === undefined || candidate.promptHash !== failedPromptHash);
 
     while (!fits() && compressed.evidence.links.length > 0) {
@@ -801,7 +1118,7 @@ function repackSynthesisBundles(
     if (fits()) return candidate;
   }
   throw new PromptBudgetExceededError(
-    effectiveInputBudget,
+    packingInputBudget,
     exhausted.estimatedInputTokens,
     exhausted.bundles.map((bundle) => bundle.entityKey),
   );
@@ -821,7 +1138,10 @@ async function executeSynthesisBatch(
     compressionProfile: input.policy.compression ?? "balanced",
     build: (effectiveInputBudget) => {
       const opts = compressionOptions(input, effectiveInputBudget);
-      const repacked = repackSynthesisBundles(input, bundles, effectiveInputBudget, failedPromptHash, opts);
+      const packingInputBudget = maxRetries > 0
+        ? Math.max(1, effectiveInputBudget - synthesisCompactRepairReserveTokens(effectiveInputBudget))
+        : effectiveInputBudget;
+      const repacked = repackSynthesisBundles(input, bundles, packingInputBudget, failedPromptHash, opts);
       const messages = repacked.messages;
       const estimatedInputTokens = repacked.estimatedInputTokens;
       return {
@@ -831,6 +1151,7 @@ async function executeSynthesisBatch(
           bundles: repacked.bundles,
           promptHash: repacked.promptHash,
           estimatedInputTokens: repacked.estimatedInputTokens,
+          promptBreakdown: repacked.promptBreakdown,
         },
         estimatedInputTokens,
         contextUnits: repacked.bundles.length,
@@ -841,19 +1162,21 @@ async function executeSynthesisBatch(
         let messages = request.messages;
         let lastResult: Awaited<ReturnType<typeof runStructuredWithRetry<SynthesisOutput>>> | undefined;
         for (let semanticAttempt = 0; semanticAttempt <= maxRetries; semanticAttempt++) {
+          const lifecycle = createLlmLifecycle("synthesize_wiki_pages");
+          input.onEvent({ ...request.promptBreakdown, requestId: lifecycle.id });
           const result = await runStructuredWithRetry({
             llm: input.llm,
             model: input.model,
             baseMessages: messages,
             opts: request.opts,
-            profile: {
-              kind: "json-zod",
-              schema: SynthesisOutputSchema,
-              repairInstruction: synthesisRepairInstruction,
-            },
+            profile: synthesisFrameProfile(
+              SynthesisOutputSchema,
+              synthesisRepairInstruction,
+              SYNTHESIS_COMPACT_REPAIR_THRESHOLD_TOKENS,
+            ),
             maxRetries: semanticAttempt === 0 ? maxRetries : 0,
             callSite: "ingest.synthesize",
-            lifecycle: createLlmLifecycle("synthesize_wiki_pages"),
+            lifecycle,
             signal: input.signal,
             onEvent: input.onEvent,
             transport: "non-stream",
@@ -865,8 +1188,12 @@ async function executeSynthesisBatch(
           lastResult = result;
           const rawOutput = result.value;
           const normalizedOutput = normalizeCreateActionPaths(
-            rawOutput,
-            request.bundles.length === 1 ? input.createPathsByEntityKey : undefined,
+            canonicalizeSingleExistingTargetAction(
+              canonicalizeSingleBundleCoverage(rawOutput, request.bundles, input.createPathsByEntityKey),
+              request.bundles,
+              input.existingPageHashes,
+            ),
+            input.createPathsByEntityKey,
           );
           const output: SynthesisOutput = {
             ...normalizedOutput,
@@ -874,6 +1201,7 @@ async function executeSynthesisBatch(
           };
           try {
             validateSynthesisCoverage(request.bundles.map((bundle) => bundle.entityKey), output);
+            validateBundleActionTargets(request.bundles, output.actions, input.createPathsByEntityKey);
             validateSynthesisActions({
               existingPaths: existingPathsFor(input),
               existingPageHashes: input.existingPageHashes,
@@ -905,7 +1233,7 @@ async function executeSynthesisBatch(
             input.onEvent({ kind: "rule_fired", ruleId: "parseWithRetry", count: 1 });
             messages = [
               ...request.messages,
-              { role: "user", content: renderSemanticRepairPrompt(cause) },
+              { role: "user", content: renderSemanticRepairPrompt(cause, request.bundles) },
             ];
           }
         }
@@ -949,7 +1277,9 @@ function renderConflictRegenerationMessages(
     }))),
     "Fresh replace authorities:",
     jsonForPrompt(input.replaceAuthorities.map(authorityDto)),
-    "Rules: return one patch for the same entity and target path, with the fresh page hash. Replace requires exact path, normalized heading, expectedSectionOrdinal, expectedSectionHash, and supplied exact section authority. Never create, skip, include another entity, or apply a page write.",
+    "Output protocol:",
+    synthesisFrameInstruction,
+    "Rules: return exactly one <<<PATCH>>> frame for the same entity and target path, with the fresh page hash. Replace requires exact path, normalized heading, expectedSectionOrdinal, expectedSectionHash, and supplied exact section authority. Never create, skip, include another entity, or apply a page write.",
   ].join("\n\n");
   void opts;
   return [{ role: "user", content }];
@@ -975,7 +1305,7 @@ function validateFreshRegenerationContext(input: ConflictRegenerationInput): voi
 }
 
 async function executeSingleRegenerationRequest(input: ConflictRegenerationInput): Promise<{
-  value: SynthesisOutput;
+  value: unknown;
   lifecycle: ReturnType<typeof createLlmLifecycle>;
 }> {
   const opts = {
@@ -993,15 +1323,17 @@ async function executeSingleRegenerationRequest(input: ConflictRegenerationInput
       [input.entityKey],
     );
   }
+  const structuredRetries = 1;
+  const maxForwardedRequests = structuredRetries + 1;
   let forwardedRequests = 0;
   const guardedCreate = async (
     params: OpenAI.Chat.ChatCompletionCreateParamsStreaming | OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
     requestOptions?: LlmChatCompletionCreateOptions,
   ): Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk> | OpenAI.Chat.ChatCompletion> => {
-    if (forwardedRequests > 0) {
+    if (forwardedRequests >= maxForwardedRequests) {
       throw new ConflictRegenerationExhaustedError(
         input.entityKey,
-        new Error("regeneration attempted a second underlying request"),
+        new Error("regeneration exceeded its bounded format repair"),
       );
     }
     forwardedRequests++;
@@ -1023,12 +1355,8 @@ async function executeSingleRegenerationRequest(input: ConflictRegenerationInput
     model: input.model,
     baseMessages: messages,
     opts,
-    profile: {
-      kind: "json-zod",
-      schema: SynthesisOutputSchema,
-      repairInstruction: synthesisRepairInstruction,
-    },
-    maxRetries: 0,
+    profile: synthesisFrameProfile(z.unknown(), synthesisRepairInstruction),
+    maxRetries: structuredRetries,
     callSite: "ingest.synthesize",
     lifecycle: createLlmLifecycle("synthesize_wiki_pages"),
     signal: input.signal,
@@ -1109,8 +1437,9 @@ export async function regenerateConflictedPatch(input: ConflictRegenerationInput
     if (error instanceof ConflictRegenerationExhaustedError) throw error;
     throw conflictError(input, error instanceof StructuredValidationError ? error.lastError.message : (error as Error).message);
   }
-  const output = regeneration.value;
+  let output: SynthesisOutput;
   try {
+    output = SynthesisOutputSchema.parse(regeneration.value);
     validateSynthesisCoverage([input.entityKey], output);
     validateSynthesisActions({
       existingPaths: new Set([input.targetPath]),

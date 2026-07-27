@@ -264,7 +264,7 @@ function mockRuntime(
           const request = params as {
             messages: OpenAI.Chat.ChatCompletionMessageParam[];
             stream?: boolean;
-            max_tokens?: unknown;
+            max_completion_tokens?: unknown;
           };
           const messages = request.messages;
           requests.push(messages);
@@ -274,11 +274,11 @@ function mockRuntime(
             await new Promise((resolve) => setTimeout(resolve, probe === undefined ? 0 : 1));
             const outputValue = respond(messages);
             const output = JSON.stringify(outputValue);
-            const maxTokens = request.max_tokens;
+            const maxTokens = request.max_completion_tokens;
             if (typeof maxTokens === "number") {
               assert.ok(
                 mockOutputBytes(outputValue) <= maxTokens,
-                `mock output ${mockOutputBytes(outputValue)} exceeded request max_tokens ${maxTokens}`,
+                `mock output ${mockOutputBytes(outputValue)} exceeded request max_completion_tokens ${maxTokens}`,
               );
             }
             if (request.stream === false) {
@@ -316,7 +316,7 @@ function mockRuntime(
   };
 }
 
-function evidencePolicy(inputBudgetTokens = 4500): EvidencePolicy {
+function evidencePolicy(inputBudgetTokens = 5000): EvidencePolicy {
   return {
     inputBudgetTokens,
     outputBudgetTokens: 512,
@@ -509,7 +509,7 @@ test("evidence telemetry wrapper preserves native transport diagnostics", async 
 
 function realisticReducerPolicy(): EvidencePolicy {
   return {
-    ...evidencePolicy(12_000),
+    ...evidencePolicy(13_000),
     outputBudgetTokens: 4_000,
   };
 }
@@ -605,6 +605,75 @@ test("configured mapper wire null stays missing and uses existing single-type in
   const result = await prepareSourceEvidence("PostgreSQL source", "demo", evidencePolicy(), runtime);
 
   assert.equal(result[0].entityType, "tool");
+});
+
+test("mapper wire accepts compact noEvidence strings for the current chunk", async () => {
+  const events: RunEvent[] = [];
+  const runtime = mockRuntime(() => ({
+    packets: [],
+    noEvidence: ["No domain evidence in this chunk."],
+  }), events);
+
+  const result = await prepareSourceEvidence("generic source line", "demo", evidencePolicy(), runtime);
+
+  assert.deepEqual(result, []);
+  assert.equal(events.some((event) => event.kind === "structural_error"), false);
+});
+
+test("mapper wire normalizes exact source range tuples without a repair request", async () => {
+  const events: RunEvent[] = [];
+  const runtime = mockRuntime((messages) => {
+    const mapped = validMapperPacket(messages) as unknown as Record<string, unknown>;
+    mapped.exactSourceRanges = [[1, 1]];
+    return { packets: [mapped], noEvidence: [] };
+  }, events);
+
+  const result = await prepareSourceEvidence("PostgreSQL source", "demo", evidencePolicy(), runtime);
+
+  assert.deepEqual(result[0].exactSourceRanges, [{ startLine: 1, endLine: 1 }]);
+  assert.equal(events.some((event) => event.kind === "structural_error"), false);
+});
+
+test("mapper wire normalizes an unambiguous singular exact source range without repair", async () => {
+  const events: RunEvent[] = [];
+  const runtime = mockRuntime((messages) => {
+    const mapped = validMapperPacket(messages) as unknown as Record<string, unknown>;
+    mapped.exactSourceRange = { startLine: 1, endLine: 1 };
+    delete mapped.exactSourceRanges;
+    return { packets: [mapped], noEvidence: [] };
+  }, events);
+
+  const result = await prepareSourceEvidence("PostgreSQL source", "demo", evidencePolicy(), runtime);
+
+  assert.deepEqual(result[0].exactSourceRanges, [{ startLine: 1, endLine: 1 }]);
+  assert.equal(events.some((event) => event.kind === "structural_error"), false);
+});
+
+test("mapper wire rejects ambiguous singular and plural exact source range fields", async () => {
+  const events: RunEvent[] = [];
+  const runtime = mockRuntime((messages) => {
+    const mapped = validMapperPacket(messages) as unknown as Record<string, unknown>;
+    mapped.exactSourceRange = { startLine: 1, endLine: 1 };
+    return { packets: [mapped], noEvidence: [] };
+  }, events);
+
+  await assert.rejects(
+    prepareSourceEvidence("PostgreSQL source", "demo", evidencePolicy(), runtime),
+    EvidenceCoverageError,
+  );
+  assert.equal(events.some((event) => event.kind === "structural_error"), true);
+});
+
+test("mapper treats omitted noEvidence as an empty set when packets cover the chunk", async () => {
+  const events: RunEvent[] = [];
+  const runtime = mockRuntime((messages) => ({
+    packets: [validMapperPacket(messages)],
+  }), events);
+
+  const result = await prepareSourceEvidence("PostgreSQL source", "demo", evidencePolicy(), runtime);
+
+  assert.equal(result.length, 1);
+  assert.equal(events.some((event) => event.kind === "structural_error"), false);
 });
 
 test("chunk planner treats undefined configured types as no configured types", () => {
@@ -792,13 +861,34 @@ test("recursive reducer reserves budget for a captured first request and repair"
   }
 });
 
-test("mapper repair exhaustion performs real requests and emits one safe budget event per request", async () => {
+test("single-chunk mapper canonicalizes a copied chunk ID before strict validation", async () => {
   const events: RunEvent[] = [];
   const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
-  const runtime = mockRuntime(() => ({
-    packets: [{ ...packet("bad", "foreign"), exactSourceRanges: [{ startLine: 1, endLine: 1 }] }],
-    noEvidence: [],
-  }), events, requests);
+  const runtime = mockRuntime((messages) => {
+    const mapped = validMapperPacket(messages);
+    return {
+      packets: [{ ...mapped, chunkId: mapped.chunkId.slice(0, -1) }],
+      noEvidence: [],
+    };
+  }, events, requests);
+
+  const result = await prepareSourceEvidence("one source line", "demo", evidencePolicy(), runtime);
+
+  assert.equal(requests.length, 1);
+  assert.equal(result.length, 1);
+  assert.equal(events.some((event) => event.kind === "structural_error"), false);
+});
+
+test("mapper range repair exhaustion performs real requests and emits one safe budget event per request", async () => {
+  const events: RunEvent[] = [];
+  const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
+  const runtime = mockRuntime((messages) => {
+    const mapped = validMapperPacket(messages);
+    return {
+      packets: [{ ...mapped, exactSourceRanges: [{ startLine: 2, endLine: 2 }] }],
+      noEvidence: [],
+    };
+  }, events, requests);
   await assert.rejects(
     prepareSourceEvidence("one source line", "demo", evidencePolicy(), runtime),
     (error: unknown) => {
@@ -808,6 +898,8 @@ test("mapper repair exhaustion performs real requests and emits one safe budget 
     },
   );
   assert.equal(requests.length, 2, "initial mapper request plus one structured repair");
+  assert.match(allMessageText(requests[1]), /source_range_out_of_bounds/i);
+  assert.match(allMessageText(requests[1]), /chunk-local CHUNK_LINE/i);
   const budgetEvents = events.filter((event) => event.kind === "prompt_budget");
   assert.equal(budgetEvents.length, requests.length);
   assert.deepEqual(
@@ -985,6 +1077,7 @@ test("bootstrap derives bounded candidate, theme, and language evidence from val
   const mapperAttempts = new Map<string, number>();
   const policy = {
     ...realisticReducerPolicy(),
+    inputBudgetTokens: 15_000,
     bootstrapPayloadBudgetTokens: 3500,
   } as EvidencePolicy;
   const runtime = mockRuntime((messages) => {
@@ -1006,7 +1099,7 @@ test("bootstrap derives bounded candidate, theme, and language evidence from val
     return output;
   }, events, requests);
   const sentinel = "FULL_SOURCE_SENTINEL";
-  const source = Array.from({ length: 500 }, (_, index) => `${sentinel}-${index + 1}`).join("\n");
+  const source = Array.from({ length: 420 }, (_, index) => `${sentinel}-${index + 1}`).join("\n");
   const expectedChunks = chunkSourceForEvidence(source, "bootstrap", policy, runtime.opts ?? {}, []);
   const result = await prepareBootstrapEvidence(source, "bootstrap", policy, runtime);
   assert.deepEqual(result.candidates.map((candidate) => candidate.entityKey), ["postgresql"]);
@@ -1126,6 +1219,41 @@ test("synthetic fenced wrappers never consume mapper source line numbers", async
   assert.equal(exactSource.map((range) => range.text).join("\n"), expected);
 });
 
+test("source frontmatter is excluded from mapper evidence without shifting body lines", async () => {
+  const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
+  const source = [
+    "---",
+    "tags:",
+    "  - unix",
+    "wiki_articles:",
+    "  - \"[[wiki_os-unix_stale_entity]]\"",
+    "---",
+    "Body fact about PostgreSQL.",
+  ].join("\n");
+  const runtime = mockRuntime((messages) => {
+    const text = allMessageText(messages);
+    const bodyLine = /CHUNK_LINE (\d+) \| Body fact about PostgreSQL\./u.exec(text);
+    assert.ok(bodyLine);
+    const localLine = Number(bodyLine[1]);
+    return {
+      packets: [{
+        ...validMapperPacket(messages),
+        exactSourceRanges: [{ startLine: localLine, endLine: localLine }],
+      }],
+      noEvidence: [],
+    };
+  }, [], requests);
+
+  const result = await prepareSourceEvidence(source, "demo", evidencePolicy(), runtime);
+  const mapperText = requests.map(allMessageText).join("\n");
+
+  assert.doesNotMatch(mapperText, /wiki_articles|stale_entity/u);
+  assert.match(mapperText, /tags:/u);
+  assert.match(mapperText, /Body fact about PostgreSQL\./u);
+  assert.deepEqual(result[0].exactSourceRanges, [{ startLine: 7, endLine: 7 }]);
+  assert.equal(result[0].exactSource[0].text, "Body fact about PostgreSQL.");
+});
+
 test("all evidence requests use the policy output cap and reject conflicting maxTokens", async () => {
   const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
   const params: Array<Record<string, unknown>> = [];
@@ -1144,7 +1272,7 @@ test("all evidence requests use the policy output cap and reject conflicting max
   runtime.opts = {};
   await prepareSourceEvidence("one source line", "demo", policy, runtime);
   assert.ok(params.length > 0);
-  assert.ok(params.every((request) => request.max_tokens === policy.outputBudgetTokens));
+  assert.ok(params.every((request) => request.max_completion_tokens === policy.outputBudgetTokens));
 });
 
 test("evidence mapper and reducer use direct non-stream requests", async () => {
@@ -1158,7 +1286,7 @@ test("evidence mapper and reducer use direct non-stream requests", async () => {
   await prepareSourceEvidence(
     source,
     "demo",
-    { ...realisticReducerPolicy(), outputBudgetTokens: 7_000 },
+    { ...realisticReducerPolicy(), inputBudgetTokens: 14_500, outputBudgetTokens: 7_000 },
     runtime,
   );
 
@@ -1169,6 +1297,8 @@ test("evidence mapper and reducer use direct non-stream requests", async () => {
     request.messages as OpenAI.Chat.ChatCompletionMessageParam[],
   )));
   assert.ok(params.every((request) => request.stream === false));
+  assert.ok(params.every((request) => request.response_format === undefined));
+  assert.ok(params.every((request) => JSON.stringify(request.messages).includes("<<<JSON>>>")));
 });
 
 test("evidence progress uses ordered human lifecycle actions with visible retry", async () => {
@@ -1192,12 +1322,12 @@ test("evidence progress uses ordered human lifecycle actions with visible retry"
     }
     return { packets: repeatedMapperPackets(messages, 24), noEvidence: [] };
   }, events);
-  const source = Array.from({ length: 500 }, (_, index) => `${hostileSource} ${index + 1}`).join("\n");
+  const source = Array.from({ length: 420 }, (_, index) => `${hostileSource} ${index + 1}`).join("\n");
 
   await prepareSourceEvidence(
     source,
     "demo",
-    { ...realisticReducerPolicy(), outputBudgetTokens: 7_000 },
+    { ...realisticReducerPolicy(), inputBudgetTokens: 14_500, outputBudgetTokens: 7_000 },
     runtime,
   );
 
@@ -1223,9 +1353,8 @@ test("evidence progress uses ordered human lifecycle actions with visible retry"
     event.kind === "structural_error"
     && event.callSite === "ingest.evidence-map"
     && event.errorType === "schema_validate"
-    && event.message === "Structured output validation event");
+    && event.retryAttempt === 0);
   assert.ok(structuralEvent?.kind === "structural_error");
-  assert.equal(structuralEvent.retryAttempt, 0);
   assert.equal(structuralEvent.succeeded, false);
   const diagnostics = JSON.stringify(events);
   for (const hostile of [hostileEntityType, hostilePacketId, hostileSource, "\"packets\""]) {
@@ -1259,7 +1388,7 @@ test("evidence mapper error closes the active human lifecycle", async () => {
   assert.equal(diagnostics.includes("HOSTILE_ERROR_SOURCE"), false);
 });
 
-test("packet IDs are chunk-local, namespaced deterministically, and duplicate locals fail", async () => {
+test("packet IDs preserve valid values and normalize only missing or duplicate locals", async () => {
   const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
   const source = Array.from({ length: 1000 }, (_, index) => `id fixture ${index + 1}`).join("\n");
   const runtime = mockRuntime((messages) => {
@@ -1277,21 +1406,26 @@ test("packet IDs are chunk-local, namespaced deterministically, and duplicate lo
   assert.equal(new Set(ids).size, ids.length);
   assert.ok(ids.every((id) => id.includes(":")));
 
+  const duplicateEvents: RunEvent[] = [];
   const duplicateRuntime = mockRuntime((messages) => {
-    const meta = mapperMeta(messages);
+    const first = validMapperPacket(messages) as unknown as Record<string, unknown>;
+    const second = validMapperPacket(messages) as unknown as Record<string, unknown>;
+    delete second.id;
     return {
       packets: [
-        { ...validMapperPacket(messages), id: "p1" },
-        { ...validMapperPacket(messages), id: "p1" },
+        { ...first, id: "p1", entityKey: "first", facts: ["first fact"] },
+        { ...second, entityKey: "second", facts: ["second fact"] },
       ],
       noEvidence: [],
     };
-  }, [], []);
+  }, duplicateEvents, []);
   duplicateRuntime.configuredEntityTypes = ["tool", "service"];
-  await assert.rejects(
-    prepareSourceEvidence("duplicate local id", "demo", policy, duplicateRuntime),
-    (error: unknown) => error instanceof EvidenceCoverageError && /duplicate packet id/i.test(error.message),
-  );
+  const normalized = await prepareSourceEvidence("duplicate local id", "demo", policy, duplicateRuntime);
+  const normalizedIds = normalized.flatMap((entity) => entity.packetIds);
+  assert.equal(new Set(normalizedIds).size, 2);
+  assert.ok(normalizedIds.some((id) => id.endsWith(":p1")));
+  assert.ok(normalizedIds.some((id) => id.endsWith(":p2")));
+  assert.equal(duplicateEvents.some((event) => event.kind === "structural_error"), false);
 });
 
 test("entity grouping inherits missing types, combines identical types, and rejects conflicts before reduction", async () => {
@@ -1387,7 +1521,12 @@ test("bounded structured repair never replays a huge invalid model response", as
     attempts += 1;
     if (attempts === 1) {
       return {
-        packets: [{ ...validMapperPacket(messages), chunkId: "foreign", sourceAnchor: sentinel, facts: [sentinel.repeat(500)] }],
+        packets: [{
+          ...validMapperPacket(messages),
+          exactSourceRanges: [{ startLine: 2, endLine: 2 }],
+          sourceAnchor: sentinel,
+          facts: [sentinel.repeat(500)],
+        }],
         noEvidence: [],
       };
     }
@@ -1397,8 +1536,61 @@ test("bounded structured repair never replays a huge invalid model response", as
   assert.equal(result.length, 1);
   assert.equal(requests.length, 2);
   assert.equal(allMessageText(requests[1]).includes(sentinel), false);
-  assert.ok(estimatePreparedMessages(requests[1]) < estimatePreparedMessages(requests[0]) + 512);
+  assert.ok(estimatePreparedMessages(requests[1]) < estimatePreparedMessages(requests[0]) + 1_024);
   assert.equal(params.length, requests.length);
+});
+
+test("evidence mapper output-limit retry raises the cap without replaying assistant output", async () => {
+  const requests: Array<Record<string, unknown>> = [];
+  let attempt = 0;
+  const llm = {
+    chat: { completions: { create: async (params: Record<string, unknown>) => {
+      requests.push(params);
+      attempt += 1;
+      const messages = params.messages as OpenAI.Chat.ChatCompletionMessageParam[];
+      const content = attempt === 1
+        ? ""
+        : JSON.stringify({ packets: [validMapperPacket(messages)], noEvidence: [] });
+      const completionTokens = attempt === 1 ? 4096 : 32;
+      return {
+        id: `evidence-output-limit-${attempt}`,
+        object: "chat.completion",
+        created: 0,
+        model: "mock",
+        choices: [{
+          index: 0,
+          finish_reason: "stop",
+          message: { role: "assistant", content, refusal: null },
+          logprobs: null,
+        }],
+        usage: { prompt_tokens: 10, completion_tokens: completionTokens, total_tokens: 10 + completionTokens },
+      };
+    } } },
+  } as unknown as LlmClient;
+  const events: RunEvent[] = [];
+  const runtime: EvidenceRuntime = {
+    llm,
+    model: "mock",
+    signal: new AbortController().signal,
+    onEvent: (event) => events.push(event),
+    configuredEntityTypes: ["tool"],
+    opts: { outputRetryBudgetTokens: 12_288 },
+  };
+
+  const result = await prepareSourceEvidence(
+    "one source line",
+    "demo",
+    { ...evidencePolicy(), outputBudgetTokens: 4096 },
+    runtime,
+  );
+
+  assert.equal(result.length, 1);
+  assert.deepEqual(requests.map((request) => request.max_completion_tokens), [4096, 6144]);
+  const retryMessages = requests[1].messages as Array<{ role: string; content: string }>;
+  assert.equal(retryMessages.some((message) => message.role === "assistant"), false);
+  assert.match(retryMessages.at(-1)?.content ?? "", /output limit/i);
+  assert.equal(events.some((event) =>
+    event.kind === "structural_error" && event.errorType === "output_limit"), true);
 });
 
 test("ingest compression profiles differ once while preserving evidence invariants", async () => {
@@ -1447,7 +1639,7 @@ test("mapper context recovery rechunks into smaller complete child requests", as
     }
     return validReduced(reducerInput(messages));
   }, events, requests);
-  const result = await prepareSourceEvidence(source, "demo", { ...evidencePolicy(5500), outputBudgetTokens: 1000 }, runtime);
+  const result = await prepareSourceEvidence(source, "demo", { ...evidencePolicy(8000), outputBudgetTokens: 1000 }, runtime);
   const mapperRequests = requests.filter((request) => !isReducerRequest(request));
   assert.ok(mapperRequests.length > 1);
   assert.ok(estimatePreparedMessages(mapperRequests[1]) < estimatePreparedMessages(mapperRequests[0]));
@@ -1476,7 +1668,10 @@ test("mapper structural exhaustion splits the failed source chunk into smaller e
     const meta = mapperMeta(messages);
     if (meta.startLine === 1 && meta.endLine === 80) {
       return {
-        packets: [{ ...validMapperPacket(messages), chunkId: "foreign" }],
+        packets: [{
+          ...validMapperPacket(messages),
+          exactSourceRanges: [{ startLine: 1, endLine: 81 }],
+        }],
         noEvidence: [],
       };
     }
@@ -1612,17 +1807,17 @@ test("reducer context recovery strictly shrinks the exact later tail batch", asy
   assert.ok(events.some((event) => event.kind === "prompt_budget" && event.retryReason === "provider_context_error"));
 });
 
-test("input-only evidence policy omits max_tokens and preserves runtime ownership", async () => {
+test("input-only evidence policy omits max_completion_tokens and preserves runtime ownership", async () => {
   const withoutRuntimeMax: Array<Record<string, unknown>> = [];
   const first = mockRuntime((messages) => ({ packets: [validMapperPacket(messages)], noEvidence: [] }), [], [], withoutRuntimeMax);
   await prepareSourceEvidence("input-only", "demo", { ...evidencePolicy(), outputBudgetTokens: undefined }, first);
-  assert.ok(withoutRuntimeMax.every((params) => !("max_tokens" in params)));
+  assert.ok(withoutRuntimeMax.every((params) => !("max_completion_tokens" in params)));
 
   const withRuntimeMax: Array<Record<string, unknown>> = [];
   const second = mockRuntime((messages) => ({ packets: [validMapperPacket(messages)], noEvidence: [] }), [], [], withRuntimeMax);
   second.opts = { maxTokens: 512 };
   await prepareSourceEvidence("input-only", "demo", { ...evidencePolicy(), outputBudgetTokens: undefined }, second);
-  assert.ok(withRuntimeMax.every((params) => params.max_tokens === 512));
+  assert.ok(withRuntimeMax.every((params) => params.max_completion_tokens === 512));
 });
 
 test("pre-verified and verified evidence aggregates use distinct public schemas", async () => {

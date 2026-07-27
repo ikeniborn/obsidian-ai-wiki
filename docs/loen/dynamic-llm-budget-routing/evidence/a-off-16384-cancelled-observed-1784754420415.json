@@ -1,0 +1,27 @@
+{
+  "variant": "a-off-16384-cancelled-observed",
+  "session": "1784754420415",
+  "firstTs": "2026-07-22T21:07:00.415Z",
+  "lastTs": "2026-07-22T21:15:02.081Z",
+  "status": "cancelled",
+  "diagnosticMode": "off",
+  "transport": "desktop-direct",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrwkp8fw-1",
+    "estimatedInputTokens": 7069,
+    "outputBudget": 16384,
+    "responseFormatType": "json_schema",
+    "hash": "fnv1a:749fb1bd"
+  },
+  "firstPromptBudget": {
+    "estimatedInputTokens": 7069,
+    "outputBudget": 16384
+  },
+  "transportRetries": 0,
+  "transportRecovered": 0,
+  "structuralRetries": 0,
+  "structuralSummary": [],
+  "createdPages": 0,
+  "resultTexts": []
+}

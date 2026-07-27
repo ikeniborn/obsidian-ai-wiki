@@ -1,0 +1,17 @@
+{
+  "variant": "baseline-captured-replay",
+  "status": "observed",
+  "synthesisRequests": 20,
+  "structuredValidationRetries": 9,
+  "structuralErrors": 2,
+  "failedSources": 1,
+  "invalidPathsWritten": 0,
+  "unknownEntityKeyAccepted": 0,
+  "pagesCreated": 10,
+  "pagesUpdated": 0,
+  "articleQualityScore": 1,
+  "notes": [
+    "captured from existing replay vault logs"
+  ],
+  "score": 230
+}

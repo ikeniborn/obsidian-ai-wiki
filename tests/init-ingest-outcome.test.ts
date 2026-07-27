@@ -151,9 +151,15 @@ function synthesisOutput(prompt: string, mode: FailureCase, adapter: MemoryAdapt
   });
 }
 
-function llmFor(mode: FailureCase, adapter: MemoryAdapter): LlmClient {
+function llmFor(
+  mode: FailureCase,
+  adapter: MemoryAdapter,
+  calls?: Array<{ model: unknown; maxTokens: unknown }>,
+): LlmClient {
   return {
     chat: { completions: { create: async (params: unknown) => {
+      const request = params as { model?: unknown; max_completion_tokens?: unknown };
+      calls?.push({ model: request.model, maxTokens: request.max_completion_tokens });
       const prompt = promptText(params);
       if (prompt.includes("CHUNK_ID ")) {
         if (mode === "llm") throw new Error("synthetic mapper transport failure");
@@ -282,6 +288,50 @@ test("init records a successful source hash exactly once", async () => {
   assert.equal(patches.length, 1);
   assert.equal(patches[0][SOURCE_PATH], hashSource(SOURCE));
   assert.equal(events.filter((event) => event.kind === "file_done" && event.file === SOURCE_PATH).length, 1);
+});
+
+test("full init applies the explicit ingest runtime to child source calls", async () => {
+  const adapter = new MemoryAdapter();
+  const calls: Array<{ model: unknown; maxTokens: unknown }> = [];
+  const events: RunEvent[] = [];
+  for await (const event of runInitWithSources(
+    "demo",
+    ["src"],
+    false,
+    new VaultTools(adapter, "/vault"),
+    llmFor("success", adapter, calls),
+    "init-model",
+    [domain()],
+    "Vault",
+    new AbortController().signal,
+    {
+      inputBudgetTokens: 8_000,
+      maxTokens: 111,
+      semanticCompression: { profile: "balanced", operation: "ingest" },
+      structuredRetries: 0,
+    },
+    undefined,
+    false,
+    similarityFor("success"),
+    undefined,
+    {
+      model: "ingest-model",
+      opts: {
+        inputBudgetTokens: 20_000,
+        maxTokens: 1_000,
+        semanticCompression: { profile: "balanced", operation: "ingest" },
+        structuredRetries: 0,
+      },
+    },
+  )) events.push(event);
+
+  assert.equal(events.some((event) => event.kind === "error"), false);
+  assert.ok(calls.length >= 2);
+  assert.equal(calls.every((call) => call.model === "ingest-model"), true);
+  assert.equal(calls.every((call) => call.maxTokens === 1_000), true);
+  const budgets = events.filter((event) => event.kind === "prompt_budget");
+  assert.ok(budgets.length >= 2);
+  assert.equal(budgets.every((event) => event.configuredInputBudget === 20_000), true);
 });
 
 test("incremental re-init replaces an existing source hash after successful ingest", async () => {
@@ -459,7 +509,7 @@ test("incremental init records the processed outcome hash when source changes af
 async function captureRetryability(
   operation: "full" | "incremental",
   failure: "deterministic" | "transport",
-): Promise<boolean[]> {
+): Promise<{ seen: boolean[]; events: RunEvent[] }> {
   const adapter = new MemoryAdapter();
   const currentDomain = failure === "deterministic"
     ? { ...domain(), source_paths: ["src", "inventory"] }
@@ -469,6 +519,7 @@ async function captureRetryability(
     adapter.files.set("inventory/wiki_demo_created.md", "Reserved source stem.");
   }
   const seen: boolean[] = [];
+  const events: RunEvent[] = [];
   const onFileError = async (_file: string, _error: Error, canRetry: boolean) => {
     seen.push(canRetry);
     return "retry" as const;
@@ -501,16 +552,22 @@ async function captureRetryability(
       onFileError,
       similarityFor(ingestMode),
     );
-  for await (const _ of generator) { /* drain */ }
-  return seen;
+  for await (const event of generator) events.push(event);
+  return { seen, events };
 }
 
 for (const operation of ["full", "incremental"] as const) {
   test(`${operation} init does not offer retry for retryable:false ingest outcome`, async () => {
-    assert.deepEqual(await captureRetryability(operation, "deterministic"), [false]);
+    const { seen, events } = await captureRetryability(operation, "deterministic");
+    assert.deepEqual(seen, [false]);
+    assert.equal(events.some((event) =>
+      event.kind === "info_text" && event.summary.includes("Waiting for file error decision")), true);
+    assert.equal(events.some((event) =>
+      event.kind === "info_text" && event.summary.includes("File error decision: retry")), true);
   });
 
   test(`${operation} init retains one retry for mapper transport failure`, async () => {
-    assert.deepEqual(await captureRetryability(operation, "transport"), [true, false]);
+    const { seen } = await captureRetryability(operation, "transport");
+    assert.deepEqual(seen, [true, false]);
   });
 }

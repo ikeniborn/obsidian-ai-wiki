@@ -1,0 +1,83 @@
+{
+  "variant": "generalized-quality-reinit",
+  "session": "1785087161419",
+  "firstTs": "2026-07-26T17:32:41.419Z",
+  "lastTs": "2026-07-26T18:32:37.380Z",
+  "status": "error",
+  "diagnosticMode": "off",
+  "transport": "desktop-hybrid",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-ms22t10s-1",
+    "estimatedInputTokens": 6902,
+    "outputBudget": 4096,
+    "hash": "fnv1a:16c727bb"
+  },
+  "firstHttpMs": 27542,
+  "firstFileMs": 42648,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 6902,
+    "outputBudget": 4096
+  },
+  "transportRetries": 3,
+  "transportRecovered": 3,
+  "structuralRetries": 1,
+  "structuredValidationRetries": 0,
+  "semanticValidationRetries": 0,
+  "structuralSummary": [
+    "ingest.synthesize:frame_parse:missing <<<END>>>"
+  ],
+  "llmCalls": 122,
+  "httpResponses": 122,
+  "httpStatusCounts": {
+    "200": 122
+  },
+  "callsBySite": {
+    "ingest.evidence-map": 23,
+    "ingest.synthesize": 97,
+    "init.bootstrap": 1,
+    "init.bootstrap-map": 1
+  },
+  "inputTokens": 471165,
+  "outputTokens": 318813,
+  "latencyMs": {
+    "p50": 16025,
+    "p95": 61116,
+    "max": 322768,
+    "sum": 3290134
+  },
+  "maxEstimatedInputTokens": 57872,
+  "maxActualInputTokens": 16210,
+  "outputBudgets": [
+    4096,
+    16384
+  ],
+  "createdPages": 86,
+  "updatedPages": 9,
+  "resultTexts": [
+    "Источник «Настройка прокси.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «NFS Server.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «AMD Driver.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «Fixing Yandex Browser Error After Hostname Change on Ubuntu 24.md» → домен «os-unix»: создано 4 стр.",
+    "Источник «Keyboard shortcuts custom.md» → домен «os-unix»: создано 2 стр.",
+    "Источник «Fail2Ban.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «Gitlab runner.md» → домен «os-unix»: создано 3 стр.",
+    "Источник «cache.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «cpu.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «grub.md» → домен «os-unix»: создано 4 стр.",
+    "Источник «logrotate.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «network.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «npm.md» → домен «os-unix»: создано 4 стр.",
+    "Источник «rc.local.md» → домен «os-unix»: создано 4, обновлено 1",
+    "Источник «ssh.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «storage.md» → домен «os-unix»: создано 4, обновлено 1",
+    "Источник «swap.md» → домен «os-unix»: создано 2, обновлено 1",
+    "Источник «ufw.md» → домен «os-unix»: создано 3 стр.",
+    "Источник «usb.md» → домен «os-unix»: создано 4, обновлено 1",
+    "Источник «user.formatted.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «user.md» → домен «os-unix»: создано 1, обновлено 4",
+    "Источник «wifi.md» → домен «os-unix»: создано 1, обновлено 1",
+    "Domain \"os-unix\" initialised 22 of 22 source files."
+  ],
+  "finalError": "ingest: patch conflict regeneration failed — Conflict regeneration rejected for nmcli: missing <<<END>>>"
+}

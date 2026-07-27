@@ -1,0 +1,38 @@
+{
+  "variant": "unknown",
+  "session": "1784802036257",
+  "firstTs": "2026-07-23T10:20:36.258Z",
+  "lastTs": "2026-07-23T10:31:18.835Z",
+  "status": "running",
+  "diagnosticMode": "undici-request-adapter",
+  "transport": "desktop-direct",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrxd1t1n-1",
+    "estimatedInputTokens": 7131,
+    "outputBudget": 16384,
+    "responseFormatType": "json_schema",
+    "hash": "fnv1a:d9f129d6"
+  },
+  "firstHttpMs": 39993,
+  "firstFileMs": 108441,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 7131,
+    "outputBudget": 16384
+  },
+  "transportRetries": 1,
+  "transportRecovered": 1,
+  "structuralRetries": 4,
+  "structuralSummary": [
+    "init.bootstrap-map:schema_validate:[\n  {\n    \"code\": \"custom\",\n    \"message\": \"Unknown source chunk 0:1-65:fnv1a:f96e1200\",\n    \"path\": []\n  }\n]",
+    "ingest.synthesize:empty_output:Empty structured output",
+    "ingest.synthesize:response_format_fallback:json_schema -> json_object",
+    "ingest.synthesize:json_parse:No JSON object found"
+  ],
+  "createdPages": 9,
+  "resultTexts": [
+    "Источник «Настройка прокси.md» → домен «os-unix»: создано 9 стр.",
+    ""
+  ],
+  "finalError": "ingest: synthesis failed — Synthesis structured output exhausted for exportfs: No JSON object found"
+}

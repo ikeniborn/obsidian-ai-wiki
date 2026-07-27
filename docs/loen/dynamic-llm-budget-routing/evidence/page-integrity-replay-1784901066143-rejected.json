@@ -1,0 +1,17 @@
+{
+  "session": "1784901066143",
+  "decision": "rejected",
+  "bundleSha256": "a22b8fd34514033bb0d2ea7c9e54d459db3cc78575c872f00b2e121d9f5a315c",
+  "pagesAudited": 6,
+  "yamlParseFailures": 0,
+  "missingResourceFailures": 0,
+  "canonicalTypeFailures": [
+    {
+      "path": "!Wiki/os-unix/configurations/wiki_os-unix_profile.md",
+      "expectedType": "configuration",
+      "actualType": "configurations"
+    }
+  ],
+  "rootCause": "Create frontmatter governance serialized the path subfolder as type instead of reversing the configured entityType-to-wikiSubfolder mapping.",
+  "replacementBundleSha256": "4abb0cc55181c376e2e67da488f44ba86c8c9133cf74b56938d40f809600ccb6"
+}

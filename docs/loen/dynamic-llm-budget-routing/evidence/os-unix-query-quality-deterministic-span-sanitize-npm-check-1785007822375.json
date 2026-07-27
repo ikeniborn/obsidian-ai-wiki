@@ -1,0 +1,126 @@
+{
+  "domain": "os-unix",
+  "vault": "/tmp/ai-wiki-bounded-ingest-replay.SMt4rx/run",
+  "model": "ollama-deepseek-v4-pro-cloud",
+  "transport": {
+    "transport": "desktop-hybrid",
+    "diagnosticMode": "off",
+    "requestedScope": "dns_tcp_tls_establishment",
+    "exactConnectTimeoutAvailable": false,
+    "hostTransportRetained": true,
+    "endpointPath": "/v1/chat/completions"
+  },
+  "querySettings": {
+    "graphDepth": 1,
+    "seedTopK": 15,
+    "seedMinScore": 0.1,
+    "bfsTopK": 5,
+    "seedSimilarityThreshold": 0.3,
+    "bfsFusion": true,
+    "bfsMinScoreRatio": 0.6,
+    "rerankerEnabled": true,
+    "rerankerTopN": 30,
+    "contextTopN": 8,
+    "inputBudgetTokens": 16384,
+    "maxTokens": 32000
+  },
+  "results": [
+    {
+      "id": "npm-nvm-node-clasp",
+      "question": "Как установить nvm, Node.js 20 и clasp, настроить глобальный prefix npm в домашнем каталоге и добавить его в PATH?",
+      "status": "done",
+      "durationMs": 6615,
+      "answer": "## Установка nvm, Node.js 20, clasp и настройка глобального префикса npm\n\nНиже приведена последовательность действий, основанная на страницах [[wiki_os-unix_nvm]], [[wiki_os-unix_node]], [[wiki_os-unix_clasp]] и [[wiki_os-unix_npm]].\n\n### 1. Установка nvm\nВыполните установку **Node Version Manager** и перезагрузите конфигурацию оболочки:\n\n```bash\ncurl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash\nsource ~/.bashrc\n```\n\n### 2. Установка Node.js 20\nС помощью nvm установите и активируйте версию 20:\n\n```bash\nnvm install 20\nnvm use 20\n```\n\n### 3. Настройка глобального префикса npm в домашнем каталоге\nСоздайте каталог для глобальных пакетов, укажите его в качестве префикса и добавьте в `PATH`:\n\n```bash\nmkdir ~/.npm-global\nnpm config set prefix '~/.npm-global'\necho 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc\nsource ~/.bashrc\n```\n\n### 4. Установка clasp\nТеперь глобальная установка пакетов не требует прав root. Установите **clasp**:\n\n```bash\nnpm install -g @google/clasp\n```\n\nПосле выполнения всех шагов утилита `clasp` будет доступна в командной строке, а глобальные npm-пакеты будут размещаться в `~/.npm-global`.",
+      "foundPages": [
+        "wiki_os-unix_npm",
+        "wiki_os-unix_clasp",
+        "wiki_os-unix_nvm",
+        "wiki_os-unix_node",
+        "wiki_os-unix_nfs_common",
+        "wiki_os-unix_nfs",
+        "wiki_os-unix_chromium_based_browser",
+        "wiki_os-unix_obsidian_desktop"
+      ],
+      "foundChunks": [
+        {
+          "articleId": "wiki_os-unix_npm",
+          "heading": "## Основные характеристики",
+          "score": 0.7438572736169462
+        },
+        {
+          "articleId": "wiki_os-unix_clasp",
+          "heading": "## Примеры",
+          "score": 0.6419378791417659
+        },
+        {
+          "articleId": "wiki_os-unix_nvm",
+          "heading": "## Примеры",
+          "score": 0.59291488314472
+        },
+        {
+          "articleId": "wiki_os-unix_node",
+          "heading": "## Применение в контексте ОС/Unix",
+          "score": 0.6059271342460298
+        },
+        {
+          "articleId": "wiki_os-unix_nfs_common",
+          "heading": "## Основные характеристики",
+          "score": 0.5210162176425392
+        },
+        {
+          "articleId": "wiki_os-unix_nfs",
+          "heading": "## Применение в контексте os-unix",
+          "score": 0.5121480248861019
+        },
+        {
+          "articleId": "wiki_os-unix_chromium_based_browser",
+          "heading": "## Применение в контексте os-unix",
+          "score": 0.5085137870305703
+        },
+        {
+          "articleId": "wiki_os-unix_obsidian_desktop",
+          "heading": "## Применение в контексте os-unix",
+          "score": 0.503150850681712
+        }
+      ],
+      "expectedPages": [
+        "wiki_os-unix_nvm",
+        "wiki_os-unix_node_js",
+        "wiki_os-unix_node_package_manager",
+        "wiki_os-unix_clasp"
+      ],
+      "expectedPageHits": [
+        "wiki_os-unix_nvm",
+        "wiki_os-unix_clasp"
+      ],
+      "retrievalHitAtK": true,
+      "expectedPageRecall": 0.5,
+      "requiredFactPasses": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "requiredFactCoverage": 1,
+      "wikiLinks": [
+        "wiki_os-unix_clasp",
+        "wiki_os-unix_node",
+        "wiki_os-unix_npm",
+        "wiki_os-unix_nvm"
+      ],
+      "invalidWikiLinks": [],
+      "wikiLinkPrecision": 1,
+      "llmCalls": 1,
+      "inputTokens": 2566,
+      "outputTokens": 696,
+      "transportRetries": 0,
+      "structuralRetries": 0,
+      "validationRetries": 0,
+      "groundingSanitizations": 0,
+      "networkTransports": [
+        "desktop-host"
+      ]
+    }
+  ]
+}

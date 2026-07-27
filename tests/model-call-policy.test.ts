@@ -17,7 +17,9 @@ test("native global policy keeps maxTokens as output and adds input budget", () 
   const resolved = resolveModelCallPolicy(s, "query");
   assert.equal(resolved.policy.inputBudgetTokens, 20_000);
   assert.equal(resolved.policy.outputBudgetTokens, 3210);
+  assert.equal(resolved.policy.outputRetryBudgetTokens, 3210);
   assert.equal(resolved.opts.maxTokens, 3210);
+  assert.equal(resolved.opts.outputRetryBudgetTokens, 3210);
   assert.equal(resolved.policy.compression, "balanced");
 });
 
@@ -43,9 +45,52 @@ test("native per-operation values and global compression fallback resolve", () =
   const resolved = resolveModelCallPolicy(s, "ingest");
   assert.deepEqual(resolved.policy, {
     inputBudgetTokens: 9000,
+    repairInputBudgetTokens: 65_536,
     outputBudgetTokens: 2000,
+    outputRetryBudgetTokens: 4096,
     compression: "maximum",
   });
+});
+
+test("native global output budget is the dynamic retry ceiling for lower per-operation caps", () => {
+  const s = settings();
+  s.nativeAgent.perOperation = true;
+  s.nativeAgent.maxTokens = 65_536;
+  s.nativeAgent.operations.ingest.maxTokens = 16_384;
+
+  const resolved = resolveModelCallPolicy(s, "ingest");
+
+  assert.equal(resolved.policy.outputBudgetTokens, 16_384);
+  assert.equal(resolved.policy.outputRetryBudgetTokens, 65_536);
+  assert.equal(resolved.opts.maxTokens, 16_384);
+  assert.equal(resolved.opts.outputRetryBudgetTokens, 65_536);
+});
+
+test("legacy numeric thinking settings never enter the OpenAI runtime policy", () => {
+  const s = settings();
+  s.nativeAgent.thinkingBudgetTokens = 4096;
+  s.nativeAgent.perOperation = true;
+  s.nativeAgent.operations.query.thinkingBudgetTokens = 8192;
+
+  const resolved = resolveModelCallPolicy(s, "query");
+
+  assert.equal("thinkingBudgetTokens" in resolved.opts, false);
+});
+
+test("native repair input ceiling applies only to ingest and init policies", () => {
+  const s = settings();
+  s.nativeAgent.repairInputBudgetTokens = 65_536;
+  s.nativeAgent.inputBudgetTokens = 32_768;
+
+  const ingest = resolveModelCallPolicy(s, "ingest");
+  const init = resolveModelCallPolicy(s, "init");
+  const query = resolveModelCallPolicy(s, "query");
+
+  assert.equal(ingest.policy.repairInputBudgetTokens, 65_536);
+  assert.equal(ingest.opts.repairInputBudgetTokens, 65_536);
+  assert.equal(init.policy.repairInputBudgetTokens, 65_536);
+  assert.equal(query.policy.repairInputBudgetTokens, undefined);
+  assert.equal(query.opts.repairInputBudgetTokens, undefined);
 });
 
 test("invalid global compression profiles fall back to balanced", () => {
@@ -107,6 +152,7 @@ test("loaded policy fields normalize without changing persisted output budgets",
   }
 
   delete (s.nativeAgent as { inputBudgetTokens?: unknown }).inputBudgetTokens;
+  (s.nativeAgent as { repairInputBudgetTokens?: unknown }).repairInputBudgetTokens = 0;
   (s.claudeAgent as { inputBudgetTokens: unknown }).inputBudgetTokens = 0.5;
   (s.nativeAgent as { compressionProfile: unknown }).compressionProfile = "bogus";
   (s.claudeAgent as { compressionProfile: unknown }).compressionProfile = "bogus";
@@ -117,6 +163,7 @@ test("loaded policy fields normalize without changing persisted output budgets",
   normalizeModelCallPolicySettings(s);
 
   assert.equal(s.nativeAgent.inputBudgetTokens, 16_384);
+  assert.equal(s.nativeAgent.repairInputBudgetTokens, 65_536);
   assert.equal(s.claudeAgent.inputBudgetTokens, 16_384);
   for (const key of keys) {
     assert.equal(s.nativeAgent.operations[key].inputBudgetTokens, 16_384);

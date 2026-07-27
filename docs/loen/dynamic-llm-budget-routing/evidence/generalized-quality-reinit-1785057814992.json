@@ -1,0 +1,83 @@
+{
+  "variant": "generalized-quality-reinit",
+  "session": "1785057814992",
+  "firstTs": "2026-07-26T09:23:34.992Z",
+  "lastTs": "2026-07-26T10:13:43.985Z",
+  "status": "done",
+  "diagnosticMode": "off",
+  "transport": "desktop-hybrid",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-ms1lc163-1",
+    "estimatedInputTokens": 6902,
+    "outputBudget": 4096,
+    "hash": "fnv1a:16c727bb"
+  },
+  "firstHttpMs": 34383,
+  "firstFileMs": 41631,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 6902,
+    "outputBudget": 4096
+  },
+  "transportRetries": 1,
+  "transportRecovered": 1,
+  "structuralRetries": 2,
+  "structuredValidationRetries": 0,
+  "semanticValidationRetries": 0,
+  "structuralSummary": [
+    "ingest.synthesize:frame_parse:Unexpected token '<', \"<<<REASONI\"... is not valid JSON",
+    "ingest.synthesize:schema_validate:[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"reasoning\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"actions\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"skips\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"response\"\n    ],\n    \"path\": [],\n    \"message\": \"Unrecognized key(s) in object: 'response'\"\n  }\n]"
+  ],
+  "llmCalls": 113,
+  "httpResponses": 113,
+  "httpStatusCounts": {
+    "200": 113
+  },
+  "callsBySite": {
+    "ingest.evidence-map": 22,
+    "ingest.synthesize": 89,
+    "init.bootstrap": 1,
+    "init.bootstrap-map": 1
+  },
+  "inputTokens": 440693,
+  "outputTokens": 338107,
+  "latencyMs": {
+    "p50": 17407,
+    "p95": 64534,
+    "max": 332044,
+    "sum": 2911610
+  },
+  "maxEstimatedInputTokens": 56676,
+  "maxActualInputTokens": 15905,
+  "outputBudgets": [
+    4096,
+    16384
+  ],
+  "createdPages": 83,
+  "updatedPages": 4,
+  "resultTexts": [
+    "Источник «Настройка прокси.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «NFS Server.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «AMD Driver.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «Fixing Yandex Browser Error After Hostname Change on Ubuntu 24.md» → домен «os-unix»: создано 4 стр.",
+    "Источник «Keyboard shortcuts custom.md» → домен «os-unix»: создано 1 стр.",
+    "Источник «Fail2Ban.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «Gitlab runner.md» → домен «os-unix»: создано 4 стр.",
+    "Источник «cache.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «cpu.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «grub.md» → домен «os-unix»: создано 3 стр.",
+    "Источник «logrotate.md» → домен «os-unix»: создано 4 стр.",
+    "Источник «network.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «npm.md» → домен «os-unix»: создано 4 стр.",
+    "Источник «rc.local.md» → домен «os-unix»: создано 2 стр.",
+    "Источник «ssh.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «storage.md» → домен «os-unix»: создано 4, обновлено 1",
+    "Источник «swap.md» → домен «os-unix»: создано 2 стр.",
+    "Источник «ufw.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «usb.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «user.formatted.md» → домен «os-unix»: создано 1, обновлено 1",
+    "Источник «user.md» → домен «os-unix»: создано 4, обновлено 1",
+    "Источник «wifi.md» → домен «os-unix»: обновлено 1 стр.",
+    "Domain \"os-unix\" initialised 22 of 22 source files."
+  ]
+}

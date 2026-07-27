@@ -89,6 +89,40 @@ function chunkUnitId(chunk: SelectedChunk): string {
   ].join(":");
 }
 
+export function selectQueryContextChunks(
+  rankedChunks: readonly SelectedChunk[],
+  contextLimit: number,
+): SelectedChunk[] {
+  if (!Number.isSafeInteger(contextLimit) || contextLimit <= 0) return [];
+  const limit = Math.min(contextLimit, rankedChunks.length);
+  const siblingSlots = Math.floor(limit / 3);
+  const anchorLimit = limit - siblingSlots;
+  const selectedIndexes = new Set<number>();
+  const anchorArticleIds = new Set<string>();
+
+  for (let index = 0; index < rankedChunks.length && anchorArticleIds.size < anchorLimit; index += 1) {
+    const articleId = rankedChunks[index].articleId;
+    if (anchorArticleIds.has(articleId)) continue;
+    anchorArticleIds.add(articleId);
+    selectedIndexes.add(index);
+  }
+
+  const orderedIndexes = [...selectedIndexes].sort((left, right) => left - right);
+  for (let index = 0; index < rankedChunks.length; index += 1) {
+    if (selectedIndexes.size >= limit) break;
+    if (selectedIndexes.has(index) || !anchorArticleIds.has(rankedChunks[index].articleId)) continue;
+    selectedIndexes.add(index);
+    orderedIndexes.push(index);
+  }
+  for (let index = 0; index < rankedChunks.length && selectedIndexes.size < limit; index += 1) {
+    if (selectedIndexes.has(index)) continue;
+    selectedIndexes.add(index);
+    orderedIndexes.push(index);
+  }
+
+  return orderedIndexes.map((index) => rankedChunks[index]);
+}
+
 export function packQueryChunks(args: PackQueryChunksArgs): PackedQueryChunks {
   const questionId = "query:current-question";
   const chunksByUnitId = new Map<string, SelectedChunk>();

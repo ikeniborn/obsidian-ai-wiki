@@ -1,0 +1,65 @@
+{
+  "variant": "unknown",
+  "session": "1785007822375",
+  "firstTs": "2026-07-25T19:30:22.376Z",
+  "lastTs": "2026-07-25T19:42:07.918Z",
+  "status": "running",
+  "diagnosticMode": "off",
+  "transport": "desktop-hybrid",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-ms0rkimk-1",
+    "estimatedInputTokens": 6848,
+    "outputBudget": 4096,
+    "hash": "fnv1a:2bf51c5e"
+  },
+  "firstHttpMs": 34097,
+  "firstFileMs": 44809,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 6848,
+    "outputBudget": 4096
+  },
+  "transportRetries": 0,
+  "transportRecovered": 0,
+  "structuralRetries": 2,
+  "structuredValidationRetries": 0,
+  "semanticValidationRetries": 0,
+  "structuralSummary": [
+    "ingest.synthesize:frame_parse:Unexpected token '<', \"<<<REASONI\"... is not valid JSON",
+    "ingest.synthesize:frame_parse:Unexpected token '<', \"<<<REASONI\"... is not valid JSON"
+  ],
+  "llmCalls": 30,
+  "httpResponses": 30,
+  "httpStatusCounts": {
+    "200": 30
+  },
+  "callsBySite": {
+    "ingest.evidence-map": 5,
+    "ingest.synthesize": 23,
+    "init.bootstrap": 1,
+    "init.bootstrap-map": 1
+  },
+  "inputTokens": 105114,
+  "outputTokens": 72376,
+  "latencyMs": {
+    "p50": 17981,
+    "p95": 56071,
+    "max": 72562,
+    "sum": 682640
+  },
+  "maxEstimatedInputTokens": 21164,
+  "maxActualInputTokens": 5265,
+  "outputBudgets": [
+    4096,
+    16384
+  ],
+  "createdPages": 21,
+  "updatedPages": 0,
+  "resultTexts": [
+    "Источник «Настройка прокси.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «NFS Server.md» → домен «os-unix»: создано 6 стр.",
+    "Источник «AMD Driver.md» → домен «os-unix»: создано 6 стр.",
+    "Источник «Fixing Yandex Browser Error After Hostname Change on Ubuntu 24.md» → домен «os-unix»: создано 3 стр.",
+    "Источник «Keyboard shortcuts custom.md» → домен «os-unix»: создано 1 стр."
+  ]
+}

@@ -5,6 +5,7 @@ import { register } from "node:module";
 import test from "node:test";
 import type OpenAI from "openai";
 import { APIError } from "openai";
+import { parse as yamlParse } from "yaml";
 import type { DomainEntry } from "../src/domain";
 import { createNativeLlmClient } from "../src/native-llm-executor";
 import type { LlmClient, NativeChatCompletionCreate, RunEvent } from "../src/types";
@@ -1306,6 +1307,7 @@ test("native force re-init retries synthesis without replaying real effects", as
   const adapter = seededAdapter();
   const calls = { bootstrap: 0, evidence: 0, synthesis: 0 };
   const events: RunEvent[] = [];
+  const expectedIngestDate = new Date().toISOString().slice(0, 10);
 
   for await (const event of runInit(
     ["demo", "--force"],
@@ -1343,8 +1345,20 @@ test("native force re-init retries synthesis without replaying real effects", as
   assert.equal(adapter.writes.filter(({ path, data }) =>
     path === "!Wiki/demo/index.jsonl" && data !== "").length, 1);
   assert.equal(adapter.files.has("!Wiki/demo/concept/old.md"), false);
+  const created = adapter.files.get("!Wiki/demo/concept/wiki_demo_created.md");
+  assert.ok(created);
+  const frontmatter = /^---\n([\s\S]*?)\n---\n/.exec(created);
+  assert.ok(frontmatter);
+  assert.deepEqual(yamlParse(frontmatter[1]), {
+    type: "concept",
+    description: "Created concept.",
+    timestamp: expectedIngestDate,
+    resource: ["src/a.md"],
+    status: "stub",
+    tags: ["concept"],
+  });
   assert.equal(
-    adapter.files.get("!Wiki/demo/concept/wiki_demo_created.md"),
+    created.slice(frontmatter[0].length),
     "# Created\n\n## Facts\nAlpha.\n\n## Sources\n- [[a]]",
   );
   assert.equal(events.filter((event) =>

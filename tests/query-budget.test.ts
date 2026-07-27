@@ -11,10 +11,13 @@ register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 const {
   packChatHistory,
   packQueryChunks,
+  selectQueryContextChunks,
 } = await import("../src/phases/query-budget");
 const { PromptBudgetExceededError } = await import("../src/prompt-budget");
+const { NativeResponseStartTimeoutError } = await import("../src/native-request-retry");
 const { answerFromContext } = await import("../src/phases/query-answer");
 const { runLintChat } = await import("../src/phases/chat");
+const { buildChatParams } = await import("../src/phases/llm-utils");
 const { wrapMobileNoStream } = await import("../src/mobile-llm-wrap");
 const { render } = await import("../src/phases/template");
 const { default: chatTemplate } = await import("../prompts/chat.md");
@@ -115,6 +118,28 @@ function transportFailureThenCompletion(calls: CapturedCall[]): LlmClient {
   } as unknown as LlmClient;
 }
 
+function unsupportedStreamOptionsThenStream(calls: CapturedCall[]): LlmClient {
+  return {
+    chat: {
+      completions: {
+        create: async (params: unknown, callOpts?: { signal?: AbortSignal }) => {
+          calls.push({
+            params: params as Record<string, unknown>,
+            signal: callOpts?.signal,
+          });
+          if (calls.length === 1) {
+            throw Object.assign(
+              new Error("400 Unsupported parameter: stream_options."),
+              { status: 400 },
+            );
+          }
+          return successfulStream("stream answer");
+        },
+      },
+    },
+  } as unknown as LlmClient;
+}
+
 function repeatedFailure(error: Error, calls: CapturedCall[]): LlmClient {
   return {
     chat: {
@@ -149,6 +174,18 @@ function deferred(): { promise: Promise<void>; resolve(): void } {
   });
   return { promise, resolve };
 }
+
+test("stream usage metadata is opt-in for OpenAI-compatible providers", () => {
+  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    { role: "user", content: "compatibility probe" },
+  ];
+
+  const defaults = buildChatParams("mock", messages, {}, true);
+  const optedIn = buildChatParams("mock", messages, { includeStreamUsage: true }, true);
+
+  assert.equal("stream_options" in defaults, false);
+  assert.deepEqual(optedIn.stream_options, { include_usage: true });
+});
 
 async function nextWithOverallTimeout<T>(
   generator: AsyncGenerator<RunEvent, T>,
@@ -312,6 +349,37 @@ test("packQueryChunks treats incoming post-reranker order as authoritative", () 
   assert.equal(packed.selected[0].score, 9.5, "raw score remains telemetry data");
   assert.match(JSON.stringify(packed.messages), /RERANKER_WINNER_START[\s\S]*RERANKER_WINNER_END/);
   assert.doesNotMatch(JSON.stringify(packed.messages), /RAW_SCORE_LEADER_START|RAW_SCORE_LEADER_END/);
+});
+
+test("selectQueryContextChunks reserves post-reranker slots for anchor siblings", () => {
+  const anchors = Array.from({ length: 8 }, (_, index) => selectedChunk(index, 100 - index));
+  const siblingA = {
+    ...selectedChunk(8, 92),
+    articleId: anchors[0].articleId,
+    path: anchors[0].path,
+    heading: "## Examples",
+  };
+  const siblingB = {
+    ...selectedChunk(9, 91),
+    articleId: anchors[1].articleId,
+    path: anchors[1].path,
+    heading: "## Configuration",
+  };
+  const ranked = [...anchors, siblingA, siblingB];
+
+  assert.deepEqual(
+    selectQueryContextChunks(ranked, 8),
+    [...anchors.slice(0, 6), siblingA, siblingB],
+  );
+});
+
+test("selectQueryContextChunks falls back to global rank when anchors have no siblings", () => {
+  const ranked = Array.from({ length: 10 }, (_, index) => selectedChunk(index, 100 - index));
+
+  assert.deepEqual(selectQueryContextChunks(ranked, 8), ranked.slice(0, 8));
+  assert.deepEqual(selectQueryContextChunks(ranked, 1), ranked.slice(0, 1));
+  assert.deepEqual(selectQueryContextChunks(ranked, 0), []);
+  assert.deepEqual(selectQueryContextChunks(ranked, Number.NaN), []);
 });
 
 test("packChatHistory keeps the newest user turn and drops old turns as whole pairs", () => {
@@ -498,6 +566,38 @@ test("answerFromContext does not resend a required-only prompt after a context e
   assert.equal(requests.length, 1, "required-only Query request must not be resent identically");
 });
 
+test("answerFromContext does not resend a required-only prompt after an empty SSE timeout", async () => {
+  const requests: Record<string, unknown>[] = [];
+  const timeout = new NativeResponseStartTimeoutError(150_000);
+  const llm = {
+    chat: {
+      completions: {
+        create: async (params: unknown) => {
+          requests.push(params as Record<string, unknown>);
+          throw timeout;
+        },
+      },
+    },
+  } as unknown as LlmClient;
+
+  await assert.rejects(async () => drainGenerator(answerFromContext({
+    llm,
+    model: "mock",
+    opts: {
+      inputBudgetTokens: 10_000,
+      nativeRequestRetries: 3,
+      semanticCompression: { profile: "balanced", operation: "query" },
+    },
+    signal: new AbortController().signal,
+    systemPrompt: "Required-only query contract.",
+    question: "Required-only current question",
+    chunks: [],
+    wikiLinkValidationRetries: 0,
+  })), timeout);
+
+  assert.equal(requests.length, 1, "required-only Query request must not be resent identically");
+});
+
 test("answerFromContext rebuilds non-stream fallback params with one composed AbortSignal", async () => {
   const calls: CapturedCall[] = [];
   const signal = new AbortController().signal;
@@ -515,7 +615,7 @@ test("answerFromContext rebuilds non-stream fallback params with one composed Ab
 
   assert.equal(result.answer, "fallback answer");
   assert.equal(calls[0].params.stream, true);
-  assert.deepEqual(calls[0].params.stream_options, { include_usage: true });
+  assert.equal("stream_options" in calls[0].params, false);
   assert.notEqual(calls[0].signal, signal);
   assertCleanFallback(calls, signal);
   const budgets = events.filter((event) => event.kind === "prompt_budget");
@@ -566,7 +666,7 @@ test("runLintChat rebuilds non-stream fallback params with one composed AbortSig
   ));
 
   assert.equal(calls[0].params.stream, true);
-  assert.deepEqual(calls[0].params.stream_options, { include_usage: true });
+  assert.equal("stream_options" in calls[0].params, false);
   assert.notEqual(calls[0].signal, signal);
   assertCleanFallback(calls, signal);
   const budgets = events.filter((event) => event.kind === "prompt_budget");
@@ -752,6 +852,294 @@ test("Query repair completes its request before primary lifecycle applies final 
       "preparing", "sent", "waiting", "producing", "validating", "applying", "completed",
     ]);
   }
+});
+
+test("answerFromContext does not repair WikiLink-shaped TOML syntax", async () => {
+  const answer = [
+    "Configure [[wiki_d_0]] with this table:",
+    "",
+    "```toml",
+    "[[runners]]",
+    "name = \"shell\"",
+    "```",
+  ].join("\n");
+  let calls = 0;
+  const llm = {
+    chat: { completions: { create: async () => {
+      calls += 1;
+      return successfulStream(answer);
+    } } },
+  } as unknown as LlmClient;
+
+  const { events, result } = await drainGenerator(answerFromContext({
+    llm,
+    model: "mock",
+    opts: { inputBudgetTokens: 10_000 },
+    signal: new AbortController().signal,
+    systemPrompt: "Code-aware link validation query.",
+    question: "question",
+    chunks: [{
+      ...selectedChunk(0, 1),
+      body: "[[runners]]\nname = \"shell\"",
+    }],
+    wikiLinkValidationRetries: 1,
+  }));
+
+  assert.equal(calls, 1);
+  assert.equal(result.answer, answer);
+  assert.equal(events.some((event) => event.kind === "tool_use" && event.name === "FixingLinks"), false);
+  assert.equal(events.some((event) => event.kind === "assistant_replace"), false);
+});
+
+test("answerFromContext accepts exact technical evidence without another model call", async () => {
+  const answer = [
+    "Use [[wiki_d_0]]:",
+    "```ini",
+    "DirectoryMode=0777",
+    "```",
+  ].join("\n");
+  let calls = 0;
+  const llm = {
+    chat: { completions: { create: async () => {
+      calls += 1;
+      return successfulStream(answer);
+    } } },
+  } as unknown as LlmClient;
+
+  const { events, result } = await drainGenerator(answerFromContext({
+    llm,
+    model: "mock",
+    opts: { inputBudgetTokens: 10_000 },
+    signal: new AbortController().signal,
+    systemPrompt: "Exact technical grounding query.",
+    question: "Which mode is configured?",
+    chunks: [{ ...selectedChunk(0, 1), body: "DirectoryMode=0777" }],
+    wikiLinkValidationRetries: 1,
+  }));
+
+  assert.equal(calls, 1);
+  assert.equal(result.answer, answer);
+  assert.equal(events.some((event) =>
+    event.kind === "tool_use" && event.name === "ValidateGrounding"), true);
+  assert.equal(events.some((event) =>
+    event.kind === "tool_use" && event.name === "RepairGrounding"), false);
+  assert.equal(events.some((event) => event.kind === "assistant_replace"), false);
+});
+
+test("answerFromContext sanitizes unsupported technical lines without another model call", async () => {
+  let calls = 0;
+  const requests: Record<string, unknown>[] = [];
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      calls += 1;
+      requests.push(params as Record<string, unknown>);
+      if ((params as { stream?: boolean }).stream === true) {
+        return successfulStream([
+          "Use [[wiki_d_0]]:",
+          "```ini",
+          "DirectoryMode=0777",
+          "DirectoryMode=0755",
+          "```",
+        ].join("\n"));
+      }
+      return completion([
+        "<<<ANSWER>>>",
+        "Use [[wiki_d_0]]:",
+        "```ini",
+        "DirectoryMode=0777",
+        "```",
+        "<<<CITATIONS>>>",
+        "- wiki_d_0",
+        "<<<END>>>",
+      ].join("\n"));
+    } } },
+  } as unknown as LlmClient;
+
+  const { events, result } = await drainGenerator(answerFromContext({
+    llm,
+    model: "mock",
+    opts: { inputBudgetTokens: 10_000, repairInputBudgetTokens: 20_000 },
+    signal: new AbortController().signal,
+    systemPrompt: "Repair exact technical grounding query.",
+    question: "Which mode is configured?",
+    chunks: [{ ...selectedChunk(0, 1), body: "DirectoryMode=0777" }],
+    wikiLinkValidationRetries: 1,
+  }));
+
+  assert.equal(calls, 1);
+  assert.match(result.answer, /DirectoryMode=0777/);
+  assert.doesNotMatch(result.answer, /0755/);
+  assert.equal(requests[0].stream, true);
+  assert.equal(events.some((event) =>
+    event.kind === "tool_use" && event.name === "SanitizeGrounding"), true);
+  assert.equal(events.some((event) =>
+    event.kind === "tool_use" && event.name === "RepairGrounding"), false);
+  assert.equal(events.some((event) =>
+    event.kind === "assistant_replace" && event.text.includes("DirectoryMode=0777")), true);
+});
+
+test("answerFromContext repeats local sanitation for technical units exposed by removal", async () => {
+  let calls = 0;
+  const llm = {
+    chat: { completions: { create: async () => {
+      calls += 1;
+      return successfulStream([
+        "Use [[wiki_d_0]] with `DirectoryMode=0777`.",
+        "Allow 2049/tcp and 2049/udp traffic.",
+      ].join("\n"));
+    } } },
+  } as unknown as LlmClient;
+
+  const { events, result } = await drainGenerator(answerFromContext({
+    llm,
+    model: "mock",
+    opts: { inputBudgetTokens: 10_000 },
+    signal: new AbortController().signal,
+    systemPrompt: "Iterative technical grounding sanitation query.",
+    question: "Which exact settings are documented?",
+    chunks: [{ ...selectedChunk(0, 1), body: "DirectoryMode=0777" }],
+    wikiLinkValidationRetries: 1,
+  }));
+
+  assert.equal(calls, 1);
+  assert.match(result.answer, /DirectoryMode=0777/);
+  assert.doesNotMatch(result.answer, /2049|\/tcp|\/udp/);
+  assert.equal(events.some((event) =>
+    event.kind === "tool_use" && event.name === "RepairGrounding"), false);
+});
+
+test("answerFromContext fails closed when technical repair remains unsupported", async () => {
+  let calls = 0;
+  const requests: Record<string, unknown>[] = [];
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      calls += 1;
+      requests.push(params as Record<string, unknown>);
+      if ((params as { stream?: boolean }).stream === true) {
+        return successfulStream("```ini\nDirectoryMode=0755\n```");
+      }
+      return completion([
+        "<<<ANSWER>>>",
+        "```ini",
+        "DirectoryMode=0700",
+        "```",
+        "<<<CITATIONS>>>",
+        "- wiki_d_0",
+        "<<<END>>>",
+      ].join("\n"));
+    } } },
+  } as unknown as LlmClient;
+
+  const { events, result } = await drainGenerator(answerFromContext({
+    llm,
+    model: "mock",
+    opts: { inputBudgetTokens: 10_000, outputLanguage: "ru" },
+    signal: new AbortController().signal,
+    systemPrompt: "Fail-closed technical grounding query.",
+    question: "Какой режим настроен?",
+    chunks: [{ ...selectedChunk(0, 1), body: "DirectoryMode=0777" }],
+    wikiLinkValidationRetries: 1,
+  }));
+
+  assert.equal(calls, 2);
+  assert.doesNotMatch(requestText(requests[1]), /DirectoryMode=0755/);
+  assert.match(requestText(requests[1]), /DirectoryMode=0777/);
+  assert.match(result.answer, /недостаточно точных технических данных/i);
+  assert.doesNotMatch(result.answer, /0755|0700/);
+  assert.equal(events.some((event) =>
+    event.kind === "assistant_replace" && /недостаточно/i.test(event.text)), true);
+});
+
+test("answerFromContext rejects a WikiLink repair that changes grounded technical values", async () => {
+  let calls = 0;
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      calls += 1;
+      if ((params as { stream?: boolean }).stream === true) {
+        return successfulStream([
+          "Use [[wiki_missing]]:",
+          "```ini",
+          "DirectoryMode=0777",
+          "```",
+        ].join("\n"));
+      }
+      return completion([
+        "<<<ANSWER>>>",
+        "Use [[wiki_d_0]]:",
+        "```ini",
+        "DirectoryMode=0755",
+        "```",
+        "<<<CITATIONS>>>",
+        "- wiki_d_0",
+        "<<<END>>>",
+      ].join("\n"));
+    } } },
+  } as unknown as LlmClient;
+
+  const { result } = await drainGenerator(answerFromContext({
+    llm,
+    model: "mock",
+    opts: { inputBudgetTokens: 10_000 },
+    signal: new AbortController().signal,
+    systemPrompt: "Grounded WikiLink repair query.",
+    question: "question",
+    chunks: [{ ...selectedChunk(0, 1), body: "DirectoryMode=0777" }],
+    wikiLinkValidationRetries: 1,
+  }));
+
+  assert.equal(calls, 2);
+  assert.match(result.answer, /DirectoryMode=0777/);
+  assert.doesNotMatch(result.answer, /0755/);
+  assert.match(result.answer, /wiki_missing/);
+});
+
+test("answerFromContext retries streaming without unsupported stream_options", async () => {
+  const calls: CapturedCall[] = [];
+
+  const { result, events } = await drainGenerator(answerFromContext({
+    llm: unsupportedStreamOptionsThenStream(calls),
+    model: "mock",
+    opts: { inputBudgetTokens: 10_000, includeStreamUsage: true },
+    signal: new AbortController().signal,
+    systemPrompt: "Query stream options compatibility.",
+    question: "Current compatibility question",
+    chunks: [],
+    wikiLinkValidationRetries: 0,
+  }));
+
+  assert.equal(result.answer, "stream answer");
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[0].params.stream_options, { include_usage: true });
+  assert.equal(calls[1].params.stream, true);
+  assert.equal("stream_options" in calls[1].params, false);
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  assert.deepEqual(lifecycle.map((event) => event.phase), [
+    "preparing", "sent", "waiting", "retrying",
+    "preparing", "sent", "waiting", "producing", "validating", "applying", "completed",
+  ]);
+});
+
+test("runLintChat retries streaming without unsupported stream_options", async () => {
+  const calls: CapturedCall[] = [];
+
+  const { events } = await drainGenerator(runLintChat(
+    unsupportedStreamOptionsThenStream(calls),
+    "mock",
+    undefined,
+    new AbortController().signal,
+    { inputBudgetTokens: 10_000, includeStreamUsage: true },
+    "",
+    [{ role: "user", content: "Current chat compatibility instruction" }],
+    "Chat stream options compatibility",
+  ));
+
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[0].params.stream_options, { include_usage: true });
+  assert.equal(calls[1].params.stream, true);
+  assert.equal("stream_options" in calls[1].params, false);
+  const result = events.find((event) => event.kind === "result");
+  assert.ok(result && result.kind === "result");
+  assert.equal(result.text, "stream answer");
 });
 
 test("Query seed and link-repair calls use non-stream human lifecycle actions", () => {
@@ -1317,6 +1705,69 @@ test("answerFromContext repacks complete chunks below provider boundaries and ke
     budgetEvents.every((event) => event.estimatedInputTokens <= event.effectiveInputBudget),
     true,
   );
+});
+
+test("answerFromContext compacts optional context after an accepted empty SSE timeout", async () => {
+  const requests: Record<string, unknown>[] = [];
+  const freshConnections: Array<boolean | undefined> = [];
+  let attempt = 0;
+  const llm = {
+    chat: {
+      completions: {
+        create: async (
+          params: unknown,
+          callOpts?: { retry?: { nativeFreshConnection?: boolean } },
+        ) => {
+          requests.push(params as Record<string, unknown>);
+          freshConnections.push(callOpts?.retry?.nativeFreshConnection);
+          attempt += 1;
+          if (attempt === 1) throw new NativeResponseStartTimeoutError(150_000);
+          return successfulStream("compact answer");
+        },
+      },
+    },
+  } as unknown as LlmClient;
+  const question = "Keep this question during empty SSE recovery";
+
+  const { events, result } = await drainGenerator(answerFromContext({
+    llm,
+    model: "mock",
+    opts: {
+      inputBudgetTokens: 5_000,
+      nativeRequestRetries: 3,
+      semanticCompression: { profile: "balanced", operation: "query" },
+    },
+    signal: new AbortController().signal,
+    systemPrompt: "Answer from complete chunks.",
+    question,
+    chunks: Array.from({ length: 8 }, (_, index) => repackChunk(index)),
+    wikiLinkValidationRetries: 0,
+  }));
+
+  assert.equal(result.answer, "compact answer");
+  assert.equal(requests.length, 2);
+  const texts = requests.map(requestText);
+  assert.equal(texts.every((text) => text.includes(question)), true);
+  const counts = texts.map(includedRepackChunks);
+  assert.ok(counts[0] > counts[1], `chunk counts: ${counts.join(", ")}`);
+  for (const text of texts) {
+    for (let index = 0; index < 8; index++) {
+      assert.equal(
+        text.includes(`REPACK_CHUNK_${index}_START`),
+        text.includes(`REPACK_CHUNK_${index}_END`),
+        `chunk ${index} must stay complete`,
+      );
+    }
+  }
+  assert.deepEqual(freshConnections, [false, true]);
+  const budgetEvents = events.filter((event) => event.kind === "prompt_budget");
+  assert.deepEqual(
+    budgetEvents.map((event) => event.retryReason),
+    ["response_start_timeout", undefined],
+  );
+  const fingerprints = events.filter((event) => event.kind === "llm_request_fingerprint");
+  assert.equal(fingerprints.length, 2);
+  assert.notEqual(fingerprints[0].preparedMessagesHash, fingerprints[1].preparedMessagesHash);
 });
 
 test("answerFromContext repacks a context error raised while consuming the stream", async () => {

@@ -86,7 +86,6 @@ test("buildRerankerCandidates bounds candidates before adapter call", () => {
 
   assert.deepEqual(candidates.map((item) => item.id), ["a::0", "b::0"]);
   assert.match(candidates[0].text, /Title: a/);
-  assert.match(candidates[0].text, /Path: !Wiki\/demo\/a\.md/);
   assert.match(candidates[0].text, /Heading: ## Section/);
   assert.match(candidates[0].text, /Text: Body for a/);
 });
@@ -120,9 +119,26 @@ test("buildRerankerCandidates includes query-aware excerpt when token matches bo
   });
 
   assert.match(candidate.text, /Title: Orders Flow/);
-  assert.match(candidate.text, /Path: !Wiki\/demo\/Orders Flow\.md/);
   assert.match(candidate.text, /Heading: ## Export/);
   assert.match(candidate.text, /Text: .*export endpoint sends orders/);
+});
+
+test("buildRerankerCandidates reserves article content when canonical metadata exceeds the cap", () => {
+  const source = chunk("wiki_very_long_domain_specific_but_not_semantic_article_identifier", 1);
+  source.path = `!Wiki/a-domain-with-a-long-name/applications/${source.articleId}.md`;
+  source.heading = "## A long generated section heading that would consume the remaining budget";
+  source.body = "Generic prefix. semantic-needle identifies the relevant operation. Generic suffix.";
+
+  const [candidate] = buildRerankerCandidates("Find semantic-needle", [source], {
+    enabled: true,
+    model: "custom-reranker",
+    rerankerTopN: 1,
+    contextTopN: 1,
+    timeoutMs: 800,
+  });
+
+  assert.ok(candidate.text.length <= MAX_RERANKER_CANDIDATE_TEXT_CHARS);
+  assert.match(candidate.text, /semantic-needle identifies the relevant operation/);
 });
 
 test("applyRerankerScores prevents a distant high-score candidate from taking top rank", () => {
@@ -434,6 +450,34 @@ test("rerankChunks sends rerankerTopN candidates while returning contextTopN chu
   assert.equal(result.fallbackReason, undefined);
   assert.equal(result.candidates, 4);
   assert.deepEqual(result.chunks.map((item) => item.articleId), ["a", "b"]);
+});
+
+test("rerankChunks can retain a bounded candidate pool for downstream context selection", async () => {
+  const chunks = [
+    chunk("a", 5),
+    chunk("b", 4),
+    chunk("a", 3, 1),
+    chunk("b", 2, 1),
+  ];
+  const result = await rerankChunks("question", chunks, {
+    config: normalizeRerankerConfig({
+      enabled: true,
+      model: "custom-reranker",
+      rerankerTopN: 4,
+      contextTopN: 2,
+    }),
+    baseUrl: "http://localhost:11434/v1",
+    apiKey: "test-key",
+    signal: new AbortController().signal,
+    resultTopN: 4,
+    transport: async ({ candidates }) => candidates.map((candidate, index) => ({
+      id: candidate.id,
+      score: 1 - (index * 0.1),
+    })),
+  });
+
+  assert.equal(result.fallbackReason, undefined);
+  assert.deepEqual(result.chunks, chunks);
 });
 
 test("rerankChunks falls back on transport error preserving order and contextTopN", async () => {

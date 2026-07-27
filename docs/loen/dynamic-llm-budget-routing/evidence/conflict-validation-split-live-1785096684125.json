@@ -1,0 +1,80 @@
+{
+  "variant": "conflict-validation-split-live",
+  "session": "1785096684125",
+  "firstTs": "2026-07-26T20:11:24.125Z",
+  "lastTs": "2026-07-26T20:47:53.523Z",
+  "status": "done",
+  "diagnosticMode": "off",
+  "transport": "desktop-hybrid",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-ms28h4se-1",
+    "estimatedInputTokens": 6902,
+    "outputBudget": 4096,
+    "hash": "fnv1a:16c727bb"
+  },
+  "firstHttpMs": 24799,
+  "firstFileMs": 32621,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 6902,
+    "outputBudget": 4096
+  },
+  "transportRetries": 0,
+  "transportRecovered": 0,
+  "structuralRetries": 0,
+  "structuredValidationRetries": 0,
+  "semanticValidationRetries": 0,
+  "structuralSummary": [],
+  "llmCalls": 106,
+  "httpResponses": 106,
+  "httpStatusCounts": {
+    "200": 106
+  },
+  "callsBySite": {
+    "ingest.evidence-map": 22,
+    "ingest.synthesize": 82,
+    "init.bootstrap": 1,
+    "init.bootstrap-map": 1
+  },
+  "inputTokens": 413375,
+  "outputTokens": 280647,
+  "latencyMs": {
+    "p50": 15592,
+    "p95": 42424,
+    "max": 71154,
+    "sum": 2100856
+  },
+  "maxEstimatedInputTokens": 63478,
+  "maxActualInputTokens": 18221,
+  "outputBudgets": [
+    4096,
+    16384
+  ],
+  "createdPages": 76,
+  "updatedPages": 6,
+  "resultTexts": [
+    "Источник «Настройка прокси.md» → домен «os-unix»: создано 3 стр.",
+    "Источник «NFS Server.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «AMD Driver.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «Fixing Yandex Browser Error After Hostname Change on Ubuntu 24.md» → домен «os-unix»: создано 4 стр.",
+    "Источник «Keyboard shortcuts custom.md» → домен «os-unix»: создано 1 стр.",
+    "Источник «Fail2Ban.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «Gitlab runner.md» → домен «os-unix»: создано 3 стр.",
+    "Источник «cache.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «cpu.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «grub.md» → домен «os-unix»: создано 1 стр.",
+    "Источник «logrotate.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «network.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «npm.md» → домен «os-unix»: создано 4 стр.",
+    "Источник «rc.local.md» → домен «os-unix»: создано 1 стр.",
+    "Источник «ssh.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «storage.md» → домен «os-unix»: создано 4, обновлено 1",
+    "Источник «swap.md» → домен «os-unix»: создано 2 стр.",
+    "Источник «ufw.md» → домен «os-unix»: создано 4 стр.",
+    "Источник «usb.md» → домен «os-unix»: создано 3, обновлено 2",
+    "Источник «user.formatted.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «user.md» → домен «os-unix»: обновлено 2 стр.",
+    "Источник «wifi.md» → домен «os-unix»: создано 1, обновлено 1",
+    "Domain \"os-unix\" initialised 22 of 22 source files."
+  ]
+}

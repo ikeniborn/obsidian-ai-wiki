@@ -1,0 +1,22 @@
+{
+  "variant": "unknown",
+  "session": "1784832560599",
+  "firstTs": "2026-07-23T18:49:20.599Z",
+  "lastTs": "2026-07-23T18:59:21.102Z",
+  "status": "running",
+  "diagnosticMode": "off",
+  "transport": "desktop-direct",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrxv81rv-1",
+    "estimatedInputTokens": 6877,
+    "outputBudget": 16384,
+    "hash": "fnv1a:2ae892dc"
+  },
+  "transportRetries": 1,
+  "transportRecovered": 0,
+  "structuralRetries": 0,
+  "structuralSummary": [],
+  "createdPages": 0,
+  "resultTexts": []
+}

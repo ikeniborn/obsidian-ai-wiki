@@ -1,0 +1,180 @@
+[
+  {
+    "id": "proxy-obsidian-altlinux",
+    "question": "Как настроить прокси для Obsidian AppImage в ALT Linux через proxy.pac, переменные окружения, wrapper и desktop-файл?",
+    "expectedPages": [
+      "wiki_os-unix_obsidian_appimage",
+      "wiki_os-unix_proxy_pac",
+      "wiki_os-unix_http_proxy",
+      "wiki_os-unix_obsidian_wrapper_script",
+      "wiki_os-unix_obsidian_desktop"
+    ],
+    "requiredFacts": [
+      ["--proxy-pac-url"],
+      ["http_proxy", "https_proxy"],
+      ["~/.profile"],
+      ["exec=", "desktop"],
+      ["wrapper", "обёртк"]
+    ]
+  },
+  {
+    "id": "nfs-server-client",
+    "question": "Как установить NFS-сервер на Ubuntu 22.04, экспортировать каталог и подключить его на клиенте Ubuntu 24.04 с учётом UFW?",
+    "expectedPages": [
+      "wiki_os-unix_nfs_kernel_server",
+      "wiki_os-unix_nfs_common",
+      "wiki_os-unix_etc_exports",
+      "wiki_os-unix_etc_fstab",
+      "wiki_os-unix_ufw"
+    ],
+    "requiredFacts": [
+      ["nfs-kernel-server"],
+      ["/etc/exports"],
+      ["exportfs -a"],
+      ["/etc/fstab"],
+      ["ufw"],
+      ["/mnt/nfsshare", "/mnt/nfsclient"]
+    ]
+  },
+  {
+    "id": "amd-driver-rocm",
+    "question": "Как установить и проверить AMDGPU и ROCm в Ubuntu 24.04, включая DKMS, конфигурацию Xorg/modprobe и диагностические команды?",
+    "expectedPages": [
+      "wiki_os-unix_amdgpu",
+      "wiki_os-unix_amdgpu_pro",
+      "wiki_os-unix_rocm",
+      "wiki_os-unix_20_amdgpu_conf",
+      "wiki_os-unix_amdgpu_conf"
+    ],
+    "requiredFacts": [
+      ["amdgpu-dkms", "amdgpu-install"],
+      ["rocm"],
+      ["20-amdgpu.conf", "/etc/x11/xorg.conf.d"],
+      ["/etc/modprobe.d/amdgpu.conf"],
+      ["lspci", "lsmod", "rocminfo"]
+    ]
+  },
+  {
+    "id": "fail2ban-haproxy-docker",
+    "question": "Как настроить Fail2Ban для защиты HAProxy в Docker: логи, filter.d, jail.local и блокировку через iptables или nftables?",
+    "expectedPages": [
+      "wiki_os-unix_jail_local",
+      "wiki_os-unix_filter_haproxy_https_docker",
+      "wiki_os-unix_haproxy",
+      "wiki_os-unix_docker"
+    ],
+    "requiredFacts": [
+      ["/etc/fail2ban/jail.local", "jail.local"],
+      ["haproxy"],
+      ["docker"],
+      ["filter.d", "failregex"],
+      ["iptables", "nftables"]
+    ]
+  },
+  {
+    "id": "gitlab-runner-shell",
+    "question": "Как установить GitLab Runner бинарником, создать пользователя, запустить service с shell executor и проверить конфигурацию?",
+    "expectedPages": [
+      "wiki_os-unix_gitlab_runner",
+      "wiki_os-unix_gitlab_runner_install_script"
+    ],
+    "requiredFacts": [
+      ["gitlab-runner-linux-amd64"],
+      ["chmod +x"],
+      ["useradd"],
+      ["gitlab-runner install"],
+      ["gitlab-runner start"],
+      ["/etc/gitlab-runner/config.toml"]
+    ]
+  },
+  {
+    "id": "linux-cache-sysctl",
+    "question": "Какие параметры sysctl управляют dirty pages и vfs cache pressure, как выбрать значения для SSD/HDD и применить настройки?",
+    "expectedPages": [
+      "wiki_os-unix_sysctl",
+      "wiki_os-unix_etc_sysctl_conf",
+      "wiki_os-unix_vm_vfs_cache_pressure"
+    ],
+    "requiredFacts": [
+      ["vm.dirty_background_ratio"],
+      ["vm.dirty_ratio"],
+      ["vm.dirty_expire_centisecs"],
+      ["vm.vfs_cache_pressure"],
+      ["sysctl -p"],
+      ["ssd", "hdd", "винчестер"]
+    ]
+  },
+  {
+    "id": "ufw-firewall",
+    "question": "Как установить и безопасно настроить UFW: политики по умолчанию, разрешение IP/портов, просмотр и удаление правил, ICMP и перезагрузка конфигурации?",
+    "expectedPages": [
+      "wiki_os-unix_ufw",
+      "wiki_os-unix_before_rules",
+      "wiki_os-unix_etc_sysctl_conf"
+    ],
+    "requiredFacts": [
+      ["apt-get install ufw", "apt install ufw"],
+      ["default deny incoming"],
+      ["allow from", "allow 51820/udp"],
+      ["status numbered"],
+      ["ufw delete"],
+      ["/etc/ufw/before.rules"],
+      ["ufw reload"]
+    ]
+  },
+  {
+    "id": "ssh-key-and-server",
+    "question": "Как создать SSH-ключ, установить его на сервер, подключить через ssh-agent и усилить sshd_config?",
+    "expectedPages": [
+      "wiki_os-unix_ssh_keygen",
+      "wiki_os-unix_ssh_add",
+      "wiki_os-unix_authorized_keys",
+      "wiki_os-unix_sshd",
+      "wiki_os-unix_sshd_config"
+    ],
+    "requiredFacts": [
+      ["ssh-keygen -t ed25519"],
+      ["ssh-copy-id", "authorized_keys"],
+      ["ssh-add"],
+      ["/etc/ssh/sshd_config"],
+      ["permitrootlogin no"],
+      ["passwordauthentication no"],
+      ["systemctl restart sshd"]
+    ]
+  },
+  {
+    "id": "systemd-storage-mounts",
+    "question": "Как настроить systemd mount-юниты для дисков WD RED и WD GREEN по UUID, включить их и проверить монтирование?",
+    "expectedPages": [
+      "wiki_os-unix_mnt_wdred_mount",
+      "wiki_os-unix_mnt_wdgreen_mount",
+      "wiki_os-unix_fdisk",
+      "wiki_os-unix_du"
+    ],
+    "requiredFacts": [
+      ["/dev/disk/by-uuid"],
+      ["/mnt/wdred"],
+      ["/mnt/wdgreen"],
+      [".mount"],
+      ["systemctl daemon-reload"],
+      ["systemctl enable", "systemctl start"]
+    ]
+  },
+  {
+    "id": "npm-nvm-node-clasp",
+    "question": "Как установить nvm, Node.js 20 и clasp, настроить глобальный prefix npm в домашнем каталоге и добавить его в PATH?",
+    "expectedPages": [
+      "wiki_os-unix_nvm",
+      "wiki_os-unix_node_js",
+      "wiki_os-unix_node_package_manager",
+      "wiki_os-unix_clasp"
+    ],
+    "requiredFacts": [
+      ["nvm/v0.39.0/install.sh"],
+      ["nvm install 20"],
+      ["~/.npm-global"],
+      ["export path=~/.npm-global/bin:$path"],
+      ["npm install -g @google/clasp"]
+    ]
+  }
+]

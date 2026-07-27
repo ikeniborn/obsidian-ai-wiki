@@ -1,0 +1,35 @@
+{
+  "variant": "f-undici-adapter-16384-repair-budget",
+  "session": "1784782915944",
+  "firstTs": "2026-07-23T05:01:55.944Z",
+  "lastTs": "2026-07-23T05:06:41.724Z",
+  "status": "running",
+  "diagnosticMode": "undici-request-adapter",
+  "transport": "desktop-direct",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrx1nzpl-1",
+    "estimatedInputTokens": 6780,
+    "outputBudget": 16384,
+    "responseFormatType": "json_schema",
+    "hash": "fnv1a:d523efcc"
+  },
+  "firstHttpMs": 35727,
+  "firstFileMs": 49697,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 6780,
+    "outputBudget": 16384
+  },
+  "transportRetries": 1,
+  "transportRecovered": 1,
+  "structuralRetries": 1,
+  "structuralSummary": [
+    "ingest.synthesize:schema_validate:[\n  {\n    \"code\": \"invalid_union_discriminator\",\n    \"options\": [\n      \"add\",\n      \"append\",\n      \"replace\"\n    ],\n    \"path\": [\n      \"actions\",\n      1,\n      \"sections\",\n      0,\n      \"operation\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'add' | 'append' | 'replace'\"\n  }\n]"
+  ],
+  "createdPages": 7,
+  "resultTexts": [
+    "Источник «Настройка прокси.md» → домен «os-unix»: создано 7 стр.",
+    ""
+  ],
+  "finalError": "ingest: synthesis failed — Prompt requires 33034 estimated tokens but budget is 32768"
+}

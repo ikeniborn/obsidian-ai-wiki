@@ -4,7 +4,7 @@ import { createRequire, register } from "node:module";
 import { setTimeout as nodeSetTimeout } from "node:timers";
 import test from "node:test";
 
-import { DEFAULT_SETTINGS, type LlmWikiPluginSettings, type RunEvent } from "../src/types";
+import { DEFAULT_SETTINGS, type LlmCallOptions, type LlmWikiPluginSettings, type RunEvent } from "../src/types";
 import { VaultTools, type VaultAdapter } from "../src/vault-tools";
 
 const pathBrowserifyLoader = `
@@ -640,6 +640,99 @@ test("agent runner keeps non-policy options while applying resolved model policy
   const claudeOpts = claudeOptsFor.buildOptsFor("query").opts;
   assert.equal(claudeOpts.inputBudgetTokens, 16_384);
   assert.equal(claudeOpts.maxTokens, undefined);
+});
+
+test("agent runner resolves a separate ingest runtime for init child work", async () => {
+  const perOp = settings();
+  perOp.nativeAgent.perOperation = true;
+  perOp.nativeAgent.repairInputBudgetTokens = 65_536;
+  perOp.nativeAgent.maxTokens = 65_536;
+  perOp.nativeAgent.operations.init = {
+    ...perOp.nativeAgent.operations.init,
+    model: "init-model",
+    inputBudgetTokens: 16_384,
+    maxTokens: 4_096,
+  };
+  perOp.nativeAgent.operations.ingest = {
+    ...perOp.nativeAgent.operations.ingest,
+    model: "ingest-model",
+    inputBudgetTokens: 65_536,
+    maxTokens: 16_384,
+  };
+  const runner = new AgentRunner(
+    { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
+    perOp,
+    new VaultTools(adapter(), "/vault"),
+    "Vault",
+    [],
+  );
+  let childRuntime: { model: string; opts: LlmCallOptions } | undefined;
+  (runner as unknown as {
+    runOperation: (...args: unknown[]) => AsyncGenerator<RunEvent>;
+  }).runOperation = async function* (...args: unknown[]) {
+    childRuntime = args[7] as typeof childRuntime;
+  };
+
+  for await (const _event of runner.run({
+    operation: "init",
+    args: ["demo"],
+    cwd: "/vault",
+    signal: new AbortController().signal,
+    timeoutMs: 0,
+  })) {
+    // Drain the operation so the captured dispatch arguments are final.
+  }
+
+  assert.equal(childRuntime?.model, "ingest-model");
+  assert.equal(childRuntime?.opts.inputBudgetTokens, 65_536);
+  assert.equal(childRuntime?.opts.repairInputBudgetTokens, 65_536);
+  assert.equal(childRuntime?.opts.maxTokens, 16_384);
+  assert.equal(childRuntime?.opts.outputRetryBudgetTokens, 65_536);
+});
+
+test("agent runner inherits global runtime for both init stages when per-operation settings are off", async () => {
+  const global = settings();
+  global.nativeAgent.perOperation = false;
+  global.nativeAgent.model = "global-model";
+  global.nativeAgent.inputBudgetTokens = 24_000;
+  global.nativeAgent.repairInputBudgetTokens = 48_000;
+  global.nativeAgent.maxTokens = 12_000;
+  const runner = new AgentRunner(
+    { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
+    global,
+    new VaultTools(adapter(), "/vault"),
+    "Vault",
+    [],
+  );
+  let parentModel: unknown;
+  let parentOpts: LlmCallOptions | undefined;
+  let childRuntime: { model: string; opts: LlmCallOptions } | undefined;
+  (runner as unknown as {
+    runOperation: (...args: unknown[]) => AsyncGenerator<RunEvent>;
+  }).runOperation = async function* (...args: unknown[]) {
+    parentModel = args[1];
+    parentOpts = args[2] as LlmCallOptions;
+    childRuntime = args[7] as typeof childRuntime;
+  };
+
+  for await (const _event of runner.run({
+    operation: "init",
+    args: ["demo"],
+    cwd: "/vault",
+    signal: new AbortController().signal,
+    timeoutMs: 0,
+  })) {
+    // Drain the operation so the captured dispatch arguments are final.
+  }
+
+  assert.equal(parentModel, "global-model");
+  assert.equal(childRuntime?.model, "global-model");
+  for (const opts of [parentOpts, childRuntime?.opts]) {
+    assert.equal(opts?.inputBudgetTokens, 24_000);
+    assert.equal(opts?.repairInputBudgetTokens, 48_000);
+    assert.equal(opts?.maxTokens, 12_000);
+    assert.equal(opts?.outputRetryBudgetTokens, 12_000);
+  }
 });
 
 test("llm lifecycle progress does not reset the semantic idle watchdog", async () => {

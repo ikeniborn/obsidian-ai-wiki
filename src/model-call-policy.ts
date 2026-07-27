@@ -9,6 +9,7 @@ import type {
 } from "./types";
 
 const DEFAULT_INPUT_BUDGET = 16_384;
+const DEFAULT_REPAIR_INPUT_BUDGET = 65_536;
 
 export type ModelControlField =
   | "inputBudgetTokens"
@@ -124,6 +125,10 @@ export function normalizePersistedModelControls(settings: LlmWikiPluginSettings)
     settings.nativeAgent.inputBudgetTokens,
     DEFAULT_INPUT_BUDGET,
   );
+  settings.nativeAgent.repairInputBudgetTokens = positiveInt(
+    settings.nativeAgent.repairInputBudgetTokens,
+    DEFAULT_REPAIR_INPUT_BUDGET,
+  );
   settings.claudeAgent.inputBudgetTokens = positiveInt(
     settings.claudeAgent.inputBudgetTokens,
     DEFAULT_INPUT_BUDGET,
@@ -205,10 +210,18 @@ export function resolveModelCallPolicy(
     : compressionProfile(local?.compressionProfile)
       ?? compressionProfile(global.compressionProfile)
       ?? "balanced";
-  const outputBudget = positiveInt(local?.maxTokens ?? global.maxTokens, 4096);
+  const globalOutputBudget = positiveInt(global.maxTokens, 4096);
+  const outputBudget = positiveInt(local?.maxTokens ?? globalOutputBudget, globalOutputBudget);
+  const outputRetryBudget = Math.max(outputBudget, globalOutputBudget);
+  const inputBudget = positiveInt(local?.inputBudgetTokens ?? global.inputBudgetTokens, DEFAULT_INPUT_BUDGET);
+  const repairInputBudget = key === "init" || key === "ingest"
+    ? Math.max(inputBudget, positiveInt(global.repairInputBudgetTokens, DEFAULT_REPAIR_INPUT_BUDGET))
+    : undefined;
   const policy: ModelCallPolicy = {
-    inputBudgetTokens: positiveInt(local?.inputBudgetTokens ?? global.inputBudgetTokens, DEFAULT_INPUT_BUDGET),
+    inputBudgetTokens: inputBudget,
+    ...(repairInputBudget === undefined ? {} : { repairInputBudgetTokens: repairInputBudget }),
     outputBudgetTokens: outputBudget,
+    outputRetryBudgetTokens: outputRetryBudget,
     ...(compression ? { compression } : {}),
   };
   return {
@@ -216,10 +229,11 @@ export function resolveModelCallPolicy(
     policy,
     opts: {
       inputBudgetTokens: policy.inputBudgetTokens,
+      repairInputBudgetTokens: policy.repairInputBudgetTokens,
       maxTokens: outputBudget,
+      outputRetryBudgetTokens: outputRetryBudget,
       temperature: local?.temperature ?? global.temperature,
       topP: global.topP,
-      thinkingBudgetTokens: local?.thinkingBudgetTokens ?? global.thinkingBudgetTokens,
       semanticCompression: compression && compressionOp
         ? { profile: compression, operation: compressionOp }
         : undefined,

@@ -283,7 +283,8 @@ export function shrinkInputBudget(
 
 export type PromptBudgetRetryReason =
   | "preflight_budget_exceeded"
-  | "provider_context_error";
+  | "provider_context_error"
+  | "response_start_timeout";
 
 export interface PromptBudgetMetadata {
   requestId: string;
@@ -339,6 +340,7 @@ export interface RunWithContextRepackArgs<TBuild, TResult> {
   ) => ContextRepackBuild<TBuild> | Promise<ContextRepackBuild<TBuild>>;
   execute: (value: TBuild) => TResult | Promise<TResult>;
   onEvent: (event: PromptBudgetEvent) => void;
+  classifyRepackError?: (error: unknown) => PromptBudgetRetryReason | undefined;
   requestBudgetsEmittedByExecute?: boolean;
   requestId?: (result?: TResult) => string | undefined;
 }
@@ -396,11 +398,14 @@ export async function runWithContextRepack<TBuild, TResult>(
     const repackSuppressed = error instanceof ContextRepackSuppressedError;
     const details = repackSuppressed ? null : classifyContextError(error);
     const preflight = error instanceof PromptBudgetExceededError;
+    const additionalRetryReason = !repackSuppressed && !preflight && details === null
+      ? args.classifyRepackError?.(error)
+      : undefined;
     const retryReason = preflight
       ? "preflight_budget_exceeded"
       : details !== null
         ? "provider_context_error"
-        : undefined;
+        : additionalRetryReason;
 
     const requestId = args.requestId?.();
     if (!args.requestBudgetsEmittedByExecute && requestId && built) {

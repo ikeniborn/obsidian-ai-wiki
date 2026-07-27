@@ -746,7 +746,9 @@ export class WikiController {
         apiKey: s.nativeAgent.apiKey,
         connectionTimeoutMs: s.llmConnectionTimeoutSec * 1000,
         idleTimeoutMs: s.llmIdleTimeoutSec * 1000,
-        nativeTransportDiagnosticMode: s.devMode.nativeTransportDiagnosticMode,
+        nativeTransportDiagnosticMode: s.devMode.enabled
+          ? s.devMode.nativeTransportDiagnosticMode
+          : "off",
         isMobile: Platform.isMobile,
         proxyConfig: s.proxy,
         mobileFetch,

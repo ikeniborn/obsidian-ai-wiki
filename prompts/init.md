@@ -10,7 +10,7 @@ Return ONLY valid JSON of the following structure:
 }
 {{schema_block}}
 
-Include the `reasoning` field first in the JSON response: a step-by-step rationale for the chosen domain structure.
+Include the `reasoning` field first in the JSON response: one short sentence, no step-by-step chain.
 
 ## Output JSON Example
 

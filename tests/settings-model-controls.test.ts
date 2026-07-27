@@ -122,16 +122,25 @@ test("native transport diagnostic mode defaults and normalizes to off without Se
   assert.doesNotMatch(settingsSource, /nativeTransportDiagnosticMode/);
 
   const valid = structuredClone(DEFAULT_SETTINGS);
+  valid.devMode.enabled = true;
   valid.devMode.nativeTransportDiagnosticMode = "connection-close";
   normalize(valid);
   assert.equal(valid.devMode.nativeTransportDiagnosticMode, "connection-close");
 
   const undiciAdapter = structuredClone(DEFAULT_SETTINGS);
+  undiciAdapter.devMode.enabled = true;
   undiciAdapter.devMode.nativeTransportDiagnosticMode = "undici-request-adapter";
   normalize(undiciAdapter);
   assert.equal(undiciAdapter.devMode.nativeTransportDiagnosticMode, "undici-request-adapter");
 
+  const disabledDevMode = structuredClone(DEFAULT_SETTINGS);
+  disabledDevMode.devMode.enabled = false;
+  disabledDevMode.devMode.nativeTransportDiagnosticMode = "undici-request-adapter";
+  normalize(disabledDevMode);
+  assert.equal(disabledDevMode.devMode.nativeTransportDiagnosticMode, "off");
+
   const invalid = structuredClone(DEFAULT_SETTINGS);
+  invalid.devMode.enabled = true;
   (invalid.devMode as { nativeTransportDiagnosticMode: unknown }).nativeTransportDiagnosticMode = "invalid";
   normalize(invalid);
   assert.equal(invalid.devMode.nativeTransportDiagnosticMode, "off");
@@ -296,7 +305,7 @@ test("native chat-model block stays localized and structurally valid in both mod
   const falseOnly = sourceBlock(native, "if (!s.nativeAgent.perOperation) {");
   assert.ok(heading < falseOnly.start, "heading must render when perOperation is true");
   assert.match(falseOnly.body, /\.setName\(T\.settings\.model_name\)/);
-  assert.match(falseOnly.body, /\.setName\("Thinking budget tokens"\)/);
+  assert.doesNotMatch(native, /\.setName\("Thinking budget tokens"\)/);
   assert.doesNotMatch(falseOnly.body, /modelControls\.globalFields/);
 
   const policy = native.indexOf("modelControls.globalFields,", falseOnly.end);
@@ -314,7 +323,6 @@ test("native chat-model block stays localized and structurally valid in both mod
     ".setName(T.settings.apiKey_name)",
     ".setName(T.settings.h3_defaultChatModel)",
     ".setName(T.settings.model_name)",
-    '.setName("Thinking budget tokens")',
     "modelControls.globalFields,",
     ".setName(T.settings.temperature_name)",
     ".setName(T.settings.perOperation_name).setHeading()",

@@ -1,0 +1,29 @@
+{
+  "variant": "e-invalid-restart-init4096-ingest32000",
+  "session": "1784782646593",
+  "firstTs": "2026-07-23T04:57:26.593Z",
+  "lastTs": "2026-07-23T04:58:03.576Z",
+  "status": "running",
+  "diagnosticMode": "undici-request-adapter",
+  "transport": "desktop-direct",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrx1i7vr-1",
+    "estimatedInputTokens": 6780,
+    "outputBudget": 4096,
+    "responseFormatType": "json_schema",
+    "hash": "fnv1a:d523efcc"
+  },
+  "firstHttpMs": 28694,
+  "firstFileMs": 36962,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 6780,
+    "outputBudget": 4096
+  },
+  "transportRetries": 1,
+  "transportRecovered": 1,
+  "structuralRetries": 0,
+  "structuralSummary": [],
+  "createdPages": 0,
+  "resultTexts": []
+}

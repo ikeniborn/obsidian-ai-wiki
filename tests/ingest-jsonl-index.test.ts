@@ -88,7 +88,7 @@ function mapperOutput(prompt: string, entityKey = "alpha"): string {
   });
 }
 
-test("chunk-only renamed page gets a typed description before real Jaccard candidate retrieval", async () => {
+test("chunk-only renamed page gets a typed description before alias-aware canonical reuse", async () => {
   const sourcePath = "src/source.md";
   const pagePath = "!Wiki/d/concept/wiki_d_legacy_alias.md";
   const duplicatePath = "!Wiki/d/concept/wiki_d_renamed_alpha.md";
@@ -97,6 +97,7 @@ test("chunk-only renamed page gets a typed description before real Jaccard candi
     "---",
     "type: concept",
     "description: Renamed Alpha canonical concept.",
+    "aliases: [Renamed Alpha]",
     "resource: [source]",
     "---",
     "# Legacy Alias",
@@ -188,7 +189,7 @@ test("chunk-only renamed page gets a typed description before real Jaccard candi
   assert.equal(records.some((record) => record.kind === "chunk" && record.articleId === "wiki_d_legacy_alias"), true);
 });
 
-test("stale valid page description is reconciled from Markdown before candidate retrieval", async () => {
+test("stale valid page description is reconciled before alias-aware canonical reuse", async () => {
   const sourcePath = "src/source.md";
   const pagePath = "!Wiki/d/concept/wiki_d_legacy_alias.md";
   const duplicatePath = "!Wiki/d/concept/wiki_d_renamed_alpha.md";
@@ -197,6 +198,7 @@ test("stale valid page description is reconciled from Markdown before candidate 
     "---",
     "type: concept",
     "description: Renamed Alpha canonical concept.",
+    "aliases: [Renamed Alpha]",
     "resource: [source]",
     "---",
     "# Legacy Alias",
@@ -309,6 +311,7 @@ test("renamed existing page patch keeps authoritative path and fresh page-record
     "---",
     "type: concept",
     "description: Renamed Alpha canonical concept.",
+    "aliases: [Renamed Alpha]",
     "resource: [old-source]",
     "---",
     "# Legacy Alias",

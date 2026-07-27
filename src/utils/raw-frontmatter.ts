@@ -94,6 +94,114 @@ export function parseTagsFromFm(content: string): string[] {
   return (tags as unknown[]).filter((t): t is string => typeof t === "string");
 }
 
+/** Raw string entries of the frontmatter `aliases:` list, or a single scalar alias. */
+export function parseAliasesFromFm(content: string): string[] {
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return [];
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = (yamlParse(fmMatch[1]) as Record<string, unknown>) ?? {};
+  } catch {
+    return [];
+  }
+  const aliases = parsed.aliases;
+  if (typeof aliases === "string") return aliases.trim() ? [aliases.trim()] : [];
+  if (!Array.isArray(aliases)) return [];
+  return aliases
+    .filter((alias): alias is string => typeof alias === "string")
+    .map((alias) => alias.trim())
+    .filter(Boolean);
+}
+
+function withoutTopLevelFields(rawYaml: string, fields: ReadonlySet<string>): string {
+  const kept: string[] = [];
+  let skipping = false;
+  for (const line of rawYaml.split("\n")) {
+    const key = /^([A-Za-z_][A-Za-z0-9_-]*):/.exec(line)?.[1];
+    if (key !== undefined) {
+      skipping = fields.has(key);
+      if (!skipping) kept.push(line);
+      continue;
+    }
+    if (!skipping) kept.push(line);
+  }
+  return kept.join("\n");
+}
+
+export function governWikiPageFrontmatter(
+  content: string,
+  fields: {
+    type: string;
+    description?: string;
+    resources?: readonly string[];
+    timestamp?: string;
+    status?: string;
+    defaultStatus?: string;
+  },
+): { content: string; warnings: string[] } {
+  const warnings: string[] = [];
+  const fmMatch = FM_RE.exec(content);
+  const body = fmMatch ? content.slice(fmMatch[0].length) : content;
+  const rawYaml = fmMatch?.[1] ?? "";
+  const description = fields.description?.replace(/\s+/g, " ").trim() ?? "";
+  const governedKeys = new Set(["type"]);
+  if (description) governedKeys.add("description");
+  if (fields.resources !== undefined) governedKeys.add("resource");
+  if (fields.timestamp !== undefined) governedKeys.add("timestamp");
+  if (fields.status !== undefined) governedKeys.add("status");
+
+  if (fmMatch) {
+    try { yamlParse(rawYaml); }
+    catch { warnings.push("Invalid model frontmatter repaired with server-owned fields"); }
+  } else {
+    warnings.push("Missing model frontmatter replaced with server-owned fields");
+  }
+
+  let parsed: Record<string, unknown> = {};
+  const candidateYaml = withoutTopLevelFields(rawYaml, governedKeys);
+  if (candidateYaml.trim()) {
+    try {
+      const candidate: unknown = yamlParse(candidateYaml);
+      if (candidate !== null && typeof candidate === "object" && !Array.isArray(candidate)) {
+        parsed = candidate as Record<string, unknown>;
+      } else {
+        warnings.push("Non-mapping model frontmatter metadata discarded");
+      }
+    } catch {
+      warnings.push("Invalid optional model frontmatter metadata discarded");
+    }
+  }
+
+  const governed: Record<string, unknown> = { type: fields.type };
+  if (description) governed.description = description;
+  if (fields.timestamp !== undefined) governed.timestamp = fields.timestamp;
+  if (fields.status !== undefined) governed.status = fields.status;
+  Object.assign(governed, parsed);
+  if (fields.resources !== undefined) {
+    governed.resource = [...new Set(fields.resources.map((value) => value.trim()).filter(Boolean))];
+  }
+  if (fields.status === undefined && fields.defaultStatus && typeof governed.status !== "string") {
+    governed.status = fields.defaultStatus;
+  }
+  return {
+    content: `---\n${yamlStringify(governed, { lineWidth: 0 })}---\n${body.replace(/^\n+/, "")}`,
+    warnings,
+  };
+}
+
+export function setWikiPageAliases(content: string, aliases: readonly string[]): string {
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return content;
+  let parsed: Record<string, unknown>;
+  try { parsed = (yamlParse(fmMatch[1]) as Record<string, unknown>) ?? {}; }
+  catch { return content; }
+  const normalized = [...new Set(aliases.map((alias) => alias.trim()).filter(Boolean))];
+  if (normalized.length > 0) parsed.aliases = normalized;
+  else delete parsed.aliases;
+  const body = content.slice(fmMatch[0].length);
+  return `---\n${yamlStringify(parsed, { lineWidth: 0 })}---\n${body}`;
+}
+
 /**
  * Recovers a source page's frontmatter into a single valid fenced block, tolerant of
  * the broken shapes seen in the wild:

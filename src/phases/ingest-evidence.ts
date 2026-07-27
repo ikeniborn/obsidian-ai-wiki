@@ -22,6 +22,7 @@ import type {
 } from "../types";
 import {
   createLlmLifecycle,
+  outputRetryOptions,
   runStructuredWithRetry,
   StructuredValidationError,
   type RunStructuredArgs,
@@ -29,6 +30,7 @@ import {
 } from "./structured-output";
 import { lifecycleEvent } from "../llm-lifecycle";
 import { prepareChatMessages } from "./llm-utils";
+import { sentinelJsonProfile } from "./framed-output";
 import mapPrompt from "../../prompts/ingest-evidence-map.md";
 import reducePrompt from "../../prompts/ingest-evidence-reduce.md";
 import {
@@ -39,6 +41,8 @@ import {
   EvidencePacketSchema,
   NoEvidenceSchema,
 } from "./zod-schemas";
+
+const MAPPER_ESTIMATE_SAFETY_TOKENS = 128;
 
 export interface EvidenceRange {
   startLine: number;
@@ -188,6 +192,25 @@ function globalRange(range: EvidenceRange, chunk: EvidenceChunk): EvidenceRange 
 
 function sourceLines(source: string | string[]): string[] {
   return Array.isArray(source) ? source : source.split("\n");
+}
+
+function sourceForEvidence(source: string): string {
+  const lines = source.split("\n");
+  if (lines[0]?.replace(/\r$/, "").trim() !== "---") return source;
+  const frontmatterEnd = lines.findIndex((line, index) =>
+    index > 0 && line.replace(/\r$/, "").trim() === "---");
+  if (frontmatterEnd < 0) return source;
+
+  let redact = false;
+  for (let index = 1; index < frontmatterEnd; index++) {
+    const line = lines[index].replace(/\r$/, "");
+    const topLevelKey = /^([A-Za-z_][A-Za-z0-9_-]*):/.exec(line)?.[1];
+    if (topLevelKey !== undefined) {
+      redact = topLevelKey.startsWith("wiki_") || topLevelKey === "OutgoingLinks";
+    }
+    if (redact) lines[index] = lines[index].endsWith("\r") ? "\r" : "";
+  }
+  return lines.join("\n");
 }
 
 export function buildEvidenceCoverage(
@@ -482,10 +505,27 @@ function addSchemaIssue(ctx: z.RefinementCtx, message: string): void {
   ctx.addIssue({ code: z.ZodIssueCode.custom, message });
 }
 
-const EvidencePacketWireSchema = EvidencePacketSchema.extend({
+const EvidenceRangeWireSchema = z.preprocess((value) => {
+  if (Array.isArray(value) && value.length === 2) {
+    const tuple = value as unknown[];
+    return { startLine: tuple[0], endLine: tuple[1] };
+  }
+  return value;
+}, EvidencePacketSchema.shape.exactSourceRanges.element);
+
+const EvidencePacketWireObjectSchema = EvidencePacketSchema.extend({
   entityType: EvidencePacketSchema.shape.entityType.nullable()
     .transform((entityType) => entityType ?? undefined),
-}).transform((packet): EvidencePacket => {
+  exactSourceRanges: z.array(EvidenceRangeWireSchema).min(1),
+});
+
+const EvidencePacketWireSchema = z.preprocess((value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const record = value as Record<string, unknown>;
+  if (record.exactSourceRanges !== undefined || record.exactSourceRange === undefined) return value;
+  const { exactSourceRange, ...withoutSingularRange } = record;
+  return { ...withoutSingularRange, exactSourceRanges: [exactSourceRange] };
+}, EvidencePacketWireObjectSchema).transform((packet): EvidencePacket => {
   const { entityType, ...withoutEntityType } = packet;
   return entityType === undefined ? withoutEntityType : { ...withoutEntityType, entityType };
 });
@@ -493,6 +533,24 @@ const EvidencePacketWireSchema = EvidencePacketSchema.extend({
 const EvidenceMapperWireOutputSchema = EvidenceMapperOutputSchema.extend({
   packets: z.array(EvidencePacketWireSchema),
 });
+
+function noEvidenceWireSchemaFor(chunkId: string): z.ZodSchema<NoEvidence> {
+  return z.preprocess((value) => {
+    if (typeof value === "string") return { chunkId, reason: value };
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const record = value as Record<string, unknown>;
+      return {
+        chunkId,
+        reason: typeof record.reason === "string" && record.reason.trim() !== ""
+          ? record.reason
+          : typeof record.summary === "string" && record.summary.trim() !== ""
+            ? record.summary
+            : "No domain evidence in supplied chunk.",
+      };
+    }
+    return value;
+  }, NoEvidenceSchema) as z.ZodSchema<NoEvidence>;
+}
 
 const UntypedEntityEvidenceWireSchema = EntityEvidenceSchema.extend({
   entityType: EntityEvidenceSchema.shape.entityType.nullable()
@@ -509,7 +567,51 @@ function structuredWireSchema<T>(
 }
 
 function mapperSchemaFor(chunk: SourceChunk, mode: EvidenceMappingMode) {
-  return structuredWireSchema(EvidenceMapperWireOutputSchema.superRefine((value, ctx) => {
+  const schema = z.preprocess((value) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const record = value as Record<string, unknown>;
+      const declaredPacketIds = new Set(
+        (Array.isArray(record.packets) ? record.packets : [])
+          .map((packet) => packet && typeof packet === "object" && !Array.isArray(packet)
+            ? (packet as Record<string, unknown>).id
+            : undefined)
+          .filter((id): id is string => typeof id === "string" && id.trim() !== ""),
+      );
+      const usedPacketIds = new Set<string>();
+      let generatedPacketOrdinal = 1;
+      const nextPacketId = (): string => {
+        let candidate: string;
+        do {
+          candidate = `p${generatedPacketOrdinal}`;
+          generatedPacketOrdinal += 1;
+        } while (declaredPacketIds.has(candidate) || usedPacketIds.has(candidate));
+        return candidate;
+      };
+      const packets = Array.isArray(record.packets)
+        ? record.packets.map((packet: unknown) => {
+          if (!packet || typeof packet !== "object" || Array.isArray(packet)) return packet;
+          const packetRecord = packet as Record<string, unknown>;
+          const declaredId = typeof packetRecord.id === "string" && packetRecord.id.trim() !== ""
+            ? packetRecord.id
+            : undefined;
+          const id = declaredId !== undefined && !usedPacketIds.has(declaredId)
+            ? declaredId
+            : nextPacketId();
+          usedPacketIds.add(id);
+          return { ...packetRecord, id, chunkId: chunk.id };
+        })
+        : record.packets;
+      return {
+        ...record,
+        packets,
+        ...(record.noEvidence === undefined ? { noEvidence: [] } : {}),
+      };
+    }
+    return value;
+  }, EvidenceMapperWireOutputSchema.extend({
+    noEvidence: z.array(noEvidenceWireSchemaFor(chunk.id)),
+  }));
+  return structuredWireSchema(schema.superRefine((value, ctx) => {
     try {
       buildEvidenceCoverage([chunk.id], value.packets, value.noEvidence);
       for (const packet of value.packets) {
@@ -626,14 +728,66 @@ function estimateLlmMessages(
   return estimatePreparedMessages(prepareChatMessages(messages, opts));
 }
 
-const STRUCTURED_REPAIR_INSTRUCTION = "STRUCTURED_REPAIR: Return only the required JSON object; preserve all supplied evidence coverage exactly.";
+function boundedStructuredRepairInstruction(error?: Error): string {
+  const detail = error instanceof z.ZodError
+    ? error.issues.slice(0, 12).map((issue) => {
+      const path = issue.path.length ? issue.path.join(".") : "(root)";
+      return `- ${path}: ${evidenceValidationReason(issue)}`;
+    }).join("\n")
+    : error?.message;
+  return [
+    "STRUCTURED_REPAIR: Previous response failed validation.",
+    detail ? `Validation details:\n${detail}` : undefined,
+    "Output only <<<JSON>>>, required JSON, then <<<END>>>.",
+    "For mapper output: cover the supplied chunk exactly once via packets or one noEvidence item.",
+    "Use the exact supplied chunkId. Omit entityType when configured entity types are none.",
+    "Use only chunk-local CHUNK_LINE numbers in exactSourceRanges.",
+  ].filter(Boolean).join("\n");
+}
+
+function evidenceValidationReason(issue: z.ZodIssue): string {
+  const message = issue.message.replace(/\s+/g, " ").trim().slice(0, 320);
+  const lower = message.toLowerCase();
+  const code = lower.includes("unknown source chunk")
+    ? "unknown_source_chunk"
+    : lower.includes("chunk coverage") || lower.includes("missing chunk") || lower.includes("covered by both")
+      ? "chunk_coverage_mismatch"
+      : lower.includes("entitytype is not allowed")
+        ? "entity_type_forbidden"
+        : lower.includes("unknown configured entity type")
+          ? "unknown_entity_type"
+          : lower.includes("normalized entity key")
+            ? "invalid_entity_key"
+            : lower.includes("range") && lower.includes("outside chunk")
+              ? "source_range_out_of_bounds"
+              : issue.code;
+  return `${code}: ${message}`;
+}
 
 function structuredRepairMessages(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  error?: Error,
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   return [
     ...messages,
-    { role: "user", content: STRUCTURED_REPAIR_INSTRUCTION },
+    { role: "user", content: boundedStructuredRepairInstruction(error) },
+  ];
+}
+
+function outputLimitStructuredRepairMessages(
+  messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  error: Error,
+): OpenAI.Chat.ChatCompletionMessageParam[] {
+  return [
+    ...messages,
+    {
+      role: "user",
+      content: [
+        "OUTPUT_LIMIT_RETRY: The previous response consumed its output limit without usable structured content.",
+        "Return the complete result now and keep optional detail compact.",
+        boundedStructuredRepairInstruction(error),
+      ].join("\n"),
+    },
   ];
 }
 
@@ -651,11 +805,13 @@ async function runBoundedStructuredWithRetry<T>(
   args: RunStructuredArgs<T>,
 ): Promise<RunStructuredResult<T>> {
   let messages = args.baseMessages;
+  let currentOpts = args.opts;
   for (let attempt = 0; attempt <= args.maxRetries; attempt++) {
     try {
       return await runStructuredWithRetry({
         ...args,
         baseMessages: messages,
+        opts: currentOpts,
         maxRetries: 0,
         lifecycle: attempt === 0
           ? args.lifecycle
@@ -669,9 +825,19 @@ async function runBoundedStructuredWithRetry<T>(
           args.callSite,
           args.maxRetries + 1,
           error.lastError,
+          error.errorType,
+          error.outputTokens,
         );
       }
-      messages = structuredRepairMessages(args.baseMessages);
+      if (error.errorType === "output_limit") {
+        currentOpts = outputRetryOptions(
+          currentOpts,
+          error.outputTokens ?? currentOpts.maxTokens ?? 0,
+        );
+        messages = outputLimitStructuredRepairMessages(args.baseMessages, error.lastError);
+      } else {
+        messages = structuredRepairMessages(args.baseMessages, error.lastError);
+      }
     }
   }
   throw new Error("unreachable bounded structured retry state");
@@ -684,7 +850,7 @@ function forwardEvidenceStructuredEvent(
   if (event.kind === "structural_error") {
     runtime.onEvent?.({
       ...event,
-      message: "Structured output validation event",
+      message: sanitizeStructuralDiagnostic(event.message),
     });
   } else if (
     event.kind === "llm_lifecycle"
@@ -702,6 +868,12 @@ function forwardEvidenceStructuredEvent(
   ) {
     runtime.onEvent?.(event);
   }
+}
+
+function sanitizeStructuralDiagnostic(message: string): string {
+  return message
+    .replace(/"[^"\n]{24,}"/g, "\"[redacted]\"")
+    .replace(/\b[A-Z0-9_]{16,}\b/g, "[redacted]");
 }
 
 function taskLlmOptions(
@@ -767,7 +939,7 @@ export function chunkSourceForEvidence(
       policy.mapperRetries ?? 1,
     ));
     const largest = Math.max(...estimates);
-    return largest <= initialRequestBudget
+    return mapperEstimateFits(largest, initialRequestBudget)
       ? { kind: "feasible" as const, value: chunks }
       : { kind: "too-large" as const };
   });
@@ -790,6 +962,10 @@ function ensurePolicy(policy: EvidencePolicy): void {
     && (!Number.isSafeInteger(policy.outputBudgetTokens) || policy.outputBudgetTokens <= 0)) {
     throw new EvidenceCoverageError("Evidence output budget must be a positive safe integer");
   }
+}
+
+function mapperEstimateFits(estimate: number, budget: number): boolean {
+  return estimate + MAPPER_ESTIMATE_SAFETY_TOKENS <= budget;
 }
 
 function ensureOutputBudget(policy: EvidencePolicy, opts: LlmCallOptions | undefined): void {
@@ -969,7 +1145,7 @@ async function mapChunk(
       model: runtime.model,
       baseMessages: messages,
       opts: mapperOpts,
-      profile: { kind: "json-zod", schema: mapperSchemaFor(chunk, mode) },
+      profile: sentinelJsonProfile(mapperSchemaFor(chunk, mode)),
       maxRetries: policy.mapperRetries ?? 1,
       callSite: mapCallSite,
       lifecycle: createLlmLifecycle("extract_source_facts"),
@@ -1065,7 +1241,7 @@ function rechunkMapperSourceForRetry(
     const largest = Math.max(...chunks.map((chunk) => estimateStructuredRequest(
       messagesForMapper(mapPrompt, chunk, domainId, mode, source), mapperOpts, policy.mapperRetries ?? 1,
     )));
-    return largest <= effectiveInputBudget
+    return mapperEstimateFits(largest, effectiveInputBudget)
       ? { kind: "feasible" as const, value: chunks }
       : { kind: "too-large" as const };
   });
@@ -1263,7 +1439,7 @@ async function reduceBatchOnce(
       model: runtime.model,
       baseMessages: messages,
       opts: reducerOpts,
-      profile: { kind: "json-zod", schema: reducerSchemaFor(expected) },
+      profile: sentinelJsonProfile(reducerSchemaFor(expected)),
       maxRetries: policy.reducerRetries ?? 1,
       callSite: "ingest.evidence-reduce",
       lifecycle: createLlmLifecycle("reduce_source_evidence"),
@@ -1481,7 +1657,7 @@ export async function prepareSourceEvidence(
   runtime: EvidenceRuntime,
 ): Promise<EntityEvidence[]> {
   const configuredEntityTypes = runtime.configuredEntityTypes ?? [];
-  return prepareSourceEvidenceInternal(source, domainId, policy, runtime, {
+  return prepareSourceEvidenceInternal(sourceForEvidence(source), domainId, policy, runtime, {
     rejectEntityTypes: configuredEntityTypes.length === 0,
     allowedEntityTypes: new Set(configuredEntityTypes),
   });
@@ -1493,7 +1669,7 @@ export async function prepareBootstrapEvidence(
   policy: EvidencePolicy,
   runtime: EvidenceRuntime,
 ): Promise<BootstrapEvidence> {
-  const evidence = await prepareSourceEvidenceInternal(source, provisionalDomainId, policy, runtime, {
+  const evidence = await prepareSourceEvidenceInternal(sourceForEvidence(source), provisionalDomainId, policy, runtime, {
     rejectEntityTypes: true,
     allowedEntityTypes: new Set(),
   });

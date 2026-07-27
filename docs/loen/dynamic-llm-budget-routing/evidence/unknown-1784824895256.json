@@ -1,0 +1,61 @@
+{
+  "variant": "unknown",
+  "session": "1784824895256",
+  "firstTs": "2026-07-23T16:41:35.257Z",
+  "lastTs": "2026-07-23T18:22:43.541Z",
+  "status": "error",
+  "diagnosticMode": "undici-request-adapter",
+  "transport": "desktop-direct",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrxqnr60-1",
+    "estimatedInputTokens": 7103,
+    "outputBudget": 16384,
+    "hash": "fnv1a:9737039f"
+  },
+  "firstHttpMs": 24788,
+  "firstFileMs": 33158,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 7103,
+    "outputBudget": 16384
+  },
+  "transportRetries": 1,
+  "transportRecovered": 1,
+  "structuralRetries": 23,
+  "structuralSummary": [
+    "ingest.evidence-map:empty_output:Empty structured output",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"custom\",\n    \"message\": \"[redacted]\"guide\\\"\",\n    \"path\": []\n  }\n]",
+    "ingest.synthesize:empty_output:Empty structured output",
+    "ingest.synthesize:empty_output:Empty structured output",
+    "ingest.synthesize:empty_output:Empty structured output",
+    "ingest.synthesize:empty_output:Empty structured output",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"custom\",\n    \"message\": \"[redacted]\",\n    \"path\": []\n  }\n]",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"packets\",\n      0,\n      \"sourceAnchor\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"packets\",\n      1,\n      \"sourceAnchor\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"packets\",\n      2,\n      \"sourceAnchor\"\n    ],\n    \"message\": \"Required\"\n  }\n]",
+    "ingest.synthesize:empty_output:Empty structured output",
+    "ingest.synthesize:empty_output:Empty structured output",
+    "ingest.synthesize:empty_output:Empty structured output",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"custom\",\n    \"message\": \"[redacted]\",\n    \"path\": []\n  }\n]"
+  ],
+  "createdPages": 53,
+  "resultTexts": [
+    "Источник «Настройка прокси.md» → домен «os-unix»: создано 1 стр.",
+    "Источник «NFS Server.md» → домен «os-unix»: создано 4 стр.",
+    "Источник «AMD Driver.md» → домен «os-unix»: создано 6 стр.",
+    "Источник «Fixing Yandex Browser Error After Hostname Change on Ubuntu 24.md» → домен «os-unix»: создано 4 стр.",
+    "Источник «Keyboard shortcuts custom.md» → домен «os-unix»: создано 2 стр.",
+    "Источник «Fail2Ban.md» → домен «os-unix»: создано 5, обновлено 1",
+    "Источник «Gitlab runner.md» → домен «os-unix»: создано 4 стр.",
+    "Источник «cache.md» → домен «os-unix»: создано 6 стр.",
+    "Источник «cpu.md» → домен «os-unix»: создано 4 стр.",
+    "Источник «grub.md» → домен «os-unix»: создано 1 стр.",
+    "Источник «logrotate.md» → домен «os-unix»: создано 2 стр.",
+    "Источник «network.md» → домен «os-unix»: создано 4 стр.",
+    "Источник «npm.md» → домен «os-unix»: создано 1 стр.",
+    "Источник «rc.local.md» → домен «os-unix»: создано 1 стр.",
+    "Источник «ssh.md» → домен «os-unix»: создано 4 стр.",
+    "Источник «storage.md» → домен «os-unix»: создано 3 стр.",
+    "Источник «swap.md» → домен «os-unix»: создано 3 стр.",
+    "Источник «ufw.md» → домен «os-unix»: создано 3 стр."
+  ],
+  "finalError": "ingest: duplicate merge regeneration failed — Conflict regeneration rejected for fstab: [\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"reasoning\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"actions\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"skips\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"entityKey\",\n      \"targetPath\",\n      \"pageHash\",\n      \"operation\",\n      \"heading\",\n      \"expectedSectionOrdinal\",\n      \"expectedSectionHash\",\n      \"exactSectionText\"\n    ],\n    \"path\": [],\n    \"message\": \"Unrecognized key(s) in object: 'entityKey', 'targetPath', 'pageHash', 'operation', 'heading', 'expectedSectionOrdinal', 'expectedSectionHash', 'exactSectionText'\"\n  }\n]"
+}

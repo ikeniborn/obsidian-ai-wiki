@@ -438,12 +438,16 @@ async function exerciseIngestContextAndSynthesis(): Promise<void> {
         ...createResponse,
         actions: [createResponse.actions[0], createResponse.actions[0]],
       };
-      await assert.rejects(
-        synthesizeEntityBatch(synthesisArgs(
-          bundleFromContext(entityEvidence, context),
-          synthesisClient(() => duplicateResponse),
-        )),
-        /duplicate action path/i,
+      const duplicateStart = capturedRequests.length;
+      const canonicalized = await synthesizeEntityBatch(synthesisArgs(
+        bundleFromContext(entityEvidence, context),
+        synthesisClient(() => duplicateResponse),
+      ));
+      assert.deepEqual(canonicalized.actions, [createResponse.actions[0]]);
+      assert.equal(
+        capturedRequests.slice(duplicateStart)
+          .filter((request) => request.entryPoint === "synthesizeEntityBatch").length,
+        1,
       );
     }
   }

@@ -1,0 +1,18 @@
+{
+  "variant": "pathless-create-actions",
+  "status": "simulated",
+  "synthesisRequests": 1,
+  "structuredValidationRetries": 0,
+  "structuralErrors": 0,
+  "failedSources": 0,
+  "invalidPathsWritten": 0,
+  "unknownEntityKeyAccepted": 0,
+  "pagesCreated": 10,
+  "pagesUpdated": 0,
+  "articleQualityScore": 1,
+  "notes": [
+    "requires schema migration: create action omits path",
+    "best retry profile, higher implementation risk than server-owned path injection"
+  ],
+  "score": -9
+}

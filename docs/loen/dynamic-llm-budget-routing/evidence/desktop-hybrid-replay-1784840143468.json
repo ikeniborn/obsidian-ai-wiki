@@ -1,0 +1,113 @@
+{
+  "session": "1784840143468",
+  "vault": "/tmp/ai-wiki-bounded-ingest-replay.SMt4rx/run",
+  "status": "done",
+  "durationMs": 4458538,
+  "sources": {
+    "completed": 22,
+    "total": 22
+  },
+  "transport": {
+    "configured": "desktop-hybrid",
+    "actualNonStream": "desktop-host",
+    "httpResponses": 134,
+    "bodyEnds": 134,
+    "bodyErrors": 0,
+    "transportRetries": 0,
+    "minimumBodyBytes": 306,
+    "maximumBodyBytes": 19290,
+    "bootstrapBodyBytes": [4318, 1255, 3213],
+    "cleanRestartAcceptance": "1/2"
+  },
+  "llm": {
+    "calls": 134,
+    "callSites": {
+      "init.bootstrap-map": 1,
+      "init.bootstrap": 2,
+      "ingest.evidence-map": 29,
+      "ingest.synthesize": 102
+    },
+    "inputTokens": 690327,
+    "outputTokens": 600049,
+    "totalTokens": 1290376,
+    "outputCapCalls": 9,
+    "outputCapTokens": 147456,
+    "outputCapDurationMs": 950356,
+    "outputCapShareOfRunPercent": 21.3
+  },
+  "structural": {
+    "evidenceSchemaRejects": 7,
+    "synthesisEmptyOutputs": 9,
+    "synthesisRepairSuccesses": 8,
+    "synthesisFinalRejects": 1,
+    "frameParseFailures": 0,
+    "jsonParseFailures": 0
+  },
+  "prompts": {
+    "synthesisPrimaryCalls": 92,
+    "averageEstimatedInputTokens": 24591,
+    "maximumEstimatedInputTokens": 30648,
+    "averageContractsTokens": 8969,
+    "averageEvidenceTokens": 1372,
+    "averageContextTokens": 5404,
+    "averagePageDescriptionTokens": 1384,
+    "averageRegistryTokens": 949,
+    "providerInputTokensForPrimarySynthesis": 542188,
+    "localToProviderInputEstimateRatio": 4.17
+  },
+  "articles": {
+    "created": 76,
+    "updated": 7,
+    "failedOperations": 1,
+    "markdownFiles": 76,
+    "sourceBytes": 80540,
+    "generatedBytes": 156977,
+    "pagesPerSource": 3.45,
+    "representedTypes": {
+      "application": 34,
+      "configuration": 35,
+      "environment-variable": 4,
+      "operating-system": 3
+    },
+    "configuredUnusedTypes": ["desktop-file", "script"],
+    "reservedMarkerLeakPages": 24,
+    "aliasCollisions": 7,
+    "confirmedDuplicatePairs": 2,
+    "invalidResourcePaths": 1,
+    "statusCounts": {
+      "stub": 72,
+      "developing": 4
+    }
+  },
+  "links": {
+    "intermediateWarnings": 113,
+    "intermediateUniqueTargets": 39,
+    "finalWikiLinkOccurrences": 101,
+    "finalDomainResolvedLinks": 38,
+    "finalSourceCitationLinks": 63,
+    "finalUnresolvedLinks": 0
+  },
+  "confirmedDefects": [
+    "Empty cap responses are retried as generic repairs with the same output budget.",
+    "The synthesis parser preserves model-emitted <<<END_CONTENT>>> lines as article Markdown.",
+    "New entities use the top retrieved page as required target context when no exact canonical target exists.",
+    "Existing aliases and titles are not used for canonical target reuse.",
+    "Optional wiki context outweighs source evidence and contaminates new pages.",
+    "Bounded evidence repair sends only a root custom code, not an actionable invariant.",
+    "The source entity cap drops fragment evidence instead of consolidating it into parent articles."
+  ],
+  "acceptance": {
+    "sources22of22": "pass",
+    "terminalDone": "pass",
+    "bootstrapTransportRetriesZero": "pass",
+    "nonCanonicalPathsZero": "pass",
+    "unknownEntityKeysZero": "pass",
+    "frameAndJsonParseFailuresZero": "pass",
+    "emptyOutputBelow2Percent": "fail",
+    "totalCallsBelow80": "fail",
+    "commandFragmentExplosionAbsent": "fail",
+    "articleContentClean": "fail",
+    "transportTwoCleanRestarts": "pending"
+  },
+  "decision": "fix"
+}

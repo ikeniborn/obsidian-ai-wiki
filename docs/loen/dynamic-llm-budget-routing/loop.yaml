@@ -1,0 +1,89 @@
+topic: dynamic-llm-budget-routing
+mode: research
+status: in-progress
+objective: Improve domain-neutral wiki generation quality, retry behavior, and retrieval depth using os-unix only as a replay corpus.
+current_stage: reflect
+stage: reflect
+created: 2026-07-23
+updated: 2026-07-27
+mutable_scope:
+  - src/agent-runner.ts
+  - src/native-openai-transport.ts
+  - src/native-llm-executor.ts
+  - src/phases/llm-utils.ts
+  - src/ingest-context.ts
+  - src/model-call-policy.ts
+  - src/prompt-budget.ts
+  - src/reranker.ts
+  - src/phases/framed-output.ts
+  - src/phases/ingest-evidence.ts
+  - src/phases/ingest-synthesis.ts
+  - src/phases/synthesis-evidence-ledger.ts
+  - src/phases/ingest.ts
+  - src/phases/init.ts
+  - src/phases/query-answer.ts
+  - src/phases/query-budget.ts
+  - src/phases/query.ts
+  - src/phases/query-cross-domain.ts
+  - src/phases/query-grounding-validator.ts
+  - src/phases/query-link-validator.ts
+  - src/phases/structured-output.ts
+  - src/phases/zod-schemas.ts
+  - src/settings.ts
+  - src/i18n.ts
+  - src/types.ts
+  - src/utils/raw-frontmatter.ts
+  - src/wiki-link-validator.ts
+  - prompts/ingest-evidence-map.md
+  - prompts/ingest-synthesis.md
+  - prompts/query.md
+  - tests/framed-output.test.ts
+  - tests/bounded-operations-acceptance.test.ts
+  - tests/ingest-bounded.test.ts
+  - tests/ingest-context.test.ts
+  - tests/ingest-evidence.test.ts
+  - tests/ingest-jsonl-index.test.ts
+  - tests/ingest-synthesis.test.ts
+  - tests/synthesis-evidence-ledger.test.ts
+  - tests/init-force-retry.test.ts
+  - tests/init-force-domain-wipe.test.ts
+  - tests/init-ingest-outcome.test.ts
+  - tests/model-call-policy.test.ts
+  - tests/native-openai-transport.test.ts
+  - tests/native-llm-executor.test.ts
+  - tests/query-budget.test.ts
+  - tests/query-parity.test.ts
+  - tests/reranker.test.ts
+  - tests/query-grounding-validator.test.ts
+  - tests/query-link-validator.test.ts
+  - tests/settings-model-controls.test.ts
+  - tests/structured-output.test.ts
+  - tests/wiki-link-validator.test.ts
+  - scripts/loen-dynamic-budget-routing/audit-page-integrity.mjs
+  - dist/main.js
+  - /tmp/ai-wiki-bounded-ingest-replay.SMt4rx/run/.obsidian/plugins/ai-wiki/main.js
+  - /tmp/ai-wiki-bounded-ingest-replay.SMt4rx/run/.obsidian/plugins/ai-wiki/data.json
+  - /tmp/ai-wiki-bounded-ingest-replay.SMt4rx/run/.obsidian/plugins/ai-wiki/agent.jsonl
+  - docs/loen/dynamic-llm-budget-routing/
+protected_scope:
+  - user source notes
+quality_gates:
+  - Record settings and session id for every variant.
+  - Preserve strict validation.
+  - Reject reserved frame markers inside article Markdown.
+  - Never infer an update target from retrieval rank alone.
+  - Preserve consolidated evidence instead of dropping capped entities.
+verifier:
+  command: node --import tsx --test tests/framed-output.test.ts tests/structured-output.test.ts tests/ingest-evidence.test.ts tests/synthesis-evidence-ledger.test.ts tests/ingest-synthesis.test.ts tests/ingest-bounded.test.ts
+budget:
+  max_variants: 5
+stop_conditions:
+  - Two consecutive variants blocked by the same external endpoint condition.
+handoff_conditions:
+  - Obsidian must be manually restarted for each live variant.
+rollback_policy: Restore evidence/baseline-data.json to test vault data.json.
+run:
+  plan_approved: true
+  plan_hash: stable-grounding-wire-compatibility-v1
+  mode: research
+  subtype: regression-repair

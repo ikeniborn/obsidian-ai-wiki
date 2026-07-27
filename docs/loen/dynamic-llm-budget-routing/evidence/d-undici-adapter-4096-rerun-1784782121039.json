@@ -1,0 +1,39 @@
+{
+  "variant": "d-undici-adapter-4096-rerun",
+  "session": "1784782121039",
+  "firstTs": "2026-07-23T04:48:41.039Z",
+  "lastTs": "2026-07-23T04:50:50.308Z",
+  "status": "running",
+  "diagnosticMode": "undici-request-adapter",
+  "transport": "desktop-direct",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrx16ycz-1",
+    "estimatedInputTokens": 7072,
+    "outputBudget": 4096,
+    "responseFormatType": "json_schema",
+    "hash": "fnv1a:b52c6a24"
+  },
+  "firstHttpMs": 19863,
+  "firstFileMs": 29123,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 7072,
+    "outputBudget": 4096
+  },
+  "transportRetries": 1,
+  "transportRecovered": 1,
+  "structuralRetries": 6,
+  "structuralSummary": [
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"noEvidence\",\n      0,\n      \"reason\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"reasoning\"\n    ],\n    \"path\": [\n      \"noEvidence\",\n      0\n    ],\n    \"message\": \"Unrecognized key(s) in object: 'reasoning'\"\n  }\n]",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"custom\",\n    \"message\": \"Unknown source chunk 2:23-33:fnv1a:4ce2d3\",\n    \"path\": []\n  }\n]",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"noEvidence\",\n      0,\n      \"reason\"\n    ],\n    \"message\": \"Required\"\n  }\n]",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"noEvidence\",\n      0,\n      \"reason\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"reasoning\"\n    ],\n    \"path\": [\n      \"noEvidence\",\n      0\n    ],\n    \"message\": \"Unrecognized key(s) in object: 'reasoning'\"\n  }\n]",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"custom\",\n    \"message\": \"Unknown source chunk 4:44-47:fnv1a:57a1e0c\",\n    \"path\": []\n  }\n]",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"noEvidence\",\n      0,\n      \"reason\"\n    ],\n    \"message\": \"Required\"\n  }\n]"
+  ],
+  "createdPages": 1,
+  "resultTexts": [
+    "Источник «Настройка прокси.md» → домен «os-unix»: создано 1 стр.",
+    "Источник «NFS Server.md» обработан — новых или изменённых страниц нет."
+  ]
+}

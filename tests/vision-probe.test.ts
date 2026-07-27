@@ -43,7 +43,7 @@ test("probe sends selected model, auth, inline PNG, and small output cap", async
   assert.equal((seen[0].headers as Record<string, string>).Authorization, "Bearer secret");
   const body = JSON.parse(String(seen[0].body));
   assert.equal(body.model, "vision-model");
-  assert.equal(body.max_tokens, 16);
+  assert.equal(body.max_completion_tokens, 16);
   assert.equal(body.stream, false);
   const dataUrl = body.messages[0].content[1].image_url.url as string;
   assert.match(dataUrl, /^data:image\/png;base64,/);

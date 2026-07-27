@@ -12,6 +12,13 @@ export interface NativeRetryDecision {
   providerRequestId?: string;
 }
 
+export class NativeResponseStartTimeoutError extends APIConnectionTimeoutError {
+  constructor(timeoutMs: number) {
+    super({ message: `LLM response start timeout after ${timeoutMs}ms` });
+    this.name = "NativeResponseStartTimeoutError";
+  }
+}
+
 const MAX_CAUSE_NODES = 16;
 const MAX_DELAY_MS = 8_000;
 const TEMPORARY_CODES = new Set([
@@ -135,6 +142,9 @@ export function classifyNativeRetry(error: unknown): NativeRetryDecision {
     if (shouldRetry === "true") return decision(true, "provider_retry", error);
   }
 
+  if (nodes.some((node) => node instanceof NativeResponseStartTimeoutError)) {
+    return decision(true, "response_start_timeout");
+  }
   if (error instanceof APIConnectionTimeoutError) return decision(true, "connection_timeout");
   if (error instanceof APIConnectionError) return decision(true, "connection");
 

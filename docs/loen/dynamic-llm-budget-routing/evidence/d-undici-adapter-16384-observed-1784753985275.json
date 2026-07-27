@@ -1,0 +1,32 @@
+{
+  "variant": "d-undici-adapter-16384-observed",
+  "session": "1784753985275",
+  "firstTs": "2026-07-22T20:59:45.275Z",
+  "lastTs": "2026-07-22T21:06:51.537Z",
+  "status": "done",
+  "diagnosticMode": "undici-request-adapter",
+  "transport": "desktop-direct",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrwkfwpf-1",
+    "estimatedInputTokens": 7312,
+    "outputBudget": 16384,
+    "responseFormatType": "json_schema",
+    "hash": "fnv1a:fae6ee8a"
+  },
+  "firstHttpMs": 35317,
+  "firstFileMs": 59226,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 7312,
+    "outputBudget": 16384
+  },
+  "transportRetries": 1,
+  "transportRecovered": 1,
+  "structuralRetries": 0,
+  "structuralSummary": [],
+  "createdPages": 12,
+  "resultTexts": [
+    "Источник «Настройка прокси.md» → домен «os-unix»: создано 6 стр.",
+    "Источник «NFS Server.md» → домен «os-unix»: создано 6 стр."
+  ]
+}

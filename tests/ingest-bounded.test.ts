@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { register } from "node:module";
 import test from "node:test";
 import type OpenAI from "openai";
+import { parse as yamlParse } from "yaml";
 import { contentHash } from "../src/content-hash";
 import type { DomainEntry } from "../src/domain";
 import { hashSource } from "../src/incremental-sources";
@@ -23,7 +24,7 @@ const { PageSimilarityService } = await import("../src/page-similarity");
 const { EmbeddingUnavailableError } = await import("../src/embedding-error");
 const { TransactionVaultTools } = await import("../src/file-transaction");
 const { runIngest } = await import("../src/phases/ingest");
-const { parseResourceFromFm } = await import("../src/utils/raw-frontmatter");
+const { parseAliasesFromFm, parseResourceFromFm } = await import("../src/utils/raw-frontmatter");
 const { VaultTools } = await import("../src/vault-tools");
 const { upsertPageIndex } = await import("../src/wiki-index-store");
 
@@ -160,6 +161,112 @@ function domain(): DomainEntry {
       wiki_subfolder: "concept",
     }],
   };
+}
+
+interface CreateIntegrityPage {
+  entityKey: string;
+  annotation: string;
+  modelDescription: string;
+  modelTimestamp?: string;
+  modelStatus?: string;
+  aliases?: string[];
+  title?: string;
+  compactH1?: boolean;
+}
+
+async function runCreateIntegrityCase(
+  pages: readonly CreateIntegrityPage[],
+  routing: { entityType: string; wikiSubfolder: string } = {
+    entityType: "concept",
+    wikiSubfolder: "concept",
+  },
+): Promise<{
+  adapter: MemoryAdapter;
+  events: RunEvent[];
+  outcome: IngestOutcome;
+}> {
+  const sourcePath = "src/create-integrity.md";
+  const adapter = new MemoryAdapter(new Map([
+    [sourcePath, pages.map((page) => `${page.entityKey} source fact.`).join("\n")],
+  ]));
+  const byLongestKey = [...pages].sort((left, right) => right.entityKey.length - left.entityKey.length);
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      const prompt = messageText(params);
+      if (prompt.includes("CHUNK_ID ")) {
+        const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
+        assert.ok(chunkId);
+        return mockChatResponse(params, JSON.stringify({
+          packets: pages.map((page, index) => ({
+            id: `packet-${page.entityKey}`,
+            chunkId,
+            entityKey: page.entityKey,
+            entityType: routing.entityType,
+            facts: [`${page.entityKey} source fact.`],
+            exactSourceRanges: [{ startLine: index + 1, endLine: index + 1 }],
+            links: [],
+            sourceAnchor: `${sourcePath}:${index + 1}`,
+          })),
+          noEvidence: [],
+        }));
+      }
+      const page = byLongestKey.find((candidate) =>
+        prompt.includes(`Entity bundle: entity-${candidate.entityKey}`));
+      if (!page) throw new Error("unexpected create-integrity synthesis call");
+      return mockChatResponse(params, JSON.stringify({
+        reasoning: `Create ${page.entityKey}.`,
+        actions: [{
+          kind: "create",
+          entityKey: page.entityKey,
+          path: `!Wiki/demo/${routing.wikiSubfolder}/wiki_demo_${page.entityKey.replaceAll("-", "_")}.md`,
+          annotation: page.annotation,
+          content: [
+            "---",
+            `type: ${routing.entityType}`,
+            `description: ${page.modelDescription}`,
+            "resource: [model-source]",
+            `timestamp: ${page.modelTimestamp ?? "2025-01-01"}`,
+            `status: ${page.modelStatus ?? "stub"}`,
+            ...(page.aliases ? [`aliases: [${page.aliases.join(", ")}]`] : []),
+            "---",
+            `${page.compactH1 ? "#" : "# "}${page.title ?? page.entityKey}`,
+            "",
+            "## Facts",
+            `${page.entityKey} source fact.`,
+            "",
+          ].join("\n"),
+        }],
+        skips: [],
+        entity_types_delta: [],
+      }));
+    } } },
+  } as unknown as LlmClient;
+
+  const result = await drain(runIngest(
+    [sourcePath],
+    new VaultTools(adapter, "/vault"),
+    llm,
+    "mock",
+    [{
+      ...domain(),
+      entity_types: [{
+        type: routing.entityType,
+        description: `A ${routing.entityType}.`,
+        extraction_cues: [routing.entityType],
+        wiki_subfolder: routing.wikiSubfolder,
+      }],
+    }],
+    "/vault",
+    new AbortController().signal,
+    {
+      inputBudgetTokens: 40_000,
+      maxTokens: 4_000,
+      structuredRetries: 0,
+      synthesisMaxEntityBatchSize: 1,
+    },
+    new PageSimilarityService({ mode: "jaccard", topK: 5 }),
+  ));
+  return { adapter, ...result };
 }
 
 async function runMultiBatchDeltaCase(
@@ -491,9 +598,11 @@ async function runCanonicalKnowledgeCase(
   failDuplicateIndexRemoval = false,
   afterDuplicateIndexRemoval?: (files: Map<string, string>) => void,
   queueUnrelatedIndexTransform = false,
+  regenerationOutput: "valid" | "legacy-flat" = "valid",
 ): Promise<{
   adapter: MemoryAdapter;
   duplicatePath: string;
+  events: RunEvent[];
   outcome: IngestOutcome;
   rerun: () => Promise<IngestOutcome>;
 }> {
@@ -546,6 +655,7 @@ async function runCanonicalKnowledgeCase(
   let lastIndex = index;
   let queuedIndexTransform: Promise<void> | undefined;
   let pageRaceArmed = false;
+  const events: RunEvent[] = [];
   let adapter!: MemoryAdapter;
   adapter = new MemoryAdapter(files, (path, data) => {
     if (path !== INDEX_PATH) return;
@@ -609,6 +719,17 @@ async function runCanonicalKnowledgeCase(
         const pageHash = prompt.match(/Fresh page hash: ([^\s]+)/)?.[1];
         const sectionHash = prompt.match(/"sectionHash": "([^"]+)"/)?.[1];
         assert.ok(pageHash && sectionHash);
+        if (regenerationOutput === "legacy-flat") {
+          return mockChatResponse(params, JSON.stringify({
+            entityKey: "knowledge",
+            targetPath: PAGE_PATH,
+            pageHash,
+            operation: "append",
+            heading: "## Facts",
+            expectedSectionHash: sectionHash,
+            exactSectionText: source,
+          }));
+        }
         return mockChatResponse(params, JSON.stringify({
           reasoning: "Merge incoming evidence.",
           actions: [{
@@ -659,7 +780,7 @@ async function runCanonicalKnowledgeCase(
       },
       refreshCache: async () => ({ updated: 0, failed: 0 }),
     } as unknown as PageSimilarityService;
-    return (await drain(runIngest(
+    const result = await drain(runIngest(
       [SOURCE_PATH],
       new VaultTools(adapter, "/vault"),
       llm,
@@ -676,11 +797,243 @@ async function runCanonicalKnowledgeCase(
         dedupThreshold: 0.85,
       },
       similarity,
-    ))).outcome;
+    ));
+    events.push(...result.events);
+    return result.outcome;
   };
   const outcome = await runOnce();
-  return { adapter, duplicatePath, outcome, rerun: runOnce };
+  return { adapter, duplicatePath, events, outcome, rerun: runOnce };
 }
+
+test("runIngest replaces invalid model frontmatter with governed parseable metadata", async () => {
+  const annotation = "Server-owned description: safe and parseable.";
+  const expectedDates = new Set([new Date().toISOString().slice(0, 10)]);
+  const { adapter, outcome } = await runCreateIntegrityCase([{
+    entityKey: "unsafe-description",
+    annotation,
+    modelDescription: "Model description: unquoted continuation.",
+    modelTimestamp: "2024-01-02",
+    modelStatus: "mature",
+  }]);
+  expectedDates.add(new Date().toISOString().slice(0, 10));
+
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  const content = adapter.files.get("!Wiki/demo/concept/wiki_demo_unsafe_description.md");
+  assert.ok(content);
+  const frontmatter = content.match(/^---\n([\s\S]*?)\n---\n/)?.[1];
+  assert.ok(frontmatter);
+  const parsed = yamlParse(frontmatter) as Record<string, unknown>;
+  assert.equal(parsed.type, "concept");
+  assert.equal(parsed.description, annotation);
+  assert.deepEqual(parsed.resource, ["src/create-integrity.md"]);
+  assert.equal(expectedDates.has(String(parsed.timestamp)), true, String(parsed.timestamp));
+  assert.notEqual(parsed.timestamp, "2024-01-02");
+  assert.equal(parsed.status, "stub");
+  assert.match(content, /unsafe-description source fact\./);
+});
+
+test("runIngest normalizes a compact leading H1 before writing a created page", async () => {
+  const { adapter, events, outcome } = await runCreateIntegrityCase([{
+    entityKey: "bashrc",
+    annotation: "Bash configuration.",
+    modelDescription: "Bash configuration.",
+    title: ".bashrc",
+    compactH1: true,
+  }]);
+
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  assert.equal(events.some((event) => event.kind === "info_text"
+    && event.summary.includes("wiki_demo_bashrc.md")
+    && event.details?.includes("H1: normalized compact heading")), true, JSON.stringify(events));
+  const content = adapter.files.get("!Wiki/demo/concept/wiki_demo_bashrc.md");
+  assert.ok(content);
+  assert.match(content, /^# \.bashrc$/m);
+  assert.doesNotMatch(content, /^#\.bashrc$/m);
+});
+
+test("runIngest serializes the canonical entity type instead of its plural subfolder", async () => {
+  const { adapter, outcome } = await runCreateIntegrityCase([{
+    entityKey: "proxy-profile",
+    annotation: "Proxy profile configuration.",
+    modelDescription: "Proxy profile configuration.",
+  }], {
+    entityType: "configuration",
+    wikiSubfolder: "configurations",
+  });
+
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  const content = adapter.files.get("!Wiki/demo/configurations/wiki_demo_proxy_profile.md");
+  assert.ok(content);
+  const frontmatter = content.match(/^---\n([\s\S]*?)\n---\n/)?.[1];
+  assert.ok(frontmatter);
+  const parsed = yamlParse(frontmatter) as Record<string, unknown>;
+  assert.equal(parsed.type, "configuration");
+  assert.deepEqual(parsed.tags, ["configuration"]);
+});
+
+test("runIngest removes a canonical alias from sibling pages created by the same source", async () => {
+  const { adapter, outcome } = await runCreateIntegrityCase([
+    {
+      entityKey: "tool",
+      annotation: "Canonical tool.",
+      modelDescription: "Canonical tool.",
+      aliases: ["tool"],
+    },
+    {
+      entityKey: "tool-config",
+      annotation: "Tool configuration.",
+      modelDescription: "Tool configuration.",
+      aliases: ["tool", "tool settings"],
+    },
+  ]);
+
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  const canonical = adapter.files.get("!Wiki/demo/concept/wiki_demo_tool.md");
+  const sibling = adapter.files.get("!Wiki/demo/concept/wiki_demo_tool_config.md");
+  assert.ok(canonical);
+  assert.ok(sibling);
+  assert.deepEqual(parseAliasesFromFm(canonical), ["tool"]);
+  assert.deepEqual(parseAliasesFromFm(sibling), ["tool settings"]);
+});
+
+test("runIngest removes an alias when its owner is only one of multiple primary owners", async () => {
+  const { adapter, outcome } = await runCreateIntegrityCase([
+    {
+      entityKey: "npm",
+      annotation: "Canonical npm application.",
+      modelDescription: "Canonical npm application.",
+    },
+    {
+      entityKey: "npm-global-config",
+      annotation: "Global npm configuration.",
+      modelDescription: "Global npm configuration.",
+      title: "npm",
+      aliases: ["npm", "npm settings"],
+    },
+  ]);
+
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  const sibling = adapter.files.get("!Wiki/demo/concept/wiki_demo_npm_global_config.md");
+  assert.ok(sibling);
+  assert.deepEqual(parseAliasesFromFm(sibling), ["npm settings"]);
+});
+
+test("runIngest preserves a localized alias whose Unicode identity differs from an ASCII primary", async () => {
+  const { adapter, outcome } = await runCreateIntegrityCase([
+    {
+      entityKey: "npm",
+      annotation: "Canonical npm application.",
+      modelDescription: "Canonical npm application.",
+    },
+    {
+      entityKey: "npm-global-config",
+      annotation: "Global npm configuration.",
+      modelDescription: "Global npm configuration.",
+      title: "Глобальная конфигурация npm",
+      aliases: ["Глобальная конфигурация npm", "npm settings"],
+    },
+  ]);
+
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  const sibling = adapter.files.get("!Wiki/demo/concept/wiki_demo_npm_global_config.md");
+  assert.ok(sibling);
+  assert.deepEqual(parseAliasesFromFm(sibling), ["Глобальная конфигурация npm", "npm settings"]);
+});
+
+test("runIngest appends an add patch when the live page already has that heading", async () => {
+  const sourcePath = "src/existing-section.md";
+  const source = "Add the grounded external reference https://new.example.";
+  const page = [
+    "---",
+    "type: concept",
+    "description: Alpha concept.",
+    "resource: [old-source]",
+    "tags: [concept]",
+    "---",
+    "# Alpha",
+    "",
+    "## Facts",
+    "Old fact.",
+    "",
+    "## External links",
+    "- [Existing](https://existing.example)",
+    "",
+    "## Sources",
+    "- [[old-source]]",
+    "",
+  ].join("\n");
+  const adapter = new MemoryAdapter(new Map([
+    [sourcePath, source],
+    ["src/old-source.md", "Old source."],
+    [PAGE_PATH, page],
+  ]));
+  let regenerationCalls = 0;
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      const prompt = messageText(params);
+      if (prompt.includes("CHUNK_ID ")) {
+        const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
+        assert.ok(chunkId);
+        return mockChatResponse(params, JSON.stringify({
+          packets: [{
+            id: `packet-${chunkId}`,
+            chunkId,
+            entityKey: "alpha",
+            entityType: "concept",
+            facts: [source],
+            exactSourceRanges: [{ startLine: 1, endLine: 1 }],
+            links: ["https://new.example"],
+            sourceAnchor: `${sourcePath}:1`,
+          }],
+          noEvidence: [],
+        }));
+      }
+      if (prompt.includes("Regenerate exactly one guarded patch")) {
+        regenerationCalls++;
+        throw new Error("deterministic existing-heading reconciliation was not applied");
+      }
+      const pageHash = prompt.match(/"pageHash":\s*"([^"]+)"/)?.[1];
+      assert.ok(pageHash);
+      return mockChatResponse(params, JSON.stringify({
+        reasoning: "Add a grounded link.",
+        actions: [{
+          kind: "patch",
+          entityKey: "alpha",
+          path: PAGE_PATH,
+          expectedPageHash: pageHash,
+          sections: [{
+            operation: "add",
+            heading: "## External links",
+            content: "- [New](https://new.example)",
+          }],
+        }],
+        skips: [],
+        entity_types_delta: [],
+      }));
+    } } },
+  } as unknown as LlmClient;
+  const similarity = {
+    config: { mode: "jaccard", topK: 5 },
+    loadCache: async () => {},
+    selectByEntities: async () => ({
+      results: new Map([["alpha::concept", [PAGE_PATH]]]),
+      allFailed: false,
+    }),
+    refreshCache: async () => ({ updated: 0, failed: 0 }),
+  } as unknown as PageSimilarityService;
+
+  const { outcome } = await drain(runIngest(
+    [sourcePath], new VaultTools(adapter, "/vault"), llm, "mock", [domain()], "/vault",
+    new AbortController().signal, { structuredRetries: 0 }, similarity,
+  ));
+
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  assert.equal(regenerationCalls, 0);
+  const updated = adapter.files.get(PAGE_PATH);
+  assert.ok(updated);
+  assert.match(updated, /\[Existing\]\(https:\/\/existing\.example\)/);
+  assert.match(updated, /\[New\]\(https:\/\/new\.example\)/);
+});
 
 test("bounded ingest never exposes raw chunk vectors and emits in-budget telemetry", async () => {
   const source = "Alpha is covered by the source.";
@@ -976,26 +1329,767 @@ test("ingest provenance stores full source path and deduplicates Sources links",
   assert.equal((content.match(/^- \[\[src\/source\.md\]\]$/gm) ?? []).length, 0);
 });
 
-test("runIngest closes validated synthesis lifecycles on strict routing rejection", async () => {
+test("runIngest canonicalizes LLM create routes before lifecycle completion", async () => {
   const { adapter, events, outcome } = await runMultiBatchDeltaCase(false, true);
 
-  assert.equal(outcome.ok, false, JSON.stringify(outcome));
-  if (!outcome.ok) {
-    assert.equal(outcome.stage, "patch");
-    assert.match(outcome.message, /strict type routing/);
-  }
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
   assert.equal(adapter.writes.some((path) => path.match(/wiki_demo_wrong_/)), false);
+  assert.equal(adapter.files.has("!Wiki/demo/concept/wiki_demo_alpha.md"), true);
+  assert.equal(adapter.files.has("!Wiki/demo/concept/wiki_demo_beta.md"), true);
   const lifecycle = events.filter((event) =>
     event.kind === "llm_lifecycle" && event.action === "synthesize_wiki_pages");
   assert.ok(lifecycle.length > 0);
   for (const id of new Set(lifecycle.map((event) => event.id))) {
     const phases = lifecycle.filter((event) => event.id === id).map((event) => event.phase);
     assert.deepEqual(phases, [
-      "preparing", "sent", "waiting", "producing", "validating", "failed",
+      "preparing", "sent", "waiting", "producing", "validating", "applying", "completed",
     ]);
     assert.equal(phases.filter((phase) =>
       ["completed", "failed", "cancelled"].includes(phase)).length, 1);
   }
+});
+
+async function runIdentityContextCase(mode: "alias-update" | "create"): Promise<{
+  adapter: MemoryAdapter;
+  outcome: IngestOutcome;
+  synthesisPrompt: string;
+}> {
+  const sourcePath = `src/${mode}.md`;
+  const source = mode === "alias-update" ? "Alias evidence." : "New entity evidence.";
+  const canonicalPath = "!Wiki/demo/concept/wiki_demo_canonical.md";
+  const unrelatedPath = "!Wiki/demo/concept/wiki_demo_unrelated.md";
+  const canonical = [
+    "---",
+    "type: concept",
+    "description: Canonical page.",
+    "aliases: [alpha-alias]",
+    "resource: [old-source]",
+    "---",
+    "# Canonical",
+    "",
+    "## Facts",
+    "CANONICAL_TARGET_BODY",
+    "",
+  ].join("\n");
+  const unrelated = [
+    "---",
+    "type: concept",
+    "description: Unrelated page.",
+    "resource: [old-source]",
+    "---",
+    "# Unrelated",
+    "",
+    "## Facts",
+    "UNRELATED_BODY_MUST_NOT_REACH_SYNTHESIS",
+    "",
+  ].join("\n");
+  const adapter = new MemoryAdapter(new Map([
+    [sourcePath, source],
+    [canonicalPath, canonical],
+    [unrelatedPath, unrelated],
+  ]));
+  let synthesisPrompt = "";
+  const entityKey = mode === "alias-update" ? "alpha-alias" : "new-entity";
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      const prompt = messageText(params);
+      if (prompt.includes("CHUNK_ID ")) {
+        const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
+        assert.ok(chunkId);
+        return mockChatResponse(params, JSON.stringify({
+          packets: [{
+            id: `packet-${entityKey}`,
+            chunkId,
+            entityKey,
+            entityType: "concept",
+            facts: [source],
+            exactSourceRanges: [{ startLine: 1, endLine: 1 }],
+            links: [],
+            sourceAnchor: `${sourcePath}:1`,
+          }],
+          noEvidence: [],
+        }));
+      }
+      synthesisPrompt = prompt;
+      if (mode === "alias-update") {
+        const pageHash = prompt.match(/"pageHash":\s*"([^"]+)"/)?.[1];
+        assert.ok(pageHash);
+        return mockChatResponse(params, JSON.stringify({
+          reasoning: "Reuse canonical alias target.",
+          actions: [{
+            kind: "patch",
+            entityKey,
+            path: canonicalPath,
+            expectedPageHash: pageHash,
+            sections: [{ operation: "append", heading: "## Facts", content: source }],
+          }],
+          skips: [],
+          entity_types_delta: [],
+        }));
+      }
+      return mockChatResponse(params, JSON.stringify({
+        reasoning: "Create new entity.",
+        actions: [{
+          kind: "create",
+          entityKey,
+          path: "!Wiki/demo/concept/wiki_demo_new_entity.md",
+          annotation: "New entity.",
+          content: "# New Entity\n\n## Facts\nNew entity evidence.\n",
+        }],
+        skips: [],
+        entity_types_delta: [],
+      }));
+    } } },
+  } as unknown as LlmClient;
+  const similarity = {
+    config: { mode: "jaccard", topK: 5 },
+    loadCache: async () => {},
+    selectByEntities: async (entities: Array<{ name: string; type?: string }>) => ({
+      results: new Map(entities.map((entity) => [
+        `${entity.name}::${entity.type ?? ""}`,
+        [unrelatedPath],
+      ])),
+      allFailed: false,
+    }),
+    refreshCache: async () => ({ updated: 0, failed: 0 }),
+  } as unknown as PageSimilarityService;
+  const { outcome } = await drain(runIngest(
+    [sourcePath],
+    new VaultTools(adapter, "/vault"),
+    llm,
+    "mock",
+    [domain()],
+    "/vault",
+    new AbortController().signal,
+    {
+      inputBudgetTokens: 20_000,
+      maxTokens: 1_000,
+      semanticCompression: { profile: "balanced", operation: "ingest" },
+      structuredRetries: 0,
+    },
+    similarity,
+  ));
+  return { adapter, outcome, synthesisPrompt };
+}
+
+test("runIngest reuses a unique canonical alias and sends only its target context", async () => {
+  const { adapter, outcome, synthesisPrompt } = await runIdentityContextCase("alias-update");
+
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  assert.match(synthesisPrompt, /CANONICAL_TARGET_BODY/);
+  assert.doesNotMatch(synthesisPrompt, /UNRELATED_BODY_MUST_NOT_REACH_SYNTHESIS/);
+  assert.equal(adapter.files.has("!Wiki/demo/concept/wiki_demo_alpha_alias.md"), false);
+  assert.match(adapter.files.get("!Wiki/demo/concept/wiki_demo_canonical.md") ?? "", /Alias evidence\./);
+});
+
+test("runIngest consolidates aliases sharing one canonical target into one patch", async () => {
+  const sourcePath = "src/same-target.md";
+  const source = "Delete a user.\nModify a user.";
+  const canonicalPath = "!Wiki/demo/concept/wiki_demo_user_management.md";
+  const canonical = [
+    "---",
+    "type: concept",
+    "description: User management commands.",
+    "aliases: [userdel, usermod]",
+    "resource: [old-source]",
+    "---",
+    "# User management",
+    "",
+    "## Facts",
+    "Existing fact.",
+    "",
+  ].join("\n");
+  const adapter = new MemoryAdapter(new Map([
+    [sourcePath, source],
+    [canonicalPath, canonical],
+  ]));
+  let synthesisCalls = 0;
+  let synthesisPrompt = "";
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      const prompt = messageText(params);
+      if (prompt.includes("CHUNK_ID ")) {
+        const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
+        assert.ok(chunkId);
+        return mockChatResponse(params, JSON.stringify({
+          packets: [{
+            id: "packet-userdel",
+            chunkId,
+            entityKey: "userdel",
+            entityType: "concept",
+            facts: ["Delete a user."],
+            exactSourceRanges: [{ startLine: 1, endLine: 1 }],
+            links: [],
+            sourceAnchor: `${sourcePath}:1`,
+          }, {
+            id: "packet-usermod",
+            chunkId,
+            entityKey: "usermod",
+            entityType: "concept",
+            facts: ["Modify a user."],
+            exactSourceRanges: [{ startLine: 2, endLine: 2 }],
+            links: [],
+            sourceAnchor: `${sourcePath}:2`,
+          }],
+          noEvidence: [],
+        }));
+      }
+      synthesisCalls += 1;
+      synthesisPrompt = prompt;
+      const pageHash = prompt.match(/"pageHash":\s*"([^"]+)"/)?.[1];
+      assert.ok(pageHash);
+      const entityKey = prompt.match(/Entity bundle: entity-([^\n]+)/)?.[1];
+      assert.ok(entityKey);
+      return mockChatResponse(params, JSON.stringify({
+        reasoning: "Update the canonical alias target once.",
+        actions: [{
+          kind: "patch",
+          entityKey,
+          path: canonicalPath,
+          expectedPageHash: pageHash,
+          sections: [{
+            operation: "append",
+            heading: "## Facts",
+            content: "Delete a user. Modify a user.",
+          }],
+        }],
+        skips: [],
+        entity_types_delta: [],
+      }));
+    } } },
+  } as unknown as LlmClient;
+  const similarity = {
+    config: { mode: "jaccard", topK: 5 },
+    loadCache: async () => {},
+    selectByEntities: async (entities: Array<{ name: string; type?: string }>) => ({
+      results: new Map(entities.map((entity) => [`${entity.name}::${entity.type ?? ""}`, []])),
+      allFailed: false,
+    }),
+    refreshCache: async () => ({ updated: 0, failed: 0 }),
+  } as unknown as PageSimilarityService;
+
+  const { outcome } = await drain(runIngest(
+    [sourcePath],
+    new VaultTools(adapter, "/vault"),
+    llm,
+    "mock",
+    [domain()],
+    "/vault",
+    new AbortController().signal,
+    {
+      inputBudgetTokens: 20_000,
+      maxTokens: 1_000,
+      structuredRetries: 0,
+      synthesisMaxEntityBatchSize: 1,
+    },
+    similarity,
+  ));
+
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  assert.equal(synthesisCalls, 1);
+  assert.match(synthesisPrompt, /"consolidatedEntityKeys":\s*\[\s*"usermod"/);
+  assert.match(synthesisPrompt, /Delete a user\./);
+  assert.match(synthesisPrompt, /Modify a user\./);
+  assert.match(adapter.files.get(canonicalPath) ?? "", /Delete a user\. Modify a user\./);
+  assert.equal(adapter.writes.filter((path) => path === canonicalPath).length, 1);
+});
+
+test("runIngest create synthesis receives no retrieved page bodies", async () => {
+  const { adapter, outcome, synthesisPrompt } = await runIdentityContextCase("create");
+
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  assert.doesNotMatch(synthesisPrompt, /CANONICAL_TARGET_BODY|UNRELATED_BODY_MUST_NOT_REACH_SYNTHESIS/);
+  assert.equal(adapter.files.has("!Wiki/demo/concept/wiki_demo_new_entity.md"), true);
+});
+
+test("runIngest consolidates small adjacent entity evidence into one parent synthesis bundle", async () => {
+  const sourcePath = "src/consolidated.md";
+  const source = "Parent overview.\nOne-off flag detail.";
+  const adapter = new MemoryAdapter(new Map([[sourcePath, source]]));
+  const consolidationDomain = domain();
+  consolidationDomain.entity_types?.push({
+    type: "application",
+    description: "An application.",
+    extraction_cues: ["Tool"],
+    wiki_subfolder: "application",
+  });
+  let synthesisPrompt = "";
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      const prompt = messageText(params);
+      if (prompt.includes("CHUNK_ID ")) {
+        const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
+        assert.ok(chunkId);
+        return mockChatResponse(params, JSON.stringify({
+          packets: [{
+            id: "packet-parent",
+            chunkId,
+            entityKey: "parent",
+            entityType: "concept",
+            facts: ["Parent overview.", "Parent procedure."],
+            exactSourceRanges: [{ startLine: 1, endLine: 2 }],
+            links: [],
+            sourceAnchor: `${sourcePath}:1`,
+          }, {
+            id: "packet-one-off",
+            chunkId,
+            entityKey: "one-off-flag",
+            facts: ["One-off flag detail."],
+            exactSourceRanges: [{ startLine: 2, endLine: 2 }],
+            links: [],
+            sourceAnchor: `${sourcePath}:2`,
+          }],
+          noEvidence: [],
+        }));
+      }
+      synthesisPrompt = prompt;
+      assert.match(prompt, /Entity bundle: entity-parent/);
+      assert.doesNotMatch(prompt, /Entity bundle: entity-one-off-flag/);
+      assert.match(prompt, /"consolidatedEntityKeys":\s*\[\s*"one-off-flag"/);
+      assert.match(prompt, /One-off flag detail\./);
+      assert.match(prompt, /named H2\/H3 subsection/);
+      assert.match(prompt, /never replace them with examples/);
+      return mockChatResponse(params, JSON.stringify({
+        reasoning: "Create consolidated parent.",
+        actions: [{
+          kind: "create",
+          entityKey: "parent",
+          path: "!Wiki/demo/concept/wiki_demo_parent.md",
+          annotation: "Parent concept.",
+          content: "# Parent\n\n## Facts\nParent overview. One-off flag detail.\n",
+        }],
+        skips: [],
+        entity_types_delta: [],
+      }));
+    } } },
+  } as unknown as LlmClient;
+
+  const { events, outcome } = await drain(runIngest(
+    [sourcePath],
+    new VaultTools(adapter, "/vault"),
+    llm,
+    "mock",
+    [consolidationDomain],
+    "/vault",
+    new AbortController().signal,
+    {
+      inputBudgetTokens: 20_000,
+      maxTokens: 1_000,
+      semanticCompression: { profile: "balanced", operation: "ingest" },
+      structuredRetries: 0,
+    },
+    new PageSimilarityService({ mode: "jaccard", topK: 5 }),
+  ));
+
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  assert.match(synthesisPrompt, /One-off flag detail\./);
+  assert.equal(adapter.files.has("!Wiki/demo/concept/wiki_demo_parent.md"), true);
+  assert.equal(adapter.files.has("!Wiki/demo/concept/wiki_demo_one_off_flag.md"), false);
+  assert.equal(events.some((event) => event.kind === "info_text" && event.summary.includes("Synthesis consolidation applied")), true);
+});
+
+async function runSynthesisCapCase(
+  maxBatchSize?: number,
+  maxEntitiesPerSource?: number,
+  sourceFileName: string = "synthesis-cap",
+  entityKeys: string[] = ["alpha", "beta", "gamma", "delta", "epsilon"],
+): Promise<{
+  adapter: MemoryAdapter;
+  events: RunEvent[];
+  outcome: IngestOutcome;
+  synthesisPrompts: string[][];
+}> {
+  const sourcePath = `src/${sourceFileName}.md`;
+  const source = entityKeys.map((key) => `${key.toUpperCase()} source fact.`).join("\n");
+  const adapter = new MemoryAdapter(new Map([[sourcePath, source]]));
+  const synthesisPrompts: string[][] = [];
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      const prompt = messageText(params);
+      if (prompt.includes("CHUNK_ID ")) {
+        const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
+        assert.ok(chunkId);
+        const packets = [...prompt.matchAll(/^CHUNK_LINE (\d+) \| (.*)$/gm)].flatMap((match) => {
+          const key = entityKeys.find((candidate) => match[2].startsWith(candidate.toUpperCase()));
+          if (key === undefined) return [];
+          return [{
+            id: `packet-${key}`,
+            chunkId,
+            entityKey: key,
+            entityType: "concept",
+            facts: [`${key} fact`],
+            exactSourceRanges: [{ startLine: Number(match[1]), endLine: Number(match[1]) }],
+            links: [],
+            sourceAnchor: `${sourcePath}:${match[1]}`,
+          }];
+        });
+        return mockChatResponse(params, JSON.stringify({ packets, noEvidence: [] }));
+      }
+      const batchKeys = entityKeys.filter((key) => prompt.includes(`Entity bundle: entity-${key}`));
+      if (batchKeys.length > 0) {
+        synthesisPrompts.push(batchKeys);
+        return mockChatResponse(params, JSON.stringify({
+          reasoning: `Create ${batchKeys.join(", ")}.`,
+          actions: batchKeys.map((key) => ({
+            kind: "create",
+            entityKey: key,
+            path: `!Wiki/demo/concept/wiki_demo_${key}.md`,
+            annotation: `${key} concept.`,
+            content: [
+              "---",
+              "type: concept",
+              `description: ${key} concept.`,
+              "resource: [synthesis-cap]",
+              "---",
+              `# ${key}`,
+              "",
+              "## Facts",
+              `${key} fact.`,
+              "",
+            ].join("\n"),
+          })),
+          skips: [],
+          entity_types_delta: [],
+        }));
+      }
+      throw new Error("unexpected synthesis cap call");
+    } } },
+  } as unknown as LlmClient;
+
+  const { events, outcome } = await drain(runIngest(
+    [sourcePath],
+    new VaultTools(adapter, "/vault"),
+    llm,
+    "mock",
+    [domain()],
+    "/vault",
+    new AbortController().signal,
+    {
+      inputBudgetTokens: 100_000,
+      maxTokens: 1_000,
+      semanticCompression: { profile: "balanced", operation: "ingest" },
+      structuredRetries: 0,
+      ...(maxBatchSize === undefined ? {} : { synthesisMaxEntityBatchSize: maxBatchSize }),
+      ...(maxEntitiesPerSource === undefined ? {} : { synthesisMaxEntitiesPerSource: maxEntitiesPerSource }),
+    },
+    new PageSimilarityService({ mode: "jaccard", topK: 5 }),
+  ));
+  return { adapter, events, outcome, synthesisPrompts };
+}
+
+test("runIngest caps synthesis entity batch size to reduce retry blast radius", async () => {
+  const { adapter, synthesisPrompts, outcome } = await runSynthesisCapCase();
+  const entityKeys = ["alpha", "beta", "gamma", "delta", "epsilon"];
+
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  assert.deepEqual(synthesisPrompts, [
+    ["alpha"],
+    ["beta"],
+    ["delta"],
+    ["epsilon"],
+    ["gamma"],
+  ]);
+  assert.equal(entityKeys.every((key) =>
+    adapter.files.has(`!Wiki/demo/concept/wiki_demo_${key}.md`)), true);
+});
+
+test("runIngest accepts a configured synthesis entity batch size", async () => {
+  const { synthesisPrompts, outcome } = await runSynthesisCapCase(3);
+
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  assert.deepEqual(synthesisPrompts, [
+    ["alpha", "beta", "delta"],
+    ["gamma", "epsilon"],
+  ]);
+});
+
+test("runIngest bounds new standalone pages and preserves overflow in the source carrier prompt", async () => {
+  const { adapter, events, synthesisPrompts, outcome } = await runSynthesisCapCase(1, 2);
+
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  assert.deepEqual(synthesisPrompts, [
+    ["alpha"],
+    ["beta"],
+  ]);
+  assert.equal(adapter.files.has("!Wiki/demo/concept/wiki_demo_alpha.md"), true);
+  assert.equal(adapter.files.has("!Wiki/demo/concept/wiki_demo_beta.md"), true);
+  assert.equal(adapter.files.has("!Wiki/demo/concept/wiki_demo_gamma.md"), false);
+  assert.equal(adapter.files.has("!Wiki/demo/concept/wiki_demo_delta.md"), false);
+  assert.equal(adapter.files.has("!Wiki/demo/concept/wiki_demo_epsilon.md"), false);
+  assert.equal(events.some((event) =>
+    event.kind === "info_text"
+    && event.summary.includes("Synthesis consolidation applied: 2/5")), true);
+  assert.equal(events.some((event) =>
+    event.kind === "info_text"
+    && event.details?.some((detail) => detail.includes("consolidated into alpha"))), true);
+});
+
+test("runIngest prefers the source-title entity as the bounded coverage carrier", async () => {
+  const { adapter, synthesisPrompts, outcome } = await runSynthesisCapCase(
+    1,
+    1,
+    "Fail2Ban",
+    ["iptables", "fail2ban", "nftables"],
+  );
+
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  assert.deepEqual(synthesisPrompts, [["fail2ban"]]);
+  assert.equal(adapter.files.has("!Wiki/demo/concept/wiki_demo_fail2ban.md"), true);
+  assert.equal(adapter.files.has("!Wiki/demo/concept/wiki_demo_iptables.md"), false);
+});
+
+test("runIngest reconciles exact source technical evidence without another model call", async () => {
+  const sourcePath = "src/alpha.md";
+  const source = [
+    "# Alpha",
+    "",
+    "Run:",
+    "```bash",
+    "sudo safe --flag",
+    "```",
+    "Reference: https://example.com/safe",
+  ].join("\n");
+  const pagePath = "!Wiki/demo/concept/wiki_demo_alpha.md";
+  const adapter = new MemoryAdapter(new Map([[sourcePath, source]]));
+  let calls = 0;
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      calls += 1;
+      const prompt = messageText(params);
+      if (prompt.includes("CHUNK_ID ")) {
+        const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
+        assert.ok(chunkId);
+        return mockChatResponse(params, JSON.stringify({
+          packets: [{
+            id: "packet-alpha",
+            chunkId,
+            entityKey: "alpha",
+            entityType: "concept",
+            facts: ["Run sudo safe --flag.", "Reference: https://example.com/safe"],
+            exactSourceRanges: [{ startLine: 3, endLine: 7 }],
+            links: [],
+            sourceAnchor: `${sourcePath}:3`,
+          }],
+          noEvidence: [],
+        }));
+      }
+      assert.match(prompt, /Entity bundle: entity-alpha/);
+      return mockChatResponse(params, JSON.stringify({
+        reasoning: "Create alpha with an unsupported technical draft.",
+        actions: [{
+          kind: "create",
+          entityKey: "alpha",
+          path: pagePath,
+          annotation: "Alpha procedure.",
+          content: [
+            "# Alpha",
+            "",
+            "## Facts",
+            "Use this generated command:",
+            "```bash",
+            "sudo invented --danger",
+            "```",
+            "See https://invented.example/bad.",
+            "",
+          ].join("\n"),
+        }],
+        skips: [],
+        entity_types_delta: [],
+      }));
+    } } },
+  } as unknown as LlmClient;
+
+  const { events, outcome } = await drain(runIngest(
+    [sourcePath],
+    new VaultTools(adapter, "/vault"),
+    llm,
+    "mock",
+    [domain()],
+    "/vault",
+    new AbortController().signal,
+    {
+      inputBudgetTokens: 40_000,
+      maxTokens: 4_000,
+      structuredRetries: 0,
+      synthesisMaxEntityBatchSize: 1,
+    },
+    new PageSimilarityService({ mode: "jaccard", topK: 5 }),
+  ));
+
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  assert.equal(calls, 2);
+  const page = adapter.files.get(pagePath) ?? "";
+  assert.match(page, /sudo safe --flag/);
+  assert.match(page, /https:\/\/example\.com\/safe/);
+  assert.doesNotMatch(page, /sudo invented --danger|https:\/\/invented\.example\/bad/);
+  assert.equal(events.some((event) =>
+    event.kind === "rule_fired" && event.ruleId === "synthesisEvidenceSanitize"), true);
+  assert.equal(events.some((event) =>
+    event.kind === "rule_fired" && event.ruleId === "synthesisEvidenceAppend"), true);
+});
+
+test("runIngest fails before page writes when a skipped technical ledger has no representation", async () => {
+  const sourcePath = "src/unrepresented.md";
+  const source = [
+    "# Unrepresented",
+    "",
+    "```bash",
+    "sudo source-only --flag",
+    "```",
+  ].join("\n");
+  const adapter = new MemoryAdapter(new Map([[sourcePath, source]]));
+  let calls = 0;
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      calls += 1;
+      const prompt = messageText(params);
+      if (prompt.includes("CHUNK_ID ")) {
+        const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
+        assert.ok(chunkId);
+        return mockChatResponse(params, JSON.stringify({
+          packets: [{
+            id: "packet-unrepresented",
+            chunkId,
+            entityKey: "unrepresented",
+            entityType: "concept",
+            facts: ["Run sudo source-only --flag."],
+            exactSourceRanges: [{ startLine: 3, endLine: 5 }],
+            links: [],
+            sourceAnchor: `${sourcePath}:3`,
+          }],
+          noEvidence: [],
+        }));
+      }
+      assert.match(prompt, /Entity bundle: entity-unrepresented/);
+      return mockChatResponse(params, JSON.stringify({
+        reasoning: "Skip without persisting the supplied technical evidence.",
+        actions: [],
+        skips: [{ entityKey: "unrepresented", reason: "No page needed." }],
+        entity_types_delta: [],
+      }));
+    } } },
+  } as unknown as LlmClient;
+
+  const { events, outcome } = await drain(runIngest(
+    [sourcePath],
+    new VaultTools(adapter, "/vault"),
+    llm,
+    "mock",
+    [domain()],
+    "/vault",
+    new AbortController().signal,
+    {
+      inputBudgetTokens: 40_000,
+      maxTokens: 4_000,
+      structuredRetries: 0,
+      synthesisMaxEntityBatchSize: 1,
+    },
+    new PageSimilarityService({ mode: "jaccard", topK: 5 }),
+  ));
+
+  assert.equal(outcome.ok, false);
+  if (outcome.ok) assert.fail("expected technical evidence coverage failure");
+  assert.equal(outcome.stage, "patch");
+  assert.match(outcome.message, /technical evidence item\(s\) have no persisted representation/);
+  assert.equal(calls, 2);
+  assert.equal([...adapter.files.keys()].some((path) =>
+    path.startsWith("!Wiki/demo/concept/") && path.endsWith(".md")), false);
+  assert.equal(events.some((event) =>
+    event.kind === "error" && /no persisted representation/.test(event.message)), true);
+});
+
+test("runIngest uses the dedicated repair input budget for a fresh field-frame retry", async () => {
+  const sourcePath = "src/frame-repair.md";
+  const adapter = new MemoryAdapter(new Map([[sourcePath, "Alpha source fact."]]));
+  const synthesisRequests: Array<Record<string, unknown>> = [];
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      const request = params as Record<string, unknown>;
+      const prompt = messageText(params);
+      if (prompt.includes("CHUNK_ID ")) {
+        const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
+        assert.ok(chunkId);
+        return mockChatResponse(params, JSON.stringify({
+          packets: [{
+            id: "packet-alpha",
+            chunkId,
+            entityKey: "alpha",
+            entityType: "concept",
+            facts: ["Alpha source fact."],
+            exactSourceRanges: [{ startLine: 1, endLine: 1 }],
+            links: [],
+            sourceAnchor: `${sourcePath}:1`,
+          }],
+          noEvidence: [],
+        }));
+      }
+      if (prompt.includes("Entity bundle: entity-alpha")) {
+        synthesisRequests.push(request);
+        if (synthesisRequests.length === 1) {
+          return mockChatResponse(params, [
+            "## CREATE",
+            "entityKey: alpha",
+            "path: !Wiki/demo/concept/wiki_demo_alpha.md",
+            "annotation: Alpha concept.",
+            "## CONTENT",
+            "# Alpha",
+            "",
+            "## Facts",
+            "Alpha source fact.",
+          ].join("\n"));
+        }
+        return mockChatResponse(params, [
+          "<<<CREATE>>>",
+          "entityKey: alpha",
+          "path: !Wiki/demo/concept/wiki_demo_alpha.md",
+          "annotation: Alpha concept.",
+          "<<<CONTENT>>>",
+          "# Alpha",
+          "",
+          "## Facts",
+          "Alpha source fact.",
+          "<<<END_CONTENT>>>",
+          "<<<END_CREATE>>>",
+          "<<<END>>>",
+        ].join("\n"));
+      }
+      throw new Error("unexpected field-frame repair call");
+    } } },
+  } as unknown as LlmClient;
+
+  const { events, outcome } = await drain(runIngest(
+    [sourcePath],
+    new VaultTools(adapter, "/vault"),
+    llm,
+    "mock",
+    [domain()],
+    "/vault",
+    new AbortController().signal,
+    {
+      inputBudgetTokens: 12_500,
+      repairInputBudgetTokens: 65_536,
+      maxTokens: 4_096,
+      outputRetryBudgetTokens: 65_536,
+      semanticCompression: { profile: "balanced", operation: "ingest" },
+      structuredRetries: 1,
+    },
+    new PageSimilarityService({ mode: "jaccard", topK: 5 }),
+  ));
+
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  assert.equal(synthesisRequests.length, 2);
+  const retryMessages = synthesisRequests[1].messages as Array<{ role: string; content: string }>;
+  assert.equal(retryMessages.some((message) => message.role === "assistant"), false);
+  assert.match(retryMessages.at(-1)?.content ?? "", /exact <<<CREATE>>> field-frame marker/i);
+  const synthesisBudgets = events.filter((event): event is Extract<RunEvent, { kind: "prompt_budget" }> =>
+    event.kind === "prompt_budget" && event.callSite === "ingest.synthesize");
+  assert.deepEqual(synthesisBudgets.map((event) => event.effectiveInputBudget), [12_500, 65_536]);
+  assert.ok((synthesisBudgets[1]?.estimatedInputTokens ?? 0) > 12_500);
+  assert.equal(events.some((event) =>
+    event.kind === "structural_error"
+    && event.callSite === "ingest.synthesize"
+    && event.errorType === "frame_parse"
+    && event.succeeded === true), true);
 });
 
 test("dedup retargets a new draft to a guarded canonical-page patch", async () => {
@@ -1437,6 +2531,30 @@ test("canonical merge deletes an exact normalized duplicate after evidence union
   assert.equal(outcome.ok, true, JSON.stringify(outcome));
   assert.equal(adapter.files.has(duplicatePath), false);
   if (outcome.ok) assert.deepEqual(outcome.deleted, [duplicatePath]);
+});
+
+test("canonical merge defers invalid duplicate regeneration without failing source", async () => {
+  const { adapter, duplicatePath, events, outcome } = await runCanonicalKnowledgeCase(
+    mergePage({ resource: "old-source", facts: "Canonical fact." }),
+    mergePage({ resource: "duplicate-old", facts: "Incoming merge fact." }),
+    false,
+    undefined,
+    false,
+    "legacy-flat",
+  );
+
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  assert.equal(adapter.files.has("!Wiki/demo/concept/wiki_demo_knowledge.md"), false);
+  assert.equal(adapter.files.has(duplicatePath), true);
+  assert.match(adapter.files.get(PAGE_PATH)!, /Canonical fact/);
+  assert.doesNotMatch(adapter.files.get(PAGE_PATH)!, /Incoming merge fact/);
+  if (outcome.ok) {
+    assert.deepEqual(outcome.created, []);
+    assert.deepEqual(outcome.updated, []);
+    assert.deepEqual(outcome.deleted, []);
+  }
+  assert.equal(events.some((event) =>
+    event.kind === "info_text" && event.summary === "Duplicate merge deferred"), true);
 });
 
 test("canonical merge removes index first and retry clears duplicate chunks safely", async () => {
@@ -2129,7 +3247,7 @@ test("ordinary guarded patch unions old and current source provenance", async ()
   assert.match(updated, /- \[\[old-source\]\]/);
 });
 
-test("failed canonical merge never deletes a duplicate candidate", async () => {
+test("deferred canonical merge never deletes a duplicate candidate", async () => {
   const duplicatePath = "!Wiki/demo/concept/wiki_demo_existing_duplicate.md";
   const source = "Duplicate failure fact.";
   const canonical = [
@@ -2218,7 +3336,7 @@ test("failed canonical merge never deletes a duplicate candidate", async () => {
     },
   } as unknown as PageSimilarityService;
 
-  const { outcome } = await drain(runIngest(
+  const { events, outcome } = await drain(runIngest(
     [SOURCE_PATH], new VaultTools(adapter, "/vault"), llm, "mock", [domain()], "/vault",
     new AbortController().signal, {
       inputBudgetTokens: 20_000,
@@ -2230,8 +3348,10 @@ test("failed canonical merge never deletes a duplicate candidate", async () => {
     }, similarity,
   ));
 
-  assert.equal(outcome.ok, false);
-  if (!outcome.ok) assert.equal(outcome.stage, "patch");
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
+  assert.equal(adapter.files.has("!Wiki/demo/concept/wiki_demo_incoming.md"), false);
   assert.equal(adapter.files.has(duplicatePath), true);
   assert.equal(adapter.files.get(INDEX_PATH)!.includes("wiki_demo_existing_duplicate"), true);
+  assert.equal(events.some((event) =>
+    event.kind === "info_text" && event.summary === "Duplicate merge deferred"), true);
 });

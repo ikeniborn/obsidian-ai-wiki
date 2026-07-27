@@ -1,0 +1,44 @@
+topic: synthesis-routing-quality
+mode: delivery
+status: completed
+objective: Improve ingest synthesis article quality and reduce structured validation retries by making entity identity and create routing server-owned.
+current_stage: result
+stage: result
+created: 2026-07-22
+updated: 2026-07-22
+mutable_scope:
+  - src/phases/ingest-synthesis.ts
+  - src/phases/zod-schemas.ts
+  - prompts/ingest-synthesis.md
+  - tests/ingest-synthesis.test.ts
+  - tests/ingest-bounded.test.ts
+  - tests/entity-routing.test.ts
+protected_scope:
+  - transport diagnostics and adapter behavior
+  - prompt-budget governor architecture outside synthesis-specific packing
+  - unrelated lint, query, export, deletion, and UI flows
+  - strict validation semantics
+quality_gates:
+  - Strict validation remains enabled.
+  - Unknown entity keys remain invalid.
+  - Non-canonical wiki paths remain invalid.
+  - Create routing is deterministic when canonical paths are server-owned.
+verifier:
+  command: node --import tsx --test tests/ingest-synthesis.test.ts tests/ingest-bounded.test.ts tests/entity-routing.test.ts && npm run lint
+  evidence_log: docs/loen/synthesis-routing-quality/evidence/latest-test.log
+  evidence_json: docs/loen/synthesis-routing-quality/evidence/latest-test.json
+budget:
+  max_passes: 3
+stop_conditions:
+  - Targeted tests and lint pass.
+  - Implementation satisfies success criteria.
+  - Handoff if scope expands into upstream entity extraction redesign.
+handoff_conditions:
+  - Canonical routing needs upstream entity extraction changes beyond synthesis contract.
+  - Provider/model cannot produce valid JSON after routing freedom is removed.
+rollback_policy: Revert topic changes only; preserve strict validation, transport diagnostics, and prompt-budget repair fixes.
+run:
+  plan_approved: true
+  plan_hash: "variant-summary-2026-07-22"
+  mode: delivery
+  subtype: null

@@ -171,9 +171,9 @@ export function buildChatParams(
   }
   const params: Record<string, unknown> = { model, messages: msgs };
   if (opts.temperature !== undefined) params.temperature = opts.temperature;
-  if (opts.maxTokens != null) params.max_tokens = opts.maxTokens;
+  if (opts.maxTokens != null) params.max_completion_tokens = opts.maxTokens;
   if (opts.topP != null) params.top_p = opts.topP;
-  if (stream) params.stream_options = { include_usage: true };
+  if (stream && opts.includeStreamUsage === true) params.stream_options = { include_usage: true };
 
   if (opts.jsonMode === "json_schema" && opts.jsonSchema) {
     params.response_format = {
@@ -182,13 +182,6 @@ export function buildChatParams(
     };
   } else if (opts.jsonMode === "json_object") {
     params.response_format = { type: "json_object" };
-  }
-
-  if (opts.thinkingBudgetTokens && opts.thinkingBudgetTokens > 0) {
-    params.thinking = { type: "enabled", budget_tokens: opts.thinkingBudgetTokens };
-    delete params.response_format;
-    delete params.temperature;
-    delete params.top_p;
   }
 
   return params;
@@ -292,6 +285,14 @@ export function shouldFallbackStreamToNonStream(
   }
   if (classifyContextError(error) !== null) return false;
   return true;
+}
+
+export function isStreamOptionsUnsupportedError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const status = (error as { status?: unknown }).status;
+  if (status !== 400 && status !== 422) return false;
+  const message = String((error as { message?: unknown }).message ?? "").toLowerCase();
+  return message.includes("stream_options") && message.includes("unsupported");
 }
 
 function isTransportFailure(error: unknown): boolean {

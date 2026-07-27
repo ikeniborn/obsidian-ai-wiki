@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 
-import { wrapMobileNoStream } from "./mobile-llm-wrap";
+import { wrapBufferedNoStream } from "./mobile-llm-wrap";
 import { createNativeLlmClient } from "./native-llm-executor";
 import {
   createNativeOpenAiFetch,
@@ -94,7 +94,9 @@ export function createNativeOpenAiClient(options: NativeOpenAiClientOptions): Ll
     raw.chat.completions,
   ) as NativeChatCompletionCreate;
   const executorClient = createNativeLlmClient(rawCreate, options.connectionTimeoutMs);
-  const client = options.isMobile ? wrapMobileNoStream(executorClient) : executorClient;
+  const bufferedCompletions = options.isMobile
+    || nativeTransportDiagnostic?.transport === "desktop-hybrid";
+  const client = bufferedCompletions ? wrapBufferedNoStream(executorClient) : executorClient;
   if (nativeTransportDiagnostic) client.nativeTransportDiagnostic = nativeTransportDiagnostic;
   client.consumeNativeHttpResponseDiagnostic = (signal) => {
     const diagnostic = nativeHttpResponseDiagnostics.get(signal);
