@@ -1,11 +1,16 @@
 import type OpenAI from "openai";
 import { APIConnectionTimeoutError, APIError } from "openai";
 
-import { classifyNativeRetry, retryDelay } from "./native-request-retry";
+import {
+  classifyNativeRetry,
+  NativeResponseStartTimeoutError,
+  retryDelay,
+} from "./native-request-retry";
 import { createReplacementAttemptLifecycle, lifecycleEvent } from "./llm-lifecycle";
 import {
   NATIVE_TRANSPORT_ATTEMPT_SIGNAL,
   NATIVE_TRANSPORT_CLIENT_REQUEST_ID,
+  NATIVE_TRANSPORT_FRESH_CONNECTION,
   NATIVE_TRANSPORT_TRACEPARENT,
 } from "./types";
 import type {
@@ -46,7 +51,7 @@ interface FailureDetails {
 
 interface AttemptScope {
   signal: AbortSignal;
-  resetIdle(): void;
+  resetIdle(timeoutMs?: number, timeoutError?: () => Error): void;
   clearIdle(): void;
   dispose(reason?: unknown): void;
   race<T>(work: Promise<T>): Promise<T>;
@@ -162,12 +167,16 @@ export function createNativeRequestRetryContext(input: {
   onEvent: (event: RunEvent) => void;
   lifecycle: NativeRequestLifecycle;
   logicalRequestId?: string;
+  maxResponseStartRetries?: number;
 }): NativeRequestRetryContext {
   return {
     logicalRequestId: input.logicalRequestId ?? input.lifecycle.current().id,
     traceId: createTraceId(),
     callSite: input.callSite,
     maxRetries: input.opts.nativeRequestRetries ?? 0,
+    ...(input.maxResponseStartRetries === undefined
+      ? {}
+      : { maxResponseStartRetries: Math.max(0, Math.floor(input.maxResponseStartRetries)) }),
     connectionTimeoutMs: input.llm.nativeRequestExecutor
       ? input.llm.nativeConnectionTimeoutMs ?? 15_000
       : 0,
@@ -176,6 +185,7 @@ export function createNativeRequestRetryContext(input: {
     onEvent: input.onEvent,
     lifecycle: input.lifecycle,
     nativeTransportDiagnostic: input.llm.nativeTransportDiagnostic,
+    nativeFreshConnection: input.opts.nativeFreshConnection === true,
     consumeNativeHttpResponseDiagnostic: input.llm.consumeNativeHttpResponseDiagnostic,
     consumeNativeTransportTrace: input.llm.consumeNativeTransportTrace,
     delay: abortableDelay,
@@ -217,16 +227,19 @@ function attemptScope(callerSignal: AbortSignal, idleTimeoutMs: number): Attempt
   if (controller.signal.aborted) onAttemptAbort();
   else controller.signal.addEventListener("abort", onAttemptAbort, { once: true });
 
-  const resetIdle = (): void => {
+  const resetIdle = (
+    timeoutMs: number = idleTimeoutMs,
+    timeoutError: () => Error = () => new APIConnectionTimeoutError({
+      message: `LLM idle timeout after ${timeoutMs}ms`,
+    }),
+  ): void => {
     clearIdle();
-    if (idleTimeoutMs <= 0 || controller.signal.aborted) return;
+    if (timeoutMs <= 0 || controller.signal.aborted) return;
     const callback = () => {
       timer = undefined;
-      controller.abort(new APIConnectionTimeoutError({
-        message: `LLM idle timeout after ${idleTimeoutMs}ms`,
-      }));
+      controller.abort(timeoutError());
     };
-    timer = scheduleTimer(callback, idleTimeoutMs);
+    timer = scheduleTimer(callback, timeoutMs);
   };
   const dispose = (reason?: unknown): void => {
     clearIdle();
@@ -241,6 +254,16 @@ function attemptScope(callerSignal: AbortSignal, idleTimeoutMs: number): Attempt
     dispose,
     race: <T>(work: Promise<T>) => Promise.race([work, abortPromise]),
   };
+}
+
+function streamResponseStartTimeoutMs(retry: NativeRequestRetryContext): number {
+  if (retry.idleTimeoutMs <= 0) return 0;
+  const attemptSlots = Math.max(1, retry.maxRetries + 1);
+  const sharedIdleWindow = Math.max(1, Math.floor(retry.idleTimeoutMs / attemptSlots));
+  return Math.min(
+    retry.idleTimeoutMs,
+    Math.max(retry.connectionTimeoutMs, sharedIdleWindow),
+  );
 }
 
 function closeOnceLifecycle(lifecycle: NativeRequestLifecycle): CloseOnceLifecycle {
@@ -314,6 +337,9 @@ function metadata(
     callSite: retry.callSite,
     attempt,
     maxRetries: retry.maxRetries,
+    ...(retry.maxResponseStartRetries === undefined
+      ? {}
+      : { maxResponseStartRetries: retry.maxResponseStartRetries }),
     meaningfulOutputSeen,
     connectionTimeoutMs: retry.connectionTimeoutMs,
     idleTimeoutMs: retry.idleTimeoutMs,
@@ -372,7 +398,9 @@ function emitNativeTransportCorrelation(
     transport,
     attempt,
     endpointPath: diagnostic.endpointPath,
-    networkTransport: diagnostic.transport,
+    networkTransport: diagnostic.transport === "desktop-hybrid"
+      ? transport === "stream" ? "desktop-direct" : "desktop-host"
+      : diagnostic.transport,
     diagnosticMode: diagnostic.diagnosticMode,
     connectionTimeoutMs: retry.connectionTimeoutMs,
     idleTimeoutMs: retry.idleTimeoutMs,
@@ -505,12 +533,17 @@ async function waitForRetry(
     ...(clientRequestId === undefined ? {} : { clientRequestId }),
     ...(traceparent === undefined ? {} : { traceparent }),
   };
+  const responseStartDelegated = decision.errorClass === "response_start_timeout"
+    && retry.maxResponseStartRetries !== undefined
+    && attempt >= retry.maxResponseStartRetries;
   const canRetry = decision.retryable
     && !meaningfulOutputSeen
-    && attempt < retry.maxRetries;
+    && attempt < (decision.errorClass === "response_start_timeout"
+      ? Math.min(retry.maxRetries, retry.maxResponseStartRetries ?? retry.maxRetries)
+      : retry.maxRetries);
   if (!canRetry) {
     lifecycle.close(retry.signal.aborted || isAbortError(error) ? "cancelled" : "failed");
-    if (decision.retryable) {
+    if (decision.retryable && !responseStartDelegated) {
       retry.onEvent({
         kind: "transport_retry_exhausted",
         ...metadata(retry, attempt, meaningfulOutputSeen, failure),
@@ -572,6 +605,7 @@ async function executeNonStream(
           [NATIVE_TRANSPORT_ATTEMPT_SIGNAL]: scope.signal,
           [NATIVE_TRANSPORT_CLIENT_REQUEST_ID]: clientRequestId,
           [NATIVE_TRANSPORT_TRACEPARENT]: traceparent,
+          [NATIVE_TRANSPORT_FRESH_CONNECTION]: retry.nativeFreshConnection === true || attempt > 0,
         },
       }));
       const sdkCompletedAtMs = Date.now();
@@ -630,6 +664,8 @@ function executeStream(
         const clientRequestId = createClientRequestId();
         const traceparent = createTraceparent(retry.traceId);
         const buffered: OpenAI.Chat.ChatCompletionChunk[] = [];
+        const responseStartTimeoutMs = streamResponseStartTimeoutMs(retry);
+        let firstModelChunkSeen = false;
         meaningfulOutputSeen = false;
         let attemptComplete = false;
         let attemptCleanedUp = false;
@@ -645,6 +681,7 @@ function executeStream(
               [NATIVE_TRANSPORT_ATTEMPT_SIGNAL]: scope.signal,
               [NATIVE_TRANSPORT_CLIENT_REQUEST_ID]: clientRequestId,
               [NATIVE_TRANSPORT_TRACEPARENT]: traceparent,
+              [NATIVE_TRANSPORT_FRESH_CONNECTION]: retry.nativeFreshConnection === true || attempt > 0,
             },
           }));
           emitNativeHttpResponse(retry, scope.signal, attempt, "stream");
@@ -652,7 +689,14 @@ function executeStream(
           let armIdleBeforeNext = true;
           while (true) {
             if (armIdleBeforeNext) {
-              scope.resetIdle();
+              if (firstModelChunkSeen) {
+                scope.resetIdle();
+              } else {
+                scope.resetIdle(
+                  responseStartTimeoutMs,
+                  () => new NativeResponseStartTimeoutError(responseStartTimeoutMs),
+                );
+              }
               armIdleBeforeNext = false;
             }
             const next = await scope.race(Promise.resolve(iterator.next()));
@@ -674,6 +718,7 @@ function executeStream(
               return;
             }
             if (!validModelChunk(next.value)) continue;
+            firstModelChunkSeen = true;
             scope.clearIdle();
             armIdleBeforeNext = true;
             if (!meaningfulOutputSeen && meaningfulChunk(next.value)) {

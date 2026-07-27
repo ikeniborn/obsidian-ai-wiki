@@ -8,6 +8,8 @@ import { hashSource } from "../incremental-sources";
 import {
   batchEntityContexts,
   buildEntityContext,
+  consolidateSameTargetEntityBundles,
+  consolidateSmallEntityBundles,
   type EntityContextBundle,
 } from "../ingest-context";
 import type { ContextUnit } from "../prompt-budget";
@@ -32,10 +34,14 @@ import {
   ensureType,
   entityTypeFromPath,
   filterStaleWikiLinks,
+  governWikiPageFrontmatter,
   normalizeTag,
+  parseAliasesFromFm,
   parseResourceFromFm,
   parseTagsFromFm,
+  parseWikiArticlesFromFm,
   recoverSourceFrontmatter,
+  setWikiPageAliases,
   stripInvalidWikiArticles,
   upsertRawFrontmatter,
   validateAndRepairSourceFrontmatter,
@@ -97,14 +103,40 @@ import {
   type SynthesisPathPolicy,
 } from "./ingest-synthesis";
 import type { SynthesisAction, SynthesisOutput } from "./zod-schemas";
+import {
+  assignSynthesisEvidenceLedger,
+  extractSynthesisEvidenceLedger,
+  findMissingSynthesisEvidence,
+  reconcileSynthesisEvidence,
+  type SynthesisEvidenceLedgerItem,
+} from "./synthesis-evidence-ledger";
 import { routeAndValidatePages } from "./entity-routing";
 import { PageSimilarityService, type ExtractedEntity } from "../page-similarity";
 import { RunEventBridge } from "../run-event-bridge";
 import { lifecycleEvent } from "../llm-lifecycle";
 
+const DEFAULT_SYNTHESIS_ENTITY_BATCH_SIZE = 1;
+const DEFAULT_SYNTHESIS_MAX_ENTITIES_PER_SOURCE = 6;
+
 function parseWikiStatus(content: string): string {
   const match = /^---\n[\s\S]*?^status:[ \t]*(.+)$/m.exec(content);
   return match ? match[1].trim() : "unknown";
+}
+
+function capSynthesisEntityBatchSize(
+  batches: readonly EntityContextBundle[][],
+  maxBatchSize: number = DEFAULT_SYNTHESIS_ENTITY_BATCH_SIZE,
+): EntityContextBundle[][] {
+  const safeMaxBatchSize = Number.isSafeInteger(maxBatchSize) && maxBatchSize > 0
+    ? maxBatchSize
+    : DEFAULT_SYNTHESIS_ENTITY_BATCH_SIZE;
+  const capped: EntityContextBundle[][] = [];
+  for (const batch of batches) {
+    for (let index = 0; index < batch.length; index += safeMaxBatchSize) {
+      capped.push(batch.slice(index, index + safeMaxBatchSize));
+    }
+  }
+  return capped;
 }
 
 async function readPagesStrict(vaultTools: VaultTools, paths: string[]): Promise<Map<string, string>> {
@@ -130,7 +162,9 @@ function makeFailure(
 function modelPolicy(opts: LlmCallOptions): ModelCallPolicy {
   return {
     inputBudgetTokens: opts.inputBudgetTokens ?? 16_384,
+    ...(opts.repairInputBudgetTokens === undefined ? {} : { repairInputBudgetTokens: opts.repairInputBudgetTokens }),
     ...(opts.maxTokens === undefined ? {} : { outputBudgetTokens: opts.maxTokens }),
+    ...(opts.outputRetryBudgetTokens === undefined ? {} : { outputRetryBudgetTokens: opts.outputRetryBudgetTokens }),
     compression: opts.semanticCompression?.profile ?? "balanced",
   };
 }
@@ -194,11 +228,93 @@ function actionAuthorities(
     bundle.replaceAuthorities.filter((authority) => authority.path === path));
 }
 
+interface CanonicalIdentityIndex {
+  uniquePathByIdentity: ReadonlyMap<string, string>;
+}
+
+function canonicalIdentity(value: string, domainId: string): string | undefined {
+  let candidate = value.normalize("NFC").trim();
+  const wikilink = /^\[\[([^\]|]+)(?:\|[^\]]+)?\]\]$/.exec(candidate);
+  if (wikilink) candidate = wikilink[1];
+  candidate = candidate.split("/").at(-1)?.replace(/\.md$/i, "") ?? candidate;
+  const prefix = `wiki_${domainId}_`;
+  if (candidate.toLowerCase().startsWith(prefix.toLowerCase())) candidate = candidate.slice(prefix.length);
+  const stripped = candidate.normalize("NFD").replace(/\p{M}+/gu, "");
+  const split = stripped
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2");
+  return split.replace(/[^\p{L}\p{N}]+/gu, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase() || undefined;
+}
+
+function sourcePrimaryEntityKeys(
+  sourcePath: string,
+  evidence: readonly EntityEvidence[],
+  domainId: string,
+): Set<string> {
+  const sourceIdentity = canonicalIdentity(sourceStem(sourcePath), domainId);
+  if (sourceIdentity === undefined) return new Set();
+  const candidates = evidence.flatMap((entity) => {
+    const identity = canonicalIdentity(entity.entityKey, domainId);
+    return identity === undefined ? [] : [{ entityKey: entity.entityKey, identity }];
+  });
+  const exact = candidates.filter((candidate) => candidate.identity === sourceIdentity);
+  if (exact.length > 0) return new Set(exact.map((candidate) => candidate.entityKey));
+
+  const sourceCompact = sourceIdentity.replaceAll("_", "");
+  const compact = candidates.filter((candidate) =>
+    candidate.identity.replaceAll("_", "") === sourceCompact);
+  if (compact.length > 0) return new Set(compact.map((candidate) => candidate.entityKey));
+
+  const sourceTokens = sourceIdentity.split("_").filter((token) => token.length >= 3);
+  return new Set(candidates
+    .filter((candidate) => {
+      const candidateTokens = candidate.identity.split("_").filter((token) => token.length >= 3);
+      return sourceTokens.some((sourceToken) => candidateTokens.some((candidateToken) =>
+        sourceToken === candidateToken
+        || sourceToken.includes(candidateToken)
+        || candidateToken.includes(sourceToken)));
+    })
+    .map((candidate) => candidate.entityKey));
+}
+
+function canonicalIdentityIndex(
+  domainId: string,
+  pages: ReadonlyMap<string, string>,
+  records: readonly PageIndexRecord[],
+): CanonicalIdentityIndex {
+  const pathsByIdentity = new Map<string, Set<string>>();
+  const register = (raw: string, path: string): void => {
+    const identity = canonicalIdentity(raw, domainId);
+    if (identity === undefined) return;
+    const paths = pathsByIdentity.get(identity) ?? new Set<string>();
+    paths.add(path);
+    pathsByIdentity.set(identity, paths);
+  };
+  for (const record of records) {
+    const content = pages.get(record.path) ?? "";
+    register(record.articleId, record.path);
+    register(pageEntityKey(domainId, record), record.path);
+    const title = content.match(/^#\s+(.+)$/m)?.[1]?.trim();
+    if (title) register(title, record.path);
+    for (const alias of parseAliasesFromFm(content)) register(alias, record.path);
+  }
+  return {
+    uniquePathByIdentity: new Map(
+      [...pathsByIdentity]
+        .filter(([, paths]) => paths.size === 1)
+        .map(([identity, paths]) => [identity, [...paths][0]]),
+    ),
+  };
+}
+
 function targetPathFor(
   evidence: EntityEvidence,
   domain: DomainEntry,
   domainRoot: string,
   existingPaths: ReadonlySet<string>,
+  identities: CanonicalIdentityIndex,
 ): string | undefined {
   const entityType = domain.entity_types?.find((candidate) => candidate.type === evidence.entityType);
   if (!entityType) return undefined;
@@ -209,7 +325,20 @@ function targetPathFor(
     return undefined;
   }
   const path = `${domainRoot}/${effectiveSubfolder(entityType)}/${stem}.md`;
-  return existingPaths.has(path) ? path : undefined;
+  if (existingPaths.has(path)) return path;
+  const identity = canonicalIdentity(evidence.entityKey, domain.id);
+  const aliasPath = identity === undefined ? undefined : identities.uniquePathByIdentity.get(identity);
+  return aliasPath !== undefined && existingPaths.has(aliasPath) ? aliasPath : undefined;
+}
+
+function governedEntityTypeFromPath(
+  domain: DomainEntry,
+  domainRoot: string,
+  path: string,
+): string {
+  const subfolder = entityTypeFromPath(domainRoot, path);
+  return domain.entity_types?.find((entityType) =>
+    effectiveSubfolder(entityType).trim().toLowerCase() === subfolder)?.type ?? subfolder;
 }
 
 function processPageContent(
@@ -219,11 +348,20 @@ function processPageContent(
   domain: DomainEntry,
   domainRoot: string,
   sourcePath: string,
+  ingestDate: string,
   additionalResources: readonly string[] = [],
+  isCreate: boolean = false,
 ): { content: string; warnings: string[]; tags: string[] } {
-  const repaired = validateAndRepairWikiPageFrontmatter(content);
+  const entityType = governedEntityTypeFromPath(domain, domainRoot, path);
+  const governed = governWikiPageFrontmatter(content, {
+    type: entityType,
+    description: annotation,
+    timestamp: ingestDate,
+    ...(isCreate ? { resources: [sourcePath, ...additionalResources], status: "stub" } : {}),
+  });
+  const repaired = validateAndRepairWikiPageFrontmatter(governed.content);
   const entityTagged = ensureEntityTypeTag(repaired.content, path, domain);
-  const typed = ensureType(entityTagged.content, entityTypeFromPath(domainRoot, path));
+  const typed = ensureType(entityTagged.content, entityType);
   const described = ensureDescription(typed, annotation);
   const sourced = ensureResource(described, sourcePath);
   const withSources = reconcilePageProvenance(
@@ -232,15 +370,154 @@ function processPageContent(
     sourcePath,
     additionalResources,
   );
+  const shaped = isCreate ? normalizeCreatedArticleH1(withSources) : { content: withSources, warnings: [] };
   return {
-    content: withSources,
+    content: shaped.content,
     warnings: [
+      ...governed.warnings,
       ...repaired.warnings,
       ...(entityTagged.added && entityTagged.tag ? [`tags: + ${entityTagged.tag}`] : []),
       ...(sourced.injected ? [`resource: + ${sourcePath}`] : []),
+      ...shaped.warnings,
     ],
-    tags: parseTagsFromFm(withSources),
+    tags: parseTagsFromFm(shaped.content),
   };
+}
+
+function normalizeCreatedArticleH1(content: string): { content: string; warnings: string[] } {
+  const frontmatter = /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/.exec(content)?.[0] ?? "";
+  const body = content.slice(frontmatter.length);
+  const lines = body.split("\n");
+  const firstContentLine = lines.findIndex((line) => line.trim().length > 0);
+  if (firstContentLine < 0) throw new TypeError("created page must contain a leading H1");
+
+  const first = lines[firstContentLine].replace(/\r$/, "");
+  let normalized = false;
+  if (!/^#[ \t]+\S/.test(first)) {
+    const compact = /^#([^#\s].*)$/.exec(first);
+    if (!compact) throw new TypeError("created page must contain a leading H1");
+    lines[firstContentLine] = `# ${compact[1]}`;
+    normalized = true;
+  }
+
+  let fence: { marker: string; length: number } | undefined;
+  let h1Count = 0;
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/\r$/, "");
+    if (fence !== undefined) {
+      const closing = /^ {0,3}([`~]+)[ \t]*$/.exec(line);
+      if (closing && closing[1][0] === fence.marker && closing[1].length >= fence.length) fence = undefined;
+      continue;
+    }
+    const opening = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+    if (opening) {
+      fence = { marker: opening[1][0], length: opening[1].length };
+      continue;
+    }
+    if (/^ {0,3}#[ \t]+\S/.test(line)) h1Count++;
+  }
+  if (h1Count !== 1) throw new TypeError("created page must contain exactly one H1");
+  return {
+    content: `${frontmatter}${lines.join("\n")}`,
+    warnings: normalized ? ["H1: normalized compact heading"] : [],
+  };
+}
+
+interface PreparedPageMutation {
+  content: string;
+  action: SynthesisAction;
+  existing: string | null;
+}
+
+function guardPreparedAliases(
+  domainId: string,
+  existingPages: ReadonlyMap<string, string>,
+  prepared: Map<string, PreparedPageMutation>,
+): Map<string, string[]> {
+  const contents = new Map(existingPages);
+  for (const [path, value] of prepared) contents.set(path, value.content);
+
+  const primaryOwners = new Map<string, Set<string>>();
+  const aliasOwners = new Map<string, Set<string>>();
+  const aliasesByPath = new Map<string, string[]>();
+  const register = (registry: Map<string, Set<string>>, raw: string, path: string): void => {
+    const identity = canonicalIdentity(raw, domainId);
+    if (identity === undefined) return;
+    const owners = registry.get(identity) ?? new Set<string>();
+    owners.add(path);
+    registry.set(identity, owners);
+  };
+
+  for (const [path, content] of contents) {
+    register(primaryOwners, pageId(path), path);
+    const title = content.match(/^#\s+(.+)$/m)?.[1]?.trim();
+    if (title) register(primaryOwners, title, path);
+    const aliases = parseAliasesFromFm(content);
+    aliasesByPath.set(path, aliases);
+    for (const alias of aliases) register(aliasOwners, alias, path);
+  }
+
+  const removals = new Map<string, Set<string>>();
+  for (const [identity, owners] of aliasOwners) {
+    const primaries = primaryOwners.get(identity) ?? new Set<string>();
+    const onlyOwner = owners.size === 1 ? [...owners][0] : undefined;
+    if (onlyOwner !== undefined
+      && (primaries.size === 0 || (primaries.size === 1 && primaries.has(onlyOwner)))) continue;
+
+    let keeper: string | undefined;
+    if (primaries.size === 1) {
+      const primary = [...primaries][0];
+      const uneditableOther = [...owners].some((path) => path !== primary && !prepared.has(path));
+      if (owners.has(primary) && !uneditableOther) keeper = primary;
+    } else if (primaries.size === 0) {
+      const existingClaimants = [...owners].filter((path) => !prepared.has(path));
+      if (existingClaimants.length === 1) keeper = existingClaimants[0];
+    }
+
+    for (const path of owners) {
+      if (!prepared.has(path) || path === keeper) continue;
+      const values = removals.get(path) ?? new Set<string>();
+      values.add(identity);
+      removals.set(path, values);
+    }
+  }
+
+  const warnings = new Map<string, string[]>();
+  for (const [path, identities] of removals) {
+    const value = prepared.get(path)!;
+    const aliases = aliasesByPath.get(path) ?? [];
+    const kept = aliases.filter((alias) => {
+      const identity = canonicalIdentity(alias, domainId);
+      return identity === undefined || !identities.has(identity);
+    });
+    value.content = setWikiPageAliases(value.content, kept);
+    warnings.set(path, aliases
+      .filter((alias) => {
+        const identity = canonicalIdentity(alias, domainId);
+        return identity !== undefined && identities.has(identity);
+      })
+      .map((alias) => `aliases: removed ambiguous "${alias}"`));
+  }
+  return warnings;
+}
+
+function normalizePatchAddsAgainstPage(
+  content: string,
+  action: Extract<SynthesisAction, { kind: "patch" }>,
+): Extract<SynthesisAction, { kind: "patch" }> {
+  const headingCounts = new Map<string, number>();
+  for (const section of inspectPatchablePage(content).sections) {
+    const heading = normalizeSectionHeading(section.heading);
+    headingCounts.set(heading, (headingCounts.get(heading) ?? 0) + 1);
+  }
+  let changed = false;
+  const sections = action.sections.map((section) => {
+    const heading = normalizeSectionHeading(section.heading);
+    if (section.operation !== "add" || headingCounts.get(heading) !== 1) return section;
+    changed = true;
+    return { ...section, operation: "append" as const };
+  });
+  return changed ? { ...action, sections } : action;
 }
 
 function compareCodePoints(left: string, right: string): number {
@@ -487,6 +764,7 @@ export async function* runIngest(
   }
 
   const startedAt = Date.now();
+  const ingestDate = new Date(startedAt).toISOString().slice(0, 10);
   const policy = modelPolicy(opts);
   const eventBridge = new RunEventBridge();
   const pendingSynthesisLifecycles = new Map<string, Extract<RunEvent, { kind: "llm_lifecycle" }>>();
@@ -517,14 +795,24 @@ export async function* runIngest(
     return events;
   };
 
+  let synthesisEvidenceLedger: SynthesisEvidenceLedgerItem[];
+  try {
+    synthesisEvidenceLedger = extractSynthesisEvidenceLedger(sourceContent);
+  } catch (error) {
+    const message = `ingest: source technical evidence invalid — ${(error as Error).message}`;
+    yield { kind: "error", message };
+    return failure("evidence", message, sourcePath, false);
+  }
+
   try {
   let pagePaths: string[];
   let pageRecords: PageIndexRecord[];
+  let actualPages: Map<string, string>;
   try {
     await ensureDomainConfig(vaultTools, domainRoot);
     pagePaths = (await vaultTools.listFiles(domainRoot))
       .filter((path) => isWikiPagePath(path) && validateArticlePath(path, domainRoot));
-    const actualPages = await readPagesStrict(vaultTools, pagePaths);
+    actualPages = await readPagesStrict(vaultTools, pagePaths);
     pageRecords = [...actualPages].map(([path, content]) =>
       pageIndexRecordFromMarkdown(domainRoot, path, content));
     await reconcilePageIndex(
@@ -582,8 +870,8 @@ export async function* runIngest(
     context_snippet: entity.facts.join(" "),
   }));
   const existingPathSet = new Set(pagePaths);
+  const identityIndex = canonicalIdentityIndex(domain.id, actualPages, pageRecords);
   const foundPages = new Set<string>();
-  const candidatePathsByEntity = new Map<string, string[]>();
   const targetPathByEntity = new Map<string, string>();
   try {
     await service.loadCache(domainRoot, vaultTools);
@@ -595,13 +883,11 @@ export async function* runIngest(
       const entity = extracted[index];
       const key = `${entity.name}::${entity.type ?? ""}`;
       const candidates = new Set(selected.results.get(key) ?? []);
-      const targetPath = targetPathFor(evidence[index], domain, domainRoot, existingPathSet);
+      const targetPath = targetPathFor(evidence[index], domain, domainRoot, existingPathSet, identityIndex);
       if (targetPath) candidates.add(targetPath);
       const governed = [...candidates].filter((path) =>
         existingPathSet.has(path) && validateArticlePath(path, domainRoot));
-      candidatePathsByEntity.set(evidence[index].entityKey, governed);
-      const contextTarget = targetPath ?? governed[0];
-      if (contextTarget) targetPathByEntity.set(evidence[index].entityKey, contextTarget);
+      if (targetPath) targetPathByEntity.set(evidence[index].entityKey, targetPath);
       governed.forEach((path) => foundPages.add(path));
     }
   } catch (error) {
@@ -624,7 +910,9 @@ export async function* runIngest(
 
   const candidateBodies = new Map<string, string>();
   try {
-    for (const path of foundPages) candidateBodies.set(path, await vaultTools.read(path));
+    for (const path of new Set(targetPathByEntity.values())) {
+      candidateBodies.set(path, await vaultTools.read(path));
+    }
   } catch (error) {
     const message = `ingest: candidate context read failed — ${(error as Error).message}`;
     yield { kind: "error", message };
@@ -648,8 +936,20 @@ export async function* runIngest(
   const registryText = renderTagRegistryBlock(registry, entityTypeNames, maxTagCategories);
   const allowedSubfolders = [...new Set((domain.entity_types ?? []).map(effectiveSubfolder))];
   const pathPolicy: SynthesisPathPolicy = { domainRoot, allowedSubfolders };
+  const sourceHistoryIdentities = new Set(
+    parseWikiArticlesFromFm(sourceContent)
+      .map((link) => canonicalIdentity(link, domain.id))
+      .filter((identity): identity is string => identity !== undefined),
+  );
+  const preferredCreateEntityKeys = new Set(evidence
+    .filter((entity) => {
+      const identity = canonicalIdentity(entity.entityKey, domain.id);
+      return identity !== undefined && sourceHistoryIdentities.has(identity);
+    })
+    .map((entity) => entity.entityKey));
   const createPathsByEntityKey = new Map<string, string>();
   for (const entity of evidence) {
+    if (targetPathByEntity.has(entity.entityKey)) continue;
     const entityType = domain.entity_types?.find((candidate) => candidate.type === entity.entityType);
     if (!entityType) continue;
     try {
@@ -673,9 +973,10 @@ export async function* runIngest(
   const existingPageHashes = new Map<string, string>();
   try {
     for (const entity of evidence) {
-      const paths = candidatePathsByEntity.get(entity.entityKey) ?? [];
-      const pages = new Map(paths.map((path) => [path, candidateBodies.get(path)!]));
       const targetPath = targetPathByEntity.get(entity.entityKey);
+      const pages = targetPath === undefined
+        ? new Map<string, string>()
+        : new Map([[targetPath, candidateBodies.get(targetPath)!]]);
       const context = buildEntityContext({
         evidence: entity,
         candidatePages: pages,
@@ -705,11 +1006,72 @@ export async function* runIngest(
     skips: [],
     entity_types_delta: [],
   };
-  if (bundles.length > 0) {
+  const maxSynthesisEntities = opts.synthesisMaxEntitiesPerSource ?? DEFAULT_SYNTHESIS_MAX_ENTITIES_PER_SOURCE;
+  const primaryEntityKeys = sourcePrimaryEntityKeys(sourcePath, evidence, domain.id);
+  const sameTargetBundles = consolidateSameTargetEntityBundles(
+    bundles,
+    targetPathByEntity,
+    primaryEntityKeys,
+  );
+  const countConsolidatedBundles = consolidateSmallEntityBundles(
+    sameTargetBundles.kept,
+    maxSynthesisEntities,
+    new Set(createPathsByEntityKey.keys()),
+    preferredCreateEntityKeys,
+    primaryEntityKeys,
+  );
+  const consolidatedBundles = {
+    ...countConsolidatedBundles,
+    consolidated: [
+      ...sameTargetBundles.consolidated,
+      ...countConsolidatedBundles.consolidated,
+    ],
+  };
+  let technicalEvidenceByEntityKey: Map<string, SynthesisEvidenceLedgerItem[]>;
+  try {
+    technicalEvidenceByEntityKey = assignSynthesisEvidenceLedger(
+      synthesisEvidenceLedger,
+      consolidatedBundles.kept,
+      primaryEntityKeys,
+    );
+  } catch (error) {
+    const message = `ingest: technical evidence assignment failed — ${(error as Error).message}`;
+    yield { kind: "error", message };
+    return failure("context", message, sourcePath, false);
+  }
+  if (consolidatedBundles.consolidated.length > 0) {
+    const details = consolidatedBundles.consolidated.slice(0, 12).map((assignment) =>
+      `${assignment.entityKey}: consolidated into ${assignment.parentEntityKey}`);
+    if (consolidatedBundles.consolidated.length > details.length) {
+      details.push(`${consolidatedBundles.consolidated.length - details.length} more entities consolidated`);
+    }
+    yield {
+      kind: "info_text",
+      icon: "⚠️",
+      summary: `Synthesis consolidation applied: ${consolidatedBundles.kept.length}/${bundles.length} parent entities for ${sourcePath}`,
+      details,
+    };
+    synthesis.skips.push(...consolidatedBundles.consolidated.map((assignment) => ({
+      entityKey: assignment.entityKey,
+      reason: `Consolidated into parent entity ${assignment.parentEntityKey} before synthesis.`,
+    })));
+  }
+  if (consolidatedBundles.overflowEntityKeys.length > 0) {
+    yield {
+      kind: "info_text",
+      icon: "ℹ️",
+      summary: `Synthesis page target exceeded by protected targets: ${consolidatedBundles.kept.length}/${maxSynthesisEntities} for ${sourcePath}`,
+      details: [
+        "Existing canonical targets and the source-primary coverage carrier remain independent.",
+        `Overflow entities: ${consolidatedBundles.overflowEntityKeys.join(", ")}`,
+      ],
+    };
+  }
+  if (consolidatedBundles.kept.length > 0) {
     let batches: EntityContextBundle[][];
     try {
       batches = batchEntityContexts(
-        bundles,
+        consolidatedBundles.kept,
         policy.inputBudgetTokens,
         (items) => [{
           role: "user",
@@ -718,17 +1080,26 @@ export async function* runIngest(
             evidence: item.evidence,
             units: item.units,
             replaceAuthorities: item.replaceAuthorities,
+            mustPreserveTechnicalEvidence: (technicalEvidenceByEntityKey.get(item.entityKey) ?? [])
+              .map(({ id, kind, startLine, endLine, markdown }) => ({
+                id,
+                kind,
+                startLine,
+                endLine,
+                markdown,
+              })),
           }))),
         }],
         opts,
       );
+      batches = capSynthesisEntityBatchSize(batches, opts.synthesisMaxEntityBatchSize);
     } catch (error) {
       const message = `ingest: context batching failed — ${(error as Error).message}`;
       yield { kind: "error", message };
       return failure("context", message, sourcePath);
     }
 
-    const outputs: SynthesisOutput[] = [];
+    const outputs: SynthesisOutput[] = [synthesis];
     try {
       for (const batch of batches) {
         const output = yield* eventBridge.forwardAbortable(signal, (operationSignal) =>
@@ -739,6 +1110,7 @@ export async function* runIngest(
           existingPageDescriptions: typedDescriptions(domain.id, pageRecords),
           createPathsByEntityKey,
           tagRegistryUnits: tagRegistryUnits(registryText),
+          technicalEvidenceByEntityKey,
           pathPolicy,
           domainContract,
           schemaContract: schemaContent,
@@ -846,7 +1218,7 @@ export async function* runIngest(
   }
 
   const sourceStem = sourcePath.split("/").pop()!.replace(/\.md$/, "");
-  const prepared = new Map<string, { content: string; action: SynthesisAction; existing: string | null }>();
+  const prepared = new Map<string, PreparedPageMutation>();
   const pendingDuplicateDeletes = new Map<string, {
     canonicalPath: string;
     duplicateContent: string;
@@ -978,14 +1350,19 @@ export async function* runIngest(
             }
           } catch (error) {
             const message = `ingest: duplicate merge regeneration failed — ${(error as Error).message}`;
-            yield { kind: "error", message };
-            return failure("patch", message, sourcePath,
-              error instanceof ConflictRegenerationExhaustedError || error instanceof ConflictStillStaleError);
+            yield {
+              kind: "info_text",
+              icon: "⚠️",
+              summary: "Duplicate merge deferred",
+              details: [message],
+            };
+            continue;
           }
         }
       }
     } else {
-      const initial = applyPagePatch(existing!, action, actionAuthorities(bundles, action.path));
+      effectiveAction = normalizePatchAddsAgainstPage(existing!, action);
+      const initial = applyPagePatch(existing!, effectiveAction, actionAuthorities(bundles, action.path));
       if (initial.ok) {
         nextContent = initial.content;
       } else {
@@ -1054,8 +1431,37 @@ export async function* runIngest(
       domain,
       domainRoot,
       sourcePath,
+      ingestDate,
       actionDuplicateResources,
+      effectiveAction.kind === "create",
     );
+    let reconciledEvidence;
+    try {
+      reconciledEvidence = reconcileSynthesisEvidence(
+        processed.content,
+        existing,
+        technicalEvidenceByEntityKey.get(effectiveAction.entityKey) ?? [],
+        opts.outputLanguage,
+      );
+    } catch (error) {
+      const message = `ingest: technical evidence reconciliation failed for ${effectiveAction.path} — ${(error as Error).message}`;
+      yield { kind: "error", message };
+      return failure("patch", message, sourcePath, false);
+    }
+    if (reconciledEvidence.removedUnits > 0) {
+      yield {
+        kind: "rule_fired",
+        ruleId: "synthesisEvidenceSanitize",
+        count: reconciledEvidence.removedUnits,
+      };
+    }
+    if (reconciledEvidence.appendedItems > 0) {
+      yield {
+        kind: "rule_fired",
+        ruleId: "synthesisEvidenceAppend",
+        count: reconciledEvidence.appendedItems,
+      };
+    }
     if (processed.warnings.length > 0) {
       yield {
         kind: "info_text",
@@ -1065,7 +1471,23 @@ export async function* runIngest(
       };
     }
     processed.tags.forEach((tag) => writtenTagCategories.add(tag.split("/")[0]));
-    prepared.set(effectiveAction.path, { content: processed.content, action: effectiveAction, existing });
+    prepared.set(effectiveAction.path, {
+      content: reconciledEvidence.content,
+      action: effectiveAction,
+      existing,
+    });
+  }
+
+  const survivingPages = new Map(actualPages);
+  for (const path of pendingDuplicateDeletes.keys()) survivingPages.delete(path);
+  const aliasWarnings = guardPreparedAliases(domain.id, survivingPages, prepared);
+  for (const [path, details] of aliasWarnings) {
+    yield {
+      kind: "info_text",
+      icon: "⚠️",
+      summary: `Alias guards applied: ${path}`,
+      details,
+    };
   }
 
   let allVaultPaths: string[];
@@ -1087,6 +1509,58 @@ export async function* runIngest(
   );
   for (const [path, value] of prepared) {
     value.content = stripDeadLinks(linkFix.fixed.get(path) ?? value.content, knownStems);
+    try {
+      const reconciled = reconcileSynthesisEvidence(
+        value.content,
+        value.existing,
+        technicalEvidenceByEntityKey.get(value.action.entityKey) ?? [],
+        opts.outputLanguage,
+      );
+      value.content = reconciled.content;
+      if (reconciled.removedUnits > 0) {
+        yield {
+          kind: "rule_fired",
+          ruleId: "synthesisEvidenceSanitize",
+          count: reconciled.removedUnits,
+        };
+      }
+      if (reconciled.appendedItems > 0) {
+        yield {
+          kind: "rule_fired",
+          ruleId: "synthesisEvidenceAppend",
+          count: reconciled.appendedItems,
+        };
+      }
+    } catch (error) {
+      const message = `ingest: final technical evidence reconciliation failed for ${path} — ${(error as Error).message}`;
+      yield { kind: "error", message };
+      return failure("patch", message, sourcePath, false);
+    }
+  }
+
+  const sourceResourceTokens = new Set([sourcePath, sourceStem]);
+  const hasCurrentSourceResource = (content: string): boolean =>
+    parseResourceFromFm(content).some((resource) => sourceResourceTokens.has(resource));
+  const representedTechnicalEvidence = [
+    ...[...actualPages]
+      .filter(([path, content]) =>
+        !prepared.has(path)
+        && !pendingDuplicateDeletes.has(path)
+        && hasCurrentSourceResource(content))
+      .map(([, content]) => content),
+    ...[...prepared.values()].map((value) => value.content),
+  ];
+  const missingTechnicalEvidence = findMissingSynthesisEvidence(
+    synthesisEvidenceLedger,
+    representedTechnicalEvidence,
+  );
+  if (missingTechnicalEvidence.length > 0) {
+    const ranges = missingTechnicalEvidence.slice(0, 8)
+      .map((item) => `${item.kind}:${item.startLine}-${item.endLine}`)
+      .join(", ");
+    const message = `ingest: ${missingTechnicalEvidence.length} source technical evidence item(s) have no persisted representation (${ranges})`;
+    yield { kind: "error", message };
+    return failure("patch", message, sourcePath, false);
   }
 
   const created: string[] = [];
@@ -1253,10 +1727,6 @@ export async function* runIngest(
     yield { kind: "error", message };
     return failure("index", message, sourcePath);
   }
-
-  const sourceResourceTokens = new Set([sourcePath, sourceStem]);
-  const hasCurrentSourceResource = (content: string): boolean =>
-    parseResourceFromFm(content).some((resource) => sourceResourceTokens.has(resource));
 
   const successfulPaths = [...new Set([
     ...created,

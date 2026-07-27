@@ -11,7 +11,7 @@ import { fetch as undiciFetch } from "undici";
 import { z } from "zod";
 import type { LlmClient, NativeChatCompletionCreate, RunEvent } from "../src/types";
 import { createNativeLlmClient } from "../src/native-llm-executor";
-import { parseAnswerFrames } from "../src/phases/framed-output";
+import { parseAnswerFrames, parseSentinelJson, parseSynthesisFrames } from "../src/phases/framed-output";
 
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 
@@ -765,6 +765,101 @@ test("empty JSON output downgrades response formats and validates recovered JSON
   );
 });
 
+test("output-cap empty response uses output_limit and a fresh compact retry with a dynamic ceiling", async () => {
+  const events: RunEvent[] = [];
+  const seen: Record<string, unknown>[] = [];
+  let attempt = 0;
+  const llm = {
+    chat: { completions: { create: async (params: Record<string, unknown>) => {
+      seen.push(params);
+      attempt += 1;
+      const content = attempt === 1 ? "" : '{"value":"ok"}';
+      const completionTokens = attempt === 1 ? 100 : 3;
+      return {
+        id: `completion-${attempt}`,
+        object: "chat.completion",
+        created: 0,
+        model: "m",
+        choices: [{
+          index: 0,
+          finish_reason: "stop",
+          message: { role: "assistant", content, refusal: null },
+          logprobs: null,
+        }],
+        usage: { prompt_tokens: 2, completion_tokens: completionTokens, total_tokens: 2 + completionTokens },
+      };
+    } } },
+  } as unknown as LlmClient;
+
+  const result = await runStructuredWithRetry({
+    llm,
+    model: "m",
+    baseMessages: [{ role: "user", content: "Return a compact object." }],
+    opts: { maxTokens: 100, outputRetryBudgetTokens: 300 } as never,
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 1,
+    callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
+    signal: new AbortController().signal,
+    onEvent: (event) => events.push(event),
+    transport: "non-stream",
+  });
+
+  assert.equal(result.value.value, "ok");
+  assert.equal(events.some((event) => event.kind === "structural_error" && event.errorType === "output_limit"), true);
+  assert.deepEqual(seen.map((params) => params.max_completion_tokens), [100, 150]);
+  const retryMessages = seen[1].messages as Array<{ role: string; content: string }>;
+  assert.equal(retryMessages.some((message) => message.role === "assistant"), false);
+  assert.match(retryMessages.at(-1)?.content ?? "", /output limit/i);
+});
+
+test("output-cap malformed response also bypasses replay and uses output_limit retry", async () => {
+  const events: RunEvent[] = [];
+  const seen: Record<string, unknown>[] = [];
+  let attempt = 0;
+  const llm = {
+    chat: { completions: { create: async (params: Record<string, unknown>) => {
+      seen.push(params);
+      attempt += 1;
+      const content = attempt === 1 ? '{"value":' : '{"value":"ok"}';
+      const completionTokens = attempt === 1 ? 100 : 3;
+      return {
+        id: `completion-${attempt}`,
+        object: "chat.completion",
+        created: 0,
+        model: "m",
+        choices: [{
+          index: 0,
+          finish_reason: "stop",
+          message: { role: "assistant", content, refusal: null },
+          logprobs: null,
+        }],
+        usage: { prompt_tokens: 2, completion_tokens: completionTokens, total_tokens: 2 + completionTokens },
+      };
+    } } },
+  } as unknown as LlmClient;
+
+  const result = await runStructuredWithRetry({
+    llm,
+    model: "m",
+    baseMessages: [{ role: "user", content: "Return a compact object." }],
+    opts: { maxTokens: 100, outputRetryBudgetTokens: 300 } as never,
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 1,
+    callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
+    signal: new AbortController().signal,
+    onEvent: (event) => events.push(event),
+    transport: "non-stream",
+  });
+
+  assert.equal(result.value.value, "ok");
+  assert.equal(events.some((event) => event.kind === "structural_error" && event.errorType === "output_limit"), true);
+  const retryMessages = seen[1].messages as Array<{ role: string; content: string }>;
+  assert.equal(retryMessages.some((message) => message.role === "assistant"), false);
+  assert.equal(retryMessages.some((message) => message.content.includes('{"value":')), false);
+});
+
 test("backend json-mode error downgrades and recovers", async () => {
   const events: RunEvent[] = [];
   const seenParams: Record<string, unknown>[] = [];
@@ -1034,6 +1129,61 @@ test("framed-zod parses parseAnswerFrames and validates schema", async () => {
 
   assert.equal(result.value.answer_markdown, "Answer");
   assert.deepEqual(result.value.citations, ["wiki_a"]);
+});
+
+test("parseSentinelJson parses framed JSON and accepts legacy raw JSON", () => {
+  assert.deepEqual(
+    parseSentinelJson('<<<JSON>>>\n{"value":"ok"}\n<<<END>>>'),
+    { value: "ok" },
+  );
+  assert.deepEqual(parseSentinelJson('{"value":"ok"}'), { value: "ok" });
+  assert.throws(
+    () => parseSentinelJson('<<<JSON>>>\n{"value":"ok"}'),
+    /missing <<<END>>>/,
+  );
+});
+
+test("parseSynthesisFrames keeps create and patch markdown outside JSON", () => {
+  const parsed = parseSynthesisFrames([
+    "<<<REASONING>>>",
+    "bounded result",
+    "<<<CREATE>>>",
+    "entityKey: alpha",
+    "path: !Wiki/d/concept/wiki_d_alpha.md",
+    "annotation: Alpha page",
+    "<<<CONTENT>>>",
+    "# Alpha",
+    "",
+    "```json",
+    "{not required to be escaped}",
+    "```",
+    "<<<END_CREATE>>>",
+    "<<<PATCH>>>",
+    "entityKey: beta",
+    "path: !Wiki/d/concept/wiki_d_beta.md",
+    "expectedPageHash: page-hash",
+    "<<<SECTION>>>",
+    "operation: replace",
+    "heading: ## Facts",
+    "expectedSectionOrdinal: 0",
+    "expectedSectionHash: section-hash",
+    "<<<CONTENT>>>",
+    "replacement with \"quotes\" and \\slashes",
+    "<<<END_SECTION>>>",
+    "<<<END_PATCH>>>",
+    "<<<SKIP>>>",
+    "entityKey: gamma",
+    "reason: no change",
+    "<<<END_SKIP>>>",
+    "<<<END>>>",
+  ].join("\n"));
+
+  assert.equal(parsed.reasoning, "bounded result");
+  assert.equal(parsed.actions[0].kind, "create");
+  assert.match(parsed.actions[0].kind === "create" ? parsed.actions[0].content : "", /\{not required/);
+  assert.equal(parsed.actions[1].kind, "patch");
+  assert.equal(parsed.actions[1].kind === "patch" ? parsed.actions[1].sections[0].content : "", 'replacement with "quotes" and \\slashes');
+  assert.deepEqual(parsed.skips, [{ entityKey: "gamma", reason: "no change" }]);
 });
 
 test("framed-zod invalid frames emit frame_parse and throw StructuredValidationError", async () => {
@@ -1591,6 +1741,153 @@ test("structured repair closes the old lifecycle before opening a new ID", async
     .map((event) => event.kind === "prompt_budget" ? event.requestId : undefined);
   assert.deepEqual(requestIds, ["repair-call", "repair-call:retry-1"]);
   assert.equal(new Set(requestIds).size, requestIds.length);
+});
+
+test("structured repair can use a larger repair input budget", async () => {
+  const events: RunEvent[] = [];
+
+  const result = await runStructuredWithRetry({
+    llm: llmFromAttempts(["not json", '{"value":"ok"}']),
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: { inputBudgetTokens: 1_600, repairInputBudgetTokens: 4_096 },
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 1,
+    callSite: "query.seeds",
+    lifecycle: { id: "repair-budget-call", action: "select_relevant_pages" },
+    signal: new AbortController().signal,
+    onEvent: (event) => events.push(event),
+  });
+
+  assert.equal(result.value.value, "ok");
+  const budgets = events.filter((event): event is Extract<RunEvent, { kind: "prompt_budget" }> =>
+    event.kind === "prompt_budget");
+  assert.deepEqual(budgets.map((event) => event.effectiveInputBudget), [1_600, 4_096]);
+  assert.equal(
+    events.some((event) =>
+      event.kind === "structural_error"
+      && event.succeeded === true),
+    true,
+  );
+});
+
+test("structured repair prefers compact prompt above profile threshold", async () => {
+  const seen: Record<string, unknown>[] = [];
+
+  const result = await runStructuredWithRetry({
+    llm: llmFromAttempts([`{"value":${JSON.stringify("x".repeat(400))}}`, '{"value":"ok"}'], seen),
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: { inputBudgetTokens: 4_096, repairInputBudgetTokens: 8_192 },
+    profile: {
+      kind: "json-zod",
+      schema: z.object({ value: z.literal("ok") }),
+      compactRepairThresholdTokens: 512,
+    },
+    maxRetries: 1,
+    callSite: "query.seeds",
+    lifecycle: { id: "compact-threshold-call", action: "select_relevant_pages" },
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+
+  assert.equal(result.value.value, "ok");
+  const retryMessages = seen[1].messages as Array<{ role: string; content: string }>;
+  assert.equal(retryMessages.some((message) => message.role === "assistant"), false);
+  assert.match(retryMessages.at(-1)?.content ?? "", /too large to include/);
+});
+
+test("structured retries rebuild compact repair from original messages", async () => {
+  const seen: Record<string, unknown>[] = [];
+  const valid = [
+    "<<<ANSWER>>>",
+    "Answer",
+    "<<<CITATIONS>>>",
+    "- wiki_a",
+    "<<<END>>>",
+  ].join("\n");
+
+  const result = await runStructuredWithRetry({
+    llm: llmFromAttempts(["first malformed frame", "second malformed frame", valid], seen),
+    model: "m",
+    baseMessages: [{ role: "user", content: "original request" }],
+    opts: { inputBudgetTokens: 4_096, repairInputBudgetTokens: 8_192 },
+    profile: {
+      kind: "framed-zod",
+      schema: AnswerSchema,
+      parse: parseAnswerFrames,
+      repairInstruction: "Return answer frames only.",
+      compactRepairThresholdTokens: 0,
+    },
+    maxRetries: 2,
+    callSite: "query.answer",
+    lifecycle: lifecycleFor("query.answer"),
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+
+  assert.equal(result.value.answer_markdown, "Answer");
+  const originalMessages = seen[0].messages as Array<{ role: string; content: string }>;
+  for (const request of seen.slice(1)) {
+    const messages = request.messages as Array<{ role: string; content: string }>;
+    assert.equal(messages.length, originalMessages.length + 1);
+    assert.deepEqual(messages.slice(0, originalMessages.length), originalMessages);
+    assert.equal(messages.some((message) => message.role === "assistant"), false);
+  }
+  const finalRepair = (seen[2].messages as Array<{ content: string }>).at(-1)?.content ?? "";
+  assert.doesNotMatch(finalRepair, /first malformed frame/);
+});
+
+test("empty output response-format fallback does not grow the retry prompt", async () => {
+  const seen: Record<string, unknown>[] = [];
+  const baseMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    { role: "system", content: "Return JSON only." },
+    { role: "user", content: "x".repeat(4000) },
+  ];
+
+  const result = await runStructuredWithRetry({
+    llm: llmFromAttempts(["", '{"value":"ok"}'], seen),
+    model: "m",
+    baseMessages,
+    opts: { jsonMode: "json_schema", inputBudgetTokens: 8_192, repairInputBudgetTokens: 8_192 },
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 1,
+    callSite: "query.seeds",
+    lifecycle: { id: "empty-fallback-call", action: "select_relevant_pages" },
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+
+  assert.equal(result.value.value, "ok");
+  assert.equal((seen[0].response_format as { type?: string }).type, "json_schema");
+  assert.equal((seen[1].response_format as { type?: string }).type, "json_object");
+  assert.deepEqual(seen[1].messages, seen[0].messages);
+});
+
+test("response-format fallback does not consume the only schema repair retry", async () => {
+  const seen: Record<string, unknown>[] = [];
+
+  const result = await runStructuredWithRetry({
+    llm: llmFromAttempts(["", "not json", '{"value":"ok"}'], seen),
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: { jsonMode: "json_schema" },
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 1,
+    callSite: "query.seeds",
+    lifecycle: { id: "fallback-plus-repair-call", action: "select_relevant_pages" },
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+
+  assert.equal(result.value.value, "ok");
+  assert.deepEqual(
+    seen.map((params) => (params.response_format as { type?: string } | undefined)?.type ?? "none"),
+    ["json_schema", "json_object", "json_object"],
+  );
+  assert.deepEqual(seen[1].messages, seen[0].messages);
+  const repairMessages = seen[2].messages as Array<{ role: string; content: string }>;
+  assert.equal(repairMessages.some((message) => message.role === "assistant"), true);
 });
 
 test("completionReasoning accepts native and compatibility completion fields", () => {

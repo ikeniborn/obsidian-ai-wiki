@@ -73,21 +73,27 @@ export const PageActionSchema = z.discriminatedUnion("kind", [
   PatchPageSchema,
 ]);
 
+const SynthesisMarkdownSchema = z.string().superRefine((content, ctx) => {
+  if (content.split(/\r?\n/).some((line) => /^<<<[A-Z][A-Z0-9_]*>>>$/.test(line.trim()))) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "reserved protocol marker is not allowed in Markdown" });
+  }
+});
+
 const SynthesisSectionPatchSchema = z.discriminatedUnion("operation", [
   z.object({
     heading: z.string(),
-    content: z.string(),
+    content: SynthesisMarkdownSchema,
     operation: z.literal("add"),
   }).strict(),
   z.object({
     heading: z.string(),
-    content: z.string(),
+    content: SynthesisMarkdownSchema,
     operation: z.literal("append"),
     expectedSectionHash: z.string().optional(),
   }).strict(),
   z.object({
     heading: z.string(),
-    content: z.string(),
+    content: SynthesisMarkdownSchema,
     operation: z.literal("replace"),
     expectedSectionHash: z.string(),
     expectedSectionOrdinal: z.number().int().nonnegative().safe(),
@@ -100,6 +106,7 @@ const SynthesisSectionPatchesSchema = z.array(SynthesisSectionPatchSchema).super
 
 export const SynthesisCreatePageSchema = CreatePageSchema.extend({
   entityKey: NonBlankStringSchema,
+  content: SynthesisMarkdownSchema,
 }).strict();
 
 export const SynthesisPatchPageSchema = PatchPageSchema.extend({
@@ -128,29 +135,7 @@ export const SynthesisOutputSchema = z.object({
     min_mentions_for_page: z.number().optional(),
     wiki_subfolder: z.string().optional(),
   }).strict()).optional(),
-}).strict().superRefine((output, ctx) => {
-  const seenEntities = new Set<string>();
-  const seenPaths = new Set<string>();
-  for (const [index, action] of output.actions.entries()) {
-    const entityKey = action.entityKey.trim().replace(/\s+/g, " ").toLowerCase();
-    if (seenEntities.has(entityKey)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["actions", index, "entityKey"], message: "duplicate entity coverage" });
-    }
-    seenEntities.add(entityKey);
-    const path = action.path.normalize("NFC").trim();
-    if (seenPaths.has(path)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["actions", index, "path"], message: "duplicate action path" });
-    }
-    seenPaths.add(path);
-  }
-  for (const [index, skip] of output.skips.entries()) {
-    const entityKey = skip.entityKey.trim().replace(/\s+/g, " ").toLowerCase();
-    if (seenEntities.has(entityKey)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["skips", index, "entityKey"], message: "duplicate entity coverage" });
-    }
-    seenEntities.add(entityKey);
-  }
-});
+}).strict();
 
 export type SynthesisAction = z.infer<typeof SynthesisActionSchema>;
 export type SynthesisOutput = z.infer<typeof SynthesisOutputSchema>;

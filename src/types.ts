@@ -167,6 +167,7 @@ type TransportRetryMetadata = {
   callSite: string;
   attempt: number;
   maxRetries: number;
+  maxResponseStartRetries?: number;
   errorClass?: string;
   status?: number;
   delayMs?: number;
@@ -179,7 +180,12 @@ type TransportRetryMetadata = {
   traceparent?: string;
 };
 
-export type NativeNetworkTransport = "desktop-direct" | "desktop-proxy" | "mobile-host";
+export type NativeNetworkTransport =
+  | "desktop-direct"
+  | "desktop-host"
+  | "desktop-hybrid"
+  | "desktop-proxy"
+  | "mobile-host";
 export type NativeTransportDiagnosticMode = "off" | "connection-close" | "undici-request-adapter";
 export type NativeTransportTraceStage =
   | "fetch_start"
@@ -204,6 +210,9 @@ export type NativeTransportTraceRecord = {
   bodyBytes?: number;
   bodyChunks?: number;
   errorClass?: string;
+  errorCode?: string;
+  causeClass?: string;
+  causeCode?: string;
   clientRequestId?: string;
   traceparent?: string;
 };
@@ -327,6 +336,34 @@ export type RunEvent =
       retryReason?: string;
     }
   | {
+      kind: "prompt_breakdown";
+      requestId?: string;
+      callSite: StructuredCallSite;
+      estimatedInputTokens: number;
+      breakdown: {
+        contractsTokens: number;
+        evidenceTokens: number;
+        contextTokens: number;
+        pageDescriptionsTokens: number;
+        registryTokens: number;
+        technicalEvidenceTokens?: number;
+      };
+      counts: {
+        bundles: number;
+        entities: number;
+        wikiSections: number;
+        requiredWikiSections: number;
+        optionalWikiSections: number;
+        pageDescriptions: number;
+        registryUnits: number;
+        facts: number;
+        exactSourceRanges: number;
+        exactSourceTexts: number;
+        links: number;
+        technicalEvidenceBlocks?: number;
+      };
+    }
+  | {
       kind: "structured_validation_retry";
       callSite: StructuredCallSite;
       requestId: string;
@@ -407,7 +444,7 @@ export type RunEvent =
   | { kind: "format_cancelled" }
   | { kind: "structural_error";
       callSite: StructuredCallSite;
-      errorType: "json_parse" | "schema_validate" | "empty_output" | "response_format_fallback" | "frame_parse" | "idle_abort";
+      errorType: "json_parse" | "schema_validate" | "empty_output" | "output_limit" | "response_format_fallback" | "frame_parse" | "idle_abort";
       retryAttempt: number;
       succeeded: boolean | null;
       message: string;
@@ -457,14 +494,19 @@ export interface SemanticCompression {
 
 export interface ModelCallPolicy {
   inputBudgetTokens: number;
+  repairInputBudgetTokens?: number;
   outputBudgetTokens?: number;
+  outputRetryBudgetTokens?: number;
   compression?: CompressionProfile;
 }
 
 export interface LlmCallOptions {
   temperature?: number;
   inputBudgetTokens?: number;
+  repairInputBudgetTokens?: number;
   maxTokens?: number;
+  /** Maximum output budget available to a fresh retry after the provider consumes maxTokens without content. */
+  outputRetryBudgetTokens?: number;
   topP?: number | null;
   systemPrompt?: string;
   outputLanguage?: OutputLanguage;
@@ -472,10 +514,15 @@ export interface LlmCallOptions {
   jsonMode?: "json_object" | "json_schema" | false;
   jsonSchema?: { name: string; schema: object };
   structuredRetries?: number;
+  /** @deprecated Numeric `thinking` is not part of OpenAI Chat Completions. Ignored. */
   thinkingBudgetTokens?: number;
+  /** Opt in to stream_options.include_usage when the provider supports it. */
+  includeStreamUsage?: boolean;
   mergeDeleteWarnThreshold?: number;
   dedupOnIngest?: boolean;
   dedupThreshold?: number;
+  synthesisMaxEntityBatchSize?: number;
+  synthesisMaxEntitiesPerSource?: number;
   lintNearDuplicate?: boolean;
   nearDupThreshold?: number;
   semanticCompression?: SemanticCompression;
@@ -483,11 +530,16 @@ export interface LlmCallOptions {
   nativeRequestRetries?: number;
   /** Internal native transport policy resolved from existing top-level settings. */
   nativeRequestIdleTimeoutMs?: number;
+  /** Internal native transport policy: use a fresh desktop connection for this call. */
+  nativeFreshConnection?: boolean;
+  /** Prefer compact structured repair once the full repair prompt reaches this estimate. */
+  compactRepairThresholdTokens?: number;
 }
 
 export const NATIVE_TRANSPORT_ATTEMPT_SIGNAL = Symbol("nativeTransportAttemptSignal");
 export const NATIVE_TRANSPORT_CLIENT_REQUEST_ID = Symbol("nativeTransportClientRequestId");
 export const NATIVE_TRANSPORT_TRACEPARENT = Symbol("nativeTransportTraceparent");
+export const NATIVE_TRANSPORT_FRESH_CONNECTION = Symbol("nativeTransportFreshConnection");
 
 export interface NativeChatCompletionCreateOptions {
   signal: AbortSignal;
@@ -495,6 +547,7 @@ export interface NativeChatCompletionCreateOptions {
     [NATIVE_TRANSPORT_ATTEMPT_SIGNAL]?: AbortSignal;
     [NATIVE_TRANSPORT_CLIENT_REQUEST_ID]?: string;
     [NATIVE_TRANSPORT_TRACEPARENT]?: string;
+    [NATIVE_TRANSPORT_FRESH_CONNECTION]?: boolean;
   };
 }
 
@@ -526,12 +579,14 @@ export interface NativeRequestRetryContext {
   traceId: string;
   callSite: string;
   maxRetries: number;
+  maxResponseStartRetries?: number;
   connectionTimeoutMs: number;
   idleTimeoutMs: number;
   signal: AbortSignal;
   onEvent: (event: RunEvent) => void;
   lifecycle: NativeRequestLifecycle;
   nativeTransportDiagnostic?: NativeTransportDiagnostic;
+  nativeFreshConnection?: boolean;
   consumeNativeHttpResponseDiagnostic?: (signal: AbortSignal) => NativeTransportDiagnostic | undefined;
   consumeNativeTransportTrace?: (signal: AbortSignal) => NativeTransportTraceSnapshot | undefined;
   delay: (ms: number, signal: AbortSignal) => Promise<void>;
@@ -604,6 +659,7 @@ export interface NativeOperationConfig {
   inputBudgetTokens: number;
   maxTokens: number;
   temperature: number;
+  /** @deprecated Numeric `thinking` is not part of OpenAI Chat Completions. Ignored. */
   thinkingBudgetTokens?: number;
   compressionProfile?: CompressionProfile;
 }
@@ -642,6 +698,7 @@ export interface LlmWikiPluginSettings {
     apiKey: string;
     model: string;
     inputBudgetTokens: number;
+    repairInputBudgetTokens?: number;
     maxTokens: number;
     compressionProfile: CompressionProfile;
     temperature: number;
@@ -649,6 +706,7 @@ export interface LlmWikiPluginSettings {
     perOperation: boolean;
     operations: OpMap<NativeOperationConfig>;
     structuredRetries: number;
+    /** @deprecated Numeric `thinking` is not part of OpenAI Chat Completions. Ignored. */
     thinkingBudgetTokens?: number;
     embeddingModel?: string;
     embeddingDimensions?: number;
@@ -670,6 +728,8 @@ export interface LlmWikiPluginSettings {
     seedSimilarityThreshold?: number;
     dedupOnIngest?: boolean;
     dedupThreshold?: number;
+    synthesisMaxEntityBatchSize?: number;
+    synthesisMaxEntitiesPerSource?: number;
     lintNearDuplicate?: boolean;
     nearDupThreshold?: number;
   };
@@ -732,9 +792,20 @@ export function normalizeLlmRuntimeControls(settings: LlmWikiPluginSettings): vo
     15,
   );
   settings.llmIdleTimeoutSec = parseLlmIdleTimeoutSec(settings.llmIdleTimeoutSec, 300);
+  settings.nativeAgent.synthesisMaxEntityBatchSize = Math.max(
+    1,
+    Math.min(10, parseLlmRetryCount(settings.nativeAgent.synthesisMaxEntityBatchSize, 1)),
+  );
+  settings.nativeAgent.synthesisMaxEntitiesPerSource = Math.max(
+    1,
+    Math.min(50, parseLlmRetryCount(settings.nativeAgent.synthesisMaxEntitiesPerSource, 6)),
+  );
   settings.devMode.nativeTransportDiagnosticMode =
-    settings.devMode.nativeTransportDiagnosticMode === "connection-close"
-      || settings.devMode.nativeTransportDiagnosticMode === "undici-request-adapter"
+    settings.devMode.enabled
+      && (
+        settings.devMode.nativeTransportDiagnosticMode === "connection-close"
+        || settings.devMode.nativeTransportDiagnosticMode === "undici-request-adapter"
+      )
       ? settings.devMode.nativeTransportDiagnosticMode
       : "off";
 }
@@ -772,6 +843,7 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
     apiKey: "ollama",
     model: "llama3.2",
     inputBudgetTokens: 16384,
+    repairInputBudgetTokens: 65536,
     maxTokens: 4096,
     compressionProfile: "balanced",
     temperature: 0.2,
@@ -797,6 +869,8 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
     seedSimilarityThreshold: 0,
     dedupOnIngest: false,
     dedupThreshold: 0.85,
+    synthesisMaxEntityBatchSize: 1,
+    synthesisMaxEntitiesPerSource: 6,
     lintNearDuplicate: false,
     nearDupThreshold: 0.80,
   },

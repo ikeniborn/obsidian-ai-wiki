@@ -35,6 +35,7 @@ import { dedupeChunks } from "../chunk-dedup";
 
 import { pruneByRelevance, robustLow, FLOOR_LO_PCT } from "../retrieval-prune";
 import { answerFromContext } from "./query-answer";
+import { selectQueryContextChunks } from "./query-budget";
 
 const DEFAULT_RERANKER_RUNTIME: RerankerRuntime = {
   config: normalizeRerankerConfig(undefined),
@@ -364,10 +365,11 @@ export async function* runQuery(
     baseUrl: rerankerRuntime.baseUrl,
     apiKey: rerankerRuntime.apiKey,
     signal,
+    resultTopN: candidateLimit,
   });
   if (signal.aborted) return;
 
-  const contextChunks = reranked.chunks.slice(0, contextLimit);
+  const contextChunks = selectQueryContextChunks(reranked.chunks, contextLimit);
   const entityTypesBlock = buildEntityTypesBlock(domain);
   const systemPrompt = (packedChunks: readonly SelectedChunk[]): string => {
     const packedIds = new Set(packedChunks.map((chunk) => chunk.articleId));

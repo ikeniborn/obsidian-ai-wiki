@@ -1,0 +1,42 @@
+{
+  "variant": "unknown",
+  "session": "1784804535754",
+  "firstTs": "2026-07-23T11:02:15.754Z",
+  "lastTs": "2026-07-23T11:19:25.223Z",
+  "status": "running",
+  "diagnosticMode": "undici-request-adapter",
+  "transport": "desktop-direct",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrxejdnz-1",
+    "estimatedInputTokens": 7265,
+    "outputBudget": 16384,
+    "responseFormatType": "json_schema",
+    "hash": "fnv1a:39910e76"
+  },
+  "firstHttpMs": 25707,
+  "firstFileMs": 55974,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 7265,
+    "outputBudget": 16384
+  },
+  "transportRetries": 1,
+  "transportRecovered": 1,
+  "structuralRetries": 8,
+  "structuralSummary": [
+    "ingest.synthesize:schema_validate:[\n  {\n    \"code\": \"custom\",\n    \"path\": [\n      \"actions\",\n      2,\n      \"entityKey\"\n    ],\n    \"message\": \"duplicate entity coverage\"\n  },\n  {\n    \"code\": \"custom\",\n    \"path\": [\n      \"actions\",\n      3,\n      \"entityKey\"\n    ],\n    \"message\": \"duplicate entity coverage\"\n  }\n]",
+    "ingest.synthesize:empty_output:Empty structured output",
+    "ingest.synthesize:response_format_fallback:json_schema -> json_object",
+    "ingest.synthesize:schema_validate:[\n  {\n    \"code\": \"custom\",\n    \"path\": [\n      \"actions\",\n      1,\n      \"entityKey\"\n    ],\n    \"message\": \"duplicate entity coverage\"\n  }\n]",
+    "ingest.synthesize:empty_output:Empty structured output",
+    "ingest.synthesize:response_format_fallback:json_object -> none",
+    "ingest.synthesize:empty_output:Empty structured output",
+    "ingest.synthesize:response_format_fallback:json_schema -> json_object"
+  ],
+  "createdPages": 12,
+  "resultTexts": [
+    "Источник «Настройка прокси.md» → домен «os-unix»: создано 12 стр.",
+    ""
+  ],
+  "finalError": "ingest: synthesis failed — Synthesis structured output exhausted for ufw: Empty structured output"
+}

@@ -1,0 +1,18 @@
+{
+  "variant": "pre-synthesis-key-type-gate",
+  "status": "simulated",
+  "synthesisRequests": 3,
+  "structuredValidationRetries": 1,
+  "structuralErrors": 0,
+  "failedSources": 0,
+  "invalidPathsWritten": 0,
+  "unknownEntityKeyAccepted": 0,
+  "pagesCreated": 10,
+  "pagesUpdated": 0,
+  "articleQualityScore": 1,
+  "notes": [
+    "does not catch entity-obsidian when hallucinated inside synthesis",
+    "useful as additional guard for bad evidence packets, not sufficient as main fix"
+  ],
+  "score": 3
+}

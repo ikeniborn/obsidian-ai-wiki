@@ -104,6 +104,14 @@ for (const [name, src] of [["query", domain], ["query-cross-domain", cross]] as 
     assert.match(src, /rerankerRuntime\.config\.contextTopN/);
   });
 
+  test(`${name} applies article-depth context packing after reranking`, () => {
+    const rerankIdx = src.indexOf("rerankChunks(");
+    const contextIdx = src.indexOf("selectQueryContextChunks(");
+    assert.ok(rerankIdx > -1 && contextIdx > rerankIdx);
+    assert.match(src, /resultTopN:\s*candidateLimit/);
+    assert.doesNotMatch(src, /reranked\.chunks\.slice\(0, contextLimit\)/);
+  });
+
   test(`${name} applies boilerplate demotion`, () => {
     assert.match(src, /boilerplateDemotion|demoteBoilerplate/);
   });

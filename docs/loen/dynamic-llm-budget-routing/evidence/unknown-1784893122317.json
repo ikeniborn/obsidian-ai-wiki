@@ -1,0 +1,46 @@
+{
+  "variant": "unknown",
+  "session": "1784893122317",
+  "firstTs": "2026-07-24T11:38:42.318Z",
+  "lastTs": "2026-07-24T11:52:13.015Z",
+  "status": "running",
+  "diagnosticMode": "off",
+  "transport": "desktop-hybrid",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mryva3hu-1",
+    "estimatedInputTokens": 7170,
+    "outputBudget": 4096,
+    "hash": "fnv1a:85651bb0"
+  },
+  "firstHttpMs": 29423,
+  "firstFileMs": 38285,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 7170,
+    "outputBudget": 4096
+  },
+  "transportRetries": 0,
+  "transportRecovered": 0,
+  "structuralRetries": 20,
+  "structuralSummary": [
+    "ingest.evidence-map:output_limit:Output limit consumed before valid structured content (4096/4096 tokens): Unterminated string in JSON at position 2008 (line 67 column 38)",
+    "ingest.evidence-map:output_limit:Output limit consumed without usable content (4096/4096 tokens)",
+    "ingest.evidence-map:output_limit:Output limit consumed before valid structured content (6144/6144 tokens): missing <<<END>>>",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"custom\",\n    \"message\": \"[redacted]\",\n    \"path\": []\n  }\n]",
+    "ingest.evidence-map:output_limit:Output limit consumed without usable content (4096/4096 tokens)",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"packets\"\n    ],\n    \"message\": \"Required\"\n  }\n]",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"packets\"\n    ],\n    \"message\": \"Required\"\n  }\n]",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"custom\",\n    \"message\": \"[redacted]\",\n    \"path\": []\n  }\n]",
+    "ingest.evidence-map:frame_parse:missing <<<END>>>",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"custom\",\n    \"message\": \"[redacted]\",\n    \"path\": []\n  }\n]",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"packets\"\n    ],\n    \"message\": \"Required\"\n  }\n]",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"packets\"\n    ],\n    \"message\": \"Required\"\n  }\n]"
+  ],
+  "createdPages": 8,
+  "resultTexts": [
+    "Источник «Настройка прокси.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «NFS Server.md» → домен «os-unix»: создано 3 стр.",
+    ""
+  ],
+  "finalError": "ingest: evidence preparation failed — Conflicting entity type for amdgpu: application, configuration"
+}

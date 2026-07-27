@@ -1,0 +1,223 @@
+{
+  "vault": "/tmp/ai-wiki-bounded-ingest-replay.SMt4rx/run",
+  "session": "1784747412210",
+  "generatedAt": "2026-07-22T19:52:39.926Z",
+  "variants": [
+    {
+      "variant": "baseline-captured-replay",
+      "status": "observed",
+      "synthesisRequests": 20,
+      "structuredValidationRetries": 9,
+      "structuralErrors": 2,
+      "failedSources": 1,
+      "invalidPathsWritten": 0,
+      "unknownEntityKeyAccepted": 0,
+      "pagesCreated": 10,
+      "pagesUpdated": 0,
+      "articleQualityScore": 1,
+      "notes": [
+        "captured from existing replay vault logs"
+      ]
+    },
+    {
+      "variant": "server-owned-create-paths-batch10",
+      "status": "verified",
+      "synthesisRequests": 3,
+      "structuredValidationRetries": 1,
+      "structuralErrors": 0,
+      "failedSources": 0,
+      "invalidPathsWritten": 0,
+      "unknownEntityKeyAccepted": 0,
+      "pagesCreated": 10,
+      "pagesUpdated": 0,
+      "articleQualityScore": 1,
+      "notes": [
+        "create paths are server-owned",
+        "batchSize=10",
+        "large batch mock emits unknown entity key"
+      ]
+    },
+    {
+      "variant": "server-owned-create-paths-batch2",
+      "status": "verified",
+      "synthesisRequests": 5,
+      "structuredValidationRetries": 0,
+      "structuralErrors": 0,
+      "failedSources": 0,
+      "invalidPathsWritten": 0,
+      "unknownEntityKeyAccepted": 0,
+      "pagesCreated": 10,
+      "pagesUpdated": 0,
+      "articleQualityScore": 1,
+      "notes": [
+        "create paths are server-owned",
+        "batchSize=2",
+        "large batch mock emits unknown entity key"
+      ]
+    },
+    {
+      "variant": "pathless-create-actions",
+      "status": "simulated",
+      "synthesisRequests": 1,
+      "structuredValidationRetries": 0,
+      "structuralErrors": 0,
+      "failedSources": 0,
+      "invalidPathsWritten": 0,
+      "unknownEntityKeyAccepted": 0,
+      "pagesCreated": 10,
+      "pagesUpdated": 0,
+      "articleQualityScore": 1,
+      "notes": [
+        "requires schema migration: create action omits path",
+        "best retry profile, higher implementation risk than server-owned path injection"
+      ]
+    },
+    {
+      "variant": "pre-synthesis-key-type-gate",
+      "status": "simulated",
+      "synthesisRequests": 3,
+      "structuredValidationRetries": 1,
+      "structuralErrors": 0,
+      "failedSources": 0,
+      "invalidPathsWritten": 0,
+      "unknownEntityKeyAccepted": 0,
+      "pagesCreated": 10,
+      "pagesUpdated": 0,
+      "articleQualityScore": 1,
+      "notes": [
+        "does not catch entity-obsidian when hallucinated inside synthesis",
+        "useful as additional guard for bad evidence packets, not sufficient as main fix"
+      ]
+    },
+    {
+      "variant": "reduced-output-budget-profile",
+      "status": "simulated",
+      "synthesisRequests": 5,
+      "structuredValidationRetries": 0,
+      "structuralErrors": 0,
+      "failedSources": 0,
+      "invalidPathsWritten": 0,
+      "unknownEntityKeyAccepted": 0,
+      "pagesCreated": 10,
+      "pagesUpdated": 0,
+      "articleQualityScore": 0.85,
+      "notes": [
+        "addresses empty-output/max-token risk for later high-token source",
+        "may reduce article completeness; needs live model eval before selection"
+      ]
+    }
+  ],
+  "ranked": [
+    {
+      "variant": "pathless-create-actions",
+      "status": "simulated",
+      "synthesisRequests": 1,
+      "structuredValidationRetries": 0,
+      "structuralErrors": 0,
+      "failedSources": 0,
+      "invalidPathsWritten": 0,
+      "unknownEntityKeyAccepted": 0,
+      "pagesCreated": 10,
+      "pagesUpdated": 0,
+      "articleQualityScore": 1,
+      "notes": [
+        "requires schema migration: create action omits path",
+        "best retry profile, higher implementation risk than server-owned path injection"
+      ],
+      "score": -9
+    },
+    {
+      "variant": "server-owned-create-paths-batch2",
+      "status": "verified",
+      "synthesisRequests": 5,
+      "structuredValidationRetries": 0,
+      "structuralErrors": 0,
+      "failedSources": 0,
+      "invalidPathsWritten": 0,
+      "unknownEntityKeyAccepted": 0,
+      "pagesCreated": 10,
+      "pagesUpdated": 0,
+      "articleQualityScore": 1,
+      "notes": [
+        "create paths are server-owned",
+        "batchSize=2",
+        "large batch mock emits unknown entity key"
+      ],
+      "score": -5
+    },
+    {
+      "variant": "reduced-output-budget-profile",
+      "status": "simulated",
+      "synthesisRequests": 5,
+      "structuredValidationRetries": 0,
+      "structuralErrors": 0,
+      "failedSources": 0,
+      "invalidPathsWritten": 0,
+      "unknownEntityKeyAccepted": 0,
+      "pagesCreated": 10,
+      "pagesUpdated": 0,
+      "articleQualityScore": 0.85,
+      "notes": [
+        "addresses empty-output/max-token risk for later high-token source",
+        "may reduce article completeness; needs live model eval before selection"
+      ],
+      "score": -3.5
+    },
+    {
+      "variant": "server-owned-create-paths-batch10",
+      "status": "verified",
+      "synthesisRequests": 3,
+      "structuredValidationRetries": 1,
+      "structuralErrors": 0,
+      "failedSources": 0,
+      "invalidPathsWritten": 0,
+      "unknownEntityKeyAccepted": 0,
+      "pagesCreated": 10,
+      "pagesUpdated": 0,
+      "articleQualityScore": 1,
+      "notes": [
+        "create paths are server-owned",
+        "batchSize=10",
+        "large batch mock emits unknown entity key"
+      ],
+      "score": 3
+    },
+    {
+      "variant": "pre-synthesis-key-type-gate",
+      "status": "simulated",
+      "synthesisRequests": 3,
+      "structuredValidationRetries": 1,
+      "structuralErrors": 0,
+      "failedSources": 0,
+      "invalidPathsWritten": 0,
+      "unknownEntityKeyAccepted": 0,
+      "pagesCreated": 10,
+      "pagesUpdated": 0,
+      "articleQualityScore": 1,
+      "notes": [
+        "does not catch entity-obsidian when hallucinated inside synthesis",
+        "useful as additional guard for bad evidence packets, not sufficient as main fix"
+      ],
+      "score": 3
+    },
+    {
+      "variant": "baseline-captured-replay",
+      "status": "observed",
+      "synthesisRequests": 20,
+      "structuredValidationRetries": 9,
+      "structuralErrors": 2,
+      "failedSources": 1,
+      "invalidPathsWritten": 0,
+      "unknownEntityKeyAccepted": 0,
+      "pagesCreated": 10,
+      "pagesUpdated": 0,
+      "articleQualityScore": 1,
+      "notes": [
+        "captured from existing replay vault logs"
+      ],
+      "score": 230
+    }
+  ],
+  "selected": "server-owned-create-paths-batch2",
+  "selectionReason": "Choose best verified production-code variant; simulated variants require additional implementation/live eval."
+}

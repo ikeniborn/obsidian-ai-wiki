@@ -1,0 +1,39 @@
+{
+  "variant": "g-undici-adapter-16384-input65536",
+  "session": "1784794138147",
+  "firstTs": "2026-07-23T08:08:58.147Z",
+  "lastTs": "2026-07-23T08:16:14.457Z",
+  "status": "running",
+  "diagnosticMode": "undici-request-adapter",
+  "transport": "desktop-direct",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrx8citk-1",
+    "estimatedInputTokens": 7103,
+    "outputBudget": 16384,
+    "responseFormatType": "json_schema",
+    "hash": "fnv1a:e559da8f"
+  },
+  "firstHttpMs": 26455,
+  "firstFileMs": 92579,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 7103,
+    "outputBudget": 16384
+  },
+  "transportRetries": 1,
+  "transportRecovered": 1,
+  "structuralRetries": 5,
+  "structuralSummary": [
+    "init.bootstrap-map:schema_validate:[\n  {\n    \"code\": \"custom\",\n    \"message\": \"Unknown source chunk 0:1-65\",\n    \"path\": []\n  }\n]",
+    "ingest.synthesize:schema_validate:[\n  {\n    \"code\": \"invalid_union_discriminator\",\n    \"options\": [\n      \"add\",\n      \"append\",\n      \"replace\"\n    ],\n    \"path\": [\n      \"actions\",\n      1,\n      \"sections\",\n      0,\n      \"operation\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'add' | 'append' | 'replace'\"\n  }\n]",
+    "ingest.synthesize:schema_validate:[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"actions\",\n      1,\n      \"sections\",\n      0,\n      \"content\"\n    ],\n    \"message\": \"Required\"\n  }\n]",
+    "ingest.synthesize:schema_validate:[\n  {\n    \"code\": \"custom\",\n    \"path\": [\n      \"actions\",\n      1,\n      \"sections\",\n      0,\n      \"content\"\n    ],\n    \"message\": \"content must not contain a top-level H2 outside a valid fence\"\n  }\n]",
+    "ingest.synthesize:schema_validate:[\n  {\n    \"code\": \"invalid_union_discriminator\",\n    \"options\": [\n      \"add\",\n      \"append\",\n      \"replace\"\n    ],\n    \"path\": [\n      \"actions\",\n      1,\n      \"sections\",\n      0,\n      \"operation\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'add' | 'append' | 'replace'\"\n  }\n]"
+  ],
+  "createdPages": 6,
+  "resultTexts": [
+    "Источник «Настройка прокси.md» → домен «os-unix»: создано 6 стр.",
+    ""
+  ],
+  "finalError": "ingest: synthesis failed — Synthesis structured output exhausted for etc-exports: [\n  {\n    \"code\": \"invalid_union_discriminator\",\n    \"options\": [\n      \"add\",\n      \"append\",\n      \"replace\"\n    ],\n    \"path\": [\n      \"actions\",\n      1,\n      \"sections\",\n      0,\n      \"operation\"\n    ],\n    \"message\": \"Invalid discriminator value. Expected 'add' | 'append' | 'replace'\"\n  }\n]"
+}

@@ -1,0 +1,975 @@
+{
+  "domain": "os-unix",
+  "vault": "/tmp/ai-wiki-bounded-ingest-replay.SMt4rx/run",
+  "model": "ollama-deepseek-v4-pro-cloud",
+  "transport": {
+    "transport": "desktop-hybrid",
+    "diagnosticMode": "off",
+    "requestedScope": "dns_tcp_tls_establishment",
+    "exactConnectTimeoutAvailable": false,
+    "hostTransportRetained": true,
+    "endpointPath": "/v1/chat/completions"
+  },
+  "querySettings": {
+    "graphDepth": 1,
+    "seedTopK": 15,
+    "seedMinScore": 0.1,
+    "bfsTopK": 5,
+    "seedSimilarityThreshold": 0.3,
+    "bfsFusion": true,
+    "bfsMinScoreRatio": 0.6,
+    "rerankerEnabled": true,
+    "rerankerTopN": 30,
+    "contextTopN": 8,
+    "inputBudgetTokens": 16384,
+    "maxTokens": 32000
+  },
+  "results": [
+    {
+      "id": "proxy-obsidian-altlinux",
+      "question": "Как настроить прокси для Obsidian AppImage в ALT Linux через proxy.pac, переменные окружения, wrapper и desktop-файл?",
+      "status": "done",
+      "durationMs": 13542,
+      "answer": "Для запуска Obsidian AppImage с прокси в ALT Linux можно использовать переменные окружения, флаг командной строки или постоянный ярлык (wrapper + desktop-файл). Во всех случаях требуется URL PAC-файла, например `http://your-proxy-server/proxy.pac` [[wiki_os-unix_proxy_configuration_note]].\n\n## Настройка через переменные окружения\n\nПеременные `http_proxy` и `https_proxy` задаются в формате [[wiki_os-unix_proxy_env_vars]].\nИх можно экспортировать в текущем сеансе или прописать глобально.\n\n- **Временная установка** (действует только в текущем терминале и дочерних процессах):\n  ```bash\n  export http_proxy=\"pac+http://your-proxy-server/proxy.pac\"\n  export https_proxy=\"pac+http://your-proxy-server/proxy.pac\"\n  ./Obsidian-*.AppImage\n  ```\n\n- **Постоянная установка** (для всех сеансов оболочки) — добавить строки в `~/.profile` [[wiki_os-unix_proxy_global_profile]]:\n  ```bash\n  echo 'export http_proxy=\"pac+http://your-proxy-server/proxy.pac\"' >> ~/.profile\n  echo 'export https_proxy=\"pac+http://your-proxy-server/proxy.pac\"' >> ~/.profile\n  ```\n  После этого приложения, запущенные из оболочки, будут наследовать эти настройки.\n\n## Запуск с флагом `--proxy-pac-url`\n\nПриложения на Electron (Obsidian) поддерживают прямую передачу PAC-файла через флаг `--proxy-pac-url` [[wiki_os-unix_proxy_chromium_flag]].  \nЭтот способ не зависит от переменных окружения и удобен для разовых запусков:\n\n```bash\n./Obsidian-*.AppImage --proxy-pac-url=\"http://your-proxy-server/proxy.pac\"\n```\n\n## Постоянный ярлык запуска (wrapper + desktop-файл)\n\nЧтобы не указывать параметры каждый раз, создаётся скрипт-обёртка и файл `.desktop` для интеграции в меню приложений [[wiki_os-unix_proxy_permanent_launcher]].\n\n1. **Скрипт-обёртка** (например,):\n   Сделайте скрипт исполняемым:\n\n2. **Desktop-файл** (например,):\n   После создания файла ярлык появится в меню приложений.\n\nТакой подход автоматизирует запуск с прокси и не требует ручного ввода параметров [[wiki_os-unix_proxy_permanent_launcher]].",
+      "foundPages": [
+        "wiki_os-unix_proxy_permanent_launcher",
+        "wiki_os-unix_proxy_configuration_note",
+        "wiki_os-unix_proxy_chromium_flag",
+        "wiki_os-unix_proxy_env_vars",
+        "wiki_os-unix_proxy_global_profile",
+        "wiki_os-unix_haproxy"
+      ],
+      "foundChunks": [
+        {
+          "articleId": "wiki_os-unix_proxy_permanent_launcher",
+          "heading": "## Основные характеристики",
+          "score": 0.8085725983519491
+        },
+        {
+          "articleId": "wiki_os-unix_proxy_configuration_note",
+          "heading": "## Основные характеристики",
+          "score": 0.7980004306214774
+        },
+        {
+          "articleId": "wiki_os-unix_proxy_chromium_flag",
+          "heading": "## Применение в контексте Unix-подобных ОС",
+          "score": 0.7081146283468085
+        },
+        {
+          "articleId": "wiki_os-unix_proxy_env_vars",
+          "heading": "## Основные характеристики",
+          "score": 0.6443233494887829
+        },
+        {
+          "articleId": "wiki_os-unix_proxy_global_profile",
+          "heading": "## Применение в контексте ОС/Unix",
+          "score": 0.6323934134131495
+        },
+        {
+          "articleId": "wiki_os-unix_haproxy",
+          "heading": "## Примеры",
+          "score": 0.49672456888876754
+        },
+        {
+          "articleId": "wiki_os-unix_proxy_permanent_launcher",
+          "heading": "## Применение в контексте os-unix",
+          "score": 0.7186711271655412
+        },
+        {
+          "articleId": "wiki_os-unix_proxy_configuration_note",
+          "heading": "## Применение в контексте ОС/Unix",
+          "score": 0.697177202261707
+        }
+      ],
+      "expectedPages": [
+        "wiki_os-unix_obsidian_appimage",
+        "wiki_os-unix_proxy_pac",
+        "wiki_os-unix_http_proxy",
+        "wiki_os-unix_obsidian_wrapper_script",
+        "wiki_os-unix_obsidian_desktop"
+      ],
+      "expectedPageHits": [],
+      "retrievalHitAtK": false,
+      "expectedPageRecall": 0,
+      "requiredFactPasses": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "requiredFactCoverage": 1,
+      "wikiLinks": [
+        "wiki_os-unix_proxy_chromium_flag",
+        "wiki_os-unix_proxy_configuration_note",
+        "wiki_os-unix_proxy_env_vars",
+        "wiki_os-unix_proxy_global_profile",
+        "wiki_os-unix_proxy_permanent_launcher"
+      ],
+      "invalidWikiLinks": [],
+      "wikiLinkPrecision": 1,
+      "llmCalls": 1,
+      "inputTokens": 2869,
+      "outputTokens": 1388,
+      "transportRetries": 0,
+      "structuralRetries": 0,
+      "validationRetries": 0,
+      "groundingSanitizations": 1,
+      "networkTransports": [
+        "desktop-host"
+      ]
+    },
+    {
+      "id": "nfs-server-client",
+      "question": "Как установить NFS-сервер на Ubuntu 22.04, экспортировать каталог и подключить его на клиенте Ubuntu 24.04 с учётом UFW?",
+      "status": "done",
+      "durationMs": 23076,
+      "answer": "Для развёртывания NFS-сервера на Ubuntu, экспорта каталога и подключения к нему клиента Ubuntu с учётом UFW необходимо выполнить несколько шагов. Ниже приведены точные команды и конфигурации, основанные на предоставленных источниках.\n\n## Установка NFS-сервера\nСерверная часть NFS предоставляется пакетом **`nfs-kernel-server`**. Установите его стандартным способом через APT (точная команда в источниках не приведена, но пакет указан в заголовке [[wiki_os-unix_nfs_kernel_server]]).\n\n## Создание и экспорт общего каталога\n1. Создайте каталог, который будет экспортироваться (например, `/mnt/nfsshare`), и настройте права доступа (конкретные команды в источниках отсутствуют, но путь используется в примерах экспорта).\n2. Отредактируйте файл **`/etc/exports`**:\n   ```bash\n   sudo nano /etc/exports\n   ```\n3. Добавьте строку экспорта. Примеры из [[wiki_os-unix_nfs_kernel_server]] и [[wiki_os-unix_exports]]:\n   - Только чтение для конкретного хоста:\n     ```\n     /mnt/nfsshare 192.168.1.10(ro,sync,no_subtree_check)\n     ```\n   - Чтение и запись для подсети (с отключением `root_squash` – **не рекомендуется** для безопасности):\n     ```\n     /mnt/nfsshare 192.168.1.0/24(rw,sync,no_subtree_check,no_root_squash)\n     ```\n   **Важно:** избегайте символа `*` (доступ всем), опции `no_root_squash` и асинхронного режима `async` (см. [[wiki_os-unix_nfs]]).\n4. Примените экспорт и перезапустите сервер:\n   ```bash\n   sudo exportfs -a\n   sudo systemctl restart nfs-kernel-server\n   ```\n\n## Настройка брандмауэра UFW\nИсточники не содержат конкретных команд UFW, однако в заголовке [[wiki_os-unix_nfs_kernel_server]] указано, что страница охватывает настройку брандмауэра UFW. Для работы NFS необходимо разрешить порты, используемые службами (основной порт ****, а также порты и др.). Обычно это делается командами вида:\nТочные правила следует уточнить в полной версии руководства.\n\n## Настройка клиента Ubuntu\n### Установка клиентских утилит\nНа клиенте установите пакет **`nfs-common`** ([[wiki_os-unix_nfs_common]]):\n```bash\nsudo apt update\nsudo apt install nfs-common\n```\n\n### Монтирование удалённого ресурса\n1. Создайте точку монтирования ([[wiki_os-unix_nfs_kernel_server]]):\n   ```bash\n   sudo mkdir -p /mnt/nfsclient\n   ```\n2. Смонтируйте NFS-шару, заменив IP-адрес на адрес вашего сервера:\n   ```bash\n   sudo mount 192.168.1.100:/mnt/nfsshare /mnt/nfsclient\n   ```\n3. Проверьте доступность:\n   ```bash\n   df -h\n   ```\n\n### Автоматическое монтирование при загрузке\nДобавьте запись в **`/etc/fstab`** ([[wiki_os-unix_fstab]]):\n```bash\nsudo nano /etc/fstab\n```\nПример строки:\n```\n192.168.1.100:/mnt/nfsshare /mnt/nfsclient nfs defaults,auto 0 0\n```\nПримените изменения без перезагрузки:\n```bash\nsudo mount -a\n```\n\n## Рекомендации по безопасности\n- Ограничивайте доступ конкретными IP-адресами или подсетями, не используйте `*` в `/etc/exports`.\n- Не отключайте `root_squash` (опция `no_root_squash`), чтобы предотвратить привилегированный доступ с клиента.\n- Предпочитайте синхронный режим `sync` вместо `async` для сохранности данных.\n- Настройте брандмауэр для портов NFS и обеспечьте совпадение UID/GID пользователей между клиентом и сервером ([[wiki_os-unix_nfs]]).",
+      "foundPages": [
+        "wiki_os-unix_nfs_kernel_server",
+        "wiki_os-unix_nfs",
+        "wiki_os-unix_exports",
+        "wiki_os-unix_nfs_common",
+        "wiki_os-unix_fstab",
+        "wiki_os-unix_npm_global_config"
+      ],
+      "foundChunks": [
+        {
+          "articleId": "wiki_os-unix_nfs_kernel_server",
+          "heading": "## Настройка клиента NFS (опционально)",
+          "score": 0.6572744290397753
+        },
+        {
+          "articleId": "wiki_os-unix_nfs",
+          "heading": "## Основные характеристики",
+          "score": 0.6503233713480525
+        },
+        {
+          "articleId": "wiki_os-unix_exports",
+          "heading": "## Основные характеристики",
+          "score": 0.6488688825029235
+        },
+        {
+          "articleId": "wiki_os-unix_nfs_common",
+          "heading": "## Основные характеристики",
+          "score": 0.625481708831663
+        },
+        {
+          "articleId": "wiki_os-unix_fstab",
+          "heading": "## Примеры",
+          "score": 0.5960504416358084
+        },
+        {
+          "articleId": "wiki_os-unix_npm_global_config",
+          "heading": "## Примеры",
+          "score": 0.5404645672345852
+        },
+        {
+          "articleId": "wiki_os-unix_nfs_kernel_server",
+          "heading": "## Экспорт каталога через /etc/exports",
+          "score": 0.6522365857256828
+        }
+      ],
+      "expectedPages": [
+        "wiki_os-unix_nfs_kernel_server",
+        "wiki_os-unix_nfs_common",
+        "wiki_os-unix_etc_exports",
+        "wiki_os-unix_etc_fstab",
+        "wiki_os-unix_ufw"
+      ],
+      "expectedPageHits": [
+        "wiki_os-unix_nfs_kernel_server",
+        "wiki_os-unix_nfs_common"
+      ],
+      "retrievalHitAtK": true,
+      "expectedPageRecall": 0.4,
+      "requiredFactPasses": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "requiredFactCoverage": 1,
+      "wikiLinks": [
+        "wiki_os-unix_exports",
+        "wiki_os-unix_fstab",
+        "wiki_os-unix_nfs",
+        "wiki_os-unix_nfs_common",
+        "wiki_os-unix_nfs_kernel_server"
+      ],
+      "invalidWikiLinks": [],
+      "wikiLinkPrecision": 1,
+      "llmCalls": 1,
+      "inputTokens": 3312,
+      "outputTokens": 3136,
+      "transportRetries": 0,
+      "structuralRetries": 0,
+      "validationRetries": 0,
+      "groundingSanitizations": 1,
+      "networkTransports": [
+        "desktop-host"
+      ]
+    },
+    {
+      "id": "amd-driver-rocm",
+      "question": "Как установить и проверить AMDGPU и ROCm в Ubuntu 24.04, включая DKMS, конфигурацию Xorg/modprobe и диагностические команды?",
+      "status": "done",
+      "durationMs": 23959,
+      "answer": "## Установка и проверка AMDGPU и ROCm в Ubuntu 24.04\n\nОткрытый драйвер **AMDGPU** уже встроен в ядро Ubuntu 24.04 LTS и работает с Mesa — отдельная установка для базовой графики не требуется [[wiki_os-unix_amdgpu]]. Для вычислительных задач и машинного обучения необходимо установить стек **ROCm** и проприетарные компоненты.\n\n### Установка через amdgpu-install\n\n1. Загрузите пакет `amdgpu-install`:\n   ```bash\n   wget https://repo.radeon.com/amdgpu-install/6.2.3/ubuntu/jammy/amdgpu-install_6.2.60203-1_all.deb\n   ```\n2. Установите драйвер с поддержкой графики и ROCm:\n   ```bash\n   sudo amdgpu-install -y --usecase=graphics,rocm\n   ```\n3. Добавьте пользователя в группы `render` и `video`:\n   ```bash\n   sudo usermod -a -G render,video $LOGNAME\n   ```\n4. Перезагрузите систему:\n   ```bash\n   sudo reboot\n   ```\n\n### Установка DKMS и ROCm\n\n- Пакет **DKMS** для модуля ядра AMDGPU:\n  ```bash\n  sudo apt install amdgpu-dkms\n  ```\n  После установки также требуется перезагрузка.\n- Стек **ROCm**:\n  ```bash\n  sudo apt install rocm\n  ```\n\n### Проверка установки\n\nОсновная диагностическая команда — `rocminfo`. Она показывает детали установки ROCm и доступные GPU-устройства:\n```bash\nrocminfo\n```\n\nСпецифические диагностические команды для открытого драйвера AMDGPU в предоставленных источниках отсутствуют.\n\n### Конфигурация Xorg и modprobe\n\nИсточники не содержат явных шагов по настройке Xorg или modprobe для драйвера AMDGPU. Открытый драйвер работает «из коробки» и не требует ручного конфигурирования Xorg. Если необходима поддержка **FreeSync**, в конфигурации Xorg можно задать параметр `VariableRefresh` (подробнее в [[wiki_os-unix_freesync]]). Никаких действий с modprobe (например, занесение в чёрный список) в материалах не упоминается — модуль `amdgpu` загружается автоматически.\n\n### Связанные страницы\n- [[wiki_os-unix_amd_radeon_driver_installation_ubuntu_24_04]] — полное руководство по установке\n- [[wiki_os-unix_rocm]] — описание стека ROCm\n- [[wiki_os-unix_amdgpu]] — характеристики открытого драйвера\n- [[wiki_os-unix_freesync]] — настройка переменной частоты обновления",
+      "foundPages": [
+        "wiki_os-unix_amd_radeon_driver_installation_ubuntu_24_04",
+        "wiki_os-unix_rocm",
+        "wiki_os-unix_amdgpu",
+        "wiki_os-unix_freesync",
+        "wiki_os-unix_amdgpu_pro",
+        "wiki_os-unix_logrotate"
+      ],
+      "foundChunks": [
+        {
+          "articleId": "wiki_os-unix_amd_radeon_driver_installation_ubuntu_24_04",
+          "heading": "",
+          "score": 0.717507012329282
+        },
+        {
+          "articleId": "wiki_os-unix_rocm",
+          "heading": "## Основные характеристики",
+          "score": 0.632395321035533
+        },
+        {
+          "articleId": "wiki_os-unix_amdgpu",
+          "heading": "## Основные характеристики",
+          "score": 0.5742760498084591
+        },
+        {
+          "articleId": "wiki_os-unix_freesync",
+          "heading": "## Основные характеристики",
+          "score": 0.5613662160809645
+        },
+        {
+          "articleId": "wiki_os-unix_amdgpu_pro",
+          "heading": "## Применение в контексте os-unix",
+          "score": 0.5560044171038383
+        },
+        {
+          "articleId": "wiki_os-unix_logrotate",
+          "heading": "## Основные характеристики",
+          "score": 0.55083498468425
+        },
+        {
+          "articleId": "wiki_os-unix_amd_radeon_driver_installation_ubuntu_24_04",
+          "heading": "## Установка проприетарного драйвера AMDGPU-PRO и ROCm",
+          "score": 0.7036757272963725
+        },
+        {
+          "articleId": "wiki_os-unix_rocm",
+          "heading": "## Применение в контексте os-unix",
+          "score": 0.5886963166336393
+        }
+      ],
+      "expectedPages": [
+        "wiki_os-unix_amdgpu",
+        "wiki_os-unix_amdgpu_pro",
+        "wiki_os-unix_rocm",
+        "wiki_os-unix_20_amdgpu_conf",
+        "wiki_os-unix_amdgpu_conf"
+      ],
+      "expectedPageHits": [
+        "wiki_os-unix_amdgpu",
+        "wiki_os-unix_amdgpu_pro",
+        "wiki_os-unix_rocm"
+      ],
+      "retrievalHitAtK": true,
+      "expectedPageRecall": 0.6,
+      "requiredFactPasses": [
+        true,
+        true,
+        false,
+        false,
+        true
+      ],
+      "requiredFactCoverage": 0.6,
+      "wikiLinks": [
+        "wiki_os-unix_amd_radeon_driver_installation_ubuntu_24_04",
+        "wiki_os-unix_amdgpu",
+        "wiki_os-unix_freesync",
+        "wiki_os-unix_rocm"
+      ],
+      "invalidWikiLinks": [],
+      "wikiLinkPrecision": 1,
+      "llmCalls": 1,
+      "inputTokens": 2626,
+      "outputTokens": 3029,
+      "transportRetries": 0,
+      "structuralRetries": 0,
+      "validationRetries": 0,
+      "groundingSanitizations": 0,
+      "networkTransports": [
+        "desktop-host"
+      ]
+    },
+    {
+      "id": "fail2ban-haproxy-docker",
+      "question": "Как настроить Fail2Ban для защиты HAProxy в Docker: логи, filter.d, jail.local и блокировку через iptables или nftables?",
+      "status": "done",
+      "durationMs": 16801,
+      "answer": "## Настройка логирования HAProxy в Docker\n\nHAProxy запускается в контейнере с `network_mode: host`, что позволяет Fail2Ban применять правила брандмауэра напрямую к хосту. Логи направляются в системный syslog через монтирование `/dev/log`:\n\n```yaml\nversion: '3'\nservices:\n  haproxy:\n    image: haproxy:latest\n    network_mode: host\n    volumes:\n    logging:\n      driver: \"json-file\"\n      options:\n        max-size: \"10m\"\n        max-file: \"3\"\n```\n\nНа хосте необходимо настроить **rsyslog** так, чтобы сообщения от HAProxy попадали в `/var/log/haproxy.log` – именно этот файл будет читать Fail2Ban. [[wiki_os-unix_haproxy]]\n\n## Установка Fail2Ban\n\n```bash\nsudo apt-get install -y fail2ban && \\\nsudo systemctl start fail2ban && \\\nsudo systemctl enable fail2ban && \\\nsudo systemctl status fail2ban\n```\n\n[[wiki_os-unix_fail2ban]]\n\n## Создание фильтров (filter.d)\n\nФильтры определяют регулярные выражения для поиска подозрительных записей в логах. Примеры файлов в `/etc/fail2ban/filter.d/`:\n\n- **haproxy-https-docker.conf** – для обнаружения аномальной активности на HTTPS-порту (создаётся аналогично другим фильтрам, точное содержимое не приведено в источниках).\n- **haproxy-auth.conf** – защита от перебора учётных данных:\n\n[[wiki_os-unix_brute_force_protection]]\n\n- **haproxy-ddos.conf** – для выявления DDoS-атак (создаётся под конкретные паттерны логов).\n\nПосле создания или изменения фильтров перезагрузите Fail2Ban:\n\n## Настройка jail.local\n\nФайл `/etc/fail2ban/jail.local` содержит локальные определения тюрем. Примеры для защиты HAProxy:\n\n```ini\n[haproxy-https-docker]\nenabled = true\nport = https,443\nfilter = haproxy-https-docker\nlogpath = /var/log/haproxy.log\nmaxretry = 6\nfindtime = 120\nbantime = 1200\nbanaction = iptables-multiport\n\nenabled = true\nlogpath = /var/log/haproxy.log\nbanaction = iptables-multiport\n\n[haproxy-ddos]\nenabled = true\nlogpath = /var/log/haproxy.log\n```\n\nДля уведомлений можно добавить действие `sendmail-whois`:\n\n```ini\n[haproxy-ddos]\naction = iptables-allports[name=haproxy-ddos]\n         sendmail-whois[name=haproxy-ddos, dest=admin@example.com, sender=fail2ban@example.com]\n```\n\n[[wiki_os-unix_jail_local]]\n\n## Блокировка через iptables или nftables\n\nПо умолчанию Fail2Ban использует **iptables**. Действия `iptables-multiport` (блокировка только указанных портов) и `iptables-allports` (полная блокировка) уже настроены в системе. При необходимости можно вручную проверить или очистить правила:\n\n[[wiki_os-unix_iptables]]\n\nДля повышения производительности при большом количестве правил рекомендуется **nftables**. Чтобы переключиться, замените `banaction` в `jail.local` на (если действие доступно в вашей версии Fail2Ban). [[wiki_os-unix_ddos_protection]]\n\n## Проверка и отладка\n\nПроверьте статус тюрем:\n\n```bash\nsudo fail2ban-client status haproxy-https-docker\nsudo fail2ban-client status haproxy-auth\nsudo fail2ban-client status haproxy-ddos\n```\n\nПротестируйте фильтр на реальном лог-файле:\n\n```bash\nsudo fail2ban-regex /var/log/haproxy.log /etc/fail2ban/filter.d/haproxy-https-docker.conf\n```\n\n[[wiki_os-unix_fail2ban]]\n\nПри корректной настройке Fail2Ban будет автоматически добавлять правила iptables/nftables для блокировки IP, превысивших порог `maxretry` за интервал `findtime`.",
+      "foundPages": [
+        "wiki_os-unix_fail2ban",
+        "wiki_os-unix_jail_local",
+        "wiki_os-unix_haproxy",
+        "wiki_os-unix_ddos_protection",
+        "wiki_os-unix_brute_force_protection",
+        "wiki_os-unix_iptables"
+      ],
+      "foundChunks": [
+        {
+          "articleId": "wiki_os-unix_fail2ban",
+          "heading": "## Применение в контексте os-unix",
+          "score": 0.7949749853963014
+        },
+        {
+          "articleId": "wiki_os-unix_jail_local",
+          "heading": "## Основные характеристики",
+          "score": 0.7592587171715335
+        },
+        {
+          "articleId": "wiki_os-unix_haproxy",
+          "heading": "## Применение в контексте os-unix",
+          "score": 0.7067571262484262
+        },
+        {
+          "articleId": "wiki_os-unix_ddos_protection",
+          "heading": "## Применение в контексте Unix-подобных ОС",
+          "score": 0.7259782230105655
+        },
+        {
+          "articleId": "wiki_os-unix_brute_force_protection",
+          "heading": "## Применение в контексте os-unix",
+          "score": 0.7064763006391009
+        },
+        {
+          "articleId": "wiki_os-unix_iptables",
+          "heading": "## Основные характеристики",
+          "score": 0.512725380084598
+        },
+        {
+          "articleId": "wiki_os-unix_fail2ban",
+          "heading": "## Примеры",
+          "score": 0.7341854922704033
+        },
+        {
+          "articleId": "wiki_os-unix_jail_local",
+          "heading": "## Примеры",
+          "score": 0.6583192983763781
+        }
+      ],
+      "expectedPages": [
+        "wiki_os-unix_jail_local",
+        "wiki_os-unix_filter_haproxy_https_docker",
+        "wiki_os-unix_haproxy",
+        "wiki_os-unix_docker"
+      ],
+      "expectedPageHits": [
+        "wiki_os-unix_jail_local",
+        "wiki_os-unix_haproxy"
+      ],
+      "retrievalHitAtK": true,
+      "expectedPageRecall": 0.5,
+      "requiredFactPasses": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "requiredFactCoverage": 1,
+      "wikiLinks": [
+        "wiki_os-unix_brute_force_protection",
+        "wiki_os-unix_ddos_protection",
+        "wiki_os-unix_fail2ban",
+        "wiki_os-unix_haproxy",
+        "wiki_os-unix_iptables",
+        "wiki_os-unix_jail_local"
+      ],
+      "invalidWikiLinks": [],
+      "wikiLinkPrecision": 1,
+      "llmCalls": 1,
+      "inputTokens": 3260,
+      "outputTokens": 2306,
+      "transportRetries": 0,
+      "structuralRetries": 0,
+      "validationRetries": 0,
+      "groundingSanitizations": 1,
+      "networkTransports": [
+        "desktop-host"
+      ]
+    },
+    {
+      "id": "gitlab-runner-shell",
+      "question": "Как установить GitLab Runner бинарником, создать пользователя, запустить service с shell executor и проверить конфигурацию?",
+      "status": "done",
+      "durationMs": 12097,
+      "answer": "Установка GitLab Runner из бинарного файла, настройка пользователя и запуск сервиса с shell-исполнителем выполняются в несколько шагов. Ниже приведена полная последовательность на основе материалов вики.\n\n## 1. Установка зависимостей\n```bash\nsudo apt install ca-certificates curl openssh-server apt-transport-https gnupg lsb-release -y\n```\n[[wiki_os-unix_gitlab_runner]]\n\n## 2. Загрузка бинарного файла\n```bash\nsudo curl -L --output /usr/local/bin/gitlab-runner https://gitlab-runner-downloads.s3.amazonaws.com/latest/binaries/gitlab-runner-linux-amd64\n```\n[[wiki_os-unix_gitlab_runner]]\n\n## 3. Права на выполнение\n```bash\nsudo chmod +x /usr/local/bin/gitlab-runner\n```\n[[wiki_os-unix_gitlab_runner]]\n\n## 4. Создание системного пользователя\n```bash\nsudo useradd --comment 'GitLab Runner' --create-home gitlab-runner --shell /bin/bash\n```\n[[wiki_os-unix_gitlab_runner]]\n\n## 5. Установка и запуск системной службы\n```bash\nsudo gitlab-runner install --user=gitlab-runner --working-directory=/home/gitlab-runner\nsudo gitlab-runner start\n```\n[[wiki_os-unix_gitlab_runner]]\n\n## 6. Подготовка shell-исполнителя\nДля корректной работы shell-исполнителя удалите файл `.bash_logout` из домашней директории пользователя `gitlab-runner`:\n```bash\nsudo rm /home/gitlab-runner/.bash_logout\n```\n[[wiki_os-unix_shell_executor]]\n\n## 7. Настройка беспарольного sudo\nДобавьте запись в `/etc/sudoers` (рекомендуется через `visudo`) или создайте отдельный файл в `/etc/sudoers.d/`:\n```bash\nsudo visudo\n```\nВ открывшемся редакторе добавьте строку:\n```\ngitlab-runner ALL=(ALL) NOPASSWD: ALL\n```\n[[wiki_os-unix_sudoers]]\n\n## 8. Перезапуск и проверка статуса\n```bash\nsudo gitlab-runner restart\nsudo gitlab-runner status\n```\n[[wiki_os-unix_gitlab_runner]]\n\n## 9. Проверка конфигурации\nФайл конфигурации GitLab Runner находится по пути `/etc/gitlab-runner/config.toml`. Просмотреть его можно командой:\n```bash\nsudo cat /etc/gitlab-runner/config.toml\n```\n[[wiki_os-unix_config_toml]]",
+      "foundPages": [
+        "wiki_os-unix_gitlab_runner",
+        "wiki_os-unix_shell_executor",
+        "wiki_os-unix_sudoers",
+        "wiki_os-unix_config_toml",
+        "wiki_os-unix_rc_local",
+        "wiki_os-unix_clasp"
+      ],
+      "foundChunks": [
+        {
+          "articleId": "wiki_os-unix_gitlab_runner",
+          "heading": "## Основные характеристики",
+          "score": 0.7208152461421125
+        },
+        {
+          "articleId": "wiki_os-unix_shell_executor",
+          "heading": "## Основные характеристики",
+          "score": 0.6781180591503121
+        },
+        {
+          "articleId": "wiki_os-unix_sudoers",
+          "heading": "## Основные характеристики",
+          "score": 0.6072962761656772
+        },
+        {
+          "articleId": "wiki_os-unix_config_toml",
+          "heading": "## Основные характеристики",
+          "score": 0.6025799374192373
+        },
+        {
+          "articleId": "wiki_os-unix_rc_local",
+          "heading": "## Примеры",
+          "score": 0.5336185980600481
+        },
+        {
+          "articleId": "wiki_os-unix_clasp",
+          "heading": "## Основные характеристики",
+          "score": 0.5022036707077174
+        },
+        {
+          "articleId": "wiki_os-unix_gitlab_runner",
+          "heading": "## Примеры",
+          "score": 0.7047305540094095
+        },
+        {
+          "articleId": "wiki_os-unix_shell_executor",
+          "heading": "## Ограничения",
+          "score": 0.5469673586810019
+        }
+      ],
+      "expectedPages": [
+        "wiki_os-unix_gitlab_runner",
+        "wiki_os-unix_gitlab_runner_install_script"
+      ],
+      "expectedPageHits": [
+        "wiki_os-unix_gitlab_runner"
+      ],
+      "retrievalHitAtK": true,
+      "expectedPageRecall": 0.5,
+      "requiredFactPasses": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "requiredFactCoverage": 1,
+      "wikiLinks": [
+        "wiki_os-unix_config_toml",
+        "wiki_os-unix_gitlab_runner",
+        "wiki_os-unix_shell_executor",
+        "wiki_os-unix_sudoers"
+      ],
+      "invalidWikiLinks": [],
+      "wikiLinkPrecision": 1,
+      "llmCalls": 1,
+      "inputTokens": 3016,
+      "outputTokens": 1712,
+      "transportRetries": 0,
+      "structuralRetries": 0,
+      "validationRetries": 0,
+      "groundingSanitizations": 0,
+      "networkTransports": [
+        "desktop-host"
+      ]
+    },
+    {
+      "id": "linux-cache-sysctl",
+      "question": "Какие параметры sysctl управляют dirty pages и vfs cache pressure, как выбрать значения для SSD/HDD и применить настройки?",
+      "status": "done",
+      "durationMs": 27307,
+      "answer": "Параметры `sysctl`, управляющие грязными страницами и кэшем VFS:\n\n- **`vm.dirty_background_ratio`** — процент ОЗУ, при котором фоновый поток начинает сброс грязных страниц на диск [[wiki_os-unix_vm_dirty_background_ratio]].\n- **`vm.dirty_ratio`** — процент ОЗУ, при котором процесс, генерирующий запись, сам начинает сброс, чтобы не превысить лимит [[wiki_os-unix_vm_dirty_ratio]].\n- **`vm.dirty_expire_centisecs`** — время в сотых долях секунды, после которого грязные страницы считаются устаревшими и подлежат записи [[wiki_os-unix_linux_disk_caching]].\n- **`vm.vfs_cache_pressure`** — склонность ядра к освобождению кэша inode и директорий; большее значение ускоряет вытеснение [[wiki_os-unix_vm_vfs_cache_pressure]].\n\n## Выбор значений для SSD и HDD\n\n### Грязные страницы (dirty pages)\nКонкретные рекомендации для SSD/HDD в предоставленных материалах отсутствуют, но страница [[wiki_os-unix_linux_disk_caching_scenarios]] описывает три типовых сценария, которые можно адаптировать под тип накопителя:\n\n| Сценарий | `vm.dirty_background_ratio` | `vm.dirty_ratio` | Характеристика |\n|----------|----------------------------|------------------|----------------|\n| Уменьшение кэша | 5 | 10 | Минимизирует риск потери данных, увеличивает число операций ввода-вывода. Подходит для HDD с медленной записью или требовательных к сохранности данных. |\n| Увеличение кэша | 50 | 80 | Повышает пропускную способность при интенсивной записи, но увеличивает объём потенциально теряемых данных. Может быть оправдано на быстрых SSD. |\n| Смешанный подход | 5 | 80 | Ранний фоновый сброс при высоком жёстком лимите — компромисс между безопасностью и производительностью. |\n\n### Кэш VFS (vfs_cache_pressure)\nСтраница [[wiki_os-unix_vm_vfs_cache_pressure]] содержит рекомендации для HDD и SSD, однако точные значения в предоставленном контексте не раскрыты. Общий принцип: для SSD значение можно уменьшить (например, до 50), чтобы дольше удерживать кэш и снизить нагрузку на диск; для HDD обычно оставляют значение по умолчанию ().\n\n## Применение настроек\n\n1. Отредактируйте файл `/etc/sysctl.conf`:\n   ```bash\n   sudo nano /etc/sysctl.conf\n   ```\n2. Добавьте нужные параметры, например:\n   ```ini\n   vm.dirty_background_ratio = 5\n   vm.dirty_ratio = 10\n   ```\n3. Примените изменения без перезагрузки:\n   ```bash\n   sudo sysctl -p\n   ```\n   Для немедленного применения отдельного параметра можно использовать:\n\n## Мониторинг\nПроверить текущие значения и активность грязных страниц:\n```bash\nsysctl -a | grep dirty\ncat /proc/vmstat | egrep \"dirty|writeback\"\n```\nИсточник: [[wiki_os-unix_linux_disk_caching]].",
+      "foundPages": [
+        "wiki_os-unix_vm_vfs_cache_pressure",
+        "wiki_os-unix_vm_dirty_background_ratio",
+        "wiki_os-unix_linux_disk_caching",
+        "wiki_os-unix_vm_dirty_ratio",
+        "wiki_os-unix_linux_disk_caching_scenarios",
+        "wiki_os-unix_cpufreq_sysfs"
+      ],
+      "foundChunks": [
+        {
+          "articleId": "wiki_os-unix_vm_vfs_cache_pressure",
+          "heading": "## Примеры",
+          "score": 0.7205473073599187
+        },
+        {
+          "articleId": "wiki_os-unix_vm_dirty_background_ratio",
+          "heading": "## Основные характеристики",
+          "score": 0.6713712863779744
+        },
+        {
+          "articleId": "wiki_os-unix_linux_disk_caching",
+          "heading": "## Основные характеристики",
+          "score": 0.6621256562492993
+        },
+        {
+          "articleId": "wiki_os-unix_vm_dirty_ratio",
+          "heading": "## Основные характеристики",
+          "score": 0.6481406330872471
+        },
+        {
+          "articleId": "wiki_os-unix_linux_disk_caching_scenarios",
+          "heading": "## Основные характеристики",
+          "score": 0.6453465725362315
+        },
+        {
+          "articleId": "wiki_os-unix_cpufreq_sysfs",
+          "heading": "## Основные характеристики",
+          "score": 0.5775570176322402
+        },
+        {
+          "articleId": "wiki_os-unix_linux_disk_caching",
+          "heading": "## Применение в контексте Unix-подобных ОС",
+          "score": 0.6086371593992256
+        }
+      ],
+      "expectedPages": [
+        "wiki_os-unix_sysctl",
+        "wiki_os-unix_etc_sysctl_conf",
+        "wiki_os-unix_vm_vfs_cache_pressure"
+      ],
+      "expectedPageHits": [
+        "wiki_os-unix_vm_vfs_cache_pressure"
+      ],
+      "retrievalHitAtK": true,
+      "expectedPageRecall": 0.3333,
+      "requiredFactPasses": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "requiredFactCoverage": 1,
+      "wikiLinks": [
+        "wiki_os-unix_linux_disk_caching",
+        "wiki_os-unix_linux_disk_caching_scenarios",
+        "wiki_os-unix_vm_dirty_background_ratio",
+        "wiki_os-unix_vm_dirty_ratio",
+        "wiki_os-unix_vm_vfs_cache_pressure"
+      ],
+      "invalidWikiLinks": [],
+      "wikiLinkPrecision": 1,
+      "llmCalls": 1,
+      "inputTokens": 3100,
+      "outputTokens": 2386,
+      "transportRetries": 0,
+      "structuralRetries": 0,
+      "validationRetries": 0,
+      "groundingSanitizations": 1,
+      "networkTransports": [
+        "desktop-host"
+      ]
+    },
+    {
+      "id": "ufw-firewall",
+      "question": "Как установить и безопасно настроить UFW: политики по умолчанию, разрешение IP/портов, просмотр и удаление правил, ICMP и перезагрузка конфигурации?",
+      "status": "done",
+      "durationMs": 11240,
+      "answer": "## Установка UFW\n\n```bash\nsudo apt-get install ufw\n```\n\nПосле установки проверьте статус:\n\n```bash\nsudo ufw status verbose\n```\n\n[[wiki_os-unix_ufw]]\n\n## Политики по умолчанию\n\nЗадайте базовые правила: запретить весь входящий трафик и разрешить исходящий.\n\n```bash\nsudo ufw default deny incoming\nsudo ufw default allow outgoing\n```\n\nЭто обеспечит безопасный стартовый профиль.\n\n[[wiki_os-unix_ufw]]\n\n## Разрешение IP-адресов и портов\n\nРазрешите доступ с доверенных IP:\n\n```bash\nsudo ufw allow from 78.107.114.37\nsudo ufw allow from 45.129.78.91\n```\n\nРазрешите конкретные порты и протоколы:\n\n```bash\nsudo ufw allow 51820/udp\nsudo ufw allow 26092/tcp\nsudo ufw allow 62651/udp\nsudo ufw allow 62651/tcp\nsudo ufw allow 5000/tcp\n```\n\nДля сетевых служб (например, NFS) можно указать подсеть:\n\n```bash\nsudo ufw allow from 192.168.1.0/24 to any port nfs\n```\n\nПосле добавления правил включите брандмауэр:\n\n```bash\nsudo ufw enable\n```\n\n[[wiki_os-unix_ufw]] [[wiki_os-unix_nfs_kernel_server]]\n\n## Просмотр и удаление правил\n\nПросмотр пронумерованного списка правил:\n\n```bash\nsudo ufw status numbered\n```\n\nУдаление правила по номеру (например, правило 1):\n\n```bash\nsudo ufw delete 1\n```\n\n[[wiki_os-unix_ufw]]\n\n## Настройка ICMP (через `before.rules`)\n\nДля тонкой настройки обработки ICMP-пакетов редактируйте файл `/etc/ufw/before.rules`.  \nСначала создайте резервную копию:\n\n```bash\nsudo cp /etc/ufw/before.rules /etc/ufw/before.rules_backup\n```\n\nЗатем отредактируйте файл:\n\n```bash\nsudo nano /etc/ufw/before.rules\n```\n\nНапример, чтобы запретить определённые ICMP-коды для цепочек INPUT и FORWARD, измените соответствующие строки на `DROP`:\n\nПосле ручного изменения файлов конфигурации UFW необходима перезагрузка.\n\n[[wiki_os-unix_ufw_before_rules]]\n\n## Перезагрузка конфигурации\n\nПосле правки любых файлов в `/etc/ufw/` (включая `before.rules`) выполните:\n\n```bash\nsudo ufw reload\n```\n\nЭто применит все изменения без прерывания работы активных правил.\n\n[[wiki_os-unix_ufw]]\n\n## Рекомендации по безопасности\n\n- Перед включением UFW обязательно разрешите SSH (порт 22), чтобы не потерять удалённый доступ.\n- Используйте `sudo ufw status numbered` для удобного управления правилами.\n- Регулярно проверяйте активные правила командой `sudo ufw status verbose`.\n- После ручного редактирования конфигурационных файлов всегда выполняйте `sudo ufw reload`.\n\n[[wiki_os-unix_ufw]]",
+      "foundPages": [
+        "wiki_os-unix_ufw",
+        "wiki_os-unix_ufw_before_rules",
+        "wiki_os-unix_nfs_kernel_server",
+        "wiki_os-unix_npm_global_config",
+        "wiki_os-unix_udev_rules",
+        "wiki_os-unix_sshd_config"
+      ],
+      "foundChunks": [
+        {
+          "articleId": "wiki_os-unix_ufw",
+          "heading": "## Примеры",
+          "score": 0.7073174723059463
+        },
+        {
+          "articleId": "wiki_os-unix_ufw_before_rules",
+          "heading": "## Основные характеристики",
+          "score": 0.648321294078282
+        },
+        {
+          "articleId": "wiki_os-unix_nfs_kernel_server",
+          "heading": "## Настройка брандмауэра UFW",
+          "score": 0.6506046054429426
+        },
+        {
+          "articleId": "wiki_os-unix_npm_global_config",
+          "heading": "## Применение в контексте os-unix",
+          "score": 0.5620691542278271
+        },
+        {
+          "articleId": "wiki_os-unix_udev_rules",
+          "heading": "## Основные характеристики",
+          "score": 0.5571105035322896
+        },
+        {
+          "articleId": "wiki_os-unix_sshd_config",
+          "heading": "## Основные характеристики",
+          "score": 0.5461836104541513
+        },
+        {
+          "articleId": "wiki_os-unix_ufw",
+          "heading": "## Best Practices",
+          "score": 0.6194745315809174
+        },
+        {
+          "articleId": "wiki_os-unix_ufw_before_rules",
+          "heading": "## Примеры",
+          "score": 0.5475170491420577
+        }
+      ],
+      "expectedPages": [
+        "wiki_os-unix_ufw",
+        "wiki_os-unix_before_rules",
+        "wiki_os-unix_etc_sysctl_conf"
+      ],
+      "expectedPageHits": [
+        "wiki_os-unix_ufw"
+      ],
+      "retrievalHitAtK": true,
+      "expectedPageRecall": 0.3333,
+      "requiredFactPasses": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "requiredFactCoverage": 1,
+      "wikiLinks": [
+        "wiki_os-unix_nfs_kernel_server",
+        "wiki_os-unix_ufw",
+        "wiki_os-unix_ufw_before_rules"
+      ],
+      "invalidWikiLinks": [],
+      "wikiLinkPrecision": 1,
+      "llmCalls": 1,
+      "inputTokens": 2977,
+      "outputTokens": 1304,
+      "transportRetries": 0,
+      "structuralRetries": 0,
+      "validationRetries": 0,
+      "groundingSanitizations": 1,
+      "networkTransports": [
+        "desktop-host"
+      ]
+    },
+    {
+      "id": "ssh-key-and-server",
+      "question": "Как создать SSH-ключ, установить его на сервер, подключить через ssh-agent и усилить sshd_config?",
+      "status": "done",
+      "durationMs": 33188,
+      "answer": "В предоставленных страницах нет команды для генерации SSH-ключа. Ниже описаны шаги по копированию существующего ключа на сервер, использованию `ssh-agent` и усилению конфигурации `sshd`.\n\n## Копирование открытого ключа на сервер\n\n### Автоматически через `ssh-copy-id`\n```bash\nssh-copy-id username@server_ip\n```\nИсточник: [[wiki_os-unix_ssh]]\n\n### Вручную через `cat` и `ssh`\n```bash\ncat ~/.ssh/id_ed25519.pub | ssh username@server_ip \"mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys\"\n```\nПосле копирования установите корректные права:\n```bash\nchmod 700 ~/.ssh\nchmod 600 ~/.ssh/authorized_keys\n```\nИсточник: [[wiki_os-unix_authorized_keys]]\n\n### Альтернативный ручной способ через `scp`\n```bash\nscp ~/.ssh/id_ed25519.pub username@server_ip:~/.ssh/authorized_keys\n```\nИсточник: [[wiki_os-unix_ssh]]\n\n## Запуск `ssh-agent` и добавление ключа\n```bash\neval \"$(ssh-agent -s)\"\nssh-add ~/.ssh/id_ed25519\n```\nПосле этого `ssh-agent` будет хранить закрытый ключ в памяти и предоставлять его SSH-клиентам без повторного ввода парольной фразы.  \nИсточник: [[wiki_os-unix_ssh]]\n\n## Усиление конфигурации `sshd`\nОтредактируйте файл `/etc/ssh/sshd_config`:\n```bash\nsudo nano /etc/ssh/sshd_config\n```\nДобавьте или измените следующие параметры:\n```bash\nPermitRootLogin no\nPasswordAuthentication no\nPubkeyAuthentication yes\nPort 22 # можно изменить на нестандартный\n```\n- **`PermitRootLogin no`** — запрещает прямой вход под root.\n- **`PasswordAuthentication no`** — отключает аутентификацию по паролю.\n- **`PubkeyAuthentication yes`** — оставляет только вход по ключам.\n- **`Port`** — смена стандартного порта снижает количество автоматических сканирований (опционально).\n\nПосле изменений перезапустите службу:\n```bash\nsudo systemctl restart sshd\n```\nИсточники: [[wiki_os-unix_sshd_config]], [[wiki_os-unix_openssh_server]]",
+      "foundPages": [
+        "wiki_os-unix_ssh",
+        "wiki_os-unix_sshd_config",
+        "wiki_os-unix_authorized_keys",
+        "wiki_os-unix_openssh_server",
+        "wiki_os-unix_nfs_kernel_server",
+        "wiki_os-unix_rc_local"
+      ],
+      "foundChunks": [
+        {
+          "articleId": "wiki_os-unix_ssh",
+          "heading": "## Инструменты SSH",
+          "score": 0.6844875855061899
+        },
+        {
+          "articleId": "wiki_os-unix_sshd_config",
+          "heading": "## Основные характеристики",
+          "score": 0.6120235045384991
+        },
+        {
+          "articleId": "wiki_os-unix_authorized_keys",
+          "heading": "## Примеры",
+          "score": 0.6214955085391553
+        },
+        {
+          "articleId": "wiki_os-unix_openssh_server",
+          "heading": "## Основные характеристики",
+          "score": 0.6057393363045466
+        },
+        {
+          "articleId": "wiki_os-unix_nfs_kernel_server",
+          "heading": "## Настройка клиента NFS (опционально)",
+          "score": 0.5640496599958433
+        },
+        {
+          "articleId": "wiki_os-unix_rc_local",
+          "heading": "## Примеры",
+          "score": 0.521084588279674
+        },
+        {
+          "articleId": "wiki_os-unix_ssh",
+          "heading": "## Инструменты SSH",
+          "score": 0.6204043438892811
+        },
+        {
+          "articleId": "wiki_os-unix_sshd_config",
+          "heading": "## Примеры",
+          "score": 0.6070985005317697
+        }
+      ],
+      "expectedPages": [
+        "wiki_os-unix_ssh_keygen",
+        "wiki_os-unix_ssh_add",
+        "wiki_os-unix_authorized_keys",
+        "wiki_os-unix_sshd",
+        "wiki_os-unix_sshd_config"
+      ],
+      "expectedPageHits": [
+        "wiki_os-unix_authorized_keys",
+        "wiki_os-unix_sshd_config"
+      ],
+      "retrievalHitAtK": true,
+      "expectedPageRecall": 0.4,
+      "requiredFactPasses": [
+        false,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "requiredFactCoverage": 0.8571,
+      "wikiLinks": [
+        "wiki_os-unix_authorized_keys",
+        "wiki_os-unix_openssh_server",
+        "wiki_os-unix_ssh",
+        "wiki_os-unix_sshd_config"
+      ],
+      "invalidWikiLinks": [],
+      "wikiLinkPrecision": 1,
+      "llmCalls": 1,
+      "inputTokens": 2971,
+      "outputTokens": 2346,
+      "transportRetries": 0,
+      "structuralRetries": 0,
+      "validationRetries": 0,
+      "groundingSanitizations": 0,
+      "networkTransports": [
+        "desktop-host"
+      ]
+    },
+    {
+      "id": "systemd-storage-mounts",
+      "question": "Как настроить systemd mount-юниты для дисков WD RED и WD GREEN по UUID, включить их и проверить монтирование?",
+      "status": "done",
+      "durationMs": 12389,
+      "answer": "Для настройки mount-юнитов systemd по UUID создаются unit-файлы в, после чего юниты запускаются и включаются в автозагрузку через `systemctl`. Проверка выполняется командой `systemctl -l --type mount`. [[wiki_os-unix_mnt_wdred_mount]] [[wiki_os-unix_fdisk]]\n\n## Подготовка каталогов и получение UUID\n\nСоздайте точки монтирования и задайте права (при необходимости):\n\n```bash\nmkdir /mnt/wdred /mnt/wdgreen && \\\nchmod 777 /mnt/wdred /mnt/wdgreen && \\\nchown ikeniborn:ikeniborn /mnt/wdred /mnt/wdgreen\n```\n\nUUID блочных устройств можно узнать командой:\n\n```bash\nblkid\n```\n\n## Создание unit-файлов\n\nПерейдите в каталог systemd-юнитов:\n\n```bash\ncd /etc/systemd/system\n```\n\n### mnt-wdred.mount\n\nСоздайте файл:\n\n```bash\nnano mnt-wdred.mount\n```\n\nСодержимое:\n\n```ini\n[Unit]\nDescription=Mount HDD WD RED 1 Tb\n\n[Mount]\nWhat=/dev/disk/by-uuid/5bc0ceca-92a5-44d7-ad0c-f395e7f400c6\nWhere=/mnt/wdred\nType=ext4\nOptions=defaults,noexec\nDirectoryMode=0777\nTimeoutSec=300\n\n[Install]\nWantedBy=multi-user.target\n```\n\n### mnt-wdgreen.mount\n\nСоздайте файл:\n\n```bash\nnano mnt-wdgreen.mount\n```\n\nСодержимое:\n\n```ini\n[Unit]\nDescription=Mount HDD WD GREEN 1.5 Tb\n\n[Mount]\nWhat=/dev/disk/by-uuid/e879ec37-294e-4ade-927f-a0079d3edc64\nWhere=/mnt/wdgreen\nType=ext4\nOptions=defaults,noexec\nDirectoryMode=0777\nTimeoutSec=300\n\n[Install]\nWantedBy=multi-user.target\n```\n\n## Применение и управление юнитами\n\nПерезагрузите конфигурацию systemd:\n\n```bash\nsystemctl daemon-reload\n```\n\nЗапустите юниты:\n\nВключите автоматическое монтирование при загрузке:\n\n## Проверка монтирования\n\nПросмотрите все активные mount-юниты:\n\n```bash\nsystemctl -l --type mount\n```\n\nВ выводе должны присутствовать `mnt-wdred.mount` и `mnt-wdgreen.mount` со статусом.",
+      "foundPages": [
+        "wiki_os-unix_mnt_wdred_mount",
+        "wiki_os-unix_fdisk",
+        "wiki_os-unix_logrotate",
+        "wiki_os-unix_nfs_kernel_server",
+        "wiki_os-unix_udev_rules",
+        "wiki_os-unix_grub"
+      ],
+      "foundChunks": [
+        {
+          "articleId": "wiki_os-unix_mnt_wdred_mount",
+          "heading": "## Основные характеристики",
+          "score": 0.7007951075813814
+        },
+        {
+          "articleId": "wiki_os-unix_fdisk",
+          "heading": "## Примеры",
+          "score": 0.5040238972117954
+        },
+        {
+          "articleId": "wiki_os-unix_logrotate",
+          "heading": "## Основные характеристики",
+          "score": 0.4881562018400686
+        },
+        {
+          "articleId": "wiki_os-unix_nfs_kernel_server",
+          "heading": "## Настройка клиента NFS (опционально)",
+          "score": 0.48264957095850164
+        },
+        {
+          "articleId": "wiki_os-unix_udev_rules",
+          "heading": "## Основные характеристики",
+          "score": 0.4768065851297731
+        },
+        {
+          "articleId": "wiki_os-unix_grub",
+          "heading": "## Основные характеристики",
+          "score": 0.4751287036754255
+        },
+        {
+          "articleId": "wiki_os-unix_mnt_wdred_mount",
+          "heading": "## Примеры",
+          "score": 0.6407072671248708
+        },
+        {
+          "articleId": "wiki_os-unix_fdisk",
+          "heading": "## Основные характеристики",
+          "score": 0.4035600998944741
+        }
+      ],
+      "expectedPages": [
+        "wiki_os-unix_mnt_wdred_mount",
+        "wiki_os-unix_mnt_wdgreen_mount",
+        "wiki_os-unix_fdisk",
+        "wiki_os-unix_du"
+      ],
+      "expectedPageHits": [
+        "wiki_os-unix_mnt_wdred_mount",
+        "wiki_os-unix_fdisk"
+      ],
+      "retrievalHitAtK": true,
+      "expectedPageRecall": 0.5,
+      "requiredFactPasses": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        false
+      ],
+      "requiredFactCoverage": 0.8333,
+      "wikiLinks": [
+        "wiki_os-unix_fdisk",
+        "wiki_os-unix_mnt_wdred_mount"
+      ],
+      "invalidWikiLinks": [],
+      "wikiLinkPrecision": 1,
+      "llmCalls": 1,
+      "inputTokens": 3223,
+      "outputTokens": 1365,
+      "transportRetries": 0,
+      "structuralRetries": 0,
+      "validationRetries": 0,
+      "groundingSanitizations": 1,
+      "networkTransports": [
+        "desktop-host"
+      ]
+    },
+    {
+      "id": "npm-nvm-node-clasp",
+      "question": "Как установить nvm, Node.js 20 и clasp, настроить глобальный prefix npm в домашнем каталоге и добавить его в PATH?",
+      "status": "done",
+      "durationMs": 12521,
+      "answer": "Для установки nvm, Node.js 20 и clasp с глобальным префиксом npm в домашнем каталоге выполните следующие шаги.\n\n1. Установите **nvm** (Node Version Manager) [[wiki_os-unix_nvm]]:\n   ```bash\n   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash\n   ```\n\n2. Перезагрузите оболочку, чтобы nvm стал доступен [[wiki_os-unix_nvm]]:\n   ```bash\n   source ~/.bashrc\n   ```\n\n3. Установите **Node.js** версии 20 и активируйте её [[wiki_os-unix_node_js]]:\n   ```bash\n   nvm install 20\n   nvm use 20\n   ```\n\n4. Настройте глобальный префикс npm в домашнем каталоге и добавьте его в `PATH` [[wiki_os-unix_npm_global_config]]:\n   ```bash\n   mkdir ~/.npm-global\n   npm config set prefix '~/.npm-global'\n   echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc\n   source ~/.bashrc\n   ```\n\n5. Установите **clasp** глобально через npm [[wiki_os-unix_clasp]]:\n   ```bash\n   npm install -g @google/clasp\n   ```\n\nПосле выполнения этих команд clasp будет установлен в `~/.npm-global/bin` и доступен из командной строки.",
+      "foundPages": [
+        "wiki_os-unix_npm_global_config",
+        "wiki_os-unix_clasp",
+        "wiki_os-unix_nvm",
+        "wiki_os-unix_node_js",
+        "wiki_os-unix_nfs_common",
+        "wiki_os-unix_nfs_kernel_server"
+      ],
+      "foundChunks": [
+        {
+          "articleId": "wiki_os-unix_npm_global_config",
+          "heading": "## Примеры",
+          "score": 0.6716647701648518
+        },
+        {
+          "articleId": "wiki_os-unix_clasp",
+          "heading": "## Основные характеристики",
+          "score": 0.665727299157974
+        },
+        {
+          "articleId": "wiki_os-unix_nvm",
+          "heading": "## Основные характеристики",
+          "score": 0.6015058845468289
+        },
+        {
+          "articleId": "wiki_os-unix_node_js",
+          "heading": "## Основные характеристики",
+          "score": 0.6293141071763648
+        },
+        {
+          "articleId": "wiki_os-unix_nfs_common",
+          "heading": "## Основные характеристики",
+          "score": 0.5325631447463847
+        },
+        {
+          "articleId": "wiki_os-unix_nfs_kernel_server",
+          "heading": "## Настройка клиента NFS (опционально)",
+          "score": 0.5322514081338868
+        },
+        {
+          "articleId": "wiki_os-unix_npm_global_config",
+          "heading": "## Основные характеристики",
+          "score": 0.6599480741292003
+        },
+        {
+          "articleId": "wiki_os-unix_clasp",
+          "heading": "## Применение в контексте os-unix",
+          "score": 0.5600816880611088
+        }
+      ],
+      "expectedPages": [
+        "wiki_os-unix_nvm",
+        "wiki_os-unix_node_js",
+        "wiki_os-unix_node_package_manager",
+        "wiki_os-unix_clasp"
+      ],
+      "expectedPageHits": [
+        "wiki_os-unix_nvm",
+        "wiki_os-unix_node_js",
+        "wiki_os-unix_clasp"
+      ],
+      "retrievalHitAtK": true,
+      "expectedPageRecall": 0.75,
+      "requiredFactPasses": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "requiredFactCoverage": 1,
+      "wikiLinks": [
+        "wiki_os-unix_clasp",
+        "wiki_os-unix_node_js",
+        "wiki_os-unix_npm_global_config",
+        "wiki_os-unix_nvm"
+      ],
+      "invalidWikiLinks": [],
+      "wikiLinkPrecision": 1,
+      "llmCalls": 1,
+      "inputTokens": 2455,
+      "outputTokens": 1044,
+      "transportRetries": 0,
+      "structuralRetries": 0,
+      "validationRetries": 0,
+      "groundingSanitizations": 0,
+      "networkTransports": [
+        "desktop-host"
+      ]
+    }
+  ]
+}

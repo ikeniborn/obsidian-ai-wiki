@@ -1,0 +1,18 @@
+{
+  "variant": "reduced-output-budget-profile",
+  "status": "simulated",
+  "synthesisRequests": 5,
+  "structuredValidationRetries": 0,
+  "structuralErrors": 0,
+  "failedSources": 0,
+  "invalidPathsWritten": 0,
+  "unknownEntityKeyAccepted": 0,
+  "pagesCreated": 10,
+  "pagesUpdated": 0,
+  "articleQualityScore": 0.85,
+  "notes": [
+    "addresses empty-output/max-token risk for later high-token source",
+    "may reduce article completeness; needs live model eval before selection"
+  ],
+  "score": -3.5
+}

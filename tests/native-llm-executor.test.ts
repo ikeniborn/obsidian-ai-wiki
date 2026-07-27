@@ -8,13 +8,14 @@ import OpenAI, {
 } from "openai";
 
 import { executeNativeLlmRequest } from "../src/native-llm-executor";
+import { NativeResponseStartTimeoutError } from "../src/native-request-retry";
 import {
   createReplacementAttemptLifecycle,
   emptyLlmLifecycleState,
   lifecycleEvent,
   reduceLlmLifecycle,
 } from "../src/llm-lifecycle";
-import { NATIVE_TRANSPORT_TRACEPARENT } from "../src/types";
+import { NATIVE_TRANSPORT_FRESH_CONNECTION, NATIVE_TRANSPORT_TRACEPARENT } from "../src/types";
 import type {
   LlmLifecycleAction,
   NativeChatCompletionCreate,
@@ -497,6 +498,39 @@ test("non-stream retries keep one trace id and create a fresh attempt span", asy
   assert.equal(parsed[0]?.traceId, "11111111111111111111111111111111");
   assert.equal(parsed[1]?.traceId, "11111111111111111111111111111111");
   assert.notEqual(parsed[0]?.spanId, parsed[1]?.spanId);
+});
+
+test("non-stream native executor forwards fresh connection policy per attempt", async () => {
+  const values: unknown[] = [];
+  await executeNativeLlmRequest({
+    create: (async (_params: object, options: { fetchOptions?: Record<symbol, unknown> }) => {
+      values.push(options.fetchOptions?.[NATIVE_TRANSPORT_FRESH_CONNECTION]);
+      return completion("ok");
+    }) as NativeChatCompletionCreate,
+    params: nonStreamParams,
+    retry: retryContext({ nativeFreshConnection: true }),
+  });
+
+  assert.deepEqual(values, [true]);
+});
+
+test("stream transport retry leaves the pooled connection after attempt zero", async () => {
+  const freshConnections: unknown[] = [];
+  let attempts = 0;
+  const result = await executeNativeLlmRequest({
+    create: (async (_params: object, options: { fetchOptions?: Record<symbol, unknown> }) => {
+      freshConnections.push(options.fetchOptions?.[NATIVE_TRANSPORT_FRESH_CONNECTION]);
+      attempts += 1;
+      if (attempts === 1) throw new APIConnectionError({ message: "pooled connection failed" });
+      return streamOf(chunk({ content: "recovered" }));
+    }) as NativeChatCompletionCreate,
+    params: streamParams,
+    retry: retryContext({ maxRetries: 1 }),
+  });
+
+  await consume(result);
+
+  assert.deepEqual(freshConnections, [false, true]);
 });
 
 test("non-stream exhaustion throws the final error after maxRetries plus one attempts", async () => {
@@ -1013,6 +1047,162 @@ test("valid model chunks reset idle timing while invalid transport heartbeats do
     await thirdRequested.promise;
     timers.tick(10);
     await assert.rejects(operation, APIConnectionTimeoutError);
+    assert.equal(timers.activeCount(), 0);
+  });
+});
+
+test("an accepted stream with no first model event reserves time for a fresh retry", async () => {
+  await withFakeTimers(async (timers) => {
+    const caller = new AbortController();
+    const events: RunEvent[] = [];
+    const firstRequested = deferred<void>();
+    const firstNext = deferred<IteratorResult<OpenAI.Chat.ChatCompletionChunk>>();
+    let attempts = 0;
+    const create = (async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        return {
+          [Symbol.asyncIterator]() {
+            return {
+              next() {
+                firstRequested.resolve(undefined);
+                return firstNext.promise;
+              },
+              return: async () => ({ done: true, value: undefined }),
+            };
+          },
+        };
+      }
+      return streamOf(chunk({ content: "recovered" }));
+    }) as NativeChatCompletionCreate;
+    const operation = consume(executeNativeLlmRequest({
+      create,
+      params: streamParams,
+      retry: retryContext({
+        maxRetries: 1,
+        connectionTimeoutMs: 10,
+        idleTimeoutMs: 100,
+        signal: caller.signal,
+        onEvent: (event) => events.push(event),
+        lifecycle: lifecycleRecorder((event) => events.push(event)),
+      }),
+    }));
+
+    try {
+      await firstRequested.promise;
+      timers.tick(50);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      assert.equal(attempts, 2);
+      const chunks = await operation;
+      assert.deepEqual(chunks.map((value) => value.choices[0]?.delta.content), ["recovered"]);
+      const scheduled = events.find((event): event is Extract<RunEvent, { kind: "transport_retry_scheduled" }> =>
+        event.kind === "transport_retry_scheduled");
+      assert.equal(scheduled?.errorClass, "response_start_timeout");
+    } finally {
+      caller.abort();
+      await operation.catch(() => {});
+    }
+  });
+});
+
+test("response-start retry can be delegated to the caller without losing the derived deadline", async () => {
+  await withFakeTimers(async (timers) => {
+    const events: RunEvent[] = [];
+    const firstRequested = deferred<void>();
+    const firstNext = deferred<IteratorResult<OpenAI.Chat.ChatCompletionChunk>>();
+    let attempts = 0;
+    const create = (async () => {
+      attempts += 1;
+      if (attempts > 1) throw new Error("identical response-start retry must be delegated");
+      return {
+        [Symbol.asyncIterator]() {
+          return {
+            next() {
+              firstRequested.resolve(undefined);
+              return firstNext.promise;
+            },
+            return: async () => ({ done: true, value: undefined }),
+          };
+        },
+      };
+    }) as NativeChatCompletionCreate;
+    const operation = consume(executeNativeLlmRequest({
+      create,
+      params: streamParams,
+      retry: retryContext({
+        maxRetries: 3,
+        maxResponseStartRetries: 0,
+        connectionTimeoutMs: 120,
+        idleTimeoutMs: 600,
+        onEvent: (event) => events.push(event),
+        lifecycle: lifecycleRecorder((event) => events.push(event)),
+      }),
+    }));
+
+    await firstRequested.promise;
+    timers.tick(149);
+    assert.equal(attempts, 1);
+    timers.tick(1);
+    await assert.rejects(operation, NativeResponseStartTimeoutError);
+
+    assert.equal(attempts, 1);
+    assert.equal(events.some((event) => event.kind === "transport_retry_scheduled"), false);
+    assert.equal(events.some((event) => event.kind === "transport_retry_exhausted"), false);
+  });
+});
+
+test("the first valid model event restores the full inter-chunk idle window", async () => {
+  await withFakeTimers(async (timers) => {
+    const firstRequested = deferred<void>();
+    const secondRequested = deferred<void>();
+    const thirdRequested = deferred<void>();
+    const firstNext = deferred<IteratorResult<OpenAI.Chat.ChatCompletionChunk>>();
+    const secondNext = deferred<IteratorResult<OpenAI.Chat.ChatCompletionChunk>>();
+    const thirdNext = deferred<IteratorResult<OpenAI.Chat.ChatCompletionChunk>>();
+    let nextCalls = 0;
+    const modelStream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk> = {
+      [Symbol.asyncIterator]() {
+        return {
+          next() {
+            nextCalls += 1;
+            if (nextCalls === 1) {
+              firstRequested.resolve(undefined);
+              return firstNext.promise;
+            }
+            if (nextCalls === 2) {
+              secondRequested.resolve(undefined);
+              return secondNext.promise;
+            }
+            thirdRequested.resolve(undefined);
+            return thirdNext.promise;
+          },
+        };
+      },
+    };
+    const operation = consume(executeNativeLlmRequest({
+      create: sequence([modelStream]),
+      params: streamParams,
+      retry: retryContext({
+        maxRetries: 1,
+        connectionTimeoutMs: 10,
+        idleTimeoutMs: 100,
+      }),
+    }));
+
+    await firstRequested.promise;
+    timers.tick(40);
+    firstNext.resolve({ done: false, value: chunk({ role: "assistant" }) });
+    await secondRequested.promise;
+    timers.tick(90);
+    assert.equal(timers.activeCount(), 1);
+    secondNext.resolve({ done: false, value: chunk({ content: "healthy" }) });
+    await thirdRequested.promise;
+    thirdNext.resolve({ done: true, value: undefined });
+    const chunks = await operation;
+    assert.deepEqual(chunks.map((value) => value.choices[0]?.delta), [
+      { role: "assistant" },
+      { content: "healthy" },
+    ]);
     assert.equal(timers.activeCount(), 0);
   });
 });

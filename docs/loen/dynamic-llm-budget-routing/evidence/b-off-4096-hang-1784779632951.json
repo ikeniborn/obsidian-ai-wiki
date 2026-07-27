@@ -1,0 +1,23 @@
+{
+  "variant": "b-off-4096-hang",
+  "session": "1784779632951",
+  "firstTs": "2026-07-23T04:07:12.951Z",
+  "lastTs": "2026-07-23T04:07:13.060Z",
+  "status": "running",
+  "diagnosticMode": "off",
+  "transport": "desktop-direct",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrwzpmkj-1",
+    "estimatedInputTokens": 7069,
+    "outputBudget": 4096,
+    "responseFormatType": "json_schema",
+    "hash": "fnv1a:749fb1bd"
+  },
+  "transportRetries": 0,
+  "transportRecovered": 0,
+  "structuralRetries": 0,
+  "structuralSummary": [],
+  "createdPages": 0,
+  "resultTexts": []
+}

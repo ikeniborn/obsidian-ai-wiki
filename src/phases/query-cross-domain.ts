@@ -6,6 +6,7 @@ import type { VaultTools } from "../vault-tools";
 import { PageSimilarityService, type SelectedChunk } from "../page-similarity";
 import { retrieveDomainCandidates, type RetrieveCfg } from "./query";
 import { answerFromContext } from "./query-answer";
+import { selectQueryContextChunks } from "./query-budget";
 import { render } from "./template";
 import queryTemplate from "../../prompts/query.md";
 import { promptVersionOf } from "../prompt-version";
@@ -157,10 +158,11 @@ export async function* runCrossDomainQuery(
     baseUrl: rerankerRuntime.baseUrl,
     apiKey: rerankerRuntime.apiKey,
     signal,
+    resultTopN: candidateLimit,
   });
   if (signal.aborted) return;
 
-  const contextChunks = reranked.chunks.slice(0, contextLimit);
+  const contextChunks = selectQueryContextChunks(reranked.chunks, contextLimit);
   const domainsForChunks = (packedChunks: readonly SelectedChunk[]): string[] => {
     const packedIds = new Set(packedChunks.map((chunk) => chunk.articleId));
     return [...new Set(

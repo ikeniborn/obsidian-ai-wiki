@@ -846,18 +846,22 @@ export class LlmWikiView extends ItemView {
       const labels = i18nFor(resolveUiLang()).view;
       const safeMessage = ev.message.replace(/\s+/g, " ").trim().slice(0, 240) || ev.errorType;
       const reason = [
+        ...(ev.errorType === "schema_validate" ? [labels.structuralRetry] : []),
         safeMessage,
         labels.structuralRetryType(ev.errorType),
         labels.structuralRetryAttempt(ev.retryAttempt + 1),
       ].join(" · ");
+      const statusLabel = ev.errorType === "schema_validate"
+        ? labels.domainRejected
+        : labels.structuralRetry;
       const step = this.stepsEl.createDiv("ai-wiki-step");
       const head = step.createDiv("ai-wiki-step-head");
       head.createSpan({ cls: "ai-wiki-step-icon" }).setText("↻");
-      head.createSpan({ cls: "ai-wiki-step-name" }).setText(labels.structuralRetry);
+      head.createSpan({ cls: "ai-wiki-step-name" }).setText(statusLabel);
       head.createSpan({ cls: "ai-wiki-step-arg" }).setText(reason);
       head.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
       this.liveStatusIconEl?.setText("↻");
-      this.liveStatusTextEl?.setText(`${labels.structuralRetry}: ${reason}`);
+      this.liveStatusTextEl?.setText(`${statusLabel}: ${reason}`);
       this.updateMetrics();
       this.scrollSteps();
       return;

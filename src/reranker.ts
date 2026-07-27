@@ -82,6 +82,7 @@ export interface RerankerRuntime {
 export interface RerankChunksOptions extends RerankerRuntime {
   signal: AbortSignal;
   transport?: RerankerTransport;
+  resultTopN?: number;
 }
 
 export interface RerankChunksResult {
@@ -154,15 +155,22 @@ function queryAwareExcerpt(query: string, body: string, maxChars: number): strin
 }
 
 function buildCandidateText(query: string, chunk: SelectedChunk, maxChars: number): string {
-  const prefix = [
+  const metadata = [
     `Title: ${titleFromPath(chunk.path)}`,
-    `Path: ${chunk.path}`,
     `Heading: ${normalizeWhitespace(chunk.heading)}`,
-    "Text:",
   ].join("\n");
-  const excerptBudget = Math.max(0, maxChars - prefix.length - 1);
-  const excerpt = queryAwareExcerpt(query, chunk.body, excerptBudget);
-  return `${prefix} ${excerpt}`.trim().slice(0, maxChars);
+  const body = normalizeWhitespace(chunk.body);
+  if (!body) return metadata.slice(0, maxChars).trim();
+
+  const bodyPrefix = "Text: ";
+  const separatorChars = 1 + bodyPrefix.length;
+  const reservedBodyChars = Math.max(1, Math.floor(maxChars * 0.55));
+  const metadataBudget = Math.max(0, maxChars - reservedBodyChars - separatorChars);
+  const compactMetadata = metadata.slice(0, metadataBudget).trimEnd();
+  const excerptBudget = Math.max(1, maxChars - compactMetadata.length - separatorChars);
+  const excerpt = queryAwareExcerpt(query, body, Math.min(body.length, excerptBudget));
+  const bodyBlock = `${bodyPrefix}${excerpt}`;
+  return [compactMetadata, bodyBlock].filter(Boolean).join("\n").slice(0, maxChars);
 }
 
 export function buildRerankerCandidates(
@@ -378,13 +386,20 @@ export async function rerankChunks(
   options: RerankChunksOptions,
 ): Promise<RerankChunksResult> {
   const started = Date.now();
-  const contextLimit = options.config.contextTopN;
+  const configuredResultTopN = options.resultTopN;
+  const resultTopN = Number.isFinite(configuredResultTopN)
+    ? Math.max(0, Math.min(
+      Math.floor(configuredResultTopN ?? options.config.contextTopN),
+      options.config.rerankerTopN,
+      chunks.length,
+    ))
+    : Math.min(options.config.contextTopN, chunks.length);
 
   if (!options.config.enabled) {
-    return fallbackResult(chunks, started, contextLimit, 0, "disabled");
+    return fallbackResult(chunks, started, resultTopN, 0, "disabled");
   }
   if (!options.config.model) {
-    return fallbackResult(chunks, started, contextLimit, 0, "missing-model");
+    return fallbackResult(chunks, started, resultTopN, 0, "missing-model");
   }
 
   const candidates = buildRerankerCandidates(query, chunks, options.config);
@@ -409,11 +424,11 @@ export async function rerankChunks(
     });
 
     if (hasMalformedScores(scores)) {
-      return fallbackResult(chunks, started, contextLimit, candidates.length, "malformed-response");
+      return fallbackResult(chunks, started, resultTopN, candidates.length, "malformed-response");
     }
 
     return {
-      chunks: applyRerankerScores(chunks, scores, contextLimit),
+      chunks: applyRerankerScores(chunks, scores, resultTopN),
       durationMs: Date.now() - started,
       candidates: candidates.length,
       scores,
@@ -422,7 +437,7 @@ export async function rerankChunks(
     return fallbackResult(
       chunks,
       started,
-      contextLimit,
+      resultTopN,
       candidates.length,
       isTimeoutError(err)
         ? "timeout"

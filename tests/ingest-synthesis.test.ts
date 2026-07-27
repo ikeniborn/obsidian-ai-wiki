@@ -17,6 +17,9 @@ const {
   validateSynthesisCoverage,
   synthesizeEntityBatch,
   regenerateConflictedPatch,
+  synthesisCompactRepairReserveTokens,
+  SYNTHESIS_EXACT_SOURCE_TEXT_LIMIT,
+  SYNTHESIS_MAX_OPTIONAL_WIKI_UNITS_PER_BUNDLE,
   SynthesisStructuredError,
   SynthesisSplitRequiredError,
   ConflictRegenerationExhaustedError,
@@ -27,6 +30,7 @@ import type { EntityContextBundle, WikiSectionUnit } from "../src/ingest-context
 import type { ContextUnit } from "../src/prompt-budget";
 import type { LlmClient, RunEvent } from "../src/types";
 import type { SynthesisOutput } from "../src/phases/zod-schemas";
+import type { SynthesisEvidenceLedgerItem } from "../src/phases/synthesis-evidence-ledger";
 import { estimatePreparedMessages } from "../src/prompt-budget";
 
 const existingPath = "!Wiki/d/concept/wiki_d_a.md";
@@ -104,6 +108,25 @@ function outputFor(keys: string[], existing = new Set<string>()) {
     actions: keys.filter((key) => !existing.has(key)).map((key) => create(key)),
     skips: keys.filter((key) => existing.has(key)).map((key) => ({ entityKey: key, reason: "no change" })),
   });
+}
+
+function framedCreateOutput(entityKey: string): string {
+  return [
+    "<<<REASONING>>>",
+    "ok",
+    "<<<CREATE>>>",
+    `entityKey: ${entityKey}`,
+    `path: !Wiki/d/concept/wiki_d_${entityKey}.md`,
+    `annotation: ${entityKey} page`,
+    "<<<CONTENT>>>",
+    `# ${entityKey}`,
+    "",
+    "## Facts",
+    `content with \"quotes\" and \\slashes for ${entityKey}`,
+    "<<<END_CONTENT>>>",
+    "<<<END_CREATE>>>",
+    "<<<END>>>",
+  ].join("\n");
 }
 
 function streamOutput(text: string): AsyncIterable<OpenAI.Chat.ChatCompletionChunk> {
@@ -201,9 +224,22 @@ test("synthesizeEntityBatch emits create, patch-safe skip, and bounded prompt te
     onEvent: (event: RunEvent) => events.push(event),
   }));
   assert.equal(result.actions.length, 2);
-  assert.equal(seen[0].max_tokens, 300);
+  assert.equal(seen[0].max_completion_tokens, 300);
+  assert.equal(seen[0].response_format, undefined);
+  assert.match(JSON.stringify(seen[0].messages), /<<<CREATE>>>/);
   assert.equal(estimatePreparedMessages(seen[0].messages as OpenAI.Chat.ChatCompletionMessageParam[]) <= 10000, true);
   assert.equal(events.filter((event) => event.kind === "prompt_budget").length >= 1, true);
+});
+
+test("synthesizeEntityBatch accepts raw Markdown from field-framed create output", async () => {
+  const seen: Record<string, unknown>[] = [];
+  const llm = mockLlm(() => framedCreateOutput("a"), seen, []);
+
+  const result = await synthesizeEntityBatch(synthesisArgs([bundle("a")], llm));
+
+  assert.equal(result.actions[0].kind, "create");
+  assert.match(result.actions[0].kind === "create" ? result.actions[0].content : "", /content with "quotes" and \\slashes/);
+  assert.equal(seen[0].response_format, undefined);
 });
 
 test("no-change entity returns skip and input-only policy omits output cap", async () => {
@@ -215,7 +251,7 @@ test("no-change entity returns skip and input-only policy omits output cap", asy
     policy: { inputBudgetTokens: 10000, compression: "balanced" as const },
   }));
   assert.equal(result.skips[0].entityKey, "a");
-  assert.equal("max_tokens" in seen[0], false);
+  assert.equal("max_completion_tokens" in seen[0], false);
 });
 
 test("missing ingest policy compression falls back to balanced", async () => {
@@ -296,7 +332,7 @@ test("context repack drops optional units, changes prompt hash, preserves requir
 test("context repack never drops required registry units while dropping optional auxiliary units", async () => {
   const calls: Record<string, unknown>[] = [];
   const requiredRegistry = { id: "required-registry", source: "registry" as const, text: "REQUIRED-REGISTRY", required: true, priority: 1, estimatedTokens: 1 };
-  const optionalRegistry = { id: "optional-registry", source: "registry" as const, text: "OPTIONAL-REGISTRY-".repeat(200), required: false, priority: 1, estimatedTokens: 40 };
+  const optionalRegistry = { id: "optional-registry", source: "registry" as const, text: "OPTIONAL-REGISTRY-".repeat(450), required: false, priority: 1, estimatedTokens: 90 };
   const llm = mockLlm((params) => {
     calls.push(params);
     if (calls.length === 1) throw new Error("prompt 12000 exceeds maximum context 10000");
@@ -308,6 +344,7 @@ test("context repack never drops required registry units while dropping optional
   const result = await synthesizeEntityBatch(synthesisArgs([bundle("a")], llm, {
     existingPageDescriptions: [{ entityKey: "a", path: absentPath, description: "OPTIONAL-DESCRIPTION-".repeat(100) }],
     tagRegistryUnits: [requiredRegistry, optionalRegistry],
+    policy: { inputBudgetTokens: 15_000, outputBudgetTokens: 300, compression: "balanced" as const },
   }));
   assert.equal(result.actions.length, 1);
   assert.equal(calls.length, 2);
@@ -383,6 +420,150 @@ test("semantic synthesis retry emits safe validation reason without raw model co
   assert.doesNotMatch(JSON.stringify(retry), /LEAK_ME/);
 });
 
+test("single-entity synthesis retargets invented entity keys without repair", async () => {
+  const seen: Record<string, unknown>[] = [];
+  const llm = mockLlm(() => JSON.stringify({
+    reasoning: "bad key",
+    actions: [create("invented-key", "!Wiki/d/concept/wiki_d_invented_key.md")],
+    skips: [],
+  }), seen, []);
+
+  const output = await synthesizeEntityBatch(synthesisArgs([bundle("a")], llm, {
+    createPathsByEntityKey: new Map([["a", "!Wiki/d/concept/wiki_d_a.md"]]),
+  }));
+
+  assert.equal(output.actions[0]?.entityKey, "a");
+  assert.equal(output.actions[0]?.path, "!Wiki/d/concept/wiki_d_a.md");
+  assert.equal(seen.length, 1);
+});
+
+test("single-entity synthesis converts create content to a guarded existing-target patch without repair", async () => {
+  const seen: Record<string, unknown>[] = [];
+  const { inspected, section } = inspectedPage();
+  const target = bundle("a", existingPath, section);
+  const llm = mockLlm(() => JSON.stringify({
+    reasoning: "wrong action kind",
+    actions: [{
+      ...create("a", existingPath),
+      content: "# A\n\n## Facts\nnew fact\n\n## Usage\nnew usage\n\n## Sources\n- [[source]]\n",
+    }],
+    skips: [],
+  }), seen, []);
+
+  const output = await synthesizeEntityBatch(synthesisArgs([target], llm, {
+    existingPaths: new Set([existingPath]),
+    existingPageHashes: new Map([[existingPath, inspected.pageHash]]),
+  }));
+
+  assert.equal(seen.length, 1);
+  assert.equal(output.actions.length, 1);
+  const action = output.actions[0];
+  assert.equal(action.kind, "patch");
+  if (action.kind !== "patch") return;
+  assert.equal(action.path, existingPath);
+  assert.equal(action.expectedPageHash, inspected.pageHash);
+  assert.deepEqual(action.sections, [{
+    heading: "## Facts",
+    operation: "replace",
+    expectedSectionOrdinal: section.ordinal,
+    expectedSectionHash: section.hash,
+    content: "new fact",
+  }, {
+    heading: "## Usage",
+    operation: "add",
+    content: "new usage",
+  }]);
+});
+
+test("single-entity synthesis refuses lossy create-to-patch conversion when the article has preamble prose", async () => {
+  const seen: Record<string, unknown>[] = [];
+  const events: RunEvent[] = [];
+  const { inspected, section } = inspectedPage();
+  const target = bundle("a", existingPath, section);
+  let calls = 0;
+  const llm = mockLlm(() => {
+    calls += 1;
+    if (calls === 1) {
+      return JSON.stringify({
+        reasoning: "wrong action kind with meaningful preamble",
+        actions: [{
+          ...create("a", existingPath),
+          content: "# A\n\nThis introduction must not be dropped.\n\n## Facts\nnew fact\n",
+        }],
+        skips: [],
+      });
+    }
+    return JSON.stringify({
+      reasoning: "guarded repair",
+      actions: [patchFor(section)],
+      skips: [],
+    });
+  }, seen, events);
+
+  const output = await synthesizeEntityBatch(synthesisArgs([target], llm, {
+    existingPaths: new Set([existingPath]),
+    existingPageHashes: new Map([[existingPath, inspected.pageHash]]),
+    onEvent: (event: RunEvent) => events.push(event),
+  }));
+
+  assert.equal(seen.length, 2);
+  assert.equal(output.actions[0]?.kind, "patch");
+  assert.equal(events.some((event) => event.kind === "structured_validation_retry"
+    && event.safeReason.includes("create is not allowed for existing canonical target")), true);
+});
+
+test("single-entity synthesis collapses duplicate action coverage deterministically", async () => {
+  const seen: Record<string, unknown>[] = [];
+  const llm = mockLlm(() => JSON.stringify({
+    reasoning: "duplicate coverage",
+    actions: [
+      create("wrong-a", "!Wiki/d/concept/wiki_d_wrong_a.md"),
+      { ...create("wrong-b", "!Wiki/d/concept/wiki_d_wrong_b.md"), content: "# B\n\n## Facts\nlonger duplicate content." },
+    ],
+    skips: [{ entityKey: "wrong-skip", reason: "duplicate skip" }],
+  }), seen, []);
+
+  const output = await synthesizeEntityBatch(synthesisArgs([bundle("a")], llm, {
+    createPathsByEntityKey: new Map([["a", "!Wiki/d/concept/wiki_d_a.md"]]),
+  }));
+
+  assert.deepEqual(output.actions.map((action) => action.entityKey), ["a"]);
+  assert.equal(output.actions[0]?.path, "!Wiki/d/concept/wiki_d_a.md");
+  assert.match(output.actions[0]?.kind === "create" ? output.actions[0].content : "", /longer duplicate content/);
+  assert.deepEqual(output.skips, []);
+  assert.equal(seen.length, 1);
+});
+
+test("synthesis deduplicates identical replace authorities before validation", async () => {
+  const { inspected, section } = inspectedPage();
+  const target = bundle("a", existingPath, section);
+  target.replaceAuthorities = [authority(section), authority(section)];
+  const llm = mockLlm(() => JSON.stringify({
+    reasoning: "patch",
+    actions: [{
+      kind: "patch",
+      entityKey: "a",
+      path: existingPath,
+      expectedPageHash: inspected.pageHash,
+      sections: [{
+        operation: "replace",
+        heading: "## Facts",
+        expectedSectionOrdinal: section.ordinal,
+        expectedSectionHash: section.hash,
+        content: "fresh",
+      }],
+    }],
+    skips: [],
+  }), [], []);
+
+  const output = await synthesizeEntityBatch(synthesisArgs([target], llm, {
+    existingPaths: new Set([existingPath]),
+    existingPageHashes: new Map([[existingPath, inspected.pageHash]]),
+  }));
+
+  assert.equal(output.actions.length, 1);
+});
+
 test("synthesis replace rejects wrong ordinal despite matching hash and span", () => {
   const { inspected, section } = inspectedPage();
   assert.throws(() => validateSynthesisActions({
@@ -454,19 +635,19 @@ test("single-bundle synthesis states the exact action envelope on initial and re
       .map((message) => typeof message.content === "string" ? message.content : "");
   for (const request of seen) {
     const messages = requestText(request).join("\n");
-    assert.match(messages, /\"reasoning\"/);
-    assert.match(messages, /\"actions\"/);
-    assert.match(messages, /\"skips\"/);
-    assert.match(messages, /\"entity_types_delta\"/);
-    assert.match(messages, /\"kind\":\"create\"/);
-    assert.match(messages, /\"entityKey\"/);
-    assert.match(messages, /\"annotation\"/);
-    assert.match(messages, /Do not return page fields.*root/is);
+    assert.match(messages, /<<<REASONING>>>/);
+    assert.match(messages, /<<<CREATE>>>/);
+    assert.match(messages, /<<<PATCH>>>/);
+    assert.match(messages, /<<<SKIP>>>/);
+    assert.match(messages, /<<<ENTITY_TYPES_DELTA_JSON>>>/);
+    assert.match(messages, /entityKey:/);
+    assert.match(messages, /annotation:/);
+    assert.match(messages, /Never encode article or section Markdown inside JSON strings/i);
   }
   const repairMessage = requestText(seen[1]).at(-1) ?? "";
-  assert.match(repairMessage, /required root fields and optional delta/i);
-  assert.match(repairMessage, /\"entity_types_delta\"/);
-  assert.match(repairMessage, /Do not return page fields at the root/i);
+  assert.match(repairMessage, /field-framed synthesis output/i);
+  assert.match(repairMessage, /ENTITY_TYPES_DELTA_JSON/);
+  assert.match(repairMessage, /raw Markdown CONTENT/i);
 });
 
 test("single bundle that cannot fit is typed as split-required", async () => {
@@ -503,12 +684,17 @@ test("single-bundle synthesis compresses oversized evidence against the real pro
     const prompt = JSON.stringify(params.messages);
     assert.match(prompt, /essential fact/);
     assert.doesNotMatch(prompt, /extra source 49/);
-    assert.match(prompt, /truncated for prompt budget/);
+    assert.match(prompt, /exact line range validated server-side/);
+    assert.equal(
+      estimatePreparedMessages(params.messages as OpenAI.Chat.ChatCompletionMessageParam[])
+        <= 12_000 - synthesisCompactRepairReserveTokens(12_000),
+      true,
+    );
     return outputFor(["a"]);
   }, seen, []);
 
   const result = await synthesizeEntityBatch(synthesisArgs([oversized], llm, {
-    policy: { inputBudgetTokens: 8_000, outputBudgetTokens: 300, compression: "balanced" as const },
+    policy: { inputBudgetTokens: 12_000, outputBudgetTokens: 300, compression: "balanced" as const },
   }));
 
   assert.equal(result.actions[0]?.entityKey, "a");
@@ -528,14 +714,18 @@ test("single-bundle synthesis compresses oversized required retrieved units agai
     const prompt = JSON.stringify(params.messages);
     assert.match(prompt, /required retrieved context/);
     assert.match(prompt, /truncated for prompt budget/);
-    return outputFor(["a"]);
+    return JSON.stringify({
+      reasoning: "Target context is synthetic in this budget fixture.",
+      actions: [],
+      skips: [{ entityKey: "a", reason: "No mutation in budget fixture." }],
+    });
   }, seen, []);
 
   const result = await synthesizeEntityBatch(synthesisArgs([oversized], llm, {
     policy: { inputBudgetTokens: 9_216, outputBudgetTokens: 300, compression: "balanced" as const },
   }));
 
-  assert.equal(result.actions[0]?.entityKey, "a");
+  assert.equal(result.skips[0]?.entityKey, "a");
   assert.equal(seen.length, 1);
 });
 
@@ -611,6 +801,86 @@ test("synthesis prompt does not duplicate required page sections in context unit
   assert.equal(seen.length, 1);
 });
 
+test("synthesis caps optional wiki sections per entity and emits metadata-only breakdown", async () => {
+  const target = bundle("a");
+  target.units = Array.from({ length: SYNTHESIS_MAX_OPTIONAL_WIKI_UNITS_PER_BUNDLE + 3 }, (_, index) => ({
+    ...target.units[0],
+    id: `optional-${index}`,
+    text: index < SYNTHESIS_MAX_OPTIONAL_WIKI_UNITS_PER_BUNDLE
+      ? `KEEP-SECTION-${index}`
+      : `DROP-SECTION-${index}`,
+    priority: 100 - index,
+    score: 100 - index,
+    sourceOrdinal: index,
+  }));
+  target.evidence = {
+    ...target.evidence,
+    exactSource: [{ startLine: 1, endLine: 1, text: `${"SOURCE-HEAD ".repeat(40)}SOURCE-TAIL-SENTINEL` }],
+  };
+  const seen: Record<string, unknown>[] = [];
+  const events: RunEvent[] = [];
+  const llm = mockLlm((params) => {
+    const prompt = JSON.stringify(params.messages);
+    assert.match(prompt, /KEEP-SECTION-0/);
+    assert.match(prompt, new RegExp(`KEEP-SECTION-${SYNTHESIS_MAX_OPTIONAL_WIKI_UNITS_PER_BUNDLE - 1}`));
+    assert.doesNotMatch(prompt, /DROP-SECTION/);
+    assert.match(prompt, /SOURCE-HEAD/);
+    assert.doesNotMatch(prompt, /SOURCE-TAIL-SENTINEL/);
+    assert.match(prompt, /exact line range validated server-side/);
+    return outputFor(["a"]);
+  }, seen, []);
+
+  await synthesizeEntityBatch(synthesisArgs([target], llm, {
+    onEvent: (event: RunEvent) => events.push(event),
+  }));
+
+  const breakdown = events.find((event) => event.kind === "prompt_breakdown");
+  assert.ok(breakdown && breakdown.kind === "prompt_breakdown");
+  assert.equal(breakdown.callSite, "ingest.synthesize");
+  assert.equal(breakdown.counts.optionalWikiSections, SYNTHESIS_MAX_OPTIONAL_WIKI_UNITS_PER_BUNDLE);
+  assert.equal(breakdown.counts.exactSourceTexts, 1);
+  assert.equal(Object.values(breakdown.breakdown).every((value) => Number.isSafeInteger(value) && value > 0), true);
+  assert.doesNotMatch(JSON.stringify(breakdown), /KEEP-SECTION|DROP-SECTION|SOURCE-HEAD|SOURCE-TAIL-SENTINEL/);
+  assert.ok(SYNTHESIS_EXACT_SOURCE_TEXT_LIMIT > 0);
+  assert.equal(seen.length, 1);
+});
+
+test("synthesis keeps assigned technical ledger evidence complete and reports metadata-only cost", async () => {
+  const target = bundle("a");
+  target.evidence = {
+    ...target.evidence,
+    exactSource: [{ startLine: 1, endLine: 1, text: `${"TRUNCATED ".repeat(40)}EXACT-SOURCE-TAIL` }],
+  };
+  const technical: SynthesisEvidenceLedgerItem = {
+    id: "code:10-10:test",
+    kind: "code",
+    startLine: 10,
+    endLine: 10,
+    markdown: "```bash\nsudo command --must-preserve TECHNICAL-LEDGER-TAIL\n```",
+    coverageUnits: ["sudo command --must-preserve TECHNICAL-LEDGER-TAIL"],
+  };
+  const seen: Record<string, unknown>[] = [];
+  const events: RunEvent[] = [];
+  const llm = mockLlm((params) => {
+    const prompt = JSON.stringify(params.messages);
+    assert.doesNotMatch(prompt, /EXACT-SOURCE-TAIL/);
+    assert.match(prompt, /TECHNICAL-LEDGER-TAIL/);
+    return outputFor(["a"]);
+  }, seen, events);
+
+  await synthesizeEntityBatch(synthesisArgs([target], llm, {
+    technicalEvidenceByEntityKey: new Map([["a", [technical]]]),
+    onEvent: (event: RunEvent) => events.push(event),
+  }));
+
+  const breakdown = events.find((event) => event.kind === "prompt_breakdown");
+  assert.ok(breakdown && breakdown.kind === "prompt_breakdown");
+  assert.equal(breakdown.counts.technicalEvidenceBlocks, 1);
+  assert.ok((breakdown.breakdown.technicalEvidenceTokens ?? 0) > 0);
+  assert.doesNotMatch(JSON.stringify(breakdown), /TECHNICAL-LEDGER-TAIL/);
+  assert.equal(seen.length, 1);
+});
+
 test("conflict regeneration permits exactly one guarded patch and never writes", async () => {
   const current = inspectPatchablePage("# A\n\n## Facts\nold\n");
   const section = current.sections[0];
@@ -629,26 +899,135 @@ test("conflict regeneration permits exactly one guarded patch and never writes",
   assert.equal(seen.length, 1);
 });
 
-test("conflict regeneration rejects create, wrong entity/path, and repeated stale output", async () => {
+test("conflict regeneration accepts field-framed patch output", async () => {
+  const current = inspectPatchablePage("# A\n\n## Facts\nold\n");
+  const section = current.sections[0];
+  const seen: Record<string, unknown>[] = [];
+  const llm = mockLlm((params) => {
+    const prompt = JSON.stringify(params.messages);
+    assert.match(prompt, /Return field-framed synthesis output only/);
+    assert.match(prompt, /<<<PATCH>>>/);
+    return [
+      "<<<REASONING>>>",
+      "regenerated",
+      "<<<PATCH>>>",
+      "entityKey: a",
+      `path: ${existingPath}`,
+      `expectedPageHash: ${current.pageHash}`,
+      "<<<SECTION>>>",
+      "operation: replace",
+      "heading: ## Facts",
+      `expectedSectionOrdinal: ${section.ordinal}`,
+      `expectedSectionHash: ${section.hash}`,
+      "<<<CONTENT>>>",
+      "fresh",
+      "<<<END_SECTION>>>",
+      "<<<END_PATCH>>>",
+      "<<<END>>>",
+    ].join("\n");
+  }, seen, []);
+  const result = await regenerateConflictedPatch(regenerationArgs(
+    "a", bundle("a", existingPath, section).evidence, existingPath, current.pageHash,
+    bundle("a", existingPath, section).units, [authority(section)], llm,
+  ));
+  assert.equal(result.kind, "patch");
+  assert.equal(result.sections[0].content, "fresh");
+  assert.equal(seen.length, 1);
+});
+
+test("conflict regeneration permits one bounded field-frame repair", async () => {
+  const current = inspectPatchablePage("# A\n\n## Facts\nold\n");
+  const section = current.sections[0];
+  const seen: Record<string, unknown>[] = [];
+  let calls = 0;
+  const llm = mockLlm((params) => {
+    calls += 1;
+    if (calls === 1) {
+      return [
+        "<<<REASONING>>>",
+        "The patch should replace Facts, but no action frame was emitted.",
+        "<<<END_REASONING>>>",
+      ].join("\n");
+    }
+    const prompt = JSON.stringify(params.messages);
+    assert.match(prompt, /missing an action frame/);
+    return [
+      "<<<REASONING>>>",
+      "regenerated",
+      "<<<PATCH>>>",
+      "entityKey: a",
+      `path: ${existingPath}`,
+      `expectedPageHash: ${current.pageHash}`,
+      "<<<SECTION>>>",
+      "operation: replace",
+      "heading: ## Facts",
+      `expectedSectionOrdinal: ${section.ordinal}`,
+      `expectedSectionHash: ${section.hash}`,
+      "<<<CONTENT>>>",
+      "fresh",
+      "<<<END_SECTION>>>",
+      "<<<END_PATCH>>>",
+      "<<<END>>>",
+    ].join("\n");
+  }, seen, []);
+
+  const result = await regenerateConflictedPatch(regenerationArgs(
+    "a", bundle("a", existingPath, section).evidence, existingPath, current.pageHash,
+    bundle("a", existingPath, section).units, [authority(section)], llm,
+  ));
+
+  assert.equal(result.kind, "patch");
+  assert.equal(result.sections[0].content, "fresh");
+  assert.equal(seen.length, 2);
+});
+
+test("conflict regeneration stops after one failed field-frame repair", async () => {
+  const current = inspectPatchablePage("# A\n\n## Facts\nold\n");
+  const section = current.sections[0];
+  const seen: Record<string, unknown>[] = [];
+  const llm = mockLlm(() => "reasoning without action frames", seen, []);
+
+  await assert.rejects(regenerateConflictedPatch(regenerationArgs(
+    "a", bundle("a", existingPath, section).evidence, existingPath, current.pageHash,
+    bundle("a", existingPath, section).units, [authority(section)], llm,
+  )), ConflictRegenerationExhaustedError);
+
+  assert.equal(seen.length, 2);
+});
+
+test("conflict regeneration rejects schema and domain errors without repair", async () => {
   const current = inspectPatchablePage("# A\n\n## Facts\nold\n");
   const section = current.sections[0];
   const base = { entityKey: "a", evidence: bundle("a", existingPath, section).evidence, targetPath: existingPath,
     pageHash: current.pageHash, targetSections: bundle("a", existingPath, section).units, replaceAuthorities: [authority(section)] };
+  const validPatch = patchFor(section);
   for (const invalid of [
     { ...create("a", existingPath) },
-    { ...create("b", existingPath), kind: "patch", expectedPageHash: current.pageHash, sections: [] },
+    { ...create("a", existingPath), kind: "patch", expectedPageHash: current.pageHash, sections: [] },
+    { ...validPatch, entityKey: "b" },
+    { ...validPatch, path: absentPath },
+    { ...validPatch, expectedPageHash: "stale" },
+    { ...validPatch, sections: [{ ...validPatch.sections[0], expectedSectionHash: "stale" }] },
   ]) {
     const seen: Record<string, unknown>[] = [];
     const llm = mockLlm(() => JSON.stringify({ reasoning: "bad", actions: [invalid], skips: [] }), seen, []);
     await assert.rejects(regenerateConflictedPatch(regenerationArgs(base.entityKey, base.evidence, base.targetPath, base.pageHash, base.targetSections, base.replaceAuthorities, llm)), ConflictRegenerationExhaustedError);
     assert.equal(seen.length, 1);
   }
+});
+
+test("conflict regeneration rejects repeated stale output before transport", async () => {
+  const current = inspectPatchablePage("# A\n\n## Facts\nold\n");
+  const section = current.sections[0];
+  const base = { entityKey: "a", evidence: bundle("a", existingPath, section).evidence, targetPath: existingPath,
+    pageHash: current.pageHash, targetSections: bundle("a", existingPath, section).units, replaceAuthorities: [authority(section)] };
   const seen: Record<string, unknown>[] = [];
   const staleLlm = mockLlm(() => JSON.stringify({ reasoning: "stale", actions: [{
     kind: "patch", entityKey: "a", path: existingPath, expectedPageHash: "stale",
     sections: [{ operation: "replace", heading: "## Facts", expectedSectionOrdinal: section.ordinal, expectedSectionHash: section.hash, content: "fresh" }],
   }], skips: [] }), seen, []);
   await assert.rejects(regenerateConflictedPatch(regenerationArgs(base.entityKey, base.evidence, base.targetPath, base.pageHash, base.targetSections, base.replaceAuthorities, staleLlm, { conflictCount: 1 })), ConflictStillStaleError);
+  assert.equal(seen.length, 0);
 });
 
 test("dedicated regeneration payload excludes descriptions/tags and second conflict makes zero requests", async () => {
@@ -1017,6 +1396,112 @@ test("single-entity synthesis normalizes create paths from governed entity paths
   assert.equal(output.actions[0]?.path, "!Wiki/os-unix/howto/wiki_os-unix_proxy_launcher_wrapper.md");
 });
 
+test("multi-entity synthesis uses server-owned create paths to avoid replay path-spelling split cascade", async () => {
+  let calls = 0;
+  const osPathPolicy = { domainRoot: "!Wiki/os-unix", allowedSubfolders: ["methods", "configurations", "applications"] };
+  const replayKeys = [
+    "chromium-flag",
+    "desktop-file",
+    "environment-variables",
+    "obsidian",
+    "permanent-launch-shortcut",
+    "profile-method",
+    "proxy-pac",
+  ];
+  const createPathsByEntityKey = new Map([
+    ["chromium-flag", "!Wiki/os-unix/methods/wiki_os-unix_chromium_flag.md"],
+    ["desktop-file", "!Wiki/os-unix/configurations/wiki_os-unix_desktop_file.md"],
+    ["environment-variables", "!Wiki/os-unix/configurations/wiki_os-unix_environment_variables.md"],
+    ["obsidian", "!Wiki/os-unix/applications/wiki_os-unix_obsidian.md"],
+    ["permanent-launch-shortcut", "!Wiki/os-unix/methods/wiki_os-unix_permanent_launch_shortcut.md"],
+    ["profile-method", "!Wiki/os-unix/methods/wiki_os-unix_profile_method.md"],
+    ["proxy-pac", "!Wiki/os-unix/configurations/wiki_os-unix_proxy_pac.md"],
+  ]);
+  const emittedPaths = new Map([
+    ["chromium-flag", "!Wiki/os-unix/methods/wiki_os-unix_chromium-flag.md"],
+    ["desktop-file", "!Wiki/os-unix/configurations/wiki_os-unix_desktop-file.md"],
+    ["environment-variables", "!Wiki/os-unix/configurations/wiki_os-unix_environment-variables.md"],
+    ["obsidian", "!Wiki/os-unix/applications/obsidian.md"],
+    ["permanent-launch-shortcut", "!Wiki/os-unix/methods/wiki_os-unix_permanent-launch-shortcut.md"],
+    ["profile-method", "!Wiki/os-unix/methods/wiki_os-unix_profile-method.md"],
+    ["proxy-pac", "!Wiki/os-unix/configurations/proxy-pac.md"],
+  ]);
+  const events: RunEvent[] = [];
+  const llm = mockLlm((params) => {
+    calls++;
+    const prompt = JSON.stringify(params.messages);
+    const keys = replayKeys.filter((entityKey) => prompt.includes(`entity-${entityKey}`));
+    return JSON.stringify({
+      reasoning: "replay batch",
+      actions: keys.map((entityKey) => ({
+        kind: "create",
+        entityKey,
+        path: emittedPaths.get(entityKey),
+        annotation: `${entityKey} page`,
+        content: `# ${entityKey}\n\n## Facts\n${entityKey} fact.`,
+      })),
+      skips: [],
+    });
+  }, [], events);
+
+  const output = await synthesizeEntityBatch(synthesisArgs(replayKeys.map((key) => bundle(key)), llm, {
+    pathPolicy: osPathPolicy,
+    createPathsByEntityKey,
+    policy: { inputBudgetTokens: 100_000, outputBudgetTokens: 300, compression: "balanced" as const },
+    onEvent: (event: RunEvent) => events.push(event),
+  }));
+
+  assert.equal(calls, 1);
+  assert.deepEqual(
+    output.actions.map((action) => action.path),
+    replayKeys.map((key) => createPathsByEntityKey.get(key)),
+  );
+  assert.equal(events.some((event) => event.kind === "structured_validation_retry"), false);
+});
+
+test("multi-entity synthesis still fails unknown replay entity keys before path normalization", async () => {
+  const events: RunEvent[] = [];
+  let calls = 0;
+  const llm = mockLlm((params) => {
+    calls++;
+    const text = JSON.stringify(params.messages);
+    const hasChromium = text.includes("entity-chromium-flag");
+    const hasDesktop = text.includes("entity-desktop-file");
+    if (hasChromium && hasDesktop) {
+      return JSON.stringify({
+        reasoning: "bad replay key",
+        actions: [
+          create("entity-obsidian", "!Wiki/os-unix/applications/wiki_os-unix_entity_obsidian.md"),
+        ],
+        skips: [],
+      });
+    }
+    const key = hasChromium ? "chromium-flag" : "desktop-file";
+    return JSON.stringify({
+      reasoning: "split ok",
+      actions: [{
+        kind: "create",
+        entityKey: key,
+        path: `!Wiki/os-unix/configurations/wiki_os-unix_${key.replace(/-/g, "_")}.md`,
+        annotation: key,
+        content: `# ${key}\n\n## Facts\n${key} fact.`,
+      }],
+      skips: [],
+    });
+  }, [], events);
+
+  const output = await synthesizeEntityBatch(synthesisArgs([bundle("chromium-flag"), bundle("desktop-file")], llm, {
+    pathPolicy: { domainRoot: "!Wiki/os-unix", allowedSubfolders: ["applications", "configurations"] },
+    onEvent: (event: RunEvent) => events.push(event),
+  }));
+
+  assert.equal(calls, 3);
+  assert.deepEqual(output.actions.map((action) => action.entityKey), ["chromium-flag", "desktop-file"]);
+  const retry = events.find((event) => event.kind === "structured_validation_retry");
+  assert.ok(retry);
+  assert.match(retry.safeReason, /unknown entity key: entity-obsidian/);
+});
+
 test("semantic synthesis retry does not replay the full invalid assistant output", async () => {
   let calls = 0;
   const seen: Record<string, unknown>[] = [];
@@ -1100,7 +1585,7 @@ test("recursive synthesis keeps stable bundle order after split", async () => {
   assert.equal(calls > 1, true);
 });
 
-test("synthesis schemas are strict and reject malformed discriminants and duplicate coverage", () => {
+test("synthesis schemas are strict and semantic validation rejects duplicate coverage", () => {
   assert.equal(SynthesisActionSchema.safeParse({ ...create(), kind: "remove" }).success, false);
   assert.equal(SynthesisActionSchema.safeParse({
     ...create(),
@@ -1110,7 +1595,11 @@ test("synthesis schemas are strict and reject malformed discriminants and duplic
     reasoning: "r",
     actions: [create("a", absentPath)],
     skips: [{ entityKey: " a ", reason: "skip" }],
-  }).success, false);
+  }).success, true);
+  assert.throws(() => validateSynthesisCoverage(["a"], {
+    actions: [create("a", absentPath)],
+    skips: [{ entityKey: " a ", reason: "skip" }],
+  }), /duplicate entity coverage/i);
 });
 
 test("synthesis prompt exposes bounded contracts without raw index or vector data", async () => {

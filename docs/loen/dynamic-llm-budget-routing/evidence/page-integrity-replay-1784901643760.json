@@ -1,0 +1,56 @@
+{
+  "variant": "page-integrity-replay",
+  "session": "1784901643760",
+  "firstTs": "2026-07-24T14:00:43.760Z",
+  "lastTs": "2026-07-24T14:50:05.371Z",
+  "status": "running",
+  "diagnosticMode": "off",
+  "transport": "desktop-hybrid",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrz0cqol-1",
+    "estimatedInputTokens": 7161,
+    "outputBudget": 4096,
+    "hash": "fnv1a:f65e1892"
+  },
+  "firstHttpMs": 51406,
+  "firstFileMs": 143898,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 7161,
+    "outputBudget": 4096
+  },
+  "transportRetries": 0,
+  "transportRecovered": 0,
+  "structuralRetries": 6,
+  "structuralSummary": [
+    "init.bootstrap-map:output_limit:Output limit consumed without usable content (4096/4096 tokens)",
+    "ingest.evidence-map:output_limit:Output limit consumed before valid structured content (16384/16384 tokens): Expected ',' or '}' after property value in JSON at position 22358 (line 784 column 47)",
+    "ingest.synthesize:frame_parse:Unexpected token '<', \"<<<REASONI\"... is not valid JSON",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"custom\",\n    \"message\": \"[redacted]\",\n    \"path\": []\n  }\n]",
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"object\",\n    \"received\": \"array\",\n    \"path\": [\n      \"packets\",\n      0,\n      \"exactSourceRanges\",\n      0\n    ],\n    \"message\": \"[redacted]\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"object\",\n    \"received\": \"array\",\n    \"path\": [\n      \"packets\",\n      0,\n      \"exactSourceRanges\",\n      1\n    ],\n    \"message\": \"[redacted]\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"object\",\n    \"received\": \"array\",\n    \"path\": [\n      \"packets\",\n      1,\n      \"exactSourceRanges\",\n      0\n    ],\n    \"message\": \"[redacted]\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"object\",\n    \"received\": \"array\",\n    \"path\": [\n      \"packets\",\n      1,\n      \"exactSourceRanges\",\n      1\n    ],\n    \"message\": \"[redacted]\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"object\",\n    \"received\": \"array\",\n    \"path\": [\n      \"packets\",\n      2,\n      \"exactSourceRanges\",\n      0\n    ],\n    \"message\": \"[redacted]\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"object\",\n    \"received\": \"array\",\n    \"path\": [\n      \"packets\",\n      3,\n      \"exactSourceRanges\",\n      0\n    ],\n    \"message\": \"[redacted]\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"object\",\n    \"received\": \"array\",\n    \"path\": [\n      \"packets\",\n      4,\n      \"exactSourceRanges\",\n      0\n    ],\n    \"message\": \"[redacted]\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"object\",\n    \"received\": \"array\",\n    \"path\": [\n      \"packets\",\n      4,\n      \"exactSourceRanges\",\n      1\n    ],\n    \"message\": \"[redacted]\"\n  }\n]",
+    "ingest.synthesize:schema_validate:[\n  {\n    \"code\": \"custom\",\n    \"path\": [\n      \"actions\",\n      0,\n      \"sections\",\n      0,\n      \"content\"\n    ],\n    \"message\": \"content must not contain a top-level H2 outside a valid fence\"\n  }\n]"
+  ],
+  "createdPages": 66,
+  "updatedPages": 8,
+  "resultTexts": [
+    "Источник «Настройка прокси.md» → домен «os-unix»: создано 6 стр.",
+    "Источник «NFS Server.md» → домен «os-unix»: создано 5 стр.",
+    "Источник «AMD Driver.md» → домен «os-unix»: создано 6 стр.",
+    "Источник «Fixing Yandex Browser Error After Hostname Change on Ubuntu 24.md» → домен «os-unix»: создано 2 стр.",
+    "Источник «Keyboard shortcuts custom.md» → домен «os-unix»: создано 2 стр.",
+    "Источник «Fail2Ban.md» → домен «os-unix»: создано 6 стр.",
+    "Источник «Gitlab runner.md» → домен «os-unix»: создано 2 стр.",
+    "Источник «cache.md» → домен «os-unix»: создано 6 стр.",
+    "Источник «cpu.md» → домен «os-unix»: создано 6 стр.",
+    "Источник «grub.md» → домен «os-unix»: обновлено 1 стр.",
+    "Источник «logrotate.md» → домен «os-unix»: создано 4 стр.",
+    "Источник «network.md» → домен «os-unix»: создано 3, обновлено 1",
+    "Источник «npm.md» → домен «os-unix»: создано 4 стр.",
+    "Источник «rc.local.md» → домен «os-unix»: создано 1 стр.",
+    "Источник «ssh.md» → домен «os-unix»: создано 6 стр.",
+    "Источник «storage.md» → домен «os-unix»: создано 4, обновлено 2",
+    "Источник «swap.md» → домен «os-unix»: создано 1, обновлено 2",
+    "Источник «ufw.md» → домен «os-unix»: создано 2, обновлено 2"
+  ],
+  "finalError": "ingest: patch conflict regeneration failed — Conflict regeneration rejected for ubuntu-24-04-lts: [\n  {\n    \"code\": \"custom\",\n    \"path\": [\n      \"actions\",\n      0,\n      \"sections\",\n      0,\n      \"content\"\n    ],\n    \"message\": \"content must not contain a top-level H2 outside a valid fence\"\n  }\n]"
+}

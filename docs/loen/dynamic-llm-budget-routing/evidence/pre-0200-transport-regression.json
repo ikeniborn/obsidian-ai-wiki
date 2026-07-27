@@ -1,0 +1,44 @@
+{
+  "topic": "dynamic-llm-budget-routing",
+  "recordedAt": "2026-07-23T23:27:16+03:00",
+  "researchQuestion": "Did a client transport change after 0.1.199 introduce the repeated HTTP 200 headers followed by zero body bytes?",
+  "releaseTimeline": {
+    "releaseBoundary": "0.1.199..0.1.200",
+    "transportFilesChanged": 0,
+    "actualTransportSwitchCommit": "d72cf5b",
+    "actualTransportSwitchDate": "2026-07-21T01:35:18+03:00",
+    "switchOccurredAfterTag": "0.1.204",
+    "before": "Obsidian requestUrl buffers non-stream response text",
+    "after": "direct pooled undici.Agent reads non-stream response body"
+  },
+  "vault": {
+    "initSessions": 12,
+    "adapterSessions": 10,
+    "adapterFirstBootstrapFetchErrors": 10,
+    "offSessions": 2,
+    "offSessionsWithZeroBodyError": 2,
+    "offZeroBodyErrors": 3,
+    "offAdvertisedContentLengths": [3905, 4821, 1760]
+  },
+  "electron": {
+    "obsidianRuntime": {
+      "electron": "34.3.0",
+      "chrome": "132.0.6834.210"
+    },
+    "currentWrapper": {
+      "electron34Main": { "passed": 8, "attempts": 8 },
+      "electron34Renderer": { "passed": 8, "attempts": 8 },
+      "electron36Main": { "passed": 8, "attempts": 8 },
+      "electron36Renderer": { "passed": 8, "attempts": 8 }
+    },
+    "bareDirectUndiciRenderer": {
+      "electron34": { "passed": 3, "attempts": 4, "immediateTimeouts": 1 },
+      "electron36": { "passed": 3, "attempts": 4, "immediateTimeouts": 1 }
+    }
+  },
+  "decision": {
+    "result": "fix",
+    "nextVariant": "buffered-host-non-stream-with-undici-streaming",
+    "acceptance": "two consecutive clean bootstrap runs with zero transport retries"
+  }
+}

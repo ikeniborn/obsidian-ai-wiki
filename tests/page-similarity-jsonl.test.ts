@@ -226,6 +226,72 @@ test("chunk refresh rejects atomically when a pending embedding batch fails", as
   assert.equal(adapter.files.get(indexPath), original);
 });
 
+test("chunk refresh retries transient embedding batch failures", async () => {
+  const domainRoot = "!Wiki/d";
+  const indexPath = `${domainRoot}/index.jsonl`;
+  const body = "# Alpha\n\n## Facts\nChanged alpha facts requiring vectors.";
+  const page = {
+    ...pageRecord("a"),
+    bodyHash: contentHash(body),
+  };
+  const adapter = new MemoryAdapter(new Map([
+    [indexPath, `${JSON.stringify(page)}\n`],
+  ]));
+  const globalWithRequest = globalThis as typeof globalThis & {
+    __obsidianRequestUrlForTest?: (options: { body: string }) => Promise<{
+      status: number;
+      text: string;
+    }>;
+    window?: { setTimeout: typeof setTimeout };
+  };
+  const previousWindow = globalWithRequest.window;
+  globalWithRequest.window = { setTimeout };
+  let requests = 0;
+  globalWithRequest.__obsidianRequestUrlForTest = async ({ body: requestBody }) => {
+    requests++;
+    if (requests === 1) {
+      return {
+        status: 503,
+        text: JSON.stringify({
+          error: {
+            message: "The requested model is temporarily unavailable.",
+            type: "server_error",
+            code: "model_unavailable",
+          },
+        }),
+      };
+    }
+    const request = JSON.parse(requestBody) as { input: string[] };
+    return {
+      status: 200,
+      text: JSON.stringify({
+        data: request.input.map(() => ({ embedding: [0.4, 0.5] })),
+      }),
+    };
+  };
+
+  try {
+    const result = await embeddingService().refreshCache(
+      domainRoot,
+      new VaultTools(adapter, ""),
+      new Map([[page.articleId, page.description]]),
+      new Map([[page.articleId, body]]),
+      { fullCorpus: true },
+    );
+    assert.equal(result.failed, 0);
+  } finally {
+    delete globalWithRequest.__obsidianRequestUrlForTest;
+    if (previousWindow === undefined) delete globalWithRequest.window;
+    else globalWithRequest.window = previousWindow;
+  }
+
+  assert.equal(requests, 2);
+  const records = parseWikiIndexJsonl(adapter.files.get(indexPath)!, indexPath);
+  const chunks = records.filter((record) => record.kind === "chunk" && record.articleId === "a");
+  assert.equal(chunks.length > 0, true);
+  assert.equal(chunks.every((record) => Math.abs(record.vector[0] - 0.4) < 0.0001), true);
+});
+
 test("model change incremental refresh preserves old-model chunks for pages without bodies", async () => {
   const domainRoot = "!Wiki/d";
   const indexPath = `${domainRoot}/index.jsonl`;

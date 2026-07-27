@@ -1,0 +1,34 @@
+{
+  "variant": "unknown",
+  "session": "1784803891040",
+  "firstTs": "2026-07-23T10:51:31.040Z",
+  "lastTs": "2026-07-23T10:55:08.182Z",
+  "status": "error",
+  "diagnosticMode": "undici-request-adapter",
+  "transport": "desktop-direct",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrxe5k79-1",
+    "estimatedInputTokens": 7265,
+    "outputBudget": 16384,
+    "responseFormatType": "json_schema",
+    "hash": "fnv1a:39910e76"
+  },
+  "firstHttpMs": 36508,
+  "firstFileMs": 82592,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 7265,
+    "outputBudget": 16384
+  },
+  "transportRetries": 1,
+  "transportRecovered": 1,
+  "structuralRetries": 1,
+  "structuralSummary": [
+    "init.bootstrap-map:schema_validate:[\n  {\n    \"code\": \"custom\",\n    \"message\": \"Unknown source chunk 0:1-67:fnv1a:1e0051\",\n    \"path\": []\n  }\n]"
+  ],
+  "createdPages": 0,
+  "resultTexts": [
+    ""
+  ],
+  "finalError": "init stopped — embedding endpoint failed: ingest: embedding refresh failed — Embedding refresh failed: Embedding API error: 503 — {\"error\":{\"message\":\"The requested model is temporarily unavailable.\",\"type\":\"server_error\",\"param\":\"model\",\"code\":\"model_unavailable\"}}. Fix embedding config and re-run."
+}

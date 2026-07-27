@@ -46,7 +46,7 @@ function stringContentLength(message: OpenAI.Chat.ChatCompletionMessageParam): n
   return typeof message.content === "string" ? message.content.length : JSON.stringify(message.content ?? "").length;
 }
 
-function requestFingerprint(
+export function requestFingerprint(
   requestId: string,
   callSite: StructuredCallSite,
   transport: "stream" | "non-stream",
@@ -69,7 +69,9 @@ function requestFingerprint(
     messageCount: messages.length,
     messageCharLengths: messages.map(stringContentLength),
     estimatedInputTokens: estimatePreparedMessages(messages),
-    ...(typeof params.max_tokens === "number" ? { outputBudget: params.max_tokens } : {}),
+    ...(typeof params.max_completion_tokens === "number"
+      ? { outputBudget: params.max_completion_tokens }
+      : {}),
     ...(typeof responseFormat?.type === "string" ? { responseFormatType: responseFormat.type } : {}),
     ...(typeof responseFormat?.json_schema?.name === "string" ? { responseFormatName: responseFormat.json_schema.name } : {}),
     ...(typeof params.temperature === "number" ? { temperature: params.temperature } : {}),
@@ -96,12 +98,13 @@ export function createLlmLifecycle(action: LlmLifecycleAction): {
 }
 
 export type StructuredProfile<T> =
-  | { kind: "json-zod"; schema: z.ZodSchema<T>; repairInstruction?: string }
+  | { kind: "json-zod"; schema: z.ZodSchema<T>; repairInstruction?: string; compactRepairThresholdTokens?: number }
   | {
       kind: "framed-zod";
       schema: z.ZodSchema<T>;
       parse: (text: string) => unknown;
       repairInstruction: string;
+      compactRepairThresholdTokens?: number;
     };
 
 export class StructuredValidationError extends Error {
@@ -109,6 +112,8 @@ export class StructuredValidationError extends Error {
     public readonly callSite: StructuredCallSite,
     public readonly attempts: number,
     public readonly lastError: Error,
+    public readonly errorType?: Extract<RunEvent, { kind: "structural_error" }>["errorType"],
+    public readonly outputTokens?: number,
   ) {
     super(`[${callSite}] structural validation failed after ${attempts} attempt(s): ${lastError.message}`);
     this.name = "StructuredValidationError";
@@ -326,12 +331,30 @@ function repairMessages<T>(
   lastError: Error,
   inputBudgetTokens: number | undefined,
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
+  if (!fullText.trim()) {
+    return [
+      ...baseMessages,
+      { role: "user" as const, content: compactRepairPrompt(profile, lastError) },
+    ];
+  }
   const fullRepair = [
     ...baseMessages,
     { role: "assistant" as const, content: fullText },
     { role: "user" as const, content: repairPrompt(profile, fullText, lastError) },
   ];
-  if (inputBudgetTokens === undefined || estimatePreparedMessages(fullRepair) <= inputBudgetTokens) {
+  const fullRepairEstimate = estimatePreparedMessages(fullRepair);
+  const compactThreshold = profile.compactRepairThresholdTokens;
+  if (compactThreshold !== undefined
+    && fullRepairEstimate >= compactThreshold) {
+    const compactRepair = [
+      ...baseMessages,
+      { role: "user" as const, content: compactRepairPrompt(profile, lastError) },
+    ];
+    if (inputBudgetTokens === undefined || estimatePreparedMessages(compactRepair) <= inputBudgetTokens) {
+      return compactRepair;
+    }
+  }
+  if (inputBudgetTokens === undefined || fullRepairEstimate <= inputBudgetTokens) {
     return fullRepair;
   }
 
@@ -341,6 +364,56 @@ function repairMessages<T>(
   ];
   if (estimatePreparedMessages(compactRepair) <= inputBudgetTokens) return compactRepair;
   return fullRepair;
+}
+
+function outputLimitRepairMessages<T>(
+  baseMessages: OpenAI.Chat.ChatCompletionMessageParam[],
+  profile: StructuredProfile<T>,
+  lastError: Error,
+): OpenAI.Chat.ChatCompletionMessageParam[] {
+  const instruction = profile.kind === "framed-zod"
+    ? profile.repairInstruction
+    : profile.repairInstruction ?? "Return only one valid JSON object matching the schema.";
+  return [
+    ...baseMessages,
+    {
+      role: "user" as const,
+      content: [
+        "OUTPUT_LIMIT_RETRY: The provider consumed the previous output limit without returning usable content.",
+        `Validation error: ${lastError.message}`,
+        "Return the complete result now, but keep prose and optional detail compact.",
+        instruction,
+        "Do not mention this retry and do not add commentary outside the required output protocol.",
+      ].join("\n"),
+    },
+  ];
+}
+
+function consumedOutputLimit(result: CallResult, opts: LlmCallOptions): boolean {
+  return Number.isSafeInteger(opts.maxTokens)
+    && (opts.maxTokens ?? 0) > 0
+    && Number.isFinite(result.outputTokens)
+    && result.outputTokens >= (opts.maxTokens ?? Number.POSITIVE_INFINITY);
+}
+
+export function outputRetryOptions(opts: LlmCallOptions, outputTokens: number): LlmCallOptions {
+  const current = opts.maxTokens;
+  if (!Number.isSafeInteger(current) || (current ?? 0) <= 0) return opts;
+  const configuredCeiling = opts.outputRetryBudgetTokens;
+  const ceiling = Number.isSafeInteger(configuredCeiling) && (configuredCeiling ?? 0) > 0
+    ? Math.max(current!, configuredCeiling!)
+    : current!;
+  const observed = Number.isFinite(outputTokens) && outputTokens > 0 ? outputTokens : current!;
+  const next = Math.min(ceiling, Math.max(current!, Math.ceil(observed * 1.5)));
+  return next === current ? opts : { ...opts, maxTokens: next };
+}
+
+function optsWithRepairInputBudget(opts: LlmCallOptions): LlmCallOptions {
+  const repairBudget = opts.repairInputBudgetTokens;
+  if (repairBudget === undefined) return opts;
+  const inputBudget = opts.inputBudgetTokens ?? 0;
+  if (!Number.isSafeInteger(repairBudget) || repairBudget <= inputBudget) return opts;
+  return { ...opts, inputBudgetTokens: repairBudget };
 }
 
 async function streamOnce(
@@ -662,12 +735,18 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
   const { baseMessages, profile, maxRetries, callSite, signal, onEvent } = args;
   let messages = baseMessages;
   let mode = initialMode(profile, args.opts);
+  const repairOpts = optsWithRepairInputBudget(args.opts);
+  let currentOpts = args.opts;
+  let retryLimit = maxRetries;
+  let responseFormatFallbackRetries = 0;
   let totalTokens = 0;
   let lastError: Error = new Error("no attempts");
+  let lastStructuralErrorType: Extract<RunEvent, { kind: "structural_error" }>["errorType"] | undefined;
+  let lastOutputTokens: number | undefined;
   const lifecycle = structuredLifecycle(args);
 
   try {
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    for (let attempt = 0; attempt <= retryLimit; attempt++) {
       if (signal.aborted) {
         const err = new Error("aborted");
         err.name = "AbortError";
@@ -675,15 +754,39 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
       }
       if (attempt > 0) onEvent({ kind: "rule_fired", ruleId: "parseWithRetry", count: 1 });
 
-      const call = await callWithFormatFallback(args, messages, mode, attempt, lifecycle);
+      const call = await callWithFormatFallback({ ...args, opts: currentOpts }, messages, mode, attempt, lifecycle);
       signal.throwIfAborted();
       mode = call.mode;
       const { fullText, outputTokens, inputTokens, statsEvent } = call.result;
+      lastOutputTokens = outputTokens;
       totalTokens += outputTokens;
       if (statsEvent) onEvent(statsEvent);
 
       if (!fullText.trim()) {
+        if (consumedOutputLimit(call.result, currentOpts)) {
+          lastError = new Error(
+            `Output limit consumed without usable content (${outputTokens}/${currentOpts.maxTokens} tokens)`,
+          );
+          lastStructuralErrorType = "output_limit";
+          emitStructuralError(onEvent, callSite, "output_limit", attempt, null, lastError.message);
+          structuralErrorCounter.record(null, attempt);
+          if (attempt === retryLimit) {
+            lifecycle.close(args.validationExhaustionPhase ?? "failed");
+            throw new StructuredValidationError(
+              callSite,
+              attempt + 1,
+              lastError,
+              lastStructuralErrorType,
+              lastOutputTokens,
+            );
+          }
+          lifecycle.close("retrying");
+          messages = outputLimitRepairMessages(baseMessages, profile, lastError);
+          currentOpts = outputRetryOptions(optsWithRepairInputBudget(currentOpts), outputTokens);
+          continue;
+        }
         lastError = new Error("Empty structured output");
+        lastStructuralErrorType = "empty_output";
         emitStructuralError(onEvent, callSite, "empty_output", attempt, null, lastError.message);
         structuralErrorCounter.record(null, attempt);
 
@@ -691,14 +794,27 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
         if (next) {
           emitResponseFormatFallback(onEvent, callSite, attempt, mode, next);
           mode = next;
+          if (maxRetries > 0 && responseFormatFallbackRetries < 2) {
+            responseFormatFallbackRetries += 1;
+            retryLimit += 1;
+          }
         }
 
-        if (attempt === maxRetries) {
+        if (attempt === retryLimit) {
           lifecycle.close(args.validationExhaustionPhase ?? "failed");
-          throw new StructuredValidationError(callSite, attempt + 1, lastError);
+          throw new StructuredValidationError(
+            callSite,
+            attempt + 1,
+            lastError,
+            lastStructuralErrorType,
+            lastOutputTokens,
+          );
         }
         lifecycle.close("retrying");
-        messages = repairMessages(messages, profile, fullText, lastError, args.opts.inputBudgetTokens);
+        messages = next
+          ? messages
+          : repairMessages(baseMessages, profile, fullText, lastError, repairOpts.inputBudgetTokens);
+        if (!next) currentOpts = optsWithRepairInputBudget(currentOpts);
         continue;
       }
 
@@ -706,7 +822,7 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
         lifecycle.phase("validating");
         const value = parseAndValidate(profile, fullText);
         if (attempt > 0) {
-          emitStructuralError(onEvent, callSite, "schema_validate", attempt, true, "retry succeeded");
+          emitStructuralError(onEvent, callSite, lastStructuralErrorType ?? "schema_validate", attempt, true, "retry succeeded");
         }
         structuralErrorCounter.record(true, attempt);
         return {
@@ -717,20 +833,45 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
           lifecycle: lifecycle.current(),
         };
       } catch (e) {
-        lastError = e as Error;
-        const isLast = attempt === maxRetries;
-        const errorType = classifyError(profile, lastError);
+        const validationError = e as Error;
+        const outputLimit = consumedOutputLimit(call.result, currentOpts);
+        lastError = outputLimit
+          ? new Error(
+            `Output limit consumed before valid structured content (${outputTokens}/${currentOpts.maxTokens} tokens): ${validationError.message}`,
+          )
+          : validationError;
+        const isLast = attempt === retryLimit;
+        const errorType = outputLimit ? "output_limit" : classifyError(profile, lastError);
+        lastStructuralErrorType = errorType;
         emitStructuralError(onEvent, callSite, errorType, attempt, isLast ? false : null, lastError.message);
         structuralErrorCounter.record(isLast ? false : null, attempt);
         if (isLast) {
           lifecycle.close(args.validationExhaustionPhase ?? "failed");
-          throw new StructuredValidationError(callSite, attempt + 1, lastError);
+          throw new StructuredValidationError(
+            callSite,
+            attempt + 1,
+            lastError,
+            lastStructuralErrorType,
+            lastOutputTokens,
+          );
         }
         lifecycle.close("retrying");
-        messages = repairMessages(messages, profile, fullText, lastError, args.opts.inputBudgetTokens);
+        if (outputLimit) {
+          messages = outputLimitRepairMessages(baseMessages, profile, lastError);
+          currentOpts = outputRetryOptions(optsWithRepairInputBudget(currentOpts), outputTokens);
+        } else {
+          messages = repairMessages(baseMessages, profile, fullText, lastError, repairOpts.inputBudgetTokens);
+          currentOpts = optsWithRepairInputBudget(currentOpts);
+        }
       }
     }
-    throw new StructuredValidationError(callSite, maxRetries + 1, lastError);
+    throw new StructuredValidationError(
+      callSite,
+      retryLimit + 1,
+      lastError,
+      lastStructuralErrorType,
+      lastOutputTokens,
+    );
   } catch (error) {
     if (lifecycle.isActive()) {
       lifecycle.close(

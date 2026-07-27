@@ -458,6 +458,8 @@ export function maxCosine(query: Float32Array, vecs: Float32Array[]): number {
 }
 
 const EMBEDDING_BATCH_SIZE = 100;
+const EMBEDDING_FETCH_MAX_ATTEMPTS = 3;
+const EMBEDDING_FETCH_RETRY_BASE_MS = 250;
 
 // Per-side candidate pool before RRF fusion in hybrid mode. Fixed (not the full
 // vault) so cost stays flat; RRF then returns the caller's topK.
@@ -502,6 +504,36 @@ async function fetchEmbeddings(
   }
   const json = JSON.parse(resp.text) as { data: { embedding: number[] }[] };
   return json.data.map((d) => new Float32Array(d.embedding));
+}
+
+function isRetryableEmbeddingError(error: unknown): boolean {
+  const message = String((error as Error | undefined)?.message ?? error);
+  if (/\b(?:429|5\d\d)\b/.test(message)) return true;
+  return /(?:timeout|temporarily unavailable|model_unavailable|ECONNRESET|ECONNREFUSED|fetch failed)/i.test(message);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function fetchEmbeddingsWithRetry(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  inputs: string[],
+  dimensions?: number,
+): Promise<Float32Array[]> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= EMBEDDING_FETCH_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await fetchEmbeddings(baseUrl, apiKey, model, inputs, dimensions);
+    } catch (error) {
+      lastError = error;
+      if (attempt === EMBEDDING_FETCH_MAX_ATTEMPTS || !isRetryableEmbeddingError(error)) break;
+      await sleep(EMBEDDING_FETCH_RETRY_BASE_MS * attempt);
+    }
+  }
+  throw lastError;
 }
 
 export interface DimensionProbe {
@@ -1259,7 +1291,7 @@ export class PageSimilarityService {
       const batch = pending.slice(i, i + EMBEDDING_BATCH_SIZE);
       let vecs: Float32Array[];
       try {
-        vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, batch.map((p) => p.embedText), dimensions);
+        vecs = await fetchEmbeddingsWithRetry(baseUrl, apiKey ?? "", model, batch.map((p) => p.embedText), dimensions);
       } catch (error) {
         throw new EmbeddingUnavailableError(`Embedding refresh failed: ${(error as Error).message}`);
       }

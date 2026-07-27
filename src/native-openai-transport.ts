@@ -2,6 +2,7 @@ import { buildProxyUrl, parseNoProxy, shouldBypass, type ProxyConfig } from "./p
 import {
   NATIVE_TRANSPORT_ATTEMPT_SIGNAL,
   NATIVE_TRANSPORT_CLIENT_REQUEST_ID,
+  NATIVE_TRANSPORT_FRESH_CONNECTION,
   NATIVE_TRANSPORT_TRACEPARENT,
   type NativeTransportDiagnostic,
   type NativeTransportDiagnosticMode,
@@ -16,58 +17,14 @@ const MAX_TRACE_PATH_LENGTH = 256;
 const MAX_TRACE_CONTENT_TYPE_LENGTH = 128;
 const MAX_TRACE_ERROR_CLASS_LENGTH = 64;
 const MAX_PROVIDER_REQUEST_ID_LENGTH = 128;
+const MAX_HTTP_ERROR_BODY_WAIT_MS = 5_000;
 
 type TaggedRequestInit = RequestInit & {
   [NATIVE_TRANSPORT_ATTEMPT_SIGNAL]?: AbortSignal;
   [NATIVE_TRANSPORT_CLIENT_REQUEST_ID]?: string;
   [NATIVE_TRANSPORT_TRACEPARENT]?: string;
+  [NATIVE_TRANSPORT_FRESH_CONNECTION]?: boolean;
 };
-
-function closeAtOpenAiDone(
-  response: import("undici").Response,
-  undici: typeof import("undici"),
-): import("undici").Response {
-  if (!response.body || !response.headers.get("content-type")?.toLowerCase().includes("text/event-stream")) {
-    return response;
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let tail = "";
-  let closed = false;
-  const body = new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      try {
-        const next = await reader.read();
-        if (next.done) {
-          closed = true;
-          controller.close();
-          return;
-        }
-        const value = next.value as Uint8Array;
-        controller.enqueue(value);
-        const scan = tail + decoder.decode(value, { stream: true });
-        tail = scan.slice(-64);
-        if (/(?:^|\r?\n)data:\s*\[DONE\](?:\r?\n|$)/.test(scan)) {
-          closed = true;
-          controller.close();
-          void reader.cancel();
-        }
-      } catch (error) {
-        closed = true;
-        controller.error(error);
-      }
-    },
-    async cancel(reason) {
-      if (!closed) await reader.cancel(reason);
-    },
-  });
-  return new undici.Response(body as unknown as ConstructorParameters<typeof undici.Response>[0], {
-    status: response.status,
-    statusText: response.statusText,
-    headers: response.headers,
-  });
-}
 
 export function createProxyDispatcher(
   cfg: ProxyConfig,
@@ -115,14 +72,14 @@ export function createDirectDesktopFetch(connectionTimeoutMs = 15_000): typeof f
     return undici.fetch(
       input as Parameters<typeof undici.fetch>[0],
       { ...(init as Parameters<typeof undici.fetch>[1]), dispatcher },
-    ).then((response) => closeAtOpenAiDone(response, undici)) as unknown as Promise<Response>;
+    ) as unknown as Promise<Response>;
   };
   return wrapped;
 }
 
 function createIsolatedDirectDesktopFetch(
   connectionTimeoutMs: number,
-  finalizers: WeakMap<Response, () => void>,
+  finalizers: WeakMap<Response, () => Promise<void>>,
 ): typeof fetch {
   const undici = require("undici") as typeof import("undici");
   const normalizedTimeout = normalizeConnectionTimeout(connectionTimeoutMs);
@@ -133,20 +90,20 @@ function createIsolatedDirectDesktopFetch(
       bodyTimeout: 0,
     });
     let closed = false;
-    const close = (): void => {
+    const close = async (): Promise<void> => {
       if (closed) return;
       closed = true;
-      void dispatcher.close().catch(() => {});
+      await dispatcher.close().catch(() => {});
     };
     try {
       const response = await undici.fetch(
         input as Parameters<typeof undici.fetch>[0],
         { ...(init as Parameters<typeof undici.fetch>[1]), dispatcher },
-      ).then((value) => closeAtOpenAiDone(value, undici));
+      );
       finalizers.set(response as unknown as Response, close);
       return response as unknown as Response;
     } catch (error) {
-      close();
+      void close();
       throw error;
     }
   };
@@ -155,7 +112,7 @@ function createIsolatedDirectDesktopFetch(
 
 function createUndiciRequestAdapterFetch(
   connectionTimeoutMs: number,
-  finalizers: WeakMap<Response, () => void>,
+  finalizers: WeakMap<Response, () => Promise<void>>,
 ): typeof fetch {
   const undici = require("undici") as typeof import("undici");
   const normalizedTimeout = normalizeConnectionTimeout(connectionTimeoutMs);
@@ -166,10 +123,10 @@ function createUndiciRequestAdapterFetch(
       bodyTimeout: 0,
     });
     let closed = false;
-    const close = (): void => {
+    const close = async (): Promise<void> => {
       if (closed) return;
       closed = true;
-      void dispatcher.close().catch(() => {});
+      await dispatcher.close().catch(() => {});
     };
     try {
       const request = requestParts(input, init);
@@ -183,18 +140,18 @@ function createUndiciRequestAdapterFetch(
         bodyTimeout: 0,
       });
       const webBody = toWebReadableStream(response.body);
-      const adaptedResponse = closeAtOpenAiDone(new undici.Response(
+      const adaptedResponse = new undici.Response(
         webBody as ConstructorParameters<typeof undici.Response>[0],
         {
           status: response.statusCode,
           statusText: (response as { statusText?: string }).statusText,
           headers: responseHeaders(response.headers),
         },
-      ), undici);
+      );
       finalizers.set(adaptedResponse as unknown as Response, close);
       return adaptedResponse as unknown as Response;
     } catch (error) {
-      close();
+      void close();
       throw error;
     }
   };
@@ -206,6 +163,7 @@ export function selectNativeFetch(options: {
   mobileFetch: typeof fetch;
   proxyFetch: typeof fetch | null;
   directDesktopFetch: () => typeof fetch;
+  preferDesktopHostForNonStream?: boolean;
 }): typeof fetch {
   return selectNativeTransport(options).fetch;
 }
@@ -215,6 +173,7 @@ export function selectNativeTransport(options: {
   mobileFetch: typeof fetch;
   proxyFetch: typeof fetch | null;
   directDesktopFetch: () => typeof fetch;
+  preferDesktopHostForNonStream?: boolean;
 }): { fetch: typeof fetch; diagnostic?: NativeTransportDiagnostic } {
   if (options.isMobile) {
     return {
@@ -231,9 +190,24 @@ export function selectNativeTransport(options: {
   if (options.proxyFetch) {
     return { fetch: options.proxyFetch, diagnostic: { transport: "desktop-proxy", diagnosticMode: "off" } };
   }
+  const directDesktopFetch = options.directDesktopFetch();
+  if (options.preferDesktopHostForNonStream === false) {
+    return {
+      fetch: directDesktopFetch,
+      diagnostic: { transport: "desktop-direct", diagnosticMode: "off" },
+    };
+  }
   return {
-    fetch: options.directDesktopFetch(),
-    diagnostic: { transport: "desktop-direct", diagnosticMode: "off" },
+    fetch: async (input, init) => await requestUsesStreaming(input, init)
+      ? directDesktopFetch(input, init)
+      : options.mobileFetch(input, init),
+    diagnostic: {
+      transport: "desktop-hybrid",
+      diagnosticMode: "off",
+      requestedScope: "dns_tcp_tls_establishment",
+      exactConnectTimeoutAvailable: false,
+      hostTransportRetained: true,
+    },
   };
 }
 
@@ -254,7 +228,7 @@ export function createNativeOpenAiFetch(options: {
     || options.nativeTransportDiagnosticMode === "undici-request-adapter"
       ? options.nativeTransportDiagnosticMode
       : "off";
-  const isolatedFinalizers = new WeakMap<Response, () => void>();
+  const isolatedFinalizers = new WeakMap<Response, () => Promise<void>>();
   let proxyFetch: typeof fetch | null = null;
   if (!options.isMobile && options.proxyConfig.enabled) {
     try {
@@ -271,6 +245,7 @@ export function createNativeOpenAiFetch(options: {
     isMobile: options.isMobile,
     mobileFetch: options.mobileFetch,
     proxyFetch,
+    preferDesktopHostForNonStream: requestedDiagnosticMode === "off",
     directDesktopFetch: () => {
       if (requestedDiagnosticMode === "connection-close") {
         return createIsolatedDirectDesktopFetch(options.connectionTimeoutMs, isolatedFinalizers);
@@ -289,7 +264,6 @@ export function createNativeOpenAiFetch(options: {
     ? { ...selection.diagnostic, diagnosticMode: effectiveDiagnosticMode }
     : undefined;
   if (selectedDiagnostic) options.onTransportDiagnostic?.(selectedDiagnostic);
-  const transportKind = selectedDiagnostic?.transport ?? "desktop-direct";
   const wrapped: typeof fetch = async (input, init) => {
     const taggedInit: TaggedRequestInit | undefined = init;
     const attemptSignal = taggedInit?.[NATIVE_TRANSPORT_ATTEMPT_SIGNAL]
@@ -302,16 +276,24 @@ export function createNativeOpenAiFetch(options: {
       NATIVE_TRANSPORT_ATTEMPT_SIGNAL in taggedInit
       || NATIVE_TRANSPORT_CLIENT_REQUEST_ID in taggedInit
       || NATIVE_TRANSPORT_TRACEPARENT in taggedInit
+      || NATIVE_TRANSPORT_FRESH_CONNECTION in taggedInit
     )) {
       const clonedInit: TaggedRequestInit = { ...taggedInit };
       delete clonedInit[NATIVE_TRANSPORT_ATTEMPT_SIGNAL];
       delete clonedInit[NATIVE_TRANSPORT_CLIENT_REQUEST_ID];
       delete clonedInit[NATIVE_TRANSPORT_TRACEPARENT];
+      delete clonedInit[NATIVE_TRANSPORT_FRESH_CONNECTION];
       if (clientRequestId || traceparent) {
         clonedInit.headers = headersWithCorrelation(clonedInit.headers, { clientRequestId, traceparent });
       }
       forwardedInit = clonedInit;
     }
+    const transportKind = selectedDiagnostic?.transport === "desktop-hybrid"
+      ? await requestUsesStreaming(input, forwardedInit) ? "desktop-direct" : "desktop-host"
+      : selectedDiagnostic?.transport ?? "desktop-direct";
+    const freshConnection = taggedInit?.[NATIVE_TRANSPORT_FRESH_CONNECTION] === true
+      && transportKind === "desktop-direct"
+      && effectiveDiagnosticMode === "off";
     const startedAtMs = Date.now();
     const path = endpointPath(input);
     const emit = (event: Omit<NativeTransportTraceRecord,
@@ -342,7 +324,9 @@ export function createNativeOpenAiFetch(options: {
     else attemptSignal?.addEventListener("abort", onFetchAbort, { once: true });
     let response: Response;
     try {
-      response = await selection.fetch(input, forwardedInit);
+      response = await (freshConnection
+        ? createIsolatedDirectDesktopFetch(options.connectionTimeoutMs, isolatedFinalizers)(input, forwardedInit)
+        : selection.fetch(input, forwardedInit));
     } catch (error) {
       attemptSignal?.removeEventListener("abort", onFetchAbort);
       const aborted = Boolean(attemptSignal?.aborted || forwardedInit?.signal?.aborted)
@@ -359,7 +343,7 @@ export function createNativeOpenAiFetch(options: {
     attemptSignal?.removeEventListener("abort", onFetchAbort);
     if (fetchTerminalRecorded) {
       void response.body?.cancel().catch(() => {});
-      isolatedFinalizers.get(response)?.();
+      void isolatedFinalizers.get(response)?.();
       throw attemptSignal?.reason instanceof Error
         ? attemptSignal.reason
         : new DOMException("The operation was aborted", "AbortError");
@@ -380,20 +364,207 @@ export function createNativeOpenAiFetch(options: {
       status: response.status,
       ...selectedResponseHeaders(response.headers),
     });
+    const responseFinalizer = isolatedFinalizers.get(response);
+    if (transportKind === "desktop-direct" && !response.ok && response.body) {
+      try {
+        response = await bufferDirectHttpErrorResponse(
+          response,
+          attemptSignal,
+          Math.min(MAX_HTTP_ERROR_BODY_WAIT_MS, normalizeConnectionTimeout(options.connectionTimeoutMs)),
+        );
+      } catch (error) {
+        emit({ stage: "body_start", bodyBytes: 0, bodyChunks: 0 });
+        emit({
+          stage: "body_error",
+          bodyBytes: 0,
+          bodyChunks: 0,
+          ...safeErrorMetadata(error),
+        });
+        await responseFinalizer?.();
+        throw error;
+      }
+    }
+    const rawDesktopSse = transportKind === "desktop-direct"
+      && effectiveDiagnosticMode === "off"
+      && response.ok
+      && response.headers.get("content-type")?.toLowerCase().includes("text/event-stream") === true;
+    if (rawDesktopSse) {
+      // Keep the Undici response and body in one runtime. Reconstructing either in
+      // Electron can detach the provider stream immediately after HTTP headers.
+      void responseFinalizer?.();
+      return response;
+    }
     return observeResponseBody(
       response,
       attemptSignal,
       emit,
-      isolatedFinalizers.get(response),
+      responseFinalizer,
     );
   };
   return wrapped;
+}
+
+async function bufferDirectHttpErrorResponse(
+  response: Response,
+  signal: AbortSignal | undefined,
+  timeoutMs: number,
+): Promise<Response> {
+  const body = await readResponseBodyWithin(
+    response.body!,
+    signal,
+    timeoutMs,
+    response.headers.get("content-type")?.toLowerCase().includes("json") === true,
+  );
+  const headers = new Headers(response.headers);
+  headers.delete("content-length");
+  headers.delete("transfer-encoding");
+  if (body !== null) {
+    headers.set("content-length", String(body.byteLength));
+    const responseBody = new ArrayBuffer(body.byteLength);
+    new Uint8Array(responseBody).set(body);
+    return new Response(responseBody, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  }
+
+  const fallback = JSON.stringify({
+    error: {
+      message: `HTTP ${response.status} response body timed out after ${timeoutMs}ms.`,
+      type: "transport_error",
+      code: "response_body_timeout",
+    },
+  });
+  headers.set("content-type", "application/json");
+  headers.set("content-length", String(new TextEncoder().encode(fallback).byteLength));
+  headers.set("x-aiwiki-error-body-timeout", "1");
+  return new Response(fallback, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function readResponseBodyWithin(
+  body: ReadableStream<Uint8Array>,
+  signal: AbortSignal | undefined,
+  timeoutMs: number,
+  stopAtCompleteJson: boolean,
+): Promise<Uint8Array | null> {
+  const reader = body.getReader();
+  return new Promise<Uint8Array | null>((resolve, reject) => {
+    let settled = false;
+    const chunks: Uint8Array[] = [];
+    let byteLength = 0;
+    const cleanup = (): void => {
+      // eslint-disable-next-line obsidianmd/prefer-window-timers -- Native transport also runs in Node.
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const finish = (complete: () => void): boolean => {
+      if (settled) return false;
+      settled = true;
+      cleanup();
+      complete();
+      return true;
+    };
+    const combinedBody = (): Uint8Array => {
+      const combined = new Uint8Array(byteLength);
+      let offset = 0;
+      for (const chunk of chunks) {
+        combined.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      return combined;
+    };
+    const completeJsonBody = (): Uint8Array | null => {
+      if (!stopAtCompleteJson || byteLength === 0) return null;
+      const combined = combinedBody();
+      try {
+        JSON.parse(new TextDecoder().decode(combined));
+        return combined;
+      } catch {
+        return null;
+      }
+    };
+    const onAbort = (): void => {
+      if (!finish(() => reject(signal?.reason instanceof Error
+        ? signal.reason
+        : new DOMException("The operation was aborted", "AbortError")))) return;
+      void reader.cancel().catch(() => {});
+    };
+    // eslint-disable-next-line obsidianmd/prefer-window-timers -- Native transport also runs in Node.
+    const timer = setTimeout(() => {
+      const partial = byteLength > 0 ? combinedBody() : null;
+      if (!finish(() => resolve(partial))) return;
+      void reader.cancel().catch(() => {});
+    }, timeoutMs);
+
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+    void (async () => {
+      try {
+        while (true) {
+          const next = await reader.read();
+          if (settled) return;
+          if (next.done) break;
+          chunks.push(next.value);
+          byteLength += next.value.byteLength;
+          const completeJson = completeJsonBody();
+          if (completeJson && finish(() => resolve(completeJson))) {
+            void reader.cancel().catch(() => {});
+            return;
+          }
+        }
+        finish(() => resolve(combinedBody()));
+      } catch (error) {
+        const reason = error instanceof Error ? error : new Error(String(error));
+        finish(() => reject(reason));
+      }
+    })();
+  });
 }
 
 function normalizeConnectionTimeout(timeoutMs: number): number {
   return Number.isFinite(timeoutMs) && timeoutMs > 0
     ? Math.floor(timeoutMs)
     : 15_000;
+}
+
+async function requestUsesStreaming(
+  input: Parameters<typeof fetch>[0],
+  init: Parameters<typeof fetch>[1],
+): Promise<boolean> {
+  let bodyText: string | undefined;
+  const body = init && "body" in init ? init.body : undefined;
+  if (typeof body === "string") {
+    bodyText = body;
+  } else if (body instanceof URLSearchParams) {
+    bodyText = body.toString();
+  } else if (body instanceof ArrayBuffer) {
+    bodyText = new TextDecoder().decode(body);
+  } else if (ArrayBuffer.isView(body)) {
+    bodyText = new TextDecoder().decode(new Uint8Array(body.buffer, body.byteOffset, body.byteLength));
+  } else if (body instanceof Blob) {
+    bodyText = await body.text();
+  } else if (body === undefined && input instanceof Request) {
+    try {
+      bodyText = await input.clone().text();
+    } catch {
+      return false;
+    }
+  }
+  if (!bodyText) return false;
+  try {
+    const parsed = JSON.parse(bodyText) as { stream?: unknown };
+    return parsed.stream === true;
+  } catch {
+    return false;
+  }
 }
 
 function requestParts(
@@ -499,13 +670,13 @@ function observeResponseBody(
   emit: (event: Omit<NativeTransportTraceRecord,
     "networkTransport" | "endpointPath" | "diagnosticMode" | "elapsedMs">
     & { elapsedMs?: number }) => void,
-  finalize: (() => void) | undefined,
+  finalize: (() => Promise<void>) | undefined,
 ): Response {
   let finalized = false;
-  const finalizeOnce = (): void => {
+  const finalizeOnce = async (): Promise<void> => {
     if (finalized) return;
     finalized = true;
-    finalize?.();
+    await finalize?.();
   };
   const knownEmptyBody = response.status === 204
     || response.headers.get("content-length")?.trim() === "0";
@@ -513,11 +684,15 @@ function observeResponseBody(
     emit({ stage: "body_start", bodyBytes: 0, bodyChunks: 0 });
     emit({ stage: "body_end", bodyBytes: 0, bodyChunks: 0 });
     if (response.body) void response.body.cancel().catch(() => {});
-    finalizeOnce();
+    void finalizeOnce();
     return response;
   }
 
   const reader = response.body.getReader();
+  const closesAtOpenAiDone = response.headers.get("content-type")
+    ?.toLowerCase().includes("text/event-stream") === true;
+  const sseDecoder = closesAtOpenAiDone ? new TextDecoder() : undefined;
+  let sseTail = "";
   let bodyStarted = false;
   let bodyBytes = 0;
   let bodyChunks = 0;
@@ -529,7 +704,7 @@ function observeResponseBody(
     bodyStarted = true;
     emit({ stage: "body_start", bodyBytes, bodyChunks });
   };
-  const finish = (stage: "body_end" | "body_error", error?: unknown): void => {
+  const finish = async (stage: "body_end" | "body_error", error?: unknown): Promise<void> => {
     if (terminal) return;
     terminal = true;
     terminalError = error;
@@ -540,11 +715,11 @@ function observeResponseBody(
       bodyChunks,
       ...(stage === "body_error" ? safeErrorMetadata(error) : {}),
     });
-    finalizeOnce();
+    await finalizeOnce();
   };
   const onAbort = (): void => {
     const error = new DOMException("The operation was aborted", "AbortError");
-    finish("body_error", error);
+    void finish("body_error", error);
     void reader.cancel().catch(() => {});
   };
   const errorIfTerminal = (
@@ -565,7 +740,7 @@ function observeResponseBody(
         const next = await reader.read();
         if (errorIfTerminal(controller)) return;
         if (next.done) {
-          finish("body_end");
+          await finish("body_end");
           controller.close();
           return;
         }
@@ -576,9 +751,18 @@ function observeResponseBody(
           emit({ stage: "body_chunk", bodyBytes, bodyChunks });
         }
         controller.enqueue(next.value);
+        if (sseDecoder) {
+          const scan = sseTail + sseDecoder.decode(next.value, { stream: true });
+          sseTail = scan.slice(-64);
+          if (/(?:^|\r?\n)data:\s*\[DONE\](?:\r?\n|$)/.test(scan)) {
+            await reader.cancel();
+            await finish("body_end");
+            controller.close();
+          }
+        }
       } catch (error) {
         if (errorIfTerminal(controller)) return;
-        finish("body_error", error);
+        await finish("body_error", error);
         controller.error(error);
       }
     },
@@ -591,7 +775,7 @@ function observeResponseBody(
       try {
         await reader.cancel(reason);
       } finally {
-        finish("body_error", new DOMException("Response body cancelled", "AbortError"));
+        await finish("body_error", new DOMException("Response body cancelled", "AbortError"));
       }
     },
   }, { highWaterMark: 0 });
@@ -626,13 +810,28 @@ function selectedResponseHeaders(headers: Headers): Pick<
 
 function safeErrorMetadata(error: unknown): Pick<
   NativeTransportTraceRecord,
-  "errorClass"
+  "errorClass" | "errorCode" | "causeClass" | "causeCode"
 > {
-  const record = error !== null && typeof error === "object"
-    ? error as { constructor?: { name?: unknown } }
-    : undefined;
+  const record = errorRecord(error);
+  const cause = errorRecord(record?.cause);
   const errorClass = boundedErrorClass(record?.constructor?.name) ?? "Error";
-  return { errorClass };
+  const errorCode = boundedErrorClass(record?.code);
+  const causeClass = boundedErrorClass(cause?.constructor?.name);
+  const causeCode = boundedErrorClass(cause?.code);
+  return {
+    errorClass,
+    ...(errorCode ? { errorCode } : {}),
+    ...(causeClass ? { causeClass } : {}),
+    ...(causeCode ? { causeCode } : {}),
+  };
+}
+
+function errorRecord(value: unknown): {
+  constructor?: { name?: unknown };
+  code?: unknown;
+  cause?: unknown;
+} | undefined {
+  return value !== null && typeof value === "object" ? value : undefined;
 }
 
 function headersWithCorrelation(

@@ -1,0 +1,29 @@
+[
+  {
+    "id": "npm-nvm-node-clasp",
+    "question": "Как установить nvm, Node.js 20 и clasp, настроить глобальный prefix npm в домашнем каталоге и добавить его в PATH?",
+    "expectedPages": [
+      "wiki_os-unix_nvm",
+      "wiki_os-unix_node_js",
+      "wiki_os-unix_node_package_manager",
+      "wiki_os-unix_clasp"
+    ],
+    "requiredFacts": [
+      [
+        "nvm/v0.39.0/install.sh"
+      ],
+      [
+        "nvm install 20"
+      ],
+      [
+        "~/.npm-global"
+      ],
+      [
+        "export path=~/.npm-global/bin:$path"
+      ],
+      [
+        "npm install -g @google/clasp"
+      ]
+    ]
+  }
+]

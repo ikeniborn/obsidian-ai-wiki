@@ -37,7 +37,7 @@ async function checkNativeAvailability(baseUrl: string, apiKey: string, model: s
         url: `${baseUrl.replace(/\/$/, "")}/chat/completions`,
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model, messages: [{ role: "user", content: "Hi, AI Wiki! Ready to work?" }], max_tokens: 50, stream: false }),
+        body: JSON.stringify({ model, messages: [{ role: "user", content: "Hi, AI Wiki! Ready to work?" }], max_completion_tokens: 50, stream: false }),
         throw: false,
       }),
       timeoutP,
@@ -761,18 +761,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           { tooltip: "Verify the chat model is reachable", run: () => this.checkChatModel() },
         );
 
-        new Setting(containerEl)
-          .setName("Thinking budget tokens")
-          .setDesc(T.settings.thinkingBudget_desc)
-          .addText(t =>
-            t.setPlaceholder("0")
-              .setValue(String(s.nativeAgent.thinkingBudgetTokens ?? 0))
-              .onChange(async v => {
-                const n = Number(v);
-                s.nativeAgent.thinkingBudgetTokens = Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
-                await this.plugin.saveSettings();
-              })
-          );
       }
 
       addPolicyControls(
@@ -788,6 +776,14 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           compressionProfile: (next) => { s.nativeAgent.compressionProfile = next ?? "balanced"; },
         },
         false,
+      );
+
+      addBudgetControl(
+        new Setting(containerEl)
+          .setName(T.settings.repairInputBudgetTokens_name)
+          .setDesc(T.settings.repairInputBudgetTokens_desc),
+        s.nativeAgent.repairInputBudgetTokens ?? 65_536,
+        (next) => { s.nativeAgent.repairInputBudgetTokens = next; },
       );
 
       if (!s.nativeAgent.perOperation) {
@@ -814,6 +810,34 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               const n = Number(v);
               if (!Number.isFinite(n) || n < 0 || n > 3) return;
               s.nativeAgent.structuredRetries = Math.floor(n);
+              await this.plugin.saveSettings();
+            }),
+        );
+
+      new Setting(containerEl)
+        .setName(T.settings.synthesisMaxEntityBatchSize_name)
+        .setDesc(T.settings.synthesisMaxEntityBatchSize_desc)
+        .addText((t) =>
+          t.setPlaceholder("1")
+            .setValue(String(s.nativeAgent.synthesisMaxEntityBatchSize ?? 1))
+            .onChange(async (v) => {
+              const n = Number(v);
+              if (!Number.isInteger(n) || n < 1 || n > 10) return;
+              s.nativeAgent.synthesisMaxEntityBatchSize = n;
+              await this.plugin.saveSettings();
+            }),
+        );
+
+      new Setting(containerEl)
+        .setName(T.settings.synthesisMaxEntitiesPerSource_name)
+        .setDesc(T.settings.synthesisMaxEntitiesPerSource_desc)
+        .addText((t) =>
+          t.setPlaceholder("6")
+            .setValue(String(s.nativeAgent.synthesisMaxEntitiesPerSource ?? 6))
+            .onChange(async (v) => {
+              const n = Number(v);
+              if (!Number.isInteger(n) || n < 1 || n > 50) return;
+              s.nativeAgent.synthesisMaxEntitiesPerSource = n;
               await this.plugin.saveSettings();
             }),
         );
@@ -873,17 +897,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             },
             true,
           );
-          new Setting(containerEl)
-            .setName("Thinking budget tokens")
-            .addText(t =>
-              t.setPlaceholder("0")
-                .setValue(String(s.nativeAgent.operations[key].thinkingBudgetTokens ?? 0))
-                .onChange(async v => {
-                  const n = Number(v);
-                  s.nativeAgent.operations[key].thinkingBudgetTokens = Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
-                  await this.plugin.saveSettings();
-                })
-            );
           new Setting(containerEl)
             .setName(T.settings.opTemperature_name)
             .setDesc(T.settings.opTemperature_desc)

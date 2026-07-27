@@ -86,6 +86,18 @@ export interface EntityContextBundle {
   units: WikiSectionUnit[];
   replaceAuthorities: ReplaceSectionAuthority[];
   estimatedInputTokens: number;
+  consolidatedEntityKeys?: string[];
+}
+
+export interface ConsolidatedEntityAssignment {
+  entityKey: string;
+  parentEntityKey: string;
+}
+
+export interface ConsolidatedEntityBundles {
+  kept: EntityContextBundle[];
+  consolidated: ConsolidatedEntityAssignment[];
+  overflowEntityKeys: string[];
 }
 
 export class ContextSplitRequiredError extends Error {
@@ -317,6 +329,335 @@ export function buildEntityContext(input: EntityContextInput): EntityContextResu
   }
 }
 
+function cloneEntityContextBundle(bundle: EntityContextBundle): EntityContextBundle {
+  return {
+    ...bundle,
+    evidence: {
+      ...bundle.evidence,
+      packetIds: [...bundle.evidence.packetIds],
+      facts: [...bundle.evidence.facts],
+      exactSourceRanges: bundle.evidence.exactSourceRanges.map((range) => ({ ...range })),
+      exactSource: bundle.evidence.exactSource.map((source) => ({ ...source })),
+      links: [...bundle.evidence.links],
+    },
+    units: bundle.units.map((unit) => ({ ...unit, duplicatePaths: [...unit.duplicatePaths] })),
+    replaceAuthorities: bundle.replaceAuthorities.map((authority) => ({ ...authority })),
+    ...(bundle.consolidatedEntityKeys === undefined
+      ? {}
+      : { consolidatedEntityKeys: [...bundle.consolidatedEntityKeys] }),
+  };
+}
+
+function uniqueValues<T>(values: readonly T[], key: (value: T) => string): T[] {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const identity = key(value);
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+}
+
+function coveredEvidenceLines(bundle: EntityContextBundle): number {
+  return bundle.evidence.exactSourceRanges.reduce(
+    (sum, range) => sum + Math.max(0, range.endLine - range.startLine + 1),
+    0,
+  );
+}
+
+function evidenceStrength(bundle: EntityContextBundle): number {
+  const coveredLines = coveredEvidenceLines(bundle);
+  const exactChars = bundle.evidence.exactSource.reduce((sum, source) => sum + source.text.length, 0);
+  return bundle.evidence.facts.length * 16
+    + bundle.evidence.exactSourceRanges.length * 8
+    + coveredLines * 4
+    + Math.min(16, Math.floor(exactChars / 128));
+}
+
+function rangeDistance(left: EntityContextBundle, right: EntityContextBundle): number {
+  let distance = Number.POSITIVE_INFINITY;
+  for (const a of left.evidence.exactSourceRanges) {
+    for (const b of right.evidence.exactSourceRanges) {
+      const gap = a.endLine < b.startLine
+        ? b.startLine - a.endLine - 1
+        : b.endLine < a.startLine
+          ? a.startLine - b.endLine - 1
+          : 0;
+      distance = Math.min(distance, gap);
+    }
+  }
+  return distance;
+}
+
+function firstEvidenceLine(bundle: EntityContextBundle): number {
+  return Math.min(
+    Number.POSITIVE_INFINITY,
+    ...bundle.evidence.exactSourceRanges.map((range) => range.startLine),
+  );
+}
+
+function nearestParent(
+  child: EntityContextBundle,
+  parents: readonly EntityContextBundle[],
+): { parent: EntityContextBundle; distance: number } | undefined {
+  return parents
+    .map((parent) => ({ parent, distance: rangeDistance(child, parent) }))
+    .sort((left, right) => left.distance - right.distance
+      || evidenceStrength(right.parent) - evidenceStrength(left.parent)
+      || compareCodePoints(left.parent.entityKey, right.parent.entityKey))[0];
+}
+
+function strictlyContainsEvidence(
+  parent: EntityContextBundle,
+  child: EntityContextBundle,
+): boolean {
+  if (parent.entityKey === child.entityKey || child.evidence.exactSourceRanges.length === 0) return false;
+  const containsEveryRange = child.evidence.exactSourceRanges.every((childRange) =>
+    parent.evidence.exactSourceRanges.some((parentRange) =>
+      parentRange.startLine <= childRange.startLine && parentRange.endLine >= childRange.endLine));
+  return containsEveryRange && coveredEvidenceLines(parent) > coveredEvidenceLines(child);
+}
+
+function nearestContainingParent(
+  child: EntityContextBundle,
+  parents: readonly EntityContextBundle[],
+): EntityContextBundle | undefined {
+  return parents
+    .filter((parent) => strictlyContainsEvidence(parent, child))
+    .sort((left, right) => coveredEvidenceLines(left) - coveredEvidenceLines(right)
+      || evidenceStrength(right) - evidenceStrength(left)
+      || compareCodePoints(left.entityKey, right.entityKey))[0];
+}
+
+function mergeEvidenceBundle(parent: EntityContextBundle, child: EntityContextBundle): void {
+  parent.evidence.packetIds = uniqueValues(
+    [...parent.evidence.packetIds, ...child.evidence.packetIds],
+    (value) => value,
+  );
+  parent.evidence.facts = uniqueValues(
+    [...parent.evidence.facts, ...child.evidence.facts],
+    (value) => value,
+  );
+  parent.evidence.exactSourceRanges = uniqueValues(
+    [...parent.evidence.exactSourceRanges, ...child.evidence.exactSourceRanges],
+    (range) => `${range.startLine}:${range.endLine}`,
+  );
+  parent.evidence.exactSource = uniqueValues(
+    [...parent.evidence.exactSource, ...child.evidence.exactSource],
+    (source) => `${source.startLine}:${source.endLine}:${source.text}`,
+  );
+  parent.evidence.links = uniqueValues(
+    [...parent.evidence.links, ...child.evidence.links],
+    (value) => value,
+  );
+  parent.consolidatedEntityKeys = uniqueValues([
+    ...(parent.consolidatedEntityKeys ?? []),
+    child.entityKey,
+    ...(child.consolidatedEntityKeys ?? []),
+  ], (value) => value);
+  parent.estimatedInputTokens += child.estimatedInputTokens;
+}
+
+function mergeSameTargetContext(parent: EntityContextBundle, child: EntityContextBundle): void {
+  for (const childUnit of child.units) {
+    const existing = parent.units.find((unit) => unit.id === childUnit.id);
+    if (existing === undefined) {
+      parent.units.push({ ...childUnit, duplicatePaths: [...childUnit.duplicatePaths] });
+      continue;
+    }
+    existing.required ||= childUnit.required;
+    existing.priority = Math.max(existing.priority, childUnit.priority);
+    existing.score = Math.max(existing.score, childUnit.score);
+    existing.duplicatePaths = uniqueValues(
+      [...existing.duplicatePaths, ...childUnit.duplicatePaths],
+      (value) => value,
+    ).sort(compareCodePoints);
+  }
+  parent.replaceAuthorities = uniqueValues(
+    [...parent.replaceAuthorities, ...child.replaceAuthorities.map((authority) => ({ ...authority }))],
+    (authority) => [
+      authority.path,
+      authority.heading,
+      authority.sectionOrdinal,
+      authority.sectionHash,
+      authority.exactSection,
+    ].join("\u0000"),
+  );
+}
+
+export function consolidateSameTargetEntityBundles(
+  sourceBundles: readonly EntityContextBundle[],
+  targetPathByEntityKey: ReadonlyMap<string, string>,
+  preferredCarrierEntityKeys: ReadonlySet<string> = new Set(),
+): ConsolidatedEntityBundles {
+  const bundles = sourceBundles.map(cloneEntityContextBundle);
+  const byTarget = new Map<string, EntityContextBundle[]>();
+  for (const bundle of bundles) {
+    const target = targetPathByEntityKey.get(bundle.entityKey);
+    if (target === undefined) continue;
+    const group = byTarget.get(target) ?? [];
+    group.push(bundle);
+    byTarget.set(target, group);
+  }
+
+  const removed = new Set<string>();
+  const consolidated: ConsolidatedEntityAssignment[] = [];
+  for (const group of byTarget.values()) {
+    if (group.length < 2) continue;
+    const ranked = [...group].sort((left, right) =>
+      Number(preferredCarrierEntityKeys.has(right.entityKey))
+      - Number(preferredCarrierEntityKeys.has(left.entityKey))
+      || evidenceStrength(right) - evidenceStrength(left)
+      || firstEvidenceLine(left) - firstEvidenceLine(right)
+      || compareCodePoints(left.entityKey, right.entityKey));
+    const parent = ranked[0];
+    for (const child of ranked.slice(1)) {
+      mergeEvidenceBundle(parent, child);
+      mergeSameTargetContext(parent, child);
+      removed.add(child.entityKey);
+      consolidated.push({ entityKey: child.entityKey, parentEntityKey: parent.entityKey });
+    }
+  }
+
+  return {
+    kept: bundles.filter((bundle) => !removed.has(bundle.entityKey)),
+    consolidated,
+    overflowEntityKeys: [],
+  };
+}
+
+export function consolidateSmallEntityBundles(
+  sourceBundles: readonly EntityContextBundle[],
+  maxEntities: number,
+  createPathEntityKeys?: ReadonlySet<string>,
+  preferredCreateEntityKeys: ReadonlySet<string> = new Set(),
+  sourcePrimaryEntityKeys?: ReadonlySet<string>,
+): ConsolidatedEntityBundles {
+  const bundles = sourceBundles.map(cloneEntityContextBundle);
+  const consolidated: ConsolidatedEntityAssignment[] = [];
+  const removed = new Set<string>();
+  const hasExistingTarget = (bundle: EntityContextBundle): boolean =>
+    bundle.replaceAuthorities.length > 0 || bundle.units.some((unit) => unit.required);
+  const hasPathAuthority = (bundle: EntityContextBundle): boolean =>
+    createPathEntityKeys === undefined
+    || createPathEntityKeys.has(bundle.entityKey)
+    || hasExistingTarget(bundle);
+  const requestedTarget = Number.isSafeInteger(maxEntities) && maxEntities > 0
+    ? maxEntities
+    : bundles.length;
+  const actionable = bundles.filter(hasPathAuthority);
+  const supportingParents = new Map<string, EntityContextBundle>();
+  for (const child of actionable) {
+    if (hasExistingTarget(child)) continue;
+    const parent = nearestContainingParent(child, actionable);
+    if (parent !== undefined) supportingParents.set(child.entityKey, parent);
+  }
+
+  if (sourcePrimaryEntityKeys !== undefined && actionable.length > 0) {
+    const containingChildCount = (bundle: EntityContextBundle): number => actionable
+      .filter((candidate) => strictlyContainsEvidence(bundle, candidate))
+      .length;
+    const ranked = [...actionable].sort((left, right) =>
+      Number(sourcePrimaryEntityKeys.has(right.entityKey))
+      - Number(sourcePrimaryEntityKeys.has(left.entityKey))
+      || coveredEvidenceLines(right) - coveredEvidenceLines(left)
+      || containingChildCount(right) - containingChildCount(left)
+      || evidenceStrength(right) - evidenceStrength(left)
+      || Number(preferredCreateEntityKeys.has(right.entityKey))
+      - Number(preferredCreateEntityKeys.has(left.entityKey))
+      || firstEvidenceLine(left) - firstEvidenceLine(right)
+      || compareCodePoints(left.entityKey, right.entityKey));
+    const primary = ranked[0];
+    const eligibleKeys = new Set(actionable
+      .filter(hasExistingTarget)
+      .map((bundle) => bundle.entityKey));
+    eligibleKeys.add(primary.entityKey);
+
+    const remainingCapacity = Math.max(0, requestedTarget - eligibleKeys.size);
+    const additional = actionable
+      .filter((bundle) => !eligibleKeys.has(bundle.entityKey))
+      .sort((left, right) =>
+        Number(preferredCreateEntityKeys.has(right.entityKey))
+        - Number(preferredCreateEntityKeys.has(left.entityKey))
+        || Number(supportingParents.has(left.entityKey))
+        - Number(supportingParents.has(right.entityKey))
+        || evidenceStrength(right) - evidenceStrength(left)
+        || firstEvidenceLine(left) - firstEvidenceLine(right)
+        || compareCodePoints(left.entityKey, right.entityKey))
+      .slice(0, remainingCapacity);
+    for (const bundle of additional) eligibleKeys.add(bundle.entityKey);
+
+    const eligible = bundles.filter((bundle) => eligibleKeys.has(bundle.entityKey));
+    const primaryCarrier = eligible.find((bundle) => bundle.entityKey === primary.entityKey);
+    for (const child of bundles.filter((bundle) => !eligibleKeys.has(bundle.entityKey))) {
+      const parent = primaryCarrier
+        ?? nearestContainingParent(child, eligible)
+        ?? nearestParent(child, eligible)?.parent;
+      if (parent === undefined) continue;
+      mergeEvidenceBundle(parent, child);
+      removed.add(child.entityKey);
+      consolidated.push({ entityKey: child.entityKey, parentEntityKey: parent.entityKey });
+    }
+
+    const kept = bundles.filter((bundle) => !removed.has(bundle.entityKey));
+    const overflowEntityKeys = kept.length > requestedTarget
+      ? kept.slice(requestedTarget).map((bundle) => bundle.entityKey)
+      : [];
+    return { kept, consolidated, overflowEntityKeys };
+  }
+
+  const eligibleKeys = new Set(actionable
+    .filter((bundle) => hasExistingTarget(bundle) || !supportingParents.has(bundle.entityKey))
+    .map((bundle) => bundle.entityKey));
+  const promotionCapacity = Math.max(0, requestedTarget - eligibleKeys.size);
+  const promoted = actionable
+    .filter((bundle) => supportingParents.has(bundle.entityKey)
+      && preferredCreateEntityKeys.has(bundle.entityKey))
+    .sort((left, right) => evidenceStrength(right) - evidenceStrength(left)
+      || firstEvidenceLine(left) - firstEvidenceLine(right)
+      || compareCodePoints(left.entityKey, right.entityKey))
+    .slice(0, promotionCapacity);
+  for (const bundle of promoted) eligibleKeys.add(bundle.entityKey);
+
+  if (eligibleKeys.size === 0 && actionable.length > 0) {
+    const fallback = [...actionable].sort((left, right) =>
+      Number(preferredCreateEntityKeys.has(right.entityKey))
+      - Number(preferredCreateEntityKeys.has(left.entityKey))
+      || evidenceStrength(right) - evidenceStrength(left)
+      || firstEvidenceLine(left) - firstEvidenceLine(right)
+      || compareCodePoints(left.entityKey, right.entityKey))[0];
+    eligibleKeys.add(fallback.entityKey);
+  }
+
+  const eligible = bundles.filter((bundle) => eligibleKeys.has(bundle.entityKey));
+  for (const child of bundles.filter((bundle) =>
+    hasPathAuthority(bundle) && !eligibleKeys.has(bundle.entityKey))) {
+    const parent = nearestContainingParent(child, eligible)
+      ?? nearestParent(child, eligible)?.parent;
+    if (parent === undefined) continue;
+    mergeEvidenceBundle(parent, child);
+    removed.add(child.entityKey);
+    consolidated.push({ entityKey: child.entityKey, parentEntityKey: parent.entityKey });
+  }
+
+  let kept = bundles.filter((bundle) => !removed.has(bundle.entityKey));
+  const finalActionable = kept.filter((bundle) => eligibleKeys.has(bundle.entityKey));
+  if (finalActionable.length > 0 && finalActionable.length < kept.length) {
+    for (const child of kept.filter((bundle) => !eligibleKeys.has(bundle.entityKey))) {
+      const nearest = nearestParent(child, finalActionable);
+      if (nearest === undefined) continue;
+      mergeEvidenceBundle(nearest.parent, child);
+      consolidated.push({ entityKey: child.entityKey, parentEntityKey: nearest.parent.entityKey });
+    }
+    kept = kept.filter((bundle) => eligibleKeys.has(bundle.entityKey));
+  }
+
+  const overflowEntityKeys = kept.length > requestedTarget
+    ? kept.slice(requestedTarget).map((bundle) => bundle.entityKey)
+    : [];
+  return { kept, consolidated, overflowEntityKeys };
+}
+
 export function batchEntityContexts(
   bundles: EntityContextBundle[],
   inputBudgetTokens: number,
@@ -341,6 +682,9 @@ export function batchEntityContexts(
     },
     units: bundle.units.map((unit) => ({ ...unit, duplicatePaths: [...unit.duplicatePaths] })),
     replaceAuthorities: bundle.replaceAuthorities.map((authority) => ({ ...authority })),
+    ...(bundle.consolidatedEntityKeys === undefined
+      ? {}
+      : { consolidatedEntityKeys: [...bundle.consolidatedEntityKeys] }),
   });
   const estimateBatch = (items: EntityContextBundle[]) => estimatePreparedMessages(renderBatch(items.map(cloneBundle)));
   const compressSingletonEvidence = (bundle: EntityContextBundle): EntityContextBundle => {

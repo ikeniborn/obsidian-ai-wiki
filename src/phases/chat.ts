@@ -7,6 +7,7 @@ import {
   completionReasoning,
   extractStreamDeltas,
   extractUsage,
+  isStreamOptionsUnsupportedError,
   runWithLiveEvents,
   shouldFallbackStreamToNonStream,
   wrapStreamWithStats,
@@ -147,85 +148,97 @@ export async function* runLintChat(
           );
         }
         executionCount += 1;
-        const streamAttempt = requestAttempt++;
-        if (!isNativeLlmClient(llm)) {
-          emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing", Date.now(), {
-            callSite,
-            transport: "stream",
-            attempt: streamAttempt,
-          }));
-        }
-        const requestLifecycle = createNativeRequestLifecycle({
-          initial: chatLifecycle,
-          callSite,
-          onEvent: emit,
-          attemptOffset: streamAttempt,
-        });
-        const params = paramsForPreparedMessages(model, request.messages, opts, true);
-        let streamChunkConsumed = false;
-        try {
-          const requestStartMs = Date.now();
+        let streamOpts = opts;
+        while (true) {
+          const streamAttempt = requestAttempt++;
           if (!isNativeLlmClient(llm)) {
-            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"));
-            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"));
+            emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "preparing", Date.now(), {
+              callSite,
+              transport: "stream",
+              attempt: streamAttempt,
+            }));
           }
-          const pending = llm.chat.completions.create(
-            { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-            {
-              signal: operationSignal,
-              retry: createNativeRequestRetryContext({
-                llm,
-                callSite,
-                opts,
-                signal: operationSignal,
-                onEvent: emit,
-                lifecycle: requestLifecycle,
-              }),
-            },
-          );
-          const rawStream = await pending;
-          const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, operationSignal);
-          let attemptText = "";
-          let attemptOutputTokens = 0;
-          let producing = false;
-          for await (const chunk of stream) {
-            streamChunkConsumed = true;
-            const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
-            if (!producing && (reasoning.trim() || content.trim())) {
-              if (!isNativeLlmClient(llm)) {
-                emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "producing"));
-              }
-              producing = true;
-            }
-            if (reasoning) emit({ kind: "assistant_text", delta: reasoning, isReasoning: true });
-            if (content) {
-              attemptText += content;
-              emit({ kind: "assistant_text", delta: content });
-            }
-            if (tok !== undefined) attemptOutputTokens += tok;
-          }
-          const stats = getStats();
-          if (isNativeLlmClient(llm)) chatLifecycle = requestLifecycle.current();
-          return {
-            text: attemptText,
-            outputTokens: attemptOutputTokens,
-            streamStats: stats,
-            inputTokens: stats?.inputTokens,
-          };
-        } catch (error) {
-          if (
-            operationSignal.aborted
-            || (error as Error).name === "AbortError"
-          ) throw error;
-          if (streamChunkConsumed) throw new ContextRepackSuppressedError(error);
-          if (classifyContextError(error) !== null && request.optionalUnits > 0) {
+          const requestLifecycle = createNativeRequestLifecycle({
+            initial: chatLifecycle,
+            callSite,
+            onEvent: emit,
+            attemptOffset: streamAttempt,
+          });
+          const params = paramsForPreparedMessages(model, request.messages, streamOpts, true);
+          let streamChunkConsumed = false;
+          try {
+            const requestStartMs = Date.now();
             if (!isNativeLlmClient(llm)) {
-              emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"));
+              emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "sent"));
+              emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "waiting"));
             }
-          }
-          rethrowForContextRepack(error, request.optionalUnits);
-          if (!shouldFallbackStreamToNonStream(error, operationSignal)) throw error;
-          budgetEvents.push(createPromptBudgetEvent({
+            const pending = llm.chat.completions.create(
+              { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
+              {
+                signal: operationSignal,
+                retry: createNativeRequestRetryContext({
+                  llm,
+                  callSite,
+                  opts: streamOpts,
+                  signal: operationSignal,
+                  onEvent: emit,
+                  lifecycle: requestLifecycle,
+                }),
+              },
+            );
+            const rawStream = await pending;
+            const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs, operationSignal);
+            let attemptText = "";
+            let attemptOutputTokens = 0;
+            let producing = false;
+            for await (const chunk of stream) {
+              streamChunkConsumed = true;
+              const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
+              if (!producing && (reasoning.trim() || content.trim())) {
+                if (!isNativeLlmClient(llm)) {
+                  emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "producing"));
+                }
+                producing = true;
+              }
+              if (reasoning) emit({ kind: "assistant_text", delta: reasoning, isReasoning: true });
+              if (content) {
+                attemptText += content;
+                emit({ kind: "assistant_text", delta: content });
+              }
+              if (tok !== undefined) attemptOutputTokens += tok;
+            }
+            const stats = getStats();
+            if (isNativeLlmClient(llm)) chatLifecycle = requestLifecycle.current();
+            return {
+              text: attemptText,
+              outputTokens: attemptOutputTokens,
+              streamStats: stats,
+              inputTokens: stats?.inputTokens,
+            };
+          } catch (error) {
+            if (
+              operationSignal.aborted
+              || (error as Error).name === "AbortError"
+            ) throw error;
+            if (streamChunkConsumed) throw new ContextRepackSuppressedError(error);
+            if (isStreamOptionsUnsupportedError(error) && streamOpts.includeStreamUsage !== false) {
+              emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"));
+              chatLifecycle = createLlmLifecycle(
+                opts.semanticCompression?.operation === "query"
+                  ? "answer_question"
+                  : "apply_lint_fixes",
+              );
+              streamOpts = { ...opts, includeStreamUsage: false };
+              continue;
+            }
+            if (classifyContextError(error) !== null && request.optionalUnits > 0) {
+              if (!isNativeLlmClient(llm)) {
+                emit(lifecycleEvent(chatLifecycle.id, chatLifecycle.action, "retrying"));
+              }
+            }
+            rethrowForContextRepack(error, request.optionalUnits);
+            if (!shouldFallbackStreamToNonStream(error, operationSignal)) throw error;
+            budgetEvents.push(createPromptBudgetEvent({
             requestId: chatLifecycle.id,
             callSite: opts.semanticCompression?.operation === "query"
               ? "query.answer"
@@ -319,6 +332,7 @@ export async function* runLintChat(
               : undefined,
             inputTokens: response.usage?.prompt_tokens,
           };
+          }
         }
       },
       requestId: () => chatLifecycle.id,

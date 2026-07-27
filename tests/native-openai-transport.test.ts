@@ -53,6 +53,9 @@ type NativeTraceEvent = {
   bodyBytes?: number;
   bodyChunks?: number;
   errorClass?: string;
+  errorCode?: string;
+  causeClass?: string;
+  causeCode?: string;
   clientRequestId?: string;
   traceparent?: string;
 };
@@ -370,7 +373,7 @@ test("native request emits exact-attempt correlation before response body consum
   assert.equal(correlation.callSite, "ingest.synthesize");
   assert.equal(correlation.transport, "non-stream");
   assert.equal(correlation.attempt, 0);
-  assert.equal(correlation.networkTransport, "desktop-direct");
+  assert.equal(correlation.networkTransport, "desktop-host");
   assert.match(correlation.endpointPath, /\/chat\/completions$/);
   assert.equal(correlation.diagnosticMode, "off");
   assert.match(correlation.clientRequestId, /^[A-Za-z0-9_.:-]{1,128}$/);
@@ -518,7 +521,7 @@ test("non-stream trace records delayed body boundaries, cumulative bytes, and sa
     assert.equal(trace.every((event) => event.callSite === "ingest.synthesize"), true);
     assert.equal(trace.every((event) => event.transport === "non-stream"), true);
     assert.equal(trace.every((event) => event.attempt === 0), true);
-    assert.equal(trace.every((event) => event.networkTransport === "desktop-direct"), true);
+    assert.equal(trace.every((event) => event.networkTransport === "desktop-host"), true);
     assert.equal(trace.every((event) => event.endpointPath === "/chat/completions"), true);
     assert.equal(trace.every((event) => event.diagnosticMode === "off"), true);
     assert.equal(trace.every((event) => event.connectionTimeoutMs === 1_234), true);
@@ -867,6 +870,154 @@ test("undici-request-adapter closes its dispatcher after body_error", async () =
   assert.deepEqual(stages, ["fetch_start", "fetch_headers", "body_start", "body_chunk", "body_error"]);
 });
 
+test("undici-request-adapter waits for dispatcher close before body completion resolves", async () => {
+  const undici = createRequire(import.meta.url)("undici") as typeof import("undici") & {
+    request: (...args: unknown[]) => Promise<unknown>;
+  };
+  const originalRequest = undici.request;
+  let releaseClose: (() => void) | undefined;
+  let closeStarted = false;
+  let responseResolved = false;
+
+  undici.request = (async (_input: unknown, options: Record<string, unknown>) => {
+    const dispatcher = options.dispatcher as { close: () => Promise<void> };
+    dispatcher.close = async () => {
+      closeStarted = true;
+      await new Promise<void>((resolve) => { releaseClose = resolve; });
+    };
+    return {
+      statusCode: 200,
+      statusText: "OK",
+      headers: { "content-type": "text/plain" },
+      body: (async function* () {
+        yield Buffer.from("ok");
+      })(),
+    };
+  }) as typeof undici.request;
+
+  try {
+    const nativeFetch = transport.createNativeOpenAiFetch!({
+      baseURL: "https://adapter-close-order.invalid/v1",
+      isMobile: false,
+      proxyConfig: { enabled: false, url: "" },
+      mobileFetch: fetch,
+      connectionTimeoutMs: 1_000,
+      nativeTransportDiagnosticMode: "undici-request-adapter",
+    });
+    const response = await nativeFetch("https://adapter-close-order.invalid/v1/chat/completions");
+    const textPromise = response.text().then((text) => {
+      responseResolved = true;
+      return text;
+    });
+    for (let i = 0; i < 20 && !closeStarted; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    assert.equal(closeStarted, true);
+    assert.equal(responseResolved, false);
+    releaseClose?.();
+    assert.equal(await textPromise, "ok");
+    assert.equal(responseResolved, true);
+  } finally {
+    releaseClose?.();
+    undici.request = originalRequest;
+  }
+});
+
+test("fresh connection request symbol keeps non-stream on desktop host transport", async () => {
+  const undici = createRequire(import.meta.url)("undici") as typeof import("undici") & {
+    fetch: (...args: unknown[]) => Promise<Response>;
+  };
+  const originalFetch = undici.fetch;
+  const freshKey = typesModule.NATIVE_TRANSPORT_FRESH_CONNECTION as symbol;
+  let dispatcherCount = 0;
+  let hostCalls = 0;
+  let leakedFreshSymbol = false;
+
+  undici.fetch = (async (_input: unknown, init: Record<symbol | string, unknown>) => {
+    if (freshKey in init) leakedFreshSymbol = true;
+    if (init.dispatcher) dispatcherCount += 1;
+    return new Response("ok", { status: 200 });
+  }) as typeof undici.fetch;
+
+  try {
+    const nativeFetch = transport.createNativeOpenAiFetch!({
+      baseURL: "https://fresh-policy.invalid/v1",
+      isMobile: false,
+      proxyConfig: { enabled: false, url: "" },
+      mobileFetch: async (_input, init) => {
+        hostCalls += 1;
+        if (init && freshKey in init) leakedFreshSymbol = true;
+        return new Response("ok", { status: 200 });
+      },
+      connectionTimeoutMs: 1_000,
+      nativeTransportDiagnosticMode: "off",
+    });
+    await nativeFetch("https://fresh-policy.invalid/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({ stream: false }),
+      [freshKey]: true,
+    } as RequestInit);
+  } finally {
+    undici.fetch = originalFetch;
+  }
+
+  assert.equal(hostCalls, 1);
+  assert.equal(dispatcherCount, 0);
+  assert.equal(leakedFreshSymbol, false);
+});
+
+test("fresh connection request symbol preserves undici request adapter diagnostic mode", async () => {
+  const undici = createRequire(import.meta.url)("undici") as typeof import("undici") & {
+    fetch: (...args: unknown[]) => Promise<Response>;
+    request: (...args: unknown[]) => Promise<unknown>;
+  };
+  const originalFetch = undici.fetch;
+  const originalRequest = undici.request;
+  const freshKey = typesModule.NATIVE_TRANSPORT_FRESH_CONNECTION as symbol;
+  let fetchCalls = 0;
+  let requestCalls = 0;
+  let leakedFreshSymbol = false;
+
+  undici.fetch = (async () => {
+    fetchCalls += 1;
+    return new Response("wrong transport", { status: 200 });
+  }) as typeof undici.fetch;
+  undici.request = (async (_input: unknown, options: Record<symbol | string, unknown>) => {
+    requestCalls += 1;
+    if (freshKey in options) leakedFreshSymbol = true;
+    return {
+      statusCode: 200,
+      statusText: "OK",
+      headers: { "content-type": "text/plain" },
+      body: (async function* () {
+        yield Buffer.from("ok");
+      })(),
+    };
+  }) as typeof undici.request;
+
+  try {
+    const nativeFetch = transport.createNativeOpenAiFetch!({
+      baseURL: "https://fresh-policy-adapter.invalid/v1",
+      isMobile: false,
+      proxyConfig: { enabled: false, url: "" },
+      mobileFetch: fetch,
+      connectionTimeoutMs: 1_000,
+      nativeTransportDiagnosticMode: "undici-request-adapter",
+    });
+    await nativeFetch("https://fresh-policy-adapter.invalid/v1/chat/completions", {
+      [freshKey]: true,
+    } as RequestInit);
+  } finally {
+    undici.fetch = originalFetch;
+    undici.request = originalRequest;
+  }
+
+  assert.equal(fetchCalls, 0);
+  assert.equal(requestCalls, 1);
+  assert.equal(leakedFreshSymbol, false);
+});
+
 test("undici-request-adapter closes its dispatcher after body cancel", async () => {
   const undici = createRequire(import.meta.url)("undici") as typeof import("undici") & {
     request: (...args: unknown[]) => Promise<unknown>;
@@ -925,7 +1076,7 @@ test("undici-request-adapter closes its dispatcher after request failure", async
     request: (...args: unknown[]) => Promise<unknown>;
   };
   const originalRequest = undici.request;
-  const stages: string[] = [];
+  const events: Array<{ stage: string; errorClass?: string; causeClass?: string; causeCode?: string }> = [];
   let closeCalls = 0;
 
   undici.request = (async (_input: unknown, options: Record<string, unknown>) => {
@@ -933,7 +1084,9 @@ test("undici-request-adapter closes its dispatcher after request failure", async
     dispatcher.close = async () => {
       closeCalls += 1;
     };
-    throw new Error("adapter fetch failure");
+    throw new TypeError("adapter fetch failure", {
+      cause: Object.assign(new Error("socket reset"), { code: "ECONNRESET" }),
+    });
   }) as typeof undici.request;
 
   try {
@@ -946,7 +1099,7 @@ test("undici-request-adapter closes its dispatcher after request failure", async
       mobileFetch: fetch,
       connectionTimeoutMs: 1_000,
       nativeTransportDiagnosticMode: "undici-request-adapter",
-      onTraceEvent: (_signal: AbortSignal, event: { stage: string }) => stages.push(event.stage),
+      onTraceEvent: (_signal: AbortSignal, event: typeof events[number]) => events.push(event),
     });
 
     await assert.rejects(
@@ -960,7 +1113,18 @@ test("undici-request-adapter closes its dispatcher after request failure", async
   }
 
   assert.equal(closeCalls, 1);
-  assert.deepEqual(stages, ["fetch_start", "fetch_error"]);
+  assert.deepEqual(events.map((event) => event.stage), ["fetch_start", "fetch_error"]);
+  assert.deepEqual({
+    stage: events[1]?.stage,
+    errorClass: events[1]?.errorClass,
+    causeClass: events[1]?.causeClass,
+    causeCode: events[1]?.causeCode,
+  }, {
+    stage: "fetch_error",
+    errorClass: "TypeError",
+    causeClass: "Error",
+    causeCode: "ECONNRESET",
+  });
 });
 
 test("undici-request-adapter is ignored for mobile and proxy transports", () => {
@@ -1061,6 +1225,88 @@ test("delayed SSE trace keeps elapsedMs monotonic through sdk_complete", async (
     }
     assert.ok(sdkComplete.elapsedMs >= bodyEnd.elapsedMs);
     assert.equal(trace.at(-1)?.stage, "sdk_complete");
+  });
+});
+
+test("explicit diagnostic stream preserves a reasoning-first SSE body", async () => {
+  const events: RunEvent[] = [];
+  let sentDone = false;
+  let closedBeforeDone = false;
+  const chunk = (delta: Record<string, string>) => JSON.stringify({
+    id: "chatcmpl-reasoning-first",
+    object: "chat.completion.chunk",
+    created: 0,
+    model: "reasoning-first-model",
+    choices: [{ index: 0, delta, finish_reason: null }],
+  });
+
+  await withServer(async (response) => {
+    response.once("close", () => {
+      if (!sentDone) closedBeforeDone = true;
+    });
+    response.writeHead(200, {
+      "content-type": "text/event-stream",
+      "cache-control": "no-cache",
+    });
+    response.flushHeaders();
+    await new Promise<void>((resolve) => nodeSetTimeout(resolve, 20));
+    response.write(`data: ${chunk({ reasoning_content: "We" })}\n\n`);
+    await new Promise<void>((resolve) => nodeSetTimeout(resolve, 20));
+    response.write(`data: ${chunk({ content: "ok" })}\n\n`);
+    sentDone = true;
+    response.end("data: [DONE]\n\n");
+  }, async (url) => {
+    const caller = new AbortController();
+    const client = createNativeOpenAiClient({
+      baseURL: new URL(url).origin,
+      apiKey: "reasoning-first-key",
+      connectionTimeoutMs: 1_000,
+      idleTimeoutMs: 1_000,
+      nativeTransportDiagnosticMode: "connection-close",
+      isMobile: false,
+      proxyConfig: { enabled: false, url: "" },
+      mobileFetch: fetch,
+    });
+    const lifecycle = createNativeRequestLifecycle({
+      initial: { id: "reasoning-first", action: "answer_question" },
+      callSite: "query.answer",
+      onEvent: (event) => events.push(event),
+    });
+    const stream = await client.chat.completions.create({
+      model: "reasoning-first-model",
+      messages: [{ role: "user", content: "reasoning-first-prompt" }],
+      stream: true,
+    }, {
+      signal: caller.signal,
+      retry: createNativeRequestRetryContext({
+        llm: client,
+        callSite: "query.answer",
+        opts: {
+          nativeFreshConnection: true,
+          nativeRequestRetries: 0,
+          nativeRequestIdleTimeoutMs: 1_000,
+        },
+        signal: caller.signal,
+        onEvent: (event) => events.push(event),
+        lifecycle,
+      }),
+    });
+    const reasoning: string[] = [];
+    const content: string[] = [];
+    for await (const item of stream) {
+      const delta = item.choices[0]?.delta as OpenAI.Chat.ChatCompletionChunk.Choice.Delta & {
+        reasoning_content?: string;
+      };
+      if (delta.reasoning_content) reasoning.push(delta.reasoning_content);
+      if (delta.content) content.push(delta.content);
+    }
+
+    assert.deepEqual(reasoning, ["We"]);
+    assert.deepEqual(content, ["ok"]);
+    assert.equal(closedBeforeDone, false);
+    const stages = nativeTraceEvents(events).map((event) => event.stage);
+    assert.deepEqual(stages.slice(0, 3), ["fetch_start", "fetch_headers", "body_start"]);
+    assert.deepEqual(stages.slice(-2), ["body_end", "sdk_complete"]);
   });
 });
 
@@ -1559,7 +1805,164 @@ test("agent logger bounds backend and model envelope fields before serialization
   assert.match(logEvent, /encoded.*byte|byteLength|TextEncoder/i);
 });
 
-test("native client selects mobile, proxy, and direct desktop transports", () => {
+test("desktop transport routes non-stream through host fetch and streaming through direct fetch", async () => {
+  let hostCalls = 0;
+  let directCalls = 0;
+  const hostFetch: typeof fetch = async () => {
+    hostCalls += 1;
+    return new Response("host");
+  };
+  const directFetch: typeof fetch = async () => {
+    directCalls += 1;
+    return new Response("direct");
+  };
+  const router = transport.selectNativeFetch!({
+    isMobile: false,
+    mobileFetch: hostFetch,
+    proxyFetch: null,
+    directDesktopFetch: () => directFetch,
+  });
+
+  assert.equal(await (await router("https://example.invalid/v1/chat/completions", {
+    method: "POST",
+    body: JSON.stringify({ stream: false }),
+  })).text(), "host");
+  assert.equal(await (await router("https://example.invalid/v1/chat/completions", {
+    method: "POST",
+    body: JSON.stringify({ stream: true }),
+  })).text(), "direct");
+  assert.deepEqual({ hostCalls, directCalls }, { hostCalls: 1, directCalls: 1 });
+});
+
+test("desktop direct transport bounds a stalled HTTP error body", async () => {
+  const stages: string[] = [];
+  let hostCalls = 0;
+
+  await withServer(async (response) => {
+    response.writeHead(400, { "content-type": "application/json" });
+    response.flushHeaders();
+    await new Promise<void>((resolve) => response.once("close", resolve));
+  }, async (url) => {
+    const exactAttempt = new AbortController();
+    const exactSignalKey = typesModule.NATIVE_TRANSPORT_ATTEMPT_SIGNAL as symbol;
+    const nativeFetch = transport.createNativeOpenAiFetch!({
+      baseURL: new URL(url).origin,
+      isMobile: false,
+      proxyConfig: { enabled: false, url: "" },
+      mobileFetch: async () => {
+        hostCalls += 1;
+        return new Response("host");
+      },
+      connectionTimeoutMs: 25,
+      nativeTransportDiagnosticMode: "off",
+      onTraceEvent: (_signal: AbortSignal, event: { stage: string }) => stages.push(event.stage),
+    });
+    const response = await nativeFetch(url, {
+      method: "POST",
+      body: JSON.stringify({ stream: true }),
+      [exactSignalKey]: exactAttempt.signal,
+    } as RequestInit);
+    const bodyOutcome = await Promise.race([
+      response.text().then((text) => ({ text })),
+      new Promise<{ timeout: true }>((resolve) => nodeSetTimeout(() => resolve({ timeout: true }), 300)),
+    ]);
+    if ("timeout" in bodyOutcome) {
+      exactAttempt.abort();
+      await response.body?.cancel().catch(() => {});
+      assert.fail("HTTP error body remained pending past its transport deadline");
+    }
+
+    assert.equal(response.status, 400);
+    assert.equal(
+      (JSON.parse(bodyOutcome.text) as { error?: { code?: string } }).error?.code,
+      "response_body_timeout",
+    );
+  });
+
+  assert.equal(hostCalls, 0);
+  assert.deepEqual(stages, ["fetch_start", "fetch_headers", "body_start", "body_chunk", "body_end"]);
+});
+
+test("desktop direct transport returns a complete JSON error before the provider closes the body", async () => {
+  const providerError = {
+    error: {
+      message: "Unsupported parameter: thinking.",
+      type: "invalid_request_error",
+      param: "thinking",
+      code: "unsupported_parameter",
+    },
+  };
+
+  await withServer(async (response) => {
+    response.writeHead(400, { "content-type": "application/json" });
+    response.write(JSON.stringify(providerError));
+    await new Promise<void>((resolve) => response.once("close", resolve));
+  }, async (url) => {
+    const exactAttempt = new AbortController();
+    const exactSignalKey = typesModule.NATIVE_TRANSPORT_ATTEMPT_SIGNAL as symbol;
+    const nativeFetch = transport.createNativeOpenAiFetch!({
+      baseURL: new URL(url).origin,
+      isMobile: false,
+      proxyConfig: { enabled: false, url: "" },
+      mobileFetch: fetch,
+      connectionTimeoutMs: 1_000,
+      nativeTransportDiagnosticMode: "off",
+    });
+    const startedAt = Date.now();
+    const response = await nativeFetch(url, {
+      method: "POST",
+      body: JSON.stringify({ stream: true }),
+      [exactSignalKey]: exactAttempt.signal,
+    } as RequestInit);
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(JSON.parse(await response.text()), providerError);
+    assert.ok(Date.now() - startedAt < 500, "complete JSON error should not wait for EOF");
+  });
+});
+
+test("desktop hybrid transport reports the actual non-stream host route", async () => {
+  const diagnostics: Array<{ transport: string }> = [];
+  const traces: Array<{ stage: string; networkTransport: string }> = [];
+  let hostCalls = 0;
+
+  await withServer(async (response) => {
+    response.writeHead(200, { "content-type": "text/plain" });
+    response.end("direct");
+  }, async (url) => {
+    const attempt = new AbortController();
+    const exactSignalKey = typesModule.NATIVE_TRANSPORT_ATTEMPT_SIGNAL as symbol;
+    const nativeFetch = transport.createNativeOpenAiFetch!({
+      baseURL: new URL(url).origin,
+      isMobile: false,
+      proxyConfig: { enabled: false, url: "" },
+      mobileFetch: async () => {
+        hostCalls += 1;
+        return new Response("host", { status: 200 });
+      },
+      connectionTimeoutMs: 1_000,
+      nativeTransportDiagnosticMode: "off",
+      onTransportDiagnostic: (diagnostic: { transport: string }) => diagnostics.push(diagnostic),
+      onTraceEvent: (_signal: AbortSignal, event: { stage: string; networkTransport: string }) => {
+        traces.push(event);
+      },
+    });
+    const response = await nativeFetch(url, {
+      method: "POST",
+      body: JSON.stringify({ stream: false }),
+      [exactSignalKey]: attempt.signal,
+    } as RequestInit);
+
+    assert.equal(await response.text(), "host");
+  });
+
+  assert.equal(hostCalls, 1);
+  assert.equal(diagnostics[0]?.transport, "desktop-hybrid");
+  assert.equal(traces.length > 0, true);
+  assert.equal(traces.every((event) => event.networkTransport === "desktop-host"), true);
+});
+
+test("native client selects mobile, proxy, and hybrid desktop transports", async () => {
   assert.equal(
     typeof transport.selectNativeFetch,
     "function",
@@ -1595,8 +1998,110 @@ test("native client selects mobile, proxy, and direct desktop transports", () =>
     proxyFetch: null,
     directDesktopFetch,
   });
-  assert.equal(desktopRouter, desktopFetch);
+  assert.notEqual(desktopRouter, desktopFetch);
   assert.equal(directDesktopSelections, 1);
+  assert.equal(await (await desktopRouter("https://example.invalid", {
+    method: "POST",
+    body: JSON.stringify({ stream: false }),
+  })).text(), "mobile");
+  assert.equal(await (await desktopRouter("https://example.invalid", {
+    method: "POST",
+    body: JSON.stringify({ stream: true }),
+  })).text(), "desktop");
+});
+
+test("normal desktop client buffers requested streams through host non-stream", async () => {
+  const requestBodies: Array<Record<string, unknown>> = [];
+  const events: RunEvent[] = [];
+  let hostCalls = 0;
+
+  await withServer(async (response, _requestPath, request) => {
+    const body = JSON.parse(await readRequestBody(request)) as Record<string, unknown>;
+    requestBodies.push(body);
+    if (body.stream === true) {
+      response.writeHead(200, { "content-type": "text/event-stream" });
+      response.end([
+        'data: {"id":"direct","object":"chat.completion.chunk","created":0,"model":"test-model","choices":[{"index":0,"delta":{"reasoning_content":"direct-reason"},"finish_reason":null}]}',
+        'data: {"id":"direct","object":"chat.completion.chunk","created":0,"model":"test-model","choices":[{"index":0,"delta":{"content":"direct"},"finish_reason":"stop"}]}',
+        "data: [DONE]",
+        "",
+      ].join("\n\n"));
+      return;
+    }
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({
+      id: "host-buffered",
+      object: "chat.completion",
+      created: 0,
+      model: "test-model",
+      choices: [{
+        index: 0,
+        finish_reason: "stop",
+        message: {
+          role: "assistant",
+          reasoning_content: "host-reason",
+          content: "host-ok",
+        },
+      }],
+    }));
+  }, async (url) => {
+    const client = createNativeOpenAiClient({
+      baseURL: new URL(url).origin,
+      apiKey: "test-key",
+      connectionTimeoutMs: 1_000,
+      idleTimeoutMs: 1_000,
+      nativeTransportDiagnosticMode: "off",
+      isMobile: false,
+      proxyConfig: { enabled: false, url: "" },
+      mobileFetch: async (input, init) => {
+        hostCalls += 1;
+        return fetch(input, init);
+      },
+    });
+    const caller = new AbortController();
+    const lifecycle = createNativeRequestLifecycle({
+      initial: { id: "desktop-host-buffered", action: "answer_question" },
+      callSite: "query.answer",
+      onEvent: (event) => events.push(event),
+    });
+    const stream = await client.chat.completions.create({
+      model: "test-model",
+      messages: [{ role: "user", content: "test" }],
+      stream: true,
+      stream_options: { include_usage: true },
+    }, {
+      signal: caller.signal,
+      retry: createNativeRequestRetryContext({
+        llm: client,
+        callSite: "query.answer",
+        opts: { nativeRequestRetries: 0, nativeRequestIdleTimeoutMs: 1_000 },
+        signal: caller.signal,
+        onEvent: (event) => events.push(event),
+        lifecycle,
+      }),
+    });
+    const reasoning: string[] = [];
+    const content: string[] = [];
+    for await (const item of stream) {
+      const delta = item.choices[0]?.delta as OpenAI.Chat.ChatCompletionChunk.Choice.Delta & {
+        reasoning?: string;
+      };
+      if (delta.reasoning) reasoning.push(delta.reasoning);
+      if (delta.content) content.push(delta.content);
+    }
+
+    assert.deepEqual(reasoning, ["host-reason"]);
+    assert.deepEqual(content, ["host-ok"]);
+  });
+
+  assert.equal(hostCalls, 1);
+  assert.equal(requestBodies.length, 1);
+  assert.equal(requestBodies[0]?.stream, false);
+  assert.equal("stream_options" in requestBodies[0]!, false);
+  const correlations = events.filter((event) => event.kind === "native_transport_correlation");
+  assert.equal(correlations.length, 1);
+  assert.equal(correlations[0]?.transport, "non-stream");
+  assert.equal(correlations[0]?.networkTransport, "desktop-host");
 });
 
 test("mobile transport selection returns mandatory connection-scope diagnostic metadata", () => {
@@ -1671,6 +2176,7 @@ test("controller enriches metadata-only run configuration before logging or view
 });
 
 test("healthy desktop non-stream generation beyond 15 seconds survives connection timeout", { timeout: 20_000 }, async () => {
+  let hostCalls = 0;
   await withServer(async (response) => {
     await new Promise<void>((resolve) => nodeSetTimeout(resolve, 15_100));
     response.writeHead(200, { "content-type": "application/json" });
@@ -1680,7 +2186,16 @@ test("healthy desktop non-stream generation beyond 15 seconds survives connectio
       baseURL: new URL(url).origin,
       isMobile: false,
       proxyConfig: { enabled: false, url: "" },
-      mobileFetch: async () => { throw new Error("desktop used mobile transport"); },
+      mobileFetch: async (input, init) => {
+        hostCalls += 1;
+        const response = await fetch(input, init);
+        const text = await response.text();
+        return new Response(text, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        });
+      },
       connectionTimeoutMs: 15_000,
     });
     const response = await desktopFetch(url, {
@@ -1689,6 +2204,7 @@ test("healthy desktop non-stream generation beyond 15 seconds survives connectio
     });
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { ok: true });
+    assert.equal(hostCalls, 1);
   });
 });
 
@@ -1778,6 +2294,83 @@ test("direct desktop transport exposes the first SSE chunk before completion", a
   });
 });
 
+test("direct desktop transport does not reconstruct an undici streaming response", async () => {
+  const runtime = globalThis as typeof globalThis & { require: NodeJS.Require };
+  const originalRequire = runtime.require;
+  const realUndici = originalRequire("undici") as typeof import("undici");
+  const guardedUndici = new Proxy(realUndici, {
+    get(target, property, receiver) {
+      if (property === "Response") {
+        return class ForbiddenResponse {
+          constructor() {
+            throw new Error("direct SSE response crossed an extra undici.Response boundary");
+          }
+        };
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  });
+
+  runtime.require = ((id: string) => id === "undici"
+    ? guardedUndici
+    : originalRequire(id)) as NodeJS.Require;
+  try {
+    await withServer(async (response) => {
+      response.writeHead(200, {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache",
+      });
+      response.end('data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n');
+    }, async (url) => {
+      const response = await transport.createDirectDesktopFetch!(1_234)(url);
+      assert.match(await response.text(), /data: \[DONE\]/);
+    });
+  } finally {
+    runtime.require = originalRequire;
+  }
+});
+
+test("production desktop streaming returns the original undici response body", async () => {
+  const runtime = globalThis as typeof globalThis & { require: NodeJS.Require };
+  const originalRequire = runtime.require;
+  const realUndici = originalRequire("undici") as typeof import("undici");
+  const rawResponse = new realUndici.Response(
+    'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n',
+    { headers: { "content-type": "text/event-stream" } },
+  );
+  const rawBody = rawResponse.body;
+  const guardedUndici = new Proxy(realUndici, {
+    get(target, property, receiver) {
+      if (property === "fetch") return async () => rawResponse;
+      return Reflect.get(target, property, receiver);
+    },
+  });
+
+  runtime.require = ((id: string) => id === "undici"
+    ? guardedUndici
+    : originalRequire(id)) as NodeJS.Require;
+  try {
+    const nativeFetch = transport.createNativeOpenAiFetch!({
+      baseURL: "https://example.invalid/v1",
+      isMobile: false,
+      proxyConfig: { enabled: false, url: "" },
+      mobileFetch: fetch,
+      connectionTimeoutMs: 1_001,
+      nativeTransportDiagnosticMode: "off",
+    });
+    const received = await nativeFetch("https://example.invalid/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({ stream: true }),
+      signal: new AbortController().signal,
+    });
+
+    assert.equal(received, rawResponse);
+    assert.equal(received.body, rawBody);
+  } finally {
+    runtime.require = originalRequire;
+  }
+});
+
 test("direct desktop transport preserves AbortSignal for a streaming body", async () => {
   assert.equal(
     typeof transport.createDirectDesktopFetch,
@@ -1810,13 +2403,7 @@ test("direct desktop transport preserves AbortSignal for a streaming body", asyn
   });
 });
 
-test("direct desktop transport closes an SSE body at the OpenAI done sentinel", async () => {
-  assert.equal(
-    typeof transport.createDirectDesktopFetch,
-    "function",
-    "direct desktop transport must be exported",
-  );
-
+test("production desktop transport leaves SSE completion to provider EOF", async () => {
   let releaseSocket!: () => void;
   const socketGate = new Promise<void>((resolve) => {
     releaseSocket = resolve;
@@ -1833,20 +2420,36 @@ test("direct desktop transport closes an SSE body at the OpenAI done sentinel", 
       await socketGate;
       response.end();
     }, async (url) => {
-      const response = await transport.createDirectDesktopFetch!()(url);
+      const nativeFetch = transport.createNativeOpenAiFetch!({
+        baseURL: new URL(url).origin,
+        isMobile: false,
+        proxyConfig: { enabled: false, url: "" },
+        mobileFetch: fetch,
+        connectionTimeoutMs: 1_000,
+        nativeTransportDiagnosticMode: "off",
+      });
+      const response = await nativeFetch(url, {
+        method: "POST",
+        body: JSON.stringify({ stream: true }),
+      });
       assert.ok(response.body, "streaming response body must be preserved");
 
       const reader = response.body.getReader();
-      const completed = (async () => {
-        while (!(await reader.read()).done) {
-          // Drain through the done sentinel.
-        }
-      })();
-      const outcome = await Promise.race([
-        completed.then(() => "complete"),
-        new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 250)),
+      const decoder = new TextDecoder();
+      let received = "";
+      while (!received.includes("data: [DONE]")) {
+        const next = await reader.read();
+        assert.equal(next.done, false);
+        received += decoder.decode(next.value, { stream: true });
+      }
+      const providerEnd = reader.read();
+      const beforeEof = await Promise.race([
+        providerEnd.then(() => "complete" as const),
+        new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 50)),
       ]);
-      assert.equal(outcome, "complete");
+      assert.equal(beforeEof, "pending");
+      releaseSocket();
+      assert.equal((await providerEnd).done, true);
     });
   } finally {
     releaseSocket();
@@ -1949,9 +2552,14 @@ test("OpenAI client omits disabled reasoning controls from stream and non-stream
     const client = new OpenAI({ apiKey: "test-key", baseURL: new URL(".", url).href, maxRetries: 0 });
     const messages = [{ role: "user" as const, content: "hello" }];
 
-    for (const thinkingBudgetTokens of [undefined, 0]) {
+    for (const thinkingBudgetTokens of [undefined, 0, 512]) {
       for (const stream of [false, true] as const) {
-        const params = buildChatParams("test-model", messages, { thinkingBudgetTokens }, stream);
+        const params = buildChatParams(
+          "test-model",
+          messages,
+          { thinkingBudgetTokens, maxTokens: 128 },
+          stream,
+        );
         const response = await client.chat.completions.create({ ...params, stream } as never);
         if (stream) {
           for await (const _chunk of response as AsyncIterable<unknown>) {
@@ -1962,13 +2570,15 @@ test("OpenAI client omits disabled reasoning controls from stream and non-stream
     }
   });
 
-  assert.equal(observedBodies.length, 4);
+  assert.equal(observedBodies.length, 6);
   for (const body of observedBodies) {
     assert.equal("reasoning_effort" in body, false);
     assert.equal("extra_body" in body, false);
     assert.equal("thinking" in body, false);
+    assert.equal(body.max_completion_tokens, 128);
+    assert.equal("max_tokens" in body, false);
   }
-  assert.deepEqual(observedBodies.map((body) => body.stream), [false, true, false, true]);
+  assert.deepEqual(observedBodies.map((body) => body.stream), [false, true, false, true, false, true]);
 });
 
 async function withServer(
@@ -2024,7 +2634,11 @@ async function sequentialRequestsReuseConnection(
       nativeTransportDiagnosticMode: diagnosticMode,
     });
     for (let index = 0; index < 2; index++) {
-      const response = await nativeFetch(url, { signal: new AbortController().signal });
+      const response = await nativeFetch(url, {
+        method: "POST",
+        body: JSON.stringify({ stream: true }),
+        signal: new AbortController().signal,
+      });
       assert.equal(await response.text(), "ok");
       if (index === 0) {
         await new Promise<void>((resolve) => nodeSetTimeout(resolve, 20));

@@ -73,20 +73,50 @@ test("zero or absent thinking budget omits reasoning controls", () => {
   }
 });
 
-test("positive thinking budget keeps the explicit thinking payload", () => {
+test("legacy numeric thinking budget never emits a non-standard OpenAI parameter", () => {
   const params = buildChatParams(
     "model",
     [{ role: "user" as const, content: "Answer this" }],
     {
       thinkingBudgetTokens: 512,
       jsonMode: "json_object",
+      maxTokens: 1024,
       temperature: 0.2,
       topP: 0.9,
     },
   );
 
-  assert.deepEqual(params.thinking, { type: "enabled", budget_tokens: 512 });
-  assert.equal("response_format" in params, false);
-  assert.equal("temperature" in params, false);
-  assert.equal("top_p" in params, false);
+  assert.equal("thinking" in params, false);
+  assert.equal(params.max_completion_tokens, 1024);
+  assert.equal("max_tokens" in params, false);
+  assert.deepEqual(params.response_format, { type: "json_object" });
+  assert.equal(params.temperature, 0.2);
+  assert.equal(params.top_p, 0.9);
+});
+
+test("shared request builder emits only OpenAI Chat Completions fields", () => {
+  const params = buildChatParams(
+    "model",
+    [{ role: "user" as const, content: "Answer this" }],
+    {
+      maxTokens: 1024,
+      temperature: 0.2,
+      topP: 0.9,
+      jsonMode: "json_schema",
+      jsonSchema: { name: "answer", schema: { type: "object" } },
+      includeStreamUsage: true,
+      thinkingBudgetTokens: 4096,
+    },
+    true,
+  );
+
+  assert.deepEqual(Object.keys(params).sort(), [
+    "max_completion_tokens",
+    "messages",
+    "model",
+    "response_format",
+    "stream_options",
+    "temperature",
+    "top_p",
+  ]);
 });

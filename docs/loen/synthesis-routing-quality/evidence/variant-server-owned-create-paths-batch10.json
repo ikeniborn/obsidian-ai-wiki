@@ -1,0 +1,19 @@
+{
+  "variant": "server-owned-create-paths-batch10",
+  "status": "verified",
+  "synthesisRequests": 3,
+  "structuredValidationRetries": 1,
+  "structuralErrors": 0,
+  "failedSources": 0,
+  "invalidPathsWritten": 0,
+  "unknownEntityKeyAccepted": 0,
+  "pagesCreated": 10,
+  "pagesUpdated": 0,
+  "articleQualityScore": 1,
+  "notes": [
+    "create paths are server-owned",
+    "batchSize=10",
+    "large batch mock emits unknown entity key"
+  ],
+  "score": 3
+}

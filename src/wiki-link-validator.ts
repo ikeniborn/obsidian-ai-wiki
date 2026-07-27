@@ -144,10 +144,14 @@ export function checkWikiLinks(pages: Map<string, string>): string {
 }
 
 function tidyAfterRemoval(text: string): string {
-  return text
-    .replace(/(\S) {2,}/g, "$1 ")    // collapse mid-line space runs (protects leading indentation)
-    .replace(/ +([,.;:)\]])/g, "$1") // drop space before punctuation
-    .replace(/[ \t]+$/gm, "");        // trim trailing spaces per line
+  return text.split("\n").map((line) => {
+    const collapsed = line
+      .replace(/(\S) {2,}/g, "$1 ")
+      .replace(/[ \t]+$/, "");
+    return /^ {0,3}#{1,6}[ \t]/.test(collapsed)
+      ? collapsed
+      : collapsed.replace(/ +([,.;:)\]])/g, "$1");
+  }).join("\n");
 }
 
 function stripEmptyReferenceBullets(text: string): string {

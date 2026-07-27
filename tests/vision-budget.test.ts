@@ -353,7 +353,7 @@ test("native raster Vision uses bounded prepared structured messages and rejects
 
   assert.equal(seen.length, 1);
   assert.equal(seen[0].stream, false);
-  assert.equal(seen[0].max_tokens, 321);
+  assert.equal(seen[0].max_completion_tokens, 321);
   assert.ok(seen[0].response_format);
   assert.ok(
     estimatePreparedMessages(
@@ -447,7 +447,7 @@ test("seven PDF pages stay bounded, retain every record, and resize only the fai
     estimatePreparedMessages(
       params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
     ) <= 10_000));
-  assert.ok(seen.every((params) => params.max_tokens === 222));
+  assert.ok(seen.every((params) => params.max_completion_tokens === 222));
   assert.ok(seen.every((params) => !/semantic compression/i.test(JSON.stringify(params.messages))));
   assert.ok(events.some((event) =>
     event.kind === "prompt_budget"
@@ -990,7 +990,7 @@ test("analyzeAttachments forwards bounded Vision options to every native call", 
     },
   );
 
-  assert.equal(seen[0].max_tokens, 456);
+  assert.equal(seen[0].max_completion_tokens, 456);
   assert.equal(seen[0].stream, false);
   assert.doesNotMatch(JSON.stringify(seen[0].messages), /semantic compression/i);
   assert.equal(events.some((event) => event.kind === "prompt_budget"), true);
@@ -1080,7 +1080,7 @@ test("Excalidraw uses one media unit and output cap without compression prompt",
     Array.isArray(message.content) ? message.content : [])
     .filter((part) => part.type === "image_url");
   assert.equal(mediaParts.length, 1);
-  assert.equal(seen[0].max_tokens, 654);
+  assert.equal(seen[0].max_completion_tokens, 654);
   assert.doesNotMatch(JSON.stringify(messages), /semantic compression/i);
 });
 

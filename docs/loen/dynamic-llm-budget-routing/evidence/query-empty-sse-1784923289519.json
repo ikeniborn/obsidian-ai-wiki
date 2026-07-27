@@ -1,0 +1,61 @@
+{
+  "schema": "loen-live-query-evidence-v1",
+  "sessionId": "1784923289519",
+  "operation": "query",
+  "domainId": "os-unix",
+  "startedAt": "2026-07-24T20:01:29.520Z",
+  "finishedAt": "2026-07-24T20:11:29.530Z",
+  "status": "error",
+  "durationMs": 600011,
+  "request": {
+    "callSite": "query.answer",
+    "configuredInputBudget": 16384,
+    "estimatedInputTokens": 12974,
+    "outputBudget": 32000,
+    "sourceChunks": 8,
+    "contextUnits": 9
+  },
+  "attempts": [
+    {
+      "attempt": 0,
+      "providerRequestId": "019f95b7-fa55-7c15-9e2f-ad23c6c6726d",
+      "status": 200,
+      "headersMs": 1522,
+      "terminalMs": 151524,
+      "bodyBytes": 0,
+      "bodyChunks": 0,
+      "terminal": "response_start_timeout"
+    },
+    {
+      "attempt": 1,
+      "providerRequestId": "019f95ba-4bba-787a-a7d1-480e94f07293",
+      "status": 200,
+      "headersMs": 1482,
+      "terminalMs": 151483,
+      "bodyBytes": 0,
+      "bodyChunks": 0,
+      "terminal": "response_start_timeout"
+    },
+    {
+      "attempt": 2,
+      "providerRequestId": "019f95bc-9f45-74df-a0c7-c2223d8d04d8",
+      "status": 200,
+      "headersMs": 1514,
+      "terminalMs": 151516,
+      "bodyBytes": 0,
+      "bodyChunks": 0,
+      "terminal": "response_start_timeout"
+    },
+    {
+      "attempt": 3,
+      "providerRequestId": "019f95be-f581-7241-81cb-234015437a7d",
+      "status": 200,
+      "headersMs": 1487,
+      "terminalMs": 141836,
+      "bodyBytes": 0,
+      "bodyChunks": 0,
+      "terminal": "operation_timeout"
+    }
+  ],
+  "decision": "Replace identical response-start transport retries for Query with bounded compact prompt repacking and a fresh connection."
+}

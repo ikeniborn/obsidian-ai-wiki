@@ -1,0 +1,29 @@
+{
+  "variant": "unknown",
+  "session": "1784901066143",
+  "firstTs": "2026-07-24T13:51:06.143Z",
+  "lastTs": "2026-07-24T13:51:48.154Z",
+  "status": "running",
+  "diagnosticMode": "off",
+  "transport": "desktop-hybrid",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrz00czk-1",
+    "estimatedInputTokens": 7170,
+    "outputBudget": 4096,
+    "hash": "fnv1a:85651bb0"
+  },
+  "firstHttpMs": 32663,
+  "firstFileMs": 41983,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 7170,
+    "outputBudget": 4096
+  },
+  "transportRetries": 0,
+  "transportRecovered": 0,
+  "structuralRetries": 0,
+  "structuralSummary": [],
+  "createdPages": 0,
+  "updatedPages": 0,
+  "resultTexts": []
+}

@@ -6,7 +6,7 @@ import { runCrossDomainQuery } from "./phases/query-cross-domain";
 import { runLint } from "./phases/lint";
 import { runLintChat } from "./phases/chat";
 import { runLintFixChat } from "./phases/lint-chat";
-import { runInit } from "./phases/init";
+import { runInit, type InitIngestRuntime } from "./phases/init";
 import { runFormat } from "./phases/format";
 import { runDelete } from "./phases/delete";
 import { VisionTempStore } from "./phases/vision-temp-store";
@@ -101,6 +101,8 @@ export class AgentRunner {
         mergeDeleteWarnThreshold,
         dedupOnIngest: na.dedupOnIngest,
         dedupThreshold: na.dedupThreshold,
+        synthesisMaxEntityBatchSize: na.synthesisMaxEntityBatchSize,
+        synthesisMaxEntitiesPerSource: na.synthesisMaxEntitiesPerSource,
         lintNearDuplicate: na.lintNearDuplicate,
         nearDupThreshold: na.nearDupThreshold,
         nativeRequestRetries: s.llmIdleRetries ?? 3,
@@ -140,6 +142,7 @@ export class AgentRunner {
     domains: DomainEntry[],
     similarity: PageSimilarityService | undefined,
     visionTempStore?: VisionTempStore,
+    initIngestRuntime?: InitIngestRuntime,
   ): AsyncGenerator<RunEvent, void, void> {
     const boilerplateDemotion = DISABLED_BOILERPLATE_DEMOTION;
     const reranker = normalizeRerankerConfig({
@@ -195,7 +198,19 @@ export class AgentRunner {
         break;
       }
       case "init":
-        yield* runInit(req.args, this.vaultTools, this.llm, model, domains, this.vaultName, req.signal, opts, req.onFileError, similarity);
+        yield* runInit(
+          req.args,
+          this.vaultTools,
+          this.llm,
+          model,
+          domains,
+          this.vaultName,
+          req.signal,
+          opts,
+          req.onFileError,
+          similarity,
+          initIngestRuntime,
+        );
         break;
       case "format": {
         const hasVision = this.settings.backend === "claude-agent";
@@ -237,6 +252,9 @@ export class AgentRunner {
       req.operation,
       req.policyOperation,
     );
+    const initIngestRuntime = req.operation === "init"
+      ? this.buildOptsFor("ingest")
+      : undefined;
     const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1000;
     const connectionTimeoutMs = (this.settings.llmConnectionTimeoutSec ?? 15) * 1000;
     yield {
@@ -319,6 +337,7 @@ export class AgentRunner {
           domains,
           similarity,
           visionTempStore,
+          initIngestRuntime,
         )) {
           if (
             ev.kind === "llm_call_stats" || ev.kind === "assistant_text" ||

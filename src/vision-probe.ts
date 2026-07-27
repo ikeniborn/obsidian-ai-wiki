@@ -114,7 +114,7 @@ export async function probeNativeVisionModel(
             ],
           }],
           stream: false,
-          max_tokens: 16,
+          max_completion_tokens: 16,
         }),
       }),
       timeout,

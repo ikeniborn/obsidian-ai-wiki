@@ -4,6 +4,8 @@ import { contentHash } from "../src/content-hash";
 import {
   batchEntityContexts,
   buildEntityContext,
+  consolidateSameTargetEntityBundles,
+  consolidateSmallEntityBundles,
   ContextSplitRequiredError,
   DuplicateEntityContextError,
   renderEntityContextMessages,
@@ -225,6 +227,474 @@ test("target missing from candidates fails loudly", () => {
     fixedMessages: [],
     opts: {},
   }), { name: "TargetContextMissingError" });
+});
+
+test("small adjacent entities consolidate into parent evidence without losing facts", () => {
+  const bundle = (entityKey: string, facts: string[], startLine: number, endLine: number): EntityContextBundle => ({
+    entityKey,
+    evidence: {
+      entityKey,
+      entityType: "concept",
+      packetIds: [`packet-${entityKey}`],
+      facts,
+      exactSourceRanges: [{ startLine, endLine }],
+      exactSource: [{ startLine, endLine, text: facts.join(" ") }],
+      links: [],
+    },
+    units: [],
+    replaceAuthorities: [],
+    estimatedInputTokens: 100,
+  });
+  const parent = bundle("parent", ["Parent overview.", "Parent procedure."], 10, 14);
+  const child = bundle("one-off-flag", ["One-off flag detail."], 13, 13);
+
+  const result = consolidateSmallEntityBundles([parent, child], 6);
+
+  assert.deepEqual(result.kept.map((item) => item.entityKey), ["parent"]);
+  assert.deepEqual(result.consolidated, [{ entityKey: "one-off-flag", parentEntityKey: "parent" }]);
+  assert.deepEqual(result.kept[0].consolidatedEntityKeys, ["one-off-flag"]);
+  assert.ok(result.kept[0].evidence.facts.includes("One-off flag detail."));
+  assert.ok(result.kept[0].evidence.packetIds.includes("packet-one-off-flag"));
+});
+
+test("entities sharing one existing canonical target consolidate before synthesis", () => {
+  const target = "!Wiki/d/concept/wiki_d_user_management.md";
+  const unit = (heading: string, ordinal: number, required: boolean) => ({
+    id: `${target}::## ${heading}::${ordinal}`,
+    source: "wiki" as const,
+    text: `## ${heading}\n${heading} body`,
+    required,
+    priority: ordinal + 1,
+    estimatedTokens: 20,
+    pageId: "wiki_d_user_management",
+    path: target,
+    heading: `## ${heading}`,
+    sectionHash: `hash-${ordinal}`,
+    score: ordinal + 1,
+    sourceOrdinal: ordinal,
+    duplicatePaths: [target],
+  });
+  const bundle = (
+    entityKey: string,
+    fact: string,
+    line: number,
+    units: ReturnType<typeof unit>[],
+  ): EntityContextBundle => ({
+    entityKey,
+    evidence: {
+      entityKey,
+      entityType: "application",
+      packetIds: [`packet-${entityKey}`],
+      facts: [fact],
+      exactSourceRanges: [{ startLine: line, endLine: line }],
+      exactSource: [{ startLine: line, endLine: line, text: fact }],
+      links: [`https://example.test/${entityKey}`],
+    },
+    units,
+    replaceAuthorities: units.filter((item) => item.required).map((item) => ({
+      path: item.path,
+      heading: item.heading,
+      sectionOrdinal: item.sourceOrdinal,
+      sectionHash: item.sectionHash,
+      exactSection: item.text,
+    })),
+    estimatedInputTokens: 100,
+  });
+  const sharedFacts = unit("Facts", 0, true);
+  const userdel = bundle("userdel", "Delete a user.", 20, [sharedFacts]);
+  const usermod = bundle("usermod", "Modify a user.", 10, [
+    { ...sharedFacts, required: false, duplicatePaths: [...sharedFacts.duplicatePaths] },
+    unit("Examples", 1, true),
+  ]);
+  const passwd = bundle("passwd", "Change a password.", 30, []);
+
+  const result = consolidateSameTargetEntityBundles(
+    [userdel, usermod, passwd],
+    new Map([
+      ["userdel", target],
+      ["usermod", target],
+      ["passwd", "!Wiki/d/application/wiki_d_passwd.md"],
+    ]),
+  );
+
+  assert.deepEqual(result.kept.map((item) => item.entityKey), ["usermod", "passwd"]);
+  assert.deepEqual(result.consolidated, [{ entityKey: "userdel", parentEntityKey: "usermod" }]);
+  const carrier = result.kept[0];
+  assert.deepEqual(carrier.consolidatedEntityKeys, ["userdel"]);
+  assert.deepEqual(carrier.evidence.packetIds, ["packet-usermod", "packet-userdel"]);
+  assert.deepEqual(carrier.evidence.facts, ["Modify a user.", "Delete a user."]);
+  assert.deepEqual(carrier.evidence.exactSourceRanges, [
+    { startLine: 10, endLine: 10 },
+    { startLine: 20, endLine: 20 },
+  ]);
+  assert.deepEqual(carrier.units.map((item) => item.heading), ["## Facts", "## Examples"]);
+  assert.equal(carrier.units[0].required, true);
+  assert.deepEqual(carrier.replaceAuthorities.map((item) => item.heading), ["## Examples", "## Facts"]);
+  assert.equal(result.kept[1].entityKey, "passwd");
+});
+
+test("pathless bundles cannot become consolidation parents when a routable bundle exists", () => {
+  const bundle = (entityKey: string, facts: string[], startLine: number, endLine: number): EntityContextBundle => ({
+    entityKey,
+    evidence: {
+      entityKey,
+      entityType: "concept",
+      packetIds: [`packet-${entityKey}`],
+      facts,
+      exactSourceRanges: [{ startLine, endLine }],
+      exactSource: [{ startLine, endLine, text: facts.join(" ") }],
+      links: [],
+    },
+    units: [],
+    replaceAuthorities: [],
+    estimatedInputTokens: 100,
+  });
+  const pathless = bundle("bashrc", [
+    "Configure the shell profile.",
+    "Export the package path.",
+    "Reload the shell.",
+  ], 1, 12);
+  const routable = bundle("npm", ["Configure npm."], 20, 22);
+
+  const result = consolidateSmallEntityBundles([pathless, routable], 1, new Set(["npm"]));
+
+  assert.deepEqual(result.kept.map((item) => item.entityKey), ["npm"]);
+  assert.deepEqual(result.consolidated, [{ entityKey: "bashrc", parentEntityKey: "npm" }]);
+  assert.ok(result.kept[0].evidence.facts.includes("Export the package path."));
+  assert.ok(result.kept[0].evidence.packetIds.includes("packet-bashrc"));
+});
+
+test("routable standalone entities remain separate beyond the per-source target", () => {
+  const bundle = (entityKey: string, startLine: number): EntityContextBundle => ({
+    entityKey,
+    evidence: {
+      entityKey,
+      entityType: "application",
+      packetIds: [`packet-${entityKey}`],
+      facts: [`${entityKey} is an independent tool.`],
+      exactSourceRanges: [{ startLine, endLine: startLine }],
+      exactSource: [{ startLine, endLine: startLine, text: `${entityKey} command` }],
+      links: [],
+    },
+    units: [],
+    replaceAuthorities: [],
+    estimatedInputTokens: 100,
+  });
+  const bundles = [bundle("ip", 1), bundle("ss", 2), bundle("nmcli", 3)];
+
+  const result = consolidateSmallEntityBundles(
+    bundles,
+    2,
+    new Set(bundles.map((item) => item.entityKey)),
+  );
+
+  assert.deepEqual(result.kept.map((item) => item.entityKey), ["ip", "ss", "nmcli"]);
+  assert.deepEqual(result.consolidated, []);
+  assert.deepEqual(result.overflowEntityKeys, ["nmcli"]);
+});
+
+test("small routable entity is not merged into an adjacent routable parent", () => {
+  const bundle = (
+    entityKey: string,
+    facts: string[],
+    startLine: number,
+    endLine: number,
+  ): EntityContextBundle => ({
+    entityKey,
+    evidence: {
+      entityKey,
+      entityType: "application",
+      packetIds: [`packet-${entityKey}`],
+      facts,
+      exactSourceRanges: [{ startLine, endLine }],
+      exactSource: [{ startLine, endLine, text: facts.join(" ") }],
+      links: [],
+    },
+    units: [],
+    replaceAuthorities: [],
+    estimatedInputTokens: 100,
+  });
+  const iptables = bundle("iptables", ["Firewall tool.", "Manages rules."], 10, 12);
+  const nmcli = bundle("nmcli", ["NetworkManager CLI."], 13, 13);
+
+  const result = consolidateSmallEntityBundles(
+    [iptables, nmcli],
+    6,
+    new Set(["iptables", "nmcli"]),
+  );
+
+  assert.deepEqual(result.kept.map((item) => item.entityKey), ["iptables", "nmcli"]);
+  assert.deepEqual(result.consolidated, []);
+  assert.deepEqual(result.overflowEntityKeys, []);
+});
+
+test("contained create candidate becomes supporting evidence for its enclosing entity", () => {
+  const bundle = (
+    entityKey: string,
+    facts: string[],
+    startLine: number,
+    endLine: number,
+  ): EntityContextBundle => ({
+    entityKey,
+    evidence: {
+      entityKey,
+      entityType: "configuration",
+      packetIds: [`packet-${entityKey}`],
+      facts,
+      exactSourceRanges: [{ startLine, endLine }],
+      exactSource: [{ startLine, endLine, text: facts.join(" ") }],
+      links: [],
+    },
+    units: [],
+    replaceAuthorities: [],
+    estimatedInputTokens: 100,
+  });
+  const procedure = bundle("storage-procedure", ["Prepare storage.", "Mount storage."], 1, 30);
+  const chmod = bundle("chmod", ["Change permissions.", "Use mode 777."], 10, 12);
+
+  const result = consolidateSmallEntityBundles(
+    [procedure, chmod],
+    6,
+    new Set(["storage-procedure", "chmod"]),
+  );
+
+  assert.deepEqual(result.kept.map((item) => item.entityKey), ["storage-procedure"]);
+  assert.deepEqual(result.consolidated, [{
+    entityKey: "chmod",
+    parentEntityKey: "storage-procedure",
+  }]);
+  assert.ok(result.kept[0].evidence.facts.includes("Use mode 777."));
+});
+
+test("source-history hints promote contained candidates only up to the soft target", () => {
+  const bundle = (
+    entityKey: string,
+    facts: string[],
+    startLine: number,
+    endLine: number,
+  ): EntityContextBundle => ({
+    entityKey,
+    evidence: {
+      entityKey,
+      entityType: "concept",
+      packetIds: [`packet-${entityKey}`],
+      facts,
+      exactSourceRanges: [{ startLine, endLine }],
+      exactSource: [{ startLine, endLine, text: facts.join(" ") }],
+      links: [],
+    },
+    units: [],
+    replaceAuthorities: [],
+    estimatedInputTokens: 100,
+  });
+  const parent = bundle("cache", ["Cache overview.", "Cache tuning."], 1, 40);
+  const strongerHint = bundle("dirty-ratio", ["Ratio threshold.", "Blocks writes."], 5, 8);
+  const weakerHint = bundle("dirty-bytes", ["Byte threshold."], 10, 10);
+
+  const result = consolidateSmallEntityBundles(
+    [parent, strongerHint, weakerHint],
+    2,
+    new Set(["cache", "dirty-ratio", "dirty-bytes"]),
+    new Set(["dirty-ratio", "dirty-bytes"]),
+  );
+
+  assert.deepEqual(result.kept.map((item) => item.entityKey), ["cache", "dirty-ratio"]);
+  assert.deepEqual(result.consolidated, [{
+    entityKey: "dirty-bytes",
+    parentEntityKey: "cache",
+  }]);
+  assert.deepEqual(result.overflowEntityKeys, []);
+});
+
+test("contained existing target stays independent regardless of source-history capacity", () => {
+  const parent: EntityContextBundle = {
+    entityKey: "parent",
+    evidence: {
+      entityKey: "parent",
+      entityType: "concept",
+      packetIds: ["packet-parent"],
+      facts: ["Parent overview."],
+      exactSourceRanges: [{ startLine: 1, endLine: 20 }],
+      exactSource: [{ startLine: 1, endLine: 20, text: "Parent overview." }],
+      links: [],
+    },
+    units: [],
+    replaceAuthorities: [],
+    estimatedInputTokens: 100,
+  };
+  const existing: EntityContextBundle = {
+    entityKey: "existing-child",
+    evidence: {
+      entityKey: "existing-child",
+      entityType: "configuration",
+      packetIds: ["packet-existing-child"],
+      facts: ["Existing child detail."],
+      exactSourceRanges: [{ startLine: 5, endLine: 6 }],
+      exactSource: [{ startLine: 5, endLine: 6, text: "Existing child detail." }],
+      links: [],
+    },
+    units: [],
+    replaceAuthorities: [{
+      path: "!Wiki/d/configuration/wiki_d_existing_child.md",
+      heading: "## Facts",
+      sectionOrdinal: 0,
+      sectionHash: "hash",
+      exactSection: "## Facts\nold\n",
+    }],
+    estimatedInputTokens: 100,
+  };
+
+  const result = consolidateSmallEntityBundles(
+    [parent, existing],
+    1,
+    new Set(["parent"]),
+    new Set(),
+  );
+
+  assert.deepEqual(result.kept.map((item) => item.entityKey), ["parent", "existing-child"]);
+  assert.deepEqual(result.consolidated, []);
+  assert.deepEqual(result.overflowEntityKeys, ["existing-child"]);
+});
+
+test("source-primary carrier receives non-contained overflow without losing evidence", () => {
+  const bundle = (
+    entityKey: string,
+    facts: string[],
+    startLine: number,
+    links: string[] = [],
+  ): EntityContextBundle => ({
+    entityKey,
+    evidence: {
+      entityKey,
+      entityType: "concept",
+      packetIds: [`packet-${entityKey}`],
+      facts,
+      exactSourceRanges: [{ startLine, endLine: startLine }],
+      exactSource: [{ startLine, endLine: startLine, text: facts.join(" ") }],
+      links,
+    },
+    units: [],
+    replaceAuthorities: [],
+    estimatedInputTokens: 100,
+  });
+  const fdisk = bundle("fdisk", ["Inspect partitions.", "Edit partitions."], 1);
+  const storage = bundle("storage", ["Configure local storage."], 10);
+  const mount = bundle("mount", ["Mount the filesystem."], 20, ["https://example.test/mount"]);
+  const blkid = bundle("blkid", ["Read the exact UUID."], 30);
+
+  const result = consolidateSmallEntityBundles(
+    [fdisk, storage, mount, blkid],
+    2,
+    new Set(["fdisk", "storage", "mount", "blkid"]),
+    new Set(["fdisk"]),
+    new Set(["storage"]),
+  );
+
+  assert.deepEqual(result.kept.map((item) => item.entityKey), ["fdisk", "storage"]);
+  assert.deepEqual(result.consolidated, [
+    { entityKey: "mount", parentEntityKey: "storage" },
+    { entityKey: "blkid", parentEntityKey: "storage" },
+  ]);
+  const carrier = result.kept.find((item) => item.entityKey === "storage");
+  assert.ok(carrier);
+  assert.deepEqual(carrier.consolidatedEntityKeys, ["mount", "blkid"]);
+  assert.ok(carrier.evidence.facts.includes("Mount the filesystem."));
+  assert.ok(carrier.evidence.facts.includes("Read the exact UUID."));
+  assert.ok(carrier.evidence.packetIds.includes("packet-mount"));
+  assert.ok(carrier.evidence.exactSource.some((item) => item.text === "Read the exact UUID."));
+  assert.ok(carrier.evidence.links.includes("https://example.test/mount"));
+  assert.deepEqual(result.overflowEntityKeys, []);
+});
+
+test("source-primary planning favors broad evidence and keeps cap overflow on that carrier", () => {
+  const bundle = (
+    entityKey: string,
+    facts: string[],
+    startLine: number,
+    endLine: number,
+  ): EntityContextBundle => ({
+    entityKey,
+    evidence: {
+      entityKey,
+      entityType: "concept",
+      packetIds: [`packet-${entityKey}`],
+      facts,
+      exactSourceRanges: [{ startLine, endLine }],
+      exactSource: [{ startLine, endLine, text: facts.join(" ") }],
+      links: [],
+    },
+    units: [],
+    replaceAuthorities: [],
+    estimatedInputTokens: 100,
+  });
+  const procedure = bundle("storage-procedure", ["Prepare and mount storage."], 1, 30);
+  const du = bundle("du", ["Measure directory size.", "Sort measured output."], 40, 50);
+  const blkid = bundle("blkid", ["Read block device identifiers."], 45, 45);
+  const lsblk = bundle("lsblk", ["List block devices."], 60, 60);
+
+  const result = consolidateSmallEntityBundles(
+    [procedure, du, blkid, lsblk],
+    2,
+    new Set(["storage-procedure", "du", "blkid", "lsblk"]),
+    new Set(),
+    new Set(),
+  );
+
+  assert.deepEqual(result.kept.map((item) => item.entityKey), ["storage-procedure", "du"]);
+  assert.deepEqual(result.consolidated, [{
+    entityKey: "blkid",
+    parentEntityKey: "storage-procedure",
+  }, {
+    entityKey: "lsblk",
+    parentEntityKey: "storage-procedure",
+  }]);
+  const carrier = result.kept[0];
+  assert.ok(carrier.evidence.facts.includes("Read block device identifiers."));
+  assert.ok(carrier.evidence.packetIds.includes("packet-blkid"));
+  assert.ok(carrier.evidence.packetIds.includes("packet-lsblk"));
+});
+
+test("existing targets remain independent when source-primary capacity is exhausted", () => {
+  const bundle = (entityKey: string, startLine: number): EntityContextBundle => ({
+    entityKey,
+    evidence: {
+      entityKey,
+      entityType: "concept",
+      packetIds: [`packet-${entityKey}`],
+      facts: [`${entityKey} fact.`],
+      exactSourceRanges: [{ startLine, endLine: startLine }],
+      exactSource: [{ startLine, endLine: startLine, text: `${entityKey} fact.` }],
+      links: [],
+    },
+    units: [],
+    replaceAuthorities: [],
+    estimatedInputTokens: 100,
+  });
+  const primary = bundle("fail2ban", 1);
+  const fragment = bundle("iptables-multiport", 10);
+  const existing = bundle("iptables", 20);
+  existing.replaceAuthorities = [{
+    path: "!Wiki/d/applications/wiki_d_iptables.md",
+    heading: "## Facts",
+    sectionOrdinal: 0,
+    sectionHash: "hash",
+    exactSection: "## Facts\nold\n",
+  }];
+
+  const result = consolidateSmallEntityBundles(
+    [fragment, existing, primary],
+    1,
+    new Set(["iptables-multiport", "fail2ban"]),
+    new Set(),
+    new Set(["fail2ban"]),
+  );
+
+  assert.deepEqual(result.kept.map((item) => item.entityKey), ["iptables", "fail2ban"]);
+  assert.deepEqual(result.consolidated, [{
+    entityKey: "iptables-multiport",
+    parentEntityKey: "fail2ban",
+  }]);
+  assert.deepEqual(result.overflowEntityKeys, ["fail2ban"]);
 });
 
 test("candidate context rejects non-page paths before extraction", () => {

@@ -1,0 +1,33 @@
+{
+  "variant": "unknown",
+  "session": "1784823481498",
+  "firstTs": "2026-07-23T16:18:01.498Z",
+  "lastTs": "2026-07-23T16:25:57.453Z",
+  "status": "done",
+  "diagnosticMode": "undici-request-adapter",
+  "transport": "desktop-direct",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrxptgbd-1",
+    "estimatedInputTokens": 7175,
+    "outputBudget": 16384,
+    "hash": "fnv1a:26b30967"
+  },
+  "firstHttpMs": 53036,
+  "firstFileMs": 76882,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 7175,
+    "outputBudget": 16384
+  },
+  "transportRetries": 1,
+  "transportRecovered": 1,
+  "structuralRetries": 2,
+  "structuralSummary": [
+    "ingest.synthesize:frame_parse:Expected ',' or '}' after property value in JSON at position 796 (line 9 column 58)",
+    "ingest.synthesize:empty_output:Empty structured output"
+  ],
+  "createdPages": 3,
+  "resultTexts": [
+    "Источник «Настройка прокси.md» → домен «os-unix»: создано 3 стр."
+  ]
+}

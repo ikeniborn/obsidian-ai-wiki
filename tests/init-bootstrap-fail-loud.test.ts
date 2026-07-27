@@ -270,7 +270,7 @@ test("force init rejects invalid bootstrap before wiping domain state", async ()
     [structuredClone(forceDomain)],
     "Vault",
     new AbortController().signal,
-    { structuredRetries: 0 },
+    { structuredRetries: 1 },
   )) {
     events.push(event);
   }
@@ -298,7 +298,7 @@ test("force bootstrap validation is read-only for seeded global legacy files", a
     [structuredClone(forceDomain)],
     "Vault",
     new AbortController().signal,
-    { structuredRetries: 0 },
+    { structuredRetries: 1 },
   )) {
     // drain
   }
@@ -729,10 +729,200 @@ test("successful bootstrap with empty entity_types does not stop init", async ()
   assert.ok(events.some((e) => e.kind === "result" && /Dry run/i.test(e.text)));
 });
 
+test("bootstrap repairs collapsed taxonomy from source evidence without hardcoded domain types", async () => {
+  const rawAdapter = adapter();
+  rawAdapter.files.set("src/a.md", "# Source\n\nChromium flag, systemd service, Debian package, and fstab notes.");
+  const collapsedBootstrapBody = JSON.stringify({
+    reasoning: "",
+    id: "demo",
+    name: "Demo",
+    wiki_folder: "demo",
+    entity_types: [{
+      type: "configuration",
+      description: "Model collapsed every source item into configuration.",
+      extraction_cues: ["everything"],
+      wiki_subfolder: "configurations",
+    }],
+    language_notes: "",
+  });
+  const repairedBootstrapBody = JSON.stringify({
+    reasoning: "",
+    id: "demo",
+    name: "Demo",
+    wiki_folder: "demo",
+    entity_types: [{
+      type: "software",
+      description: "Reusable software packages and applications.",
+      extraction_cues: ["Chromium", "package"],
+      wiki_subfolder: "software",
+    }, {
+      type: "service",
+      description: "Managed services and daemons.",
+      extraction_cues: ["systemd", "service"],
+      wiki_subfolder: "services",
+    }, {
+      type: "configuration",
+      description: "Configuration files and flags.",
+      extraction_cues: ["flag", "fstab"],
+      wiki_subfolder: "configuration",
+    }],
+    language_notes: "",
+  });
+  let bootstrapCalls = 0;
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      const prompt = JSON.stringify(params);
+      const chunkId = prompt.match(/CHUNK_ID ([^\s\\"]+)/)?.[1];
+      if (chunkId) {
+        return mockResponse(params, JSON.stringify({
+          packets: [
+            {
+              id: `${chunkId}:chromium`,
+              chunkId,
+              entityKey: "chromium",
+              facts: ["Chromium is a browser package with flags."],
+              exactSourceRanges: [{ startLine: 1, endLine: 1 }],
+              links: [],
+              sourceAnchor: "src/a.md:1",
+            },
+            {
+              id: `${chunkId}:systemd`,
+              chunkId,
+              entityKey: "systemd",
+              facts: ["systemd manages services."],
+              exactSourceRanges: [{ startLine: 1, endLine: 1 }],
+              links: [],
+              sourceAnchor: "src/a.md:1",
+            },
+            {
+              id: `${chunkId}:fstab`,
+              chunkId,
+              entityKey: "fstab",
+              facts: ["fstab stores filesystem mount configuration."],
+              exactSourceRanges: [{ startLine: 1, endLine: 1 }],
+              links: [],
+              sourceAnchor: "src/a.md:1",
+            },
+          ],
+          noEvidence: [],
+        }));
+      }
+      bootstrapCalls++;
+      return mockResponse(
+        params,
+        prompt.includes("taxonomy too collapsed") ? repairedBootstrapBody : collapsedBootstrapBody,
+      );
+    } } },
+  } as unknown as LlmClient;
+  const events: RunEvent[] = [];
+
+  for await (const event of runInitWithSources(
+    "demo",
+    ["src"],
+    true,
+    new VaultTools(rawAdapter, "/vault"),
+    llm,
+    "m",
+    [],
+    "Vault",
+    new AbortController().signal,
+    { structuredRetries: 1 },
+    undefined,
+    false,
+    undefined,
+  )) {
+    events.push(event);
+  }
+
+  const result = events.find((event) => event.kind === "result");
+  assert.ok(result && result.kind === "result");
+  assert.equal(bootstrapCalls, 2);
+  assert.match(result.text, /"type": "software"/);
+  assert.match(result.text, /"type": "service"/);
+  assert.match(result.text, /"type": "configuration"/);
+  assert.doesNotMatch(result.text, /"wiki_subfolder": "configurations"/);
+  assert.equal(events.some((event) =>
+    event.kind === "llm_lifecycle" && event.action === "bootstrap_domain" && event.phase === "failed"), true);
+});
+
+test("force bootstrap reuses existing entity types and adds source-supported new types", async () => {
+  const rawAdapter = adapter();
+  rawAdapter.files.set("src/a.md", "# Source\n\nExisting service notes plus new config notes.");
+  const existing = {
+    id: "demo",
+    name: "Demo",
+    wiki_folder: "demo",
+    source_paths: ["src"],
+    entity_types: [{
+      type: "service",
+      description: "Existing service definition.",
+      extraction_cues: ["daemon"],
+      wiki_subfolder: "services",
+    }],
+    analyzed_sources: {},
+    analyzed_sources_v2: true,
+    analyzed_sources_v3: true,
+  };
+  const bootstrapBody = JSON.stringify({
+    reasoning: "",
+    id: "demo",
+    name: "Demo",
+    wiki_folder: "demo",
+    entity_types: [{
+      type: "configuration",
+      description: "Configuration files.",
+      extraction_cues: ["config"],
+      wiki_subfolder: "configuration",
+    }],
+    language_notes: "",
+  });
+  const prompts: string[] = [];
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      const prompt = JSON.stringify(params);
+      prompts.push(prompt);
+      const chunkId = prompt.match(/CHUNK_ID ([^\s\\"]+)/)?.[1];
+      if (chunkId) {
+        return mockResponse(params, JSON.stringify({
+          packets: [],
+          noEvidence: [{ chunkId, reason: "No bootstrap evidence." }],
+        }));
+      }
+      return mockResponse(params, bootstrapBody);
+    } } },
+  } as unknown as LlmClient;
+  const events: RunEvent[] = [];
+
+  for await (const event of runInitWithSources(
+    "demo",
+    ["src"],
+    true,
+    new VaultTools(rawAdapter, "/vault"),
+    llm,
+    "m",
+    [existing],
+    "Vault",
+    new AbortController().signal,
+    { structuredRetries: 0 },
+    undefined,
+    true,
+    undefined,
+  )) {
+    events.push(event);
+  }
+
+  assert.equal(prompts.some((prompt) => prompt.includes("Existing service definition.")), true);
+  const result = events.find((event) => event.kind === "result");
+  assert.ok(result && result.kind === "result");
+  assert.match(result.text, /"type": "service"/);
+  assert.match(result.text, /Existing service definition\./);
+  assert.match(result.text, /"type": "configuration"/);
+});
+
 test("successful init bootstrap uses one direct non-stream request", async () => {
   const rawAdapter = adapter();
   rawAdapter.files.set("src/a.md", "# Source\n\nAlpha source content.");
-  const bootstrapRequests: Array<{ stream?: boolean }> = [];
+  const bootstrapRequests: Array<{ stream?: boolean; nativeFreshConnection?: boolean }> = [];
   const bootstrapBody = JSON.stringify({
     reasoning: "",
     id: "demo",
@@ -742,7 +932,7 @@ test("successful init bootstrap uses one direct non-stream request", async () =>
     language_notes: "",
   });
   const llm = {
-    chat: { completions: { create: async (params: unknown) => {
+    chat: { completions: { create: async (params: unknown, options?: { retry?: { nativeFreshConnection?: boolean } }) => {
       const request = params as { stream?: boolean };
       const prompt = JSON.stringify(params);
       const chunkId = prompt.match(/CHUNK_ID ([^\s\\"]+)/)?.[1];
@@ -752,7 +942,7 @@ test("successful init bootstrap uses one direct non-stream request", async () =>
           noEvidence: [{ chunkId, reason: "No bootstrap evidence." }],
         }));
       }
-      bootstrapRequests.push(request);
+      bootstrapRequests.push({ ...request, nativeFreshConnection: options?.retry?.nativeFreshConnection });
       return mockResponse(params, bootstrapBody);
     } } },
   } as unknown as LlmClient;
@@ -779,6 +969,7 @@ test("successful init bootstrap uses one direct non-stream request", async () =>
   assert.equal(events.some((event) => event.kind === "result" && /Dry run/i.test(event.text)), true);
   assert.equal(bootstrapRequests.length, 1);
   assert.deepEqual(bootstrapRequests.map((request) => request.stream), [false]);
+  assert.deepEqual(bootstrapRequests.map((request) => request.nativeFreshConnection), [true]);
   assert.equal(bootstrapRequests.some((request) => request.stream === true), false);
 });
 

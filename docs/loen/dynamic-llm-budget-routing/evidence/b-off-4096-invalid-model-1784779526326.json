@@ -1,0 +1,30 @@
+{
+  "variant": "b-off-4096-invalid-model",
+  "session": "1784779526326",
+  "firstTs": "2026-07-23T04:05:26.326Z",
+  "lastTs": "2026-07-23T04:05:26.492Z",
+  "status": "error",
+  "diagnosticMode": "off",
+  "transport": "desktop-direct",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrwzncao-1",
+    "estimatedInputTokens": 7069,
+    "outputBudget": 4096,
+    "responseFormatType": "json_schema",
+    "hash": "fnv1a:749fb1bd"
+  },
+  "firstPromptBudget": {
+    "estimatedInputTokens": 7069,
+    "outputBudget": 4096
+  },
+  "transportRetries": 0,
+  "transportRecovered": 0,
+  "structuralRetries": 0,
+  "structuralSummary": [],
+  "createdPages": 0,
+  "resultTexts": [
+    ""
+  ],
+  "finalError": "init: domain bootstrap failed — bounded evidence preparation failed: Evidence mapper failed for chunk 0:1-64:fnv1a:18828722: 404 The requested model alias was not found.. Fix model/prompt and re-run."
+}

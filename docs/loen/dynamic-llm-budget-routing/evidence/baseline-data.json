@@ -1,0 +1,1318 @@
+{
+  "backend": "claude-agent",
+  "systemPrompt": "",
+  "outputLanguage": "ru",
+  "reasoningLanguage": "en",
+  "agentLogEnabled": true,
+  "historyLimit": 10,
+  "graphDepth": 1,
+  "bfsTopK": 5,
+  "wikiLinkValidationRetries": 3,
+  "seedTopK": 15,
+  "seedMinScore": 0.1,
+  "timeouts": {
+    "ingest": 0,
+    "query": 600,
+    "lint": 0,
+    "init": 0,
+    "format": 900,
+    "fix": 900
+  },
+  "history": [
+    {
+      "id": "1784739972931",
+      "operation": "init",
+      "args": [
+        "os-unix",
+        "--force",
+        "--sources",
+        "ОС/Unix/"
+      ],
+      "startedAt": 1784739972931,
+      "finishedAt": 1784740543892,
+      "status": "error",
+      "finalText": "",
+      "steps": [
+        {
+          "kind": "tool_use",
+          "label": "Initialising domain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "WipeDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Glob ОС/Unix/"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "SaveDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Read"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Update"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "UpdateDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Read"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        }
+      ]
+    },
+    {
+      "id": "1784743379467",
+      "operation": "init",
+      "args": [
+        "os-unix",
+        "--force",
+        "--sources",
+        "ОС/Unix/"
+      ],
+      "startedAt": 1784743379467,
+      "finishedAt": 1784744756475,
+      "status": "error",
+      "finalText": "",
+      "steps": [
+        {
+          "kind": "tool_use",
+          "label": "Initialising domain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "WipeDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Glob ОС/Unix/"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "SaveDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Read"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Update"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "UpdateDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Read"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        }
+      ]
+    },
+    {
+      "id": "1784744771574",
+      "operation": "init",
+      "args": [
+        "os-unix",
+        "--force",
+        "--sources",
+        "ОС/Unix/"
+      ],
+      "startedAt": 1784744771574,
+      "finishedAt": 1784747245758,
+      "status": "error",
+      "finalText": "",
+      "steps": [
+        {
+          "kind": "tool_use",
+          "label": "Initialising domain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "WipeDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Glob ОС/Unix/"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "SaveDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Read"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Update"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "UpdateDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Read"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Read"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        }
+      ]
+    },
+    {
+      "id": "1784747412210",
+      "operation": "init",
+      "args": [
+        "os-unix",
+        "--force",
+        "--sources",
+        "ОС/Unix/"
+      ],
+      "startedAt": 1784747412210,
+      "finishedAt": 1784748661044,
+      "status": "error",
+      "finalText": "",
+      "steps": [
+        {
+          "kind": "tool_use",
+          "label": "Initialising domain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "WipeDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Glob ОС/Unix/"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "SaveDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Read"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Update"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "UpdateDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Read"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        }
+      ]
+    },
+    {
+      "id": "1784750439314",
+      "operation": "init",
+      "args": [
+        "os-unix",
+        "--force",
+        "--sources",
+        "ОС/Unix/"
+      ],
+      "startedAt": 1784750439314,
+      "finishedAt": 1784750746631,
+      "status": "cancelled",
+      "finalText": "",
+      "steps": [
+        {
+          "kind": "tool_use",
+          "label": "Initialising domain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "WipeDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Glob ОС/Unix/"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "SaveDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Read"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        }
+      ]
+    },
+    {
+      "id": "1784750919650",
+      "operation": "init",
+      "args": [
+        "os-unix",
+        "--force",
+        "--sources",
+        "ОС/Unix/"
+      ],
+      "startedAt": 1784750919650,
+      "finishedAt": 1784753437894,
+      "status": "error",
+      "finalText": "",
+      "steps": [
+        {
+          "kind": "tool_use",
+          "label": "Initialising domain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "WipeDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Glob ОС/Unix/"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "SaveDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Read"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Update"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "UpdateDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Read"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        }
+      ]
+    },
+    {
+      "id": "1784753449795",
+      "operation": "init",
+      "args": [
+        "os-unix",
+        "--force",
+        "--sources",
+        "ОС/Unix/"
+      ],
+      "startedAt": 1784753449795,
+      "finishedAt": 1784753959671,
+      "status": "error",
+      "finalText": "",
+      "steps": [
+        {
+          "kind": "tool_use",
+          "label": "Initialising domain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "WipeDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Glob ОС/Unix/"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "SaveDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Read"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Update"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "UpdateDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Read"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        }
+      ]
+    },
+    {
+      "id": "1784753985275",
+      "operation": "init",
+      "args": [
+        "os-unix",
+        "--force",
+        "--sources",
+        "ОС/Unix/"
+      ],
+      "startedAt": 1784753985275,
+      "finishedAt": 1784754411538,
+      "status": "done",
+      "finalText": "Источник «NFS Server.md» → домен «os-unix»: создано 6 стр.",
+      "steps": [
+        {
+          "kind": "tool_use",
+          "label": "Initialising domain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "WipeDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Glob ОС/Unix/"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "SaveDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Read"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Update"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "UpdateDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Read"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Create"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Update"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "UpdateDomain"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        },
+        {
+          "kind": "tool_use",
+          "label": "Read"
+        },
+        {
+          "kind": "tool_result",
+          "label": "ok"
+        }
+      ]
+    },
+    {
+      "id": "1784754420415",
+      "operation": "init",
+      "args": [
+        "os-unix",
+        "--force",
+        "--sources",
+        "ОС/Unix/"
+      ],
+      "startedAt": 1784754420415,
+      "finishedAt": 1784754902082,
+      "status": "cancelled",
+      "finalText": "",
+      "steps": []
+    },
+    {
+      "id": "1784754904402",
+      "operation": "init",
+      "args": [
+        "os-unix",
+        "--force",
+        "--sources",
+        "ОС/Unix/"
+      ],
+      "startedAt": 1784754904402,
+      "finishedAt": 1784755229661,
+      "status": "cancelled",
+      "finalText": "",
+      "steps": []
+    }
+  ],
+  "claudeAgent": {
+    "model": "sonnet",
+    "inputBudgetTokens": 16384,
+    "compressionProfile": "balanced",
+    "allowedTools": "",
+    "perOperation": false,
+    "operations": {
+      "ingest": {
+        "model": "opus",
+        "inputBudgetTokens": 16384
+      },
+      "query": {
+        "model": "haiku",
+        "inputBudgetTokens": 16384
+      },
+      "lint": {
+        "model": "opus",
+        "inputBudgetTokens": 16384
+      },
+      "init": {
+        "model": "opus",
+        "inputBudgetTokens": 16384
+      },
+      "format": {
+        "model": "opus",
+        "inputBudgetTokens": 16384
+      }
+    },
+    "spawnCwd": "/tmp",
+    "domainMapDir": "",
+    "maxTokens": 4096,
+    "requestTimeoutSec": 300,
+    "systemPrompt": "",
+    "effort": "medium"
+  },
+  "nativeAgent": {
+    "baseUrl": "https://homelab.ikeniborn.ru/v1",
+    "apiKey": "",
+    "model": "ollama-deepseek-v4-pro-cloud",
+    "inputBudgetTokens": 32768,
+    "maxTokens": 16384,
+    "compressionProfile": "balanced",
+    "temperature": 0.2,
+    "topP": null,
+    "perOperation": false,
+    "operations": {
+      "ingest": {
+        "model": "qwen3.5:cloud",
+        "inputBudgetTokens": 16384,
+        "maxTokens": 32000,
+        "temperature": 0.5
+      },
+      "query": {
+        "model": "qwen3.5:cloud",
+        "inputBudgetTokens": 16384,
+        "maxTokens": 32000,
+        "temperature": 0.5
+      },
+      "lint": {
+        "model": "qwen3.5:cloud",
+        "inputBudgetTokens": 16384,
+        "maxTokens": 32000,
+        "temperature": 0.5
+      },
+      "init": {
+        "model": "qwen3.5:cloud",
+        "inputBudgetTokens": 16384,
+        "maxTokens": 32000,
+        "temperature": 0.5
+      },
+      "format": {
+        "model": "qwen3.5:cloud",
+        "inputBudgetTokens": 16384,
+        "maxTokens": 32000,
+        "temperature": 0.5
+      }
+    },
+    "structuredRetries": 3,
+    "rerankerEnabled": true,
+    "rerankerModel": "lemonade-reranker-bge-reranker-v2-m3",
+    "rerankerTopN": 30,
+    "contextTopN": 8,
+    "rerankerTimeoutMs": 800,
+    "hybridRetrieval": true,
+    "rrfK": 60,
+    "bfsFusion": true,
+    "bfsMinScoreRatio": 0.6,
+    "seedSimilarityThreshold": 0.3,
+    "dedupOnIngest": true,
+    "dedupThreshold": 0.85,
+    "synthesisMaxEntityBatchSize": 2,
+    "lintNearDuplicate": true,
+    "nearDupThreshold": 0.8,
+    "boilerplateDemotionEnabled": true,
+    "boilerplateDemotionFactor": 0.15,
+    "structuredOutput": "json_schema",
+    "requestTimeoutSec": 300,
+    "domainMapDir": "",
+    "systemPrompt": "You are a wiki assistant for a technical knowledge base. Be precise, factual, and concise. Use only the provided sources.",
+    "embeddingModel": "ollama-bge-m3",
+    "embeddingDimensions": 1024,
+    "relevantPagesTopK": 15,
+    "thinkingBudgetTokens": 4096
+  },
+  "proxy": {
+    "enabled": false,
+    "url": ""
+  },
+  "devMode": {
+    "enabled": false,
+    "nativeTransportDiagnosticMode": "off"
+  },
+  "lintOptions": {
+    "useLlm": false
+  },
+  "vision": {
+    "enabled": true,
+    "model": "ollama-qwen3-5-397b-cloud"
+  },
+  "llmConnectionTimeoutSec": 120,
+  "llmIdleTimeoutSec": 600,
+  "llmIdleRetries": 3,
+  "hubThreshold": 5,
+  "shellConsentGiven": false,
+  "agentLogPath": "/home/UF.RT.RU/i.y.tischenko/Документы/Git/obsidian-llm-wiki/logs",
+  "domainMapDir": "",
+  "iclaudePath": "/home/ikeniborn/Documents/Project/iclaude/iclaude.sh",
+  "cwd": "/home/ikeniborn/Documents/Project/iclaude/.nvm-isolated/.claude-isolated/skills/llm-wiki",
+  "allowedTools": [
+    "Read",
+    "Edit",
+    "Write",
+    "Glob",
+    "Grep"
+  ],
+  "model": "",
+  "showRawJson": false
+}

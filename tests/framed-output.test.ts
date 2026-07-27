@@ -8,6 +8,7 @@ import {
   parseLintChatFrames,
   parseLintFrames,
   parsePageFrames,
+  parseSynthesisFrames,
   parseWikiPagesFrames,
   parseWikiPageRepairFramesOrJson,
   lintChatProfile,
@@ -17,6 +18,7 @@ import {
   queryAnswerProfile,
   wikiPagesFrameInstruction,
   wikiPagesProfile,
+  synthesisFrameInstruction,
 } from "../src/phases/framed-output";
 import { LintChatSchema, LintOutputSchema, MergedPageOutputSchema, WikiPagesOutputSchema, makeQueryAnswerSchema } from "../src/phases/zod-schemas";
 
@@ -53,6 +55,97 @@ test("parseContentFrame parses reasoning, annotation, and content", () => {
   assert.equal(parsed.reasoning, "merged related notes");
   assert.equal(parsed.annotation, "Short description");
   assert.equal(parsed.content, "# Entity\n\nBody");
+});
+
+test("synthesis content frames consume an explicit END_CONTENT boundary", () => {
+  const parsed = parseSynthesisFrames([
+    "<<<CREATE>>>",
+    "entityKey: alpha",
+    "path: !Wiki/demo/concept/wiki_demo_alpha.md",
+    "annotation: Alpha",
+    "<<<CONTENT>>>",
+    "# Alpha",
+    "",
+    "## Facts",
+    "Grounded fact.",
+    "<<<END_CONTENT>>>",
+    "<<<END_CREATE>>>",
+    "<<<END>>>",
+  ].join("\n"));
+
+  const action = parsed.actions[0];
+  assert.equal(action.kind, "create");
+  assert.equal(action.kind === "create" ? action.content : "", "# Alpha\n\n## Facts\nGrounded fact.");
+  assert.match(synthesisFrameInstruction, /<<<END_CONTENT>>>/);
+});
+
+test("synthesis patch frames remove one repeated matching section heading", () => {
+  const parsed = parseSynthesisFrames([
+    "<<<PATCH>>>",
+    "entityKey: alpha",
+    "path: !Wiki/demo/concept/wiki_demo_alpha.md",
+    "expectedPageHash: fnv1a:page",
+    "<<<SECTION>>>",
+    "operation: replace",
+    "heading: ## Facts",
+    "expectedSectionOrdinal: 0",
+    "expectedSectionHash: fnv1a:section",
+    "<<<CONTENT>>>",
+    "## Facts",
+    "Grounded replacement.",
+    "<<<END_CONTENT>>>",
+    "<<<END_SECTION>>>",
+    "<<<END_PATCH>>>",
+    "<<<END>>>",
+  ].join("\n"));
+
+  const action = parsed.actions[0];
+  assert.equal(action.kind, "patch");
+  assert.equal(action.kind === "patch" ? action.sections[0].content : "", "Grounded replacement.");
+});
+
+test("synthesis content frames reject reserved protocol markers in Markdown", () => {
+  assert.throws(() => parseSynthesisFrames([
+    "<<<CREATE>>>",
+    "entityKey: alpha",
+    "path: !Wiki/demo/concept/wiki_demo_alpha.md",
+    "annotation: Alpha",
+    "<<<CONTENT>>>",
+    "# Alpha",
+    "<<<END_CONTENT>>>",
+    "<<<END_CONTENT>>>",
+    "<<<END_CREATE>>>",
+    "<<<END>>>",
+  ].join("\n")), /reserved protocol marker/i);
+});
+
+test("synthesis frames diagnose Markdown headings used instead of protocol markers", () => {
+  assert.throws(() => parseSynthesisFrames([
+    "## CREATE",
+    "entityKey: alpha",
+    "path: !Wiki/demo/concept/wiki_demo_alpha.md",
+    "annotation: Alpha",
+    "## CONTENT",
+    "# Alpha",
+    "",
+    "## Facts",
+    "Grounded fact.",
+    "## END_CREATE",
+  ].join("\n")), /exact <<<CREATE>>> field-frame marker.*not a Markdown heading/i);
+});
+
+test("synthesis frame-looking output does not fall through to legacy JSON parsing", () => {
+  assert.throws(() => parseSynthesisFrames([
+    "<<<REASONING>>>",
+    "The response stopped before any action frame.",
+    "<<<END>>>",
+  ].join("\n")), (error: unknown) => {
+    assert.ok(error instanceof Error);
+    assert.match(error.message, /field-framed synthesis output.*CREATE.*PATCH.*SKIP/i);
+    assert.doesNotMatch(error.message, /JSON|Unexpected token/i);
+    return true;
+  });
+  assert.match(synthesisFrameInstruction, /never return a JSON object or a response wrapper/i);
 });
 
 test("parseAnswerFrames parses citations and defaults missing reasoning", () => {

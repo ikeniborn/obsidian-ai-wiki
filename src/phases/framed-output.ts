@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import { parseSentinelOutput } from "./format-utils";
 import type { StructuredProfile } from "./structured-output";
-import type { FormatOutput, LintChatResponse, LintOutput, QueryAnswer } from "./zod-schemas";
+import type { FormatOutput, LintChatResponse, LintOutput, QueryAnswer, SynthesisOutput } from "./zod-schemas";
 import { LintChatSchema, LintOutputSchema, MergedPageOutputSchema, WikiPagesOutputSchema } from "./zod-schemas";
 
 export interface FramedParseResult<T> {
@@ -63,6 +63,193 @@ export interface AnswerFrameOutput {
 }
 
 const END = "<<<END>>>";
+
+export const sentinelJsonFrameInstruction = [
+  "Return sentinel-framed JSON only.",
+  "Put <<<JSON>>> on its own first line.",
+  "Put exactly one JSON object after it.",
+  "Put <<<END>>> on its own final line.",
+  "Do not add markdown fences or text outside the markers.",
+].join("\n");
+
+export const synthesisFrameInstruction = [
+  "Return field-framed synthesis output only.",
+  "The entire response is plain-text frames; never return a JSON object or a response wrapper.",
+  "Protocol markers are exact literal lines such as <<<CREATE>>>; never replace them with Markdown headings such as ## CREATE.",
+  "Optional reasoning: <<<REASONING>>> followed by plain text.",
+  "Create: <<<CREATE>>>, entityKey/path/annotation headers, <<<CONTENT>>>, raw Markdown, <<<END_CONTENT>>>, <<<END_CREATE>>>.",
+  "Patch: <<<PATCH>>>, entityKey/path/expectedPageHash headers, one or more <<<SECTION>>> blocks, then <<<END_PATCH>>>.",
+  "Section: operation/heading headers, optional expectedSectionOrdinal/expectedSectionHash headers, <<<CONTENT>>>, raw Markdown, <<<END_CONTENT>>>, <<<END_SECTION>>>.",
+  "Section CONTENT is body-only Markdown; never repeat its heading inside CONTENT.",
+  "Skip: <<<SKIP>>>, entityKey/reason headers, <<<END_SKIP>>>.",
+  "Optional entity type updates: <<<ENTITY_TYPES_DELTA_JSON>>>, one compact JSON array, <<<END_ENTITY_TYPES_DELTA_JSON>>>.",
+  "Finish with <<<END>>>. Do not wrap Markdown content in JSON or code fences. Never put any <<<...>>> protocol marker inside Markdown.",
+].join("\n");
+
+export function sentinelJsonProfile<T>(
+  schema: z.ZodSchema<T>,
+  repairInstruction?: string,
+  compactRepairThresholdTokens?: number,
+): StructuredProfile<T> {
+  return {
+    kind: "framed-zod",
+    schema,
+    parse: parseSentinelJson,
+    repairInstruction: repairInstruction
+      ? `${sentinelJsonFrameInstruction}\n${repairInstruction}`
+      : sentinelJsonFrameInstruction,
+    ...(compactRepairThresholdTokens === undefined ? {} : { compactRepairThresholdTokens }),
+  };
+}
+
+export function synthesisFrameProfile<T>(
+  schema: z.ZodSchema<T>,
+  repairInstruction?: string,
+  compactRepairThresholdTokens?: number,
+): StructuredProfile<T> {
+  return {
+    kind: "framed-zod",
+    schema,
+    parse: parseSynthesisFrames,
+    repairInstruction: repairInstruction
+      ? `${synthesisFrameInstruction}\n${repairInstruction}`
+      : synthesisFrameInstruction,
+    ...(compactRepairThresholdTokens === undefined ? {} : { compactRepairThresholdTokens }),
+  };
+}
+
+export function parseSentinelJson(text: string): unknown {
+  const payload = hasMarker(text, "<<<JSON>>>")
+    ? between(text, "<<<JSON>>>", END)
+    : text.trim();
+  const fenced = payload.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/i);
+  return JSON.parse((fenced?.[1] ?? payload).trim());
+}
+
+export function parseSynthesisFrames(text: string): SynthesisOutput {
+  if (!hasMarker(text, "<<<CREATE>>>")
+    && !hasMarker(text, "<<<PATCH>>>")
+    && !hasMarker(text, "<<<SKIP>>>")) {
+    const heading = /^\s{0,3}#{1,6}\s+(CREATE|PATCH|SKIP|CONTENT|SECTION|END_CREATE|END_PATCH|END_SKIP)\s*$/im.exec(text)?.[1];
+    if (heading !== undefined) {
+      throw new Error(`missing exact <<<${heading}>>> field-frame marker; use the literal marker on its own line, not a Markdown heading`);
+    }
+    const synthesisMarker = /^\s*<<<(?:REASONING|CONTENT|END_CONTENT|END_CREATE|END_PATCH|SECTION|END_SECTION|END_SKIP|ENTITY_TYPES_DELTA_JSON|END_ENTITY_TYPES_DELTA_JSON|END)>>>\s*$/m.exec(text)?.[0];
+    if (synthesisMarker !== undefined && !hasMarker(text, "<<<JSON>>>")) {
+      throw new Error("field-framed synthesis output is missing an action frame; expected <<<CREATE>>>, <<<PATCH>>>, or <<<SKIP>>>");
+    }
+    return parseSentinelJson(text) as SynthesisOutput;
+  }
+  requireMarker(text, END);
+  const entityTypesDelta = parseEntityTypesDelta(text);
+  return {
+    reasoning: parseReasoning(text),
+    actions: [...parseSynthesisCreates(text), ...parseSynthesisPatches(text)],
+    skips: parseSynthesisSkips(text),
+    ...(entityTypesDelta === undefined ? {} : { entity_types_delta: entityTypesDelta as SynthesisOutput["entity_types_delta"] }),
+  };
+}
+
+function parseSynthesisCreates(text: string): SynthesisOutput["actions"] {
+  const lines = linesOf(text);
+  const actions: SynthesisOutput["actions"] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!isMarkerLine(lines[i], "<<<CREATE>>>")) continue;
+    const contentIdx = markerLineIndex(lines, "<<<CONTENT>>>", i + 1);
+    const endIdx = contentIdx < 0 ? -1 : markerLineIndex(lines, "<<<END_CREATE>>>", contentIdx + 1);
+    if (contentIdx < 0 || endIdx < 0) throw new Error("incomplete create frame");
+    const header = parseHeader(lines.slice(i + 1, contentIdx).join("\n"));
+    actions.push({
+      kind: "create",
+      entityKey: header.entityKey ?? "",
+      path: header.path ?? "",
+      annotation: header.annotation ?? "",
+      content: parseSynthesisContent(lines, contentIdx + 1, endIdx),
+    });
+    i = endIdx;
+  }
+  return actions;
+}
+
+function parseSynthesisPatches(text: string): SynthesisOutput["actions"] {
+  const lines = linesOf(text);
+  const actions: SynthesisOutput["actions"] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!isMarkerLine(lines[i], "<<<PATCH>>>")) continue;
+    const endPatchIdx = markerLineIndex(lines, "<<<END_PATCH>>>", i + 1);
+    if (endPatchIdx < 0) throw new Error("incomplete patch frame");
+    const firstSectionIdx = markerLineIndex(lines, "<<<SECTION>>>", i + 1);
+    const headerEnd = firstSectionIdx >= 0 && firstSectionIdx < endPatchIdx ? firstSectionIdx : endPatchIdx;
+    const header = parseHeader(lines.slice(i + 1, headerEnd).join("\n"));
+    const sections: Extract<SynthesisOutput["actions"][number], { kind: "patch" }>["sections"] = [];
+    for (let j = headerEnd; j < endPatchIdx; j++) {
+      if (!isMarkerLine(lines[j], "<<<SECTION>>>")) continue;
+      const contentIdx = markerLineIndex(lines, "<<<CONTENT>>>", j + 1);
+      const endSectionIdx = contentIdx < 0 ? -1 : markerLineIndex(lines, "<<<END_SECTION>>>", contentIdx + 1);
+      if (contentIdx < 0 || endSectionIdx < 0 || endSectionIdx > endPatchIdx) throw new Error("incomplete patch section frame");
+      const sectionHeader = parseHeader(lines.slice(j + 1, contentIdx).join("\n"));
+      const heading = sectionHeader.heading ?? "";
+      sections.push({
+        operation: sectionHeader.operation as "add" | "append" | "replace",
+        heading,
+        content: stripRepeatedSectionHeading(
+          heading,
+          parseSynthesisContent(lines, contentIdx + 1, endSectionIdx),
+        ),
+        ...(sectionHeader.expectedSectionOrdinal === undefined
+          ? {}
+          : { expectedSectionOrdinal: Number(sectionHeader.expectedSectionOrdinal) }),
+        ...(sectionHeader.expectedSectionHash === undefined ? {} : { expectedSectionHash: sectionHeader.expectedSectionHash }),
+      } as typeof sections[number]);
+      j = endSectionIdx;
+    }
+    actions.push({
+      kind: "patch",
+      entityKey: header.entityKey ?? "",
+      path: header.path ?? "",
+      expectedPageHash: header.expectedPageHash ?? "",
+      sections,
+    });
+    i = endPatchIdx;
+  }
+  return actions;
+}
+
+function stripRepeatedSectionHeading(heading: string, content: string): string {
+  const [first, ...rest] = content.split("\n");
+  if (first?.trim() !== heading.trim()) return content;
+  return rest.join("\n").trim();
+}
+
+const RESERVED_PROTOCOL_MARKER_RE = /^<<<[A-Z][A-Z0-9_]*>>>$/;
+
+function parseSynthesisContent(lines: string[], start: number, end: number): string {
+  const contentLines = lines.slice(start, end);
+  let last = contentLines.length - 1;
+  while (last >= 0 && contentLines[last].trim() === "") last -= 1;
+  if (last >= 0 && isMarkerLine(contentLines[last], "<<<END_CONTENT>>>")) {
+    contentLines.splice(last, 1);
+  }
+  const reserved = contentLines.find((line) => RESERVED_PROTOCOL_MARKER_RE.test(line.trim()));
+  if (reserved !== undefined) {
+    throw new Error(`reserved protocol marker inside synthesis Markdown: ${reserved.trim()}`);
+  }
+  return contentLines.join("\n").trim();
+}
+
+function parseSynthesisSkips(text: string): SynthesisOutput["skips"] {
+  const lines = linesOf(text);
+  const skips: SynthesisOutput["skips"] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!isMarkerLine(lines[i], "<<<SKIP>>>")) continue;
+    const endIdx = markerLineIndex(lines, "<<<END_SKIP>>>", i + 1);
+    if (endIdx < 0) throw new Error("incomplete skip frame");
+    const header = parseHeader(lines.slice(i + 1, endIdx).join("\n"));
+    skips.push({ entityKey: header.entityKey ?? "", reason: header.reason ?? "" });
+    i = endIdx;
+  }
+  return skips;
+}
 
 export const wikiPagesFrameInstruction = [
   "Return framed wiki pages only.",
@@ -306,6 +493,9 @@ function parseReasoning(text: string): string {
   const lines = linesOf(text);
   const startIdx = markerLineIndex(lines, marker);
   const endIdx = firstMarkerLineAfter(lines, startIdx + 1, [
+    "<<<CREATE>>>",
+    "<<<PATCH>>>",
+    "<<<SKIP>>>",
     "<<<PAGE>>>",
     "<<<DELETE>>>",
     "<<<ENTITY_TYPES_DELTA_JSON>>>",

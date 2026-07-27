@@ -6,5 +6,6 @@ Rules:
 - Return one entity record with the same normalized entityKey matching exactly `^[a-z0-9]+(?:[_-][a-z0-9]+)*$` and optional entityType. The key may contain only lowercase ASCII letters, digits, underscore, and hyphen; preserve the supplied validated key unchanged.
 - exactSource text is server-owned and must be copied unchanged when supplied.
 
-Return ONLY JSON:
+<<<JSON>>>
 {"entityKey":"...","entityType":"...","packetIds":["..."],"facts":["..."],"exactSourceRanges":[{"startLine":1,"endLine":1}],"exactSource":[{"startLine":1,"endLine":1,"text":"..."}],"links":["https://..."]}
+<<<END>>>

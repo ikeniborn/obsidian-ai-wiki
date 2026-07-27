@@ -1,0 +1,31 @@
+{
+  "variant": "unknown",
+  "session": "1784822269108",
+  "firstTs": "2026-07-23T15:57:49.108Z",
+  "lastTs": "2026-07-23T16:00:32.955Z",
+  "status": "running",
+  "diagnosticMode": "undici-request-adapter",
+  "transport": "desktop-direct",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrxp3gtr-1",
+    "estimatedInputTokens": 7902,
+    "outputBudget": 16384,
+    "responseFormatType": "json_schema",
+    "hash": "fnv1a:9d75de65"
+  },
+  "firstHttpMs": 71497,
+  "firstFileMs": 90279,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 7902,
+    "outputBudget": 16384
+  },
+  "transportRetries": 1,
+  "transportRecovered": 1,
+  "structuralRetries": 1,
+  "structuralSummary": [
+    "ingest.evidence-map:schema_validate:[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"noEvidence\"\n    ],\n    \"message\": \"Required\"\n  }\n]"
+  ],
+  "createdPages": 0,
+  "resultTexts": []
+}

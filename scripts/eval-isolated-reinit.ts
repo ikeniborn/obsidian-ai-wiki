@@ -33,7 +33,7 @@ function cloneSettings(settings: LlmWikiPluginSettings): LlmWikiPluginSettings {
   return JSON.parse(JSON.stringify(settings)) as LlmWikiPluginSettings;
 }
 
-function mergeSettings(data: Record<string, unknown> | null): LlmWikiPluginSettings {
+export function mergeSettings(data: Record<string, unknown> | null): LlmWikiPluginSettings {
   const base = cloneSettings(DEFAULT_SETTINGS);
   const caData = (data?.claudeAgent as Record<string, unknown>) ?? {};
   const naData = (data?.nativeAgent as Record<string, unknown>) ?? {};
@@ -73,7 +73,7 @@ function mergeSettings(data: Record<string, unknown> | null): LlmWikiPluginSetti
   return merged;
 }
 
-async function readJson(pathname: string): Promise<Record<string, unknown> | null> {
+export async function readJson(pathname: string): Promise<Record<string, unknown> | null> {
   try {
     return JSON.parse(await readFile(pathname, "utf8")) as Record<string, unknown>;
   } catch {
@@ -81,7 +81,7 @@ async function readJson(pathname: string): Promise<Record<string, unknown> | nul
   }
 }
 
-function safeJoin(root: string, vaultPath: string): string {
+export function safeJoin(root: string, vaultPath: string): string {
   const normalized = vaultPath.split("/").filter(Boolean).join(path.sep);
   const resolved = path.resolve(root, normalized);
   const rootResolved = path.resolve(root);
@@ -91,7 +91,7 @@ function safeJoin(root: string, vaultPath: string): string {
   return resolved;
 }
 
-class FsVaultAdapter implements VaultAdapter {
+export class FsVaultAdapter implements VaultAdapter {
   constructor(private root: string) {}
 
   async read(vaultPath: string): Promise<string> {
@@ -166,7 +166,7 @@ class FsVaultAdapter implements VaultAdapter {
   }
 }
 
-async function loadDomains(adapter: FsVaultAdapter): Promise<DomainEntry[]> {
+export async function loadDomains(adapter: FsVaultAdapter): Promise<DomainEntry[]> {
   const domains: DomainEntry[] = [];
   if (await adapter.exists(WIKI_ROOT)) {
     const listed = await adapter.list(WIKI_ROOT);

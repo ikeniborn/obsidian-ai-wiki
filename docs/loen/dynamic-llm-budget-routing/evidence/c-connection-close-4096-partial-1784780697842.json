@@ -1,0 +1,31 @@
+{
+  "variant": "c-connection-close-4096-partial",
+  "session": "1784780697842",
+  "firstTs": "2026-07-23T04:24:57.842Z",
+  "lastTs": "2026-07-23T04:25:40.467Z",
+  "status": "running",
+  "diagnosticMode": "connection-close",
+  "transport": "desktop-direct",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrx0cg8k-1",
+    "estimatedInputTokens": 7069,
+    "outputBudget": 4096,
+    "responseFormatType": "json_schema",
+    "hash": "fnv1a:749fb1bd"
+  },
+  "firstHttpMs": 42202,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 7069,
+    "outputBudget": 4096
+  },
+  "transportRetries": 1,
+  "transportRecovered": 0,
+  "structuralRetries": 2,
+  "structuralSummary": [
+    "init.bootstrap-map:empty_output:Empty structured output",
+    "init.bootstrap-map:response_format_fallback:json_schema -> json_object"
+  ],
+  "createdPages": 0,
+  "resultTexts": []
+}

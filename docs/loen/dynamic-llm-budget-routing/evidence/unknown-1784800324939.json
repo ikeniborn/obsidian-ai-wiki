@@ -1,0 +1,38 @@
+{
+  "variant": "unknown",
+  "session": "1784800324939",
+  "firstTs": "2026-07-23T09:52:04.939Z",
+  "lastTs": "2026-07-23T10:05:11.266Z",
+  "status": "running",
+  "diagnosticMode": "undici-request-adapter",
+  "transport": "desktop-direct",
+  "firstRequest": {
+    "callSite": "init.bootstrap-map",
+    "requestId": "llm-mrxc14ku-1",
+    "estimatedInputTokens": 7097,
+    "outputBudget": 16384,
+    "responseFormatType": "json_schema",
+    "hash": "fnv1a:ed0e9ea6"
+  },
+  "firstHttpMs": 56326,
+  "firstFileMs": 73306,
+  "firstPromptBudget": {
+    "estimatedInputTokens": 7097,
+    "outputBudget": 16384
+  },
+  "transportRetries": 1,
+  "transportRecovered": 1,
+  "structuralRetries": 3,
+  "structuralSummary": [
+    "ingest.synthesize:json_parse:No JSON object found",
+    "ingest.synthesize:empty_output:Empty structured output",
+    "ingest.synthesize:response_format_fallback:json_schema -> json_object"
+  ],
+  "createdPages": 15,
+  "resultTexts": [
+    "Источник «Настройка прокси.md» → домен «os-unix»: создано 7 стр.",
+    "Источник «NFS Server.md» → домен «os-unix»: создано 8 стр.",
+    ""
+  ],
+  "finalError": "ingest: synthesis failed — Prompt requires 66929 estimated tokens but budget is 65536"
+}

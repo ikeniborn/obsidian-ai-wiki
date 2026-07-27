@@ -62,6 +62,11 @@ interface PreparedDomainBootstrap {
   outputTokens: number;
 }
 
+export interface InitIngestRuntime {
+  model: string;
+  opts: LlmCallOptions;
+}
+
 function compareCodePoints(left: string, right: string): number {
   const a = Array.from(left, (value) => value.codePointAt(0) ?? 0);
   const b = Array.from(right, (value) => value.codePointAt(0) ?? 0);
@@ -69,6 +74,85 @@ function compareCodePoints(left: string, right: string): number {
     if (a[index] !== b[index]) return a[index] - b[index];
   }
   return a.length - b.length;
+}
+
+function bootstrapAbortError(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException("The operation was aborted", "AbortError");
+}
+
+function waitForBootstrapTransportSettle(signal: AbortSignal, delayMs = 1_500): Promise<void> {
+  if (signal.aborted) return Promise.reject(bootstrapAbortError(signal));
+  let onAbort: (() => void) | undefined;
+  const pending = new Promise<void>((resolve, reject) => {
+    // eslint-disable-next-line obsidianmd/prefer-window-timers -- Shared phase code also runs in Node tests.
+    const timer = setTimeout(resolve, delayMs);
+    onAbort = (): void => {
+      // eslint-disable-next-line obsidianmd/prefer-window-timers -- Shared phase code also runs in Node tests.
+      clearTimeout(timer);
+      reject(bootstrapAbortError(signal));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  return pending.finally(() => {
+    if (onAbort) signal.removeEventListener("abort", onAbort);
+  });
+}
+
+function cloneEntityTypes(entityTypes: readonly EntityType[] | undefined): EntityType[] {
+  return (entityTypes ?? []).map((entityType) => ({
+    ...entityType,
+    extraction_cues: [...entityType.extraction_cues],
+  }));
+}
+
+function mergeBootstrapEntityTypes(
+  existingTypes: readonly EntityType[] | undefined,
+  generatedTypes: readonly EntityType[],
+): EntityType[] {
+  const existing = cloneEntityTypes(existingTypes);
+  const existingNames = new Set(existing.map((entityType) => entityType.type));
+  const additions = generatedTypes
+    .filter((entityType) => !existingNames.has(entityType.type))
+    .map((entityType) => ({ ...entityType, extraction_cues: [...entityType.extraction_cues] }))
+    .sort((left, right) => left.type.localeCompare(right.type));
+  return [...existing, ...additions];
+}
+
+function bootstrapTaxonomyIssue(
+  entry: Pick<DomainEntry, "entity_types">,
+  bootstrapEvidence: BootstrapEvidence,
+): string | null {
+  const candidateCount = new Set(bootstrapEvidence.candidates.map((candidate) => candidate.entityKey)).size;
+  const typeCount = new Set((entry.entity_types ?? []).map((entityType) => entityType.type)).size;
+  if (candidateCount >= 3 && typeCount <= 1) {
+    return `taxonomy too collapsed: ${candidateCount} evidence candidates mapped to ${typeCount} entity type(s)`;
+  }
+  return null;
+}
+
+function renderBootstrapTaxonomyRepairPrompt(
+  issue: string,
+  bootstrapEvidence: BootstrapEvidence,
+  existingTypes: readonly EntityType[] | undefined,
+): string {
+  return JSON.stringify({
+    repair: "Regenerate the domain entry JSON. The previous taxonomy was rejected by local domain validation.",
+    issue,
+    rules: [
+      "Derive reusable entity types from the supplied bootstrap evidence.",
+      "Do not collapse unrelated candidates into one generic type.",
+      "Reuse existing entity types when they fit; add only source-supported missing types.",
+      "Do not invent a permanent domain-specific fallback list.",
+    ],
+    existingEntityTypes: cloneEntityTypes(existingTypes),
+    evidenceCandidates: bootstrapEvidence.candidates.map((candidate) => ({
+      entityKey: candidate.entityKey,
+      facts: candidate.facts.slice(0, 6),
+    })),
+    domainThemes: bootstrapEvidence.domainThemes.slice(0, 12),
+  });
 }
 
 async function* prepareDomainBootstrap(
@@ -107,6 +191,7 @@ async function* prepareDomainBootstrap(
         vaultName,
         sourcePaths,
         sourceFile,
+        existingEntityTypes: cloneEntityTypes(existing?.entity_types),
         bootstrapEvidence,
       }),
     },
@@ -179,7 +264,15 @@ async function* prepareDomainBootstrap(
   }
 
   yield { kind: "tool_use", name: "Initialising domain", input: {} };
-  const sink: StructuredSink<{
+  if (llm.nativeRequestExecutor) {
+    try {
+      await waitForBootstrapTransportSettle(signal);
+    } catch (error) {
+      if ((error as Error).name === "AbortError" || signal.aborted) return null;
+      throw error;
+    }
+  }
+  let sink: StructuredSink<{
     id: string;
     name: string;
     wiki_folder: string;
@@ -193,22 +286,55 @@ async function* prepareDomainBootstrap(
     entity_types: EntityType[];
     language_notes: string;
   };
+  let bootstrapRequestMessages = messages;
+  let bootstrapOutputTokens = 0;
+  let entry: DomainEntry | undefined;
   try {
-    const bootstrapLifecycle = createLlmLifecycle("bootstrap_domain");
-    for await (const event of runStructuredStreaming({
-      llm,
-      model,
-      baseMessages: messages,
-      opts,
-      profile: { kind: "json-zod", schema: DomainEntrySchema },
-      maxRetries: opts.structuredRetries ?? 1,
-      callSite: "init.bootstrap",
-      lifecycle: bootstrapLifecycle,
-      signal,
-      onEvent: () => {},
-      transport: "non-stream",
-    }, sink)) {
-      yield event;
+    for (let semanticAttempt = 0; ; semanticAttempt++) {
+      sink = {};
+      const bootstrapLifecycle = createLlmLifecycle("bootstrap_domain");
+      for await (const event of runStructuredStreaming({
+        llm,
+        model,
+        baseMessages: bootstrapRequestMessages,
+        opts: { ...opts, nativeFreshConnection: true },
+        profile: { kind: "json-zod", schema: DomainEntrySchema },
+        maxRetries: opts.structuredRetries ?? 1,
+        callSite: "init.bootstrap",
+        lifecycle: bootstrapLifecycle,
+        signal,
+        onEvent: () => {},
+        transport: "non-stream",
+      }, sink)) {
+        yield event;
+      }
+      bootstrapOutputTokens += sink.outputTokens ?? 0;
+      parsed = sink.value!;
+      entry = {
+        id: parsed.id,
+        name: parsed.name,
+        wiki_folder: sanitizeWikiFolder(parsed.wiki_folder),
+        entity_types: mergeBootstrapEntityTypes(existing?.entity_types, parsed.entity_types),
+        language_notes: parsed.language_notes,
+      };
+      for (const entityType of entry.entity_types ?? []) {
+        if (entityType.wiki_subfolder) {
+          entityType.wiki_subfolder = sanitizeWikiSubfolder(entityType.wiki_subfolder);
+        }
+        if (entityType.wiki_subfolder === domainId) entityType.wiki_subfolder = "";
+      }
+      if (!entry.id || !entry.wiki_folder) throw new Error("Missing required fields");
+      if (force && existing) entry.wiki_folder = existing.wiki_folder;
+      const taxonomyIssue = bootstrapTaxonomyIssue(entry, bootstrapEvidence);
+      if (taxonomyIssue === null) break;
+      yield lifecycleEvent(sink.lifecycle!.id, sink.lifecycle!.action, "failed");
+      if (semanticAttempt >= (opts.structuredRetries ?? 1)) {
+        throw new Error(taxonomyIssue);
+      }
+      bootstrapRequestMessages = [
+        ...messages,
+        { role: "user", content: renderBootstrapTaxonomyRepairPrompt(taxonomyIssue, bootstrapEvidence, existing?.entity_types) },
+      ];
     }
     parsed = sink.value!;
     yield lifecycleEvent(sink.lifecycle!.id, sink.lifecycle!.action, "applying");
@@ -228,23 +354,16 @@ async function* prepareDomainBootstrap(
 
   if (signal.aborted) return null;
 
-  let entry: DomainEntry;
-  try {
-    entry = {
-      id: parsed.id,
-      name: parsed.name,
-      wiki_folder: sanitizeWikiFolder(parsed.wiki_folder),
-      entity_types: parsed.entity_types,
-      language_notes: parsed.language_notes,
+  if (entry === undefined) {
+    yield {
+      kind: "error",
+      message: `init: domain bootstrap failed — invalid domain entry for ${sourceFile}`,
     };
-    for (const entityType of entry.entity_types ?? []) {
-      if (entityType.wiki_subfolder) {
-        entityType.wiki_subfolder = sanitizeWikiSubfolder(entityType.wiki_subfolder);
-      }
-      if (entityType.wiki_subfolder === domainId) entityType.wiki_subfolder = "";
-    }
+    yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
+    return null;
+  }
+  try {
     if (!entry.id || !entry.wiki_folder) throw new Error("Missing required fields");
-    if (force && existing) entry.wiki_folder = existing.wiki_folder;
   } catch {
     yield {
       kind: "error",
@@ -258,7 +377,7 @@ async function* prepareDomainBootstrap(
     sourceFile,
     sourceContent,
     entry,
-    outputTokens: sink.outputTokens ?? 0,
+    outputTokens: bootstrapOutputTokens,
   };
 }
 
@@ -283,6 +402,7 @@ export async function* runInit(
   opts: LlmCallOptions = {},
   onFileError?: OnFileError,
   similarity?: PageSimilarityService,
+  ingestRuntime?: InitIngestRuntime,
 ): AsyncGenerator<RunEvent> {
   const domainId = args[0];
   const dryRun = args.includes("--dry-run");
@@ -313,7 +433,17 @@ export async function* runInit(
       return;
     }
     yield* runIncrementalReinit(
-      domainId, sourcePaths, vaultTools, llm, model, domains, signal, opts, onFileError, similarity,
+      domainId,
+      sourcePaths,
+      vaultTools,
+      llm,
+      model,
+      domains,
+      signal,
+      opts,
+      onFileError,
+      similarity,
+      ingestRuntime,
     );
     return;
   }
@@ -456,13 +586,28 @@ export async function* runInit(
       true,
       similarity,
       preparedBootstrap,
+      ingestRuntime,
     );
     return;
   }
 
   if (sourcePaths.length) {
     yield* runInitWithSources(
-      domainId, sourcePaths, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, false, similarity,
+      domainId,
+      sourcePaths,
+      dryRun,
+      vaultTools,
+      llm,
+      model,
+      domains,
+      vaultName,
+      signal,
+      opts,
+      onFileError,
+      false,
+      similarity,
+      undefined,
+      ingestRuntime,
     );
     return;
   }
@@ -480,7 +625,23 @@ export async function* runInit(
     yield { kind: "error", message: `init: no source_paths configured for "${domainId}" — add them in settings` };
     return;
   }
-  yield* runInitWithSources(domainId, effectiveSources, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, false, similarity);
+  yield* runInitWithSources(
+    domainId,
+    effectiveSources,
+    dryRun,
+    vaultTools,
+    llm,
+    model,
+    domains,
+    vaultName,
+    signal,
+    opts,
+    onFileError,
+    false,
+    similarity,
+    undefined,
+    ingestRuntime,
+  );
 }
 
 export async function* runInitWithSources(
@@ -498,10 +659,13 @@ export async function* runInitWithSources(
   force: boolean = false,
   similarity?: PageSimilarityService,
   preparedBootstrap?: PreparedDomainBootstrap,
+  ingestRuntime?: InitIngestRuntime,
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
   let outputTokens = 0;
   const wikiRootGuess = `!Wiki`;
+  const sourceModel = ingestRuntime?.model ?? model;
+  const sourceOpts = ingestRuntime?.opts ?? opts;
 
   yield { kind: "tool_use", name: "Glob", input: { pattern: sourcePaths.join(", ") } };
   const preparedSourceContents = new Map(
@@ -687,7 +851,18 @@ export async function* runInitWithSources(
       let controlledRetryable: boolean | undefined;
       try {
         const forwarded = forwardIngest(
-          runIngest([file], vaultTools, llm, model, [currentDomain], vaultTools.vaultRoot, signal, opts, similarity, annotationsCache),
+          runIngest(
+            [file],
+            vaultTools,
+            llm,
+            sourceModel,
+            [currentDomain],
+            vaultTools.vaultRoot,
+            signal,
+            sourceOpts,
+            similarity,
+            annotationsCache,
+          ),
           (event) => {
             if (event.domainId === domainId && currentDomain) {
               currentDomain = { ...currentDomain, ...event.patch };
@@ -719,7 +894,13 @@ export async function* runInitWithSources(
           return;
         }
         const canRetry = !retried && (controlledRetryable ?? true);
-        const choice = onFileError ? await onFileError(file, caughtErr, canRetry) : "skip";
+        let choice: Awaited<ReturnType<NonNullable<OnFileError>>> = "skip";
+        if (onFileError) {
+          const progress = i18nFor(resolveLang(sourceOpts.outputLanguage)).initProgress;
+          yield { kind: "info_text", icon: "⏳", summary: progress.fileErrorWaiting(file) };
+          choice = await onFileError(file, caughtErr, canRetry);
+          yield { kind: "info_text", icon: "ℹ️", summary: progress.fileErrorDecision(choice) };
+        }
         if (choice === "stop") return;
         if (choice === "retry" && canRetry) { retried = true; continue; }
         done = true;
@@ -793,8 +974,11 @@ export async function* runIncrementalReinit(
   opts: LlmCallOptions,
   onFileError: OnFileError | undefined,
   similarity?: PageSimilarityService,
+  ingestRuntime?: InitIngestRuntime,
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
+  const sourceModel = ingestRuntime?.model ?? model;
+  const sourceOpts = ingestRuntime?.opts ?? opts;
   let currentDomain = domains.find((d) => d.id === domainId) ?? null;
   if (!currentDomain) {
     yield { kind: "error", message: `incremental: domain "${domainId}" missing` };
@@ -817,7 +1001,17 @@ export async function* runIncrementalReinit(
       let controlledRetryable: boolean | undefined;
       try {
         const forwarded = forwardIngest(
-          runIngest([file], vaultTools, llm, model, [currentDomain], vaultTools.vaultRoot, signal, opts, similarity),
+          runIngest(
+            [file],
+            vaultTools,
+            llm,
+            sourceModel,
+            [currentDomain],
+            vaultTools.vaultRoot,
+            signal,
+            sourceOpts,
+            similarity,
+          ),
           (event) => {
             if (event.domainId === domainId) currentDomain = { ...currentDomain!, ...event.patch };
           },
@@ -848,7 +1042,13 @@ export async function* runIncrementalReinit(
         }
         if (caught.name === "AbortError" || signal.aborted) return;
         const canRetry = !retried && (controlledRetryable ?? true);
-        const choice = onFileError ? await onFileError(file, caught, canRetry) : "skip";
+        let choice: Awaited<ReturnType<NonNullable<OnFileError>>> = "skip";
+        if (onFileError) {
+          const progress = i18nFor(resolveLang(sourceOpts.outputLanguage)).initProgress;
+          yield { kind: "info_text", icon: "⏳", summary: progress.fileErrorWaiting(file) };
+          choice = await onFileError(file, caught, canRetry);
+          yield { kind: "info_text", icon: "ℹ️", summary: progress.fileErrorDecision(choice) };
+        }
         if (choice === "stop") return;
         if (choice === "retry" && canRetry) { retried = true; continue; }
         fileDone = true;

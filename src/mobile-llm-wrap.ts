@@ -1,12 +1,8 @@
 import type { LlmChatCompletionCreateOptions, LlmClient } from "./types";
 import type OpenAI from "openai";
 
-/**
- * Mobile-only wrapper: forces stream:false (requestUrl/mobileFetch не поддерживает
- * incremental SSE). Эмулирует AsyncIterable из non-stream completion для совместимости
- * с phase-кодом, который ожидает chunk-stream.
- */
-export function wrapMobileNoStream(inner: LlmClient): LlmClient {
+/** Converts requested streams to buffered completions while preserving the phase-level async iterable contract. */
+export function wrapBufferedNoStream(inner: LlmClient): LlmClient {
   const create = (async (
     params: Record<string, unknown>,
     callOpts?: LlmChatCompletionCreateOptions,
@@ -28,12 +24,20 @@ export function wrapMobileNoStream(inner: LlmClient): LlmClient {
   };
 }
 
+export const wrapMobileNoStream = wrapBufferedNoStream;
+
 async function* completionToAsyncIterable(
   c: OpenAI.Chat.ChatCompletion,
 ): AsyncIterable<OpenAI.Chat.ChatCompletionChunk> {
   const choice = c.choices[0];
   const content = typeof choice?.message?.content === "string" ? choice.message.content : "";
-  const reasoning = (choice?.message as { reasoning?: string } | undefined)?.reasoning;
+  const message = choice?.message as {
+    reasoning?: string;
+    reasoning_content?: string;
+  } | undefined;
+  const reasoning = typeof message?.reasoning === "string"
+    ? message.reasoning
+    : message?.reasoning_content;
 
   if (reasoning) {
     yield mkChunk(c, { reasoning } as Partial<OpenAI.Chat.ChatCompletionChunk.Choice.Delta>);

@@ -52,3 +52,20 @@ test("stripDeadLinks removes empty Related section after all bullets become dead
   assert.doesNotMatch(out, /## Related/);
   assert.match(out, /## Facts\nBody\n\n## External links/);
 });
+
+test("stripDeadLinks preserves the required ATX heading space before punctuation", () => {
+  const input = [
+    "---",
+    "type: configuration",
+    "---",
+    "# .bashrc",
+    "",
+    "## Facts",
+    "Shell configuration.",
+  ].join("\n");
+
+  const out = stripDeadLinks(input, new Set());
+
+  assert.match(out, /^# \.bashrc$/m);
+  assert.doesNotMatch(out, /^#\.bashrc$/m);
+});
