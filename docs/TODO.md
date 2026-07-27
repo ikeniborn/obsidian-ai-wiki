@@ -23,3 +23,4 @@
 | bounded-ingest-model-controls | in-progress | ✓ | ✓ | ✓ | – | 2026-07-16 |  | Bounded ingest/model controls; human LLM lifecycle; complete full-Re-init domain wipe |
 | synthesis-routing-quality | done | n/a | n/a | n/a | OK | 2026-07-22 | 2026-07-22 | LoEn research selected verified server-owned create paths + batch-2 synthesis cap for os-unix replay |
 | dynamic-llm-budget-routing | in-progress | n/a | n/a | n/a | – | 2026-07-23 |  | Live `1785096684125`: 22/22 done, 106 HTTP 200, zero retries; fix Query fact gate 91.809% and 12/537 evidence gaps; conflict trigger and successful file-Retry status remain pending |
+| td1-td2-evidence-and-grounding | in-progress | n/a | ✓ | – | – | 2026-07-27 |  | TD-1 exact evidence reconciliation + TD-2 query context/grounding; Phase 0 red tests, live os-unix run, diagnostic os-mac pass |
