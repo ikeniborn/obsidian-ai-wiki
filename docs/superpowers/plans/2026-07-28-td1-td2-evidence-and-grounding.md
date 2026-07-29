@@ -27,6 +27,10 @@ review:
       verdict: fixed
 chain:
   spec: docs/superpowers/specs/2026-07-27-td1-td2-evidence-and-grounding-design.md
+result_check:
+  verdict: OK
+  plan_hash: 1bd12a773809b861
+  last_run: 2026-07-29
 ---
 
 # TD-1/TD-2 Evidence Reconciliation and Query Grounding Implementation Plan
