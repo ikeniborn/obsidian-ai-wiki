@@ -267,6 +267,40 @@ test("reconcileSynthesisEvidence does not duplicate a carried-over item on repea
   assert.equal((reconciled.content.match(/sudo earlier-command/g) ?? []).length, 1);
 });
 
+test("reconcileSynthesisEvidence does not duplicate an item present in both the existing evidence section and the current ledger", () => {
+  const existing = [
+    "# Article",
+    "",
+    "## Точные технические данные",
+    "",
+    "```bash",
+    "sudo earlier-command",
+    "```",
+    "",
+    "## Sources",
+    "",
+    "- [[Source A]]",
+  ].join("\n");
+  const candidate = [
+    "# Article",
+    "",
+    "## Sources",
+    "",
+    "- [[Source A]]",
+    "- [[Source B]]",
+  ].join("\n");
+  const ledger = extractSynthesisEvidenceLedger([
+    "```bash",
+    "sudo earlier-command",
+    "```",
+  ].join("\n"));
+
+  const reconciled = reconcileSynthesisEvidence(candidate, existing, ledger, "ru");
+
+  assert.equal(reconciled.appendedItems, 1);
+  assert.equal((reconciled.content.match(/sudo earlier-command/g) ?? []).length, 1);
+});
+
 test("findMissingSynthesisEvidence tolerates a trailing shell line continuation", () => {
   const ledger = extractSynthesisEvidenceLedger([
     "```bash",

@@ -424,6 +424,23 @@ function appendEvidenceSection(
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
 }
 
+function dedupeEvidenceItems(
+  items: readonly SynthesisEvidenceLedgerItem[],
+): SynthesisEvidenceLedgerItem[] {
+  const seen = new Set<string>();
+  const deduped: SynthesisEvidenceLedgerItem[] = [];
+  for (const item of items) {
+    const raw = item.kind === "code"
+      ? normalizedCoverage(item.coverageUnits.join("\n"))
+      : normalizedCoverage(item.coverageUnits[0] ?? "");
+    const key = stripTrailingContinuation(raw);
+    if (key.length > 0 && seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+  }
+  return deduped;
+}
+
 export function reconcileSynthesisEvidence(
   content: string,
   existing: string | null,
@@ -435,7 +452,7 @@ export function reconcileSynthesisEvidence(
     ? []
     : findMissingSynthesisEvidence(extractLedger(existingEvidenceSection(existing), false), [sanitized.content]);
   const missing = findMissingSynthesisEvidence(ledger, [sanitized.content]);
-  const appended = [...carryOver, ...missing];
+  const appended = dedupeEvidenceItems([...carryOver, ...missing]);
   const reconciled = appendEvidenceSection(sanitized.content, appended, language);
   const unresolved = findMissingSynthesisEvidence(ledger, [reconciled]);
   if (unresolved.length > 0) {
