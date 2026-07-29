@@ -188,16 +188,36 @@ function containsExactNumber(context: string, value: string): boolean {
   return false;
 }
 
+function idForm(value: string): string {
+  return value
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function titleSupported(unit: QueryTechnicalUnit, articleIds: readonly string[]): boolean {
+  if (unit.kind === "number") return false;
+  const unitForm = idForm(unit.text);
+  if (!unitForm.includes("_")) return false;
+  return articleIds.some((articleId) => {
+    const articleForm = idForm(articleId);
+    return articleForm === unitForm || articleForm.endsWith(`_${unitForm}`);
+  });
+}
+
 export function findUnsupportedTechnicalUnits(
   answer: string,
   selectedContext: readonly string[],
+  articleIds: readonly string[] = [],
 ): QueryTechnicalUnit[] {
   const context = normalizeText(selectedContext.join("\n"));
   return extractTechnicalUnits(answer).filter((unit) => {
     const value = normalizeText(unit.text);
-    return unit.kind === "number"
-      ? !containsExactNumber(context, value)
-      : !context.includes(value);
+    const supported = unit.kind === "number"
+      ? containsExactNumber(context, value)
+      : context.includes(value);
+    return !supported && !titleSupported(unit, articleIds);
   });
 }
 

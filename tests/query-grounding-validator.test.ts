@@ -117,6 +117,38 @@ test("technical grounding does not classify slash-separated prose as a path", ()
   }]);
 });
 
+test("technical grounding treats a unit as supported when it matches a selected article's title-derived id", () => {
+  const context = ["Раздел объясняет настройку параметров ядра памяти без упоминания точного имени параметра."];
+  const answer = "Параметр `vm.dirty_expire_centisecs` управляет временем жизни грязных страниц.";
+  const articleIds = ["wiki_linux_vm_dirty_expire_centisecs"];
+
+  assert.deepEqual(findUnsupportedTechnicalUnits(answer, context), [{
+    kind: "inline_code",
+    text: "vm.dirty_expire_centisecs",
+  }]);
+  assert.deepEqual(findUnsupportedTechnicalUnits(answer, context, articleIds), []);
+});
+
+test("technical grounding does not apply title support to a single-segment unit", () => {
+  const answer = "See `restart` for details.";
+  const articleIds = ["wiki_linux_restart"];
+
+  assert.deepEqual(findUnsupportedTechnicalUnits(answer, ["unrelated context"], articleIds), [{
+    kind: "inline_code",
+    text: "restart",
+  }]);
+});
+
+test("technical grounding never applies title support to numeric units", () => {
+  const answer = "Значение равно 1.5.";
+  const articleIds = ["wiki_topic_1_5"];
+
+  assert.deepEqual(findUnsupportedTechnicalUnits(answer, ["другой текст"], articleIds), [{
+    kind: "number",
+    text: "1.5",
+  }]);
+});
+
 test("technical grounding strips a trailing sentence period from an extracted path", () => {
   const answer = "See /etc/modprobe.d/amdgpu.conf.";
 
