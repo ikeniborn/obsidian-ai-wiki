@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.2 — 2026-07-29
+
+### New
+- feat(ingest): add a testable audit-snippets module for evidence-quality checks and fix prose false positives in evidence audits
+- feat(query): reserve a context-budget slot for otherwise-uncovered question facets
+- feat(query): support technical units that match a selected article's own title
+
+### Fixes
+- fix(ingest): carry over and dedupe evidence across cross-source page rewrites, tolerate shell line continuations
+- fix(query): strip trailing sentence period from extracted technical paths
+- fix(query): repair Markdown residue (empty emphasis, dangling markers, doubled backticks, empty parens) left after grounding sanitation
+
+---
+
 ## 0.2.1 — 2026-07-27
 
 ### Fixes
