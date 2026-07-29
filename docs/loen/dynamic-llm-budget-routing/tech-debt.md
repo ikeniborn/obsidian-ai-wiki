@@ -11,56 +11,43 @@ This register tracks only domain-neutral gaps confirmed by tests or live evidenc
 
 ## TD-1: Exact Technical Evidence Classification and Reconciliation
 
-Live source audit reported 12 exact-string mismatches out of 537 candidate snippets.
+Status: fixed, pending live verification.
 
-The raw count contains three different classes:
+Live source audit reported 12 missing snippets out of 537 candidates (323 ledger items, 3 unrepresented), decomposed into four groups:
 
-- Seven technical literals are absent from the final domain: one desktop-file path, two NFS `fstab` entries, two NetworkManager commands, and two disk-label `fstab` commands.
-- Three commands are represented with equivalent content but different chaining, qualification, or source attribution: `df -h`, `mount -a`, and `systemctl daemon-reload`.
-- Two English explanatory sentences were incorrectly classified as exact technical content even though natural-language prose is translatable.
+- 6 snippets / 3 ledger items (`NFS Server.md` `code:203-203`, `code:217-217`, `storage.md` `code:33-37`) absent from the final domain due to evidence erosion on a cross-source page rewrite: `reconcileSynthesisEvidence` only reconciled against the live ledger, not against an existing page's own already-published evidence section, so a later source's rewrite of a shared page silently dropped an earlier source's evidence block. Fixed by carrying over any evidence block from `existing` that the ledger no longer covers, deduplicated against what the new content already contains (`src/phases/synthesis-evidence-ledger.ts`).
+- 1 snippet (`systemctl daemon-reload && \`) represented with equivalent content but without its trailing shell line continuation — fixed by tolerating a trailing continuation (`&&`/`\`) symmetrically in `findMissingSynthesisEvidence` (`src/phases/synthesis-evidence-ledger.ts`) and in the audit's own snippet-vs-corpus comparison in `scripts/loen-dynamic-budget-routing/audit-domain-quality.mjs` (via the shared `stripTrailingContinuation` helper exported by `scripts/loen-dynamic-budget-routing/audit-snippets.mjs`).
+- 2 English explanatory sentences incorrectly classified as exact technical content by the audit's case-insensitive `commandStart` command-head match — fixed by making that match case-sensitive, so a capitalized prose sentence no longer registers as a shell command.
+- 3 snippets (`~/.local/share/applications/obsidian.desktop`, `sudo apt install network-manager`, `sudo nmcli dev show`) never accepted into any ledger in the first place — a ledger-*selection* gap, not a reconciliation defect, explicitly out of scope for this fix and recorded under Discovered Debt.
 
-Required fix:
+Acceptance (met against the fixed 22-source corpus prior to live verification):
 
-- classify complete fenced/config/command/path evidence separately from translatable prose;
-- preserve stable evidence ownership through entity consolidation and shared-page updates;
-- compare normalized command structure where shell chaining does not change the technical operation;
-- deterministically restore genuinely absent evidence without another model call;
-- retain source attribution when a shared canonical page represents evidence from multiple sources.
-
-Acceptance:
-
-- zero unrepresented accepted ledger items across the fixed 22-source corpus;
+- zero unrepresented accepted ledger items;
 - zero prose false positives in the exact-evidence audit;
 - 100% source URL preservation;
 - no additional LLM request, retry, or token-ceiling increase.
 
-Evidence: `evidence/conflict-validation-split-live-domain-quality-1785096684125.json`.
+Evidence: `evidence/conflict-validation-split-live-domain-quality-1785096684125.json` (baseline); live re-run pending per the Live Verification Protocol.
 
 ## TD-2: Query Context Coverage and Grounding Sanitation
 
-The fixed ten-query replay completed 10/10 with zero retries and zero invalid WikiLinks, but macro required-fact coverage was 91.809%, below the accepted 92.904% gate.
+Status: fixed, pending live verification.
 
-All five omitted fact groups exist in generated pages. Failures are therefore downstream of synthesis:
+The fixed ten-query replay completed 10/10 with zero retries and zero invalid WikiLinks, but macro required-fact coverage was 91.809%, below the accepted 92.904% gate. All five omitted fact groups existed in generated pages — the gaps were downstream of synthesis:
 
-- the final context can select the correct article but omit the section containing an exact path or command;
-- answer compression can describe an operation without returning its supported command;
-- deterministic grounding sanitation can remove a supported term and leave malformed Markdown such as `****`.
+- the final context could select the correct article but omit the section containing an exact path or command — fixed by reserving a sibling context slot for each question facet (tokenized from the query) not already covered by the selected chunks, in `selectQueryContextChunks` (`src/phases/query-budget.ts`);
+- a supported path unit could be wrongly flagged as unsupported solely because it captured a trailing sentence period — fixed by stripping the trailing period in the `path` pattern's value cleaner in `extractTechnicalUnits` (`src/phases/query-grounding-validator.ts`);
+- after a correct removal, deterministic grounding sanitation could leave malformed Markdown residue behind, such as an empty emphasis span `****` — fixed by extending `cleanSanitizedProseLine` (`src/phases/query-grounding-validator.ts`) to repair empty emphasis spans, empty parenthesis pairs, empty code labels, and now-empty/numeral-only residue lines;
+- a technical unit could legitimately be supported only by a selected article's own title (not its body) — fixed by adding title-derived-id support (`findUnsupportedTechnicalUnits`'s new `articleIds` parameter), gated to multi-segment, non-numeric units matched by suffix against the selected articles' id forms.
 
-Required fix:
-
-- preserve coverage of distinct question facets when selecting sections within the existing context limit;
-- validate sanitizer support against the exact selected article, heading, and body before deletion;
-- remove empty emphasis, list items, and code labels created by sanitation;
-- keep fail-closed grounding and the existing one-call healthy path.
-
-Acceptance:
+Acceptance (met against the fixed 10-query replay prior to live verification):
 
 - 10/10 fixed cases complete with zero model repair and zero invalid WikiLinks;
 - macro required-fact coverage at or above 92.904%;
 - no malformed Markdown after sanitation;
 - unchanged Query input/output ceilings and final context size.
 
-Evidence: `evidence/os-unix-query-quality-conflict-validation-split-live-1785096684125.json` and `evidence/os-unix-query-grounding-conflict-validation-split-live-1785096684125.json`.
+Evidence: `evidence/os-unix-query-quality-conflict-validation-split-live-1785096684125.json` and `evidence/os-unix-query-grounding-conflict-validation-split-live-1785096684125.json` (baseline); live re-run pending per the Live Verification Protocol. A second, diagnostic-only corpus for the os-mac domain (`scripts/loen-dynamic-budget-routing/os-mac-query-quality-cases.json`, 16 cases) now exists alongside the os-unix corpus; os-unix remains the sole domain used for cross-source attribution acceptance.
 
 ## TD-3: Deterministic Conflict-Regeneration Integration Trigger
 
