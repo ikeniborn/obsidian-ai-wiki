@@ -117,6 +117,15 @@ test("technical grounding does not classify slash-separated prose as a path", ()
   }]);
 });
 
+test("technical grounding strips a trailing sentence period from an extracted path", () => {
+  const answer = "See /etc/modprobe.d/amdgpu.conf.";
+
+  assert.deepEqual(extractTechnicalUnits(answer), [{
+    kind: "path",
+    text: "/etc/modprobe.d/amdgpu.conf",
+  }]);
+});
+
 test("technical grounding sanitizer removes only unsupported technical lines", () => {
   const context = [
     "DirectoryMode=0777",

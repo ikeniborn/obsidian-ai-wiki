@@ -154,7 +154,8 @@ export function extractTechnicalUnits(markdown: string): QueryTechnicalUnit[] {
     [/\bhttps?:\/\/[^\s<>"'`]+/giu, "url", (value) => value.replace(/[.,;:!?)}\]]+$/g, "")],
     [/\b(?:\d{1,3}\.){3}\d{1,3}(?:\/\d{1,2})?\b/g, "ipv4"],
     [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/giu, "uuid"],
-    [/(?<![\p{L}\p{N}])(?:~|\.{1,2})?\/(?:[A-Za-z0-9._~+@%=-]+\/)*[A-Za-z0-9._~+@%=-]+/gu, "path"],
+    [/(?<![\p{L}\p{N}])(?:~|\.{1,2})?\/(?:[A-Za-z0-9._~+@%=-]+\/)*[A-Za-z0-9._~+@%=-]+/gu, "path",
+      (value) => value.replace(/\.+$/, "")],
     [/\b[A-Za-z_][A-Za-z0-9_.-]*[ \t]*=[ \t]*[^\s,;]+/g, "assignment"],
     [/(?:^|[\s(])--[A-Za-z0-9][A-Za-z0-9-]*/g, "flag", (value) =>
       /--[A-Za-z0-9][A-Za-z0-9-]*/.exec(value)?.[0] ?? ""],
