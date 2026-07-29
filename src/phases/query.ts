@@ -369,7 +369,7 @@ export async function* runQuery(
   });
   if (signal.aborted) return;
 
-  const contextChunks = selectQueryContextChunks(reranked.chunks, contextLimit);
+  const contextChunks = selectQueryContextChunks(reranked.chunks, contextLimit, question);
   const entityTypesBlock = buildEntityTypesBlock(domain);
   const systemPrompt = (packedChunks: readonly SelectedChunk[]): string => {
     const packedIds = new Set(packedChunks.map((chunk) => chunk.articleId));
