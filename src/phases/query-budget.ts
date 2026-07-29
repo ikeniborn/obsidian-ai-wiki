@@ -1,4 +1,5 @@
 import type OpenAI from "openai";
+import { tokenizeLexical } from "../lexical-retrieval";
 import {
   packContextUnits,
   type ContextUnit,
@@ -89,9 +90,14 @@ function chunkUnitId(chunk: SelectedChunk): string {
   ].join(":");
 }
 
+function chunkFacets(chunk: SelectedChunk): Set<string> {
+  return tokenizeLexical(`${chunk.heading}\n${chunk.body}`);
+}
+
 export function selectQueryContextChunks(
   rankedChunks: readonly SelectedChunk[],
   contextLimit: number,
+  question = "",
 ): SelectedChunk[] {
   if (!Number.isSafeInteger(contextLimit) || contextLimit <= 0) return [];
   const limit = Math.min(contextLimit, rankedChunks.length);
@@ -108,6 +114,20 @@ export function selectQueryContextChunks(
   }
 
   const orderedIndexes = [...selectedIndexes].sort((left, right) => left - right);
+
+  let facetSlots = 0;
+  for (const facet of tokenizeLexical(question)) {
+    if (selectedIndexes.size >= limit || facetSlots >= siblingSlots) break;
+    const covered = orderedIndexes.some((index) => chunkFacets(rankedChunks[index]).has(facet));
+    if (covered) continue;
+    const index = rankedChunks.findIndex((chunk, idx) =>
+      !selectedIndexes.has(idx) && chunkFacets(chunk).has(facet));
+    if (index < 0) continue;
+    selectedIndexes.add(index);
+    orderedIndexes.push(index);
+    facetSlots += 1;
+  }
+
   for (let index = 0; index < rankedChunks.length; index += 1) {
     if (selectedIndexes.size >= limit) break;
     if (selectedIndexes.has(index) || !anchorArticleIds.has(rankedChunks[index].articleId)) continue;

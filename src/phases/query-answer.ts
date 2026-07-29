@@ -453,7 +453,7 @@ export async function* answerFromContext(args: {
 
   if (answer && !signal.aborted) {
     yield { kind: "tool_use", name: "ValidateGrounding", input: {} };
-    const unsupported = findUnsupportedTechnicalUnits(answer, selectedContext);
+    const unsupported = findUnsupportedTechnicalUnits(answer, selectedContext, [...knownStems]);
     yield {
       kind: "tool_result",
       ok: unsupported.length === 0,
@@ -472,7 +472,7 @@ export async function* answerFromContext(args: {
         removedUnits += sanitized.removedUnits;
         if (sanitized.answer === sanitizedAnswer) break;
         sanitizedAnswer = sanitized.answer;
-        sanitizedUnsupported = findUnsupportedTechnicalUnits(sanitizedAnswer, selectedContext);
+        sanitizedUnsupported = findUnsupportedTechnicalUnits(sanitizedAnswer, selectedContext, [...knownStems]);
       }
       let repaired = sanitizedAnswer.length > 0 && sanitizedUnsupported.length === 0;
       let repairPreview = repaired
@@ -522,6 +522,7 @@ export async function* answerFromContext(args: {
           const repairUnsupported = findUnsupportedTechnicalUnits(
             repair.value.answer_markdown,
             selectedContext,
+            [...knownStems],
           );
           yield lifecycleEvent(repair.lifecycle.id, repair.lifecycle.action, "applying");
           if (repairUnsupported.length === 0) {
@@ -611,6 +612,7 @@ export async function* answerFromContext(args: {
           const stillUnsupported = findUnsupportedTechnicalUnits(
             r.value.answer_markdown,
             selectedContext,
+            [...knownStems],
           );
           if (stillBroken.length === 0 && stillUnsupported.length === 0) {
             if (signal.aborted) {

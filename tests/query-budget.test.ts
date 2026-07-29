@@ -382,6 +382,19 @@ test("selectQueryContextChunks falls back to global rank when anchors have no si
   assert.deepEqual(selectQueryContextChunks(ranked, Number.NaN), []);
 });
 
+test("selectQueryContextChunks reserves a sibling slot for an uncovered question facet", () => {
+  const anchors = Array.from({ length: 3 }, (_, index) => selectedChunk(index, 100 - index));
+  const filler = { ...selectedChunk(3, 97), body: "No relevant keyword here." };
+  const facetChunk = { ...selectedChunk(4, 90), body: "Ask about the storage quota limit." };
+  const ranked = [...anchors, filler, facetChunk];
+
+  assert.deepEqual(selectQueryContextChunks(ranked, 4), [...anchors, filler]);
+  assert.deepEqual(
+    selectQueryContextChunks(ranked, 4, "What is the storage quota limit?"),
+    [...anchors, facetChunk],
+  );
+});
+
 test("packChatHistory keeps the newest user turn and drops old turns as whole pairs", () => {
   const newest = "Current instruction must survive exactly [CURRENT-INSTRUCTION]";
   const history = [

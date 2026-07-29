@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TD-1/TD-2: Evidence Reconciliation and Query Grounding — отчёт о внедрении</title>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --bg-alt: #ffffff;
+    --fg: #1c2230;
+    --fg-muted: #5b6472;
+    --border: #d7dce4;
+    --accent: #3457d5;
+    --accent-soft: #e7ecfc;
+    --ok: #1a8f4c;
+    --ok-soft: #e4f7ec;
+    --warn: #b8860b;
+    --warn-soft: #fbf1d8;
+    --crit: #c23b3b;
+    --crit-soft: #fbe4e4;
+    --code-bg: #eef0f5;
+    --shadow: 0 1px 3px rgba(20,25,40,0.08), 0 1px 2px rgba(20,25,40,0.06);
+  }
+  html[data-theme="dark"] {
+    --bg: #12151c;
+    --bg-alt: #1a1f2b;
+    --fg: #e6e9f0;
+    --fg-muted: #9aa3b2;
+    --border: #2c3340;
+    --accent: #7c9bff;
+    --accent-soft: #232c45;
+    --ok: #52c98a;
+    --ok-soft: #16301f;
+    --warn: #e0b23a;
+    --warn-soft: #3a2f12;
+    --crit: #e07070;
+    --crit-soft: #3a1d1d;
+    --code-bg: #232936;
+    --shadow: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+    padding: 0 0 4rem 0;
+  }
+  header {
+    background: var(--bg-alt);
+    border-bottom: 1px solid var(--border);
+    padding: 1.5rem 2rem;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: var(--shadow);
+  }
+  header h1 { font-size: 1.15rem; margin: 0; }
+  header .sub { color: var(--fg-muted); font-size: 0.85rem; margin-top: 0.2rem; }
+  main { max-width: 980px; margin: 0 auto; padding: 2rem; }
+  section { margin-bottom: 3rem; }
+  h2 {
+    font-size: 1.3rem;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 0.4rem;
+    margin-bottom: 1rem;
+  }
+  h3 { font-size: 1.05rem; margin-top: 1.5rem; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--bg-alt);
+    box-shadow: var(--shadow);
+    border-radius: 6px;
+    overflow: hidden;
+    font-size: 0.88rem;
+  }
+  th, td {
+    padding: 0.55rem 0.7rem;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--accent-soft); color: var(--fg); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  code {
+    background: var(--code-bg);
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+  }
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .badge.ok { background: var(--ok-soft); color: var(--ok); }
+  .badge.warn { background: var(--warn-soft); color: var(--warn); }
+  .badge.crit { background: var(--crit-soft); color: var(--crit); }
+  .badge.neutral { background: var(--accent-soft); color: var(--accent); }
+  .note {
+    border-left: 4px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.9rem;
+    margin: 1rem 0;
+  }
+  .lead { color: var(--fg-muted); margin-bottom: 1rem; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .card {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    box-shadow: var(--shadow);
+  }
+  .card .num { font-size: 1.6rem; font-weight: 700; color: var(--accent); }
+  .card .label { color: var(--fg-muted); font-size: 0.85rem; }
+  #theme-toggle {
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--fg);
+    border-radius: 6px;
+    padding: 0.4rem 0.8rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  /* --- block/flow diagram --- */
+  .flow {
+    display: flex;
+    align-items: stretch;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin: 1rem 0;
+  }
+  .flow .node {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.7rem 0.9rem;
+    box-shadow: var(--shadow);
+    flex: 1 1 200px;
+    min-width: 180px;
+  }
+  .flow .node .title { font-weight: 700; font-size: 0.9rem; margin-bottom: 0.3rem; }
+  .flow .node .desc { font-size: 0.8rem; color: var(--fg-muted); }
+  .flow .arrow {
+    align-self: center;
+    color: var(--accent);
+    font-size: 1.4rem;
+    flex: 0 0 auto;
+  }
+  .flow .node.new { border-color: var(--ok); }
+  .flow .node.new .title::before { content: "＋ "; color: var(--ok); }
+  .flow .node.mod { border-color: var(--accent); }
+  footer { text-align: center; color: var(--fg-muted); font-size: 0.8rem; margin-top: 2rem; }
+</style>
+</head>
+<body data-theme-body>
+<header>
+  <div>
+    <h1>TD-1 / TD-2: Evidence Reconciliation and Query Grounding</h1>
+    <div class="sub">Отчёт о внедрении · /check-chain result · дифф против merge-base(master)</div>
+  </div>
+  <button id="theme-toggle" onclick="toggleTheme()">🌓 Тема</button>
+</header>
+<main>
+
+<section id="summary">
+  <h2>1. Резюме внедрения</h2>
+  <p class="lead">Тема: <code>td1-td2-evidence-and-grounding</code>. Ветка <code>dev-td1-td2-evidence-and-grounding</code>, база сравнения — merge-base с <code>master</code> (<code>9db8dbe7</code>) до <code>HEAD</code> (<code>463419c</code>, 13 коммитов).</p>
+  <div class="grid-2">
+    <div class="card"><div class="num">n/a</div><div class="label">Intent</div></div>
+    <div class="card"><div class="num">✓</div><div class="label">Spec: <code>docs/superpowers/specs/2026-07-27-td1-td2-evidence-and-grounding-design.md</code></div></div>
+  </div>
+  <p style="margin-top:1rem">Plan: <code>docs/superpowers/plans/2026-07-28-td1-td2-evidence-and-grounding.md</code> — 11 задач, выполнены через <code>subagent-driven-development</code> (отдельный субагент-реализатор + ревьюер на задачу, TDD red→green).</p>
+  <div class="note">Закрывает технический долг TD-1 (точная классификация и восстановление технических свидетельств при синтезе) и TD-2 (полнота контекста запроса и очистка обоснования) из <code>docs/loen/dynamic-llm-budget-routing/tech-debt.md</code>.</div>
+</section>
+
+<section id="changes">
+  <h2>2. Выполненные изменения</h2>
+  <table>
+    <thead><tr><th>Файл</th><th>Тип</th><th>± строк</th><th>Что делает</th></tr></thead>
+    <tbody>
+      <tr><td><code>src/phases/synthesis-evidence-ledger.ts</code></td><td><span class="badge neutral">modified</span></td><td>+49</td><td>Перенос блока свидетельств из <code>existing</code> при перезаписи страницы другим источником (§1.1) + дедуп + допуск обрыва shell-продолжения <code>&&</code>/<code>\</code> (§1.4)</td></tr>
+      <tr><td><code>scripts/loen-dynamic-budget-routing/audit-snippets.mjs</code></td><td><span class="badge ok">added</span></td><td>+39</td><td>Новый модуль: извлечение сниппетов вынесено из <code>audit-domain-quality.mjs</code> для юнит-тестируемости; case-sensitive <code>commandStart</code> (§1.3); экспортирует <code>stripTrailingContinuation</code></td></tr>
+      <tr><td><code>scripts/loen-dynamic-budget-routing/audit-domain-quality.mjs</code></td><td><span class="badge neutral">modified</span></td><td>+42/-…</td><td>Подключён к <code>audit-snippets.mjs</code>; <code>sourceRoot</code> стал CLI-аргументом; сравнение сниппетов использует <code>stripTrailingContinuation</code></td></tr>
+      <tr><td><code>src/phases/query-budget.ts</code></td><td><span class="badge neutral">modified</span></td><td>+20</td><td><code>chunkFacets</code> + резервирование слота бюджета под непокрытую фасету вопроса в <code>selectQueryContextChunks</code> (§2.1)</td></tr>
+      <tr><td><code>src/phases/query.ts</code></td><td><span class="badge neutral">modified</span></td><td>+2/-1</td><td>Передаёт <code>question</code> в <code>selectQueryContextChunks</code></td></tr>
+      <tr><td><code>src/phases/query-cross-domain.ts</code></td><td><span class="badge neutral">modified</span></td><td>+2/-1</td><td>Передаёт <code>q</code> в <code>selectQueryContextChunks</code></td></tr>
+      <tr><td><code>src/phases/query-grounding-validator.ts</code></td><td><span class="badge neutral">modified</span></td><td>+36</td><td>Обрезка завершающей точки в <code>path</code>-паттерне (§2.2); ремонт Markdown-остатков в <code>cleanSanitizedProseLine</code> (§2.3); <code>idForm</code>/<code>titleSupported</code> + 3-й параметр <code>articleIds</code> в <code>findUnsupportedTechnicalUnits</code> (§2.4)</td></tr>
+      <tr><td><code>src/phases/query-answer.ts</code></td><td><span class="badge neutral">modified</span></td><td>+6/-2</td><td>4 места вызова <code>findUnsupportedTechnicalUnits</code> передают <code>[...knownStems]</code></td></tr>
+      <tr><td><code>scripts/loen-dynamic-budget-routing/os-mac-query-quality-cases.json</code></td><td><span class="badge ok">added</span></td><td>+98</td><td>Диагностический корпус запросов для домена os-mac (16 кейсов)</td></tr>
+      <tr><td><code>docs/loen/dynamic-llm-budget-routing/tech-debt.md</code></td><td><span class="badge neutral">modified</span></td><td>+47/-…</td><td>TD-1/TD-2 переписаны в статус «fixed, pending live verification» с разбивкой по фиксам</td></tr>
+      <tr><td><code>tests/td1-td2-phase0-repro.test.ts</code></td><td><span class="badge ok">added</span></td><td>+91</td><td>5 red→green тестов Phase-0 (классы 1,4,5,6,7)</td></tr>
+      <tr><td><code>tests/audit-snippets.test.ts</code></td><td><span class="badge ok">added</span></td><td>+48</td><td>6 юнит-тестов нового модуля (проверяют Phase-0 классы 2,3)</td></tr>
+      <tr><td><code>tests/synthesis-evidence-ledger.test.ts</code></td><td><span class="badge neutral">modified</span></td><td>+119</td><td>Тесты carry-over, дедупа, допуска продолжений</td></tr>
+      <tr><td><code>tests/query-budget.test.ts</code></td><td><span class="badge neutral">modified</span></td><td>+13</td><td>Тест резервирования слота под фасету</td></tr>
+      <tr><td><code>tests/query-grounding-validator.test.ts</code></td><td><span class="badge neutral">modified</span></td><td>+64</td><td>Тесты §2.2 trailing-period, §2.3 Markdown-ремонт, §2.4 title-only support</td></tr>
+    </tbody>
+  </table>
+  <p class="lead" style="margin-top:0.8rem">Итого: 18 изменённых файлов, +3047/-77 строк (из них <code>docs/TODO.md</code> (+1) и сами файлы плана/спеки — артефакты процесса IDD/check-chain, не код).</p>
+</section>
+
+<section id="results">
+  <h2>3. Результаты</h2>
+  <h3>Пошаговая сверка плана с диффом</h3>
+  <table>
+    <thead><tr><th>#</th><th>Задача</th><th>Статус</th><th>Свидетельство в диффе</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Phase 0 — доказать красные классы ошибок</td><td><span class="badge ok">DONE</span></td><td><code>tests/td1-td2-phase0-repro.test.ts</code> создан, 5 тестов, все были red на <code>HEAD</code> до Task 4/6/8</td></tr>
+      <tr><td>2</td><td>Вынести извлечение сниппетов в <code>audit-snippets.mjs</code></td><td><span class="badge ok">DONE</span></td><td>новый модуль, 5 экспортов, 6/6 юнит-тестов, case-sensitive <code>commandStart</code></td></tr>
+      <tr><td>3</td><td>Подключить <code>audit-domain-quality.mjs</code>, <code>sourceRoot</code> как CLI-арг</td><td><span class="badge ok">DONE</span></td><td>импорт из нового модуля, <code>argv[7]</code>, <code>stripTrailingContinuation</code> в фильтре</td></tr>
+      <tr><td>4</td><td>§1.1 carry-over + §1.4 допуск продолжений</td><td><span class="badge ok">DONE</span></td><td><code>synthesis-evidence-ledger.ts</code>: <code>existingEvidenceSection</code>/<code>EVIDENCE_HEADINGS</code>/<code>dedupeEvidenceItems</code>; 12/12 целевых тестов, 61/61 регрессии</td></tr>
+      <tr><td>5</td><td>§2.1 покрытие фасет в бюджете запроса</td><td><span class="badge ok">DONE</span></td><td><code>chunkFacets</code> + цикл резервирования слотов; оба вызывающих места (<code>query.ts</code>, <code>query-cross-domain.ts</code>) обновлены; 45/45 + 15/15</td></tr>
+      <tr><td>6</td><td>§2.2 фикс завершающей точки в путях</td><td><span class="badge ok">DONE</span></td><td>чистильщик пути в <code>extractTechnicalUnits</code> обрезает <code>/\.+$/</code>; 10/10</td></tr>
+      <tr><td>7</td><td>§2.3 ремонт Markdown-остатков</td><td><span class="badge ok">DONE</span></td><td><code>cleanSanitizedProseLine</code> расширен 6 шагами; 12/12, 1327/1328 по репозиторию (1 — заранее известный несвязанный пробел из Task 8)</td></tr>
+      <tr><td>8</td><td>§2.4 поддержка по заголовку статьи</td><td><span class="badge ok">DONE</span></td><td><code>idForm</code>/<code>titleSupported</code> + 3-й параметр <code>articleIds</code>; 4 места вызова в <code>query-answer.ts</code>; 15/15</td></tr>
+      <tr><td>9</td><td>Диагностический корпус os-mac</td><td><span class="badge ok">DONE</span></td><td><code>os-mac-query-quality-cases.json</code>, валиден, 16 кейсов</td></tr>
+      <tr><td>10</td><td>Реестр: переписать TD-1/TD-2</td><td><span class="badge ok">DONE</span></td><td><code>tech-debt.md</code>, TD-3/TD-4/Non-Actions/Scope побайтово не тронуты</td></tr>
+      <tr><td>11</td><td>Полный регресс + Phase-0 подтверждение</td><td><span class="badge ok">DONE</span></td><td>Phase-0 5/5 pass, 6 зависимых файлов 0 fail, typecheck чист, дерево чисто (без коммита — верификационный гейт)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Покрытие требований</h3>
+  <div class="grid-2">
+    <div class="card"><div class="num">7/7</div><div class="label">Spec-требования в скоупе покрыты (§1.1, §1.3, §1.4, §2.1, §2.2, §2.3, §2.4). §1.2 formально retired как невоспроизводимый — вне скоупа.</div></div>
+    <div class="card"><div class="num">0/0</div><div class="label">Intent Desired Outcomes — intent-документа для этой темы нет (n/a)</div></div>
+  </div>
+
+  <h3>Лишние изменения (excess)</h3>
+  <table>
+    <thead><tr><th>Файл</th><th>Причина</th></tr></thead>
+    <tbody>
+      <tr><td><code>docs/TODO.md</code></td><td>Собственная бухгалтерия <code>/check-chain</code> (открытие/закрытие строки темы) — не код плана</td></tr>
+      <tr><td><code>docs/superpowers/plans/2026-07-28-td1-td2-evidence-and-grounding.md</code>, <code>docs/superpowers/specs/2026-07-27-td1-td2-evidence-and-grounding-design.md</code></td><td>Сами артефакты IDD-цепочки (план/спека), впервые попавшие в этот диапазон диффа — не продукт задач плана</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Итоговый вердикт</h3>
+  <p><span class="badge ok" style="font-size:1rem;padding:0.4rem 1rem">OK</span> — все 11 шагов плана DONE, критических находок нет. Финальный ревью всей ветки (независимый субагент, diff 13 коммитов): <strong>APPROVED</strong>, 0 Critical/Important, 6 Minor + 7 Informational (не блокирующие).</p>
+</section>
+
+<section id="impact">
+  <h2>4. Влияние на систему</h2>
+  <table>
+    <thead><tr><th>Компонент / файл</th><th>Изменение поведения</th><th>Риски / следующие шаги</th></tr></thead>
+    <tbody>
+      <tr><td>Synthesis evidence ledger</td><td>Перезапись общей страницы другим источником больше не роняет ранее опубликованный блок свидетельств; блок продолжений (<code>&&</code>/<code>\</code>) больше не считается «отсутствующим»</td><td>Дедуп рассчитан только на пересечение по точному тексту айтема — редкий edge-case смены языка домена посреди работы может дать две секции свидетельств (задокументировано как Informational в финальном ревью)</td></tr>
+      <tr><td>Audit tooling (<code>audit-*.mjs</code>)</td><td>Извлечение сниппетов теперь тестируемый модуль; ложные срабатывания на англ. прозе устранены case-sensitive матчем; <code>sourceRoot</code> для второго домена (os-mac) через CLI-арг</td><td>Дублирование <code>TRAILING_CONTINUATION_RE</code> в TS и MJS модулях (unavoidable через границу TS/JS) — ничто не держит их синхронно, кроме дисциплины</td></tr>
+      <tr><td>Query context budget</td><td>Бюджет резервирует слот под непокрытую фасету вопроса, ограничен долей sibling-слотов — меньше шансов упустить факт, присутствующий на странице, но не в выбранном чанке</td><td>Facet-резерв не ограничен «якорными» статьями — может ввести в контекст новую статью, что расширяет allowlist WikiLink и множество <code>articleIds</code> для §2.4 (задокументировано как Informational — связь между Task 5 и Task 8, невидимая в диффах каждой задачи по отдельности)</td></tr>
+      <tr><td>Query grounding validator</td><td>Путь с завершающей точкой признаётся поддержанным; Markdown-остатки после санитации чинятся шире; технический юнит, подтверждённый только заголовком статьи (не телом), теперь принимается — под двумя защитными условиями (≥2 сегмента, не число)</td><td>Расширение exact-grounding намеренно принято пользователем (см. решение по Task 8, спека уже закладывала этот компромисс с rollback-триггером на живой прогон). Два Markdown-чинящих regex (двойные бэктики, пустые скобки) теоретически могут задеть легитимный контент на уже тронутой строке (Minor, финальный ревью)</td></tr>
+      <tr><td>Tech-debt register</td><td>TD-1/TD-2 переведены в «fixed, pending live verification»</td><td>Требует Live Verification Protocol (см. ниже) для окончательного закрытия до «fixed»</td></tr>
+    </tbody>
+  </table>
+  <div class="note">
+    <strong>Live Verification Protocol (ручной, вне автоматизации):</strong> сборка плагина → копирование в реальный vault Obsidian → пользователь перезапускает Obsidian → два force-reinit (os-unix, os-mac) → 4 audit-скрипта → проверка условия «22/22 источника, ноль ошибок целостности страниц, оба acceptance-списка держатся». Только после этого TD-1/TD-2 переходят в статус «fixed» окончательно.
+  </div>
+</section>
+
+<section id="diagrams">
+  <h2>5. Схемы</h2>
+  <p class="lead">Диаграмма включена: дифф добавляет новый модуль (<code>audit-snippets.mjs</code>) и новое ребро зависимости (<code>audit-domain-quality.mjs</code> → <code>audit-snippets.mjs</code>).</p>
+
+  <h3>Аудит-инструментарий: новый модуль и его подключение</h3>
+  <div class="flow">
+    <div class="node mod"><div class="title">audit-domain-quality.mjs</div><div class="desc">CLI-скрипт офлайн-аудита; sourceRoot теперь argv[7]</div></div>
+    <div class="arrow">→</div>
+    <div class="node new"><div class="title">audit-snippets.mjs</div><div class="desc">Извлечение сниппетов + commandStart (case-sensitive) + stripTrailingContinuation</div></div>
+  </div>
+  <div class="flow">
+    <div class="node new"><div class="title">audit-snippets.test.ts</div><div class="desc">6/6 юнит-тестов нового модуля</div></div>
+    <div class="arrow">→</div>
+    <div class="node mod"><div class="title">audit-snippets.mjs</div><div class="desc">импортируется тестами напрямую</div></div>
+  </div>
+
+  <h3>Query pipeline: где сидит каждый фикс</h3>
+  <div class="flow">
+    <div class="node mod"><div class="title">1. query-budget.ts</div><div class="desc">§2.1 — резерв слота под фасету вопроса до отбора siblings</div></div>
+    <div class="arrow">→</div>
+    <div class="node mod"><div class="title">2. query-grounding-validator.ts</div><div class="desc">§2.2 trailing-period · §2.3 Markdown-ремонт · §2.4 title-only support</div></div>
+    <div class="arrow">→</div>
+    <div class="node mod"><div class="title">3. query-answer.ts</div><div class="desc">4 вызова передают knownStems как articleIds</div></div>
+  </div>
+
+  <h3>Synthesis evidence ledger: поток carry-over</h3>
+  <div class="flow">
+    <div class="node mod"><div class="title">existing (старая страница)</div><div class="desc">Блок «## Точные технические данные»</div></div>
+    <div class="arrow">→</div>
+    <div class="node mod"><div class="title">reconcileSynthesisEvidence</div><div class="desc">carry-over непокрытых айтемов + dedupeEvidenceItems</div></div>
+    <div class="arrow">→</div>
+    <div class="node mod"><div class="title">candidate (новая версия)</div><div class="desc">Секция свидетельств без потерь и без дублей</div></div>
+  </div>
+</section>
+
+</main>
+<footer>Сгенерировано /check-chain result · 2026-07-29</footer>
+
+<script>
+  function toggleTheme() {
+    var html = document.documentElement;
+    var cur = html.getAttribute('data-theme');
+    html.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+    try { localStorage.setItem('td1td2-report-theme', html.getAttribute('data-theme')); } catch (e) {}
+  }
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem('td1td2-report-theme'); } catch (e) {}
+    if (saved) { document.documentElement.setAttribute('data-theme', saved); }
+    else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  })();
+</script>
+</body>
+</html>

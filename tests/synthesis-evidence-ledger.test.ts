@@ -194,6 +194,125 @@ test("ledger reconciliation removes unsupported code and URLs, appends missing e
   assert.equal(repeated.appendedItems, 0);
 });
 
+test("reconcileSynthesisEvidence carries over an earlier source's evidence block dropped by a rewrite", () => {
+  const existing = [
+    "# Article",
+    "",
+    "## Examples",
+    "",
+    "prior content",
+    "",
+    "## Точные технические данные",
+    "",
+    "```bash",
+    "sudo earlier-command",
+    "```",
+    "",
+    "## Sources",
+    "",
+    "- [[Source A]]",
+  ].join("\n");
+  const candidate = [
+    "---",
+    "type: concept",
+    "---",
+    "# Article",
+    "",
+    "## Examples",
+    "",
+    "rewritten content with no mention of the earlier command",
+    "",
+    "## Sources",
+    "",
+    "- [[Source A]]",
+    "- [[Source B]]",
+  ].join("\n");
+
+  const reconciled = reconcileSynthesisEvidence(candidate, existing, [], "ru");
+
+  assert.equal(reconciled.appendedItems, 1);
+  assert.match(reconciled.content, /sudo earlier-command/);
+  assert.ok(reconciled.content.indexOf("sudo earlier-command") < reconciled.content.indexOf("## Sources"));
+});
+
+test("reconcileSynthesisEvidence does not duplicate a carried-over item on repeated reconciliation", () => {
+  const existing = [
+    "# Article",
+    "",
+    "## Точные технические данные",
+    "",
+    "```bash",
+    "sudo earlier-command",
+    "```",
+    "",
+    "## Sources",
+    "",
+    "- [[Source A]]",
+  ].join("\n");
+  const candidate = [
+    "# Article",
+    "",
+    "## Sources",
+    "",
+    "- [[Source A]]",
+    "- [[Source B]]",
+  ].join("\n");
+
+  const reconciled = reconcileSynthesisEvidence(candidate, existing, [], "ru");
+  const repeated = reconcileSynthesisEvidence(reconciled.content, existing, [], "ru");
+
+  assert.equal(reconciled.appendedItems, 1);
+  assert.equal(repeated.appendedItems, 0);
+  assert.equal(repeated.content, reconciled.content);
+  assert.equal((reconciled.content.match(/sudo earlier-command/g) ?? []).length, 1);
+});
+
+test("reconcileSynthesisEvidence does not duplicate an item present in both the existing evidence section and the current ledger", () => {
+  const existing = [
+    "# Article",
+    "",
+    "## Точные технические данные",
+    "",
+    "```bash",
+    "sudo earlier-command",
+    "```",
+    "",
+    "## Sources",
+    "",
+    "- [[Source A]]",
+  ].join("\n");
+  const candidate = [
+    "# Article",
+    "",
+    "## Sources",
+    "",
+    "- [[Source A]]",
+    "- [[Source B]]",
+  ].join("\n");
+  const ledger = extractSynthesisEvidenceLedger([
+    "```bash",
+    "sudo earlier-command",
+    "```",
+  ].join("\n"));
+
+  const reconciled = reconcileSynthesisEvidence(candidate, existing, ledger, "ru");
+
+  assert.equal(reconciled.appendedItems, 1);
+  assert.equal((reconciled.content.match(/sudo earlier-command/g) ?? []).length, 1);
+});
+
+test("findMissingSynthesisEvidence tolerates a trailing shell line continuation", () => {
+  const ledger = extractSynthesisEvidenceLedger([
+    "```bash",
+    "systemctl daemon-reload && \\",
+    "```",
+  ].join("\n"));
+
+  assert.equal(findMissingSynthesisEvidence(ledger, ["systemctl daemon-reload"]).length, 0);
+  assert.equal(findMissingSynthesisEvidence(ledger, ["systemctl daemon-reload && \\"]).length, 0);
+  assert.equal(findMissingSynthesisEvidence(ledger, ["unrelated content"]).length, 1);
+});
+
 test("ledger reconciliation preserves an allowed existing URL while removing a new unsupported URL", () => {
   const existing = "## External links\n- [Existing](https://existing.example)\n";
   const draft = [

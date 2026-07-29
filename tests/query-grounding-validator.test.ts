@@ -117,6 +117,47 @@ test("technical grounding does not classify slash-separated prose as a path", ()
   }]);
 });
 
+test("technical grounding treats a unit as supported when it matches a selected article's title-derived id", () => {
+  const context = ["Раздел объясняет настройку параметров ядра памяти без упоминания точного имени параметра."];
+  const answer = "Параметр `vm.dirty_expire_centisecs` управляет временем жизни грязных страниц.";
+  const articleIds = ["wiki_linux_vm_dirty_expire_centisecs"];
+
+  assert.deepEqual(findUnsupportedTechnicalUnits(answer, context), [{
+    kind: "inline_code",
+    text: "vm.dirty_expire_centisecs",
+  }]);
+  assert.deepEqual(findUnsupportedTechnicalUnits(answer, context, articleIds), []);
+});
+
+test("technical grounding does not apply title support to a single-segment unit", () => {
+  const answer = "See `restart` for details.";
+  const articleIds = ["wiki_linux_restart"];
+
+  assert.deepEqual(findUnsupportedTechnicalUnits(answer, ["unrelated context"], articleIds), [{
+    kind: "inline_code",
+    text: "restart",
+  }]);
+});
+
+test("technical grounding never applies title support to numeric units", () => {
+  const answer = "Значение равно 1.5.";
+  const articleIds = ["wiki_topic_1_5"];
+
+  assert.deepEqual(findUnsupportedTechnicalUnits(answer, ["другой текст"], articleIds), [{
+    kind: "number",
+    text: "1.5",
+  }]);
+});
+
+test("technical grounding strips a trailing sentence period from an extracted path", () => {
+  const answer = "See /etc/modprobe.d/amdgpu.conf.";
+
+  assert.deepEqual(extractTechnicalUnits(answer), [{
+    kind: "path",
+    text: "/etc/modprobe.d/amdgpu.conf",
+  }]);
+});
+
 test("technical grounding sanitizer removes only unsupported technical lines", () => {
   const context = [
     "DirectoryMode=0777",
@@ -145,6 +186,29 @@ test("technical grounding sanitizer removes only unsupported technical lines", (
     "Ubuntu uses `/etc/fstab`.",
   ].join("\n"));
   assert.deepEqual(findUnsupportedTechnicalUnits(sanitized.answer, [context]), []);
+});
+
+test("technical grounding sanitizer repairs empty emphasis and parenthesis residue left by inline-code removal", () => {
+  const context = "sysctl controls memory pressure settings.";
+  const answer = "- **`vm.dirty_expire_centisecs`** – максимальное время жизни грязных страниц (`vm.dirty_expire_centisecs`) в памяти.";
+  const unsupported = findUnsupportedTechnicalUnits(answer, [context]);
+
+  const sanitized = sanitizeUnsupportedTechnicalLines(answer, unsupported);
+
+  assert.equal(sanitized.answer, "- – максимальное время жизни грязных страниц в памяти.");
+});
+
+test("technical grounding sanitizer preserves real emphasis, glob patterns, and snake_case identifiers", () => {
+  const context = "docs/**/*.ts и vm_dirty_expire_centisecs описаны в документации.";
+  const answer = "**Важно:** `docs/**/*.ts` и `vm_dirty_expire_centisecs` используют порт 9999.";
+  const unsupported = findUnsupportedTechnicalUnits(answer, [context]);
+
+  const sanitized = sanitizeUnsupportedTechnicalLines(answer, unsupported);
+
+  assert.match(sanitized.answer, /\*\*Важно:\*\*/);
+  assert.match(sanitized.answer, /`docs\/\*\*\/\*\.ts`/);
+  assert.match(sanitized.answer, /`vm_dirty_expire_centisecs`/);
+  assert.doesNotMatch(sanitized.answer, /9999/);
 });
 
 test("technical grounding sanitizer removes empty CRLF and tilde fences", () => {

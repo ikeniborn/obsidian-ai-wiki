@@ -263,15 +263,22 @@ export function assignSynthesisEvidenceLedger(
   return assigned;
 }
 
+const TRAILING_CONTINUATION_RE = /[ \t]*(?:&&[ \t]*)?\\[ \t]*$/;
+
+function stripTrailingContinuation(value: string): string {
+  return value.replace(TRAILING_CONTINUATION_RE, "").trimEnd();
+}
+
 export function findMissingSynthesisEvidence(
   ledger: readonly SynthesisEvidenceLedgerItem[],
   contents: readonly string[],
 ): SynthesisEvidenceLedgerItem[] {
   const corpus = normalizedCoverage(contents.join("\n"));
   return ledger.filter((item) => {
-    const required = item.kind === "code"
+    const raw = item.kind === "code"
       ? normalizedCoverage(item.coverageUnits.join("\n"))
       : normalizedCoverage(item.coverageUnits[0] ?? "");
+    const required = stripTrailingContinuation(raw);
     return required.length > 0 && !corpus.includes(required);
   });
 }
@@ -379,6 +386,21 @@ function headingIndexes(lines: readonly string[]): Array<{ index: number; headin
   return headings;
 }
 
+const EVIDENCE_HEADINGS = new Set([
+  "## Точные технические данные",
+  "## Evidencia técnica exacta",
+  "## Exact technical evidence",
+]);
+
+function existingEvidenceSection(existing: string): string {
+  const lines = normalizedMarkdown(existing).split("\n");
+  const headings = headingIndexes(lines);
+  const start = headings.find((candidate) => EVIDENCE_HEADINGS.has(candidate.heading));
+  if (start === undefined) return "";
+  const end = headings.find((candidate) => candidate.index > start.index)?.index ?? lines.length;
+  return lines.slice(start.index + 1, end).join("\n");
+}
+
 function appendEvidenceSection(
   content: string,
   missing: readonly SynthesisEvidenceLedgerItem[],
@@ -402,6 +424,23 @@ function appendEvidenceSection(
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
 }
 
+function dedupeEvidenceItems(
+  items: readonly SynthesisEvidenceLedgerItem[],
+): SynthesisEvidenceLedgerItem[] {
+  const seen = new Set<string>();
+  const deduped: SynthesisEvidenceLedgerItem[] = [];
+  for (const item of items) {
+    const raw = item.kind === "code"
+      ? normalizedCoverage(item.coverageUnits.join("\n"))
+      : normalizedCoverage(item.coverageUnits[0] ?? "");
+    const key = stripTrailingContinuation(raw);
+    if (key.length > 0 && seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+  }
+  return deduped;
+}
+
 export function reconcileSynthesisEvidence(
   content: string,
   existing: string | null,
@@ -409,8 +448,12 @@ export function reconcileSynthesisEvidence(
   language: OutputLanguage | undefined,
 ): SynthesisEvidenceReconciliation {
   const sanitized = sanitizeUnsupportedEvidence(content, allowedEvidence(ledger, existing ?? ""));
+  const carryOver = existing === null
+    ? []
+    : findMissingSynthesisEvidence(extractLedger(existingEvidenceSection(existing), false), [sanitized.content]);
   const missing = findMissingSynthesisEvidence(ledger, [sanitized.content]);
-  const reconciled = appendEvidenceSection(sanitized.content, missing, language);
+  const appended = dedupeEvidenceItems([...carryOver, ...missing]);
+  const reconciled = appendEvidenceSection(sanitized.content, appended, language);
   const unresolved = findMissingSynthesisEvidence(ledger, [reconciled]);
   if (unresolved.length > 0) {
     throw new TypeError(`source technical evidence reconciliation left ${unresolved.length} item(s) unresolved`);
@@ -418,6 +461,6 @@ export function reconcileSynthesisEvidence(
   return {
     content: reconciled,
     removedUnits: sanitized.removedUnits,
-    appendedItems: missing.length,
+    appendedItems: appended.length,
   };
 }

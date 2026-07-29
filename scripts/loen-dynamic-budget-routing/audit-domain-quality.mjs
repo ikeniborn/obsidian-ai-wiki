@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parse as yamlParse } from "yaml";
+import { extractTechnicalSnippets, normalizedText, stripTrailingContinuation, unique } from "./audit-snippets.mjs";
 
 const domainId = process.argv[2] ?? "os-unix";
 const runRoot = path.resolve(process.argv[3]
@@ -11,7 +12,9 @@ const beforeRoot = path.resolve(process.argv[4]
   ?? path.join(path.dirname(runRoot), "before"));
 const outputPath = process.argv[5] ? path.resolve(process.argv[5]) : undefined;
 const expectedTimestamp = process.argv[6];
-const sourceRoot = path.join(beforeRoot, "ОС", "Unix");
+const sourceRoot = process.argv[7]
+  ? path.resolve(process.argv[7])
+  : path.join(beforeRoot, "ОС", "Unix");
 const domainRoot = path.join(runRoot, "!Wiki", domainId);
 
 function walkMarkdown(root) {
@@ -62,14 +65,6 @@ function normalizeIdentity(raw) {
     .toLowerCase();
 }
 
-function normalizedText(value) {
-  return value.normalize("NFC").replace(/\s+/g, " ").trim();
-}
-
-function unique(values) {
-  return [...new Set(values.filter(Boolean))].sort();
-}
-
 function markdownH1Count(markdown) {
   let count = 0;
   let inFence = false;
@@ -85,32 +80,6 @@ function markdownH1Count(markdown) {
 
 function h2At(markdown, index) {
   return [...markdown.slice(0, index).matchAll(/^##\s+(.+)$/gm)].at(-1)?.[1]?.trim();
-}
-
-const commandStart = /^(?:\$\s*)?(?:sudo\b|apt(?:-get)?\b|dnf\b|yum\b|curl\b|wget\b|git\b|systemctl\b|journalctl\b|ufw\b|iptables\b|nft\b|ss\b|nstat\b|netstat\b|nmcli\b|ip\b|mount\b|umount\b|lsblk\b|fdisk\b|du\b|cp\b|mv\b|rm\b|mkdir\b|chmod\b|chown\b|nano\b|vim\b|echo\b|export\b|source\b|nvm\b|npm\b|grub-mkconfig\b|update-grub\b|sysctl\b|swapoff\b|swapon\b|mkswap\b|ssh(?:-keygen|-copy-id|-add)?\b|scp\b|useradd\b|usermod\b|passwd\b|groupadd\b|modprobe\b|lspci\b|lsusb\b|cat\b|grep\b|sed\b|awk\b|find\b|dd\b|tee\b)/i;
-
-function extractTechnicalSnippets(markdown) {
-  const snippets = [];
-  let inFence = false;
-  for (const rawLine of markdown.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (/^```/.test(line)) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence && line && !line.startsWith("#")) snippets.push(normalizedText(line));
-    if (!inFence && commandStart.test(line)) snippets.push(normalizedText(line.replace(/^\$\s*/, "")));
-    if (!inFence && /^(?:[A-Z][A-Z0-9_]*|[a-z][a-z0-9_.-]*)=\S/.test(line)) {
-      snippets.push(normalizedText(line));
-    }
-    for (const match of line.matchAll(/`([^`\r\n]+)`/g)) {
-      const value = normalizedText(match[1]);
-      if (value.length >= 4 && (/[\s=|]/.test(value) || value.includes("/") || value.includes("--"))) {
-        snippets.push(value);
-      }
-    }
-  }
-  return unique(snippets);
 }
 
 function extractUrls(markdown) {
@@ -224,7 +193,8 @@ const sourceResults = sourceFiles.map((filePath) => {
   const declared = unique(asStrings(parsed.frontmatter.wiki_articles).map(wikilinkTarget));
   const resolvedDeclared = declared.filter((target) => pageIdentities.has(normalizeIdentity(target)));
   const technicalSnippets = extractTechnicalSnippets(parsed.body);
-  const preservedTechnicalSnippets = technicalSnippets.filter((snippet) => corpus.includes(snippet));
+  const preservedTechnicalSnippets = technicalSnippets.filter((snippet) =>
+    corpus.includes(stripTrailingContinuation(snippet)));
   const urls = extractUrls(parsed.body);
   const preservedUrls = urls.filter((url) => corpus.includes(normalizedText(url)));
   const technicalValues = extractTechnicalValues(parsed.body);

@@ -154,7 +154,8 @@ export function extractTechnicalUnits(markdown: string): QueryTechnicalUnit[] {
     [/\bhttps?:\/\/[^\s<>"'`]+/giu, "url", (value) => value.replace(/[.,;:!?)}\]]+$/g, "")],
     [/\b(?:\d{1,3}\.){3}\d{1,3}(?:\/\d{1,2})?\b/g, "ipv4"],
     [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/giu, "uuid"],
-    [/(?<![\p{L}\p{N}])(?:~|\.{1,2})?\/(?:[A-Za-z0-9._~+@%=-]+\/)*[A-Za-z0-9._~+@%=-]+/gu, "path"],
+    [/(?<![\p{L}\p{N}])(?:~|\.{1,2})?\/(?:[A-Za-z0-9._~+@%=-]+\/)*[A-Za-z0-9._~+@%=-]+/gu, "path",
+      (value) => value.replace(/\.+$/, "")],
     [/\b[A-Za-z_][A-Za-z0-9_.-]*[ \t]*=[ \t]*[^\s,;]+/g, "assignment"],
     [/(?:^|[\s(])--[A-Za-z0-9][A-Za-z0-9-]*/g, "flag", (value) =>
       /--[A-Za-z0-9][A-Za-z0-9-]*/.exec(value)?.[0] ?? ""],
@@ -187,16 +188,36 @@ function containsExactNumber(context: string, value: string): boolean {
   return false;
 }
 
+function idForm(value: string): string {
+  return value
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function titleSupported(unit: QueryTechnicalUnit, articleIds: readonly string[]): boolean {
+  if (unit.kind === "number") return false;
+  const unitForm = idForm(unit.text);
+  if (!unitForm.includes("_")) return false;
+  return articleIds.some((articleId) => {
+    const articleForm = idForm(articleId);
+    return articleForm === unitForm || articleForm.endsWith(`_${unitForm}`);
+  });
+}
+
 export function findUnsupportedTechnicalUnits(
   answer: string,
   selectedContext: readonly string[],
+  articleIds: readonly string[] = [],
 ): QueryTechnicalUnit[] {
   const context = normalizeText(selectedContext.join("\n"));
   return extractTechnicalUnits(answer).filter((unit) => {
     const value = normalizeText(unit.text);
-    return unit.kind === "number"
-      ? !containsExactNumber(context, value)
-      : !context.includes(value);
+    const supported = unit.kind === "number"
+      ? containsExactNumber(context, value)
+      : context.includes(value);
+    return !supported && !titleSupported(unit, articleIds);
   });
 }
 
@@ -242,7 +263,14 @@ function cleanSanitizedProseLine(line: string): string {
     .replace(/[ \t]+([,.;:!?])/g, "$1")
     .replace(/([([])[ \t]+/g, "$1")
     .replace(/[ \t]+([)\]])/g, "$1")
+    .replace(/\*\*\*\*/g, "")
+    .replace(/____/g, "")
+    .replace(/(^|[ \t])(\*\*|__|\*|_)(?=[ \t]|$)/g, "$1")
+    .replace(/(?<!`)``(?!`)/g, "")
+    .replace(/\([ \t]*\)/g, "")
+    .replace(/[ \t]+/g, " ")
     .trim();
+  if (body.length === 0 || /^\d{1,9}[.)]$/.test(body)) return "";
   if (!/[\p{L}\p{N}`\]]/u.test(body)) return "";
   return `${leading}${body}`;
 }

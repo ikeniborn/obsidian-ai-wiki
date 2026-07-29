@@ -1,0 +1,98 @@
+[
+  {
+    "id": "terminal-proxy-scripting",
+    "question": "Как Терминал в macOS используется для автоматизации переключения прокси-серверов и какая команда для этого упоминается?",
+    "expectedPages": ["wiki_os-mac_terminal", "wiki_os-mac_macos", "wiki_os-mac_proxy_server"],
+    "requiredFacts": [["networksetup"], ["скриптов"], ["командную строку"]]
+  },
+  {
+    "id": "anonymity-socks5-check",
+    "question": "Почему SOCKS5 обеспечивает более высокую анонимность, чем HTTP/HTTPS прокси, и на каких сайтах проверяют IP-адрес после настройки?",
+    "expectedPages": ["wiki_os-mac_anonymity", "wiki_os-mac_socks5", "wiki_os-mac_proxy_server"],
+    "requiredFacts": [["2ip.ru"], ["whatismyip.com"], ["не изменяет заголовки"], ["SOCKS5"]]
+  },
+  {
+    "id": "bypass-blocking-pac",
+    "question": "Как в macOS обойти блокировку конкретных сайтов через SOCKS5 и PAC-файл, и где выполняется такая настройка?",
+    "expectedPages": ["wiki_os-mac_bypass_blocking", "wiki_os-mac_socks5", "wiki_os-mac_pac_file"],
+    "requiredFacts": [["SOCKS5"], ["PAC-файл"], ["вкладке «Прокси»"], ["глубокой инспекцией пакетов"]]
+  },
+  {
+    "id": "caching-http-proxy",
+    "question": "Какой тип прокси поддерживает кэширование веб-страниц в macOS и почему SOCKS5 для этого не подходит?",
+    "expectedPages": ["wiki_os-mac_caching", "wiki_os-mac_http", "wiki_os-mac_socks5"],
+    "requiredFacts": [["не анализирует HTTP-заголовки"], ["Ускорение повторных запросов"], ["HTTPS (частично)"]]
+  },
+  {
+    "id": "network-tab-to-proxies",
+    "question": "Какие сетевые подключения показывает раздел «Сеть» в Системных настройках macOS и как из него попасть на вкладку «Прокси»?",
+    "expectedPages": ["wiki_os-mac_network", "wiki_os-mac_system_settings", "wiki_os-mac_proxies"],
+    "requiredFacts": [["Ethernet"], ["USB"], ["Подробнее"], ["SOCKS прокси"]]
+  },
+  {
+    "id": "proxies-tab-auth-and-pac",
+    "question": "Что можно настроить на вкладке «Прокси» в macOS: типы прокси, автонастройку через PAC-файл и авторизацию?",
+    "expectedPages": ["wiki_os-mac_proxies", "wiki_os-mac_pac_file", "wiki_os-mac_proxy_authorization"],
+    "requiredFacts": [["Автонастройка прокси"], ["Proxy server requires password"], ["localhost, 127.0.0.1, *.local"], ["Веб-прокси (HTTP)"]]
+  },
+  {
+    "id": "proxy-authorization-pac-limits",
+    "question": "Почему PAC-файл не подходит для хранения логина и пароля прокси-сервера и как в macOS всё же включить авторизацию?",
+    "expectedPages": ["wiki_os-mac_proxy_authorization", "wiki_os-mac_pac_file", "wiki_os-mac_proxy_server"],
+    "requiredFacts": [["нельзя встроить логин/пароль в код"], ["Proxy server requires password"], ["Username"], ["Password"]]
+  },
+  {
+    "id": "proxy-server-ports-and-check",
+    "question": "Какие протоколы поддерживает прокси-сервер в macOS, какие у них типичные порты и на каких сайтах проверить, что прокси реально применяется?",
+    "expectedPages": ["wiki_os-mac_proxy_server", "wiki_os-mac_http", "wiki_os-mac_https", "wiki_os-mac_socks5"],
+    "requiredFacts": [["8080"], ["443"], ["1080"], ["2ip.ru"]]
+  },
+  {
+    "id": "pac-file-directives",
+    "question": "Какая функция обязательна в PAC-файле для Safari на macOS и какие директивы возврата она может использовать?",
+    "expectedPages": ["wiki_os-mac_pac_file", "wiki_os-mac_socks5", "wiki_os-mac_https"],
+    "requiredFacts": [["FindProxyForURL"], ["DIRECT"], ["SOCKS5 host:port"], ["PROXY"]]
+  },
+  {
+    "id": "system-settings-entry-point",
+    "question": "С чего начинается настройка прокси в macOS через Системные настройки и на какой вкладке она завершается?",
+    "expectedPages": ["wiki_os-mac_system_settings", "wiki_os-mac_network", "wiki_os-mac_proxies"],
+    "requiredFacts": [["Apple"], ["Сеть"], ["Подробнее"], ["Прокси"]]
+  },
+  {
+    "id": "macos-proxy-mechanism",
+    "question": "К какому семейству ОС относится macOS, кто её разработчик и какие протоколы прокси она поддерживает через системные настройки?",
+    "expectedPages": ["wiki_os-mac_macos", "wiki_os-mac_system_settings", "wiki_os-mac_proxies"],
+    "requiredFacts": [["Apple"], ["Darwin"], ["PAC-файл"], ["SOCKS5"]]
+  },
+  {
+    "id": "ftp-socks5-only",
+    "question": "Какой протокол проксирует передачу файлов по FTP в macOS, а через какие прокси FTP вообще не работает?",
+    "expectedPages": ["wiki_os-mac_ftp", "wiki_os-mac_socks5", "wiki_os-mac_http"],
+    "requiredFacts": [["File Transfer Protocol"], ["SOCKS5"], ["не работает через HTTP/HTTPS прокси"]]
+  },
+  {
+    "id": "http-proxy-ports",
+    "question": "Какие типичные порты использует HTTP-прокси в macOS и как называется соответствующая опция в системных настройках?",
+    "expectedPages": ["wiki_os-mac_http", "wiki_os-mac_proxies", "wiki_os-mac_caching"],
+    "requiredFacts": [["8080"], ["3128"], ["Веб-прокси (HTTP)"], ["Ускорение повторных запросов"]]
+  },
+  {
+    "id": "https-proxy-pac-caveat",
+    "question": "Как называется опция HTTPS-прокси в Системных настройках macOS и какую директиву PAC-файла стоит использовать вместо HTTPS?",
+    "expectedPages": ["wiki_os-mac_https", "wiki_os-mac_pac_file", "wiki_os-mac_http"],
+    "requiredFacts": [["Защищённый веб-прокси (HTTPS)"], ["443"], ["PROXY"], ["TLS", "SSL"]]
+  },
+  {
+    "id": "socks5-universal-proxy",
+    "question": "Почему SOCKS5 считается универсальным протоколом для прокси в macOS и какой у него типичный порт?",
+    "expectedPages": ["wiki_os-mac_socks5", "wiki_os-mac_udp", "wiki_os-mac_ftp"],
+    "requiredFacts": [["1080"], ["UDP"], ["TCP"], ["File Transfer Protocol"]]
+  },
+  {
+    "id": "udp-realtime-through-socks5",
+    "question": "Какие приложения используют UDP-трафик через SOCKS5-прокси в macOS и для чего это нужно?",
+    "expectedPages": ["wiki_os-mac_udp", "wiki_os-mac_socks5"],
+    "requiredFacts": [["FaceTime"], ["Zoom"], ["User Datagram Protocol"], ["SOCKS5"]]
+  }
+]

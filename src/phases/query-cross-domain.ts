@@ -162,7 +162,7 @@ export async function* runCrossDomainQuery(
   });
   if (signal.aborted) return;
 
-  const contextChunks = selectQueryContextChunks(reranked.chunks, contextLimit);
+  const contextChunks = selectQueryContextChunks(reranked.chunks, contextLimit, q);
   const domainsForChunks = (packedChunks: readonly SelectedChunk[]): string[] => {
     const packedIds = new Set(packedChunks.map((chunk) => chunk.articleId));
     return [...new Set(
