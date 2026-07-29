@@ -156,6 +156,29 @@ test("technical grounding sanitizer removes only unsupported technical lines", (
   assert.deepEqual(findUnsupportedTechnicalUnits(sanitized.answer, [context]), []);
 });
 
+test("technical grounding sanitizer repairs empty emphasis and parenthesis residue left by inline-code removal", () => {
+  const context = "sysctl controls memory pressure settings.";
+  const answer = "- **`vm.dirty_expire_centisecs`** – максимальное время жизни грязных страниц (`vm.dirty_expire_centisecs`) в памяти.";
+  const unsupported = findUnsupportedTechnicalUnits(answer, [context]);
+
+  const sanitized = sanitizeUnsupportedTechnicalLines(answer, unsupported);
+
+  assert.equal(sanitized.answer, "- – максимальное время жизни грязных страниц в памяти.");
+});
+
+test("technical grounding sanitizer preserves real emphasis, glob patterns, and snake_case identifiers", () => {
+  const context = "docs/**/*.ts и vm_dirty_expire_centisecs описаны в документации.";
+  const answer = "**Важно:** `docs/**/*.ts` и `vm_dirty_expire_centisecs` используют порт 9999.";
+  const unsupported = findUnsupportedTechnicalUnits(answer, [context]);
+
+  const sanitized = sanitizeUnsupportedTechnicalLines(answer, unsupported);
+
+  assert.match(sanitized.answer, /\*\*Важно:\*\*/);
+  assert.match(sanitized.answer, /`docs\/\*\*\/\*\.ts`/);
+  assert.match(sanitized.answer, /`vm_dirty_expire_centisecs`/);
+  assert.doesNotMatch(sanitized.answer, /9999/);
+});
+
 test("technical grounding sanitizer removes empty CRLF and tilde fences", () => {
   const answer = "~~~bash\r\nsudo unsafe --force\r\n~~~";
   const unsupported = findUnsupportedTechnicalUnits(answer, ["sudo safe"]);

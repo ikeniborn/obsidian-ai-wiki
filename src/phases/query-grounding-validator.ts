@@ -243,7 +243,14 @@ function cleanSanitizedProseLine(line: string): string {
     .replace(/[ \t]+([,.;:!?])/g, "$1")
     .replace(/([([])[ \t]+/g, "$1")
     .replace(/[ \t]+([)\]])/g, "$1")
+    .replace(/\*\*\*\*/g, "")
+    .replace(/____/g, "")
+    .replace(/(^|[ \t])(\*\*|__|\*|_)(?=[ \t]|$)/g, "$1")
+    .replace(/(?<!`)``(?!`)/g, "")
+    .replace(/\([ \t]*\)/g, "")
+    .replace(/[ \t]+/g, " ")
     .trim();
+  if (body.length === 0 || /^\d{1,9}[.)]$/.test(body)) return "";
   if (!/[\p{L}\p{N}`\]]/u.test(body)) return "";
   return `${leading}${body}`;
 }
