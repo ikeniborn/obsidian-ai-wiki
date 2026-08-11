@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.3 — 2026-08-11
+
+### New
+- feat: retain and type bootstrap evidence
+
+### Fixes
+- fix: reduce terminal run status from outcomes
+- fix: scope Init file attempt failures
+- fix: bound evidence mapper recovery
+
+### Other
+- perf: reuse authoritative bootstrap evidence
+- perf: pack evidence ranges by prepared budget
+
+---
+
 ## 0.2.2 — 2026-07-29
 
 ### New
