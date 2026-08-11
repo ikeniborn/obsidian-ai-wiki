@@ -335,6 +335,49 @@ export type RunEvent =
       sourceChunks?: number;
       reductionDepth?: number;
       retryReason?: string;
+      contextWindow?: number;
+      inputSource?: "override" | "discovered" | "learned" | "default";
+      outputSource?: "override" | "default";
+      calibration?: number;
+    }
+  | {
+      kind: "budget_resolved";
+      operation: OpKey;
+      model: string;
+      contextWindow: number;
+      inputSource: "override" | "discovered" | "learned" | "default";
+      outputSource: "override" | "default";
+      calibration: number;
+      samples: number;
+      inputBudget: number;
+      outputBudget: number;
+    }
+  | {
+      kind: "context_probe";
+      baseUrl: string;
+      model: string;
+      endpoint: string;
+      ok: boolean;
+      ms: number;
+      matchedById: boolean;
+      contextLength?: number;
+    }
+  | {
+      kind: "calibration_sample";
+      model: string;
+      estimated: number;
+      actual: number;
+      ratio: number;
+      applied: boolean;
+      clamped: boolean;
+    }
+  | {
+      kind: "evidence_split";
+      callSite: StructuredCallSite;
+      groups: number;
+      candidates: number;
+      subdivided: number;
+      payloadBudget: number;
     }
   | {
       kind: "prompt_breakdown";

@@ -281,6 +281,10 @@ export interface PromptBudgetMetadata {
   sourceChunks?: number;
   reductionDepth?: number;
   retryReason?: PromptBudgetRetryReason;
+  contextWindow?: number;
+  inputSource?: "override" | "discovered" | "learned" | "default";
+  outputSource?: "override" | "default";
+  calibration?: number;
 }
 
 export type PromptBudgetEvent = Extract<RunEvent, { kind: "prompt_budget" }>;
@@ -301,6 +305,10 @@ export function createPromptBudgetEvent(metadata: PromptBudgetMetadata): PromptB
   if (metadata.sourceChunks !== undefined) event.sourceChunks = metadata.sourceChunks;
   if (metadata.reductionDepth !== undefined) event.reductionDepth = metadata.reductionDepth;
   if (metadata.retryReason !== undefined) event.retryReason = metadata.retryReason;
+  if (metadata.contextWindow !== undefined) event.contextWindow = metadata.contextWindow;
+  if (metadata.inputSource !== undefined) event.inputSource = metadata.inputSource;
+  if (metadata.outputSource !== undefined) event.outputSource = metadata.outputSource;
+  if (metadata.calibration !== undefined) event.calibration = metadata.calibration;
   return event;
 }
 

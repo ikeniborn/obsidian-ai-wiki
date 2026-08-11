@@ -564,3 +564,25 @@ test("buildChatParams rejects the complete prepared message above budget", () =>
     },
   );
 });
+
+test("budget metadata carries the window, both sources and the calibration", () => {
+  const event = createPromptBudgetEvent({
+    requestId: "r1",
+    callSite: "init.bootstrap",
+    configuredInputBudget: 100,
+    effectiveInputBudget: 100,
+    estimatedInputTokens: 50,
+    actualInputTokens: 48,
+    contextUnits: 1,
+    contextWindow: 131_072,
+    inputSource: "discovered",
+    outputSource: "default",
+    calibration: 1.1,
+  });
+  assert.equal(event.contextWindow, 131_072);
+  assert.equal(event.inputSource, "discovered");
+  assert.equal(event.outputSource, "default");
+  assert.equal(event.calibration, 1.1);
+  assert.equal(event.estimatedInputTokens, 50);
+  assert.equal(event.actualInputTokens, 48);
+});
