@@ -25,14 +25,12 @@ import { EmbeddingUnavailableError } from "../embedding-error";
 import { hashSource } from "../incremental-sources";
 import {
   prepareBootstrapEvidenceBundle,
+  worstCaseBootstrapOverheadTokens,
   type BootstrapEvidence,
   type BootstrapEvidenceBundle,
 } from "./ingest-evidence";
 import { enrichEvidenceTypes } from "./evidence-type-enrichment";
-import {
-  estimatePreparedMessages,
-  PromptBudgetExceededError,
-} from "../prompt-budget";
+import { estimatePreparedMessages } from "../prompt-budget";
 import { prepareChatMessages } from "./llm-utils";
 import { RunEventBridge } from "../run-event-bridge";
 import {
@@ -158,6 +156,60 @@ function bootstrapTaxonomyIssue(
   return null;
 }
 
+/**
+ * Smallest output reserve that still fits a complete `DomainEntry` with a
+ * realistic `entity_types` list. Reclaiming below this would trade a size
+ * failure for a truncated model answer.
+ */
+const MIN_BOOTSTRAP_OUTPUT_TOKENS = 2_048;
+/**
+ * Floor on the source evidence a bootstrap payload must still be able to carry
+ * once the capped per-group overhead is subtracted. Below it the mapper spends
+ * a request per couple of kilobytes of markdown, so no chunk size makes the
+ * operation progress and the model itself is the wrong size for the job.
+ */
+const MIN_BOOTSTRAP_CHUNK_TOKENS = 512;
+/**
+ * Ceiling on split bootstrap groups, and therefore on the provider requests one
+ * bootstrap attempt issues. At the default 16_384-token input budget a group
+ * carries roughly 14_500 payload tokens, so 16 groups cover about 230_000
+ * tokens of evidence — far more than a single source file can produce — while
+ * keeping the worst case at 16 sequential requests per attempt instead of the
+ * thousands an unbounded loop would issue.
+ */
+export const MAX_BOOTSTRAP_GROUPS = 16;
+
+/**
+ * Deterministic merge with no heuristic conflict resolution. Group 0 owns
+ * identity: `domainId` is an input to the prompt, so the model does not invent
+ * it. Entity types are unioned across every group, so no group's taxonomy is
+ * lost.
+ */
+export function mergeBootstrapEntries(entries: DomainEntry[]): DomainEntry {
+  const [first, ...rest] = entries;
+  let entityTypes = cloneEntityTypes(first.entity_types);
+  for (const entry of rest) {
+    entityTypes = mergeBootstrapEntityTypes(entityTypes, entry.entity_types ?? []);
+  }
+  return {
+    id: first.id,
+    name: first.name,
+    wiki_folder: first.wiki_folder,
+    entity_types: entityTypes,
+    language_notes: entries.find((entry) => entry.language_notes?.trim())?.language_notes
+      ?? first.language_notes,
+  };
+}
+
+interface BootstrapBudget {
+  systemContent: string;
+  includeSchema: boolean;
+  inputBudgetTokens: number;
+  outputBudgetTokens: number | undefined;
+  fixedRequestEstimate: number;
+  payloadBudgetTokens: number;
+}
+
 function renderBootstrapTaxonomyRepairPrompt(
   issue: string,
   bootstrapEvidence: BootstrapEvidence,
@@ -195,19 +247,20 @@ async function* prepareDomainBootstrap(
   opts: LlmCallOptions,
   startedAt: number,
 ): AsyncGenerator<RunEvent, PreparedDomainBootstrap | null> {
-  const inputBudgetTokens = opts.inputBudgetTokens ?? 16_384;
-  const outputBudgetTokens = opts.maxTokens;
   const compressionProfile = opts.semanticCompression?.profile ?? "balanced";
   const schemaContent = render(schemaTemplate, {
     section_conventions: wikiSections(resolveLang(opts.outputLanguage)),
   });
-  const systemContent = render(initTemplate, {
+  const renderSystemContent = (includeSchema: boolean): string => render(initTemplate, {
     domain_id: domainId,
     vault_name: vaultName,
-    schema_block: schemaContent ? `\nWiki conventions (_wiki_schema.md):\n${schemaContent}` : "",
+    schema_block: includeSchema && schemaContent
+      ? `\nWiki conventions (_wiki_schema.md):\n${schemaContent}`
+      : "",
   });
   const bootstrapMessages = (
     bootstrapEvidence: BootstrapEvidence,
+    systemContent: string,
   ): OpenAI.Chat.ChatCompletionMessageParam[] => [
     { role: "system", content: systemContent },
     {
@@ -227,25 +280,98 @@ async function* prepareDomainBootstrap(
     domainThemes: [],
     languageEvidence: [],
   };
-  const fixedRequestEstimate = estimatePreparedMessages(
-    prepareChatMessages(bootstrapMessages(emptyBootstrapEvidence), opts),
-    opts.tokenCalibration,
-  );
   const emptyPayloadEstimate = estimatePreparedMessages([{
     role: "user",
     content: JSON.stringify(emptyBootstrapEvidence),
   }], opts.tokenCalibration);
-  const bootstrapPayloadBudgetTokens = inputBudgetTokens
-    - fixedRequestEstimate
-    + emptyPayloadEstimate;
-  if (bootstrapPayloadBudgetTokens <= 0) {
+  // Worst case a group can carry besides its evidence: both capped lists at full
+  // length plus the JSON envelope. It is a constant, so the chunk budget is
+  // decidable before the evidence preparation the budget governs has run.
+  const worstCaseGroupOverhead = worstCaseBootstrapOverheadTokens(opts.tokenCalibration);
+  const budgetFor = (
+    includeSchema: boolean,
+    inputBudgetTokens: number,
+    outputBudgetTokens: number | undefined,
+  ): BootstrapBudget => {
+    const systemContent = renderSystemContent(includeSchema);
+    const fixedRequestEstimate = estimatePreparedMessages(
+      prepareChatMessages(bootstrapMessages(emptyBootstrapEvidence, systemContent), opts),
+      opts.tokenCalibration,
+    );
+    return {
+      systemContent,
+      includeSchema,
+      inputBudgetTokens,
+      outputBudgetTokens,
+      fixedRequestEstimate,
+      // + emptyPayloadEstimate cancels the empty payload already counted inside
+      // fixedRequestEstimate, leaving what a real payload may add.
+      payloadBudgetTokens: inputBudgetTokens - fixedRequestEstimate + emptyPayloadEstimate,
+    };
+  };
+  /**
+   * Widens the payload budget towards `requiredPayloadTokens` using the levers
+   * the model actually offers, largest first, stopping as soon as it fits.
+   * Nothing is trimmed or truncated: when no lever is left the caller fails
+   * explicitly instead of shrinking the evidence.
+   */
+  const widenBootstrapBudget = (
+    current: BootstrapBudget,
+    requiredPayloadTokens: number,
+  ): BootstrapBudget => {
+    if (current.payloadBudgetTokens >= requiredPayloadTokens) return current;
+    let widened = current;
+    // 1. Drop the schema block from the system prompt — the same lever
+    //    lint-chat.ts already pulls, and the largest single reclaimable chunk.
+    if (widened.includeSchema) {
+      widened = budgetFor(false, widened.inputBudgetTokens, widened.outputBudgetTokens);
+      if (widened.payloadBudgetTokens >= requiredPayloadTokens) return widened;
+    }
+    // 2. Reclaim the output reserve down to a floor that still fits a domain
+    //    entry. Only possible when the model's own window is known, because the
+    //    reclaimed tokens have to come from somewhere real.
+    const contextWindowTokens = opts.contextWindowTokens;
+    if (contextWindowTokens !== undefined
+      && widened.outputBudgetTokens !== undefined
+      && widened.outputBudgetTokens > MIN_BOOTSTRAP_OUTPUT_TOKENS) {
+      const reclaimed = Math.min(
+        contextWindowTokens - MIN_BOOTSTRAP_OUTPUT_TOKENS,
+        widened.inputBudgetTokens + widened.outputBudgetTokens - MIN_BOOTSTRAP_OUTPUT_TOKENS,
+      );
+      if (reclaimed > widened.inputBudgetTokens) {
+        widened = budgetFor(widened.includeSchema, reclaimed, MIN_BOOTSTRAP_OUTPUT_TOKENS);
+      }
+    }
+    return widened;
+  };
+  const unsupportedModelContext = (needs: string, current: BootstrapBudget): string =>
+    `init: ${needs}, but model ${model} allows ${current.inputBudgetTokens} input token(s)`
+    + (opts.contextWindowTokens === undefined
+      ? ""
+      : ` from a context window of ${opts.contextWindowTokens} token(s)`)
+    + ". Choose a model with a larger context window.";
+
+  let budget = budgetFor(true, opts.inputBudgetTokens ?? 16_384, opts.maxTokens);
+  budget = widenBootstrapBudget(budget, worstCaseGroupOverhead + MIN_BOOTSTRAP_CHUNK_TOKENS);
+  const chunkBudgetTokens = budget.payloadBudgetTokens - worstCaseGroupOverhead;
+  if (chunkBudgetTokens < MIN_BOOTSTRAP_CHUNK_TOKENS) {
     yield {
       kind: "error",
-      message: `init: configuration error — fixed bootstrap prompt requires ${fixedRequestEstimate} tokens but input budget is ${inputBudgetTokens}; domain was not created.`,
+      message: unsupportedModelContext(
+        `the Init prompt needs ${budget.fixedRequestEstimate} tokens and every evidence group up to `
+        + `${worstCaseGroupOverhead} more, leaving ${Math.max(0, chunkBudgetTokens)} token(s) for source `
+        + `evidence instead of ${MIN_BOOTSTRAP_CHUNK_TOKENS}`,
+        budget,
+      ),
     };
     yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
     return null;
   }
+  const budgetOpts = (current: BootstrapBudget): LlmCallOptions => ({
+    ...opts,
+    inputBudgetTokens: current.inputBudgetTokens,
+    ...(current.outputBudgetTokens === undefined ? {} : { maxTokens: current.outputBudgetTokens }),
+  });
 
   const bootstrapEvents = new RunEventBridge();
   let bootstrapEvidenceOutputTokens = 0;
@@ -253,16 +379,18 @@ async function* prepareDomainBootstrap(
   try {
     bootstrapBundle = yield* bootstrapEvents.forwardAbortable(signal, (operationSignal) =>
       prepareBootstrapEvidenceBundle(sourceContent, domainId, sourceFile, {
-      inputBudgetTokens,
-      outputBudgetTokens,
+      inputBudgetTokens: budget.inputBudgetTokens,
+      outputBudgetTokens: budget.outputBudgetTokens,
       compressionProfile,
       mapperRetries: opts.structuredRetries ?? 1,
       reducerRetries: opts.structuredRetries ?? 1,
-      bootstrapPayloadBudgetTokens,
+      bootstrapPayloadBudgetTokens: budget.payloadBudgetTokens,
+      chunkBudgetTokens,
+      calibration: opts.tokenCalibration ?? 1,
     }, {
       llm,
       model,
-      opts,
+      opts: budgetOpts(budget),
       signal: operationSignal,
       onEvent: (event) => {
         if (event.kind === "llm_call_stats") bootstrapEvidenceOutputTokens += event.outputTokens;
@@ -273,29 +401,84 @@ async function* prepareDomainBootstrap(
     }));
   } catch (error) {
     if ((error as Error).name === "AbortError" || signal.aborted) return null;
-    const isConfigurationError = error instanceof PromptBudgetExceededError
-      || /bounded mapper chunk size|requires .*budget|exceeds .*budget/i.test((error as Error).message);
-    const message = isConfigurationError
-      ? `init: configuration error — fixed bootstrap evidence prompt exceeds input budget: ${(error as Error).message}; domain was not created.`
+    // The only size-shaped failure evidence preparation can still raise is a
+    // mapper prompt that fits no chunk size at all — a model-context problem,
+    // reported as one, never as a configuration error.
+    const unboundedMapper = /bounded mapper chunk size|mapper prompt and repair reserve/i
+      .test((error as Error).message);
+    const message = unboundedMapper
+      ? unsupportedModelContext(
+        "the evidence mapper prompt and its repair reserve fit no source chunk size",
+        budget,
+      )
       : `init: domain bootstrap failed — bounded evidence preparation failed: ${(error as Error).message}. Fix model/prompt and re-run.`;
     yield { kind: "error", message };
     yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
     return null;
   }
-  const bootstrapEvidence = bootstrapBundle.bootstrap;
-
-  const messages = bootstrapMessages(bootstrapEvidence);
-  const estimatedInputTokens = estimatePreparedMessages(
-    prepareChatMessages(messages, opts),
-    opts.tokenCalibration,
-  );
-  if (estimatedInputTokens > inputBudgetTokens) {
+  const bootstrapGroups = bootstrapBundle.bootstrapGroups;
+  yield {
+    kind: "evidence_split",
+    callSite: "init.bootstrap",
+    groups: bootstrapGroups.length,
+    candidates: bootstrapGroups.reduce((total, group) => total + group.candidates.length, 0),
+    subdivided: bootstrapBundle.bootstrapSubdivided,
+    payloadBudget: budget.payloadBudgetTokens,
+  };
+  if (bootstrapGroups.length > MAX_BOOTSTRAP_GROUPS) {
     yield {
       kind: "error",
-      message: `init: configuration error — fixed bootstrap prompt requires ${estimatedInputTokens} tokens but input budget is ${inputBudgetTokens}; domain was not created.`,
+      message: unsupportedModelContext(
+        `the source evidence needs ${bootstrapGroups.length} bootstrap requests of `
+        + `${budget.payloadBudgetTokens} payload token(s), above the ${MAX_BOOTSTRAP_GROUPS}-request ceiling`,
+        budget,
+      ),
     };
     yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
     return null;
+  }
+  // A group above the payload budget here is atomic: one evidence unit that no
+  // further split divides. Widen as far as the model allows, then stop — the
+  // evidence is never cut to fit.
+  budget = widenBootstrapBudget(budget, bootstrapBundle.bootstrapMinimumGroupTokens);
+  if (bootstrapBundle.bootstrapMinimumGroupTokens > budget.payloadBudgetTokens) {
+    yield {
+      kind: "error",
+      message: unsupportedModelContext(
+        `one indivisible evidence unit needs ${bootstrapBundle.bootstrapMinimumGroupTokens} payload token(s) `
+        + `and the widest payload this model allows is ${budget.payloadBudgetTokens}`,
+        budget,
+      ),
+    };
+    yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
+    return null;
+  }
+  // Validation and the repair prompt reason about the whole taxonomy, so they
+  // see the union of every group rather than whichever slice was sent first.
+  const fullBootstrapEvidence: BootstrapEvidence = {
+    candidates: bootstrapGroups.flatMap((group) => group.candidates),
+    domainThemes: bootstrapGroups[0].domainThemes,
+    languageEvidence: bootstrapGroups[0].languageEvidence,
+  };
+  const requestOpts: LlmCallOptions = { ...budgetOpts(budget), nativeFreshConnection: true };
+  const groupMessages = bootstrapGroups.map((group) =>
+    bootstrapMessages(group, budget.systemContent));
+  for (const messages of groupMessages) {
+    const estimatedInputTokens = estimatePreparedMessages(
+      prepareChatMessages(messages, requestOpts),
+      opts.tokenCalibration,
+    );
+    if (estimatedInputTokens > budget.inputBudgetTokens) {
+      yield {
+        kind: "error",
+        message: unsupportedModelContext(
+          `a bootstrap request needs ${estimatedInputTokens} tokens`,
+          budget,
+        ),
+      };
+      yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
+      return null;
+    }
   }
 
   yield { kind: "tool_use", name: "Initialising domain", input: {} };
@@ -307,50 +490,67 @@ async function* prepareDomainBootstrap(
       throw error;
     }
   }
-  let sink: StructuredSink<{
-    id: string;
-    name: string;
-    wiki_folder: string;
-    entity_types: EntityType[];
-    language_notes: string;
-  }> = {};
-  let parsed: {
+  type BootstrapDomainEntry = {
     id: string;
     name: string;
     wiki_folder: string;
     entity_types: EntityType[];
     language_notes: string;
   };
-  let bootstrapRequestMessages = messages;
+  let attemptSinks: Array<StructuredSink<BootstrapDomainEntry>> = [];
   let bootstrapOutputTokens = 0;
   let entry: DomainEntry | undefined;
   try {
+    // One repair instruction per group: a rejected taxonomy is a property of the
+    // merged answer, but each group can only be repaired against its own slice.
+    let repairInstructions: Array<string | undefined> = groupMessages.map(() => undefined);
     for (let semanticAttempt = 0; ; semanticAttempt++) {
-      sink = {};
-      const bootstrapLifecycle = createLlmLifecycle("bootstrap_domain");
-      for await (const event of runStructuredStreaming({
-        llm,
-        model,
-        baseMessages: bootstrapRequestMessages,
-        opts: { ...opts, nativeFreshConnection: true },
-        profile: { kind: "json-zod", schema: DomainEntrySchema },
-        maxRetries: opts.structuredRetries ?? 1,
-        callSite: "init.bootstrap",
-        lifecycle: bootstrapLifecycle,
-        signal,
-        onEvent: () => {},
-        transport: "non-stream",
-      }, sink)) {
-        yield event;
+      const groupEntries: DomainEntry[] = [];
+      attemptSinks = [];
+      for (const [index, messages] of groupMessages.entries()) {
+        const sink: StructuredSink<BootstrapDomainEntry> = {};
+        const repair = repairInstructions[index];
+        const bootstrapLifecycle = createLlmLifecycle("bootstrap_domain");
+        for await (const event of runStructuredStreaming({
+          llm,
+          model,
+          baseMessages: repair === undefined
+            ? messages
+            : [...messages, { role: "user", content: repair }],
+          opts: requestOpts,
+          profile: { kind: "json-zod", schema: DomainEntrySchema },
+          maxRetries: opts.structuredRetries ?? 1,
+          callSite: "init.bootstrap",
+          lifecycle: bootstrapLifecycle,
+          signal,
+          onEvent: () => {},
+          transport: "non-stream",
+        }, sink)) {
+          yield event;
+        }
+        bootstrapOutputTokens += sink.outputTokens ?? 0;
+        attemptSinks.push(sink);
+        const parsed = sink.value!;
+        groupEntries.push({
+          id: parsed.id,
+          name: parsed.name,
+          wiki_folder: parsed.wiki_folder,
+          entity_types: parsed.entity_types,
+          language_notes: parsed.language_notes,
+        });
       }
-      bootstrapOutputTokens += sink.outputTokens ?? 0;
-      parsed = sink.value!;
+      for (const field of ["id", "wiki_folder"] as const) {
+        if (groupEntries.some((groupEntry) => groupEntry[field] !== groupEntries[0][field])) {
+          yield { kind: "system", message: `bootstrap group conflict on ${field}; group 0 wins` };
+        }
+      }
+      const merged = mergeBootstrapEntries(groupEntries);
       entry = {
-        id: parsed.id,
-        name: parsed.name,
-        wiki_folder: sanitizeWikiFolder(parsed.wiki_folder),
-        entity_types: mergeBootstrapEntityTypes(existing?.entity_types, parsed.entity_types),
-        language_notes: parsed.language_notes,
+        id: merged.id,
+        name: merged.name,
+        wiki_folder: sanitizeWikiFolder(merged.wiki_folder),
+        entity_types: mergeBootstrapEntityTypes(existing?.entity_types, merged.entity_types ?? []),
+        language_notes: merged.language_notes,
       };
       for (const entityType of entry.entity_types ?? []) {
         if (entityType.wiki_subfolder) {
@@ -360,22 +560,25 @@ async function* prepareDomainBootstrap(
       }
       if (!entry.id || !entry.wiki_folder) throw new Error("Missing required fields");
       if (force && existing) entry.wiki_folder = existing.wiki_folder;
-      const taxonomyIssue = bootstrapTaxonomyIssue(entry, bootstrapEvidence);
+      const taxonomyIssue = bootstrapTaxonomyIssue(entry, fullBootstrapEvidence);
       if (taxonomyIssue === null) break;
-      yield lifecycleEvent(sink.lifecycle!.id, sink.lifecycle!.action, "failed");
+      for (const attemptSink of attemptSinks) {
+        yield lifecycleEvent(attemptSink.lifecycle!.id, attemptSink.lifecycle!.action, "failed");
+      }
       if (semanticAttempt >= (opts.structuredRetries ?? 1)) {
         throw new Error(taxonomyIssue);
       }
-      bootstrapRequestMessages = [
-        ...messages,
-        { role: "user", content: renderBootstrapTaxonomyRepairPrompt(taxonomyIssue, bootstrapEvidence, existing?.entity_types) },
-      ];
+      repairInstructions = bootstrapGroups.map((group) =>
+        renderBootstrapTaxonomyRepairPrompt(taxonomyIssue, group, existing?.entity_types));
     }
-    parsed = sink.value!;
-    yield lifecycleEvent(sink.lifecycle!.id, sink.lifecycle!.action, "applying");
-    yield lifecycleEvent(sink.lifecycle!.id, sink.lifecycle!.action, "completed");
-    yield { kind: "tool_result", ok: true, preview: `domain: ${parsed.id}` };
-    if (sink.fullText) yield { kind: "assistant_text", delta: sink.fullText };
+    for (const attemptSink of attemptSinks) {
+      yield lifecycleEvent(attemptSink.lifecycle!.id, attemptSink.lifecycle!.action, "applying");
+      yield lifecycleEvent(attemptSink.lifecycle!.id, attemptSink.lifecycle!.action, "completed");
+    }
+    yield { kind: "tool_result", ok: true, preview: `domain: ${entry.id}` };
+    for (const attemptSink of attemptSinks) {
+      if (attemptSink.fullText) yield { kind: "assistant_text", delta: attemptSink.fullText };
+    }
   } catch (error) {
     yield { kind: "tool_result", ok: false, preview: (error as Error).message };
     if ((error as Error).name === "AbortError" || signal.aborted) return null;
@@ -417,8 +620,8 @@ async function* prepareDomainBootstrap(
         bootstrapBundle.evidence,
         new Set((entry.entity_types ?? []).map((entityType) => entityType.type)),
         {
-          inputBudgetTokens,
-          outputBudgetTokens,
+          inputBudgetTokens: budget.inputBudgetTokens,
+          outputBudgetTokens: budget.outputBudgetTokens,
           compressionProfile,
           mapperRetries: opts.structuredRetries ?? 1,
           reducerRetries: opts.structuredRetries ?? 1,
@@ -426,7 +629,7 @@ async function* prepareDomainBootstrap(
         {
           llm,
           model,
-          opts,
+          opts: budgetOpts(budget),
           signal: operationSignal,
           onEvent: (event) => {
             if (event.kind === "llm_call_stats") enrichmentOutputTokens += event.outputTokens;

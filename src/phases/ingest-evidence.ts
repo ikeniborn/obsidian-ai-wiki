@@ -139,6 +139,57 @@ function estimateBootstrapPayload(value: BootstrapEvidence, calibration?: number
 
 export { estimateBootstrapPayload as estimateBootstrapPayloadForTest };
 
+/**
+ * Caps for the two lists every split group duplicates. They bound the per-group
+ * overhead so the chunk budget is computable BEFORE the evidence that fills it
+ * exists — the budget governs the very preparation that would otherwise have to
+ * be measured. Both lists are naming and language signals derived from the whole
+ * corpus: no coverage invariant reads them and no later phase consumes them
+ * beyond the Init prompt, so bounding them drops nothing that is not already
+ * carried, in full, by the candidates.
+ */
+export const MAX_DOMAIN_THEMES = 24;
+export const MAX_LANGUAGE_EVIDENCE = 12;
+/**
+ * Per-item ceiling in estimator tokens on the JSON-encoded item, not in
+ * characters: one Cyrillic character costs 2.2 estimator tokens per latin one
+ * and one CJK character costs 4.2, so a character cap would understate the worst
+ * case by the same factors. Measuring the encoded form also absorbs escaping.
+ */
+export const MAX_OVERHEAD_ITEM_TOKENS = 48;
+
+/** Longest prefix of `value` whose JSON encoding fits `MAX_OVERHEAD_ITEM_TOKENS`. */
+function boundOverheadItem(value: string): string {
+  if (estimateText(JSON.stringify(value)) <= MAX_OVERHEAD_ITEM_TOKENS) return value;
+  const characters = [...value];
+  let low = 0;
+  let high = characters.length;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (estimateText(JSON.stringify(characters.slice(0, middle).join(""))) <= MAX_OVERHEAD_ITEM_TOKENS) {
+      low = middle;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return characters.slice(0, low).join("");
+}
+
+/**
+ * Upper bound, in calibrated tokens, on what one split group carries besides its
+ * candidates: both capped lists at full length plus the JSON envelope. Each item
+ * costs at most `MAX_OVERHEAD_ITEM_TOKENS` encoded, plus one separator character
+ * (below one token) — so the arithmetic bound holds for any script.
+ */
+export function worstCaseBootstrapOverheadTokens(calibration?: number): number {
+  const items = MAX_DOMAIN_THEMES + MAX_LANGUAGE_EVIDENCE;
+  const envelope = estimateBootstrapPayload(
+    { candidates: [], domainThemes: [], languageEvidence: [] },
+    calibration,
+  );
+  return envelope + Math.ceil(items * (MAX_OVERHEAD_ITEM_TOKENS + 1) * (calibration ?? 1));
+}
+
 function emptyBootstrapGroup(value: BootstrapEvidence): BootstrapEvidence {
   return {
     candidates: [],
@@ -1995,11 +2046,13 @@ export async function prepareBootstrapEvidenceBundle(
     facts: [...facts],
     exactSource: exactSource.map((range) => ({ ...range })),
   }));
-  const domainThemes = unique(evidence.flatMap((item) => item.facts), (fact) => fact);
+  const domainThemes = unique(evidence.flatMap((item) => item.facts), (fact) => fact)
+    .slice(0, MAX_DOMAIN_THEMES)
+    .map(boundOverheadItem);
   const languageEvidence = unique(
     evidence.flatMap((item) => item.exactSource.map((range) => range.text)),
     (text) => text,
-  );
+  ).slice(0, MAX_LANGUAGE_EVIDENCE).map(boundOverheadItem);
   const payloadBudget = Math.min(
     policy.inputBudgetTokens,
     policy.bootstrapPayloadBudgetTokens ?? policy.inputBudgetTokens,
