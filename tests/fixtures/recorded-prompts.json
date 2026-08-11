@@ -1,0 +1,10 @@
+{
+  "note": "Character counts, message counts and actualInputTokens are read verbatim from agent.jsonl (messageCharLengths and llm_call_stats.inputTokens) of the failing run. The 60/40 Cyrillic/Latin split of the payload is an explicit modelling assumption, not recorded data: the payload is JSON whose keys and paths are Latin and whose values are Russian. The system message is Latin-only and identical in all four requests, which is what makes the differences between them isolate the payload ratio.",
+  "payloadCyrillicShare": 0.6,
+  "cases": [
+    { "id": "llm-1",     "systemChars": 4181, "payloadChars": 6933, "messages": 2, "actualInputTokens": 3767 },
+    { "id": "llm-2",     "systemChars": 4181, "payloadChars": 8840, "messages": 2, "actualInputTokens": 4381 },
+    { "id": "llm-3",     "systemChars": 4181, "payloadChars": 2168, "messages": 2, "actualInputTokens": 1809 },
+    { "id": "bounded-1", "systemChars": 4181, "payloadChars": 2290, "messages": 3, "actualInputTokens": 1851 }
+  ]
+}
