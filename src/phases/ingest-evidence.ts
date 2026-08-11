@@ -137,39 +137,103 @@ function estimateBootstrapPayload(value: BootstrapEvidence, calibration?: number
   return estimatePreparedMessages([{ role: "user", content: JSON.stringify(value) }], calibration);
 }
 
-function boundBootstrapPayload(value: BootstrapEvidence, budget: number, calibration?: number): BootstrapEvidence {
-  const clone: BootstrapEvidence = {
-    candidates: value.candidates.map((candidate) => ({
-      entityKey: candidate.entityKey,
-      packetIds: [...candidate.packetIds],
-      facts: [...candidate.facts],
-      exactSource: candidate.exactSource.map((source) => ({ ...source })),
-    })),
+export { estimateBootstrapPayload as estimateBootstrapPayloadForTest };
+
+function emptyBootstrapGroup(value: BootstrapEvidence): BootstrapEvidence {
+  return {
+    candidates: [],
     domainThemes: [...value.domainThemes],
     languageEvidence: [...value.languageEvidence],
   };
-  if (estimateBootstrapPayload(clone, calibration) <= budget) return clone;
+}
 
-  while (clone.languageEvidence.length > 0 && estimateBootstrapPayload(clone, calibration) > budget) {
-    clone.languageEvidence.pop();
+/**
+ * Splits a candidate into sub-candidates sharing its entityKey and carrying
+ * disjoint evidence. A candidate aggregates facts and ranges across every chunk
+ * that mentions the entity, so bounding the chunk does not bound the candidate.
+ */
+function subdivideCandidate(
+  candidate: BootstrapCandidateEvidence,
+  parts: number,
+): BootstrapCandidateEvidence[] {
+  const total = Math.max(candidate.facts.length, candidate.exactSource.length, 1);
+  const size = Math.max(1, Math.ceil(total / Math.max(1, parts)));
+  const result: BootstrapCandidateEvidence[] = [];
+  for (let offset = 0; offset < total; offset += size) {
+    result.push({
+      entityKey: candidate.entityKey,
+      packetIds: [...candidate.packetIds],
+      facts: candidate.facts.slice(offset, offset + size),
+      exactSource: candidate.exactSource.slice(offset, offset + size).map((range) => ({ ...range })),
+    });
   }
-  while (clone.domainThemes.length > 0 && estimateBootstrapPayload(clone, calibration) > budget) {
-    clone.domainThemes.pop();
-  }
-  for (const candidate of clone.candidates) {
-    while (candidate.exactSource.length > 1 && estimateBootstrapPayload(clone, calibration) > budget) {
-      candidate.exactSource.pop();
+  return result.filter((part) => part.facts.length > 0 || part.exactSource.length > 0);
+}
+
+export interface BootstrapSplit {
+  groups: BootstrapEvidence[];
+  /** Largest group that could not be divided any further, in tokens. */
+  minimumGroupTokens: number;
+  subdivided: number;
+}
+
+/**
+ * Greedy over candidates; a candidate that does not fit an empty group is
+ * subdivided first. Themes and language evidence are duplicated into every
+ * group, which is the overhead the chunk budget already subtracts. Nothing is
+ * ever dropped or truncated: when a single evidence unit still does not fit,
+ * it is kept whole and `minimumGroupTokens` reports the budget it would need.
+ */
+export function splitBootstrapPayload(
+  value: BootstrapEvidence,
+  budget: number,
+  calibration?: number,
+): BootstrapSplit {
+  const estimate = (group: BootstrapEvidence): number => estimateBootstrapPayload(group, calibration);
+  const whole = estimate(value);
+  if (whole <= budget) return { groups: [value], minimumGroupTokens: whole, subdivided: 0 };
+
+  // Divide until every part fits or is atomic. `subdivideCandidate` halves by
+  // evidence unit, so the loop terminates: each pass either shrinks a part or
+  // reports it atomic. A single arithmetic pass is not enough — one unit can be
+  // far larger than the average, so ceil(size / budget) parts can still overflow.
+  let subdivided = 0;
+  const queue: BootstrapCandidateEvidence[] = [];
+  const pending = [...value.candidates];
+  while (pending.length > 0) {
+    const candidate = pending.shift()!;
+    const probe: BootstrapEvidence = { ...emptyBootstrapGroup(value), candidates: [candidate] };
+    if (estimate(probe) <= budget) {
+      queue.push(candidate);
+      continue;
     }
-  }
-  for (const candidate of clone.candidates) {
-    while (candidate.facts.length > 1 && estimateBootstrapPayload(clone, calibration) > budget) {
-      candidate.facts.pop();
+    const units = Math.max(candidate.facts.length, candidate.exactSource.length);
+    if (units <= 1) {
+      queue.push(candidate); // atomic: at most one fact and one range, cannot divide
+      continue;
     }
+    subdivided++;
+    pending.unshift(...subdivideCandidate(candidate, 2));
   }
-  while (clone.candidates.length > 1 && estimateBootstrapPayload(clone, calibration) > budget) {
-    clone.candidates.pop();
+
+  const groups: BootstrapEvidence[] = [];
+  let current = emptyBootstrapGroup(value);
+  for (const candidate of queue) {
+    const attempt: BootstrapEvidence = { ...current, candidates: [...current.candidates, candidate] };
+    if (current.candidates.length > 0 && estimate(attempt) > budget) {
+      groups.push(current);
+      current = { ...emptyBootstrapGroup(value), candidates: [candidate] };
+      continue;
+    }
+    current = attempt;
   }
-  return clone;
+  groups.push(current);
+
+  return {
+    groups,
+    minimumGroupTokens: Math.max(...groups.map((group) => estimate(group))),
+    subdivided,
+  };
 }
 
 function rangeKey(range: EvidenceRange): string {
@@ -429,6 +493,10 @@ export interface EvidencePolicy {
   reducerRetries?: number;
   maxReductionDepth?: number;
   bootstrapPayloadBudgetTokens?: number;
+  /** Calibrated token ceiling for one mapper source chunk. */
+  chunkBudgetTokens?: number;
+  /** Token calibration factor the budgets above are expressed in. */
+  calibration?: number;
 }
 
 export interface EvidenceRuntime {
@@ -456,6 +524,9 @@ export interface BootstrapEvidence {
 
 export interface BootstrapEvidenceBundle {
   bootstrap: BootstrapEvidence;
+  bootstrapGroups: BootstrapEvidence[];
+  bootstrapMinimumGroupTokens: number;
+  bootstrapSubdivided: number;
   evidence: EntityEvidence[];
   domainId: string;
   sourcePath: string;
@@ -985,7 +1056,15 @@ function planSourceChunksForEvidence(
   if (initialRequestBudget <= 0) {
     throw new EvidenceCoverageError("Mapper prompt and repair reserve exceed the input budget");
   }
-  const planned = findLargestFeasibleBudget<SourceChunk[]>(1, initialRequestBudget, (chunkBudget) => {
+  // policy.chunkBudgetTokens is expressed in calibrated tokens, the same unit as
+  // the bootstrap payload budget. chunkMarkdownSource measures in raw estimator
+  // tokens, so the budget is converted rather than the measurement. Without this
+  // the "one evidence unit always fits" proof compares two different scales.
+  const rawChunkBudget = Math.max(1, Math.floor(
+    Math.min(initialRequestBudget, policy.chunkBudgetTokens ?? initialRequestBudget)
+    / (policy.calibration ?? 1),
+  ));
+  const planned = findLargestFeasibleBudget<SourceChunk[]>(1, rawChunkBudget, (chunkBudget) => {
     let chunks: SourceChunk[];
     try {
       chunks = chunkMarkdownSource(source, {
@@ -996,14 +1075,17 @@ function planSourceChunksForEvidence(
       return { kind: "too-small" as const };
     }
     const mapperOpts = taskLlmOptions(opts, policy, policy.inputBudgetTokens);
-    chunks = packAdjacentMapperChunks(chunks, createChunk, (chunk) => mapperEstimateFits(
-      estimateStructuredRequest(
-        messagesForMapper(mapPrompt, chunk, domainId, mode, preparedSourceLines),
-        mapperOpts,
-        policy.mapperRetries ?? 1,
-      ),
-      initialRequestBudget,
-    ));
+    // Packing merges adjacent chunks, so it has to respect the raw chunk budget
+    // too; otherwise the bound the search just applied is immediately undone.
+    chunks = packAdjacentMapperChunks(chunks, createChunk, (chunk) => estimateText(chunk.markdown) <= rawChunkBudget
+      && mapperEstimateFits(
+        estimateStructuredRequest(
+          messagesForMapper(mapPrompt, chunk, domainId, mode, preparedSourceLines),
+          mapperOpts,
+          policy.mapperRetries ?? 1,
+        ),
+        initialRequestBudget,
+      ));
     const estimates = chunks.map((chunk) => estimateStructuredRequest(
       messagesForMapper(mapPrompt, chunk, domainId, mode, preparedSourceLines),
       mapperOpts,
@@ -1032,6 +1114,16 @@ function ensurePolicy(policy: EvidencePolicy): void {
   if (policy.outputBudgetTokens !== undefined
     && (!Number.isSafeInteger(policy.outputBudgetTokens) || policy.outputBudgetTokens <= 0)) {
     throw new EvidenceCoverageError("Evidence output budget must be a positive safe integer");
+  }
+  if (policy.chunkBudgetTokens !== undefined
+    && (!Number.isSafeInteger(policy.chunkBudgetTokens) || policy.chunkBudgetTokens <= 0)) {
+    throw new EvidenceCoverageError("Evidence chunk budget must be a positive safe integer");
+  }
+  // A calibration of zero would make the raw chunk budget infinite and hang the
+  // budget search, so it is rejected rather than clamped.
+  if (policy.calibration !== undefined
+    && (!Number.isFinite(policy.calibration) || policy.calibration <= 0)) {
+    throw new EvidenceCoverageError("Evidence token calibration must be a positive finite number");
   }
 }
 
@@ -1890,19 +1982,19 @@ export async function prepareBootstrapEvidenceBundle(
   if (!Number.isSafeInteger(payloadBudget) || payloadBudget <= 0) {
     throw new EvidenceCoverageError("Bootstrap payload budget must be a positive safe integer");
   }
-  const bootstrap = boundBootstrapPayload(
+  // No size check throws here. A group larger than the budget means the evidence
+  // is atomic, and the operation must not end on size — so the number is reported
+  // upward and the caller widens the budget instead.
+  const split = splitBootstrapPayload(
     { candidates, domainThemes, languageEvidence },
     payloadBudget,
     runtime.opts?.tokenCalibration,
   );
-  const estimated = estimateBootstrapPayload(bootstrap, runtime.opts?.tokenCalibration);
-  if (estimated > payloadBudget) {
-    throw new EvidenceCoverageError(
-      `Bootstrap evidence payload requires ${estimated} tokens but budget is ${payloadBudget}`,
-    );
-  }
   return {
-    bootstrap,
+    bootstrap: split.groups[0],
+    bootstrapGroups: split.groups,
+    bootstrapMinimumGroupTokens: split.minimumGroupTokens,
+    bootstrapSubdivided: split.subdivided,
     evidence,
     domainId: provisionalDomainId,
     sourcePath,

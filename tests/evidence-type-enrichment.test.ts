@@ -138,17 +138,25 @@ test("bootstrap bundle retains full evidence and source provenance while the old
   );
   const retained = structuredClone(bundle.evidence);
 
+  const expectedBootstrap = {
+    candidates: [{
+      entityKey: "postgresql",
+      packetIds: bundle.evidence[0].packetIds,
+      facts: ["PostgreSQL is a database"],
+      exactSource: [{ startLine: 1, endLine: 2, text: source }],
+    }],
+    domainThemes: ["PostgreSQL is a database"],
+    languageEvidence: [source],
+  };
   assert.deepEqual(bundle, {
-    bootstrap: {
-      candidates: [{
-        entityKey: "postgresql",
-        packetIds: bundle.evidence[0].packetIds,
-        facts: ["PostgreSQL is a database"],
-        exactSource: [{ startLine: 1, endLine: 2, text: source }],
-      }],
-      domainThemes: ["PostgreSQL is a database"],
-      languageEvidence: [source],
-    },
+    bootstrap: expectedBootstrap,
+    // A payload that fits stays one group; task-9 splits only what is oversized.
+    bootstrapGroups: [expectedBootstrap],
+    bootstrapMinimumGroupTokens: estimatePreparedMessages([{
+      role: "user",
+      content: JSON.stringify(expectedBootstrap),
+    }]),
+    bootstrapSubdivided: 0,
     evidence: retained,
     domainId: "databases",
     sourcePath,
