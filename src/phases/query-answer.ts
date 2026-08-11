@@ -317,6 +317,7 @@ export async function* answerFromContext(args: {
             effectiveInputBudget: opts.inputBudgetTokens ?? 16_384,
             estimatedInputTokens: estimatePreparedMessages(
               params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+              opts.tokenCalibration,
             ),
             outputBudget: opts.maxTokens,
             compressionProfile: opts.semanticCompression?.profile ?? "balanced",

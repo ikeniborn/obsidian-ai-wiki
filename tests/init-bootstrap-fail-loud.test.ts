@@ -1142,10 +1142,13 @@ test("bootstrap evidence packing reserves system and schema overhead from the sa
   } as unknown as LlmClient;
   const events: RunEvent[] = [];
 
+  // Rescaled from a byte-era budget of 9_000 for the token estimator
+  // (task-3 prompt-budget-automation): 2_143 (9_000 / 4.2) still leaves the
+  // bootstrap payload budget non-positive, forcing the configuration error.
   for await (const event of runInitWithSources(
     "demo", ["src"], false, new VaultTools(rawAdapter, "/vault"), llm, "m",
     [], "Vault", new AbortController().signal, {
-      inputBudgetTokens: 9_000,
+      inputBudgetTokens: 2_143,
       maxTokens: 1_000,
       semanticCompression: { profile: "balanced", operation: "ingest" },
       structuredRetries: 0,

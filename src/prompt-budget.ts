@@ -5,8 +5,10 @@ import type {
   RunEvent,
   StructuredCallSite,
 } from "./types";
+import { MEDIA_TOKENS, estimateMessages } from "./token-estimate";
 
-const MEDIA_TOKENS = 4_096;
+export { MEDIA_TOKENS };
+
 const MAX_CONTEXT_REPACKS = 2;
 
 export interface ContextUnit {
@@ -36,48 +38,15 @@ export class PromptBudgetExceededError extends Error {
   }
 }
 
-interface SanitizedValue {
-  value: unknown;
-  mediaParts: number;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function sanitizeMedia(value: unknown): SanitizedValue {
-  if (Array.isArray(value)) {
-    let mediaParts = 0;
-    const sanitized = value.map((item) => {
-      const result = sanitizeMedia(item);
-      mediaParts += result.mediaParts;
-      return result.value;
-    });
-    return { value: sanitized, mediaParts };
-  }
-
-  if (!isRecord(value)) return { value, mediaParts: 0 };
-
-  let mediaParts = value.type === "image_url" ? 1 : 0;
-  const sanitized: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(value)) {
-    const result = sanitizeMedia(item);
-    mediaParts += result.mediaParts;
-    if (key === "image_url" && isRecord(result.value)) {
-      sanitized[key] = { ...result.value, url: "[media]" };
-    } else {
-      sanitized[key] = result.value;
-    }
-  }
-  return { value: sanitized, mediaParts };
-}
-
 export function estimatePreparedMessages(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  calibration?: number,
 ): number {
-  const sanitized = sanitizeMedia(messages);
-  const serialized = JSON.stringify(sanitized.value) ?? "";
-  return new TextEncoder().encode(serialized).byteLength + sanitized.mediaParts * MEDIA_TOKENS;
+  return estimateMessages(messages, calibration);
 }
 
 export interface PackContextUnitsArgs {
@@ -127,7 +96,7 @@ export function packContextUnits(args: PackContextUnitsArgs): PackedPrompt {
     args.fixedMessages,
   );
   let messages = render(selected);
-  let estimatedInputTokens = estimatePreparedMessages(messages);
+  let estimatedInputTokens = estimatePreparedMessages(messages, args.opts.tokenCalibration);
 
   if (estimatedInputTokens > args.inputBudgetTokens) {
     throw new PromptBudgetExceededError(args.inputBudgetTokens, estimatedInputTokens, []);
@@ -136,7 +105,7 @@ export function packContextUnits(args: PackContextUnitsArgs): PackedPrompt {
   for (const unit of required) {
     selected.push(unit);
     messages = render(selected);
-    estimatedInputTokens = estimatePreparedMessages(messages);
+    estimatedInputTokens = estimatePreparedMessages(messages, args.opts.tokenCalibration);
   }
 
   if (estimatedInputTokens > args.inputBudgetTokens) {
@@ -150,7 +119,7 @@ export function packContextUnits(args: PackContextUnitsArgs): PackedPrompt {
   for (const unit of optional) {
     const candidate = [...selected, unit];
     const candidateMessages = render(candidate);
-    const candidateEstimate = estimatePreparedMessages(candidateMessages);
+    const candidateEstimate = estimatePreparedMessages(candidateMessages, args.opts.tokenCalibration);
     if (candidateEstimate <= args.inputBudgetTokens) {
       selected.push(unit);
       messages = candidateMessages;

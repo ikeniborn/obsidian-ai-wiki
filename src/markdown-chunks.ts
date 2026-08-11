@@ -1,5 +1,6 @@
 import { contentHash } from "./content-hash";
 import { inspectPatchablePage } from "./section-patches";
+import { estimateText } from "./token-estimate";
 
 export interface SourceChunk {
   id: string;
@@ -60,8 +61,6 @@ interface SourceRange {
   endIndex: number;
   headingPath: string[];
 }
-
-const encoder = new TextEncoder();
 
 function splitSourceLines(source: string): string[] {
   return source.length === 0 ? [] : source.split("\n");
@@ -183,7 +182,7 @@ function renderRangeMarkdown(lines: ScannedLine[], range: SourceRange): string {
 }
 
 function estimateTokens(markdown: string): number {
-  return encoder.encode(markdown).byteLength;
+  return estimateText(markdown);
 }
 
 function buildSections(lines: ScannedLine[]): MarkdownSection[] {

@@ -537,6 +537,19 @@ export interface LlmCallOptions {
   nativeFreshConnection?: boolean;
   /** Prefer compact structured repair once the full repair prompt reaches this estimate. */
   compactRepairThresholdTokens?: number;
+  /** Provider-derived correction applied to every token estimate for this call. */
+  tokenCalibration?: number;
+  /** The model's context window, when known. Absent on the claude-agent path. */
+  contextWindowTokens?: number;
+  /** Reports the estimate against the provider's own count so the estimator can self-correct. */
+  onUsageObserved?: (sample: { estimated: number; actual?: number }) => void;
+  /** Provenance of the resolved budget, for the prompt_budget diagnostic event. */
+  budgetTelemetry?: {
+    contextWindow: number;
+    inputSource: "override" | "discovered" | "learned" | "default";
+    outputSource: "override" | "default";
+    calibration: number;
+  };
 }
 
 export const NATIVE_TRANSPORT_ATTEMPT_SIGNAL = Symbol("nativeTransportAttemptSignal");

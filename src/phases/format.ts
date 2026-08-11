@@ -371,6 +371,7 @@ export async function* runFormat(
     effectiveInputBudget: opts.inputBudgetTokens ?? 0,
     estimatedInputTokens: estimatePreparedMessages(
       params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+      opts.tokenCalibration,
     ),
     actualInputTokens,
     outputBudget: opts.maxTokens,

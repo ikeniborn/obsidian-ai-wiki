@@ -631,6 +631,13 @@ test("PDF context recovery exhausts bounded repacks with unique dispatched reque
     },
   } as unknown as LlmClient;
 
+  // Rescaled from a byte-era configured budget of 20_000 for the token
+  // estimator (task-3 prompt-budget-automation): the fixed system-prompt
+  // overhead now costs fewer estimated tokens, so 20_000 left enough room
+  // for a third dispatch after two shrinks. 12_000 keeps the same two-
+  // dispatch-then-preflight-exhausted shape (12_000 -> 6_750 shrunk budget,
+  // both from shrinkInputBudget's fixed 12000/10000 ratio in the mocked
+  // provider error, unrelated to content size).
   await assert.rejects(
     analyzePdf(
       new ArrayBuffer(0),
@@ -640,7 +647,7 @@ test("PDF context recovery exhausts bounded repacks with unique dispatched reque
       "en",
       "en",
       {
-        inputBudgetTokens: 20_000,
+        inputBudgetTokens: 12_000,
         onEvent: (event) => events.push(event),
       },
       {
@@ -653,7 +660,7 @@ test("PDF context recovery exhausts bounded repacks with unique dispatched reque
         }),
       },
     ),
-    /vision\.analysis.*configuredInputBudget=20000.*finalEffectiveInputBudget=11250.*provider context limit.*promptTokens=12000.*maxContextTokens=10000/i,
+    /vision\.analysis.*configuredInputBudget=12000.*finalEffectiveInputBudget=6750.*provider context limit.*promptTokens=12000.*maxContextTokens=10000/i,
   );
 
   const budgets = events
@@ -661,7 +668,7 @@ test("PDF context recovery exhausts bounded repacks with unique dispatched reque
     .map((event) => event.kind === "prompt_budget" ? event.effectiveInputBudget : -1);
   assert.equal(seen.length, 2);
   assert.equal(new Set(seen.map((call) => call.signature)).size, 2);
-  assert.deepEqual(budgets, [20_000, 15_000]);
+  assert.deepEqual(budgets, [12_000, 6_750]);
   assert.ok(seen.every((call, index) =>
     call.estimate <= budgets[index]));
 });

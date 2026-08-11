@@ -164,7 +164,7 @@ export function buildChatParams(
 ): Record<string, unknown> {
   const msgs = prepareChatMessages(messages, opts);
   if (opts.inputBudgetTokens !== undefined) {
-    const estimated = estimatePreparedMessages(msgs);
+    const estimated = estimatePreparedMessages(msgs, opts.tokenCalibration);
     if (estimated > opts.inputBudgetTokens) {
       throw new PromptBudgetExceededError(opts.inputBudgetTokens, estimated, []);
     }

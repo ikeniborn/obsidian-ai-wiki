@@ -84,7 +84,10 @@ function estimateUnits(
   allowedTypes: ReadonlySet<string>,
   opts: LlmCallOptions,
 ): number {
-  return estimatePreparedMessages(prepareChatMessages(messagesForUnits(units, allowedTypes), opts));
+  return estimatePreparedMessages(
+    prepareChatMessages(messagesForUnits(units, allowedTypes), opts),
+    opts.tokenCalibration,
+  );
 }
 
 function partitionTypeUnits(
@@ -125,7 +128,7 @@ async function classifyBatch(
   opts: LlmCallOptions,
 ): Promise<EvidenceTypeAssignment[]> {
   const messages = messagesForUnits(units, allowedTypes);
-  const estimated = estimatePreparedMessages(prepareChatMessages(messages, opts));
+  const estimated = estimatePreparedMessages(prepareChatMessages(messages, opts), opts.tokenCalibration);
   if (estimated > policy.inputBudgetTokens) {
     throw new PromptBudgetExceededError(policy.inputBudgetTokens, estimated, units.map((unit) => unit.entityKey));
   }

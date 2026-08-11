@@ -1033,7 +1033,7 @@ function repackSynthesisBundles(
       .map((entry) => entry.id));
     const messages = renderSynthesisMessages(input, selected, opts, selectedOptionalIds);
     const prepared = prepareChatMessages(messages, opts);
-    const estimatedInputTokens = estimatePreparedMessages(prepared);
+    const estimatedInputTokens = estimatePreparedMessages(prepared, opts.tokenCalibration);
     const promptHash = contentHash(JSON.stringify(prepared));
     return {
       bundles: selected,
@@ -1068,12 +1068,13 @@ function repackSynthesisBundles(
     const renderCompressed = (): RepackedSynthesisRequest => {
       const messages = renderSynthesisMessages(input, [compressed], opts, new Set());
       const prepared = prepareChatMessages(messages, opts);
+      const estimatedInputTokens = estimatePreparedMessages(prepared, opts.tokenCalibration);
       return {
         bundles: [compressed],
         messages,
         promptHash: contentHash(JSON.stringify(prepared)),
-        estimatedInputTokens: estimatePreparedMessages(prepared),
-        promptBreakdown: synthesisPromptBreakdown(input, [compressed], new Set(), estimatePreparedMessages(prepared)),
+        estimatedInputTokens,
+        promptBreakdown: synthesisPromptBreakdown(input, [compressed], new Set(), estimatedInputTokens),
       };
     };
     let candidate = renderCompressed();
@@ -1315,7 +1316,7 @@ async function executeSingleRegenerationRequest(input: ConflictRegenerationInput
     structuredRetries: 0,
   };
   const messages = renderConflictRegenerationMessages(input, opts);
-  const estimatedInputTokens = estimatePreparedMessages(prepareChatMessages(messages, opts));
+  const estimatedInputTokens = estimatePreparedMessages(prepareChatMessages(messages, opts), opts.tokenCalibration);
   if (estimatedInputTokens > input.policy.inputBudgetTokens) {
     throw new PromptBudgetExceededError(
       input.policy.inputBudgetTokens,

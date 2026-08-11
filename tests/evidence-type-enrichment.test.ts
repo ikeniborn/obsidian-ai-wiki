@@ -237,7 +237,10 @@ test("classifier budget-packs compact immutable units and covers every key exact
     `entity-${index + 1}`,
     `bounded fact ${index + 1} ${"x".repeat(360)}`,
   ));
-  const inputPolicy = policy(3_900);
+  // Rescaled from a byte-era budget of 3_900 for the token estimator
+  // (task-3 prompt-budget-automation): 928 (3_900 / 4.2) still forces
+  // multiple classifier batches.
+  const inputPolicy = policy(928);
   const result = await enrichEvidenceTypes(
     input,
     new Set(["database", "cache"]),

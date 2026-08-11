@@ -679,8 +679,11 @@ test("single- and cross-domain Query keep the post-reranker winner under a one-c
     apiKey: "test",
   };
   const question = "Which reranker ranking evidence wins?";
+  // Rescaled from a byte-era budget of 7_000 for the token estimator
+  // (task-3 prompt-budget-automation): 1_667 (7_000 / 4.2) still fits only
+  // one of the two 2_400-character candidate chunks.
   const opts = {
-    inputBudgetTokens: 7_000,
+    inputBudgetTokens: 1_667,
     maxTokens: 200,
     semanticCompression: {
       profile: "balanced" as const,

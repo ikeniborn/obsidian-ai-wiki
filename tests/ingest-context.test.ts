@@ -65,7 +65,9 @@ test("diversity rounds survive packer ordering: A1, B1, then A2", () => {
       ["!Wiki/d/a.md", "## Entity A1\nentity entity entity\n## A2\nentity entity"],
       ["!Wiki/d/b.md", "## B1\nentity\n## B2\nquiet"],
     ]),
-    inputBudgetTokens: 600,
+    // Rescaled from a byte-era budget of 600 for the token estimator (task-3
+    // prompt-budget-automation): 130 still excludes the lowest-score "## B2".
+    inputBudgetTokens: 130,
     fixedMessages: [],
     opts: {},
   });
@@ -141,7 +143,9 @@ test("required target occupies round zero before optional target-page sections",
       ["!Wiki/d/b.md", "## B1\nentity\n## B2\nquiet"],
     ]),
     targetPath,
-    inputBudgetTokens: 600,
+    // Rescaled from a byte-era budget of 600 for the token estimator (task-3
+    // prompt-budget-automation): 130 still excludes the lowest-score "## B2".
+    inputBudgetTokens: 130,
     fixedMessages: [],
     opts: {},
   });
@@ -818,10 +822,13 @@ test("normalized duplicate section text is emitted once and ties are stable", ()
 });
 
 test("fixed and rendered overhead overflow is rejected", () => {
+  // Rescaled from a byte-era budget of 10 for the token estimator (task-3
+  // prompt-budget-automation): 5 is still smaller than the fixed system
+  // message's own token estimate.
   assert.throws(() => buildEntityContext({
     evidence,
     candidatePages: new Map(),
-    inputBudgetTokens: 10,
+    inputBudgetTokens: 5,
     fixedMessages: [{ role: "system", content: "fixed overhead" }],
     opts: {},
   }), ContextSplitRequiredError);
@@ -863,7 +870,10 @@ test("bundles batch exactly once in stable order and within rendered bounds", ()
 });
 
 test("oversized bundle directs caller to evidence reducer", () => {
-  assert.throws(() => batchEntityContexts([bundle("a", 100)], 10, () => [{ role: "user", content: "oversized" }], {}), ContextSplitRequiredError);
+  // Rescaled from a byte-era budget of 10 for the token estimator (task-3
+  // prompt-budget-automation): 5 is still smaller than the rendered
+  // "oversized" message's own token estimate.
+  assert.throws(() => batchEntityContexts([bundle("a", 100)], 5, () => [{ role: "user", content: "oversized" }], {}), ContextSplitRequiredError);
 });
 
 test("oversized singleton evidence is compressed before batching fails", () => {

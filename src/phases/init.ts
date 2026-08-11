@@ -229,11 +229,12 @@ async function* prepareDomainBootstrap(
   };
   const fixedRequestEstimate = estimatePreparedMessages(
     prepareChatMessages(bootstrapMessages(emptyBootstrapEvidence), opts),
+    opts.tokenCalibration,
   );
   const emptyPayloadEstimate = estimatePreparedMessages([{
     role: "user",
     content: JSON.stringify(emptyBootstrapEvidence),
-  }]);
+  }], opts.tokenCalibration);
   const bootstrapPayloadBudgetTokens = inputBudgetTokens
     - fixedRequestEstimate
     + emptyPayloadEstimate;
@@ -284,7 +285,10 @@ async function* prepareDomainBootstrap(
   const bootstrapEvidence = bootstrapBundle.bootstrap;
 
   const messages = bootstrapMessages(bootstrapEvidence);
-  const estimatedInputTokens = estimatePreparedMessages(prepareChatMessages(messages, opts));
+  const estimatedInputTokens = estimatePreparedMessages(
+    prepareChatMessages(messages, opts),
+    opts.tokenCalibration,
+  );
   if (estimatedInputTokens > inputBudgetTokens) {
     yield {
       kind: "error",

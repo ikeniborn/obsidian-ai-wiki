@@ -921,11 +921,15 @@ test("schema repair retry stays within input budget by compacting previous inval
   const seenParams: Record<string, unknown>[] = [];
   const largeInvalid = JSON.stringify({ value: 42, noise: "x".repeat(3_000) });
 
+  // Rescaled from a byte-era budget of 3_000 for the token estimator
+  // (task-3 prompt-budget-automation): 714 (3_000 / 4.2) is still smaller
+  // than the full repair (base + verbatim invalid output), forcing the
+  // compact repair path.
   const result = await runStructuredWithRetry({
     llm: llmFromAttempts([largeInvalid, '{"value":"recovered"}'], seenParams),
     model: "m",
     baseMessages: [{ role: "user", content: "x".repeat(650) }],
-    opts: { inputBudgetTokens: 3_000 },
+    opts: { inputBudgetTokens: 714 },
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 1,
     callSite: "query.seeds",
@@ -1782,7 +1786,10 @@ test("structured repair prefers compact prompt above profile threshold", async (
     profile: {
       kind: "json-zod",
       schema: z.object({ value: z.literal("ok") }),
-      compactRepairThresholdTokens: 512,
+      // Rescaled from a byte-era 512 for the token estimator (task-3
+      // prompt-budget-automation): 122 (512 / 4.2) is still smaller than
+      // the full repair's own token estimate, forcing the compact path.
+      compactRepairThresholdTokens: 122,
     },
     maxRetries: 1,
     callSite: "query.seeds",

@@ -2084,7 +2084,19 @@ test("runIngest uses the dedicated repair input budget for a fresh field-frame r
   const synthesisBudgets = events.filter((event): event is Extract<RunEvent, { kind: "prompt_budget" }> =>
     event.kind === "prompt_budget" && event.callSite === "ingest.synthesize");
   assert.deepEqual(synthesisBudgets.map((event) => event.effectiveInputBudget), [12_500, 65_536]);
-  assert.ok((synthesisBudgets[1]?.estimatedInputTokens ?? 0) > 12_500);
+  // The retry always dispatches on the dedicated repair budget (asserted
+  // above), regardless of whether the smaller configured budget would also
+  // have fit it. Under the byte estimator this fixture's field-frame repair
+  // instructions reliably pushed the retry past 12_500; under the token
+  // estimator (task-3 prompt-budget-automation) the fixed repair-instruction
+  // overhead (~479 estimated tokens) is smaller than the packer's own
+  // minimum compaction reserve (512 tokens), so no configured budget can
+  // make the retry exceed it while still letting the first attempt succeed.
+  // Assert the still-meaningful relationship instead: the repair prompt is
+  // larger than the original, because it must explain the missing marker.
+  assert.ok(
+    (synthesisBudgets[1]?.estimatedInputTokens ?? 0) > (synthesisBudgets[0]?.estimatedInputTokens ?? 0),
+  );
   assert.equal(events.some((event) =>
     event.kind === "structural_error"
     && event.callSite === "ingest.synthesize"

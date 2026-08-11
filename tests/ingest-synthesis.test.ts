@@ -344,7 +344,10 @@ test("context repack never drops required registry units while dropping optional
   const result = await synthesizeEntityBatch(synthesisArgs([bundle("a")], llm, {
     existingPageDescriptions: [{ entityKey: "a", path: absentPath, description: "OPTIONAL-DESCRIPTION-".repeat(100) }],
     tagRegistryUnits: [requiredRegistry, optionalRegistry],
-    policy: { inputBudgetTokens: 15_000, outputBudgetTokens: 300, compression: "balanced" as const },
+    // Rescaled from a byte-era budget of 15_000 for the token estimator
+    // (task-3 prompt-budget-automation): 3_571 (15_000 / 4.2) still forces
+    // the optional registry/description text to be dropped on retry.
+    policy: { inputBudgetTokens: 3_571, outputBudgetTokens: 300, compression: "balanced" as const },
   }));
   assert.equal(result.actions.length, 1);
   assert.equal(calls.length, 2);
@@ -679,6 +682,9 @@ test("single-bundle synthesis compresses oversized evidence against the real pro
     ],
     links: Array.from({ length: 100 }, (_, index) => `https://example.com/${index}`),
   };
+  // Rescaled from a byte-era budget of 12_000 for the token estimator
+  // (task-3 prompt-budget-automation): 2_857 (12_000 / 4.2) still forces
+  // the oversized evidence to be compressed rather than fitting whole.
   const seen: Record<string, unknown>[] = [];
   const llm = mockLlm((params) => {
     const prompt = JSON.stringify(params.messages);
@@ -687,14 +693,14 @@ test("single-bundle synthesis compresses oversized evidence against the real pro
     assert.match(prompt, /exact line range validated server-side/);
     assert.equal(
       estimatePreparedMessages(params.messages as OpenAI.Chat.ChatCompletionMessageParam[])
-        <= 12_000 - synthesisCompactRepairReserveTokens(12_000),
+        <= 2_857 - synthesisCompactRepairReserveTokens(2_857),
       true,
     );
     return outputFor(["a"]);
   }, seen, []);
 
   const result = await synthesizeEntityBatch(synthesisArgs([oversized], llm, {
-    policy: { inputBudgetTokens: 12_000, outputBudgetTokens: 300, compression: "balanced" as const },
+    policy: { inputBudgetTokens: 2_857, outputBudgetTokens: 300, compression: "balanced" as const },
   }));
 
   assert.equal(result.actions[0]?.entityKey, "a");

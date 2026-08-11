@@ -13,6 +13,7 @@ import {
   PromptBudgetExceededError,
   runWithContextRepack,
 } from "../prompt-budget";
+import { estimateText } from "../token-estimate";
 import type {
   CompressionProfile,
   LlmCallOptions,
@@ -714,7 +715,7 @@ function messagesForMapper(
 interface MapperRequestDetails {
   hash: string;
   estimatedInputTokens: number;
-  rawBytes: number;
+  rawTokens: number;
   lineCount: number;
 }
 
@@ -740,7 +741,7 @@ function mapperRequestDetails(
   return {
     hash: JSON.stringify(prepared),
     estimatedInputTokens: estimateStructuredRequest(messages, mapperOpts, policy.mapperRetries ?? 1),
-    rawBytes: new TextEncoder().encode(original).byteLength,
+    rawTokens: estimateText(original),
     lineCount: chunk.endLine - chunk.startLine + 1,
   };
 }
@@ -749,7 +750,7 @@ function estimateLlmMessages(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   opts: LlmCallOptions,
 ): number {
-  return estimatePreparedMessages(prepareChatMessages(messages, opts));
+  return estimatePreparedMessages(prepareChatMessages(messages, opts), opts.tokenCalibration);
 }
 
 function boundedStructuredRepairInstruction(error?: Error): string {
@@ -1370,7 +1371,7 @@ function rechunkMapperSourceForRetry(
         policy,
         runtime.opts ?? {},
       );
-      return details.rawBytes <= maximumRawBudget
+      return details.rawTokens <= maximumRawBudget
         && mapperEstimateFits(details.estimatedInputTokens, effectiveInputBudget);
     });
     const largest = Math.max(...chunks.map((chunk) => estimateStructuredRequest(
@@ -1424,7 +1425,7 @@ async function mapChunksWithContextRepack(
           mode,
         );
       } else {
-        const forcedRawBudget = failedMapper.rawBytes - 1;
+        const forcedRawBudget = failedMapper.rawTokens - 1;
         if (forcedRawBudget <= 0) {
           throw new EvidenceCoverageError(`Mapper chunk ${failedMapper.id} cannot be split into a smaller original-source range`);
         }

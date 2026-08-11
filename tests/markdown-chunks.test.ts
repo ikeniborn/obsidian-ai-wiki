@@ -8,8 +8,7 @@ import {
   extractMarkdownSections,
 } from "../src/markdown-chunks";
 import { contentHash } from "../src/content-hash";
-
-const estimatedBytes = (text: string): number => new TextEncoder().encode(text).byteLength;
+import { estimateText } from "../src/token-estimate";
 
 test("content hashes use stable FNV-1a values", () => {
   assert.equal(contentHash(""), "fnv1a:811c9dc5");
@@ -82,7 +81,7 @@ test("oversized fenced blocks retain fence language and source anchors", () => {
   assert.doesNotThrow(() => assertCompleteSourceCoverage(source, chunks));
 });
 
-test("every returned chunk stays within the strict byte budget", () => {
+test("every returned chunk stays within the strict token budget", () => {
   const fixtures = [
     {
       source: ["# Root", "", ...Array.from({ length: 40 }, (_, i) => `paragraph line ${i}`)].join("\n"),
@@ -99,7 +98,7 @@ test("every returned chunk stays within the strict byte budget", () => {
   for (const fixture of fixtures) {
     const chunks = chunkMarkdownSource(fixture.source, fixture);
     assert.equal(
-      chunks.every((chunk) => estimatedBytes(chunk.markdown) <= fixture.maxEstimatedTokens),
+      chunks.every((chunk) => estimateText(chunk.markdown) <= fixture.maxEstimatedTokens),
       true,
     );
   }
@@ -107,18 +106,21 @@ test("every returned chunk stays within the strict byte budget", () => {
 
 test("a source line larger than the budget fails with its range and required size", () => {
   const source = "x".repeat(64);
+  const required = estimateText(source);
   assert.throws(
-    () => chunkMarkdownSource(source, { maxEstimatedTokens: 32, overlapLines: 0 }),
-    /range 1-1 requires 64 estimated tokens but budget is 32/i,
+    () => chunkMarkdownSource(source, { maxEstimatedTokens: required - 1, overlapLines: 0 }),
+    new RegExp(`range 1-1 requires ${required} estimated tokens but budget is ${required - 1}`, "i"),
   );
 });
 
 test("mandatory fence wrappers larger than the budget fail with their source range", () => {
   const source = "```lang\n1234567890\n```";
-  assert.equal(estimatedBytes("```lang\n1234567890\n```"), 22);
+  // Budget 4 is large enough for the opening fence line alone but too small
+  // for the fenced content line, which must carry synthetic open/close
+  // fence overhead — so range 2-2 is the one that fails.
   assert.throws(
-    () => chunkMarkdownSource(source, { maxEstimatedTokens: 20, overlapLines: 0 }),
-    /range 2-2 requires 22 estimated tokens but budget is 20/i,
+    () => chunkMarkdownSource(source, { maxEstimatedTokens: 4, overlapLines: 0 }),
+    /range 2-2 requires \d+ estimated tokens but budget is 4/i,
   );
 });
 
@@ -175,7 +177,10 @@ test("nested headings produce stable hierarchical paths", () => {
     "## Sibling",
     `sibling ${"x".repeat(20)}`,
   ].join("\n");
-  const chunks = chunkMarkdownSource(source, { maxEstimatedTokens: 45, overlapLines: 1 });
+  // Rescaled from a byte-era budget of 45 for the token estimator (task-3
+  // prompt-budget-automation): 15 tokens keeps the same one-section-per-chunk
+  // split this test asserts below.
+  const chunks = chunkMarkdownSource(source, { maxEstimatedTokens: 15, overlapLines: 1 });
 
   assert.deepEqual(chunks.map((chunk) => chunk.headingPath), [
     ["Root"],
@@ -260,9 +265,11 @@ test("chunking never emits a blank-only leading preamble chunk", () => {
 });
 
 test("a leading blank range fails loud when it cannot share the heading budget", () => {
+  // Rescaled from a byte-era budget of 3 for the token estimator (task-3
+  // prompt-budget-automation): budget 1 is still too small to coalesce.
   assert.throws(
-    () => chunkMarkdownSource("\n# H", { maxEstimatedTokens: 3, overlapLines: 0 }),
-    /blank source range 1-1 cannot be coalesced.*budget 3/i,
+    () => chunkMarkdownSource("\n# H", { maxEstimatedTokens: 1, overlapLines: 0 }),
+    /blank source range 1-1 cannot be coalesced.*budget 1/i,
   );
 });
 
@@ -275,7 +282,7 @@ test("blank paragraph separators coalesce with an adjacent range when the result
     [3, 4, "\nb"],
   ]);
   assert.equal(chunks.every((chunk) => chunk.markdown.length > 0), true);
-  assert.equal(chunks.every((chunk) => estimatedBytes(chunk.markdown) <= 2), true);
+  assert.equal(chunks.every((chunk) => estimateText(chunk.markdown) <= 2), true);
   assert.doesNotThrow(() => assertCompleteSourceCoverage(source, chunks));
 });
 
@@ -296,7 +303,9 @@ test("oversized sections split at blank lines before using overlap", () => {
     "",
     `third ${"c".repeat(24)}`,
   ].join("\n");
-  const chunks = chunkMarkdownSource(source, { maxEstimatedTokens: 40, overlapLines: 2 });
+  // Rescaled from a byte-era budget of 40 for the token estimator (task-3
+  // prompt-budget-automation): 15 tokens reproduces the same blank-line splits.
+  const chunks = chunkMarkdownSource(source, { maxEstimatedTokens: 15, overlapLines: 2 });
 
   assert.ok(chunks.length > 1);
   for (let index = 1; index < chunks.length; index++) {
@@ -373,8 +382,10 @@ test("line-window sizing performs bounded byte-encoding work", () => {
 
 test("overlap that cannot preserve progress is rejected clearly", () => {
   const source = Array.from({ length: 6 }, (_, i) => `${i}:${"x".repeat(18)}`).join("\n");
+  // Rescaled from a byte-era budget of 41 for the token estimator (task-3
+  // prompt-budget-automation): 12 tokens still forces the range 1-2 window.
   assert.throws(
-    () => chunkMarkdownSource(source, { maxEstimatedTokens: 41, overlapLines: 2 }),
+    () => chunkMarkdownSource(source, { maxEstimatedTokens: 12, overlapLines: 2 }),
     /overlapLines 2 prevents progress after source range 1-2/i,
   );
 });
@@ -387,7 +398,10 @@ test("synthetic fence wrappers are excluded from the source content hash", () =>
     "```",
   ];
   const source = sourceLines.join("\n");
-  const chunks = chunkMarkdownSource(source, { maxEstimatedTokens: 80, overlapLines: 1 });
+  // Rescaled from a byte-era budget of 80 for the token estimator (task-3
+  // prompt-budget-automation): 40 tokens still splits the fenced block so a
+  // middle chunk is fully wrapped by synthetic fence delimiters.
+  const chunks = chunkMarkdownSource(source, { maxEstimatedTokens: 40, overlapLines: 1 });
   const wrapped = chunks.find((chunk) => chunk.startLine > 2 && chunk.endLine < sourceLines.length);
 
   assert.ok(wrapped);
@@ -420,7 +434,10 @@ test("coverage validation rejects a missing synthetic fence wrapper", () => {
     "```",
   ];
   const source = sourceLines.join("\n");
-  const chunks = chunkMarkdownSource(source, { maxEstimatedTokens: 80, overlapLines: 1 });
+  // Rescaled from a byte-era budget of 80 for the token estimator (task-3
+  // prompt-budget-automation): 40 tokens still splits the fenced block so a
+  // middle chunk is fully wrapped by synthetic fence delimiters.
+  const chunks = chunkMarkdownSource(source, { maxEstimatedTokens: 40, overlapLines: 1 });
   const wrapped = chunks.find((chunk) => chunk.startLine > 1 && chunk.endLine < sourceLines.length);
   assert.ok(wrapped);
   wrapped.markdown = sourceLines.slice(wrapped.startLine - 1, wrapped.endLine).join("\n");
@@ -438,7 +455,10 @@ test("coverage validation rejects an altered synthetic fence wrapper", () => {
     "```",
   ];
   const source = sourceLines.join("\n");
-  const chunks = chunkMarkdownSource(source, { maxEstimatedTokens: 80, overlapLines: 1 });
+  // Rescaled from a byte-era budget of 80 for the token estimator (task-3
+  // prompt-budget-automation): 40 tokens still splits the fenced block so a
+  // middle chunk is fully wrapped by synthetic fence delimiters.
+  const chunks = chunkMarkdownSource(source, { maxEstimatedTokens: 40, overlapLines: 1 });
   const wrapped = chunks.find((chunk) => chunk.startLine > 1 && chunk.endLine < sourceLines.length);
   assert.ok(wrapped);
   wrapped.markdown = wrapped.markdown.replace("```rust", "```text");
@@ -495,7 +515,9 @@ test("coverage validation rejects an ID that differs from ordinal, range, and ha
 
 test("coverage validation accepts intentional overlapping ranges", () => {
   const source = Array.from({ length: 10 }, (_, i) => `line ${i} ${"x".repeat(10)}`).join("\n");
-  const chunks = chunkMarkdownSource(source, { maxEstimatedTokens: 70, overlapLines: 2 });
+  // Rescaled from a byte-era budget of 70 for the token estimator (task-3
+  // prompt-budget-automation): 25 tokens still forces overlapping windows.
+  const chunks = chunkMarkdownSource(source, { maxEstimatedTokens: 25, overlapLines: 2 });
   assert.ok(chunks.some((chunk, index) => index > 0 && chunk.startLine <= chunks[index - 1].endLine));
   assert.doesNotThrow(() => assertCompleteSourceCoverage(source, chunks));
 });

@@ -527,6 +527,7 @@ async function streamOnce(
       effectiveInputBudget: opts.inputBudgetTokens ?? 16_384,
       estimatedInputTokens: estimatePreparedMessages(
         params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+        opts.tokenCalibration,
       ),
       actualInputTokens: inputTokens,
       outputBudget: opts.maxTokens,
@@ -583,6 +584,7 @@ async function nonStreamOnce(
       effectiveInputBudget: opts.inputBudgetTokens ?? 16_384,
       estimatedInputTokens: estimatePreparedMessages(
         params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+        opts.tokenCalibration,
       ),
       outputBudget: opts.maxTokens,
       compressionProfile: opts.semanticCompression?.profile ?? "balanced",
@@ -602,6 +604,7 @@ async function nonStreamOnce(
       effectiveInputBudget: opts.inputBudgetTokens ?? 16_384,
       estimatedInputTokens: estimatePreparedMessages(
         params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+        opts.tokenCalibration,
       ),
       actualInputTokens,
       outputBudget: opts.maxTokens,

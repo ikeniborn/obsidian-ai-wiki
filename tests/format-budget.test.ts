@@ -177,6 +177,10 @@ function llmWithCreate(
   } as unknown as LlmClient;
 }
 
+// Most fixtures below call this with 2_381 as inputBudgetTokens — rescaled
+// from a byte-era budget of 10_000 for the token estimator (task-3
+// prompt-budget-automation, 10_000 / 4.2) — so the oversized fixtures still
+// force segmentation instead of fitting whole-file.
 async function collectFormatEvents(
   source: string,
   llm: LlmClient,
@@ -472,7 +476,7 @@ test("format segments oversized H2 notes and never sends the full note to one mo
       assert.ok(segment.length > 0, "segment calls must carry bounded source markdown");
       return segmentFrame(id, `- formatted ${id}`, segment);
     }, seenParams),
-    10_000,
+    2381,
   );
 
   assert.ok(seenParams.length > 1);
@@ -509,7 +513,7 @@ test("format creates no temp preview or source write when a segment response fai
       const segment = userText.match(/<<<SOURCE_SEGMENT>>>\n([\s\S]*?)\n<<<END_SOURCE_SEGMENT>>>/)?.[1] ?? "";
       return segmentFrame(id, `- formatted ${id}`, segment);
     }, seenParams),
-    10_000,
+    2381,
     adapter,
   );
 
@@ -544,7 +548,7 @@ test("segmented Format fails the prior validated lifecycle when the next segment
       const segment = userText.match(/<<<SOURCE_SEGMENT>>>\n([\s\S]*?)\n<<<END_SOURCE_SEGMENT>>>/)?.[1] ?? "";
       return segmentFrame(id, `- formatted ${id}`, segment);
     }, seenParams),
-    10_000,
+    2381,
     adapter,
   );
 
@@ -586,7 +590,9 @@ test("segmented Format cancels the prior validated lifecycle before the next seg
     false,
     [],
     controller.signal,
-    { inputBudgetTokens: 10_000 },
+    // Rescaled from 10_000 for the token estimator (task-3
+    // prompt-budget-automation), matching the other segmented fixtures below.
+    { inputBudgetTokens: 2_381 },
   );
   const events: RunEvent[] = [];
   while (true) {
@@ -622,7 +628,7 @@ test("Format preview write failure closes the validated request as failed", asyn
   const { events } = await collectFormatEvents(
     original,
     llmWithResponder(() => frame("- report", "# Formatted\n\nBody"), []),
-    10_000,
+    2381,
     adapter,
   );
   const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
@@ -680,7 +686,7 @@ test("Format closes validated lifecycle when restore parameter construction exce
       "- report",
       `---\ntags: [restore]\n---\n# Formatted\n\n${"x".repeat(100_000)}`,
     ), []),
-    10_000,
+    2381,
   );
 
   const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
@@ -708,7 +714,7 @@ test("Format abort during token restoration stops before preview", async () => {
         throw new DOMException("aborted", "AbortError");
       })();
     }, seen),
-    10_000,
+    2381,
     undefined,
     {},
     false,
@@ -754,7 +760,7 @@ test("format retries a malformed complete segment frame once with correction con
       const segment = userText.match(/<<<SOURCE_SEGMENT>>>\n([\s\S]*?)\n<<<END_SOURCE_SEGMENT>>>/)?.[1] ?? "";
       return segmentFrame(id, `- formatted ${id}`, segment);
     }, seenParams),
-    10_000,
+    2381,
   );
 
   assert.equal(attemptsById.get("segment-1"), 2);
@@ -802,7 +808,7 @@ test("segmented correction provider context errors split into narrower calls", a
         yield usageChunk();
       })();
     }, seenParams),
-    10_000,
+    2381,
   );
 
   assert.equal(attemptsById.get(targetId), 2);
@@ -838,7 +844,7 @@ test("segmented missing-token recovery never rebuilds an oversized whole-file mo
       const segment = userText.match(/<<<SOURCE_SEGMENT>>>\n([\s\S]*?)\n<<<END_SOURCE_SEGMENT>>>/)?.[1] ?? "";
       return segmentFrame(id, `- formatted ${id}`, segment.replace("AlphaUniqueToken", "Alpha"));
     }, seenParams),
-    10_000,
+    2381,
   );
 
   assert.equal(adapter.writes.length, 1);
@@ -914,7 +920,7 @@ test("oversized format fails closed for direct Markdown images even when hasVisi
     llmWithResponder(() => {
       throw new Error("image-bearing oversized note must fail before model calls");
     }, seenParams),
-    10_000,
+    2381,
   );
 
   assert.equal(seenParams.length, 0);
@@ -939,7 +945,7 @@ test("segmented format preserves BOM and CRLF frontmatter exactly without exposi
       const segment = userText.match(/<<<SOURCE_SEGMENT>>>\n([\s\S]*?)\n<<<END_SOURCE_SEGMENT>>>/)?.[1] ?? "";
       return segmentFrame(id, `- formatted ${id}`, segment);
     }, seenParams),
-    10_000,
+    2381,
   );
 
   assert.equal(adapter.writes.length, 1);
@@ -964,7 +970,7 @@ test("segmented format restores BOM and CRLF frontmatter exactly once", async ()
       const segment = userText.match(/<<<SOURCE_SEGMENT>>>\n([\s\S]*?)\n<<<END_SOURCE_SEGMENT>>>/)?.[1] ?? "";
       return segmentFrame(id, `- formatted ${id}`, segment.replace("# CRLF", "# CRLF Formatted"));
     }, seenParams),
-    10_000,
+    2381,
   );
 
   const expected = `${frontmatter}${body.replace("# CRLF", "# CRLF Formatted")}`;
@@ -992,7 +998,7 @@ test("segmented reassembly strips model-added frontmatter without stripping them
         : segment;
       return segmentFrame(id, `- formatted ${id}`, formatted);
     }, seenParams),
-    10_000,
+    2381,
   );
 
   assert.equal(adapter.writes.length, 1);
@@ -1030,7 +1036,7 @@ test("segmented provider context errors split into narrower calls and reassemble
         yield usageChunk();
       })();
     }, seenParams),
-    10_000,
+    2381,
   );
 
   assert.equal(adapter.writes.length, 1);
@@ -1094,7 +1100,7 @@ test("segmented non-stream fallback records prompt usage, completion usage, and 
       if (params.stream !== false) throw new Error("temporary transport failure");
       return nonStreamResponse(segmentFrame(id, `- formatted ${id}`, segment), 13, 5);
     }, seenParams),
-    10_000,
+    2381,
   );
 
   const nonStreamCalls = seenParams.filter((params) => params.stream === false).length;
@@ -1144,7 +1150,7 @@ test("runtime segmentation never sends partial fenced code blocks", async () => 
       assert.ok(fenceCount === 0 || fenceCount === 2, `partial fence in ${id}`);
       return segmentFrame(id, `- formatted ${id}`, segment);
     }, seenParams),
-    10_000,
+    2381,
   );
 
   assert.equal(adapter.writes.length, 1);
@@ -1174,7 +1180,7 @@ test("segmented format emits format.segment prompt-budget telemetry and aggregat
       const segment = userText.match(/<<<SOURCE_SEGMENT>>>\n([\s\S]*?)\n<<<END_SOURCE_SEGMENT>>>/)?.[1] ?? "";
       return segmentFrame(id, `- formatted ${id}`, segment);
     }, seenParams),
-    10_000,
+    2381,
     new MemoryAdapter({ "notes/source.md": original }),
     { maxTokens: 123 },
   );
@@ -1245,7 +1251,7 @@ test("format restores frontmatter and Obsidian embeds after segmented formatting
           .replace("# Identity", "# Identity Formatted"),
       );
     }, seenParams),
-    10_000,
+    2381,
   );
 
   assert.equal(adapter.writes.length, 1);

@@ -665,7 +665,6 @@ export function batchEntityContexts(
   opts: LlmCallOptions,
 ): EntityContextBundle[][] {
   validateBudget(inputBudgetTokens);
-  void opts;
   const sorted = [...bundles].sort((a, b) => compareCodePoints(a.entityKey, b.entityKey));
   const duplicateKeys = sorted.filter((bundle, index) => index > 0 && bundle.entityKey === sorted[index - 1].entityKey)
     .map((bundle) => bundle.entityKey);
@@ -686,7 +685,10 @@ export function batchEntityContexts(
       ? {}
       : { consolidatedEntityKeys: [...bundle.consolidatedEntityKeys] }),
   });
-  const estimateBatch = (items: EntityContextBundle[]) => estimatePreparedMessages(renderBatch(items.map(cloneBundle)));
+  const estimateBatch = (items: EntityContextBundle[]) => estimatePreparedMessages(
+    renderBatch(items.map(cloneBundle)),
+    opts.tokenCalibration,
+  );
   const compressSingletonEvidence = (bundle: EntityContextBundle): EntityContextBundle => {
     const compressed = cloneBundle(bundle);
     if (estimateBatch([compressed]) <= inputBudgetTokens) return compressed;

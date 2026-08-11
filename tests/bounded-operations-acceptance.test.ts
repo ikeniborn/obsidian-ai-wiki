@@ -636,8 +636,11 @@ function reducedEvidence(input: Array<Record<string, unknown>>): Record<string, 
 async function exerciseEvidenceThroughSynthesis(): Promise<void> {
   const events: RunEvent[] = [];
   const evidenceRequests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
+  // Rescaled from a byte-era budget of 12_000 for the token estimator
+  // (task-3 prompt-budget-automation): 2_857 (12_000 / 4.2) still forces
+  // recursive reduction over the 500-line fixture below.
   const policy: EvidencePolicy = {
-    inputBudgetTokens: 12_000,
+    inputBudgetTokens: 2_857,
     outputBudgetTokens: 4_000,
     compressionProfile: "balanced",
     overlapLines: 0,
@@ -650,7 +653,7 @@ async function exerciseEvidenceThroughSynthesis(): Promise<void> {
       chat: {
         completions: {
           create: async (params: unknown) => {
-            const typed = capture("prepareSourceEvidence", 12_000, params);
+            const typed = capture("prepareSourceEvidence", 2_857, params);
             const messages = typed.messages as OpenAI.Chat.ChatCompletionMessageParam[];
             evidenceRequests.push(messages);
             if (isReducerRequest(messages)) {
@@ -973,6 +976,9 @@ async function exerciseFormat(): Promise<void> {
   ].join("\n");
   const adapter = new MemoryAdapter(new Map([["notes/source.md", source]]));
   const segmentIds: string[] = [];
+  // Rescaled from a byte-era budget of 10_000 for the token estimator
+  // (task-3 prompt-budget-automation): 2_381 (10_000 / 4.2) still forces
+  // the oversized fixture to segment instead of fitting whole-file.
   const events = await collectEvents(runFormat(
     ["notes/source.md"],
     new VaultTools(adapter, "/vault"),
@@ -980,7 +986,7 @@ async function exerciseFormat(): Promise<void> {
       chat: {
         completions: {
           create: async (params: unknown) => {
-            const typed = capture("runFormat", 10_000, params);
+            const typed = capture("runFormat", 2_381, params);
             const user = textFromUserMessage(typed);
             const id = user.match(/Segment ID:\s*(segment[-\d]+)/)?.[1];
             assert.ok(id);
@@ -997,7 +1003,7 @@ async function exerciseFormat(): Promise<void> {
     false,
     [],
     new AbortController().signal,
-    { inputBudgetTokens: 10_000, maxTokens: 2_000 },
+    { inputBudgetTokens: 2_381, maxTokens: 2_000 },
   ));
   assert.ok(segmentIds.length > 1);
   assert.equal(new Set(segmentIds).size, segmentIds.length);
@@ -1174,9 +1180,13 @@ async function exerciseContextRecovery(): Promise<void> {
   const budgets: number[] = [];
   const signatures: string[] = [];
   let attempt = 0;
+  // Rescaled from a byte-era budget of 1_000 (and its matching 1_200-token
+  // provider overflow report) for the token estimator (task-3
+  // prompt-budget-automation): 238 (1_000 / 4.2) still forces a different
+  // optional-unit subset to be selected at each of the three shrink steps.
   await assert.rejects(runWithContextRepack({
     callSite: "query.answer",
-    configuredInputBudget: 1_000,
+    configuredInputBudget: 238,
     compressionProfile: "balanced",
     build: (effectiveInputBudget) => {
       budgets.push(effectiveInputBudget);
@@ -1217,16 +1227,16 @@ async function exerciseContextRecovery(): Promise<void> {
       signatures.push(JSON.stringify(messages));
       attempt++;
       if (attempt === 1) {
-        throw contextError("prompt size 1200 exceeds maximum context 1000");
+        throw contextError("prompt size 285 exceeds maximum context 238");
       }
       throw contextError("context window exceeded");
     },
     onEvent: () => {},
   }), /context/i);
   assert.deepEqual(budgets, [
-    1_000,
-    shrinkInputBudget(1_000, { promptTokens: 1_200, maxContextTokens: 1_000 }),
-    562,
+    238,
+    shrinkInputBudget(238, { promptTokens: 285, maxContextTokens: 238 }),
+    133,
   ]);
   assert.equal(attempt, 3);
   assert.equal(signatures.length, 3);
