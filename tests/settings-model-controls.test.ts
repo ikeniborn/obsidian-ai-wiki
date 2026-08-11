@@ -16,6 +16,7 @@ import {
 import { DEFAULT_SETTINGS, type LlmWikiPluginSettings } from "../src/types";
 import type { ModelContextRecord } from "../src/model-context";
 import { runNativeVisionModelCheck } from "../src/vision-probe";
+import { clearNativeBudgets, hasStoredNativeBudget, settleOnce } from "../src/auto-budget-notice";
 
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 
@@ -26,6 +27,7 @@ const { i18nFor } = await import("../src/i18n");
 const runtimeControls = await import("../src/types") as unknown as Record<string, unknown>;
 const settingsSource = readFileSync(new URL("../src/settings.ts", import.meta.url), "utf8");
 const mainSource = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
+const modalsSource = readFileSync(new URL("../src/modals.ts", import.meta.url), "utf8");
 
 function assertSourceOrder(source: string, markers: readonly string[]): void {
   let previous = -1;
@@ -738,5 +740,156 @@ test("Embedding Check uses localized success and failure notices", () => {
     assert.equal(typeof labels.embeddingDimensionCheck_native(1024), "string");
     assert.equal(typeof labels.embeddingDimensionCheck_truncated(512, 1024), "string");
     assert.equal(typeof labels.embeddingDimensionCheck_ok(1024, "1024"), "string");
+  }
+});
+
+// --- Task 13: the one-shot auto-budget upgrade choice ---------------------------------
+
+test("a stored native budget is detected, a claude one is not", () => {
+  const settings = structuredClone(DEFAULT_SETTINGS);
+  assert.equal(hasStoredNativeBudget(settings), false);
+  settings.nativeAgent.inputBudgetTokens = 16_384;
+  assert.equal(hasStoredNativeBudget(settings), true);
+});
+
+test("a stored repair or output budget override is also detected", () => {
+  const withMaxTokens = structuredClone(DEFAULT_SETTINGS);
+  withMaxTokens.nativeAgent.maxTokens = 4_096;
+  assert.equal(hasStoredNativeBudget(withMaxTokens), true);
+
+  const withRepair = structuredClone(DEFAULT_SETTINGS);
+  withRepair.nativeAgent.repairInputBudgetTokens = 65_536;
+  assert.equal(hasStoredNativeBudget(withRepair), true);
+});
+
+test("accepting clears only the native budgets", () => {
+  const settings = structuredClone(DEFAULT_SETTINGS);
+  settings.nativeAgent.inputBudgetTokens = 24_000;
+  settings.nativeAgent.operations.init.maxTokens = 8_192;
+  const claudeBefore = structuredClone(settings.claudeAgent);
+  clearNativeBudgets(settings);
+  assert.equal(settings.nativeAgent.inputBudgetTokens, undefined);
+  assert.equal(settings.nativeAgent.operations.init.maxTokens, undefined);
+  assert.deepEqual(settings.claudeAgent, claudeBefore, "claude-agent must be untouched");
+});
+
+test("declining or dismissing keeps the stored native budgets: only clearNativeBudgets rewrites them", () => {
+  const settings = structuredClone(DEFAULT_SETTINGS);
+  settings.nativeAgent.inputBudgetTokens = 24_000;
+  const before = structuredClone(settings);
+  // Neither hasStoredNativeBudget nor "not calling clearNativeBudgets" mutates settings.
+  hasStoredNativeBudget(settings);
+  assert.deepEqual(settings, before);
+});
+
+test("clearing wipes every operation's budget override, not just one", () => {
+  const settings = structuredClone(DEFAULT_SETTINGS);
+  settings.nativeAgent.inputBudgetTokens = 24_000;
+  settings.nativeAgent.repairInputBudgetTokens = 65_536;
+  settings.nativeAgent.maxTokens = 4_096;
+  for (const key of ["ingest", "query", "lint", "init", "format"] as const) {
+    settings.nativeAgent.operations[key].inputBudgetTokens = 12_345;
+    settings.nativeAgent.operations[key].maxTokens = 6_789;
+  }
+  clearNativeBudgets(settings);
+  assert.equal(settings.nativeAgent.inputBudgetTokens, undefined);
+  assert.equal(settings.nativeAgent.repairInputBudgetTokens, undefined);
+  assert.equal(settings.nativeAgent.maxTokens, undefined);
+  for (const key of ["ingest", "query", "lint", "init", "format"] as const) {
+    assert.equal(settings.nativeAgent.operations[key].inputBudgetTokens, undefined, key);
+    assert.equal(settings.nativeAgent.operations[key].maxTokens, undefined, key);
+  }
+});
+
+test("settleOnce resolves to the first value across any number of later calls", async () => {
+  const { promise, settle } = settleOnce<boolean>();
+  settle(true);
+  settle(false); // must be ignored: the promise already settled to true
+  settle(true);  // also ignored
+  assert.equal(await promise, true);
+});
+
+test("settleOnce settles even when only ever called with the dismissal value", async () => {
+  const { promise, settle } = settleOnce<boolean>();
+  // Simulates Escape / clicking outside: onClose is the only caller, exactly once.
+  settle(false);
+  assert.equal(await promise, false);
+});
+
+test("settleOnce never leaves the promise pending: every resolver call is idempotent", async () => {
+  const { promise, settle } = settleOnce<number>();
+  for (let i = 0; i < 5; i++) settle(i);
+  assert.equal(await promise, 0, "the first call must win");
+});
+
+test("AutoBudgetNoticeModal: dismissal (onClose) resolves the same conservative answer as an explicit keep", () => {
+  const block = sourceBlock(modalsSource, "export class AutoBudgetNoticeModal extends Modal {");
+  // The switch button explicitly settles true; every other exit (keep button, and
+  // onClose which covers Escape / outside click / the built-in close control) settles
+  // false. Assert both, and assert onClose settles unconditionally (no branching that
+  // could special-case some dismissal path into "true").
+  assert.match(block.body, /autoBudgetNotice_switch\)\.setCta\(\)\s*\n\s*\.onClick\(\(\) => \{ this\.resolver\.settle\(true\); this\.close\(\); \}\)/);
+  assert.match(block.body, /autoBudgetNotice_keep\)\s*\n\s*\.onClick\(\(\) => \{ this\.resolver\.settle\(false\); this\.close\(\); \}\)/);
+  const onCloseBlock = sourceBlock(block.body, "onClose(): void {");
+  assert.match(onCloseBlock.body, /this\.resolver\.settle\(false\);/);
+  assert.doesNotMatch(onCloseBlock.body, /settle\(true\)/, "onClose must never resolve true");
+  // ask() must call open() (which Obsidian guarantees eventually calls onClose()) and
+  // return the resolver's promise directly — no separate, never-settled promise.
+  const askBlock = sourceBlock(block.body, "ask(): Promise<boolean> {");
+  assert.match(askBlock.body, /this\.open\(\);/);
+  assert.match(askBlock.body, /return this\.resolver\.promise;/);
+  // The class must not call Obsidian's non-existent Modal.openAndWait().
+  assert.doesNotMatch(block.body, /openAndWait/);
+});
+
+test("offerAutoBudgetMigration: a claude-agent user is never prompted, native-agent budgets aside", () => {
+  const block = sourceBlock(mainSource, "export async function offerAutoBudgetMigration(");
+  const backendGateIndex = block.body.indexOf('if (plugin.settings.backend !== "native-agent") return;');
+  const modalIndex = block.body.indexOf("new AutoBudgetNoticeModal(");
+  const hasStoredIndex = block.body.indexOf("hasStoredNativeBudget(plugin.settings)");
+  assert.ok(backendGateIndex >= 0, "must gate on backend === native-agent before anything else");
+  assert.ok(backendGateIndex < hasStoredIndex, "backend gate must run before checking stored budgets");
+  assert.ok(backendGateIndex < modalIndex, "backend gate must run before the modal can be constructed");
+});
+
+test("offerAutoBudgetMigration: a user with nothing stored is never prompted, but the flag is still recorded", () => {
+  const block = sourceBlock(mainSource, "export async function offerAutoBudgetMigration(");
+  const ifBlock = sourceBlock(block.body, "if (hasStoredNativeBudget(plugin.settings)) {");
+  assert.match(ifBlock.body, /new AutoBudgetNoticeModal\(/, "the modal is only constructed inside the hasStoredNativeBudget guard");
+  const saveCallIndex = block.body.lastIndexOf('localConfigStore.save({ migrated_auto_budget: true });');
+  assert.ok(saveCallIndex > ifBlock.end, "migrated_auto_budget must be recorded after (outside) the stored-budget branch, unconditionally");
+});
+
+test("offerAutoBudgetMigration: the prompt is not offered twice, whichever way it was answered", () => {
+  const block = sourceBlock(mainSource, "export async function offerAutoBudgetMigration(");
+  assert.match(
+    block.body.trimStart(),
+    /^const local = await localConfigStore\.load\(\);\s*\n\s*if \(local\.migrated_auto_budget\) return;/,
+    "must return immediately once migrated_auto_budget was already recorded, before any other check",
+  );
+});
+
+test("offerAutoBudgetMigration: clearNativeBudgets only runs on an explicit yes", () => {
+  const block = sourceBlock(mainSource, "export async function offerAutoBudgetMigration(");
+  assert.match(
+    block.body,
+    /if \(switchToAutomatic\) \{\s*\n\s*clearNativeBudgets\(plugin\.settings\);/,
+    "clearNativeBudgets must be gated on switchToAutomatic being true",
+  );
+});
+
+test("auto-budget-notice strings exist and differ across en/ru/es", () => {
+  for (const lang of ["en", "ru", "es"] as const) {
+    const s = i18nFor(lang).settings;
+    for (const key of [
+      "autoBudgetNotice_title",
+      "autoBudgetNotice_body",
+      "autoBudgetNotice_switch",
+      "autoBudgetNotice_keep",
+    ] as const) {
+      assert.equal(typeof s[key], "string", `${lang}.${key}`);
+      assert.ok(s[key].length > 0, `${lang}.${key} must not be empty`);
+    }
+    assert.notEqual(s.autoBudgetNotice_switch, s.autoBudgetNotice_keep);
   }
 });

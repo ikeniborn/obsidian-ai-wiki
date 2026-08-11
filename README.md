@@ -106,9 +106,11 @@ Settings → AI Wiki:
 | API Key | `ollama` |
 | Model | `llama3.2` |
 | Temperature | `0.2` |
-| Input budget tokens | `16384` |
-| Output budget tokens | `4096` |
 | Semantic compression | `Balanced` |
+
+Input and output budget tokens are automatic by default — AI Wiki derives them from the
+model's context window, so there is nothing to configure here. Leave them empty unless
+you need to override the automatic value; see [Bounded processing and storage](#bounded-processing-and-storage).
 
 ### 5. Create a knowledge area (domain)
 
@@ -273,8 +275,8 @@ Native Agent's request executor, HTTP status matrix, or connection-timeout trans
 | Base URL | OpenAI-compatible endpoint. Ollama: `http://localhost:11434/v1` | `http://localhost:11434/v1` |
 | API key | `ollama` for Ollama; `sk-...` for OpenAI | `ollama` |
 | Connection timeout | Desktop DNS/TCP/TLS establishment only; it does not cap response headers, body, or generation | `15` s |
-| Input budget tokens | Maximum estimated size of the packed prompt. This is configured explicitly; the plugin does not discover the model's context window | `16384` |
-| Output budget tokens | Response cap sent through the existing `maxTokens`/API `max_tokens` setting | `4096` |
+| Input budget tokens | Maximum size of the packed prompt. Empty (shown as "Automatic") derives it from the model's context window, discovered once per model, cached, and self-corrected against the provider's reported usage. Set a number to override it | *(empty = Automatic)* |
+| Output budget tokens | Response cap sent through `maxTokens`/API `max_tokens`. Empty (shown as "Automatic") is derived per operation from the model's context window the same way. Set a number to override it | *(empty = Automatic)* |
 | Semantic compression | Prompt-density profile (`Maximum`/`Balanced`/`Minimum`) with operation-specific preservation rules | `Balanced` |
 | Model | Model name (`llama3.2`, `mistral`, `gpt-4o`, …). Shown when per-operation is off | `llama3.2` |
 | Thinking budget tokens | Separate native model reasoning allowance; `0` or empty disables it. It does not increase the input budget | off |
@@ -327,9 +329,24 @@ remains CLI-owned.
 The input budget governs the complete prepared request, including system/schema
 instructions—not just note text. When content does not fit, AI Wiki packs complete context
 units and uses operation-specific batching or splitting instead of silently truncating
-required content. Provider context errors can trigger a smaller repack. The configured
-budget remains explicit; AI Wiki does not automatically discover a model's context
-window.
+required content. Provider context errors can trigger a smaller repack.
+
+For Native Agent, an empty input or output budget is automatic: AI Wiki discovers the
+model's context window once per model, caches it, and self-corrects the estimate against
+the provider's reported token usage. A number you type in Input budget tokens or Output
+budget tokens still acts as an explicit override — automatic budgeting never overrides a
+value you set. Claude Agent is unchanged: its input budget stays a fixed, explicitly
+configured value.
+
+If you upgraded from a version where these fields required a number, AI Wiki asks once
+whether to switch your saved value to automatic or keep it; dismissing that prompt keeps
+your saved value. You can change your mind at any time by clearing or setting the field
+in Settings.
+
+The prompt estimator counts tokens rather than serialized bytes, which also moved chunk
+boundaries during ingest. Existing domains are **not** re-indexed automatically after
+upgrading — use the sidebar's **♻ full re-init** (`--force`) on a domain to rebuild it
+with the new chunking.
 
 Ingest splits oversized Markdown at stable section, paragraph, line-window, and fenced-code
 boundaries. Bounded map calls produce source-anchored evidence; reduction calls preserve

@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### New
+- feat(native-agent): derive input and output budgets automatically from the model's context window, discovered once per model, cached, and self-corrected against the provider's reported usage. A stored value still acts as an explicit override; Claude Agent is unaffected.
+- feat(settings): ask an existing user once, on upgrade, whether to switch a stored native budget override to automatic — dismissing the prompt keeps the stored values, same as an explicit "keep".
+
+### Fixes
+- fix(llm): measure prompt budgets in tokens instead of serialized bytes, so Init no longer fails with "domain was not created" purely because of source size.
+
+### Other
+- Chunk boundaries moved with the token-based estimator. Rebuild an existing domain with `Init --force` to re-chunk it; existing domains are not re-indexed automatically.
+
+---
+
 ## 0.2.3 — 2026-08-11
 
 ### New

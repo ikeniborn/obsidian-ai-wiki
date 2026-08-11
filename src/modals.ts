@@ -4,6 +4,7 @@ import { i18n } from "./i18n";
 import { capList } from "./incremental-sources";
 import { isSelectableSourceFolder } from "./source-paths";
 import { effectiveSubfolder } from "./wiki-path";
+import { settleOnce } from "./auto-budget-notice";
 
 export class BusyCloseModal extends Modal {
   constructor(app: App, private onAbort: () => void) { super(app); }
@@ -905,4 +906,56 @@ export class LintOptionsModal extends Modal {
   }
 
   onClose(): void { this.contentEl.empty(); }
+}
+
+/**
+ * Offers the existing user a one-shot choice: switch stored native budgets to automatic,
+ * or keep them exactly as saved.
+ *
+ * Obsidian's `Modal` has no `openAndWait` — `node_modules/obsidian/obsidian.d.ts` exposes
+ * only `open()`, `close()`, `onOpen()` and `onClose()` — so `ask()` wraps `open()` in a
+ * promise that `onClose()` always settles, whichever way the modal exits. Dismissing the
+ * modal (Escape, the close button, or clicking outside) never reaches a button handler,
+ * so it can only be observed through `onClose()` — Obsidian gives no separate signal that
+ * would let it be distinguished from any other close, so it deliberately resolves to the
+ * same conservative answer as an explicit "keep": false.
+ */
+export class AutoBudgetNoticeModal extends Modal {
+  private readonly resolver = settleOnce<boolean>();
+
+  constructor(app: App) {
+    super(app);
+  }
+
+  /**
+   * Resolves true to switch to automatic, false to keep the stored values. Settles
+   * exactly once no matter how the modal is closed.
+   */
+  ask(): Promise<boolean> {
+    this.open();
+    return this.resolver.promise;
+  }
+
+  onOpen(): void {
+    const T = i18n().settings;
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: T.autoBudgetNotice_title });
+    contentEl.createEl("p", { text: T.autoBudgetNotice_body });
+    new Setting(contentEl)
+      .addButton((b) => b.setButtonText(T.autoBudgetNotice_keep)
+        .onClick(() => { this.resolver.settle(false); this.close(); }))
+      .addButton((b) => b.setButtonText(T.autoBudgetNotice_switch).setCta()
+        .onClick(() => { this.resolver.settle(true); this.close(); }));
+  }
+
+  /**
+   * Escape, the built-in close control, and clicking outside the modal all land here —
+   * and so does the explicit `close()` call a button handler makes after it already
+   * settled the promise. `settleOnce` makes that second call a no-op; every other path
+   * through `onClose()` is a real dismissal, which keeps the stored values (`false`).
+   */
+  onClose(): void {
+    this.contentEl.empty();
+    this.resolver.settle(false);
+  }
 }

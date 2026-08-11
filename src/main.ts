@@ -10,7 +10,7 @@ import type { DomainEntry } from "./domain";
 import { LlmWikiSettingTab } from "./settings";
 import { AI_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
 import { WikiController } from "./controller";
-import { QueryModal, DomainModal, LintOptionsModal, ExportOkfModal } from "./modals";
+import { QueryModal, DomainModal, LintOptionsModal, ExportOkfModal, AutoBudgetNoticeModal } from "./modals";
 import { i18n } from "./i18n";
 import { DomainStore } from "./domain-store";
 import { LocalConfigStore } from "./local-config";
@@ -21,6 +21,7 @@ import { migrateDropSections } from "./migrate-drop-sections";
 import { migrateOkfFrontmatter } from "./migrate-okf-frontmatter";
 import { migrateJsonlDomainStorage } from "./migrate-jsonl-domain-storage";
 import { GLOBAL_DOMAIN_PATH, domainWikiFolder, effectiveSubfolder } from "./wiki-path";
+import { clearNativeBudgets, hasStoredNativeBudget } from "./auto-budget-notice";
 
 export default class LlmWikiPlugin extends Plugin {
   settings!: LlmWikiPluginSettings;
@@ -51,6 +52,7 @@ export default class LlmWikiPlugin extends Plugin {
     await this.loadSettings();
     await migrateToLocalV1(this, this.localConfigStore);
     await migrateToLocalV2(this, this.localConfigStore);
+    await offerAutoBudgetMigration(this, this.localConfigStore);
     try {
       const domains = await this.domainStore.load();
       await migrateIndexFormat(this.app.vault, domains);
@@ -485,4 +487,35 @@ export async function migrateToLocalV2(
   };
   await adapter.write(localPath, JSON.stringify(newLocal, null, 2));
   localConfigStore["cache"] = null; // invalidate cache
+}
+
+/**
+ * One-shot upgrade prompt: an existing user with a stored native-agent budget override
+ * is asked once whether to switch to automatic (context-window-derived) budgeting or
+ * keep the stored values. Nothing is rewritten unless the user explicitly answers yes;
+ * dismissing the modal any way (Escape, close, or clicking outside) keeps the stored
+ * values, same as an explicit "keep".
+ *
+ * Automatic budgeting is native-agent only, so a claude-agent user never sees this
+ * prompt — and the flag is deliberately left unset for them, so the check runs again
+ * (silently, without a modal, until it finds stored native budgets) the first time they
+ * switch to native-agent and restart. A native-agent user is asked, and the flag is
+ * recorded, exactly once either way.
+ */
+export async function offerAutoBudgetMigration(
+  plugin: LlmWikiPlugin,
+  localConfigStore: LocalConfigStore,
+): Promise<void> {
+  const local = await localConfigStore.load();
+  if (local.migrated_auto_budget) return;
+  if (plugin.settings.backend !== "native-agent") return;
+
+  if (hasStoredNativeBudget(plugin.settings)) {
+    const switchToAutomatic = await new AutoBudgetNoticeModal(plugin.app).ask();
+    if (switchToAutomatic) {
+      clearNativeBudgets(plugin.settings);
+      await plugin.saveSettings();
+    }
+  }
+  await localConfigStore.save({ migrated_auto_budget: true });
 }
