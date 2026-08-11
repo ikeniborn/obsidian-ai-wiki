@@ -884,13 +884,39 @@ test("mapper wire rejects ambiguous singular and plural exact source range field
 
 test("mapper treats omitted noEvidence as an empty set when packets cover the chunk", async () => {
   const events: RunEvent[] = [];
+  const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
   const runtime = mockRuntime((messages) => ({
     packets: [validMapperPacket(messages)],
-  }), events);
+  }), events, requests);
 
-  const result = await prepareSourceEvidence("PostgreSQL source", "demo", evidencePolicy(), runtime);
+  const result = await prepareSourceEvidence(
+    "PostgreSQL source",
+    "demo",
+    { ...evidencePolicy(), mapperRetries: 3 },
+    runtime,
+  );
 
   assert.equal(result.length, 1);
+  assert.equal(requests.length, 1);
+  assert.equal(events.some((event) => event.kind === "structural_error"), false);
+});
+
+test("mapper treats omitted packets as an empty set when noEvidence covers the chunk", async () => {
+  const events: RunEvent[] = [];
+  const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
+  const runtime = mockRuntime((messages) => ({
+    noEvidence: [{ chunkId: mapperMeta(messages).id, reason: "Heading-only chunk" }],
+  }), events, requests);
+
+  const result = await prepareSourceEvidence(
+    "## Heading only",
+    "demo",
+    { ...evidencePolicy(), mapperRetries: 3 },
+    runtime,
+  );
+
+  assert.deepEqual(result, []);
+  assert.equal(requests.length, 1);
   assert.equal(events.some((event) => event.kind === "structural_error"), false);
 });
 
@@ -1079,8 +1105,7 @@ test("recursive reducer reserves budget for a captured first request and repair"
   }
 });
 
-test("single-chunk mapper canonicalizes a copied chunk ID before strict validation", async () => {
-  const events: RunEvent[] = [];
+test("single-chunk mapper rejects foreign packet ownership", async () => {
   const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
   const runtime = mockRuntime((messages) => {
     const mapped = validMapperPacket(messages);
@@ -1088,13 +1113,28 @@ test("single-chunk mapper canonicalizes a copied chunk ID before strict validati
       packets: [{ ...mapped, chunkId: mapped.chunkId.slice(0, -1) }],
       noEvidence: [],
     };
-  }, events, requests);
+  }, [], requests);
 
-  const result = await prepareSourceEvidence("one source line", "demo", evidencePolicy(), runtime);
+  await assert.rejects(
+    prepareSourceEvidence("one source line", "demo", evidencePolicy(), runtime),
+    EvidenceCoverageError,
+  );
 
-  assert.equal(requests.length, 1);
-  assert.equal(result.length, 1);
-  assert.equal(events.some((event) => event.kind === "structural_error"), false);
+  assert.equal(requests.length, 2);
+});
+
+test("mapper complementary normalization rejects foreign noEvidence ownership", async () => {
+  const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
+  const runtime = mockRuntime(() => ({
+    noEvidence: [{ chunkId: "foreign-chunk", reason: "none" }],
+  }), [], requests);
+
+  await assert.rejects(
+    prepareSourceEvidence("one source line", "demo", evidencePolicy(), runtime),
+    EvidenceCoverageError,
+  );
+
+  assert.equal(requests.length, 2);
 });
 
 test("mapper range repair exhaustion performs real requests and emits one safe budget event per request", async () => {
@@ -1935,6 +1975,115 @@ test("mapper context recovery rechunks into smaller complete child requests", as
   assertClosedToolLifecycles(events);
 });
 
+test("mapper context repack preserves semantic split depth for child replacements", async () => {
+  const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
+  const events: RunEvent[] = [];
+  let childContextFailed = false;
+  const source = Array.from(
+    { length: 8 },
+    (_, index) => `lineage mapper ${index + 1} ${"x".repeat(40)}`,
+  ).join("\n");
+  const runtime = mockRuntime((messages) => {
+    const meta = mapperMeta(messages);
+    const lineCount = meta.endLine - meta.startLine + 1;
+    if (meta.startLine === 1 && meta.endLine === 8) {
+      return {
+        packets: [{
+          ...validMapperPacket(messages),
+          exactSourceRanges: [{ startLine: 1, endLine: 9 }],
+        }],
+        noEvidence: [],
+      };
+    }
+    if (!childContextFailed && meta.startLine === 1 && meta.endLine === 4) {
+      childContextFailed = true;
+      throw contextLengthError();
+    }
+    if (childContextFailed && meta.startLine <= 4) {
+      return {
+        packets: [{
+          ...validMapperPacket(messages),
+          exactSourceRanges: [{ startLine: 1, endLine: lineCount + 1 }],
+        }],
+        noEvidence: [],
+      };
+    }
+    return { noEvidence: [{ chunkId: meta.id, reason: "none" }] };
+  }, events, requests);
+
+  await assert.rejects(
+    prepareSourceEvidence(source, "demo", {
+      ...evidencePolicy(10_000),
+      outputBudgetTokens: 1_000,
+      mapperRetries: 1,
+    }, runtime),
+    EvidenceCoverageError,
+  );
+
+  assert.deepEqual(requests.slice(0, 3).map((request) => {
+    const meta = mapperMeta(request);
+    return `${meta.startLine}-${meta.endLine}`;
+  }), ["1-8", "1-8", "1-4"]);
+  assert.ok(requests.length > 3, "context repack must schedule a smaller overlapping replacement");
+  assert.ok(estimatePreparedMessages(requests[3]) < estimatePreparedMessages(requests[2]));
+  assert.equal(events.filter((event) =>
+    event.kind === "tool_use" && event.name === "Evidence mapper split").length, 1);
+  assert.equal(events.some((event) =>
+    event.kind === "prompt_budget" && event.retryReason === "provider_context_error"), true);
+});
+
+test("mapper semantic child context repack succeeds without a second split", async () => {
+  const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
+  const events: RunEvent[] = [];
+  let childContextFailed = false;
+  const source = Array.from(
+    { length: 8 },
+    (_, index) => `lineage success ${index + 1} ${"x".repeat(40)}`,
+  ).join("\n");
+  const runtime = mockRuntime((messages) => {
+    const meta = mapperMeta(messages);
+    if (meta.startLine === 1 && meta.endLine === 8) {
+      return {
+        packets: [{
+          ...validMapperPacket(messages),
+          exactSourceRanges: [{ startLine: 1, endLine: 9 }],
+        }],
+        noEvidence: [],
+      };
+    }
+    if (!childContextFailed && meta.startLine === 1 && meta.endLine === 4) {
+      childContextFailed = true;
+      throw contextLengthError();
+    }
+    return { noEvidence: [{ chunkId: meta.id, reason: "none" }] };
+  }, events, requests);
+
+  let result: unknown;
+  await assert.doesNotReject(async () => {
+    result = await prepareSourceEvidence(source, "demo", {
+      ...evidencePolicy(10_000),
+      outputBudgetTokens: 1_000,
+      mapperRetries: 1,
+    }, runtime);
+  });
+
+  assert.deepEqual(result, []);
+  assert.deepEqual(requests.map((request) => {
+    const meta = mapperMeta(request);
+    return `${meta.startLine}-${meta.endLine}`;
+  }), ["1-8", "1-8", "1-4", "1-3", "4-6", "7-8"]);
+  assert.equal(events.filter((event) =>
+    event.kind === "tool_use" && event.name === "Evidence mapper split").length, 1);
+  assert.equal(events.filter((event) =>
+    event.kind === "prompt_budget" && event.retryReason === "provider_context_error").length, 1);
+  assert.equal(events.filter((event) =>
+    event.kind === "tool_use" && event.name === "Evidence context repack").length, 1);
+  const overlappingRepacked = requests.slice(3).map(mapperMeta)
+    .filter((meta) => meta.startLine <= 4 && meta.endLine >= 1);
+  assert.ok(overlappingRepacked.length > 0);
+  assert.ok(overlappingRepacked.every((meta) => meta.endLine - meta.startLine + 1 < 4));
+});
+
 test("mapper structural exhaustion splits the failed source chunk into smaller evidence-map requests", async () => {
   const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
   const events: RunEvent[] = [];
@@ -1961,7 +2110,11 @@ test("mapper structural exhaustion splits the failed source chunk into smaller e
     };
   }, events, requests);
 
-  const result = await prepareSourceEvidence(source, "demo", { ...evidencePolicy(10_000), outputBudgetTokens: 1_000 }, runtime);
+  const result = await prepareSourceEvidence(source, "demo", {
+    ...evidencePolicy(10_000),
+    outputBudgetTokens: 1_000,
+    mapperRetries: 1,
+  }, runtime);
   const mapperRequests = requests.filter((request) => !isReducerRequest(request));
 
   assert.deepEqual(
@@ -1971,11 +2124,234 @@ test("mapper structural exhaustion splits the failed source chunk into smaller e
     }),
     ["1-80", "1-80", "1-40", "41-80"],
   );
+  assert.ok(estimatePreparedMessages(mapperRequests[2]) < estimatePreparedMessages(mapperRequests[0]));
+  assert.ok(estimatePreparedMessages(mapperRequests[3]) < estimatePreparedMessages(mapperRequests[0]));
   assert.equal(result.flatMap((entity) => entity.exactSource).map((range) => range.text).join("\n"), source);
-  assert.ok(events.some((event) =>
-    event.kind === "tool_use"
-    && event.name === "Evidence mapper split"));
+  const splitEvent = events.find((event) =>
+    event.kind === "tool_use" && event.name === "Evidence mapper split");
+  assert.deepEqual(splitEvent?.kind === "tool_use" ? splitEvent.input : undefined, {
+    chunkId: mapperMeta(mapperRequests[0]).id,
+    startLine: 1,
+    endLine: 80,
+    replacementChunks: 2,
+    reason: "chunk_local_validation",
+    splitDepth: 0,
+  });
   assertClosedToolLifecycles(events);
+});
+
+test("mapper protocol defects exhaust bounded repair without child requests", async () => {
+  const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
+  const events: RunEvent[] = [];
+  const runtime = mockRuntime(() => ({}), events, requests);
+
+  await assert.rejects(
+    prepareSourceEvidence(
+      "protocol line 1\nprotocol line 2\nprotocol line 3\nprotocol line 4",
+      "demo",
+      { ...evidencePolicy(), mapperRetries: 2 },
+      runtime,
+    ),
+    EvidenceCoverageError,
+  );
+
+  assert.equal(requests.length, 3);
+  assert.equal(events.some((event) => event.kind === "tool_use" && event.name === "Evidence mapper split"), false);
+});
+
+test("mapper malformed framed JSON exhausts repair without child requests", async () => {
+  const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
+  const events: RunEvent[] = [];
+  const llm = {
+    chat: { completions: { create: async (params: Record<string, unknown>) => {
+      const messages = params.messages as OpenAI.Chat.ChatCompletionMessageParam[];
+      requests.push(messages);
+      return {
+        id: `malformed-frame-${requests.length}`,
+        object: "chat.completion",
+        created: 0,
+        model: "mock",
+        choices: [{
+          index: 0,
+          finish_reason: "stop",
+          message: { role: "assistant", content: "<<<JSON>>>\n{not-json}\n<<<END>>>", refusal: null },
+          logprobs: null,
+        }],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      };
+    } } },
+  } as unknown as LlmClient;
+  const runtime: EvidenceRuntime = {
+    llm,
+    model: "mock",
+    signal: new AbortController().signal,
+    configuredEntityTypes: ["tool"],
+    onEvent: (event) => events.push(event),
+  };
+
+  await assert.rejects(
+    prepareSourceEvidence(
+      "frame line 1\nframe line 2\nframe line 3\nframe line 4",
+      "demo",
+      { ...evidencePolicy(), mapperRetries: 1 },
+      runtime,
+    ),
+    EvidenceCoverageError,
+  );
+
+  assert.equal(requests.length, 2);
+  assert.equal(events.some((event) =>
+    event.kind === "structural_error" && event.errorType === "frame_parse"), true);
+  assert.equal(events.some((event) => event.kind === "tool_use" && event.name === "Evidence mapper split"), false);
+});
+
+test("mapper non-local schema controls never schedule child requests", async () => {
+  const cases: Array<{
+    name: string;
+    output: (messages: OpenAI.Chat.ChatCompletionMessageParam[]) => unknown;
+  }> = [
+    { name: "both arrays empty", output: () => ({ packets: [], noEvidence: [] }) },
+    { name: "invalid collection type", output: () => ({ packets: "invalid", noEvidence: [] }) },
+    { name: "malformed packet", output: () => ({ packets: [42], noEvidence: [] }) },
+    { name: "malformed noEvidence", output: () => ({ packets: [], noEvidence: [42] }) },
+    {
+      name: "noEvidence missing reason",
+      output: (messages) => ({ noEvidence: [{ chunkId: mapperMeta(messages).id }] }),
+    },
+    {
+      name: "invalid entity key",
+      output: (messages) => ({
+        packets: [{ ...validMapperPacket(messages), entityKey: "Invalid Entity" }],
+        noEvidence: [],
+      }),
+    },
+    {
+      name: "foreign packet",
+      output: (messages) => ({
+        packets: [{ ...validMapperPacket(messages), chunkId: "foreign-chunk" }],
+        noEvidence: [],
+      }),
+    },
+    {
+      name: "mixed coverage",
+      output: (messages) => ({
+        packets: [validMapperPacket(messages)],
+        noEvidence: [{ chunkId: mapperMeta(messages).id, reason: "none" }],
+      }),
+    },
+  ];
+
+  for (const fixture of cases) {
+    const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
+    const events: RunEvent[] = [];
+    const runtime = mockRuntime(fixture.output, events, requests);
+    await assert.rejects(
+      prepareSourceEvidence(
+        "control line 1\ncontrol line 2\ncontrol line 3\ncontrol line 4",
+        "demo",
+        { ...evidencePolicy(), mapperRetries: 1 },
+        runtime,
+      ),
+      EvidenceCoverageError,
+      fixture.name,
+    );
+    assert.equal(requests.length, 2, fixture.name);
+    assert.equal(
+      events.some((event) => event.kind === "tool_use" && event.name === "Evidence mapper split"),
+      false,
+      fixture.name,
+    );
+  }
+});
+
+test("mapper split children cannot split again after structured exhaustion", async () => {
+  const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
+  const events: RunEvent[] = [];
+  const source = Array.from({ length: 8 }, (_, index) => `bounded split ${index + 1}`).join("\n");
+  const runtime = mockRuntime((messages) => {
+    const mapped = validMapperPacket(messages);
+    const meta = mapperMeta(messages);
+    return {
+      packets: [{
+        ...mapped,
+        exactSourceRanges: [{ startLine: 1, endLine: meta.endLine - meta.startLine + 2 }],
+      }],
+      noEvidence: [],
+    };
+  }, events, requests);
+
+  await assert.rejects(
+    prepareSourceEvidence(source, "demo", { ...evidencePolicy(), mapperRetries: 1 }, runtime),
+    EvidenceCoverageError,
+  );
+
+  assert.deepEqual(requests.map((request) => {
+    const meta = mapperMeta(request);
+    return `${meta.startLine}-${meta.endLine}`;
+  }), ["1-8", "1-8", "1-4", "1-4"]);
+  assert.equal(events.filter((event) => event.kind === "tool_use" && event.name === "Evidence mapper split").length, 1);
+});
+
+test("mapper output-limit exhaustion schedules at most two bounded children", async () => {
+  const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
+  const events: RunEvent[] = [];
+  const llm = {
+    chat: { completions: { create: async (params: Record<string, unknown>) => {
+      const messages = params.messages as OpenAI.Chat.ChatCompletionMessageParam[];
+      const meta = mapperMeta(messages);
+      const parent = meta.startLine === 1 && meta.endLine === 4;
+      const maxTokens = params.max_completion_tokens as number;
+      requests.push(messages);
+      const content = parent
+        ? ""
+        : JSON.stringify({ noEvidence: [{ chunkId: meta.id, reason: "none" }] });
+      const completionTokens = parent ? maxTokens : 1;
+      return {
+        id: `bounded-output-${requests.length}`,
+        object: "chat.completion",
+        created: 0,
+        model: "mock",
+        choices: [{
+          index: 0,
+          finish_reason: "stop",
+          message: { role: "assistant", content, refusal: null },
+          logprobs: null,
+        }],
+        usage: { prompt_tokens: 1, completion_tokens: completionTokens, total_tokens: completionTokens + 1 },
+      };
+    } } },
+  } as unknown as LlmClient;
+  const runtime: EvidenceRuntime = {
+    llm,
+    model: "mock",
+    signal: new AbortController().signal,
+    configuredEntityTypes: ["tool"],
+    opts: { outputRetryBudgetTokens: 2_048 },
+    onEvent: (event) => events.push(event),
+  };
+
+  const result = await prepareSourceEvidence(
+    "output line 1\noutput line 2\noutput line 3\noutput line 4",
+    "demo",
+    { ...evidencePolicy(), mapperRetries: 1 },
+    runtime,
+  );
+
+  assert.deepEqual(result, []);
+  assert.deepEqual(requests.map((request) => {
+    const meta = mapperMeta(request);
+    return `${meta.startLine}-${meta.endLine}`;
+  }), ["1-4", "1-4", "1-2", "3-4"]);
+  const splitEvents = events.filter((event) => event.kind === "tool_use" && event.name === "Evidence mapper split");
+  assert.equal(splitEvents.length, 1);
+  assert.deepEqual(splitEvents[0]?.kind === "tool_use" ? splitEvents[0].input : undefined, {
+    chunkId: mapperMeta(requests[0]).id,
+    startLine: 1,
+    endLine: 4,
+    replacementChunks: 2,
+    reason: "output_limit",
+    splitDepth: 0,
+  });
 });
 
 test("reducer context recovery repartitions whole units into smaller requests", async () => {

@@ -541,13 +541,14 @@ function noEvidenceWireSchemaFor(chunkId: string): z.ZodSchema<NoEvidence> {
     if (typeof value === "string") return { chunkId, reason: value };
     if (value && typeof value === "object" && !Array.isArray(value)) {
       const record = value as Record<string, unknown>;
+      const { summary, ...withoutSummary } = record;
       return {
-        chunkId,
-        reason: typeof record.reason === "string" && record.reason.trim() !== ""
-          ? record.reason
-          : typeof record.summary === "string" && record.summary.trim() !== ""
-            ? record.summary
-            : "No domain evidence in supplied chunk.",
+        ...withoutSummary,
+        reason: record.reason === undefined
+          && typeof summary === "string"
+          && summary.trim() !== ""
+            ? summary
+            : record.reason,
       };
     }
     return value;
@@ -600,13 +601,15 @@ function mapperSchemaFor(chunk: SourceChunk, mode: EvidenceMappingMode) {
             ? declaredId
             : nextPacketId();
           usedPacketIds.add(id);
-          return { ...packetRecord, id, chunkId: chunk.id };
+          return { ...packetRecord, id };
         })
         : record.packets;
+      const hasPackets = Array.isArray(record.packets) && record.packets.length > 0;
+      const hasNoEvidence = Array.isArray(record.noEvidence) && record.noEvidence.length > 0;
       return {
         ...record,
-        packets,
-        ...(record.noEvidence === undefined ? { noEvidence: [] } : {}),
+        ...(record.packets === undefined && hasNoEvidence ? { packets: [] } : { packets }),
+        ...(record.noEvidence === undefined && hasPackets ? { noEvidence: [] } : {}),
       };
     }
     return value;
@@ -615,6 +618,9 @@ function mapperSchemaFor(chunk: SourceChunk, mode: EvidenceMappingMode) {
   }));
   return structuredWireSchema(schema.superRefine((value, ctx) => {
     try {
+      if (value.packets.length === 0 && value.noEvidence.length === 0) {
+        throw new EvidenceCoverageError("Evidence map must assign packets or explicit noEvidence");
+      }
       buildEvidenceCoverage([chunk.id], value.packets, value.noEvidence);
       for (const packet of value.packets) {
         assertEntityKey(packet.entityKey);
@@ -704,6 +710,11 @@ interface MapperRequestDetails {
 }
 
 type SourceChunkRangeFactory = ReturnType<typeof createSourceChunkRangeFactory>;
+
+interface MapperChunkWork {
+  chunk: SourceChunk;
+  splitDepth: 0 | 1;
+}
 
 function mapperRequestDetails(
   preparedSourceLines: readonly string[],
@@ -1231,9 +1242,26 @@ function lineCountOf(chunk: Pick<SourceChunk, "startLine" | "endLine">): number 
   return chunk.endLine - chunk.startLine + 1;
 }
 
-function isStructuredMapperFailure(error: unknown): boolean {
+function isStructuredMapperFailure(
+  error: unknown,
+): error is EvidenceCoverageError & { cause: StructuredValidationError } {
   return error instanceof EvidenceCoverageError
     && error.cause instanceof StructuredValidationError;
+}
+
+type MapperSplitReason = "output_limit" | "chunk_local_validation";
+
+function mapperSplitReason(error: unknown): MapperSplitReason | null {
+  if (!isStructuredMapperFailure(error)) return null;
+  const structured = error.cause;
+  if (structured.errorType === "output_limit") return "output_limit";
+  if (structured.errorType !== "schema_validate" || !(structured.lastError instanceof z.ZodError)) return null;
+  if (structured.lastError.issues.length === 0) return null;
+  const localCodes = new Set(["chunk_coverage_mismatch", "source_range_out_of_bounds"]);
+  return structured.lastError.issues.every((issue) =>
+    localCodes.has(evidenceValidationReason(issue).split(":", 1)[0]))
+    ? "chunk_local_validation"
+    : null;
 }
 
 function normalizeSourceChunksFrom(
@@ -1244,6 +1272,20 @@ function normalizeSourceChunksFrom(
   for (let index = startIndex; index < chunks.length; index++) {
     const chunk = chunks[index];
     chunks[index] = createChunk(chunk.startLine, chunk.endLine, index, chunk.headingPath);
+  }
+}
+
+function normalizeMapperChunkWorkFrom(
+  workItems: MapperChunkWork[],
+  startIndex: number,
+  createChunk: SourceChunkRangeFactory,
+): void {
+  for (let index = startIndex; index < workItems.length; index++) {
+    const work = workItems[index];
+    workItems[index] = {
+      ...work,
+      chunk: createChunk(work.chunk.startLine, work.chunk.endLine, index, work.chunk.headingPath),
+    };
   }
 }
 
@@ -1310,14 +1352,18 @@ function rechunkMapperSourceForRetry(
       return { kind: "too-small" as const };
     }
     const mapperOpts = taskLlmOptions(runtime.opts ?? {}, policy, effectiveInputBudget);
-    chunks = packAdjacentMapperChunks(chunks, createChunk, (chunk) => mapperEstimateFits(
-      estimateStructuredRequest(
-        messagesForMapper(mapPrompt, chunk, domainId, mode, preparedSourceLines),
-        mapperOpts,
-        policy.mapperRetries ?? 1,
-      ),
-      effectiveInputBudget,
-    ));
+    chunks = packAdjacentMapperChunks(chunks, createChunk, (chunk) => {
+      const details = mapperRequestDetails(
+        preparedSourceLines,
+        chunk,
+        domainId,
+        mode,
+        policy,
+        runtime.opts ?? {},
+      );
+      return details.rawBytes <= maximumRawBudget
+        && mapperEstimateFits(details.estimatedInputTokens, effectiveInputBudget);
+    });
     const largest = Math.max(...chunks.map((chunk) => estimateStructuredRequest(
       messagesForMapper(mapPrompt, chunk, domainId, mode, preparedSourceLines), mapperOpts, policy.mapperRetries ?? 1,
     )));
@@ -1343,7 +1389,10 @@ async function mapChunksWithContextRepack(
   const mapCallSite = runtime.mapCallSite ?? "ingest.evidence-map";
   const preparedSourceLines = sourceLines(source);
   const createChunk = createSourceChunkRangeFactory(source);
-  let failedMapper: (MapperRequestDetails & Pick<SourceChunk, "id" | "startLine" | "endLine">) | undefined;
+  let failedMapper: (MapperRequestDetails
+    & Pick<SourceChunk, "id" | "startLine" | "endLine">
+    & Pick<MapperChunkWork, "splitDepth">) | undefined;
+  const semanticSplitLineage: Array<Pick<SourceChunk, "startLine" | "endLine">> = [];
   return runWithContextRepack({
     requestBudgetsEmittedByExecute: true,
     callSite: mapCallSite,
@@ -1408,37 +1457,77 @@ async function mapChunksWithContextRepack(
           throw new EvidenceCoverageError(`Mapper retry for chunk ${failedMapper.id} did not make strict progress`);
         }
       }
+      const workItems: MapperChunkWork[] = chunks.map((chunk) => ({
+        chunk,
+        splitDepth: (failedMapper?.splitDepth === 1
+          && chunk.endLine >= failedMapper.startLine
+          && chunk.startLine <= failedMapper.endLine)
+          || semanticSplitLineage.some((lineage) =>
+            chunk.endLine >= lineage.startLine && chunk.startLine <= lineage.endLine) ? 1 : 0,
+      }));
       return {
-        value: { chunks, effectiveInputBudget },
+        value: { workItems, effectiveInputBudget },
         estimatedInputTokens,
         contextUnits: chunks.length,
         sourceChunks: chunks.length,
         reductionDepth: 0,
       };
     },
-    execute: async ({ chunks, effectiveInputBudget }) => {
+    execute: async ({ workItems, effectiveInputBudget }) => {
       const effectivePolicy = { ...policy, inputBudgetTokens: effectiveInputBudget };
-      const activeChunks = [...chunks];
+      const activeWorkItems = [...workItems];
       const packets: VerifiedEvidencePacket[] = [];
       const noEvidence: NoEvidence[] = [];
-      for (let index = 0; index < activeChunks.length; index++) {
-        const chunk = activeChunks[index];
+      for (let index = 0; index < activeWorkItems.length; index++) {
+        const work = activeWorkItems[index];
+        const chunk = work.chunk;
         const details = mapperRequestDetails(
           preparedSourceLines, chunk, domainId, mode, effectivePolicy, runtime.opts ?? {},
         );
         let mapped: VerifiedEvidencePacket[];
         try {
           mapped = await mapChunk(
-            preparedSourceLines, domainId, chunk, activeChunks.length, effectivePolicy, runtime, mode,
+            preparedSourceLines, domainId, chunk, activeWorkItems.length, effectivePolicy, runtime, mode,
           );
         } catch (error) {
           if (classifyContextError(error) !== null) {
-            failedMapper = { ...details, id: chunk.id, startLine: chunk.startLine, endLine: chunk.endLine };
+            failedMapper = {
+              ...details,
+              id: chunk.id,
+              startLine: chunk.startLine,
+              endLine: chunk.endLine,
+              splitDepth: work.splitDepth,
+            };
           }
-          if (isStructuredMapperFailure(error) && lineCountOf(chunk) > 1) {
-            const replacements = splitSourceChunkForEvidenceMap(chunk, index, createChunk);
-            activeChunks.splice(index, 1, ...replacements);
-            normalizeSourceChunksFrom(activeChunks, index, createChunk);
+          const splitReason = mapperSplitReason(error);
+          if (splitReason !== null && work.splitDepth === 0 && lineCountOf(chunk) > 1) {
+            const prospectiveWorkItems = [...activeWorkItems];
+            prospectiveWorkItems.splice(
+              index,
+              1,
+              ...splitSourceChunkForEvidenceMap(chunk, index, createChunk)
+                .map((replacement): MapperChunkWork => ({ chunk: replacement, splitDepth: 1 })),
+            );
+            normalizeMapperChunkWorkFrom(prospectiveWorkItems, index, createChunk);
+            const replacements = prospectiveWorkItems.slice(index, index + 2);
+            const replacementDetails = replacements.map((replacement) => mapperRequestDetails(
+              preparedSourceLines,
+              replacement.chunk,
+              domainId,
+              mode,
+              effectivePolicy,
+              runtime.opts ?? {},
+            ));
+            if (replacementDetails.length !== 2
+              || replacementDetails.some((replacement) =>
+                replacement.estimatedInputTokens >= details.estimatedInputTokens)) {
+              throw error;
+            }
+            activeWorkItems.splice(0, activeWorkItems.length, ...prospectiveWorkItems);
+            semanticSplitLineage.push(...replacements.map(({ chunk: replacement }) => ({
+              startLine: replacement.startLine,
+              endLine: replacement.endLine,
+            })));
             index -= 1;
             runtime.onEvent?.({
               kind: "tool_use",
@@ -1448,6 +1537,8 @@ async function mapChunksWithContextRepack(
                 startLine: chunk.startLine,
                 endLine: chunk.endLine,
                 replacementChunks: replacements.length,
+                reason: splitReason,
+                splitDepth: work.splitDepth,
               },
             });
             runtime.onEvent?.({ kind: "tool_result", ok: true, preview: "retry scheduled" });
@@ -1458,7 +1549,7 @@ async function mapChunksWithContextRepack(
         if (mapped.length === 0) noEvidence.push({ chunkId: chunk.id, reason: "No domain evidence" });
         packets.push(...mapped);
       }
-      return { chunks: activeChunks, packets, noEvidence };
+      return { chunks: activeWorkItems.map(({ chunk }) => chunk), packets, noEvidence };
     },
     onEvent: (event) => forwardContextRepackProgress(runtime, event),
   });
