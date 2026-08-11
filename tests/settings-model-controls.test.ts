@@ -656,15 +656,29 @@ test("addPolicyControls renders a native automatic field even when its value is 
   const end = settingsSource.indexOf("const busy = this.plugin.controller.running;", start);
   assert.ok(start >= 0 && end > start);
   const body = settingsSource.slice(start, end);
-  assert.match(body, /T\.settings\.advancedBudgets_name/);
   assert.match(body, /T\.settings\.budgetAutomatic/);
   assert.match(body, /addAutomaticBudgetControl/);
-  assert.match(body, /automaticBudgetPlaceholders/);
   assert.match(body, /automatic\?\.updates\.inputBudgetTokens/);
   assert.match(body, /automatic\?\.updates\.maxTokens/);
   // The carried-forward guard must be reachable only after the automatic branch
   // returns — i.e. it still exists, but no longer fires for an automatic field.
   assert.match(body, /values\.inputBudgetTokens === undefined \|\| !updates\.inputBudgetTokens\) return;/);
+  // F1: no heading, and no "Advanced" grouping string anywhere — the automatic
+  // fields render inline, exactly where the fixed fields used to render, so
+  // compressionProfile is never visually grouped under a budgets-only heading.
+  assert.doesNotMatch(settingsSource, /advancedBudgets_name/);
+  assert.doesNotMatch(settingsSource, /Advanced: manual budgets/);
+  // Minor: automaticBudgetPlaceholders is called once per addPolicyControls
+  // invocation (assigned to `placeholders`) and both fields read from it, rather
+  // than each field recomputing the same {input, output} pair.
+  assert.match(body, /const placeholders = automatic\s*\n\s*\? automaticBudgetPlaceholders\(/);
+  assert.equal(
+    (body.match(/automaticBudgetPlaceholders\(/g) ?? []).length,
+    1,
+    "automaticBudgetPlaceholders must be called once per addPolicyControls invocation",
+  );
+  assert.match(body, /placeholders!\.input/);
+  assert.match(body, /placeholders!\.output/);
 });
 
 test("only the native-agent call sites opt into automatic budgets; claude-agent call sites do not", () => {

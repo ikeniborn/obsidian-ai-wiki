@@ -391,9 +391,9 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       },
       useGlobalCompression: boolean,
       // Native-only. When present, inputBudgetTokens/maxTokens render as automatic
-      // (undefined-capable) fields under an "Advanced" heading instead of the fixed,
-      // always-required claude-agent fields. `model`/`operation` locate the cached
-      // record used only to compute the placeholder text — never to probe.
+      // (undefined-capable) fields instead of the fixed, always-required claude-agent
+      // fields. `model`/`operation` locate the cached record used only to compute the
+      // placeholder text — never to probe.
       automatic?: {
         model: string;
         operation: OpKey;
@@ -403,21 +403,24 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         };
       },
     ): void => {
+      // Computed once per call (not once per field): both renderers below read the
+      // same {input, output} pair rather than each triggering its own resolveBudget.
+      const placeholders = automatic
+        ? automaticBudgetPlaceholders(automatic.model, automatic.operation, {
+            input: values.inputBudgetTokens,
+            output: values.maxTokens,
+          })
+        : undefined;
       renderModelControlFields(fields, {
         inputBudgetTokens: () => {
           if (automatic?.updates.inputBudgetTokens) {
-            new Setting(containerEl).setName(T.settings.advancedBudgets_name).setHeading();
-            const placeholder = automaticBudgetPlaceholders(automatic.model, automatic.operation, {
-              input: values.inputBudgetTokens,
-              output: values.maxTokens,
-            }).input;
             addAutomaticBudgetControl(
               new Setting(containerEl)
                 .setName(T.settings.inputBudgetTokens_name)
                 .setDesc(T.settings.inputBudgetTokens_descAutomatic),
               values.inputBudgetTokens,
               automatic.updates.inputBudgetTokens,
-              placeholder,
+              placeholders!.input,
             );
             return;
           }
@@ -432,17 +435,13 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         },
         maxTokens: () => {
           if (automatic?.updates.maxTokens) {
-            const placeholder = automaticBudgetPlaceholders(automatic.model, automatic.operation, {
-              input: values.inputBudgetTokens,
-              output: values.maxTokens,
-            }).output;
             addAutomaticBudgetControl(
               new Setting(containerEl)
                 .setName(T.settings.outputBudgetTokens_name)
                 .setDesc(T.settings.outputBudgetTokens_descAutomatic),
               values.maxTokens,
               automatic.updates.maxTokens,
-              placeholder,
+              placeholders!.output,
             );
             return;
           }
