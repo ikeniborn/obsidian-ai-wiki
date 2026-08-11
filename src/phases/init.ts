@@ -183,11 +183,15 @@ const MIN_BOOTSTRAP_CHUNK_TOKENS = 512;
 const MAX_BOOTSTRAP_EVIDENCE_TOKENS = 240_000;
 /**
  * Hard ceiling on the provider requests one bootstrap attempt issues, whatever
- * the arithmetic above allows. It only binds on narrow windows: at the default
- * 16_384-token input budget a group carries ~12_500 evidence tokens, so the
- * evidence budget caps first (20 requests); at a 3_686-token input budget a
- * group carries ~1_200, and 64 requests cover ~75_000 evidence tokens — a
- * ~300 KB source — instead of the 20 a fixed count allowed.
+ * the arithmetic above allows. It only binds on narrow windows. Both figures
+ * below are `evidencePerGroup(...)`, the same arithmetic the ceiling and the
+ * refusal message use: at the default 16_384-token input budget a group carries
+ * 12_049 evidence tokens, so the evidence budget caps first at 20 requests; at a
+ * 3_686-token input budget (an 8_192-token window) a group carries 656 by that
+ * worst-case accounting, and 64 requests admit 41_984 evidence tokens instead of
+ * the 10_496 a fixed count of 16 allowed. Real per-group overhead runs well
+ * below its 1_783-token bound, so a run of that shape carries proportionally
+ * more than the worst case admits — a ~87 KB source completes in 24 groups.
  */
 export const MAX_BOOTSTRAP_REQUESTS = 64;
 /**
@@ -238,9 +242,20 @@ function evidencePreparationFailure(
   error: Error,
   asModelContext: (needs: string) => string,
 ): string {
-  if (error instanceof PromptBudgetExceededError) {
+  const overflow = error instanceof PromptBudgetExceededError
+    ? { estimated: error.estimated, budget: error.budget }
+    // The mapper and reducer catches rewrap anything that is not their own error
+    // class (ingest-evidence.ts:1409-1415, :1829-1835). That contract is left
+    // intact for every class; the counts survive verbatim in the wrapped text and
+    // only PromptBudgetExceededError writes that sentence, so they are read back
+    // from there instead of changing what those catches throw.
+    : /Prompt requires (\d+) estimated tokens but budget is (\d+)/.exec(error.message);
+  if (overflow) {
+    const [estimated, budget] = Array.isArray(overflow)
+      ? [overflow[1], overflow[2]]
+      : [overflow.estimated, overflow.budget];
     return asModelContext(
-      `a bounded evidence request needs ${error.estimated} tokens against a ${error.budget}-token budget`,
+      `a bounded evidence request needs ${estimated} tokens against a ${budget}-token budget`,
     );
   }
   const sizeShaped: Array<[RegExp, string]> = [
@@ -289,7 +304,12 @@ function renderBootstrapTaxonomyRepairPrompt(
   existingTypes: readonly EntityType[] | undefined,
   calibration?: number,
 ): string {
-  const build = (candidates: number, facts: number, themes: number): string => JSON.stringify({
+  const build = (
+    candidates: number,
+    facts: number,
+    themes: number,
+    existingNames: number,
+  ): string => JSON.stringify({
     repair: "Regenerate the domain entry JSON. The previous taxonomy was rejected by local domain validation.",
     issue,
     rules: [
@@ -298,7 +318,7 @@ function renderBootstrapTaxonomyRepairPrompt(
       "Reuse existing entity types when they fit; add only source-supported missing types.",
       "Do not invent a permanent domain-specific fallback list.",
     ],
-    existingEntityTypes: (existingTypes ?? []).map((entityType) => entityType.type),
+    existingEntityTypes: (existingTypes ?? []).slice(0, existingNames).map((entityType) => entityType.type),
     evidenceCandidates: bootstrapEvidence.candidates.slice(0, candidates).map((candidate) => ({
       entityKey: candidate.entityKey,
       facts: candidate.facts.slice(0, facts),
@@ -307,17 +327,18 @@ function renderBootstrapTaxonomyRepairPrompt(
   });
   const fits = (content: string): boolean =>
     estimatePreparedMessages([{ role: "user", content }], calibration) <= MAX_TAXONOMY_REPAIR_TOKENS;
-  for (const [candidates, facts, themes] of [
-    [bootstrapEvidence.candidates.length, 6, 12],
-    [24, 3, 6],
-    [12, 2, 3],
-    [6, 1, 0],
-    [0, 0, 0],
+  const allExisting = existingTypes?.length ?? 0;
+  for (const [candidates, facts, themes, existingNames] of [
+    [bootstrapEvidence.candidates.length, 6, 12, allExisting],
+    [24, 3, 6, Math.min(allExisting, 48)],
+    [12, 2, 3, Math.min(allExisting, 24)],
+    [6, 1, 0, Math.min(allExisting, 12)],
+    [0, 0, 0, 0],
   ] as const) {
-    const content = build(candidates, facts, themes);
+    const content = build(candidates, facts, themes, existingNames);
     if (fits(content)) return content;
   }
-  return build(0, 0, 0);
+  return build(0, 0, 0, 0);
 }
 
 async function* prepareDomainBootstrap(
@@ -554,12 +575,6 @@ async function* prepareDomainBootstrap(
       minimumGroupTokens = resplit.minimumGroupTokens;
     }
   }
-  if (configuredBudget.includeSchema && !budget.includeSchema) {
-    yield {
-      kind: "system",
-      message: "init: wiki conventions omitted from the Init prompt to fit the model context",
-    };
-  }
   yield {
     kind: "evidence_split",
     callSite: "init.bootstrap",
@@ -615,6 +630,14 @@ async function* prepareDomainBootstrap(
       yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
       return null;
     }
+  }
+  // Announced only past every check that can still refuse: a user told the wiki
+  // conventions were dropped should be getting a domain out of it.
+  if (configuredBudget.includeSchema && !budget.includeSchema) {
+    yield {
+      kind: "system",
+      message: "init: wiki conventions omitted from the Init prompt to fit the model context",
+    };
   }
 
   yield { kind: "tool_use", name: "Initialising domain", input: {} };

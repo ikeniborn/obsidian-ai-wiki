@@ -1411,6 +1411,108 @@ test("evidence needing more groups than the request ceiling fails instead of flo
     event.kind === "domain_created" || event.kind === "domain_updated"), false);
 });
 
+/**
+ * Drives a real budget overflow through evidence preparation. A calibration
+ * below 1 (the model-context clamp reaches 0.5) makes the planning estimates
+ * smaller than the uncalibrated check inside the request telemetry, so a request
+ * that passed planning overflows at dispatch — inside the mapper and reducer
+ * try/catch that rewrap `PromptBudgetExceededError` into their own error class.
+ */
+async function budgetOverflowInit(options: {
+  sourceLines: number;
+  packetsPerChunk: number;
+  sameEntity: boolean;
+  factRepeat: number;
+  maxTokens: number;
+}): Promise<{ events: RunEvent[]; mapperRequests: number; reducerRequests: number }> {
+  const rawAdapter = adapter();
+  rawAdapter.files.set("src/a.md", evidenceSourceLines(options.sourceLines));
+  let ordinal = 0;
+  let mapperRequests = 0;
+  let reducerRequests = 0;
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      const serialized = JSON.stringify((params as { messages: unknown }).messages);
+      if (serialized.includes("REDUCE_INPUT ")) {
+        reducerRequests++;
+        return mockResponse(params, "{}");
+      }
+      const chunkId = serialized.match(/CHUNK_ID ([^\s\\"]+)/)?.[1];
+      if (!chunkId) return mockResponse(params, bootstrapDomainBody("concept", ""));
+      mapperRequests++;
+      return mockResponse(params, JSON.stringify({
+        packets: Array.from({ length: options.packetsPerChunk }, () => {
+          const entityKey = options.sameEntity ? "shared" : `e${ordinal}`;
+          const id = `${chunkId}-${ordinal++}`;
+          return {
+            id,
+            chunkId,
+            entityKey,
+            facts: [`${id} ${"evidence fact text ".repeat(options.factRepeat)}`],
+            exactSourceRanges: [{ startLine: 1, endLine: 1 }],
+            links: [],
+            sourceAnchor: "src/a.md:1",
+          };
+        }),
+        noEvidence: [],
+      }));
+    } } },
+  } as unknown as LlmClient;
+  const events: RunEvent[] = [];
+  for await (const event of runInitWithSources(
+    "demo", ["src"], true, new VaultTools(rawAdapter, "/vault"), llm, "m",
+    [], "Vault", new AbortController().signal, {
+      inputBudgetTokens: 16_384,
+      maxTokens: options.maxTokens,
+      structuredRetries: 0,
+      tokenCalibration: 0.5,
+    }, undefined, false, undefined,
+  )) {
+    events.push(event);
+  }
+  return { events, mapperRequests, reducerRequests };
+}
+
+test("a wrapped mapper budget overflow reports the model context, not a bare wrapper message", async () => {
+  const run = await budgetOverflowInit({
+    sourceLines: 400,
+    packetsPerChunk: 1,
+    sameEntity: false,
+    factRepeat: 400,
+    maxTokens: 2_000,
+  });
+
+  // The very first mapper request overflows, so none is dispatched.
+  assert.equal(run.mapperRequests, 0);
+  const failure = run.events.find((event) => event.kind === "error");
+  assert.ok(failure && failure.kind === "error", JSON.stringify(run.events.slice(-3)));
+  assert.match(failure.message, /a bounded evidence request needs \d+ tokens against a \d+-token budget/);
+  assert.match(failure.message, /Choose a model with a larger context window\./);
+  assert.doesNotMatch(failure.message, /bounded evidence preparation failed/);
+  assert.doesNotMatch(failure.message, /Evidence mapper failed for chunk/);
+});
+
+test("a wrapped reducer budget overflow reports the model context, not a bare wrapper message", async () => {
+  const run = await budgetOverflowInit({
+    sourceLines: 20,
+    packetsPerChunk: 8,
+    sameEntity: true,
+    factRepeat: 1_400,
+    maxTokens: 400_000,
+  });
+
+  // Every mapper request fits and is dispatched; the reducer request is the one
+  // that overflows, so the failure comes from the reducer catch.
+  assert.ok(run.mapperRequests > 0);
+  assert.equal(run.reducerRequests, 0);
+  const failure = run.events.find((event) => event.kind === "error");
+  assert.ok(failure && failure.kind === "error", JSON.stringify(run.events.slice(-3)));
+  assert.match(failure.message, /a bounded evidence request needs \d+ tokens against a \d+-token budget/);
+  assert.match(failure.message, /Choose a model with a larger context window\./);
+  assert.doesNotMatch(failure.message, /bounded evidence preparation failed/);
+  assert.doesNotMatch(failure.message, /Evidence reducer failed at depth/);
+});
+
 test("a narrow window keeps the wiki conventions block when the evidence fits with it", async () => {
   const rawAdapter = adapter();
   rawAdapter.files.set("src/a.md", "# Source\n\nAlpha source content for a narrow window.");
