@@ -13,6 +13,15 @@ export interface LocalConfig {
   migrated_okf_frontmatter?: boolean;
   shellConsentGiven?: boolean;
   lastDomain?: string;
+  migrated_auto_budget?: boolean;
+  /** Keyed by `${baseUrl}::${model}`. */
+  modelContext?: Record<string, {
+    contextWindow: number;
+    source: "discovered" | "learned" | "default";
+    calibration: number;
+    samples: number;
+    expiresAt?: number;
+  }>;
 }
 
 const DEFAULTS: LocalConfig = { iclaudePath: "" };
