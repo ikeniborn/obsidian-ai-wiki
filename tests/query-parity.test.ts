@@ -16,6 +16,7 @@ import {
   type WikiOperation,
 } from "../src/types";
 import { VaultTools, type VaultAdapter } from "../src/vault-tools";
+import { stubModelContextStore } from "./model-context-stub";
 
 const pathBrowserifyLoader = `
 export async function resolve(specifier, context, nextResolve) {
@@ -1016,6 +1017,9 @@ async function captureRunnerPolicy(
     new VaultTools(memoryAdapter(), "/vault"),
     "Vault",
     [],
+    undefined,
+    false,
+    stubModelContextStore(),
   );
   let captured: {
     req: RunRequest;

@@ -10,12 +10,11 @@ import type {
 import type { ModelContextRecord } from "./model-context";
 import { resolveBudget, type ResolvedBudget } from "./budget-resolver";
 
-// Retained for `resolveModelCallPolicy` (the claude-agent-era resolver Task 8 removes),
-// which still falls back to fixed literals when a stored value is invalid or absent.
-// `resolveCallPolicy` below does not use these: an absent native budget now derives
-// from the model context instead of inventing a constant.
+// The claude-agent input-budget default. That backend keeps its stored defaults and
+// still falls back to a fixed literal when a stored value is invalid or absent; the
+// native path does not, because an absent native budget derives from the model
+// context instead of inventing a constant.
 const DEFAULT_INPUT_BUDGET = 16_384;
-const DEFAULT_REPAIR_INPUT_BUDGET = 65_536;
 
 export type ModelControlField =
   | "inputBudgetTokens"
@@ -180,76 +179,6 @@ function compressionOperation(key: OpKey): CompressionOperation | undefined {
   return key;
 }
 
-export function resolveModelCallPolicy(
-  settings: LlmWikiPluginSettings,
-  operation: WikiOperation,
-  parent?: OpKey,
-): { model: string; policy: ModelCallPolicy; opts: LlmCallOptions } {
-  const key = policyKey(operation, parent);
-  if (settings.backend === "claude-agent") {
-    const global = settings.claudeAgent;
-    const local = global.perOperation ? global.operations[key] : undefined;
-    const compressionOp = compressionOperation(key);
-    const compression = key === "format"
-      ? undefined
-      : compressionProfile(local?.compressionProfile)
-        ?? compressionProfile(global.compressionProfile)
-        ?? "balanced";
-    const policy: ModelCallPolicy = {
-      inputBudgetTokens: positiveInt(local?.inputBudgetTokens ?? global.inputBudgetTokens, DEFAULT_INPUT_BUDGET),
-      ...(compression ? { compression } : {}),
-    };
-    return {
-      model: local?.model ?? global.model,
-      policy,
-      opts: {
-        inputBudgetTokens: policy.inputBudgetTokens,
-        semanticCompression: compression && compressionOp
-          ? { profile: compression, operation: compressionOp }
-          : undefined,
-      },
-    };
-  }
-
-  const global = settings.nativeAgent;
-  const local = global.perOperation ? global.operations[key] : undefined;
-  const compressionOp = compressionOperation(key);
-  const compression = key === "format"
-    ? undefined
-    : compressionProfile(local?.compressionProfile)
-      ?? compressionProfile(global.compressionProfile)
-      ?? "balanced";
-  const globalOutputBudget = positiveInt(global.maxTokens, 4096);
-  const outputBudget = positiveInt(local?.maxTokens ?? globalOutputBudget, globalOutputBudget);
-  const outputRetryBudget = Math.max(outputBudget, globalOutputBudget);
-  const inputBudget = positiveInt(local?.inputBudgetTokens ?? global.inputBudgetTokens, DEFAULT_INPUT_BUDGET);
-  const repairInputBudget = key === "init" || key === "ingest"
-    ? Math.max(inputBudget, positiveInt(global.repairInputBudgetTokens, DEFAULT_REPAIR_INPUT_BUDGET))
-    : undefined;
-  const policy: ModelCallPolicy = {
-    inputBudgetTokens: inputBudget,
-    ...(repairInputBudget === undefined ? {} : { repairInputBudgetTokens: repairInputBudget }),
-    outputBudgetTokens: outputBudget,
-    outputRetryBudgetTokens: outputRetryBudget,
-    ...(compression ? { compression } : {}),
-  };
-  return {
-    model: local?.model ?? global.model,
-    policy,
-    opts: {
-      inputBudgetTokens: policy.inputBudgetTokens,
-      repairInputBudgetTokens: policy.repairInputBudgetTokens,
-      maxTokens: outputBudget,
-      outputRetryBudgetTokens: outputRetryBudget,
-      temperature: local?.temperature ?? global.temperature,
-      topP: global.topP,
-      semanticCompression: compression && compressionOp
-        ? { profile: compression, operation: compressionOp }
-        : undefined,
-    },
-  };
-}
-
 export interface ResolvedModelCall {
   model: string;
   policy: ModelCallPolicy;
@@ -275,12 +204,11 @@ export function effectiveModel(
 }
 
 /**
- * The record-aware successor to `resolveModelCallPolicy`. On the native-agent path,
+ * The record-aware model-call resolver. On the native-agent path,
  * input and output budgets are derived from the model's context window
  * (`resolveBudget`) instead of falling back to fixed constants; a stored budget still
- * acts as an explicit override. The claude-agent path is unchanged: it does not read
- * `record` and keeps its fixed 16_384 input-budget default. Task 8 switches every
- * caller to this function and removes `resolveModelCallPolicy`.
+ * acts as an explicit override. The claude-agent path does not read `record` and keeps
+ * its fixed 16_384 input-budget default.
  */
 export function resolveCallPolicy(
   settings: LlmWikiPluginSettings,
@@ -293,8 +221,8 @@ export function resolveCallPolicy(
   const model = effectiveModel(settings, operation, parent);
 
   if (settings.backend === "claude-agent") {
-    // Byte-for-byte the body `resolveModelCallPolicy` has today, returned without a
-    // `budget` field. `record` is not read on this path.
+    // The claude-agent-era resolution, unchanged and returned without a `budget`
+    // field. `record` is not read on this path.
     const global = settings.claudeAgent;
     const local = global.perOperation ? global.operations[key] : undefined;
     const compression = key === "format"

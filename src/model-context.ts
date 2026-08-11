@@ -1,3 +1,5 @@
+import type { RunEvent } from "./types";
+
 export const BACKEND_DEFAULT_CONTEXT = 8_192;
 export const PROBE_DEADLINE_MS = 2_000;
 export const DEFAULT_TTL_MS = 86_400_000;
@@ -17,6 +19,16 @@ export interface ModelContextRecord {
 }
 
 export type ModelContextMap = Record<string, ModelContextRecord>;
+
+/** One diagnostic per endpoint the probe attempts. */
+export type ContextProbeEvent = Extract<RunEvent, { kind: "context_probe" }>;
+
+/** What `observeUsage` actually did with a sample, so the caller can report it. */
+export interface CalibrationOutcome {
+  ratio: number;
+  applied: boolean;
+  clamped: boolean;
+}
 
 export interface ModelContextStoreDeps {
   read: () => Promise<ModelContextMap>;
@@ -117,19 +129,47 @@ export async function probeContextWindow(
   model: string,
   deadlineMs: number = PROBE_DEADLINE_MS,
   signal?: AbortSignal,
+  onProbe?: (event: ContextProbeEvent) => void,
 ): Promise<number | null> {
   const started = Date.now();
   const now = (): number => Date.now() - started;
   const deadline = deadlineMs;
   const root = baseUrl.replace(/\/+$/, "");
+  const report = (
+    endpoint: string,
+    ok: boolean,
+    startedAt: number,
+    matchedById: boolean,
+    contextLength: number | null,
+  ): void => {
+    onProbe?.({
+      kind: "context_probe",
+      baseUrl,
+      model,
+      endpoint,
+      ok,
+      ms: now() - startedAt,
+      matchedById,
+      ...(contextLength === null ? {} : { contextLength }),
+    });
+  };
 
-  const models = await getJson(fetchFn, `${root}/models`, apiKey, deadline, now, signal);
+  const modelsUrl = `${root}/models`;
+  const modelsStartedAt = now();
+  const models = await getJson(fetchFn, modelsUrl, apiKey, deadline, now, signal);
   const fromModels = models === null ? null : contextLengthForModel(models, model);
+  // `matchedById` is true only when the length came from the entry whose id is
+  // this model — the /models endpoint is the only one scoped that way.
+  report(modelsUrl, models !== null, modelsStartedAt, fromModels !== null, fromModels);
   if (fromModels !== null) return fromModels;
 
   const ollamaRoot = root.replace(/\/v1$/, "");
-  const show = await getJson(fetchFn, `${ollamaRoot}/api/show`, apiKey, deadline, now, signal, { model });
-  return show === null ? null : findContextLength(show);
+  const showUrl = `${ollamaRoot}/api/show`;
+  const showStartedAt = now();
+  const show = await getJson(fetchFn, showUrl, apiKey, deadline, now, signal, { model });
+  const fromShow = show === null ? null : findContextLength(show);
+  report(showUrl, show !== null, showStartedAt, false, fromShow);
+  return fromShow;
 }
 
 export class ModelContextStore {
@@ -148,6 +188,7 @@ export class ModelContextStore {
     apiKey: string,
     now: number,
     signal?: AbortSignal,
+    onProbe?: (event: ContextProbeEvent) => void,
   ): Promise<ModelContextRecord> {
     signal?.throwIfAborted();
     if (this.cache === null) this.cache = await this.deps.read();
@@ -161,7 +202,7 @@ export class ModelContextStore {
 
     const task = (async (): Promise<ModelContextRecord> => {
       const probed = await probeContextWindow(
-        this.deps.fetchFn, baseUrl, apiKey, model, PROBE_DEADLINE_MS, signal,
+        this.deps.fetchFn, baseUrl, apiKey, model, PROBE_DEADLINE_MS, signal, onProbe,
       );
       signal?.throwIfAborted();
       const record: ModelContextRecord = probed === null
@@ -187,11 +228,18 @@ export class ModelContextStore {
     return task;
   }
 
-  observeUsage(baseUrl: string, model: string, estimated: number, actual: number): void {
+  observeUsage(
+    baseUrl: string,
+    model: string,
+    estimated: number,
+    actual: number,
+  ): CalibrationOutcome {
     const record = this.get(baseUrl, model);
-    if (!record || estimated <= 0 || actual <= 0) return;
-    const ratio = actual / estimated;
-    if (ratio < CALIBRATION_MIN || ratio > CALIBRATION_MAX) return;
+    const ratio = estimated > 0 ? actual / estimated : 0;
+    if (!record || estimated <= 0 || actual <= 0) return { ratio, applied: false, clamped: false };
+    if (ratio < CALIBRATION_MIN || ratio > CALIBRATION_MAX) {
+      return { ratio, applied: false, clamped: true };
+    }
     // MULTIPLICATIVE. `ratio` is measured through the current factor, so
     // averaging it into the factor converges on sqrt(truth): a real factor of 2
     // settles at 1.414, a permanent 29% underestimate. Multiply, then smooth.
@@ -207,6 +255,7 @@ export class ModelContextStore {
     // hiccup losing one sample is not worth surfacing as an unhandled
     // rejection (or failing this call) in the plugin host.
     this.persist().catch(() => {});
+    return { ratio, applied: true, clamped: false };
   }
 
   observeContextError(baseUrl: string, model: string, maxContextTokens?: number): void {

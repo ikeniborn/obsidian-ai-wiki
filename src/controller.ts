@@ -17,7 +17,8 @@ import { arrayBufferToBase64, stripImageDataUriPrefix } from "./phases/attachmen
 import { ClaudeCliClient } from "./claude-cli-client";
 import { maskProxyUrl } from "./proxy";
 import { mobileFetch } from "./mobile-fetch";
-import { createNativeOpenAiClient } from "./native-openai-client";
+import { ModelContextStore } from "./model-context";
+import { createNativeOpenAiClient, createNativeProbeFetch } from "./native-openai-client";
 import { i18n } from "./i18n";
 import { resolveEffective } from "./effective-settings";
 import { applyDomainEvent } from "./domain";
@@ -123,6 +124,31 @@ export class WikiController {
     private domainStore: DomainStore,
     private localConfigStore: LocalConfigStore,
   ) {}
+
+  /**
+   * One store for the whole plugin session, so a window probed for one operation is
+   * reused by the next. `fetchFn` is resolved per request rather than captured at
+   * construction: the settings it depends on (proxy, connection timeout, base URL)
+   * change while the plugin is loaded, and `plugin.settings` is not populated yet
+   * when the controller is constructed.
+   */
+  private modelContextStore = new ModelContextStore({
+    read: async () => (await this.localConfigStore.load()).modelContext ?? {},
+    write: async (next) => { await this.localConfigStore.save({ modelContext: next }); },
+    fetchFn: async (input, init) => (await this.probeFetch())(input, init),
+  });
+
+  /** Transport construction stays in the native factory; this only supplies the inputs. */
+  private async probeFetch(): Promise<typeof fetch> {
+    const s = resolveEffective(this.plugin.settings, await this.localConfigStore.load());
+    return createNativeProbeFetch({
+      baseURL: s.nativeAgent.baseUrl,
+      isMobile: Platform.isMobile,
+      proxyConfig: s.proxy,
+      mobileFetch,
+      connectionTimeoutMs: s.llmConnectionTimeoutSec * 1000,
+    });
+  }
 
   isBusy(): boolean { return this.current !== null; }
 
@@ -763,7 +789,7 @@ export class WikiController {
     }
 
     this._currentNativeTransportDiagnostic = llm.nativeTransportDiagnostic;
-    return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`, Platform.isMobile);
+    return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`, Platform.isMobile, this.modelContextStore);
   }
 
   private async logEvent(_vaultRoot: string, sessionId: string, op: WikiOperation, domainId: string | undefined, ev: RunEvent): Promise<void> {

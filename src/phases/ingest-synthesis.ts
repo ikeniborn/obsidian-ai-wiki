@@ -1132,6 +1132,7 @@ async function executeSynthesisBatch(
 ): Promise<SynthesisOutput> {
   let failedPromptHash: string | undefined;
   return runWithContextRepack({
+    onContextError: input.opts.onContextError,
     requestBudgetsEmittedByExecute: true,
     callSite: "ingest.synthesize",
     configuredInputBudget: input.policy.inputBudgetTokens,

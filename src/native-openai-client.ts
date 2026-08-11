@@ -3,10 +3,13 @@ import OpenAI from "openai";
 import { wrapBufferedNoStream } from "./mobile-llm-wrap";
 import { createNativeLlmClient } from "./native-llm-executor";
 import {
+  createDirectDesktopFetch,
   createNativeOpenAiFetch,
+  createProxyFetch,
   sanitizeNativeDiagnosticPath,
+  selectNativeFetch,
 } from "./native-openai-transport";
-import type { ProxyConfig } from "./proxy";
+import { parseNoProxy, shouldBypass, type ProxyConfig } from "./proxy";
 import {
   MAX_SAFE_TIMER_MS,
   type LlmClient,
@@ -45,6 +48,40 @@ function chatCompletionsPath(baseURL: string): string {
   } catch {
     return "/chat/completions";
   }
+}
+
+export interface NativeProbeFetchOptions {
+  baseURL: string;
+  isMobile: boolean;
+  proxyConfig: ProxyConfig;
+  mobileFetch: typeof fetch;
+  connectionTimeoutMs: number;
+}
+
+/**
+ * The transport for a context-window probe. It makes the same route decision this
+ * factory makes for completions against the same base URL — mobile host, proxy, or
+ * direct desktop, with the no-proxy bypass honoured — so a probe never travels a
+ * route the completion would not. It is pinned to the direct desktop route rather
+ * than the hybrid one because a probe is a plain non-streaming GET/POST.
+ */
+export function createNativeProbeFetch(options: NativeProbeFetchOptions): typeof fetch {
+  let proxyFetch: typeof fetch | null = null;
+  if (!options.isMobile && options.proxyConfig.enabled) {
+    try {
+      const baseHost = new URL(options.baseURL).hostname;
+      if (!shouldBypass(baseHost, parseNoProxy(options.proxyConfig.noProxy))) {
+        proxyFetch = createProxyFetch(options.proxyConfig, options.connectionTimeoutMs);
+      }
+    } catch { /* an unparseable base URL leaves the probe on the direct route */ }
+  }
+  return selectNativeFetch({
+    isMobile: options.isMobile,
+    mobileFetch: options.mobileFetch,
+    proxyFetch,
+    directDesktopFetch: () => createDirectDesktopFetch(options.connectionTimeoutMs),
+    preferDesktopHostForNonStream: false,
+  });
 }
 
 /** Node-safe production seam shared by the controller and later live evaluation. */

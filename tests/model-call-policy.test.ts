@@ -5,7 +5,6 @@ import type { ModelContextRecord } from "../src/model-context";
 import {
   normalizeModelCallPolicySettings,
   resolveCallPolicy,
-  resolveModelCallPolicy,
 } from "../src/model-call-policy";
 
 function settings(): LlmWikiPluginSettings {
@@ -20,25 +19,25 @@ test("native global policy keeps maxTokens as output and adds input budget", () 
   const s = settings();
   s.nativeAgent.inputBudgetTokens = 20_000;
   s.nativeAgent.maxTokens = 3210;
-  const resolved = resolveModelCallPolicy(s, "query");
+  const resolved = resolveCallPolicy(s, "query", rec());
   assert.equal(resolved.policy.inputBudgetTokens, 20_000);
   assert.equal(resolved.policy.outputBudgetTokens, 3210);
-  assert.equal(resolved.policy.outputRetryBudgetTokens, 3210);
   assert.equal(resolved.opts.maxTokens, 3210);
-  assert.equal(resolved.opts.outputRetryBudgetTokens, 3210);
   assert.equal(resolved.policy.compression, "balanced");
 });
 
-test("invalid and sub-token native budgets fall back without producing zero", () => {
+test("invalid and sub-token native budgets derive from the window without producing zero", () => {
   for (const value of [0.5, 0, Number.NaN, Number.POSITIVE_INFINITY]) {
     const s = settings();
     s.nativeAgent.inputBudgetTokens = value;
     s.nativeAgent.maxTokens = value;
-    const resolved = resolveModelCallPolicy(s, "query");
-    assert.equal(resolved.policy.inputBudgetTokens, 16_384);
-    assert.equal(resolved.policy.outputBudgetTokens, 4096);
-    assert.equal(resolved.opts.inputBudgetTokens, 16_384);
-    assert.equal(resolved.opts.maxTokens, 4096);
+    const resolved = resolveCallPolicy(s, "query", rec());
+    // An unusable stored value is not an override, so the budget comes from the
+    // 131_072 window: 8_192 out, floor((131_072 - 8_192) * 0.9) in.
+    assert.equal(resolved.policy.inputBudgetTokens, 110_592);
+    assert.equal(resolved.policy.outputBudgetTokens, 8_192);
+    assert.equal(resolved.opts.inputBudgetTokens, 110_592);
+    assert.equal(resolved.opts.maxTokens, 8_192);
   }
 });
 
@@ -48,28 +47,14 @@ test("native per-operation values and global compression fallback resolve", () =
   s.nativeAgent.operations.ingest.inputBudgetTokens = 9000;
   s.nativeAgent.operations.ingest.maxTokens = 2000;
   s.nativeAgent.operations.ingest.compressionProfile = "maximum";
-  const resolved = resolveModelCallPolicy(s, "ingest");
+  const resolved = resolveCallPolicy(s, "ingest", rec());
+  // No stored repair budget: the repair prompt inherits the input budget it repairs.
   assert.deepEqual(resolved.policy, {
     inputBudgetTokens: 9000,
-    repairInputBudgetTokens: 65_536,
+    repairInputBudgetTokens: 9000,
     outputBudgetTokens: 2000,
-    outputRetryBudgetTokens: 4096,
     compression: "maximum",
   });
-});
-
-test("native global output budget is the dynamic retry ceiling for lower per-operation caps", () => {
-  const s = settings();
-  s.nativeAgent.perOperation = true;
-  s.nativeAgent.maxTokens = 65_536;
-  s.nativeAgent.operations.ingest.maxTokens = 16_384;
-
-  const resolved = resolveModelCallPolicy(s, "ingest");
-
-  assert.equal(resolved.policy.outputBudgetTokens, 16_384);
-  assert.equal(resolved.policy.outputRetryBudgetTokens, 65_536);
-  assert.equal(resolved.opts.maxTokens, 16_384);
-  assert.equal(resolved.opts.outputRetryBudgetTokens, 65_536);
 });
 
 test("legacy numeric thinking settings never enter the OpenAI runtime policy", () => {
@@ -78,7 +63,7 @@ test("legacy numeric thinking settings never enter the OpenAI runtime policy", (
   s.nativeAgent.perOperation = true;
   s.nativeAgent.operations.query.thinkingBudgetTokens = 8192;
 
-  const resolved = resolveModelCallPolicy(s, "query");
+  const resolved = resolveCallPolicy(s, "query", rec());
 
   assert.equal("thinkingBudgetTokens" in resolved.opts, false);
 });
@@ -88,13 +73,14 @@ test("native repair input ceiling applies only to ingest and init policies", () 
   s.nativeAgent.repairInputBudgetTokens = 65_536;
   s.nativeAgent.inputBudgetTokens = 32_768;
 
-  const ingest = resolveModelCallPolicy(s, "ingest");
-  const init = resolveModelCallPolicy(s, "init");
-  const query = resolveModelCallPolicy(s, "query");
+  const ingest = resolveCallPolicy(s, "ingest", rec());
+  const init = resolveCallPolicy(s, "init", rec());
+  const query = resolveCallPolicy(s, "query", rec());
 
-  assert.equal(ingest.policy.repairInputBudgetTokens, 65_536);
-  assert.equal(ingest.opts.repairInputBudgetTokens, 65_536);
-  assert.equal(init.policy.repairInputBudgetTokens, 65_536);
+  // The stored 65_536 is clamped to the input budget it repairs.
+  assert.equal(ingest.policy.repairInputBudgetTokens, 32_768);
+  assert.equal(ingest.opts.repairInputBudgetTokens, 32_768);
+  assert.equal(init.policy.repairInputBudgetTokens, 32_768);
   assert.equal(query.policy.repairInputBudgetTokens, undefined);
   assert.equal(query.opts.repairInputBudgetTokens, undefined);
 });
@@ -105,7 +91,7 @@ test("invalid global compression profiles fall back to balanced", () => {
     s.backend = backend;
     const global = backend === "native-agent" ? s.nativeAgent : s.claudeAgent;
     (global as { compressionProfile: unknown }).compressionProfile = "bogus";
-    const resolved = resolveModelCallPolicy(s, "query");
+    const resolved = resolveCallPolicy(s, "query", rec());
     assert.equal(resolved.policy.compression, "balanced");
     assert.deepEqual(resolved.opts.semanticCompression, {
       profile: "balanced",
@@ -122,7 +108,7 @@ test("invalid per-operation compression profiles use the valid global profile", 
     global.perOperation = true;
     global.compressionProfile = "minimum";
     (global.operations.query as { compressionProfile?: unknown }).compressionProfile = "bogus";
-    const resolved = resolveModelCallPolicy(s, "query");
+    const resolved = resolveCallPolicy(s, "query", rec());
     assert.equal(resolved.policy.compression, "minimum");
     assert.deepEqual(resolved.opts.semanticCompression, {
       profile: "minimum",
@@ -137,7 +123,7 @@ test("format resolves no compression policy and no semantic compression options"
     s.backend = backend;
     const global = backend === "native-agent" ? s.nativeAgent : s.claudeAgent;
     global.compressionProfile = "maximum";
-    const resolved = resolveModelCallPolicy(s, "format");
+    const resolved = resolveCallPolicy(s, "format", rec());
     assert.equal(resolved.policy.compression, undefined);
     assert.equal(resolved.opts.semanticCompression, undefined);
   }
@@ -191,7 +177,7 @@ test("claude resolves no plugin-owned output cap", () => {
   const s = settings();
   s.backend = "claude-agent";
   s.claudeAgent.inputBudgetTokens = 12_000;
-  const resolved = resolveModelCallPolicy(s, "lint");
+  const resolved = resolveCallPolicy(s, "lint", rec());
   assert.equal(resolved.policy.inputBudgetTokens, 12_000);
   assert.equal(resolved.policy.outputBudgetTokens, undefined);
   assert.equal(resolved.opts.maxTokens, undefined);
@@ -202,8 +188,8 @@ test("delete borrows ingest and a query follow-up borrows query", () => {
   s.nativeAgent.perOperation = true;
   s.nativeAgent.operations.ingest.inputBudgetTokens = 7000;
   s.nativeAgent.operations.query.inputBudgetTokens = 8000;
-  assert.equal(resolveModelCallPolicy(s, "delete").policy.inputBudgetTokens, 7000);
-  assert.equal(resolveModelCallPolicy(s, "chat", "query").policy.inputBudgetTokens, 8000);
+  assert.equal(resolveCallPolicy(s, "delete", rec()).policy.inputBudgetTokens, 7000);
+  assert.equal(resolveCallPolicy(s, "chat", rec(), "query").policy.inputBudgetTokens, 8000);
 });
 
 test("an absent native budget yields a context-derived budget, not 16384", () => {

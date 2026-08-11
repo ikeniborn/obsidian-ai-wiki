@@ -26,10 +26,22 @@ import { PageSimilarityService, DEFAULT_CHUNKING } from "./page-similarity";
 import { resolveLang, i18nFor } from "./i18n";
 import type { BoilerplateDemotionConfig } from "./boilerplate-demotion";
 import { normalizeRerankerConfig } from "./reranker";
-import { resolveModelCallPolicy } from "./model-call-policy";
+import { effectiveModel, policyKey, resolveCallPolicy } from "./model-call-policy";
+import type { ModelContextRecord, ModelContextStore } from "./model-context";
 import { cancelRuntimeTimeout, scheduleRuntimeTimeout, type RuntimeTimer } from "./runtime-timers";
 
 const DISABLED_BOILERPLATE_DEMOTION: BoilerplateDemotionConfig = { enabled: false, factor: 0 };
+
+/**
+ * Satisfies `resolveCallPolicy`'s signature on the claude-agent path, which never
+ * reads the record: that backend keeps its stored budgets and never probes a window.
+ */
+const CLAUDE_PLACEHOLDER_RECORD: ModelContextRecord = Object.freeze({
+  contextWindow: 0,
+  source: "default" as const,
+  calibration: 1,
+  samples: 0,
+});
 
 export function resolveFollowUpPolicyOperation(parent: WikiOperation): OpKey {
   return parent === "query" ? "query" : "lint";
@@ -43,24 +55,48 @@ export class AgentRunner {
     private vaultTools: VaultTools,
     private vaultName: string,
     private domains: DomainEntry[],
-    private visionTempBaseDir?: string,
+    private visionTempBaseDir: string | undefined = undefined,
     private isMobile: boolean = false,
+    private modelContextStore: ModelContextStore,
   ) {
     this.llm = llm;
   }
 
-  private buildOptsFor(
+  /**
+   * Resolves the model FIRST, then its context record, then the budgets — a window
+   * probed for a different model than the one the call uses would be confidently
+   * wrong. Diagnostics are returned as data (`events`), not emitted: this is a
+   * private helper, not a generator step. `run` yields the array before the request
+   * and drains it again as the operation progresses, so the run-time
+   * `calibration_sample` entries the returned `opts` push onto it are yielded too.
+   */
+  private async buildOptsFor(
     op: RunRequest["operation"],
     policyOperation?: RunRequest["policyOperation"],
-  ): { model: string; opts: LlmCallOptions } {
+    signal?: AbortSignal,
+  ): Promise<{ model: string; opts: LlmCallOptions; events: RunEvent[] }> {
     const s = this.settings;
-    const resolved = resolveModelCallPolicy(s, op, policyOperation);
+    const events: RunEvent[] = [];
+    const model = effectiveModel(s, op, policyOperation);
+    const baseUrl = s.nativeAgent.baseUrl;
+    const record = s.backend === "claude-agent"
+      ? CLAUDE_PLACEHOLDER_RECORD
+      : await this.modelContextStore.resolve(
+          baseUrl,
+          model,
+          s.nativeAgent.apiKey ?? "",
+          Date.now(),
+          signal,
+          (event) => events.push(event),
+        );
+    const resolved = resolveCallPolicy(s, op, record, policyOperation);
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
     const mergeDeleteWarnThreshold = s.nativeAgent.mergeDeleteWarnThreshold;
 
     if (s.backend === "claude-agent") {
       return {
         model: resolved.model,
+        events,
         opts: {
           ...resolved.opts,
           systemPrompt: s.systemPrompt,
@@ -71,9 +107,25 @@ export class AgentRunner {
       };
     }
 
+    if (resolved.budget) {
+      events.push({
+        kind: "budget_resolved",
+        operation: policyKey(op, policyOperation),
+        model: resolved.model,
+        contextWindow: resolved.budget.contextWindow,
+        inputSource: resolved.budget.inputSource,
+        outputSource: resolved.budget.outputSource,
+        calibration: resolved.budget.calibration,
+        samples: record.samples,
+        inputBudget: resolved.budget.inputBudgetTokens,
+        outputBudget: resolved.budget.outputBudgetTokens,
+      });
+    }
+
     const na = s.nativeAgent;
     return {
       model: resolved.model,
+      events,
       opts: {
         ...resolved.opts,
         systemPrompt: s.systemPrompt,
@@ -89,6 +141,20 @@ export class AgentRunner {
         nearDupThreshold: na.nearDupThreshold,
         nativeRequestRetries: s.llmIdleRetries ?? 3,
         nativeRequestIdleTimeoutMs: (s.llmIdleTimeoutSec ?? 300) * 1000,
+        onUsageObserved: ({ estimated, actual }) => {
+          if (actual === undefined) return;
+          const outcome = this.modelContextStore.observeUsage(baseUrl, resolved.model, estimated, actual);
+          events.push({
+            kind: "calibration_sample",
+            model: resolved.model,
+            estimated,
+            actual,
+            ...outcome,
+          });
+        },
+        onContextError: (details) => {
+          this.modelContextStore.observeContextError(baseUrl, resolved.model, details.maxContextTokens);
+        },
       },
     };
   }
@@ -230,13 +296,30 @@ export class AgentRunner {
   }
 
   async *run(req: RunRequest): AsyncGenerator<RunEvent, void, void> {
-    const { model, opts } = this.buildOptsFor(
-      req.operation,
-      req.policyOperation,
-    );
-    const initIngestRuntime = req.operation === "init"
-      ? this.buildOptsFor("ingest")
-      : undefined;
+    let built: { model: string; opts: LlmCallOptions; events: RunEvent[] };
+    let initIngestRuntime: { model: string; opts: LlmCallOptions; events: RunEvent[] } | undefined;
+    try {
+      built = await this.buildOptsFor(req.operation, req.policyOperation, req.signal);
+      initIngestRuntime = req.operation === "init"
+        ? await this.buildOptsFor("ingest", undefined, req.signal)
+        : undefined;
+    } catch (error) {
+      // A cancellation during the context probe is a cancelled run, not a failed
+      // one: returning here leaves the terminal status to the caller's abort check.
+      if (req.signal.aborted) return;
+      throw error;
+    }
+    const { model, opts } = built;
+    // The diagnostic queues stay live for the whole run: `onUsageObserved` pushes a
+    // calibration_sample onto them while the operation is streaming.
+    const diagnosticQueues = initIngestRuntime
+      ? [built.events, initIngestRuntime.events]
+      : [built.events];
+    function* drainDiagnostics(): Generator<RunEvent, void, void> {
+      for (const queue of diagnosticQueues) {
+        while (queue.length > 0) yield queue.shift()!;
+      }
+    }
     const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1000;
     const connectionTimeoutMs = (this.settings.llmConnectionTimeoutSec ?? 15) * 1000;
     yield {
@@ -248,6 +331,7 @@ export class AgentRunner {
       ? ` @ ${this.settings.nativeAgent.baseUrl}`
       : "";
     yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"}${baseUrlHint}` };
+    yield* drainDiagnostics();
 
     if (req.signal.aborted) return;
 
@@ -338,7 +422,9 @@ export class AgentRunner {
             ev.runId = req.runId; // so the view's 👍/👎 buttons know which record to update
           }
           yield ev;
+          yield* drainDiagnostics();
         }
+        yield* drainDiagnostics();
         // Phases swallow AbortError silently (return instead of throw).
         // Detect silent idle abort by checking if idleCtrl fired but user didn't cancel.
         if (idleCtrl.signal.aborted && !req.signal.aborted) {

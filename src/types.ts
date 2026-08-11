@@ -586,6 +586,12 @@ export interface LlmCallOptions {
   contextWindowTokens?: number;
   /** Reports the estimate against the provider's own count so the estimator can self-correct. */
   onUsageObserved?: (sample: { estimated: number; actual?: number }) => void;
+  /**
+   * Reports a provider context rejection so the model's stored window can shrink.
+   * Structurally identical to `ContextErrorDetails` (`src/prompt-budget.ts`), spelled
+   * out here to keep `types.ts` free of an import cycle.
+   */
+  onContextError?: (details: { promptTokens?: number; maxContextTokens?: number }) => void;
   /** Provenance of the resolved budget, for the prompt_budget diagnostic event. */
   budgetTelemetry?: {
     contextWindow: number;

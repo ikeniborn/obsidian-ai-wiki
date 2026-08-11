@@ -330,6 +330,12 @@ export interface RunWithContextRepackArgs<TBuild, TResult> {
   ) => ContextRepackBuild<TBuild> | Promise<ContextRepackBuild<TBuild>>;
   execute: (value: TBuild) => TResult | Promise<TResult>;
   onEvent: (event: PromptBudgetEvent) => void;
+  /**
+   * Every provider context rejection seen inside this boundary, including the ones
+   * the repack then recovers from. A terminal `catch` never sees a recovered
+   * overflow, and that is exactly the signal the model context learns from.
+   */
+  onContextError?: (details: ContextErrorDetails) => void;
   classifyRepackError?: (error: unknown) => PromptBudgetRetryReason | undefined;
   requestBudgetsEmittedByExecute?: boolean;
   requestId?: (result?: TResult) => string | undefined;
@@ -387,6 +393,7 @@ export async function runWithContextRepack<TBuild, TResult>(
     const error = outcome.error;
     const repackSuppressed = error instanceof ContextRepackSuppressedError;
     const details = repackSuppressed ? null : classifyContextError(error);
+    if (details !== null) args.onContextError?.(details);
     const preflight = error instanceof PromptBudgetExceededError;
     const additionalRetryReason = !repackSuppressed && !preflight && details === null
       ? args.classifyRepackError?.(error)

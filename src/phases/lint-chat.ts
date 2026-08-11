@@ -317,6 +317,7 @@ export async function* runLintFixChat(
       return runWithContextRepack({
         requestBudgetsEmittedByExecute: true,
         callSite: "lint-chat.patch",
+        onContextError: opts.onContextError,
         configuredInputBudget: opts.inputBudgetTokens ?? 16_384,
         outputBudget: opts.maxTokens,
         compressionProfile: opts.semanticCompression?.profile ?? "balanced",

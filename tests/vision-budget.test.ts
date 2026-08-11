@@ -14,6 +14,7 @@ import {
   shrinkInputBudget,
 } from "../src/prompt-budget";
 import { VaultTools, type VaultAdapter } from "../src/vault-tools";
+import { stubModelContextStore } from "./model-context-stub";
 import {
   batchPdfPages,
   mergeRecognitionRecords,
@@ -266,6 +267,9 @@ test("AgentRunner keeps Chat compression out of Vision analysis messages", async
       vaultTools,
       "Vault",
       [],
+      undefined,
+      false,
+      stubModelContextStore(),
     );
 
     for await (const _event of runner.run({

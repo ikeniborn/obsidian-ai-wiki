@@ -9,12 +9,17 @@ import {
   normalizePersistedModelControls,
   parsePositiveBudgetInput,
   renderModelControlFields,
-  resolveModelCallPolicy,
+  resolveCallPolicy,
 } from "../src/model-call-policy";
 import { DEFAULT_SETTINGS, type LlmWikiPluginSettings } from "../src/types";
+import type { ModelContextRecord } from "../src/model-context";
 import { runNativeVisionModelCheck } from "../src/vision-probe";
 
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
+
+function probeRecord(): ModelContextRecord {
+  return { contextWindow: 131_072, source: "discovered", calibration: 1, samples: 0 };
+}
 const { i18nFor } = await import("../src/i18n");
 const runtimeControls = await import("../src/types") as unknown as Record<string, unknown>;
 const settingsSource = readFileSync(new URL("../src/settings.ts", import.meta.url), "utf8");
@@ -582,7 +587,7 @@ test("Vision compression override is legacy-only and ignored by Format policy", 
   settings.nativeAgent.compressionProfile = "minimum";
   assert.equal(settings.vision.compressionProfile, "maximum");
 
-  const format = resolveModelCallPolicy(settings, "format");
+  const format = resolveCallPolicy(settings, "format", probeRecord());
   assert.equal(format.policy.compression, undefined);
   assert.equal(format.opts.semanticCompression, undefined);
 });
@@ -594,7 +599,7 @@ test("Format compression fields are ignored and no compression policy is produce
   settings.nativeAgent.operations.format.compressionProfile = "maximum";
 
   normalizePersistedModelControls(settings);
-  const format = resolveModelCallPolicy(settings, "format");
+  const format = resolveCallPolicy(settings, "format", probeRecord());
   assert.equal(format.policy.compression, undefined);
   assert.equal(format.opts.semanticCompression, undefined);
 

@@ -8,7 +8,7 @@ import { VaultTools, type VaultAdapter } from "../src/vault-tools";
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 
 const { runFormat } = await import("../src/phases/format");
-const { resolveModelCallPolicy } = await import("../src/model-call-policy");
+const { resolveCallPolicy } = await import("../src/model-call-policy");
 
 function chunk(content: string): OpenAI.Chat.ChatCompletionChunk {
   return {
@@ -99,7 +99,12 @@ async function capturedFormatParams(profile: CompressionProfile): Promise<Record
   const settings = structuredClone(DEFAULT_SETTINGS);
   settings.backend = "native-agent";
   settings.nativeAgent.compressionProfile = profile;
-  const { opts } = resolveModelCallPolicy(settings, "format");
+  const { opts } = resolveCallPolicy(settings, "format", {
+    contextWindow: 131_072,
+    source: "discovered",
+    calibration: 1,
+    samples: 0,
+  });
   const vaultTools = new VaultTools(new MemoryAdapter({ "notes/source.md": original }), "/vault");
 
   for await (const event of runFormat(

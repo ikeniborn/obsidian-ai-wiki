@@ -1404,6 +1404,7 @@ async function mapChunksWithContextRepack(
     & Pick<MapperChunkWork, "splitDepth">) | undefined;
   const semanticSplitLineage: Array<Pick<SourceChunk, "startLine" | "endLine">> = [];
   return runWithContextRepack({
+    onContextError: runtime.opts?.onContextError,
     requestBudgetsEmittedByExecute: true,
     callSite: mapCallSite,
     configuredInputBudget: configuredBudget,
@@ -1678,6 +1679,7 @@ async function reduceBatch(
   const retries = policy.reducerRetries ?? 1;
   let failedReducer: { hash: string; units: EvidenceUnit[]; estimatedInputTokens: number } | undefined;
   return runWithContextRepack({
+    onContextError: runtime.opts?.onContextError,
     requestBudgetsEmittedByExecute: true,
     callSite: "ingest.evidence-reduce",
     configuredInputBudget: configuredBudget,

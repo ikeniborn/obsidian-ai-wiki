@@ -6,6 +6,7 @@ import test from "node:test";
 
 import { DEFAULT_SETTINGS, type LlmCallOptions, type LlmWikiPluginSettings, type RunEvent } from "../src/types";
 import { VaultTools, type VaultAdapter } from "../src/vault-tools";
+import { stubModelContextStore } from "./model-context-stub";
 
 const pathBrowserifyLoader = `
 export async function resolve(specifier, context, nextResolve) {
@@ -66,6 +67,9 @@ test("runner emits effective idle timeout as machine-readable run configuration"
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [],
+    undefined,
+    false,
+    stubModelContextStore(),
   );
   (runner as unknown as { runOperation: () => AsyncGenerator<RunEvent> }).runOperation =
     async function* () {};
@@ -109,6 +113,9 @@ test("desktop idle watchdog works without window timers or Node require", async 
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [],
+    undefined,
+    false,
+    stubModelContextStore(),
   );
   let enteredRunOperation!: () => void;
   const runOperationEntered = new Promise<void>((resolve) => {
@@ -173,6 +180,7 @@ test("mobile idle timers do not require Node timers", async () => {
     [],
     undefined,
     true,
+    stubModelContextStore(),
   );
   (runner as unknown as {
     runOperation: () => AsyncGenerator<RunEvent>;
@@ -213,6 +221,9 @@ test("streaming idle abort does not depend on Electron renderer timers", async (
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [],
+    undefined,
+    false,
+    stubModelContextStore(),
   );
   let enteredRunOperation!: () => void;
   const runOperationEntered = new Promise<void>((resolve) => {
@@ -272,6 +283,9 @@ test("consumer return clears the active idle timer without aborting later", asyn
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [],
+    undefined,
+    false,
+    stubModelContextStore(),
   );
   let operationSignal: AbortSignal | undefined;
   let aborts = 0;
@@ -316,6 +330,9 @@ test("operation-level idle retry does not replay WipeDomain after destructive pr
       entity_types: [],
       analyzed_sources: {},
     }],
+    undefined,
+    false,
+    stubModelContextStore(),
   );
   let calls = 0;
 
@@ -360,6 +377,9 @@ test("caught idle AbortError does not replay WipeDomain after destructive prelud
       entity_types: [],
       analyzed_sources: {},
     }],
+    undefined,
+    false,
+    stubModelContextStore(),
   );
   let calls = 0;
 
@@ -399,6 +419,9 @@ test("Claude operation-level idle retry still replays non-destructive operations
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [],
+    undefined,
+    false,
+    stubModelContextStore(),
   );
   let calls = 0;
 
@@ -434,6 +457,9 @@ test("native operation-level idle exhaustion never continues the outer runOperat
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [],
+    undefined,
+    false,
+    stubModelContextStore(),
   );
   let calls = 0;
 
@@ -468,6 +494,9 @@ test("silent idle abort after visible assistant text does not replay the operati
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [],
+    undefined,
+    false,
+    stubModelContextStore(),
   );
   let calls = 0;
 
@@ -515,6 +544,9 @@ test("thrown idle AbortError after visible assistant text does not replay the op
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [],
+    undefined,
+    false,
+    stubModelContextStore(),
   );
   let calls = 0;
 
@@ -562,7 +594,7 @@ test("thrown idle AbortError after visible assistant text does not replay the op
   assert.equal(events.some((event) => event.kind === "system" && event.message.includes("retrying")), false);
 });
 
-test("agent runner keeps non-policy options while applying resolved model policy", () => {
+test("agent runner keeps non-policy options while applying resolved model policy", async () => {
   const base = settings();
   const runner = new AgentRunner(
     { chat: { completions: { create: async () => { throw new Error("unused"); } } } } as never,
@@ -570,21 +602,26 @@ test("agent runner keeps non-policy options while applying resolved model policy
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [],
+    undefined,
+    false,
+    stubModelContextStore(),
   );
   const optsFor = runner as unknown as {
-    buildOptsFor(op: "query" | "init"): {
+    buildOptsFor(op: "query" | "init"): Promise<{
       opts: {
         inputBudgetTokens?: number;
         maxTokens?: number;
         semanticCompression?: unknown;
         jsonMode?: unknown;
       };
-    };
+    }>;
   };
 
-  const queryOpts = optsFor.buildOptsFor("query").opts;
-  assert.equal(queryOpts.inputBudgetTokens, 16_384);
-  assert.equal(queryOpts.maxTokens, 4096);
+  // No stored native budgets: both are derived from the stub's 131_072 window —
+  // 8_192 out, floor((131_072 - 8_192) * 0.9) in.
+  const queryOpts = (await optsFor.buildOptsFor("query")).opts;
+  assert.equal(queryOpts.inputBudgetTokens, 110_592);
+  assert.equal(queryOpts.maxTokens, 8192);
   assert.deepEqual(queryOpts.semanticCompression, {
     profile: "balanced",
     operation: "query",
@@ -600,19 +637,22 @@ test("agent runner keeps non-policy options while applying resolved model policy
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [],
+    undefined,
+    false,
+    stubModelContextStore(),
   );
   const perOpOptsFor = perOpRunner as unknown as {
-    buildOptsFor(op: "init"): {
+    buildOptsFor(op: "init"): Promise<{
       opts: {
         inputBudgetTokens?: number;
         maxTokens?: number;
         semanticCompression?: unknown;
         jsonMode?: unknown;
       };
-    };
+    }>;
   };
 
-  const initOpts = perOpOptsFor.buildOptsFor("init").opts;
+  const initOpts = (await perOpOptsFor.buildOptsFor("init")).opts;
   assert.equal(initOpts.inputBudgetTokens, 12_000);
   assert.equal(initOpts.maxTokens, 8192);
   assert.deepEqual(initOpts.semanticCompression, {
@@ -629,17 +669,20 @@ test("agent runner keeps non-policy options while applying resolved model policy
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [],
+    undefined,
+    false,
+    stubModelContextStore(),
   );
   const claudeOptsFor = claudeRunner as unknown as {
-    buildOptsFor(op: "query"): {
+    buildOptsFor(op: "query"): Promise<{
       opts: {
         inputBudgetTokens?: number;
         maxTokens?: number;
       };
-    };
+    }>;
   };
 
-  const claudeOpts = claudeOptsFor.buildOptsFor("query").opts;
+  const claudeOpts = (await claudeOptsFor.buildOptsFor("query")).opts;
   assert.equal(claudeOpts.inputBudgetTokens, 16_384);
   assert.equal(claudeOpts.maxTokens, undefined);
 });
@@ -667,6 +710,9 @@ test("agent runner resolves a separate ingest runtime for init child work", asyn
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [],
+    undefined,
+    false,
+    stubModelContextStore(),
   );
   let childRuntime: { model: string; opts: LlmCallOptions } | undefined;
   (runner as unknown as {
@@ -689,7 +735,6 @@ test("agent runner resolves a separate ingest runtime for init child work", asyn
   assert.equal(childRuntime?.opts.inputBudgetTokens, 65_536);
   assert.equal(childRuntime?.opts.repairInputBudgetTokens, 65_536);
   assert.equal(childRuntime?.opts.maxTokens, 16_384);
-  assert.equal(childRuntime?.opts.outputRetryBudgetTokens, 65_536);
 });
 
 test("agent runner inherits global runtime for both init stages when per-operation settings are off", async () => {
@@ -705,6 +750,9 @@ test("agent runner inherits global runtime for both init stages when per-operati
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [],
+    undefined,
+    false,
+    stubModelContextStore(),
   );
   let parentModel: unknown;
   let parentOpts: LlmCallOptions | undefined;
@@ -731,9 +779,9 @@ test("agent runner inherits global runtime for both init stages when per-operati
   assert.equal(childRuntime?.model, "global-model");
   for (const opts of [parentOpts, childRuntime?.opts]) {
     assert.equal(opts?.inputBudgetTokens, 24_000);
-    assert.equal(opts?.repairInputBudgetTokens, 48_000);
+    // A stored repair budget may not exceed the input budget it repairs.
+    assert.equal(opts?.repairInputBudgetTokens, 24_000);
     assert.equal(opts?.maxTokens, 12_000);
-    assert.equal(opts?.outputRetryBudgetTokens, 12_000);
   }
 });
 
@@ -746,6 +794,9 @@ test("llm lifecycle progress does not reset the semantic idle watchdog", async (
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [],
+    undefined,
+    false,
+    stubModelContextStore(),
   );
   (runner as unknown as {
     runOperation: (req: { signal: AbortSignal }) => AsyncGenerator<RunEvent>;
@@ -801,6 +852,9 @@ test("non-empty assistant reasoning resets the semantic idle watchdog", async ()
     new VaultTools(adapter(), "/vault"),
     "Vault",
     [],
+    undefined,
+    false,
+    stubModelContextStore(),
   );
   (runner as unknown as {
     runOperation: () => AsyncGenerator<RunEvent>;
