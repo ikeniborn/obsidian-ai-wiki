@@ -1,81 +1,63 @@
 ---
 review:
-  spec_hash: eaf96ca6b05732dd
+  spec_hash: 4116006016a989c1
   last_run: 2026-08-11
+  revision: 2
   phases:
     structure: { status: passed }
     coverage: { status: passed }
     clarity: { status: passed }
     consistency: { status: passed }
   findings:
-    - id: F-001
-      phase: coverage
-      severity: WARNING
-      section: 4. Components
-      section_hash: 885066639d44d89a
-      fragment: "settings.ts, i18n.ts | budget fields move to Advanced"
-      text: "The accepted scope item \"keep compressionProfile, it is semantics not arithmetic\" was not reflected anywhere in the spec."
-      fix: "State in 4.4 that Compression profile stays in the main settings section."
-      verdict: fixed
-      verdict_at: 2026-08-11
-    - id: F-002
-      phase: coverage
-      severity: WARNING
-      section: Acceptance (from intent)
-      section_hash: d0c7f297bc8a24dc
-      fragment: "Two clauses above say \"truncated with an explicit marker\""
-      text: "Overstated: Desired Outcome 3 already permits \"or split across calls\", so only the \"Done when\" clause diverges."
-      fix: "Narrow the note to the \"Done when\" clause and say how result reconciliation should treat the substitution."
-      verdict: fixed
-      verdict_at: 2026-08-11
-    - id: F-003
-      phase: clarity
+    - id: F-006
+      phase: consistency
       severity: CRITICAL
-      section: 3. Architecture
-      section_hash: 626bea9a0cb327da
-      fragment: "inputBudget = override ?? floor((contextWindow - outputReserve) x SAFETY)"
-      text: "Circular definition: outputReserve was defined as outputBudget, outputBudget depended on inputBudget, and inputBudget depended on outputReserve. The formulas were not computable."
-      fix: "Order the formulas explicitly and drop outputReserve in favour of outputBudget, which is resolved first."
+      section: 3. Budget arithmetic
+      section_hash: 3d1dc8c66d8f1a8e
+      fragment: "outputBudget = min(outputBase x operationMultiplier(op), contextWindow - 1)"
+      text: "Revision 2 draft: clamping the output budget to contextWindow - 1 leaves nothing for the input at a small window. At the 8192 fallback the formula yields output 8191 and input 0, contradicting the 3686 stated two paragraphs later."
+      fix: "Clamp the output budget to OUTPUT_MAX_SHARE of the window and add worked examples so the formulas are checkable."
       verdict: fixed
       verdict_at: 2026-08-11
-    - id: F-004
-      phase: clarity
+    - id: F-007
+      phase: consistency
       severity: WARNING
-      section: 2. Approach decisions
-      section_hash: c16ec83985780158
-      fragment: "with a short timeout"
-      text: "The probe timeout was the only constant left unquantified after the other constants were pinned."
-      fix: "Pin it to 2000 ms in the constants table and in 2.2."
+      section: 5. Data flow
+      section_hash: ba8c089760a17928
+      fragment: "input 110479, output 8192"
+      text: "Revision 2 draft: the worked value was wrong. floor((131072 - 8192) x 0.9) is 110592, not 110479."
+      fix: "Correct the example in 5.1 and add the worked-example table to section 3."
       verdict: fixed
       verdict_at: 2026-08-11
-    - id: F-005
-      phase: clarity
+    - id: F-008
+      phase: consistency
       severity: INFO
-      section: 3. Architecture
-      section_hash: 626bea9a0cb327da
-      fragment: "ModelContext store"
-      text: "One entity carried three names: \"ModelContext store\", \"ModelContextStore\", \"model context cache\"."
-      fix: "Use ModelContextStore throughout."
+      section: 6. Error handling
+      section_hash: b2e7f373f52a2688
+      fragment: "Three new events in `agent.jsonl`"
+      text: "Revision 2 draft: four events are listed, not three; evidence_split was added without updating the count."
+      fix: "Say four."
       verdict: fixed
       verdict_at: 2026-08-11
 chain:
   intent:
     path: docs/superpowers/intents/2026-08-11-prompt-budget-automation-intent.md
-    hash: 77a5215b67e1d735
+    hash: 56cb5d606560c990
 ---
 
 # Design: prompt-budget-automation
 
 **Date:** 2026-08-11
-**Intent:** `docs/superpowers/intents/2026-08-11-prompt-budget-automation-intent.md` (Status: approved)
+**Revision:** 2 — rewritten after a review found eleven defects in revision 1; see §9.
+**Intent:** `docs/superpowers/intents/2026-08-11-prompt-budget-automation-intent.md` (Status: approved, `intent_hash: 56cb5d606560c990`)
 
 ## 1. Problem
 
 The prompt budget is not measured in tokens. `estimatePreparedMessages`
-(`src/prompt-budget.ts:75`) returns the UTF-8 byte length of
-`JSON.stringify(messages)`, and `estimateTokens` (`src/markdown-chunks.ts:186`) is the same
-byte count. Payloads are serialized twice — once into a message `content`, once again for
-estimation — so every quote is escaped twice.
+(`src/prompt-budget.ts:75`) returns the UTF-8 byte length of `JSON.stringify(messages)`, and
+`estimateTokens` (`src/markdown-chunks.ts:186`) is the same byte count. Payloads are
+serialized twice — once into a message `content`, once again for estimation — so every quote
+is escaped twice.
 
 Measured against the provider's reported `inputTokens` in `agent.jsonl`, the estimate
 overshoots by 3.6–4.1×:
@@ -97,16 +79,22 @@ model's context size: `grep context_length` matches only the error parser.
 budget, leaving 5276 for the bootstrap payload (`src/phases/init.ts:237`).
 `boundBootstrapPayload` (`src/phases/ingest-evidence.ts:139`) keeps at least one candidate,
 one fact and one `exactSource` entry and never truncates strings, so it cannot converge below
-the size of one `exactSource[].text`. `runWithContextRepack` rethrows a preflight budget error
-without repacking (`src/prompt-budget.ts:428`), producing
+the size of one candidate. `runWithContextRepack` rethrows a preflight budget error without
+repacking (`src/prompt-budget.ts:428`), producing
 `init: configuration error — ... domain was not created.`
 
 **1.3 The chunk budget and the payload budget are computed independently.** Chunk size is
 bounded by `policy.inputBudgetTokens` (`src/phases/ingest-evidence.ts:983`,
 `findLargestFeasibleBudget(1, 16384, ...)`) — up to ~16k. The bootstrap payload budget is
-`inputBudgetTokens − fixedInitPrompt` ≈ 5276. An `exactSource` range is bounded by its chunk
-(`assertLocalRange`), so a single range can legally be three times larger than the payload
-budget. This mismatch is the root cause of the unreachable floor in 1.2.
+`inputBudgetTokens − fixedInitPrompt` ≈ 5276.
+
+Bounding the chunk is not by itself enough, because a candidate is not chunk-scoped. Evidence
+packets are grouped by `entityKey` and reduced: `reduceUntilBounded`
+(`src/phases/ingest-evidence.ts:480-513`) and `dedupeVerifiedEvidencePackets`
+(`src/phases/ingest-evidence.ts:369-374`) concatenate `facts` and `exactSource` across **every
+chunk that mentions the entity**. One candidate can therefore aggregate ranges from many
+chunks and exceed any per-chunk bound. The design must bound the evidence unit, not the chunk
+alone.
 
 **1.4 The output ceiling equals the output budget.** `outputRetryOptions`
 (`src/phases/structured-output.ts:399`) grows `maxTokens` by 1.5× up to
@@ -141,9 +129,16 @@ Neither cl100k nor a fixed coefficient predicts the target model's BPE. The prov
 count is available on every call: `usage.prompt_tokens` is already parsed and logged. The
 design therefore measures instead of guessing.
 
-Coefficients are calibrated against the provider's own numbers. The same four log entries
-give the payload ratio directly, because the system message is identical (4181 chars) in all
-four requests:
+Static coefficients are only the seed. The provider's own numbers close the loop: after every
+call the estimate is compared against the reported `inputTokens`, and the resulting factor is
+applied to **every subsequent estimate** — packing, preflight and telemetry alike. Because the
+factor is applied rather than merely recorded, the starting coefficients need only be in the
+right neighbourhood; they are not a source of truth.
+
+Seed coefficients: Cyrillic ÷2, Latin and punctuation ÷3.5, CJK ×1, plus a fixed per-message
+allowance for role and separators. Their calibration target is derived from the four log
+entries, where the system message is identical (4181 chars) in all four requests, so the
+differences isolate the payload ratio:
 
 ```
 msg2 − msg1:  614 tokens over 1907 chars = 3.11 chars/token
@@ -151,144 +146,168 @@ msg2 − msg3: 2572 tokens over 6672 chars = 2.59
 msg1 − msg3: 1958 tokens over 4765 chars = 2.43
 ```
 
-Starting coefficients: Cyrillic ÷2, Latin and punctuation ÷3.5, CJK ×1, plus a fixed
-per-message allowance for role and separators. A runtime correction factor per
-`(baseUrl, model)` converges the estimate to the provider's own accounting within a few
-calls.
+### 2.2 Context window: lazy probe, cached, model-scoped
 
-### 2.2 Context window: lazy probe, cached
+One probe per `(baseUrl, model)`, hardened against four failure modes the first revision
+missed:
 
-`GET /v1/models`, then Ollama's `POST /api/show`, then a per-backend constant. One probe per
-`(baseUrl, model)` with a 2000 ms timeout; the result is persisted. Any probe failure falls
-through silently — it is not an error. Rejected: probing upward by deliberately provoking
-provider rejections, which conflicts with the intent's zero-unrecovered-overflow metric.
+- **Model scoping.** `/v1/models` returns a list. The probe selects the entry whose `id`
+  equals the configured model and reads the context length from that entry only. A context
+  length found under a different model's entry is ignored — using it would produce a
+  confidently wrong window and real overflows. If no entry matches by `id`, the probe treats
+  the endpoint as having no answer.
+- **Concurrency.** Several operations can start at once. The store keeps one in-flight promise
+  per key, so concurrent callers share a single probe.
+- **Cancellation and deadline.** The caller's `AbortSignal` propagates into the probe, and the
+  2000 ms budget is a deadline shared across both endpoints, not 2000 ms per endpoint.
+- **Fallback staleness.** A `default` record is cached with an expiry, so a provider that was
+  merely unreachable at first use is re-probed later instead of being permanently pinned to
+  the fallback. `discovered` and `learned` records do not expire.
 
-### 2.3 Migration: clear default-valued budgets only
+Endpoint order: `GET /v1/models`, then Ollama's `POST /api/show`, then the backend constant.
+Any probe failure falls through silently — it is not an error.
 
-A stored value exactly equal to the old default (`inputBudgetTokens` 16384,
-`repairInputBudgetTokens` 65536, the per-operation `maxTokens` defaults) was written by the
-plugin, not chosen by the user. It is cleared, enabling automatic budgeting. Any other value
-is a deliberate choice and is preserved as an explicit override. One-shot, guarded by
-`migrated_auto_budget` in `local.json`, recorded in `agent.jsonl`.
+Rejected: probing upward by deliberately provoking provider rejections, which conflicts with
+the intent's zero-unrecovered-overflow metric.
 
-Without this, every existing installation would keep 16384 forever and the defect would
-persist unchanged.
+### 2.3 Migration: ask once, rewrite nothing without an answer
 
-### 2.4 Oversized payload: split across calls, not truncation
+The origin of a stored value cannot be determined: `16384` may be an untouched default or a
+number the user typed. Revision 1 cleared it on that guess, which violated the intent's hard
+constraint against rewriting user values.
 
-When the bootstrap payload exceeds its budget, candidates are split into K groups and the
-results merged. Nothing is discarded.
+Instead, on the first load after the upgrade, an installation that still holds any native
+budget value is shown one notice with two actions — switch to automatic, or keep the saved
+numbers. Whatever the answer, `migrated_auto_budget` is set in `local.json` and the question
+is never asked again. Declining leaves every value in place as an explicit override.
 
-Splitting alone does not cover a single `exactSource[].text` larger than the budget, because
-a one-candidate group cannot be divided further. That case is removed structurally by 2.5
-rather than by truncation, so no content is ever truncated.
+A fresh installation has no stored values, so it is automatic with no prompt.
 
-### 2.5 Chunk budget bound to the payload budget
+### 2.4 Oversized payload: split at evidence-unit granularity
 
-Chunk size is bounded by `min(mapper request budget, bootstrap payload budget)` instead of
-the raw input budget. An `exactSource` range is bounded by its chunk, so a single range
-always fits the payload budget by construction — this closes defect 1.3 and makes the
-`boundBootstrapPayload` floor reachable.
+When the bootstrap payload exceeds its budget, it is split into K groups and the results
+merged. Nothing is discarded.
+
+Splitting whole candidates is not sufficient, because §1.3 shows one candidate can aggregate
+evidence from many chunks. The split therefore descends one level: a candidate that does not
+fit alone is divided into sub-candidates that share its `entityKey` and carry disjoint subsets
+of its `facts` and `exactSource`. The same entity may appear in several groups with different
+evidence.
+
+This is safe because the bootstrap call produces a domain-level result — entity types, themes
+and language notes — and the merge (§5.2) unions entity types across groups. A group seeing
+part of an entity's evidence still contributes the same entity type.
+
+The residual case, one evidence unit larger than the budget, is removed structurally by §2.5.
+
+### 2.5 Chunk budget bound to the payload budget minus group overhead
+
+Chunk size is bounded by `min(mapper request budget, payloadBudget − groupOverhead)` instead
+of the raw input budget, where `groupOverhead` is the estimated cost of everything a group
+carries besides its evidence: the duplicated `domainThemes` and `languageEvidence`, and the
+JSON envelope.
+
+A single `exactSource` range is produced inside one chunk (`assertLocalRange`), so its text is
+bounded by the chunk size. With the chunk bounded by the payload budget net of overhead, one
+evidence unit — one fact plus one range — always fits a group by construction. Combined with
+§2.4, no content is ever truncated.
 
 This moves chunk boundaries. Existing domains are not re-indexed automatically; the user
 re-runs `Init --force` manually, per the intent's hard constraint.
 
-## 3. Architecture
+### 2.6 Scope: native-agent only
 
-The budget stops being a number from settings and becomes a computed value with a recorded
-source.
+Automatic budgeting applies to `native-agent`. `claude-agent` keeps its stored defaults, its
+settings layout, its policy resolution and its transport unchanged; it inherits the honest
+token estimate and nothing else. Its context window is not discoverable — the CLI does not
+expose one — so automating it would require a hardcoded per-model table this project would
+have to maintain.
 
-```
-                    ┌──────────────────────────────────┐
-                    │  BudgetResolver                  │
-                    │  src/budget-resolver.ts          │
-                    └──────────────────────────────────┘
-                       │              │             │
-        contextWindow  │              │ calibration │  overrides
-                       ▼              ▼             ▼
-              ┌────────────────┐  ┌────────┐  ┌──────────┐
-              │ ModelContext-  │  │ Token  │  │ Settings │
-              │ Store (local)  │  │ Estim. │  │ Advanced │
-              └────────────────┘  └────────┘  └──────────┘
-                    ▲     ▲            ▲
-      probe /v1/models     │           │
-      probe /api/show      │           │
-                           │           │
-              context_length_exceeded  │
-                     (shrink)          │
-                                       │
-                        inputTokens from the provider
-                              (calibration)
-```
+## 3. Budget arithmetic
 
-Three sources of truth replace one constant:
-
-| Value | Source | Persisted to |
-|---|---|---|
-| Model context window | probe → cache → backend constant | `local.json`, event in `agent.jsonl` |
-| Estimator correction | the provider's `inputTokens` on every call | `local.json` |
-| Override | Advanced settings field, empty means automatic | `data.json` |
-
-Formulas:
-
-Evaluated strictly in this order, so no value depends on one defined after it:
+The budget stops being a number from settings and becomes a computed value whose source is
+recorded. Evaluated strictly in this order, so no value depends on one defined after it:
 
 ```
-outputBudget  = override.output ?? defaultOutput                        (1)
-inputBudget   = override.input  ?? floor((contextWindow − outputBudget) × SAFETY)   (2)
-outputCeiling = contextWindow − estimatedInput   (replaces max(local, global))      (3)
-payloadBudget = inputBudget − fixedPromptEstimate                       (4)
-chunkBudget   = min(mapperRequestBudget, payloadBudget)                 (5)
+outputBase    = override.output ?? DEFAULT_OUTPUT_BASE                                (1)
+outputBudget  = min(outputBase × operationMultiplier(op),
+                    floor(contextWindow × OUTPUT_MAX_SHARE))                           (2)
+inputBudget   = min(override.input ?? floor((contextWindow − outputBudget) × SAFETY),
+                    contextWindow)                                                     (3)
+payloadBudget = inputBudget − fixedPromptEstimate                                      (4)
+groupOverhead = estimate(domainThemes + languageEvidence + envelope)                   (5)
+chunkBudget   = min(mapperRequestBudget, payloadBudget − groupOverhead)                (6)
 ```
 
-`outputBudget` is the reserve subtracted in (2): the input budget must leave room for the
-reply it is asking for. `outputCeiling` in (3) is computed per request, after the prompt is
-packed, and is what makes `outputRetryOptions` able to grow — it is deliberately larger than
-`outputBudget`.
+Per request, after the prompt is packed and using the calibrated estimate:
 
-Constants, fixed here so the formulas are unambiguous:
+```
+outputCeiling = contextWindow − estimatedInput                                         (7)
+```
+
+`outputCeiling` is **not** part of the resolved budget object. Revision 1 stored it
+statically as `contextWindow − inputBudget`, which is a different and looser quantity. It is
+computed at the call site, immediately before dispatch, because only there is the actual
+packed prompt known. That is what gives `outputRetryOptions` real room to grow.
+
+Constants:
 
 | Constant | Value | Rationale |
 |---|---|---|
-| `SAFETY` | `0.9` | absorbs estimator error; the measured worst case is well inside 10% |
-| `defaultOutput` | `8192` | the current per-operation default for Init and Lint; unchanged in meaning |
-| `BACKEND_DEFAULT` | `16384` real tokens | the fallback when no probe answers. Four times the current effective limit, so the ≥16k desired outcome holds even with discovery unavailable, and at or below the context window of any model realistically served by this backend |
+| `SAFETY` | `0.9` | absorbs residual estimator error after calibration |
+| `DEFAULT_OUTPUT_BASE` | `8192` | the current per-operation default for Init and Lint; unchanged in meaning |
+| `operationMultiplier` | `format: 4`, everything else `1` | preserves the deliberate 32768 output allowance `format` carries today against a base of 8192 |
+| `OUTPUT_MAX_SHARE` | `0.5` | the reply may never claim more than half the window. Without this bound a small context leaves nothing for the input: at 8192 an unclamped base would take 8191 and reduce the input budget to zero |
+| `BACKEND_DEFAULT` | `8192` real tokens | the fallback when no endpoint answers. Small enough not to exceed the window of any model realistically served, so it never causes an avoidable overflow |
 | calibration window `N` | `8` samples | enough to damp a single anomalous `usage` report, short enough to follow a model swap |
-| probe timeout | `2000` ms | the probe runs once per `(baseUrl, model)`; two seconds is short enough not to be felt at operation start and long enough for a local Ollama to answer |
+| calibration clamp | `[0.5, 3.0]` | a sample outside this range indicates the provider counts `usage` differently than assumed |
+| probe deadline | `2000` ms | shared across both endpoints, once per `(baseUrl, model)` |
+| `default` record TTL | `24` hours | a provider unreachable at first use is re-probed later |
 
-`BACKEND_DEFAULT` is the intent's "conservative" constant: a single value declared in code,
-not derived at runtime.
+Worked examples, so the formulas are checkable:
 
-Two feedback loops, both partially present today:
+| contextWindow | operation | outputBudget | inputBudget |
+|---|---|---|---|
+| 131072 (discovered) | `init` | `min(8192, 65536)` = 8192 | `floor((131072−8192)×0.9)` = 110592 |
+| 131072 (discovered) | `format` | `min(32768, 65536)` = 32768 | `floor((131072−32768)×0.9)` = 88473 |
+| 8192 (fallback) | `init` | `min(8192, 4096)` = 4096 | `floor((8192−4096)×0.9)` = 3686 |
 
-- **Down:** `context_length_exceeded` → `shrinkInputBudget` → the shrunk window is written to
-  the cache as `learned`. Existing; only the cache write is new.
-- **Calibration:** after each call, `estimated` against the reported `inputTokens` yields a
-  correction factor for that model. New.
+With `BACKEND_DEFAULT` at 8192 the derived input budget is 3686 tokens — smaller than today's
+effective 4.1k. That is the intended trade: it is honest, it never overflows, and the repack
+loop plus the learned cache recover from it. The intent's ≥16k outcome is conditional on
+discovery reporting a window, which is why §2.2 hardens the probe rather than inflating the
+fallback.
 
-Unchanged: `runWithContextRepack`, `packContextUnits`, `shrinkInputBudget`,
-`classifyContextError`, `outputRetryOptions`, all twelve consumers of
-`estimatePreparedMessages` (the signature is preserved), and the `claude-agent` backend.
+Two sources are tracked separately, because the input can be automatic while the output is
+overridden and vice versa:
+
+```
+inputSource  ∈ override | discovered | learned | default
+outputSource ∈ override | default
+```
+
+Revision 1 collapsed them into one field, so an operation with any stored `maxTokens` reported
+`source: override` even when its input budget had been derived from a discovered window.
 
 ## 4. Components
 
 ### 4.1 `src/token-estimate.ts` (new) — how many tokens is this
 
 ```ts
-export function estimateText(text: string): number;
+export const MEDIA_TOKENS: number;
+export function estimateText(text: string, calibration?: number): number;
 export function estimateMessages(
   messages: readonly OpenAI.Chat.ChatCompletionMessageParam[],
   calibration?: number,
 ): number;
 ```
 
-Counts each message's `content` character by character (Cyrillic ÷2, Latin ÷3.5, CJK ×1),
-adds a fixed allowance for role and separators, adds `MEDIA_TOKENS` per `image_url` part, and
-multiplies by `calibration` (default 1.0). Pure, no I/O, no dependencies.
-
-`prompt-budget.ts::estimatePreparedMessages` becomes a thin wrapper — the signature does not
-change, so its twelve consumers are untouched. `markdown-chunks.ts::estimateTokens` moves to
-`estimateText`.
+Counts each message character by character (Cyrillic ÷2, CJK ×1, everything else ÷3.5), adds
+a flat 4 tokens per message for its role and separators, adds `MEDIA_TOKENS` per `image_url`
+part without counting the URL, and counts every other string-valued field — `name`,
+`tool_calls[].function.arguments`, `tool_call_id` — as text. That preserves the existing
+"metadata is counted" behaviour without the double-JSON inflation. The result is multiplied by
+`calibration`, default `1`. Pure, no I/O.
 
 ### 4.2 `src/model-context.ts` (new) — what is known about this model
 
@@ -296,21 +315,32 @@ change, so its twelve consumers are untouched. `markdown-chunks.ts::estimateToke
 export interface ModelContextRecord {
   contextWindow: number;
   source: "discovered" | "learned" | "default";
-  calibration: number;   // estimated → actual, moving average
+  calibration: number;   // estimated → actual, moving average over N samples
   samples: number;
+  expiresAt?: number;    // set for `default` records only
 }
 
 export interface ModelContextStore {
   get(baseUrl: string, model: string): ModelContextRecord | undefined;
-  resolve(baseUrl: string, model: string, signal: AbortSignal): Promise<ModelContextRecord>;
+  resolve(baseUrl: string, model: string, apiKey: string, signal?: AbortSignal): Promise<ModelContextRecord>;
   observeUsage(baseUrl: string, model: string, estimated: number, actual: number): void;
   observeContextError(baseUrl: string, model: string, maxContextTokens?: number): void;
 }
+
+export function probeContextWindow(
+  fetchFn: typeof fetch,
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  deadlineMs: number,
+  signal?: AbortSignal,
+): Promise<number | null>;
 ```
 
-`resolve` is lazy: cache → `GET /v1/models` → `POST /api/show` → backend constant. Persisted
-in `local.json`. Depends only on an HTTP client and the store; it knows nothing about
-prompts, phases or evidence.
+`resolve` is lazy and deduplicated: cache hit that has not expired → the in-flight promise for
+that key if one exists → a fresh probe. Persisted through an injected reader/writer pair, so
+the store has no Obsidian dependency and is testable against a plain object. It knows nothing
+about prompts, phases or evidence.
 
 ### 4.3 `src/budget-resolver.ts` (new) — how much may be spent
 
@@ -318,35 +348,52 @@ prompts, phases or evidence.
 export interface ResolvedBudget {
   inputBudgetTokens: number;
   outputBudgetTokens: number;
-  outputCeilingTokens: number;
   contextWindow: number;
-  source: "override" | "discovered" | "learned" | "default";
+  inputSource: "override" | "discovered" | "learned" | "default";
+  outputSource: "override" | "default";
   calibration: number;
 }
 
 export function resolveBudget(
   record: ModelContextRecord,
+  operation: OpKey,
   overrides: { input?: number; output?: number },
 ): ResolvedBudget;
+
+export function outputCeiling(contextWindow: number, estimatedInput: number): number;
 ```
 
-A pure function. All reserve and safety-factor arithmetic lives here and nowhere else.
+Pure functions. All reserve, multiplier and safety arithmetic lives here and nowhere else.
+`outputCeiling` is deliberately separate and takes the packed estimate, per §3 (7).
 
-`model-call-policy.ts::resolveModelCallPolicy` becomes asynchronous on this path: it reads
-the record from `ModelContextStore`, passes it to `resolveBudget`, and puts the result into
-`LlmCallOptions`. The `positiveInt(..., DEFAULT_INPUT_BUDGET)` fallbacks disappear from
-settings resolution.
+### 4.4 Runtime wiring
 
-### 4.4 Changes to existing modules
+Revision 1 referenced a `this.modelContextStore` that does not exist and assumed a
+synchronous resolution path that is not one. The real wiring:
+
+| Site | Change |
+|---|---|
+| `src/controller.ts:124` | `LocalConfigStore` is already injected. Construct one `ModelContextStore` beside it, with `read`/`write` adapters over `LocalConfig.modelContext` and a `fetchFn` from `selectNativeFetch`. |
+| `src/controller.ts:766` | Pass the store into the `AgentRunner` constructor. |
+| `src/agent-runner.ts:52` | `buildOptsFor` becomes `async`: it resolves the record, then calls `resolveModelCallPolicy`. Its two call sites (`:233`, `:238`) await it. For `claude-agent` it returns today's result unchanged and never touches the store. |
+| `src/agent-runner.ts` | After each call, feed `observeUsage`; on a classified context error, feed `observeContextError`. Without the second hook the `learned` source can never appear. |
+
+`resolveModelCallPolicy` gains a `ModelContextRecord` parameter on the native path only.
+
+### 4.5 Changes to existing modules
 
 | File | Change |
 |---|---|
-| `phases/init.ts` | pass `chunkBudget = min(mapperBudget, payloadBudget)`; remove the "configuration error / domain was not created" branch |
-| `phases/ingest-evidence.ts` | `boundBootstrapPayload` → `splitBootstrapPayload(value, budget): BootstrapEvidence[]`; add the K-way merge |
-| `phases/structured-output.ts` | take the ceiling from `outputCeilingTokens`; call `observeUsage` after each call |
-| `settings.ts`, `i18n.ts` | budget fields move to Advanced, empty means automatic; strings in ru/en/es. `Compression profile` stays where it is: it selects semantics, not arithmetic, and the user is still the right owner of that choice |
-| `types.ts` | settings budgets become `number \| undefined` |
-| `main.ts` | migration: clear values exactly equal to the old defaults, set `migrated_auto_budget` |
+| `src/prompt-budget.ts` | `estimatePreparedMessages(messages, calibration?)` delegates to `estimateMessages`. The added parameter is optional, so the twelve existing call sites keep compiling; the budget-consuming ones pass `opts.tokenCalibration`. |
+| `src/markdown-chunks.ts` | `estimateTokens` delegates to `estimateText`. |
+| `src/types.ts` | native settings budgets become optional; `LlmCallOptions` gains `tokenCalibration?: number` and `onUsageObserved?`; three new `RunEvent` kinds; `prompt_budget` gains `contextWindow`, `inputSource`, `outputSource`, `calibration`. |
+| `src/local-config.ts` | `LocalConfig` gains `modelContext` and `migrated_auto_budget`. |
+| `src/model-call-policy.ts` | native budgets come from `resolveBudget`; the `claude-agent` branch is untouched. |
+| `src/phases/structured-output.ts` | ceiling from `outputCeiling(contextWindow, estimatedInput)` computed per request; report usage back for calibration. |
+| `src/phases/ingest-evidence.ts` | `boundBootstrapPayload` → `splitBootstrapPayload` at evidence-unit granularity; `chunkBudgetTokens` in `EvidencePolicy`. |
+| `src/phases/init.ts` | bind the chunk budget net of group overhead; merge K bootstrap entries; drop the size-based hard failure. |
+| `src/settings.ts`, `src/i18n.ts` | native budget fields move to Advanced, empty means automatic; the control is always rendered; strings in ru/en/es. `Compression profile` stays where it is: it selects semantics, not arithmetic. |
+| `src/main.ts` | the one-shot upgrade notice from §2.3. |
 
 The boundary below `LlmCallOptions` does not move. Phases keep receiving
 `inputBudgetTokens: number` and do not know where it came from.
@@ -356,33 +403,37 @@ The boundary below `LlmCallOptions` does not move. Phases keep receiving
 ### 5.1 Init, end to end
 
 ```
-1. resolveModelCallPolicy(settings, "init")
-     └─ ModelContextStore.resolve(baseUrl, model)
-          cache? → GET /v1/models? → POST /api/show? → BACKEND_DEFAULT
-          ⇒ { contextWindow: 131072, source: "discovered", calibration: 1.0 }
-     └─ resolveBudget(record, overrides)
-          ⇒ input 114688, output 8192, ceiling 131072 − estimatedInput
-     └─ agent.jsonl: { kind: "budget_resolved", contextWindow, source, calibration }
+1. AgentRunner.buildOptsFor("init")                                   [async]
+     └─ ModelContextStore.resolve(baseUrl, model, apiKey, signal)
+          fresh cache? → in-flight probe? → GET /v1/models (id match)
+          → POST /api/show → BACKEND_DEFAULT (with TTL)
+          ⇒ { contextWindow: 131072, source: "discovered", calibration: 1.04 }
+     └─ resolveBudget(record, "init", overrides)
+          ⇒ input 110592, output 8192, inputSource "discovered", outputSource "default"
+     └─ agent.jsonl: { kind: "budget_resolved", operation: "init", ... }
 
 2. init.ts
-     fixedPromptEstimate = estimateMessages(system prompt + empty payload)  ≈ 2800
-     payloadBudget       = 114688 − 2800                                    ≈ 111888
-     chunkBudget         = min(mapperRequestBudget, payloadBudget)
+     fixedPromptEstimate = estimateMessages(system prompt + empty payload, calibration)
+     payloadBudget       = 110592 − fixedPromptEstimate
+     groupOverhead       = estimate(themes + languageEvidence + envelope)
+     chunkBudget         = min(mapperRequestBudget, payloadBudget − groupOverhead)
 
 3. prepareBootstrapEvidenceBundle(...)
      chunk the source by chunkBudget
-     mapper calls → evidence packets → candidates
+     mapper calls → evidence packets → candidates (aggregated per entityKey)
 
 4. splitBootstrapPayload(payload, payloadBudget) → BootstrapEvidence[]
-     fits whole → [payload]      ← normal case, today's path
-     does not   → K groups       ← fallback path
+     fits whole                → [payload]              ← normal case
+     candidate too large alone → sub-candidates by evidence unit
+     ⇒ K groups, each ≤ payloadBudget
 
 5. K × init.bootstrap → K × DomainEntry → mergeBootstrapEntries(...)
 
 6. bootstrapTaxonomyIssue(merged, FULL bootstrapEvidence)
      coverage is checked against all evidence, not against one group
 
-7. after each call: observeUsage(estimated, actual) → calibration
+7. per request: outputCeiling(contextWindow, estimatedInput) → opts.outputRetryBudgetTokens
+8. after each call: observeUsage(estimated, actual); on a context error, observeContextError
 ```
 
 ### 5.2 Merge semantics
@@ -404,15 +455,15 @@ differ from a single call.
 
 ### 5.3 Grouping
 
-Greedy, on candidate boundaries: fill a group until the estimate exceeds `payloadBudget`.
-`domainThemes` and `languageEvidence` are duplicated into every group — they are small and
-needed for the language inference. Candidate order is preserved, so group 0 always holds the
-first candidate.
+Greedy and two-level. Candidates are filled into a group in order until the estimate exceeds
+`payloadBudget`. A candidate that does not fit an empty group is divided into sub-candidates
+carrying disjoint subsets of its `facts` and `exactSource` under the same `entityKey`.
+`domainThemes` and `languageEvidence` are duplicated into every group; that duplication is
+exactly the `groupOverhead` subtracted in §3 (6).
 
-A single candidate that does not fit a group is impossible by construction after 2.5: its
-`exactSource[].text` is bounded by its chunk, and the chunk is bounded by `payloadBudget`. If
-the invariant is violated anyway it is a construction bug, not user input: raise with an
-explicit message about the chunk-budget mismatch, not about configuring a budget.
+A single evidence unit that does not fit is impossible after §2.5. If it happens anyway it is
+a construction bug, not user input: raise with an explicit message about the chunk-budget
+misalignment, naming both numbers, and never with the words "configuration error".
 
 ## 6. Error handling
 
@@ -421,12 +472,14 @@ a provider rejection after every recovery loop has run.
 
 | Situation | Behaviour | User-visible |
 |---|---|---|
-| Probe times out, fails, or 404s | next step in the chain, ending at the backend constant | no, `agent.jsonl` only |
-| Probe returns garbage | validated as an integer in 1k…2M, otherwise the constant | no |
+| Probe times out, fails, or 404s | next endpoint, then the constant with a TTL | no, `agent.jsonl` only |
+| Probe returns garbage, or no entry matches the model `id` | treated as no answer | no |
+| Concurrent operations start together | one shared in-flight probe per key | no |
+| The caller aborts during a probe | the probe aborts with it; nothing is cached | no |
 | The model behind a name is swapped for a smaller one | provider returns `context_length_exceeded` → `shrinkInputBudget` → cached as `learned` | no, self-healing |
 | `context_length_exceeded` | existing `runWithContextRepack`, up to two repacks | no, until exhausted |
 | Repack exhausted | the provider error as-is — the only acceptable size failure | yes |
-| `finish_reason=length` | `outputRetryOptions` with the real ceiling `contextWindow − estimatedInput` | no |
+| `finish_reason=length` | `outputRetryOptions` with the per-request ceiling | no |
 | Output ceiling reached and still truncated | existing structured repair, then an error | yes |
 | Provider reports no `usage` | calibration is not updated, the step is skipped | no |
 | Override exceeds the model context | clamped to the context, the clamp is logged | no |
@@ -436,7 +489,7 @@ a provider rejection after every recovery loop has run.
 Today this is `init: configuration error — fixed bootstrap prompt requires N tokens but input
 budget is M; domain was not created.` The cause was the invented budget. Once the budget is
 derived from the model's context, this genuinely means the Init system prompt is larger than
-the model's window — a 4k model, for example.
+the model's window.
 
 Following the existing pattern at `lint-chat.ts:272`, first rebuild the prompt without
 `schema_block` and re-estimate. If that still does not fit, fail with an honest message naming
@@ -452,17 +505,20 @@ diagnostics, not a reason to change behaviour.
 
 ### 6.3 Diagnostics
 
-Three new events in `agent.jsonl`; existing diagnostics are not reduced:
+Four new events in `agent.jsonl`; existing diagnostics are not reduced:
 
 ```
-budget_resolved     { contextWindow, source, calibration, samples,
-                      inputBudget, outputBudget, outputCeiling, override }
-context_probe       { baseUrl, model, endpoint, ok, ms, contextLength? }
+budget_resolved     { operation, model, contextWindow, inputSource, outputSource,
+                      calibration, samples, inputBudget, outputBudget }
+context_probe       { baseUrl, model, endpoint, ok, ms, matchedById, contextLength? }
 calibration_sample  { model, estimated, actual, ratio, applied, clamped }
+evidence_split      { callSite, groups, candidates, subdivided, payloadBudget }
 ```
 
-`prompt_budget` gains `contextWindow`, `budgetSource` and `calibration`. Sidebar text does not
-change: numbers go to the log, not the UI.
+`prompt_budget` gains `contextWindow`, `inputSource`, `outputSource` and `calibration`. It
+already carries both `estimatedInputTokens` and `actualInputTokens` on the same record, which
+is what verification correlates on — never array position across two event streams. Sidebar
+text does not change: numbers go to the log, not the UI.
 
 ## 7. Testing
 
@@ -476,9 +532,9 @@ tokens.
 
 | Class | Action | Examples |
 |---|---|---|
-| Set a budget, assert **relationships** (required packed, optional omitted, coverage complete) | leave alone; the invariant is unit-independent | most of `prompt-budget.test.ts` |
-| Set a budget, assert **absolute values** (chunk count, K calls, exact `estimatedInputTokens`) | rescale the budget constant by ÷3.5, or rewrite as a relationship | parts of `ingest-bounded.test.ts`, `format-budget.test.ts`, `query-budget.test.ts` |
-| Assert the size-related hard failure "domain was not created" | inverted: success through split is now expected | `init-bootstrap-fail-loud.test.ts` |
+| Set a budget, assert **relationships** | leave alone; the invariant is unit-independent | most of `prompt-budget.test.ts` |
+| Set a budget, assert **absolute values** | rewrite as a relationship against the same estimator, or divide the constant by 3.5 with a comment naming this change | parts of `ingest-bounded.test.ts`, `format-budget.test.ts`, `query-budget.test.ts` |
+| Assert the size-related hard failure | inverted: success through split is now expected | `init-bootstrap-fail-loud.test.ts` |
 | Settings and migrations | new cases | `settings-model-controls.test.ts`, `model-call-policy.test.ts` |
 
 When rescaling, convert the assertion to a relationship rather than tuning the constant until
@@ -486,81 +542,116 @@ it passes; otherwise the next estimator change breaks it again.
 
 ### 7.2 New tests
 
-**`token-estimate.test.ts`.** Table-driven over real repository files (`init.md`,
-`_wiki_schema.md`, a Russian source) with recorded expectations. The key case is the intent's
-health metric: the estimate is never more than 15% below the actual. Actual values come from
-recorded `(estimated, actual)` pairs, not from a live network call.
+**`token-estimate.test.ts`.** Fixtures are real recorded prompts, sanitized, not synthetic
+`"x".repeat(n)` strings — revision 1's synthetic case was itself outside the ±15% band it
+asserted. The key case is the intent's health metric: the estimate is never more than 15%
+below the provider's recorded value. Plus: calibration scales the result; image parts cost a
+flat allowance; tool-call metadata is counted.
 
-**`model-context.test.ts`.** The cache → `/v1/models` → `/api/show` → constant chain against
-mocks; garbage responses; timeouts; `observeContextError` shrinks and remembers; calibration
-as a moving average, clamped to `[0.5, 3.0]`, with anomalies discarded.
+**`model-context.test.ts`.** The probe selects by model `id` and ignores another model's
+context length; garbage and non-matching responses; the deadline is shared across endpoints;
+a caller abort cancels and caches nothing; concurrent `resolve` calls share one probe; a
+`default` record expires and is re-probed; `observeContextError` shrinks and marks `learned`;
+calibration is a clamped moving average that discards anomalies.
 
-**`budget-resolver.test.ts`.** Pure functions: the formulas, override handling, clamping an
-override to the context window, and `outputCeiling > outputBudget` — a regression test for the
-current defect where the ceiling equals the value it is meant to raise.
+**`budget-resolver.test.ts`.** Formula order; `format` receives 4× the base output; an
+override is clamped to the context window; `inputSource` and `outputSource` move
+independently; `outputCeiling(contextWindow, estimatedInput)` exceeds the output budget — the
+regression test for §1.4.
 
 **Split and merge**, in `ingest-evidence.test.ts` and the `init-*` suites. The central case is
 equivalence: on the same evidence, the merged result of K calls equals the result of a single
-call. Plus a forced K ≥ 3 through an artificially small context, an `id` conflict between
-groups, and taxonomy coverage checked against the full evidence.
+call. Plus a candidate aggregating ranges from several chunks that must be subdivided, a
+forced K ≥ 3, an `id` conflict between groups, and taxonomy coverage checked against the full
+evidence.
 
-**Migration.** Values exactly equal to the old defaults are cleared; 24 000 is preserved;
-`migrated_auto_budget` is set once; a second run is a no-op.
+**Chunk budget binding.** An invariant test over a source whose entity spans many chunks: no
+resulting evidence unit exceeds `payloadBudget − groupOverhead`.
 
-**Chunk budget binding.** An invariant test: for any source, no `exactSource[].text` exceeds
-`payloadBudget`. This is what makes split sufficient and truncation unnecessary.
+**Migration.** The notice appears once when a stored value exists; accepting clears the native
+budgets; declining leaves them; `migrated_auto_budget` is set either way; a second load is
+silent; `claude-agent` values are untouched in both branches.
+
+**Settings rendering.** The control renders when the value is `undefined`, its placeholder
+shows the resolved automatic value, and clearing it deletes the property rather than keeping
+the previous number — the guard at `src/settings.ts:355` returns early today and must go.
 
 ### 7.3 Baselines for the health metrics
 
-The intent's metrics require "no worse than before", so a baseline must be captured and
-committed before any change: LLM calls per operation and create/update decisions on
-`bounded-operations-acceptance` and `ingest-bounded`. Without a recorded baseline the metric
-is unverifiable.
+Captured before any change and committed: the full-suite pass/fail counts, and LLM call counts
+**per operation and `callSite`**, not one total per fixture. A single total cannot show that
+Init got cheaper while Ingest got more expensive.
 
 ### 7.4 Live verification
 
-The intent's "Done when" requires a real run: `init os-mac --force --sources ОС/Mac/` on the
-user's vault, checking `status: ok` in the history and the estimate-to-actual gap in
-`agent.jsonl`. Automated tests do not replace this.
+The intent's "Done when" requires a real run. Four distinct checks, none of which substitutes
+for another:
 
-## Acceptance (from intent)
+1. `init os-mac --force --sources ОС/Mac/` ends with history `status: done`.
+2. Estimate against actual, read from single `prompt_budget` records that carry both fields,
+   within 15%.
+3. An oversized-evidence scenario produces `evidence_split` and a created domain, with no
+   content discarded.
+4. A provider context-overflow is recovered by the repack loop without surfacing — this is a
+   separate scenario from check 2, which measures the estimator and proves nothing about
+   recovery.
+
+## 8. Acceptance (from intent)
 
 ### Desired Outcomes
 
 - Init `os-mac --force --sources ОС/Mac/` on the same vault completes successfully and the
-  domain is created; the `data.json` history entry reports `ok`, not `error`.
+  domain is created; the `data.json` history entry reports `done`, not `error`.
 - In `agent.jsonl`, `estimatedInputTokens` differs from the provider's reported
   `inputTokens` by no more than ~15% (currently a factor of ~4).
 - No Init or Ingest run ends with `configuration error — ... domain was not created` because
   of input size. A long `exactSource[].text` is truncated with an explicit marker or split
   across calls, and the domain is created.
-- The main Settings section no longer shows `Input budget tokens` or `Repair input budget`.
-  Both live under Advanced and are empty by default, meaning automatic. Previously saved
-  values keep working as an explicit override.
-- On a model with a 128k context window the effective input budget for Init is at least 4×
-  the current 16384-byte-derived limit — that is, ≥16k real tokens — and `agent.jsonl`
-  records which source produced that boundary: discovery, a learned value, or the fallback
-  default. It is never the constant 16384.
+- The main Settings section no longer shows `Input budget tokens`, `Repair input budget` or
+  `Output budget tokens` for the native backend. All three live under Advanced and are empty
+  by default, meaning automatic. Previously saved values keep working as an explicit override.
+- On first load after the upgrade, an installation that still holds budget values is offered
+  a single explicit choice — switch to automatic, or keep the saved numbers. Nothing is
+  rewritten without that answer, and the choice is asked once.
+- When discovery reports a context window, the effective input budget for Init is at least 4×
+  the current 16384-byte-derived limit — that is, ≥16k real tokens. When no endpoint reports
+  a window, the conservative fallback applies instead and the budget is smaller; that is a
+  correct outcome, not a failure. In both cases `agent.jsonl` records which source produced
+  the boundary: discovery, a learned value, or the fallback default. It is never the constant
+  16384.
 - A truncated generation (`finish_reason=length`) triggers a retry with a larger output
   limit instead of a `structural_error / schema_validate` failure.
 
 ### Done when
 
-`init os-mac --force --sources ОС/Mac/` on the real vault finishes with `status: ok`;
-`agent.jsonl` shows the input estimate within 15% of the provider's reported value; the main
-Settings section contains no budget fields; and a reproduced long `exactSource` scenario
-creates the domain with the truncation recorded in the log.
+`init os-mac --force --sources ОС/Mac/` on the real vault finishes with `status: done`;
+`agent.jsonl` shows the input estimate within 15% of the provider's reported value, correlated
+per request rather than by array position; the main Settings section contains no native budget
+fields; a reproduced oversized-evidence scenario creates the domain with the split recorded in
+the log and no content discarded; and a reproduced provider context-overflow is recovered by
+the repack loop without surfacing to the user.
 
-### Note on the "Done when" wording
+### Note on the truncation wording
 
-Desired Outcome 3 already allows either resolution — "truncated with an explicit marker **or
-split across calls**" — so the design satisfies it directly through section 2.4.
+Desired Outcome 3 allows either resolution — "truncated with an explicit marker **or split
+across calls**" — and the design takes the split branch, so no content is truncated. Result
+reconciliation should accept an `evidence_split` record where a truncation marker is
+mentioned.
 
-One clause does diverge: "Done when" says the reproduced long-`exactSource` scenario creates
-the domain "with the truncation recorded in the log". Sections 2.4 and 2.5 remove truncation
-entirely — splitting carries no data loss, and the oversized-single-range case is eliminated
-structurally rather than by cutting content. The observable requirement, that the domain is
-created instead of the run failing on size, is met more strongly than the intent asked. The
-corresponding verification records a `split` event where the intent expected a truncation
-marker; result reconciliation should accept that substitution rather than treat it as a
-missing outcome.
+## 9. What revision 1 got wrong
+
+Recorded so the same mistakes are not reintroduced.
+
+| # | Defect | Fixed in |
+|---|---|---|
+| 1 | Migration cleared values whose origin cannot be determined, violating a hard constraint | §2.3 |
+| 2 | The fallback could not deliver the ≥16k input budget the spec claimed: `floor((16384−8192)×0.9)` is 7372 | §3, and the intent's outcome is now conditional |
+| 3 | `maxTokens` was kept while the spec said to clear it, so every budget reported `source: override` | §3, split into `inputSource` and `outputSource` |
+| 4 | The calibration factor was stored but never applied to any estimate | §2.1, §4.1, §4.5 |
+| 5 | Runtime wiring referenced a store that does not exist, and a sync path that is async | §4.4 |
+| 6 | "One candidate always fits" was false: candidates aggregate evidence across chunks | §1.3, §2.4, §2.5 |
+| 7 | The output ceiling was static, not per-request as the spec required | §3 (7), §4.3 |
+| 8 | Empty settings fields would vanish rather than show as automatic | §4.5, §7.2 |
+| 9 | `claude-agent` was in fact modified, against a hard constraint | §2.6 |
+| 10 | The probe could adopt another model's context window | §2.2 |
+| 11 | Verification correlated two event streams by array position and expected an impossible status value | §6.3, §7.4 |
