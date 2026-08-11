@@ -61,9 +61,13 @@ export interface NativeProbeFetchOptions {
 /**
  * The transport for a context-window probe. It makes the same route decision this
  * factory makes for completions against the same base URL — mobile host, proxy, or
- * direct desktop, with the no-proxy bypass honoured — so a probe never travels a
- * route the completion would not. It is pinned to the direct desktop route rather
- * than the hybrid one because a probe is a plain non-streaming GET/POST.
+ * desktop hybrid, with the no-proxy bypass honoured — so a probe never travels a
+ * route the completion would not. `preferDesktopHostForNonStream` matches what
+ * `createNativeOpenAiFetch` passes with diagnostics off, which sends every
+ * non-streaming request (a probe is one) through the Obsidian host fetch. Taking the
+ * direct route instead would let a probe fail where the completion succeeds — under
+ * corporate TLS interception or a custom certificate store — and cache the 8_192
+ * default window for a day off the back of it.
  */
 export function createNativeProbeFetch(options: NativeProbeFetchOptions): typeof fetch {
   let proxyFetch: typeof fetch | null = null;
@@ -80,7 +84,7 @@ export function createNativeProbeFetch(options: NativeProbeFetchOptions): typeof
     mobileFetch: options.mobileFetch,
     proxyFetch,
     directDesktopFetch: () => createDirectDesktopFetch(options.connectionTimeoutMs),
-    preferDesktopHostForNonStream: false,
+    preferDesktopHostForNonStream: true,
   });
 }
 

@@ -240,6 +240,73 @@ test("a provider context rejection inside the repack shrinks the stored window",
   assert.equal(record?.source, "learned");
 });
 
+test("a context rejection without a token count leaves the stored window alone", async () => {
+  const store = storeWith(modelsFetch());
+  const instance = runner(nativeSettings(), store);
+  captureOperation(instance, async (opts) => {
+    // Classified by error CODE alone, so it carries no numbers: it says the
+    // prompt was too big, not how big the window is. runWithContextRepack calls
+    // onContextError once per attempt, which is where a guess would compound.
+    await assert.rejects(runWithContextRepack({
+      callSite: "query.answer",
+      configuredInputBudget: 4_000,
+      compressionProfile: "balanced",
+      onContextError: opts.onContextError,
+      build: () => ({ value: null, estimatedInputTokens: 10, contextUnits: 1 }),
+      execute: () => {
+        throw Object.assign(new Error("context length exceeded"), { code: "context_length_exceeded" });
+      },
+      onEvent: () => {},
+    }));
+  });
+
+  await drain(instance.run(runRequest()));
+
+  const record = store.get("http://host/v1", "global-model");
+  assert.equal(record?.contextWindow, 131_072);
+  assert.equal(record?.source, "discovered");
+});
+
+test("a cache write failure does not fail the run", async () => {
+  const store = new ModelContextStore({
+    read: async () => ({}),
+    write: async () => { throw new Error("disk full"); },
+    fetchFn: modelsFetch(),
+  });
+  const instance = runner(nativeSettings(), store);
+  const captured = captureOperation(instance);
+
+  const events = await drain(instance.run(runRequest()));
+
+  assert.equal(events.some((event) => event.kind === "error"), false);
+  assert.equal(events.at(-1)?.kind, "result");
+  assert.equal(captured.opts?.contextWindowTokens, 131_072);
+});
+
+test("the probe takes the route a non-streaming completion takes", async () => {
+  const { createNativeProbeFetch } = await import("../src/native-openai-client");
+  const hostCalls: string[] = [];
+  const hostFetch = (async (input: string | URL | Request) => {
+    hostCalls.push(String(input));
+    return json({ data: [] });
+  }) as typeof fetch;
+  const probe = createNativeProbeFetch({
+    baseURL: "http://host/v1",
+    isMobile: false,
+    proxyConfig: { enabled: false, url: "" },
+    mobileFetch: hostFetch,
+    connectionTimeoutMs: 15_000,
+  });
+
+  await probe("http://host/v1/models", { method: "GET" });
+  await probe("http://host/api/show", { method: "POST", body: JSON.stringify({ model: "m1" }) });
+
+  // Desktop without a proxy answers non-streaming requests through the Obsidian
+  // host fetch; a probe that took the direct route instead could fail where the
+  // completion succeeds and cache the 8_192 default off the back of it.
+  assert.deepEqual(hostCalls, ["http://host/v1/models", "http://host/api/show"]);
+});
+
 test("the claude-agent path never consults the model context store", async () => {
   const settings = structuredClone(DEFAULT_SETTINGS);
   settings.backend = "claude-agent";

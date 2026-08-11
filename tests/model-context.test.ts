@@ -132,6 +132,40 @@ test("a context error shrinks the window and marks it learned", async () => {
   assert.equal(record.source, "learned");
 });
 
+test("a context error without a token count never shrinks the window", async () => {
+  const store = storeWith(
+    { "http://x/v1::m1": { contextWindow: 131_072, source: "discovered", calibration: 1, samples: 0 } },
+    (async () => json({})) as typeof fetch,
+  );
+  await store.resolve("http://x/v1", "m1", "", 0);
+
+  // The callback fires once per failed attempt and once per repack boundary. A
+  // -25% guess would compound to 55_112 after four of them, permanently, because
+  // a learned record never expires and nothing raises it again.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    store.observeContextError("http://x/v1", "m1", undefined);
+    store.observeContextError("http://x/v1", "m1", 0);
+  }
+
+  const record = store.get("http://x/v1", "m1")!;
+  assert.equal(record.contextWindow, 131_072);
+  assert.equal(record.source, "discovered");
+});
+
+test("a cache write failure while resolving does not fail the caller", async () => {
+  const store = new ModelContextStore({
+    read: async () => ({}),
+    write: async () => { throw new Error("disk full"); },
+    fetchFn: (async () => json({ data: [{ id: "m1", context_length: 40_960 }] })) as typeof fetch,
+  });
+
+  const record = await store.resolve("http://x/v1", "m1", "", 0);
+
+  assert.equal(record.contextWindow, 40_960);
+  assert.equal(record.source, "discovered");
+  assert.equal(store.get("http://x/v1", "m1")?.contextWindow, 40_960);
+});
+
 test("a persistence failure after observeUsage does not surface as an unhandled rejection", async () => {
   const store = new ModelContextStore({
     read: async () => ({

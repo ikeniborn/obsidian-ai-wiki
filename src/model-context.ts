@@ -220,7 +220,12 @@ export class ModelContextStore {
             samples: cached?.samples ?? 0,
           };
       this.cache![key] = record;
-      await this.deps.write(this.cache!);
+      // Best-effort, like observeUsage and observeContextError: the record is
+      // already live in memory, so a failed cache write costs one probe on the
+      // next session. It must never fail the run that asked for the record.
+      try {
+        await this.deps.write(this.cache!);
+      } catch { /* the in-memory record stands */ }
       return record;
     })().finally(() => this.inFlight.delete(key));
 
@@ -261,8 +266,15 @@ export class ModelContextStore {
   observeContextError(baseUrl: string, model: string, maxContextTokens?: number): void {
     const record = this.get(baseUrl, model);
     if (!record) return;
-    const next = plausible(maxContextTokens) ?? Math.floor(record.contextWindow * 0.75);
-    if (next >= record.contextWindow) return;
+    // ONLY a window the provider actually reported is learned. A rejection that
+    // carries no token count (an error code alone) says the prompt was too big,
+    // not how big the window is, and guessing -25% here would compound: the
+    // callback fires per failed attempt and per repack boundary, `learned`
+    // records never expire, and nothing raises the window again. The in-run
+    // repack already shrinks the effective input budget for such a failure, so
+    // the operation still recovers — only the durable cache stops guessing.
+    const next = plausible(maxContextTokens);
+    if (next === null || next >= record.contextWindow) return;
     record.contextWindow = Math.max(MIN_PLAUSIBLE_CONTEXT, next);
     record.source = "learned";
     delete record.expiresAt;
