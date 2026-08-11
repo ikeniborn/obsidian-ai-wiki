@@ -102,7 +102,7 @@ import {
   type SynthesisPageDescription,
   type SynthesisPathPolicy,
 } from "./ingest-synthesis";
-import type { SynthesisAction, SynthesisOutput } from "./zod-schemas";
+import { EntityEvidenceSchema, type SynthesisAction, type SynthesisOutput } from "./zod-schemas";
 import {
   assignSynthesisEvidenceLedger,
   extractSynthesisEvidenceLedger,
@@ -687,6 +687,40 @@ export async function collectSourceStems(
   return stems;
 }
 
+export interface PreparedIngestEvidence {
+  domainId: string;
+  sourcePath: string;
+  sourceBodyHash: string;
+  evidence: EntityEvidence[];
+}
+
+function consumePreparedEvidence(
+  prepared: PreparedIngestEvidence,
+  domain: DomainEntry,
+  sourcePath: string,
+  sourceBodyHash: string,
+  vaultTools: VaultTools,
+  vaultRoot: string,
+): EntityEvidence[] | undefined {
+  const preparedAbsolute = isAbsolute(prepared.sourcePath)
+    ? prepared.sourcePath
+    : join(vaultRoot, prepared.sourcePath);
+  const preparedSourcePath = vaultTools.toVaultPath(preparedAbsolute);
+  if (
+    prepared.domainId !== domain.id
+    || preparedSourcePath !== sourcePath
+    || prepared.sourceBodyHash !== sourceBodyHash
+  ) return undefined;
+
+  const parsed = EntityEvidenceSchema.array().safeParse(prepared.evidence);
+  if (!parsed.success) return undefined;
+  const allowedTypes = new Set((domain.entity_types ?? []).map((entityType) => entityType.type));
+  if (parsed.data.some((item) => item.entityType === undefined || !allowedTypes.has(item.entityType))) {
+    return undefined;
+  }
+  return parsed.data;
+}
+
 export async function* runIngest(
   args: string[],
   vaultTools: VaultTools,
@@ -701,6 +735,7 @@ export async function* runIngest(
   graphDepth = 1,
   wikiLinkValidationRetries = 3,
   internal?: IngestInternalExecution,
+  preparedEvidence?: PreparedIngestEvidence,
 ): AsyncGenerator<RunEvent, IngestOutcome> {
   void graphDepth;
   const deferred = (
@@ -761,6 +796,20 @@ export async function* runIngest(
     const message = `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.`;
     yield { kind: "error", message };
     return failure("context", message, sourcePath, false);
+  }
+
+  const acceptedPreparedEvidence = preparedEvidence === undefined
+    ? undefined
+    : consumePreparedEvidence(
+        preparedEvidence,
+        domain,
+        sourcePath,
+        processedSourceBodyHash,
+        vaultTools,
+        vaultRoot,
+      );
+  if (preparedEvidence !== undefined && acceptedPreparedEvidence === undefined) {
+    yield { kind: "rule_fired", ruleId: "preparedEvidenceFallback", count: 1 };
   }
 
   const startedAt = Date.now();
@@ -835,32 +884,34 @@ export async function* runIngest(
     delta: i18nFor(resolveLang(opts.outputLanguage)).ingestProgress.synthesizing(domain.id),
   };
 
-  let evidence: EntityEvidence[];
-  try {
-    evidence = yield* eventBridge.forwardAbortable(signal, (operationSignal) =>
-      prepareSourceEvidence(sourceContent, domain.id, {
-      inputBudgetTokens: policy.inputBudgetTokens,
-      outputBudgetTokens: policy.outputBudgetTokens,
-      compressionProfile: policy.compression,
-      mapperRetries: opts.structuredRetries ?? 1,
-      reducerRetries: opts.structuredRetries ?? 1,
-    }, {
-      llm,
-      model,
-      opts,
-      signal: operationSignal,
-      configuredEntityTypes: (domain.entity_types ?? []).map((entityType) => entityType.type),
-      onEvent: captureEvent,
-    }));
-  } catch (error) {
-    if (signal.aborted || (error as Error).name === "AbortError") {
-      return failure("evidence", "ingest cancelled", sourcePath);
+  let evidence = acceptedPreparedEvidence;
+  if (evidence === undefined) {
+    try {
+      evidence = yield* eventBridge.forwardAbortable(signal, (operationSignal) =>
+        prepareSourceEvidence(sourceContent, domain.id, {
+        inputBudgetTokens: policy.inputBudgetTokens,
+        outputBudgetTokens: policy.outputBudgetTokens,
+        compressionProfile: policy.compression,
+        mapperRetries: opts.structuredRetries ?? 1,
+        reducerRetries: opts.structuredRetries ?? 1,
+      }, {
+        llm,
+        model,
+        opts,
+        signal: operationSignal,
+        configuredEntityTypes: (domain.entity_types ?? []).map((entityType) => entityType.type),
+        onEvent: captureEvent,
+      }));
+    } catch (error) {
+      if (signal.aborted || (error as Error).name === "AbortError") {
+        return failure("evidence", "ingest cancelled", sourcePath);
+      }
+      const message = `ingest: evidence preparation failed — ${(error as Error).message}`;
+      yield { kind: "error", message };
+      yield { kind: "result", durationMs: Date.now() - startedAt, text: "", outputTokens: 0 };
+      return failure("evidence", message, sourcePath,
+        error instanceof EvidenceCoverageError || error instanceof EvidenceReducerError);
     }
-    const message = `ingest: evidence preparation failed — ${(error as Error).message}`;
-    yield { kind: "error", message };
-    yield { kind: "result", durationMs: Date.now() - startedAt, text: "", outputTokens: 0 };
-    return failure("evidence", message, sourcePath,
-      error instanceof EvidenceCoverageError || error instanceof EvidenceReducerError);
   }
 
   const service = similarity ?? new PageSimilarityService({ mode: "jaccard", topK: 20 });

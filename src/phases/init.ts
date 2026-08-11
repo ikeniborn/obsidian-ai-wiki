@@ -9,7 +9,7 @@ import schemaTemplate from "../../templates/_wiki_schema.md";
 import initTemplate from "../../prompts/init.md";
 import { render } from "./template";
 import { wikiSections } from "./llm-utils";
-import { runIngest } from "./ingest";
+import { runIngest, type PreparedIngestEvidence } from "./ingest";
 import {
   WIKI_ROOT,
   domainIndexPath,
@@ -22,7 +22,13 @@ import { readPageDescriptions } from "../wiki-index-store";
 import { i18nFor, resolveLang } from "../i18n";
 import { promptVersionOf } from "../prompt-version";
 import { EmbeddingUnavailableError } from "../embedding-error";
-import { prepareBootstrapEvidence, type BootstrapEvidence } from "./ingest-evidence";
+import { hashSource } from "../incremental-sources";
+import {
+  prepareBootstrapEvidenceBundle,
+  type BootstrapEvidence,
+  type BootstrapEvidenceBundle,
+} from "./ingest-evidence";
+import { enrichEvidenceTypes } from "./evidence-type-enrichment";
 import {
   estimatePreparedMessages,
   PromptBudgetExceededError,
@@ -59,6 +65,7 @@ interface PreparedDomainBootstrap {
   sourceFile: string;
   sourceContent: string;
   preparedSources?: Array<{ path: string; content: string }>;
+  preparedEvidence: PreparedIngestEvidence;
   entry: DomainEntry;
   outputTokens: number;
 }
@@ -220,10 +227,11 @@ async function* prepareDomainBootstrap(
   }
 
   const bootstrapEvents = new RunEventBridge();
-  let bootstrapEvidence: BootstrapEvidence;
+  let bootstrapEvidenceOutputTokens = 0;
+  let bootstrapBundle: BootstrapEvidenceBundle;
   try {
-    bootstrapEvidence = yield* bootstrapEvents.forwardAbortable(signal, (operationSignal) =>
-      prepareBootstrapEvidence(sourceContent, domainId, {
+    bootstrapBundle = yield* bootstrapEvents.forwardAbortable(signal, (operationSignal) =>
+      prepareBootstrapEvidenceBundle(sourceContent, domainId, sourceFile, {
       inputBudgetTokens,
       outputBudgetTokens,
       compressionProfile,
@@ -235,7 +243,10 @@ async function* prepareDomainBootstrap(
       model,
       opts,
       signal: operationSignal,
-      onEvent: (event) => bootstrapEvents.push(event),
+      onEvent: (event) => {
+        if (event.kind === "llm_call_stats") bootstrapEvidenceOutputTokens += event.outputTokens;
+        bootstrapEvents.push(event);
+      },
       configuredEntityTypes: [],
       mapCallSite: "init.bootstrap-map",
     }));
@@ -250,6 +261,7 @@ async function* prepareDomainBootstrap(
     yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
     return null;
   }
+  const bootstrapEvidence = bootstrapBundle.bootstrap;
 
   const messages = bootstrapMessages(bootstrapEvidence);
   const estimatedInputTokens = estimatePreparedMessages(prepareChatMessages(messages, opts));
@@ -372,11 +384,53 @@ async function* prepareDomainBootstrap(
     return null;
   }
 
+  const enrichmentEvents = new RunEventBridge();
+  let enrichmentOutputTokens = 0;
+  let evidence: PreparedIngestEvidence["evidence"];
+  try {
+    evidence = yield* enrichmentEvents.forwardAbortable(signal, (operationSignal) =>
+      enrichEvidenceTypes(
+        bootstrapBundle.evidence,
+        new Set((entry.entity_types ?? []).map((entityType) => entityType.type)),
+        {
+          inputBudgetTokens,
+          outputBudgetTokens,
+          compressionProfile,
+          mapperRetries: opts.structuredRetries ?? 1,
+          reducerRetries: opts.structuredRetries ?? 1,
+        },
+        {
+          llm,
+          model,
+          opts,
+          signal: operationSignal,
+          onEvent: (event) => {
+            if (event.kind === "llm_call_stats") enrichmentOutputTokens += event.outputTokens;
+            enrichmentEvents.push(event);
+          },
+        },
+      ));
+  } catch (error) {
+    if ((error as Error).name === "AbortError" || signal.aborted) return null;
+    yield {
+      kind: "error",
+      message: `init: domain bootstrap failed — evidence type enrichment failed: ${(error as Error).message}. Fix model/prompt and re-run.`,
+    };
+    yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
+    return null;
+  }
+
   return {
     sourceFile,
     sourceContent,
+    preparedEvidence: {
+      domainId,
+      sourcePath: bootstrapBundle.sourcePath,
+      sourceBodyHash: bootstrapBundle.sourceBodyHash,
+      evidence,
+    },
     entry,
-    outputTokens: bootstrapOutputTokens,
+    outputTokens: bootstrapEvidenceOutputTokens + bootstrapOutputTokens + enrichmentOutputTokens,
   };
 }
 
@@ -719,6 +773,8 @@ export async function* runInitWithSources(
 
   let currentDomain: DomainEntry | null = existing ?? null;
   let bootstrapApplied = false;
+  let handoffSourceFile = preparedBootstrap?.sourceFile;
+  let firstSourceEvidence = preparedBootstrap?.preparedEvidence;
   let successfulFiles = 0;
 
   if (force && preparedBootstrap && !existing) {
@@ -762,6 +818,7 @@ export async function* runInitWithSources(
     // --- Step 1: Analyze ---
     if (i === 0 && !isResuming && !bootstrapApplied) {
       let bootstrapResult = preparedBootstrap;
+      const requiresFreshPreflight = bootstrapResult === undefined;
       if (bootstrapResult) {
         if (bootstrapResult.sourceFile !== file || bootstrapResult.sourceContent !== fileContent) {
           yield { kind: "error", message: `force: prepared bootstrap source changed: ${file}` };
@@ -792,6 +849,29 @@ export async function* runInitWithSources(
         }
       }
       if (!bootstrapResult) return;
+      const recheckFreshBootstrapSource = async (): Promise<string | undefined> => {
+        if (!requiresFreshPreflight) return undefined;
+        let freshSourceContent: string;
+        try {
+          freshSourceContent = await vaultTools.read(file);
+        } catch (error) {
+          return `init: could not recheck bootstrap source ${file}: ${(error as Error).message}`;
+        }
+        if (
+          freshSourceContent !== bootstrapResult.sourceContent
+          || hashSource(freshSourceContent) !== bootstrapResult.preparedEvidence.sourceBodyHash
+        ) {
+          return `init: source changed during bootstrap preflight: ${file}`;
+        }
+        return undefined;
+      };
+      const initialPreflightIssue = await recheckFreshBootstrapSource();
+      if (initialPreflightIssue) {
+        yield { kind: "error", message: initialPreflightIssue };
+        return;
+      }
+      handoffSourceFile = bootstrapResult.sourceFile;
+      firstSourceEvidence = bootstrapResult.preparedEvidence;
       outputTokens += bootstrapResult.outputTokens;
       const entry = bootstrapResult.entry;
 
@@ -816,6 +896,12 @@ export async function* runInitWithSources(
       };
 
       yield { kind: "tool_use", name: existing ? "UpdateDomain" : "SaveDomain", input: { id: domainId } };
+      const persistencePreflightIssue = await recheckFreshBootstrapSource();
+      if (persistencePreflightIssue) {
+        yield { kind: "tool_result", ok: false, preview: "bootstrap source preflight failed" };
+        yield { kind: "error", message: persistencePreflightIssue };
+        return;
+      }
       if (existing) {
         yield {
           kind: "domain_updated", domainId,
@@ -861,6 +947,10 @@ export async function* runInitWithSources(
             sourceOpts,
             similarity,
             annotationsCache,
+            undefined,
+            undefined,
+            undefined,
+            file === handoffSourceFile ? firstSourceEvidence : undefined,
           ),
           (event) => {
             if (event.domainId === domainId && currentDomain) {

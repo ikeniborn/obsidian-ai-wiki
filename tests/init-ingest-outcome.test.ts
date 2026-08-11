@@ -7,6 +7,7 @@ import { EmbeddingUnavailableError } from "../src/embedding-error";
 import { hashSource } from "../src/incremental-sources";
 import type { PageSimilarityService } from "../src/page-similarity";
 import type { LlmClient, RunEvent } from "../src/types";
+import type { PreparedIngestEvidence } from "../src/phases/ingest";
 import type { VaultAdapter } from "../src/vault-tools";
 import { mockChatResponse } from "./openai-mock-response";
 
@@ -19,11 +20,14 @@ export async function resolve(specifier, context, nextResolve) {
 register(`data:text/javascript,${encodeURIComponent(pathBrowserifyLoader)}`);
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 
-const { runIncrementalReinit, runInitWithSources } = await import("../src/phases/init");
+const { runIncrementalReinit, runInit, runInitWithSources } = await import("../src/phases/init");
+const { runIngest } = await import("../src/phases/ingest");
 const { VaultTools } = await import("../src/vault-tools");
 
 const SOURCE_PATH = "src/a.md";
 const SOURCE = "Alpha source fact.";
+const STALE_PREPARED_EVIDENCE = "STALE_PREPARED_EVIDENCE_SENTINEL";
+const REMAPPED_EVIDENCE = "REMAPPED_EVIDENCE_SENTINEL";
 const EXISTING_PATH = "!Wiki/demo/concept/wiki_demo_alpha.md";
 const CREATE_PATH = "!Wiki/demo/concept/wiki_demo_created.md";
 const INDEX_PATH = "!Wiki/demo/index.jsonl";
@@ -58,6 +62,31 @@ class MemoryAdapter implements VaultAdapter {
   }
   async mkdir(): Promise<void> {}
   async remove(path: string): Promise<void> { this.files.delete(path); }
+  async rmdir(): Promise<void> {}
+  async rename(from: string, to: string): Promise<void> {
+    const matches = [...this.files].filter(([path]) => path === from || path.startsWith(`${from}/`));
+    for (const [path, content] of matches) {
+      this.files.delete(path);
+      this.files.set(`${to}${path.slice(from.length)}`, content);
+    }
+  }
+  async readBinary(path: string): Promise<ArrayBuffer> {
+    const value = await this.read(path);
+    return new TextEncoder().encode(value).buffer;
+  }
+  async writeBinary(path: string, data: ArrayBuffer): Promise<void> {
+    this.files.set(path, new TextDecoder().decode(data));
+  }
+  async stat(path: string): Promise<{ type: "file" | "folder"; ctime: number; mtime: number; size: number } | null> {
+    const value = this.files.get(path);
+    if (value !== undefined) {
+      return { type: "file", ctime: 0, mtime: 0, size: new TextEncoder().encode(value).length };
+    }
+    if ([...this.files].some(([file]) => file.startsWith(`${path}/`))) {
+      return { type: "folder", ctime: 0, mtime: 0, size: 0 };
+    }
+    return null;
+  }
   async list(path: string): Promise<{ files: string[]; folders: string[] }> {
     const prefix = path ? `${path}/` : "";
     const files: string[] = [];
@@ -212,6 +241,443 @@ function similarityFor(mode: FailureCase): PageSimilarityService {
     maxSimilarityToExisting: async () => ({ pid: "", score: 0 }),
   } as unknown as PageSimilarityService;
 }
+
+interface HandoffCalls {
+  bootstrapMap: number;
+  bootstrap: number;
+  typeMap: number;
+  ingestMap: number;
+  synthesis: number;
+}
+
+function preparedEvidence(overrides: Partial<PreparedIngestEvidence> = {}): PreparedIngestEvidence {
+  return {
+    domainId: "demo",
+    sourcePath: SOURCE_PATH,
+    sourceBodyHash: hashSource(SOURCE),
+    evidence: [{
+      entityKey: "created",
+      entityType: "concept",
+      packetIds: ["prepared-packet"],
+      facts: [SOURCE],
+      exactSourceRanges: [{ startLine: 1, endLine: 1 }],
+      exactSource: [{ startLine: 1, endLine: 1, text: SOURCE }],
+      links: [],
+    }],
+    ...overrides,
+  };
+}
+
+function stalePreparedEvidence(
+  overrides: Partial<PreparedIngestEvidence["evidence"][number]> = {},
+): PreparedIngestEvidence["evidence"][number] {
+  return {
+    ...preparedEvidence().evidence[0],
+    entityKey: "stale",
+    packetIds: ["stale-packet"],
+    facts: [STALE_PREPARED_EVIDENCE],
+    ...overrides,
+  };
+}
+
+function handoffLlm(
+  adapter: MemoryAdapter,
+  calls: HandoffCalls,
+  options: {
+    failFirstSynthesis?: boolean;
+    mutateSourceDuringBootstrap?: boolean;
+    directIngest?: boolean;
+  } = {},
+  synthesisPrompts: string[] = [],
+): LlmClient {
+  let bootstrapComplete = options.directIngest ?? false;
+  return {
+    chat: { completions: { create: async (params: unknown) => {
+      const prompt = promptText(params);
+      if (prompt.includes("EVIDENCE_TYPE_UNITS ")) {
+        calls.typeMap += 1;
+        const marker = "EVIDENCE_TYPE_UNITS ";
+        const encoded = prompt.slice(prompt.lastIndexOf(marker) + marker.length).split("\n", 1)[0];
+        const units = JSON.parse(encoded) as Array<{ entityKey: string }>;
+        return mockChatResponse(params, JSON.stringify({
+          assignments: units.map((unit) => ({ entityKey: unit.entityKey, entityType: "concept" })),
+        }));
+      }
+      if (prompt.includes("CHUNK_ID ")) {
+        if (bootstrapComplete) calls.ingestMap += 1;
+        else calls.bootstrapMap += 1;
+        const chunkId = prompt.match(/CHUNK_ID ([^\s]+)/)?.[1];
+        assert.ok(chunkId);
+        return mockChatResponse(params, JSON.stringify({
+          packets: [{
+            id: `packet-${chunkId}`,
+            chunkId,
+            entityKey: "created",
+            ...(bootstrapComplete ? { entityType: "concept" } : {}),
+            facts: [options.directIngest ? REMAPPED_EVIDENCE : SOURCE],
+            exactSourceRanges: [{ startLine: 1, endLine: 1 }],
+            links: [],
+            sourceAnchor: `${SOURCE_PATH}:1`,
+          }],
+          noEvidence: [],
+        }));
+      }
+      if (prompt.includes("\"bootstrapEvidence\"")) {
+        calls.bootstrap += 1;
+        bootstrapComplete = true;
+        if (options.mutateSourceDuringBootstrap) {
+          adapter.files.set(SOURCE_PATH, "Changed after bootstrap extraction.");
+        }
+        return mockChatResponse(params, JSON.stringify({
+          reasoning: "Derive one source-supported type.",
+          id: "demo",
+          name: "Demo",
+          wiki_folder: "demo",
+          entity_types: [{
+            type: "concept",
+            description: "A concept.",
+            extraction_cues: ["Alpha"],
+            wiki_subfolder: "concept",
+          }],
+          language_notes: "",
+        }));
+      }
+      if (prompt.includes("Entity bundle:")) {
+        calls.synthesis += 1;
+        synthesisPrompts.push(prompt);
+        if (options.failFirstSynthesis && calls.synthesis === 1) {
+          return streamText(JSON.stringify({ reasoning: "invalid", actions: [] }));
+        }
+        return streamText(synthesisOutput(prompt, "success", adapter));
+      }
+      throw new Error("unexpected handoff call");
+    } } },
+  } as unknown as LlmClient;
+}
+
+function emptyHandoffCalls(): HandoffCalls {
+  return { bootstrapMap: 0, bootstrap: 0, typeMap: 0, ingestMap: 0, synthesis: 0 };
+}
+
+const HANDOFF_OPTS = {
+  inputBudgetTokens: 20_000,
+  maxTokens: 1_000,
+  semanticCompression: { profile: "balanced", operation: "ingest" } as const,
+  structuredRetries: 0,
+};
+
+async function collect(generator: AsyncGenerator<RunEvent>): Promise<RunEvent[]> {
+  const events: RunEvent[] = [];
+  for await (const event of generator) events.push(event);
+  return events;
+}
+
+async function runDirectWithPreparedEvidence(
+  value: PreparedIngestEvidence,
+): Promise<{ events: RunEvent[]; calls: HandoffCalls; synthesisPrompts: string[] }> {
+  const adapter = new MemoryAdapter();
+  const calls = emptyHandoffCalls();
+  const synthesisPrompts: string[] = [];
+  const events = await collect(runIngest(
+    [SOURCE_PATH],
+    new VaultTools(adapter, "/vault"),
+    handoffLlm(adapter, calls, { directIngest: true }, synthesisPrompts),
+    "mock",
+    [domain()],
+    "/vault",
+    new AbortController().signal,
+    HANDOFF_OPTS,
+    similarityFor("success"),
+    undefined,
+    1,
+    3,
+    undefined,
+    value,
+  ));
+  return { events, calls, synthesisPrompts };
+}
+
+test("fresh init enriches bootstrap evidence once and hands it to first-source ingest", async () => {
+  const adapter = new MemoryAdapter();
+  const calls = emptyHandoffCalls();
+  const events = await collect(runInitWithSources(
+    "demo",
+    ["src"],
+    false,
+    new VaultTools(adapter, "/vault"),
+    handoffLlm(adapter, calls),
+    "mock",
+    [],
+    "Vault",
+    new AbortController().signal,
+    HANDOFF_OPTS,
+    undefined,
+    false,
+    similarityFor("success"),
+  ));
+
+  assert.deepEqual(calls, {
+    bootstrapMap: 1,
+    bootstrap: 1,
+    typeMap: 1,
+    ingestMap: 0,
+    synthesis: 1,
+  });
+  assert.equal(events.some((event) => event.kind === "error"), false);
+  assert.equal(events.filter((event) => event.kind === "domain_created").length, 1);
+  assert.equal(events.filter((event) => event.kind === "file_done" && event.file === SOURCE_PATH).length, 1);
+});
+
+test("fresh init rejects a source changed during bootstrap enrichment before domain mutation", async () => {
+  const adapter = new MemoryAdapter();
+  const calls = emptyHandoffCalls();
+  const events = await collect(runInitWithSources(
+    "demo",
+    ["src"],
+    false,
+    new VaultTools(adapter, "/vault"),
+    handoffLlm(adapter, calls, { mutateSourceDuringBootstrap: true }),
+    "mock",
+    [],
+    "Vault",
+    new AbortController().signal,
+    HANDOFF_OPTS,
+    undefined,
+    false,
+    similarityFor("success"),
+  ));
+
+  assert.equal(calls.bootstrapMap, 1);
+  assert.equal(calls.typeMap, 1);
+  assert.equal(calls.ingestMap, 0);
+  assert.equal(calls.synthesis, 0);
+  assert.equal(events.some((event) =>
+    event.kind === "error" && event.message.includes("source changed during bootstrap preflight")), true);
+  assert.equal(events.some((event) => event.kind === "domain_created" || event.kind === "domain_updated"), false);
+});
+
+for (const fixture of [
+  {
+    name: "SaveDomain",
+    domains: [] as DomainEntry[],
+  },
+  {
+    name: "UpdateDomain",
+    domains: [{ ...domain(), entity_types: [] }],
+  },
+]) {
+  test(`fresh init rechecks source after ${fixture.name} tool handoff before persistence`, async () => {
+    const adapter = new MemoryAdapter();
+    const calls = emptyHandoffCalls();
+    const events: RunEvent[] = [];
+    const generator = runInitWithSources(
+      "demo",
+      ["src"],
+      false,
+      new VaultTools(adapter, "/vault"),
+      handoffLlm(adapter, calls),
+      "mock",
+      fixture.domains,
+      "Vault",
+      new AbortController().signal,
+      HANDOFF_OPTS,
+      undefined,
+      false,
+      similarityFor("success"),
+    );
+
+    for await (const event of generator) {
+      events.push(event);
+      if (event.kind === "tool_use" && event.name === fixture.name) {
+        adapter.files.set(SOURCE_PATH, `Changed during ${fixture.name} controller handoff.`);
+      }
+    }
+
+    assert.equal(events.filter((event) =>
+      event.kind === "tool_use" && event.name === fixture.name).length, 1);
+    const errorIndex = events.findIndex((event) =>
+      event.kind === "error" && event.message.includes("source changed during bootstrap preflight"));
+    assert.ok(errorIndex > 0);
+    assert.deepEqual(events[errorIndex - 1], {
+      kind: "tool_result",
+      ok: false,
+      preview: "bootstrap source preflight failed",
+    });
+    assert.equal(events.some((event) => event.kind === "domain_created" || event.kind === "domain_updated"), false);
+    assert.equal(events.at(-1)?.kind, "error");
+    assert.equal(calls.ingestMap, 0);
+    assert.equal(calls.synthesis, 0);
+  });
+}
+
+test("dry-run bootstrap output tokens include evidence map, domain bootstrap, and type enrichment", async () => {
+  const adapter = new MemoryAdapter();
+  const calls = emptyHandoffCalls();
+  const events = await collect(runInitWithSources(
+    "demo",
+    ["src"],
+    true,
+    new VaultTools(adapter, "/vault"),
+    handoffLlm(adapter, calls),
+    "mock",
+    [],
+    "Vault",
+    new AbortController().signal,
+    HANDOFF_OPTS,
+    undefined,
+    false,
+    similarityFor("success"),
+  ));
+
+  const measuredOutputTokens = events.reduce((sum, event) =>
+    sum + (event.kind === "llm_call_stats" ? event.outputTokens : 0), 0);
+  const result = events.findLast((event) => event.kind === "result");
+  assert.ok(result && result.kind === "result");
+  assert.deepEqual(calls, {
+    bootstrapMap: 1,
+    bootstrap: 1,
+    typeMap: 1,
+    ingestMap: 0,
+    synthesis: 0,
+  });
+  assert.equal(measuredOutputTokens, 15);
+  assert.equal(result.outputTokens, measuredOutputTokens);
+});
+
+test("force init enriches before wipe and reuses first-source bootstrap evidence", async () => {
+  const adapter = new MemoryAdapter();
+  const calls = emptyHandoffCalls();
+  const events = await collect(runInit(
+    ["demo", "--force", "--sources", "src"],
+    new VaultTools(adapter, "/vault"),
+    handoffLlm(adapter, calls),
+    "mock",
+    [domain()],
+    "Vault",
+    new AbortController().signal,
+    HANDOFF_OPTS,
+    undefined,
+    similarityFor("success"),
+  ));
+
+  assert.deepEqual(calls, {
+    bootstrapMap: 1,
+    bootstrap: 1,
+    typeMap: 1,
+    ingestMap: 0,
+    synthesis: 1,
+  });
+  const typeMapIndex = events.findIndex((event) =>
+    event.kind === "llm_request_fingerprint" && event.callSite === "init.bootstrap-type-map");
+  const wipeIndex = events.findIndex((event) => event.kind === "tool_use" && event.name === "WipeDomain");
+  assert.ok(typeMapIndex >= 0 && wipeIndex > typeMapIndex);
+  assert.equal(events.some((event) => event.kind === "error"), false);
+  assert.equal(events.filter((event) => event.kind === "domain_created").length, 1);
+});
+
+test("force init rejects a source changed after bootstrap enrichment before domain mutation", async () => {
+  const adapter = new MemoryAdapter();
+  const calls = emptyHandoffCalls();
+  const events = await collect(runInit(
+    ["demo", "--force", "--sources", "src"],
+    new VaultTools(adapter, "/vault"),
+    handoffLlm(adapter, calls, { mutateSourceDuringBootstrap: true }),
+    "mock",
+    [domain()],
+    "Vault",
+    new AbortController().signal,
+    HANDOFF_OPTS,
+    undefined,
+    similarityFor("success"),
+  ));
+
+  assert.equal(calls.typeMap, 1, "type enrichment must complete before force preflight mutation boundary");
+  assert.equal(calls.ingestMap, 0);
+  assert.equal(calls.synthesis, 0);
+  assert.equal(events.some((event) =>
+    event.kind === "error" && event.message.includes("source changed during bootstrap preflight")), true);
+  assert.equal(events.some((event) => event.kind === "domain_created" || event.kind === "domain_updated"), false);
+});
+
+test("matching handoff accepts a normalized vault source path without remapping", async () => {
+  const { events, calls } = await runDirectWithPreparedEvidence(preparedEvidence({
+    sourcePath: "src/./a.md",
+  }));
+
+  assert.equal(calls.ingestMap, 0);
+  assert.equal(calls.synthesis, 1);
+  assert.equal(events.some((event) =>
+    event.kind === "rule_fired" && event.ruleId === "preparedEvidenceFallback"), false);
+});
+
+for (const mismatch of [
+  {
+    name: "domain id",
+    value: preparedEvidence({ domainId: "other", evidence: [stalePreparedEvidence()] }),
+  },
+  {
+    name: "source path",
+    value: preparedEvidence({ sourcePath: "src/other.md", evidence: [stalePreparedEvidence()] }),
+  },
+  {
+    name: "source body hash",
+    value: preparedEvidence({ sourceBodyHash: "stale", evidence: [stalePreparedEvidence()] }),
+  },
+  {
+    name: "unknown entity type",
+    value: preparedEvidence({
+      evidence: [stalePreparedEvidence({ entityType: "unknown" })],
+    }),
+  },
+  {
+    name: "invalid evidence item",
+    value: preparedEvidence({
+      evidence: [stalePreparedEvidence({ facts: [] })],
+    }),
+  },
+]) {
+  test(`prepared evidence ${mismatch.name} mismatch emits metadata fallback and remaps`, async () => {
+    const { events, calls, synthesisPrompts } = await runDirectWithPreparedEvidence(mismatch.value);
+    assert.equal(calls.ingestMap, 1);
+    assert.equal(calls.synthesis, 1);
+    assert.equal(synthesisPrompts.length, 1);
+    assert.equal(synthesisPrompts[0].includes(REMAPPED_EVIDENCE), true);
+    assert.equal(synthesisPrompts[0].includes(STALE_PREPARED_EVIDENCE), false);
+    assert.equal(events.filter((event) =>
+      event.kind === "rule_fired" && event.ruleId === "preparedEvidenceFallback").length, 1);
+  });
+}
+
+test("first-source Retry reuses matching prepared evidence without remapping", async () => {
+  const adapter = new MemoryAdapter();
+  const calls = emptyHandoffCalls();
+  const decisions: boolean[] = [];
+  const events = await collect(runInitWithSources(
+    "demo",
+    ["src"],
+    false,
+    new VaultTools(adapter, "/vault"),
+    handoffLlm(adapter, calls, { failFirstSynthesis: true }),
+    "mock",
+    [],
+    "Vault",
+    new AbortController().signal,
+    HANDOFF_OPTS,
+    async (_file, _error, canRetry) => {
+      decisions.push(canRetry);
+      return "retry";
+    },
+    false,
+    similarityFor("success"),
+  ));
+
+  assert.deepEqual(decisions, [true]);
+  assert.equal(calls.bootstrapMap, 1);
+  assert.equal(calls.typeMap, 1);
+  assert.equal(calls.ingestMap, 0);
+  assert.equal(calls.synthesis, 2);
+  assert.equal(events.filter((event) => event.kind === "file_done" && event.file === SOURCE_PATH).length, 1);
+});
 
 async function runCase(mode: FailureCase): Promise<RunEvent[]> {
   const adapter = new MemoryAdapter();
