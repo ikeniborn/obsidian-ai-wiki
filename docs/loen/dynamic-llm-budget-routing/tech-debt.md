@@ -1,13 +1,22 @@
 # Dynamic LLM Budget Routing Technical Debt
 
 Status: open
-Updated: 2026-07-27
+Updated: 2026-08-11
 Live baseline: Obsidian reinit session `1785096684125`
 Project wiki: `architecture/dynamic-llm-budget-routing-technical-debt`
 
 ## Scope
 
 This register tracks only domain-neutral gaps confirmed by tests or live evidence. Fixes must not add OS-specific entity types, paths, commands, aliases, headings, prompt exceptions, larger token ceilings, or extra model retries.
+
+## Generic Evidence Pipeline Contract
+
+- Adjacent Markdown ranges are greedily packed only while the complete prepared mapper request, repair reserve, and safety margin fit the configured input budget. Structural source coverage, source order, exact ranges, and fenced blocks remain authoritative for small and large inputs.
+- Init maps the bootstrap source once. It enriches that evidence with entity types, then hands the authoritative domain/path/body-hash bundle to first-source Ingest; Retry reuses the matching bundle instead of remapping the source.
+- Mapper wire normalization treats omitted `packets` or omitted `noEvidence` as an empty complementary array only when the present array completely and validly covers the chunk. Ambiguous, mixed, foreign, or malformed coverage still fails closed.
+- Mapper semantic recovery splits only eligible output-limit or local schema/range failures, permits one split level, and requires strict prepared-request progress. Provider context repacking preserves split lineage and cannot enable a second semantic split.
+
+Deterministic evidence: neutral generated corpora and contract assertions in `tests/ingest-evidence.test.ts`, `tests/markdown-chunks.test.ts`, and `tests/init-ingest-outcome.test.ts`. No private source article is used as a fixture.
 
 ## TD-1: Exact Technical Evidence Classification and Reconciliation
 
@@ -51,40 +60,29 @@ Evidence: `evidence/os-unix-query-quality-conflict-validation-split-live-1785096
 
 ## TD-3: Deterministic Conflict-Regeneration Integration Trigger
 
-Unit coverage proves guarded conflict regeneration repairs one malformed frame, rejects parsed schema/domain defects without repair, and stops after the explicit request bound. Live session `1785096684125` did not naturally produce a stale write, so the branch was not exercised by the provider replay.
+Status: fixed.
 
-Required fix:
+The deterministic loopback fixture in `tests/conflict-regeneration-integration.test.ts` retains the OpenAI HTTP transport, response framing/parser, semantic validation, stale-authority inspection, and final vault apply boundaries. It changes the target after the initial synthesis response, returns one malformed regeneration frame, then a valid guarded patch against the current page and section hashes.
 
-- add a live-equivalent deterministic integration fixture that creates a stale target authority;
-- inject a malformed first regeneration response and a valid second response without depending on provider randomness;
-- retain real transport, parser, semantic-validation, and apply boundaries in the harness.
+Exact assertions:
 
-Acceptance:
-
-- malformed frame: exactly two underlying requests at most;
-- parsed semantic defect: exactly one request;
-- repeated stale conflict: zero additional requests;
-- successful repaired patch reaches apply with current page and section authorities.
-
-Evidence: focused `tests/ingest-synthesis.test.ts` coverage and `evidence/conflict-validation-split-live-1785096684125.json`.
+- malformed regeneration is bounded to two regeneration requests; the complete fixture performs one mapper, one synthesis, and two regeneration requests (`requests.length === 4`);
+- the accepted patch contains the current-authority content, rejects the stale patch content, and preserves the unrelated concurrently changed section;
+- `tests/ingest-synthesis.test.ts` asserts every parsed schema or domain defect forwards exactly one request and cannot trigger format repair;
+- the same focused suite asserts a repeated stale conflict (`conflictCount === 1`) forwards zero requests.
 
 ## TD-4: Init Terminal Status After Successful File Retry
 
-Earlier live runs could retain a handled file error and finish with `status=error` after the user selected Retry and all 22 sources eventually completed. Session `1785096684125` finished correctly but contained no file-level retry, so it does not close this gap.
+Status: fixed.
 
-Required fix:
+Init now emits attempt-local `file_attempt` telemetry and one terminal `file_outcome`; `src/run-status.ts` reduces only terminal outcomes and global failures into the operation status.
 
-- distinguish active/unrecovered file failures from recovered attempts;
-- clear or supersede the recorded failure after a successful Retry;
-- preserve real failure status for Skip, Stop, cancellation, and exhausted retries.
+Exact assertions:
 
-Acceptance:
-
-- an induced file failure followed by successful Retry finishes `status=done`;
-- the recovered attempt remains visible in telemetry;
-- unresolved, skipped, stopped, or cancelled work cannot be reported as done.
-
-Evidence: prior session `1785087161419` and successful no-retry control session `1785096684125`.
+- `tests/init-ingest-outcome.test.ts` verifies both full and incremental Init retain `failed -> retry_scheduled -> recovered` telemetry, emit one `file_outcome: done`, and do not leak the handled child failure as a global error;
+- `tests/run-status.test.ts` verifies that sequence reduces to `done`;
+- `file_outcome: skipped` and `file_outcome: exhausted` reduce to `error`, while `file_outcome: stopped` and user abort reduce to `cancelled`;
+- timeout, non-zero exit, and unrelated global error remain `error`; a later success, zero exit, or abort cannot overwrite that status.
 
 ## Non-Actions
 
