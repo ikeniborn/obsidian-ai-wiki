@@ -1,3 +1,86 @@
+---
+review:
+  intent_hash: 77a5215b67e1d735
+  last_run: 2026-08-11
+  phases:
+    structure: { status: passed }
+    completeness: { status: passed }
+    clarity: { status: passed }
+    consistency: { status: passed }
+    alignment: { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: Desired Outcomes
+      section_hash: 3106d50d569e6c5e
+      fragment: "uses substantially more than 4k input tokens"
+      text: "Vague quantity with no criterion."
+      fix: "State an explicit threshold for the effective input budget."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-002
+      phase: clarity
+      severity: WARNING
+      section: Desired Outcomes
+      section_hash: 3106d50d569e6c5e
+      fragment: "No separate observable outcome is required for the `claude-agent` backend"
+      text: "Scope exclusion listed as a desired outcome; it is not observable."
+      fix: "Move it to Strategic Context, next to the matching hard constraint."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-003
+      phase: clarity
+      severity: WARNING
+      section: Health Metrics
+      section_hash: 53dd60ae19b4574a
+      fragment: "The number of LLM calls per Init/Ingest does not grow systematically."
+      text: "Not measurable: no baseline and no fixture named."
+      fix: "Name the fixtures and the baseline; exempt splits caused by an unreachable payload."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-004
+      phase: clarity
+      severity: WARNING
+      section: Constraints
+      section_hash: 67ebf9da4c249b7c
+      fragment: "fall back to a conservative per-backend default"
+      text: "\"Conservative\" carries no criterion and recurs in the Guarded autonomy zone."
+      fix: "Define what conservative means for the fallback constant."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-005
+      phase: consistency
+      severity: INFO
+      section: Health Metrics
+      section_hash: 53dd60ae19b4574a
+      fragment: "Zero provider context-overflow errors."
+      text: "Reads as contradicting the hard constraint that allows a provider rejection after the repack loop is exhausted."
+      fix: "Scope the metric to unrecovered overflows surfaced to the user."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-006
+      phase: consistency
+      severity: INFO
+      section: Health Metrics
+      section_hash: 53dd60ae19b4574a
+      fragment: "The number of LLM calls per Init/Ingest does not grow systematically."
+      text: "Tension with the Guarded autonomy zone that permits splitting into several calls."
+      fix: "Exempt splits explicitly; resolved together with F-003."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-007
+      phase: alignment
+      severity: INFO
+      section: Objective
+      section_hash: d75cb02d2ed62cec
+      fragment: null
+      text: "Objective and Desired Outcomes cover the task described in the conversation, including the output budget and markdown-chunks scope added by the user. No extra objectives. iwiki unavailable, so the wiki check was skipped."
+      fix: null
+      verdict: accepted
+      verdict_at: 2026-08-11
+---
+
 # Intent: prompt-budget-automation
 
 **Date:** 2026-08-11
@@ -64,13 +147,12 @@ budgeting.
 - The main Settings section no longer shows `Input budget tokens` or `Repair input budget`.
   Both live under Advanced and are empty by default, meaning automatic. Previously saved
   values keep working as an explicit override.
-- On a model with a 128k context window the plugin actually uses substantially more than 4k
-  input tokens; the boundary comes from discovery or from a learned value, not from the
-  constant 16384.
+- On a model with a 128k context window the effective input budget for Init is at least 4×
+  the current 16384-byte-derived limit — that is, ≥16k real tokens — and `agent.jsonl`
+  records which source produced that boundary: discovery, a learned value, or the fallback
+  default. It is never the constant 16384.
 - A truncated generation (`finish_reason=length`) triggers a retry with a larger output
   limit instead of a `structural_error / schema_validate` failure.
-- No separate observable outcome is required for the `claude-agent` backend. Its behaviour
-  stays as it is; it only inherits the honest token estimate.
 
 ## Health Metrics
 
@@ -82,9 +164,13 @@ budgeting.
   decisions; zero new duplicate pages.
 - **Existing section preservation.** 100% of untouched pre-existing page sections remain
   present after fixture updates.
-- **Zero provider context-overflow errors.** A larger budget must not produce
-  `context_length_exceeded`; `runWithContextRepack` still catches and shrinks.
-- **LLM call count.** The number of LLM calls per Init/Ingest does not grow systematically.
+- **Zero unrecovered provider context-overflow errors.** A larger budget may not surface
+  `context_length_exceeded` to the user: `runWithContextRepack` still catches and shrinks,
+  and the operation completes.
+- **LLM call count.** On the `bounded-operations-acceptance` and `ingest-bounded` fixtures,
+  the number of LLM calls per operation does not exceed the pre-change baseline recorded on
+  the same fixtures. Extra calls caused by splitting an unreachable payload are exempt and
+  must be recorded in `agent.jsonl`.
 - **Total operation cost is explicitly NOT a health metric.** Honest estimation packs more
   evidence per prompt, so total input tokens per operation are expected to grow. This is
   accepted with no ceiling.
@@ -113,6 +199,9 @@ budgeting.
     Claude Agent CLI.
   - Roughly 25 test files that encode the current byte-based invariants.
   - The plugin user, who stops being part of the number-tuning loop.
+- Out of scope: the `claude-agent` backend has no separate desired outcome. Its behaviour
+  stays as it is and it only inherits the honest token estimate; see the matching hard
+  constraint.
 - Priority trade-off: **trust**. The operation must complete correctly and predictably;
   speed and cost are secondary, and cost has already been removed from the health metrics.
 
@@ -126,7 +215,10 @@ budgeting.
   not embed a real tokenizer (tiktoken/BPE): bundle weight, and the target model's BPE is
   not available anyway.
 - Context discovery is best-effort. If the provider does not report a context size, fall
-  back to a conservative per-backend default; that is not an error.
+  back to a per-backend default; that is not an error. "Conservative" here has one meaning:
+  the fallback is a single constant declared in code, chosen so it does not exceed the
+  smallest context window among the models that backend is known to serve. The applied value
+  and its source are recorded in `agent.jsonl`.
 - All technical numbers — the estimate, the learned context size, the source of the budget,
   and the fact that content was truncated — go to `agent.jsonl`, never into sidebar progress
   text (invariant carried over from the 2026-07-16 intent).
