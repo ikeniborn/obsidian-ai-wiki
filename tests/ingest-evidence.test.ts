@@ -3,7 +3,12 @@ import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import test from "node:test";
 import type OpenAI from "openai";
-import { assertCompleteSourceCoverage } from "../src/markdown-chunks";
+import {
+  assertCompleteSourceCoverage,
+  chunkMarkdownSource,
+  createSourceChunkForRange,
+  type SourceChunk,
+} from "../src/markdown-chunks";
 import { estimatePreparedMessages } from "../src/prompt-budget";
 import type {
   LlmChatCompletionCreateOptions,
@@ -15,6 +20,14 @@ import type {
   EvidenceRuntime,
 } from "../src/phases/ingest-evidence";
 import type { EvidencePacket } from "../src/phases/ingest-evidence";
+import {
+  fencedEvidenceSource,
+  headingHeavyEvidenceSource,
+  mediumEvidenceSource,
+  mixedOversizedEvidenceSource,
+  oversizedParagraphEvidenceSource,
+  smallEvidenceSource,
+} from "./fixtures/evidence-source-corpus";
 
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 const {
@@ -415,6 +428,211 @@ function validMapperPacket(
   else mapped.entityType = entityType;
   return mapped;
 }
+
+const PACKING_INPUT_BUDGET = 16_384;
+const PACKING_OUTPUT_BUDGET = 4_096;
+const PACKING_SAFETY_TOKENS = 128;
+
+function packingPolicy(): EvidencePolicy {
+  return {
+    ...evidencePolicy(PACKING_INPUT_BUDGET),
+    outputBudgetTokens: PACKING_OUTPUT_BUDGET,
+    overlapLines: 0,
+  };
+}
+
+function exactCoveredSource(source: string, chunks: SourceChunk[]): string {
+  const lines = source.split("\n");
+  return chunks
+    .flatMap((chunk) => lines.slice(chunk.startLine - 1, chunk.endLine))
+    .join("\n");
+}
+
+test("neutral evidence corpus has stable generic size and shape", () => {
+  const headingHeavy = headingHeavyEvidenceSource();
+  const lines = headingHeavy.split("\n");
+  const headings = lines.filter((line) => /^#{1,6} /u.test(line));
+  const bytes = new TextEncoder().encode(headingHeavy).byteLength;
+
+  assert.ok(bytes >= 17_000 && bytes <= 18_000, `heading-heavy corpus has ${bytes} bytes`);
+  assert.ok(lines.length >= 390 && lines.length <= 410, `heading-heavy corpus has ${lines.length} lines`);
+  assert.ok(headings.length >= 32, `heading-heavy corpus has ${headings.length} headings`);
+});
+
+test("evidence planning packs fitting heading ranges by complete prepared budget", async () => {
+  const policy = packingPolicy();
+  const small = chunkSourceForEvidence(smallEvidenceSource(), "neutral", policy);
+  const source = headingHeavyEvidenceSource();
+  const chunks = chunkSourceForEvidence(source, "neutral", policy);
+
+  assert.equal(small.length, 1);
+  assert.ok(chunks.length <= 3, `expected at most 3 packed chunks, received ${chunks.length}`);
+  assertCompleteSourceCoverage(source, chunks);
+  assert.equal(exactCoveredSource(source, chunks), source);
+
+  const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
+  const attempts = new Map<string, number>();
+  const runtime = mockRuntime((messages) => {
+    const meta = mapperMeta(messages);
+    const attempt = (attempts.get(meta.id) ?? 0) + 1;
+    attempts.set(meta.id, attempt);
+    if (attempt === 1) {
+      return { packets: [], noEvidence: [] };
+    }
+    return { packets: [], noEvidence: [{ chunkId: meta.id, reason: "none" }] };
+  }, [], requests);
+  await prepareSourceEvidence(source, "neutral", policy, runtime);
+
+  assert.equal(requests.length, chunks.length * 2, "each packed chunk receives one bounded repair");
+  for (const request of requests) {
+    assert.ok(
+      estimatePreparedMessages(request) + PACKING_SAFETY_TOKENS <= policy.inputBudgetTokens,
+      "complete base or repair request plus safety reserve must fit",
+    );
+  }
+
+  const lines = source.split("\n");
+  for (let index = 1; index < chunks.length; index++) {
+    const previous = chunks[index - 1];
+    const next = chunks[index];
+    assert.equal(previous.endLine + 1, next.startLine);
+    const combinedSource = lines.slice(previous.startLine - 1, next.endLine).join("\n");
+    assert.ok(
+      chunkSourceForEvidence(combinedSource, "neutral", policy).length > 1,
+      `adjacent ranges ${previous.startLine}-${next.endLine} remain mergeable`,
+    );
+  }
+});
+
+test("packed maximality uses final ordinals at a request boundary", () => {
+  const source = Array.from(
+    { length: 40 },
+    (_, index) => `## Neutral heading ${index + 1} ${"x".repeat(24)}`,
+  ).join("\n");
+  const chunks = chunkSourceForEvidence(source, "neutral", {
+    ...packingPolicy(),
+    inputBudgetTokens: 4_744,
+  });
+
+  assert.deepEqual(chunks.slice(0, 10).map((chunk) => [chunk.startLine, chunk.endLine]), [
+    [1, 2],
+    [3, 4],
+    [5, 6],
+    [7, 8],
+    [9, 10],
+    [11, 12],
+    [13, 14],
+    [15, 16],
+    [17, 18],
+    [19, 20],
+  ]);
+  assert.deepEqual(chunks.map((chunk) => chunk.ordinal), chunks.map((_, index) => index));
+  assertCompleteSourceCoverage(source, chunks);
+});
+
+test("mapper planning splits a large source only a bounded number of times", () => {
+  const source = Array.from(
+    { length: 1_000 },
+    (_, index) => `## Neutral section ${index + 1}\nRecord ${index + 1}: ${"x".repeat(24)}`,
+  ).join("\n");
+  const originalSplit = String.prototype.split;
+  let fullSourceSplits = 0;
+  String.prototype.split = function(separator, limit): string[] {
+    if (this.toString() === source && separator === "\n") fullSourceSplits += 1;
+    return originalSplit.call(this, separator, limit);
+  };
+
+  let chunks: SourceChunk[];
+  try {
+    chunks = chunkSourceForEvidence(source, "neutral", packingPolicy());
+  } finally {
+    String.prototype.split = originalSplit;
+  }
+
+  assertCompleteSourceCoverage(source, chunks);
+  assert.ok(fullSourceSplits <= 32, `planner split the full source ${fullSourceSplits} times`);
+});
+
+test("packed evidence corpus preserves oversized and fenced source authority", () => {
+  const policy = packingPolicy();
+  for (const source of [
+    mediumEvidenceSource(),
+    mixedOversizedEvidenceSource(),
+    oversizedParagraphEvidenceSource(),
+    fencedEvidenceSource(),
+  ]) {
+    const chunks = chunkSourceForEvidence(source, "neutral", policy);
+    assertCompleteSourceCoverage(source, chunks);
+    assert.equal(exactCoveredSource(source, chunks), source);
+    assert.equal(
+      chunks.every((chunk) => chunk.id === `${chunk.ordinal}:${chunk.startLine}-${chunk.endLine}:${chunk.contentHash}`),
+      true,
+    );
+  }
+
+  const fenced = fencedEvidenceSource();
+  const fencedChunks = chunkSourceForEvidence(fenced, "neutral", {
+    ...policy,
+    inputBudgetTokens: 6_000,
+  });
+  assertCompleteSourceCoverage(fenced, fencedChunks);
+  assert.ok(fencedChunks.length > 1);
+  const interiorFencedChunks = fencedChunks
+    .filter((chunk) => chunk.startLine > 3 && chunk.endLine < 184);
+  assert.ok(interiorFencedChunks.length > 0, "fixture must produce an interior fenced chunk");
+  assert.ok(
+    interiorFencedChunks
+      .every((chunk) => chunk.markdown.startsWith("```text\n") && chunk.markdown.endsWith("\n```")),
+  );
+
+  const mixed = mixedOversizedEvidenceSource();
+  const mixedChunks = chunkSourceForEvidence(mixed, "neutral", {
+    ...policy,
+    inputBudgetTokens: 6_000,
+  });
+  assert.ok(mixedChunks.length > 1);
+  assertCompleteSourceCoverage(mixed, mixedChunks);
+  assert.equal(exactCoveredSource(mixed, mixedChunks), mixed);
+  assert.equal(
+    mixedChunks.every((chunk) => chunk.id === `${chunk.ordinal}:${chunk.startLine}-${chunk.endLine}:${chunk.contentHash}`),
+    true,
+  );
+  assert.ok(mixedChunks.some((chunk) => chunk.markdown.includes("```text")));
+});
+
+test("packed mapper input estimate stays below uncoalesced structural baseline", async () => {
+  const source = mediumEvidenceSource();
+  const policy = packingPolicy();
+  const capture = async (input: string): Promise<OpenAI.Chat.ChatCompletionMessageParam[][]> => {
+    const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
+    const runtime = mockRuntime((messages) => {
+      const { id } = mapperMeta(messages);
+      return { packets: [], noEvidence: [{ chunkId: id, reason: "none" }] };
+    }, [], requests);
+    await prepareSourceEvidence(input, "neutral", policy, runtime);
+    return requests;
+  };
+
+  const packedRequests = await capture(source);
+  const structural = chunkMarkdownSource(source, {
+    maxEstimatedTokens: 700,
+    overlapLines: 0,
+  });
+  const baselineRequests = (
+    await Promise.all(structural.map((chunk) => capture(createSourceChunkForRange(
+      source,
+      chunk.startLine,
+      chunk.endLine,
+      0,
+      chunk.headingPath,
+    ).markdown)))
+  ).flat();
+  const total = (requests: OpenAI.Chat.ChatCompletionMessageParam[][]): number =>
+    requests.reduce((sum, request) => sum + estimatePreparedMessages(request), 0);
+
+  assert.ok(structural.length > packedRequests.length);
+  assert.ok(total(packedRequests) < total(baselineRequests));
+});
 
 test("evidence telemetry wrapper preserves native transport diagnostics", async () => {
   const consumeHttpResponse = (_signal: AbortSignal) => undefined;
@@ -1591,6 +1809,64 @@ test("evidence mapper output-limit retry raises the cap without replaying assist
   assert.match(retryMessages.at(-1)?.content ?? "", /output limit/i);
   assert.equal(events.some((event) =>
     event.kind === "structural_error" && event.errorType === "output_limit"), true);
+});
+
+test("near-boundary mapper planning reserves the actual output-limit retry envelope", async () => {
+  const captured: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
+  const attempts = new Map<string, number>();
+  const outputBudgetTokens = 256;
+  const inputBudgetTokens = 6_000;
+  const llm = {
+    chat: { completions: { create: async (params: Record<string, unknown>) => {
+      const messages = params.messages as OpenAI.Chat.ChatCompletionMessageParam[];
+      captured.push(messages);
+      const meta = mapperMeta(messages);
+      const attempt = (attempts.get(meta.id) ?? 0) + 1;
+      attempts.set(meta.id, attempt);
+      const output = attempt === 1
+        ? ""
+        : JSON.stringify({ packets: [], noEvidence: [{ chunkId: meta.id, reason: "none" }] });
+      const completionTokens = attempt === 1 ? outputBudgetTokens : 1;
+      return {
+        id: `near-boundary-${meta.id}-${attempt}`,
+        object: "chat.completion",
+        created: 0,
+        model: "mock",
+        choices: [{
+          index: 0,
+          finish_reason: "stop",
+          message: { role: "assistant", content: output, refusal: null },
+          logprobs: null,
+        }],
+        usage: { prompt_tokens: 1, completion_tokens: completionTokens, total_tokens: completionTokens + 1 },
+      };
+    } } },
+  } as unknown as LlmClient;
+  const runtime: EvidenceRuntime = {
+    llm,
+    model: "mock",
+    signal: new AbortController().signal,
+    configuredEntityTypes: [],
+    opts: { outputRetryBudgetTokens: 1_024 },
+  };
+  const source = Array.from(
+    { length: 180 },
+    (_, index) => `Boundary ${index.toString().padStart(3, "0")}: ${"x".repeat(24)}`,
+  ).join("\n");
+
+  await prepareSourceEvidence(source, "neutral", {
+    ...evidencePolicy(inputBudgetTokens),
+    outputBudgetTokens,
+    overlapLines: 0,
+  }, runtime);
+
+  assert.ok(captured.length >= 4, "fixture must exercise multiple base and output-limit retry requests");
+  for (const request of captured) {
+    assert.ok(
+      estimatePreparedMessages(request) + PACKING_SAFETY_TOKENS <= inputBudgetTokens,
+      `prepared request requires ${estimatePreparedMessages(request)} plus safety`,
+    );
+  }
 });
 
 test("ingest compression profiles differ once while preserving evidence invariants", async () => {
