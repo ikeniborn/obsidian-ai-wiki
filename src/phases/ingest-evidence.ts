@@ -133,11 +133,11 @@ function unique<T>(values: T[], key: (value: T) => string): T[] {
   });
 }
 
-function estimateBootstrapPayload(value: BootstrapEvidence): number {
-  return estimatePreparedMessages([{ role: "user", content: JSON.stringify(value) }]);
+function estimateBootstrapPayload(value: BootstrapEvidence, calibration?: number): number {
+  return estimatePreparedMessages([{ role: "user", content: JSON.stringify(value) }], calibration);
 }
 
-function boundBootstrapPayload(value: BootstrapEvidence, budget: number): BootstrapEvidence {
+function boundBootstrapPayload(value: BootstrapEvidence, budget: number, calibration?: number): BootstrapEvidence {
   const clone: BootstrapEvidence = {
     candidates: value.candidates.map((candidate) => ({
       entityKey: candidate.entityKey,
@@ -148,25 +148,25 @@ function boundBootstrapPayload(value: BootstrapEvidence, budget: number): Bootst
     domainThemes: [...value.domainThemes],
     languageEvidence: [...value.languageEvidence],
   };
-  if (estimateBootstrapPayload(clone) <= budget) return clone;
+  if (estimateBootstrapPayload(clone, calibration) <= budget) return clone;
 
-  while (clone.languageEvidence.length > 0 && estimateBootstrapPayload(clone) > budget) {
+  while (clone.languageEvidence.length > 0 && estimateBootstrapPayload(clone, calibration) > budget) {
     clone.languageEvidence.pop();
   }
-  while (clone.domainThemes.length > 0 && estimateBootstrapPayload(clone) > budget) {
+  while (clone.domainThemes.length > 0 && estimateBootstrapPayload(clone, calibration) > budget) {
     clone.domainThemes.pop();
   }
   for (const candidate of clone.candidates) {
-    while (candidate.exactSource.length > 1 && estimateBootstrapPayload(clone) > budget) {
+    while (candidate.exactSource.length > 1 && estimateBootstrapPayload(clone, calibration) > budget) {
       candidate.exactSource.pop();
     }
   }
   for (const candidate of clone.candidates) {
-    while (candidate.facts.length > 1 && estimateBootstrapPayload(clone) > budget) {
+    while (candidate.facts.length > 1 && estimateBootstrapPayload(clone, calibration) > budget) {
       candidate.facts.pop();
     }
   }
-  while (clone.candidates.length > 1 && estimateBootstrapPayload(clone) > budget) {
+  while (clone.candidates.length > 1 && estimateBootstrapPayload(clone, calibration) > budget) {
     clone.candidates.pop();
   }
   return clone;
@@ -1888,8 +1888,12 @@ export async function prepareBootstrapEvidenceBundle(
   if (!Number.isSafeInteger(payloadBudget) || payloadBudget <= 0) {
     throw new EvidenceCoverageError("Bootstrap payload budget must be a positive safe integer");
   }
-  const bootstrap = boundBootstrapPayload({ candidates, domainThemes, languageEvidence }, payloadBudget);
-  const estimated = estimateBootstrapPayload(bootstrap);
+  const bootstrap = boundBootstrapPayload(
+    { candidates, domainThemes, languageEvidence },
+    payloadBudget,
+    runtime.opts?.tokenCalibration,
+  );
+  const estimated = estimateBootstrapPayload(bootstrap, runtime.opts?.tokenCalibration);
   if (estimated > payloadBudget) {
     throw new EvidenceCoverageError(
       `Bootstrap evidence payload requires ${estimated} tokens but budget is ${payloadBudget}`,

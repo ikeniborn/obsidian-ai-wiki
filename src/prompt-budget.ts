@@ -149,7 +149,13 @@ const INPUT_SEMANTICS = /\b(?:input|prompt|messages?)\b/i;
 const CONTEXT_SEMANTICS = /\bcontext(?:\s+(?:length|limit|size|window))?\b/i;
 const OUTPUT_SEMANTICS = /\b(?:completion|generated|output)\b/i;
 const NON_CONTEXT_ERROR_SEMANTICS = /\b(?:account|billing|credits?|deadline|quota|rate\s+limit|time(?:d)?\s*out|timeout)\b/i;
-const OVERFLOW_RELATION = /\b(?:exceeds?|exceeded|exceeding|overflow(?:ed)?|too\s+(?:long|large|many)|over\s+(?:the\s+)?(?:limit|maximum)|greater\s+than|more\s+than|beyond)\b|>/i;
+// No bare ">" alternative: unlike the words below, a lone ">" appears in
+// arbitrary non-overflow text (e.g. a "->" conversion example echoed from an
+// unrelated validation error) and is not itself a reliable overflow signal.
+// Numeric "N > M" comparisons are still classified via reportedOverflow
+// below, which requires actual digit sequences on both sides through
+// extractContextCounts's greaterThanMaximum pattern.
+const OVERFLOW_RELATION = /\b(?:exceeds?|exceeded|exceeding|overflow(?:ed)?|too\s+(?:long|large|many)|over\s+(?:the\s+)?(?:limit|maximum)|greater\s+than|more\s+than|beyond)\b/i;
 const TOKEN_NUMBER = "(\\d[\\d,_]*)";
 const MAXIMUM_INPUT = "(?:maximum\\s+context(?:\\s+length)?|max(?:imum)?\\s+context|context\\s+(?:length|window)|maximum(?:\\s+number)?\\s+of\\s+tokens(?:\\s+allowed)?|maximum\\s+tokens(?:\\s+allowed)?)";
 
@@ -210,6 +216,13 @@ function classifyContextMessage(message: string): ContextErrorDetails | null {
 export function classifyContextError(error: unknown): ContextErrorDetails | null {
   if (!error || typeof error !== "object") return null;
   const record = error as Record<string, unknown>;
+  // A structured-output schema/validation failure is never a context-overflow
+  // signal, even when its message happens to contain overflow-shaped text
+  // (e.g. an echoed Zod issue mentioning "message", or an example containing
+  // a bare "->" that the OVERFLOW_RELATION fallback below would misread as
+  // ">"). Exclude it here rather than loosening the regexes, which stay
+  // meaningful for actual provider error text.
+  if (record.name === "StructuredValidationError") return null;
   const nested = isRecord(record.error) ? record.error : undefined;
   const codes = [record.code, record.type, nested?.code, nested?.type]
     .filter((value): value is string => typeof value === "string")

@@ -500,6 +500,84 @@ test("lint-chat fails closed instead of calling LLM with empty pages after lexic
   assert.equal(events.some((event) => event.kind === "result" && event.text === ""), true);
 });
 
+test("lint-chat fixed-request budget check is token-based, not raw serialized bytes", async () => {
+  // The full rendered request (lint-chat template + wiki schema + this page)
+  // serializes to 10,486 raw bytes, but estimates at ~2,415 tokens. A budget
+  // of 2,500 is far too small for the old byte-based check (which would fail
+  // closed exactly like the oversized-page test above) but comfortably fits
+  // the token estimate. This is the fix-loop I1 regression test: it fails if
+  // buildLintChatMessagesWithinBudget / estimateLintChatFixedRequest revert
+  // to byte-length estimation.
+  const path = "!Wiki/d/concept/wiki_d_page.md";
+  const files = new Map<string, string>([
+    [path, `# Page\n\n## Facts\n${"facts ".repeat(140)}issue here`],
+  ]);
+  const { VaultTools } = await import("../src/vault-tools");
+  const { runLintFixChat } = await import("../src/phases/lint-chat");
+  const adapter = new MemoryAdapter(files);
+  const seen: Record<string, unknown>[] = [];
+  const events = await collectEvents(runLintFixChat(
+    {
+      operation: "lint-chat",
+      context: `- [warning] ${path} :: ## Facts :: issue :: issue here`,
+      chatMessages: [{ role: "user", content: "Fix issue here" }],
+    } as RunRequest,
+    new VaultTools(adapter, ""),
+    "",
+    { id: "d", name: "Demo", wiki_folder: "d", entity_types: [], language_notes: "" } as DomainEntry,
+    jsonLlm(JSON.stringify({ summary: "ok", patches: [] }), seen),
+    "m",
+    { inputBudgetTokens: 2_500, semanticCompression: { profile: "balanced", operation: "lint" } },
+    new AbortController().signal,
+  ));
+  assert.equal(seen.length, 1);
+  const fullRequestBytes = new TextEncoder().encode(JSON.stringify(seen[0].messages)).byteLength;
+  assert.ok(fullRequestBytes > 2_500, `fixture must exceed the budget in raw bytes (got ${fullRequestBytes})`);
+  assert.ok(
+    estimatePreparedMessages((seen[0].messages ?? []) as OpenAI.Chat.ChatCompletionMessageParam[]) <= 2_500,
+  );
+  assert.equal(events.some((event) => event.kind === "error"), false);
+});
+
+test("lint-chat fixed-request budget check applies tokenCalibration", async () => {
+  const path = "!Wiki/d/concept/wiki_d_page.md";
+  const files = new Map<string, string>([
+    [path, `# Page\n\n## Facts\n${"facts ".repeat(140)}issue here`],
+  ]);
+  const { VaultTools } = await import("../src/vault-tools");
+  const { runLintFixChat } = await import("../src/phases/lint-chat");
+
+  const run = async (tokenCalibration?: number) => {
+    const adapter = new MemoryAdapter(files);
+    const seen: Record<string, unknown>[] = [];
+    const events = await collectEvents(runLintFixChat(
+      {
+        operation: "lint-chat",
+        context: `- [warning] ${path} :: ## Facts :: issue :: issue here`,
+        chatMessages: [{ role: "user", content: "Fix issue here" }],
+      } as RunRequest,
+      new VaultTools(adapter, ""),
+      "",
+      { id: "d", name: "Demo", wiki_folder: "d", entity_types: [], language_notes: "" } as DomainEntry,
+      jsonLlm(JSON.stringify({ summary: "ok", patches: [] }), seen),
+      "m",
+      { inputBudgetTokens: 2_500, tokenCalibration, semanticCompression: { profile: "balanced", operation: "lint" } },
+      new AbortController().signal,
+    ));
+    return { seen, events };
+  };
+
+  const uncalibrated = await run(undefined);
+  assert.equal(uncalibrated.seen.length, 1, "same fixture as the token-based test above fits at calibration 1");
+
+  const calibrated = await run(2);
+  assert.equal(calibrated.seen.length, 0, "calibration 2 must double the estimate past the same budget");
+  assert.equal(
+    calibrated.events.some((event) => event.kind === "error" && /selected referenced page context exceeds input budget/i.test(event.message)),
+    true,
+  );
+});
+
 test("lint-chat bare-stem explicit refs use boundaries and do not select overlapping stems", async () => {
   const files = new Map<string, string>([
     ["!Wiki/d/concept/wiki_d_page_1.md", "# Page 1\n\n## Facts\nwrong page"],

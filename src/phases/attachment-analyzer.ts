@@ -116,6 +116,8 @@ export interface VisionAnalysisOptions {
   onEvent?: (event: RunEvent) => void;
   nativeRequestRetries?: number;
   nativeRequestIdleTimeoutMs?: number;
+  /** Provider-derived correction applied to every token estimate for this call. */
+  tokenCalibration?: number;
 }
 
 interface ResolvedVisionAnalysisOptions {
@@ -124,6 +126,7 @@ interface ResolvedVisionAnalysisOptions {
   onEvent?: (event: RunEvent) => void;
   nativeRequestRetries?: number;
   nativeRequestIdleTimeoutMs?: number;
+  tokenCalibration?: number;
 }
 
 function resolveVisionOptions(
@@ -135,6 +138,7 @@ function resolveVisionOptions(
     onEvent: options?.onEvent,
     nativeRequestRetries: options?.nativeRequestRetries,
     nativeRequestIdleTimeoutMs: options?.nativeRequestIdleTimeoutMs,
+    tokenCalibration: options?.tokenCalibration,
   };
 }
 
@@ -194,6 +198,7 @@ function visionCallOptions(
     reasoningLanguage,
     nativeRequestRetries: options.nativeRequestRetries,
     nativeRequestIdleTimeoutMs: options.nativeRequestIdleTimeoutMs,
+    tokenCalibration: options.tokenCalibration,
     jsonMode: "json_schema" as const,
     jsonSchema: {
       name: "vision_analysis",
@@ -460,7 +465,7 @@ export async function analyzePdf(
     }),
     visionCallOptions(resolved, language, reasoningLanguage),
   );
-  const fixedEstimatedTokens = estimatePreparedMessages(fixedMessages);
+  const fixedEstimatedTokens = estimatePreparedMessages(fixedMessages, resolved.tokenCalibration);
   const resizedPages = new Set<string>();
   let visionAttempt = 0;
 

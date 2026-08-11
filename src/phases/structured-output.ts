@@ -330,6 +330,7 @@ function repairMessages<T>(
   fullText: string,
   lastError: Error,
   inputBudgetTokens: number | undefined,
+  calibration?: number,
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   if (!fullText.trim()) {
     return [
@@ -342,7 +343,7 @@ function repairMessages<T>(
     { role: "assistant" as const, content: fullText },
     { role: "user" as const, content: repairPrompt(profile, fullText, lastError) },
   ];
-  const fullRepairEstimate = estimatePreparedMessages(fullRepair);
+  const fullRepairEstimate = estimatePreparedMessages(fullRepair, calibration);
   const compactThreshold = profile.compactRepairThresholdTokens;
   if (compactThreshold !== undefined
     && fullRepairEstimate >= compactThreshold) {
@@ -350,7 +351,7 @@ function repairMessages<T>(
       ...baseMessages,
       { role: "user" as const, content: compactRepairPrompt(profile, lastError) },
     ];
-    if (inputBudgetTokens === undefined || estimatePreparedMessages(compactRepair) <= inputBudgetTokens) {
+    if (inputBudgetTokens === undefined || estimatePreparedMessages(compactRepair, calibration) <= inputBudgetTokens) {
       return compactRepair;
     }
   }
@@ -362,7 +363,7 @@ function repairMessages<T>(
     ...baseMessages,
     { role: "user" as const, content: compactRepairPrompt(profile, lastError) },
   ];
-  if (estimatePreparedMessages(compactRepair) <= inputBudgetTokens) return compactRepair;
+  if (estimatePreparedMessages(compactRepair, calibration) <= inputBudgetTokens) return compactRepair;
   return fullRepair;
 }
 
@@ -816,7 +817,7 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
         lifecycle.close("retrying");
         messages = next
           ? messages
-          : repairMessages(baseMessages, profile, fullText, lastError, repairOpts.inputBudgetTokens);
+          : repairMessages(baseMessages, profile, fullText, lastError, repairOpts.inputBudgetTokens, repairOpts.tokenCalibration);
         if (!next) currentOpts = optsWithRepairInputBudget(currentOpts);
         continue;
       }
@@ -863,7 +864,7 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
           messages = outputLimitRepairMessages(baseMessages, profile, lastError);
           currentOpts = outputRetryOptions(optsWithRepairInputBudget(currentOpts), outputTokens);
         } else {
-          messages = repairMessages(baseMessages, profile, fullText, lastError, repairOpts.inputBudgetTokens);
+          messages = repairMessages(baseMessages, profile, fullText, lastError, repairOpts.inputBudgetTokens, repairOpts.tokenCalibration);
           currentOpts = optsWithRepairInputBudget(currentOpts);
         }
       }

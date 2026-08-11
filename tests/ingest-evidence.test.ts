@@ -2277,44 +2277,17 @@ test("mapper non-local schema controls never schedule child requests", async () 
     const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
     const events: RunEvent[] = [];
     const runtime = mockRuntime(fixture.output, events, requests);
-    // The "invalid entity key" fixture's fixed validation message includes
-    // "proxy.pac" -> "proxy-pac" as a conversion example; classifyContextError's
-    // bare ">" fallback (prompt-budget.ts) misreads that arrow as a reported
-    // token overflow, a pre-existing false positive predating task-3. Before
-    // this task, chunkMarkdownSource's byte-based estimator meant the ensuing
-    // context-repack's rechunk search could never find a strictly smaller
-    // chunk, so it gave up after one retry ("did not make strict progress").
-    // Now that the search operates in the same token unit as the estimator,
-    // it does find smaller chunks and exhausts all context repacks before
-    // giving up. The invariant this test protects — malformed mapper output
-    // never schedules a child split — still holds (checked below); only the
-    // incidental request count and terminal error class differ for this one
-    // fixture, so it gets its own expectation.
-    if (fixture.name === "invalid entity key") {
-      await assert.rejects(
-        prepareSourceEvidence(
-          "control line 1\ncontrol line 2\ncontrol line 3\ncontrol line 4",
-          "demo",
-          { ...evidencePolicy(), mapperRetries: 1 },
-          runtime,
-        ),
-        (error: unknown) => error instanceof Error && /entity key/i.test(error.message),
-        fixture.name,
-      );
-      assert.ok(requests.length >= 2, fixture.name);
-    } else {
-      await assert.rejects(
-        prepareSourceEvidence(
-          "control line 1\ncontrol line 2\ncontrol line 3\ncontrol line 4",
-          "demo",
-          { ...evidencePolicy(), mapperRetries: 1 },
-          runtime,
-        ),
-        EvidenceCoverageError,
-        fixture.name,
-      );
-      assert.equal(requests.length, 2, fixture.name);
-    }
+    await assert.rejects(
+      prepareSourceEvidence(
+        "control line 1\ncontrol line 2\ncontrol line 3\ncontrol line 4",
+        "demo",
+        { ...evidencePolicy(), mapperRetries: 1 },
+        runtime,
+      ),
+      EvidenceCoverageError,
+      fixture.name,
+    );
+    assert.equal(requests.length, 2, fixture.name);
     assert.equal(
       events.some((event) => event.kind === "tool_use" && event.name === "Evidence mapper split"),
       false,
