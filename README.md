@@ -55,6 +55,26 @@ The plugin reads only the folders you set as sources for each domain. It does no
 
 ---
 
+## Installation
+
+### Community Plugins
+
+In Obsidian, open **Settings -> Community plugins -> Browse**, search for **AI Wiki**, select the plugin, and install it. Enable **AI Wiki** after installation.
+
+### Manual installation
+
+Download `main.js`, `manifest.json`, and `styles.css` from the same version on the [GitHub Releases page](https://github.com/ikeniborn/obsidian-ai-wiki/releases). Put the three files directly in `<vault>/.obsidian/plugins/ai-wiki/`, then reload Obsidian and enable **AI Wiki**.
+
+Do not mix files from different releases. A repository checkout is source code, not an install bundle.
+
+### Local development
+
+Run `npm install` and `npm run build`, then copy or link the contents of `dist/` into `<vault>/.obsidian/plugins/ai-wiki/`. The plugin directory must contain the flat `main.js`, `manifest.json`, and `styles.css` asset set; link `dist/`, not the repository root.
+
+GitHub Release publication is gated by synchronized metadata, lint, typecheck, the complete test suite, a production build, and postbuild validation of all three assets.
+
+---
+
 ## Quick start: Ollama (fully local)
 
 No accounts or cloud services required — AI runs on your computer.
@@ -69,14 +89,7 @@ ollama pull llama3.2
 
 ### 2. Install the plugin
 
-Copy the plugin folder into your vault:
-
-```bash
-# symlink for development
-ln -s /path/to/obsidian-ai-wiki ~/.config/obsidian/Plugins/obsidian-ai-wiki
-```
-
-Or copy the folder to `<vault>/.obsidian/plugins/obsidian-ai-wiki/` manually.
+Install through Community Plugins, from one GitHub Release, or from a local `dist/` build as described in [Installation](#installation).
 
 ### 3. Enable the plugin
 

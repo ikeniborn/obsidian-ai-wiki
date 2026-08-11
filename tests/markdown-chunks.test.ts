@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   assertCompleteSourceCoverage,
   chunkMarkdownSource,
+  createSourceChunkForRange,
+  createSourceChunkRangeFactory,
   extractMarkdownSections,
 } from "../src/markdown-chunks";
 import { contentHash } from "../src/content-hash";
@@ -12,6 +14,47 @@ const estimatedBytes = (text: string): number => new TextEncoder().encode(text).
 test("content hashes use stable FNV-1a values", () => {
   assert.equal(contentHash(""), "fnv1a:811c9dc5");
   assert.equal(contentHash("hello"), "fnv1a:4f9f2cab");
+});
+
+test("prepared range factory is equivalent and scans source only once", () => {
+  type RangeFactory = (
+    startLine: number,
+    endLine: number,
+    ordinal: number,
+    headingPath?: string[],
+  ) => ReturnType<typeof chunkMarkdownSource>[number];
+  const source = [
+    "# Root\r",
+    "```text\r",
+    ...Array.from({ length: 1_000 }, (_, index) => `value ${index.toString().padStart(4, "0")}\r`),
+    "```\r",
+    "tail\r",
+  ].join("\n");
+  const originalEncode = TextEncoder.prototype.encode;
+  let encodedCharacters = 0;
+  TextEncoder.prototype.encode = function(input = ""): Uint8Array {
+    encodedCharacters += input.length;
+    return originalEncode.call(this, input);
+  };
+
+  let prepared: RangeFactory;
+  try {
+    prepared = createSourceChunkRangeFactory(source);
+    for (let index = 0; index < 100; index++) {
+      prepared(3 + index, 3 + index, index, ["Root"]);
+    }
+  } finally {
+    TextEncoder.prototype.encode = originalEncode;
+  }
+
+  assert.ok(
+    encodedCharacters <= source.length * 2,
+    `prepared factory encoded ${encodedCharacters} characters for ${source.length} source characters`,
+  );
+  assert.deepEqual(
+    prepared(200, 240, 7, ["Root"]),
+    createSourceChunkForRange(source, 200, 240, 7, ["Root"]),
+  );
 });
 
 test("small source remains one stable chunk", () => {

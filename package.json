@@ -7,6 +7,10 @@
     "build": "node esbuild.config.mjs production",
     "dev": "node esbuild.config.mjs",
     "lint": "eslint \"src/**/*.ts\"",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "release:validate:pre": "node scripts/validate-release.mjs --phase prebuild",
+    "release:validate:post": "node scripts/validate-release.mjs --phase postbuild",
     "migrate:wiki-prefix": "tsx scripts/migrate-wiki-prefix.ts",
     "eval": "tsx scripts/eval.ts"
   },

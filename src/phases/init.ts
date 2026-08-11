@@ -9,7 +9,7 @@ import schemaTemplate from "../../templates/_wiki_schema.md";
 import initTemplate from "../../prompts/init.md";
 import { render } from "./template";
 import { wikiSections } from "./llm-utils";
-import { runIngest } from "./ingest";
+import { runIngest, type PreparedIngestEvidence } from "./ingest";
 import {
   WIKI_ROOT,
   domainIndexPath,
@@ -22,7 +22,13 @@ import { readPageDescriptions } from "../wiki-index-store";
 import { i18nFor, resolveLang } from "../i18n";
 import { promptVersionOf } from "../prompt-version";
 import { EmbeddingUnavailableError } from "../embedding-error";
-import { prepareBootstrapEvidence, type BootstrapEvidence } from "./ingest-evidence";
+import { hashSource } from "../incremental-sources";
+import {
+  prepareBootstrapEvidenceBundle,
+  type BootstrapEvidence,
+  type BootstrapEvidenceBundle,
+} from "./ingest-evidence";
+import { enrichEvidenceTypes } from "./evidence-type-enrichment";
 import {
   estimatePreparedMessages,
   PromptBudgetExceededError,
@@ -43,13 +49,33 @@ import {
 } from "../wipe-proof";
 import { cancelRuntimeTimeout, scheduleRuntimeTimeout } from "../runtime-timers";
 
+type IngestFailureStage = Extract<IngestOutcome, { ok: false }>["stage"];
+
+function safeFileAttemptMessage(error: unknown, category?: IngestFailureStage): string {
+  const constructorName = error !== null && typeof error === "object"
+    ? (error as { constructor?: { name?: unknown } }).constructor?.name
+    : undefined;
+  const errorClass = typeof constructorName === "string"
+    && /^[A-Za-z][A-Za-z0-9_.:-]{0,63}$/.test(constructorName)
+    ? constructorName
+    : "Error";
+  return category === undefined
+    ? `class=${errorClass}`
+    : `class=${category === "embedding" ? "EmbeddingUnavailableError" : "IngestOutcomeError"} category=${category}`;
+}
+
 async function* forwardIngest(
   generator: AsyncGenerator<RunEvent, IngestOutcome>,
   onDomainUpdate: (event: Extract<RunEvent, { kind: "domain_updated" }>) => void,
-): AsyncGenerator<RunEvent, IngestOutcome> {
+): AsyncGenerator<RunEvent, { outcome: IngestOutcome; childError?: string }> {
+  let childError: string | undefined;
   while (true) {
     const next = await generator.next();
-    if (next.done) return next.value;
+    if (next.done) return { outcome: next.value, childError };
+    if (next.value.kind === "error") {
+      childError = next.value.message;
+      continue;
+    }
     if (next.value.kind === "domain_updated") onDomainUpdate(next.value);
     yield next.value;
   }
@@ -59,6 +85,7 @@ interface PreparedDomainBootstrap {
   sourceFile: string;
   sourceContent: string;
   preparedSources?: Array<{ path: string; content: string }>;
+  preparedEvidence: PreparedIngestEvidence;
   entry: DomainEntry;
   outputTokens: number;
 }
@@ -220,10 +247,11 @@ async function* prepareDomainBootstrap(
   }
 
   const bootstrapEvents = new RunEventBridge();
-  let bootstrapEvidence: BootstrapEvidence;
+  let bootstrapEvidenceOutputTokens = 0;
+  let bootstrapBundle: BootstrapEvidenceBundle;
   try {
-    bootstrapEvidence = yield* bootstrapEvents.forwardAbortable(signal, (operationSignal) =>
-      prepareBootstrapEvidence(sourceContent, domainId, {
+    bootstrapBundle = yield* bootstrapEvents.forwardAbortable(signal, (operationSignal) =>
+      prepareBootstrapEvidenceBundle(sourceContent, domainId, sourceFile, {
       inputBudgetTokens,
       outputBudgetTokens,
       compressionProfile,
@@ -235,7 +263,10 @@ async function* prepareDomainBootstrap(
       model,
       opts,
       signal: operationSignal,
-      onEvent: (event) => bootstrapEvents.push(event),
+      onEvent: (event) => {
+        if (event.kind === "llm_call_stats") bootstrapEvidenceOutputTokens += event.outputTokens;
+        bootstrapEvents.push(event);
+      },
       configuredEntityTypes: [],
       mapCallSite: "init.bootstrap-map",
     }));
@@ -250,6 +281,7 @@ async function* prepareDomainBootstrap(
     yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
     return null;
   }
+  const bootstrapEvidence = bootstrapBundle.bootstrap;
 
   const messages = bootstrapMessages(bootstrapEvidence);
   const estimatedInputTokens = estimatePreparedMessages(prepareChatMessages(messages, opts));
@@ -372,11 +404,53 @@ async function* prepareDomainBootstrap(
     return null;
   }
 
+  const enrichmentEvents = new RunEventBridge();
+  let enrichmentOutputTokens = 0;
+  let evidence: PreparedIngestEvidence["evidence"];
+  try {
+    evidence = yield* enrichmentEvents.forwardAbortable(signal, (operationSignal) =>
+      enrichEvidenceTypes(
+        bootstrapBundle.evidence,
+        new Set((entry.entity_types ?? []).map((entityType) => entityType.type)),
+        {
+          inputBudgetTokens,
+          outputBudgetTokens,
+          compressionProfile,
+          mapperRetries: opts.structuredRetries ?? 1,
+          reducerRetries: opts.structuredRetries ?? 1,
+        },
+        {
+          llm,
+          model,
+          opts,
+          signal: operationSignal,
+          onEvent: (event) => {
+            if (event.kind === "llm_call_stats") enrichmentOutputTokens += event.outputTokens;
+            enrichmentEvents.push(event);
+          },
+        },
+      ));
+  } catch (error) {
+    if ((error as Error).name === "AbortError" || signal.aborted) return null;
+    yield {
+      kind: "error",
+      message: `init: domain bootstrap failed — evidence type enrichment failed: ${(error as Error).message}. Fix model/prompt and re-run.`,
+    };
+    yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
+    return null;
+  }
+
   return {
     sourceFile,
     sourceContent,
+    preparedEvidence: {
+      domainId,
+      sourcePath: bootstrapBundle.sourcePath,
+      sourceBodyHash: bootstrapBundle.sourceBodyHash,
+      evidence,
+    },
     entry,
-    outputTokens: bootstrapOutputTokens,
+    outputTokens: bootstrapEvidenceOutputTokens + bootstrapOutputTokens + enrichmentOutputTokens,
   };
 }
 
@@ -719,6 +793,8 @@ export async function* runInitWithSources(
 
   let currentDomain: DomainEntry | null = existing ?? null;
   let bootstrapApplied = false;
+  let handoffSourceFile = preparedBootstrap?.sourceFile;
+  let firstSourceEvidence = preparedBootstrap?.preparedEvidence;
   let successfulFiles = 0;
 
   if (force && preparedBootstrap && !existing) {
@@ -754,6 +830,7 @@ export async function* runInitWithSources(
         : await vaultTools.read(file);
     } catch {
       yield { kind: "assistant_text", delta: `⚠ ${file}: не удалось прочитать файл, пропускаем\n` };
+      yield { kind: "file_outcome", file, status: "skipped" };
       continue;
     }
 
@@ -762,6 +839,7 @@ export async function* runInitWithSources(
     // --- Step 1: Analyze ---
     if (i === 0 && !isResuming && !bootstrapApplied) {
       let bootstrapResult = preparedBootstrap;
+      const requiresFreshPreflight = bootstrapResult === undefined;
       if (bootstrapResult) {
         if (bootstrapResult.sourceFile !== file || bootstrapResult.sourceContent !== fileContent) {
           yield { kind: "error", message: `force: prepared bootstrap source changed: ${file}` };
@@ -792,6 +870,29 @@ export async function* runInitWithSources(
         }
       }
       if (!bootstrapResult) return;
+      const recheckFreshBootstrapSource = async (): Promise<string | undefined> => {
+        if (!requiresFreshPreflight) return undefined;
+        let freshSourceContent: string;
+        try {
+          freshSourceContent = await vaultTools.read(file);
+        } catch (error) {
+          return `init: could not recheck bootstrap source ${file}: ${(error as Error).message}`;
+        }
+        if (
+          freshSourceContent !== bootstrapResult.sourceContent
+          || hashSource(freshSourceContent) !== bootstrapResult.preparedEvidence.sourceBodyHash
+        ) {
+          return `init: source changed during bootstrap preflight: ${file}`;
+        }
+        return undefined;
+      };
+      const initialPreflightIssue = await recheckFreshBootstrapSource();
+      if (initialPreflightIssue) {
+        yield { kind: "error", message: initialPreflightIssue };
+        return;
+      }
+      handoffSourceFile = bootstrapResult.sourceFile;
+      firstSourceEvidence = bootstrapResult.preparedEvidence;
       outputTokens += bootstrapResult.outputTokens;
       const entry = bootstrapResult.entry;
 
@@ -816,6 +917,12 @@ export async function* runInitWithSources(
       };
 
       yield { kind: "tool_use", name: existing ? "UpdateDomain" : "SaveDomain", input: { id: domainId } };
+      const persistencePreflightIssue = await recheckFreshBootstrapSource();
+      if (persistencePreflightIssue) {
+        yield { kind: "tool_result", ok: false, preview: "bootstrap source preflight failed" };
+        yield { kind: "error", message: persistencePreflightIssue };
+        return;
+      }
       if (existing) {
         yield {
           kind: "domain_updated", domainId,
@@ -844,10 +951,12 @@ export async function* runInitWithSources(
     // --- Ingest: write pages + intercept domain_updated for entity_types propagation ---
     let retried = false;
     let done = false;
+    let attempt = 1;
     let ingestOutcome: IngestOutcome | undefined;
     while (!done) {
       let caughtErr: Error | null = null;
       let controlledRetryable: boolean | undefined;
+      let controlledStage: IngestFailureStage | undefined;
       try {
         const forwarded = forwardIngest(
           runIngest(
@@ -861,6 +970,10 @@ export async function* runInitWithSources(
             sourceOpts,
             similarity,
             annotationsCache,
+            undefined,
+            undefined,
+            undefined,
+            file === handoffSourceFile ? firstSourceEvidence : undefined,
           ),
           (event) => {
             if (event.domainId === domainId && currentDomain) {
@@ -871,13 +984,17 @@ export async function* runInitWithSources(
         while (true) {
           const next = await forwarded.next();
           if (next.done) {
-            ingestOutcome = next.value;
+            ingestOutcome = next.value.outcome;
+            if (!ingestOutcome.ok && next.value.childError) {
+              ingestOutcome = { ...ingestOutcome, message: next.value.childError };
+            }
             break;
           }
           yield next.value;
         }
         if (!ingestOutcome.ok) {
           controlledRetryable = ingestOutcome.retryable;
+          controlledStage = ingestOutcome.stage;
           caughtErr = new Error(ingestOutcome.message);
           caughtErr.name = ingestOutcome.stage === "embedding"
             ? "EmbeddingUnavailableError"
@@ -887,12 +1004,22 @@ export async function* runInitWithSources(
         caughtErr = e as Error;
       }
       if (caughtErr) {
+        if (caughtErr.name === "AbortError" || signal.aborted) return;
+        const failureRetryable = controlledRetryable ?? true;
+        yield {
+          kind: "file_attempt",
+          file,
+          attempt,
+          state: "failed",
+          retryable: failureRetryable,
+          message: safeFileAttemptMessage(caughtErr, controlledStage),
+        };
         if (caughtErr instanceof EmbeddingUnavailableError || caughtErr.name === "EmbeddingUnavailableError") {
           yield { kind: "error", message: `init stopped — embedding endpoint failed: ${caughtErr.message}. Fix embedding config and re-run.` };
           yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
           return;
         }
-        const canRetry = !retried && (controlledRetryable ?? true);
+        const canRetry = !retried && failureRetryable;
         let choice: Awaited<ReturnType<NonNullable<OnFileError>>> = "skip";
         if (onFileError) {
           const progress = i18nFor(resolveLang(sourceOpts.outputLanguage)).initProgress;
@@ -900,10 +1027,23 @@ export async function* runInitWithSources(
           choice = await onFileError(file, caughtErr, canRetry);
           yield { kind: "info_text", icon: "ℹ️", summary: progress.fileErrorDecision(choice) };
         }
-        if (choice === "stop") return;
-        if (choice === "retry" && canRetry) { retried = true; continue; }
+        if (signal.aborted) return;
+        if (choice === "stop") {
+          yield { kind: "file_outcome", file, status: "stopped" };
+          return;
+        }
+        if (choice === "retry" && canRetry) {
+          retried = true;
+          attempt += 1;
+          yield { kind: "file_attempt", file, attempt, state: "retry_scheduled", retryable: true };
+          continue;
+        }
+        yield { kind: "file_outcome", file, status: retried ? "exhausted" : "skipped" };
         done = true;
       } else {
+        if (retried) {
+          yield { kind: "file_attempt", file, attempt, state: "recovered", retryable: true };
+        }
         done = true;
       }
     }
@@ -938,6 +1078,7 @@ export async function* runInitWithSources(
     yield { kind: "tool_result", ok: true };
 
     successfulFiles++;
+    yield { kind: "file_outcome", file, status: "done" };
     yield { kind: "file_done", file };
   }
 
@@ -994,10 +1135,12 @@ export async function* runIncrementalReinit(
 
     let retried = false;
     let fileDone = false;
+    let attempt = 1;
     let ingestOutcome: IngestOutcome | undefined;
     while (!fileDone) {
       let caught: Error | null = null;
       let controlledRetryable: boolean | undefined;
+      let controlledStage: IngestFailureStage | undefined;
       try {
         const forwarded = forwardIngest(
           runIngest(
@@ -1018,13 +1161,17 @@ export async function* runIncrementalReinit(
         while (true) {
           const next = await forwarded.next();
           if (next.done) {
-            ingestOutcome = next.value;
+            ingestOutcome = next.value.outcome;
+            if (!ingestOutcome.ok && next.value.childError) {
+              ingestOutcome = { ...ingestOutcome, message: next.value.childError };
+            }
             break;
           }
           yield next.value;
         }
         if (!ingestOutcome.ok) {
           controlledRetryable = ingestOutcome.retryable;
+          controlledStage = ingestOutcome.stage;
           caught = new Error(ingestOutcome.message);
           caught.name = ingestOutcome.stage === "embedding"
             ? "EmbeddingUnavailableError"
@@ -1034,13 +1181,22 @@ export async function* runIncrementalReinit(
         caught = e as Error;
       }
       if (caught) {
+        if (caught.name === "AbortError" || signal.aborted) return;
+        const failureRetryable = controlledRetryable ?? true;
+        yield {
+          kind: "file_attempt",
+          file,
+          attempt,
+          state: "failed",
+          retryable: failureRetryable,
+          message: safeFileAttemptMessage(caught, controlledStage),
+        };
         if (caught instanceof EmbeddingUnavailableError || caught.name === "EmbeddingUnavailableError") {
           yield { kind: "error", message: `init stopped — embedding endpoint failed: ${caught.message}. Fix embedding config and re-run.` };
           yield { kind: "result", durationMs: Date.now() - start, text: "" };
           return;
         }
-        if (caught.name === "AbortError" || signal.aborted) return;
-        const canRetry = !retried && (controlledRetryable ?? true);
+        const canRetry = !retried && failureRetryable;
         let choice: Awaited<ReturnType<NonNullable<OnFileError>>> = "skip";
         if (onFileError) {
           const progress = i18nFor(resolveLang(sourceOpts.outputLanguage)).initProgress;
@@ -1048,10 +1204,23 @@ export async function* runIncrementalReinit(
           choice = await onFileError(file, caught, canRetry);
           yield { kind: "info_text", icon: "ℹ️", summary: progress.fileErrorDecision(choice) };
         }
-        if (choice === "stop") return;
-        if (choice === "retry" && canRetry) { retried = true; continue; }
+        if (signal.aborted) return;
+        if (choice === "stop") {
+          yield { kind: "file_outcome", file, status: "stopped" };
+          return;
+        }
+        if (choice === "retry" && canRetry) {
+          retried = true;
+          attempt += 1;
+          yield { kind: "file_attempt", file, attempt, state: "retry_scheduled", retryable: true };
+          continue;
+        }
+        yield { kind: "file_outcome", file, status: retried ? "exhausted" : "skipped" };
         fileDone = true;
       } else {
+        if (retried) {
+          yield { kind: "file_attempt", file, attempt, state: "recovered", retryable: true };
+        }
         fileDone = true;
       }
     }
@@ -1073,6 +1242,7 @@ export async function* runIncrementalReinit(
     yield { kind: "tool_result", ok: true };
 
     doneCount++;
+    yield { kind: "file_outcome", file, status: "done" };
     yield { kind: "file_done", file };
   }
 

@@ -772,6 +772,29 @@ test("bootstrap repairs collapsed taxonomy from source evidence without hardcode
   const llm = {
     chat: { completions: { create: async (params: unknown) => {
       const prompt = JSON.stringify(params);
+      const messages = (params as {
+        messages?: Array<{ content?: unknown }>;
+      }).messages ?? [];
+      const messageText = messages
+        .map((message) => typeof message.content === "string" ? message.content : "")
+        .join("\n");
+      if (messageText.includes("EVIDENCE_TYPE_UNITS ")) {
+        const marker = "EVIDENCE_TYPE_UNITS ";
+        const encoded = messageText.slice(messageText.lastIndexOf(marker) + marker.length).split("\n", 1)[0];
+        const units = JSON.parse(encoded) as Array<{ entityKey: string }>;
+        const types: Record<string, string> = {
+          chromium: "software",
+          systemd: "service",
+          fstab: "configuration",
+        };
+        return mockResponse(params, JSON.stringify({
+          assignments: units.map(({ entityKey }) => {
+            const entityType = types[entityKey];
+            assert.ok(entityType, `unexpected evidence type unit ${entityKey}`);
+            return { entityKey, entityType };
+          }),
+        }));
+      }
       const chunkId = prompt.match(/CHUNK_ID ([^\s\\"]+)/)?.[1];
       if (chunkId) {
         return mockResponse(params, JSON.stringify({

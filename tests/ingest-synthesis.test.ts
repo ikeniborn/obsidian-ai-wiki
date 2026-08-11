@@ -995,7 +995,7 @@ test("conflict regeneration stops after one failed field-frame repair", async ()
   assert.equal(seen.length, 2);
 });
 
-test("conflict regeneration rejects schema and domain errors without repair", async () => {
+test("conflict regeneration forwards exactly one request for each parsed schema or domain defect", async () => {
   const current = inspectPatchablePage("# A\n\n## Facts\nold\n");
   const section = current.sections[0];
   const base = { entityKey: "a", evidence: bundle("a", existingPath, section).evidence, targetPath: existingPath,
@@ -1012,11 +1012,11 @@ test("conflict regeneration rejects schema and domain errors without repair", as
     const seen: Record<string, unknown>[] = [];
     const llm = mockLlm(() => JSON.stringify({ reasoning: "bad", actions: [invalid], skips: [] }), seen, []);
     await assert.rejects(regenerateConflictedPatch(regenerationArgs(base.entityKey, base.evidence, base.targetPath, base.pageHash, base.targetSections, base.replaceAuthorities, llm)), ConflictRegenerationExhaustedError);
-    assert.equal(seen.length, 1);
+    assert.equal(seen.length, 1, `invalid output must not trigger format repair: ${JSON.stringify(invalid)}`);
   }
 });
 
-test("conflict regeneration rejects repeated stale output before transport", async () => {
+test("conflict regeneration forwards zero requests when conflictCount is already one", async () => {
   const current = inspectPatchablePage("# A\n\n## Facts\nold\n");
   const section = current.sections[0];
   const base = { entityKey: "a", evidence: bundle("a", existingPath, section).evidence, targetPath: existingPath,

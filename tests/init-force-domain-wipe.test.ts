@@ -1106,22 +1106,39 @@ function bootstrapLlm(): LlmClient {
 
 function nativeReinitLlm(calls: {
   bootstrap: number;
-  evidence: number;
+  bootstrapMap: number;
+  typeMap: number;
+  ingestMap: number;
   synthesis: number;
 }): LlmClient {
   let bootstrapEvidencePrepared = false;
   const create = (async (params: unknown) => {
     const prompt = JSON.stringify(params);
+    if (prompt.includes("EVIDENCE_TYPE_UNITS ")) {
+      calls.typeMap += 1;
+      return mockResponse(params, JSON.stringify({
+        assignments: [{ entityKey: "created", entityType: "concept" }],
+      }));
+    }
     const chunkId = prompt.match(/CHUNK_ID ([^\s\\"]+)/)?.[1];
     if (chunkId) {
       if (!bootstrapEvidencePrepared) {
         bootstrapEvidencePrepared = true;
+        calls.bootstrapMap += 1;
         return mockResponse(params, JSON.stringify({
-          packets: [],
-          noEvidence: [{ chunkId, reason: "Entity types are not configured yet." }],
+          packets: [{
+            id: `packet-${chunkId}`,
+            chunkId,
+            entityKey: "created",
+            facts: ["Alpha."],
+            exactSourceRanges: [{ startLine: 3, endLine: 3 }],
+            links: [],
+            sourceAnchor: "src/a.md:3",
+          }],
+          noEvidence: [],
         }));
       }
-      calls.evidence += 1;
+      calls.ingestMap += 1;
       return mockResponse(params, JSON.stringify({
         packets: [{
           id: `packet-${chunkId}`,
@@ -1305,7 +1322,7 @@ test("force init emits one wipe, proves absence, then creates a fresh domain bef
 
 test("native force re-init retries synthesis without replaying real effects", async () => {
   const adapter = seededAdapter();
-  const calls = { bootstrap: 0, evidence: 0, synthesis: 0 };
+  const calls = { bootstrap: 0, bootstrapMap: 0, typeMap: 0, ingestMap: 0, synthesis: 0 };
   const events: RunEvent[] = [];
   const expectedIngestDate = new Date().toISOString().slice(0, 10);
 
@@ -1338,7 +1355,9 @@ test("native force re-init retries synthesis without replaying real effects", as
     && event.name === "Read"
     && event.input.path === "src/a.md").length, 1);
   assert.equal(calls.bootstrap, 1);
-  assert.equal(calls.evidence, 1);
+  assert.equal(calls.bootstrapMap, 1);
+  assert.equal(calls.typeMap, 1);
+  assert.equal(calls.ingestMap, 0);
   assert.equal(calls.synthesis, 2);
   assert.equal(adapter.writes.filter(({ path }) =>
     path === "!Wiki/demo/concept/wiki_demo_created.md").length, 1);

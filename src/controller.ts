@@ -90,6 +90,7 @@ import {
   persistDeleteStateCommitEvent,
 } from "./phases/delete";
 import { processDeleteStateCommitForDispatch } from "./delete-state-dispatch";
+import { finalizeRunStatus, reduceRunStatus } from "./run-status";
 
 /** Minimal surface of the host obsidian-excalidraw-plugin's ExcalidrawAutomate. */
 interface ExcalidrawAutomateLike {
@@ -948,6 +949,7 @@ export class WikiController {
     const steps: RunHistoryEntry["steps"] = [];
     let finalText = "";
     let status: RunHistoryEntry["status"] = "done";
+    let observedSuccessfulMutation = false;
 
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `start op=${op} args=${JSON.stringify(args)} domainId=${domainId ?? ""}` });
     view.setRunning(op, args);
@@ -992,6 +994,7 @@ export class WikiController {
             ctrl.abort();
             break;
           }
+          observedSuccessfulMutation = true;
         } else {
           await this.logEvent(vaultRoot, sessionId, op, domainId, ev);
           this.activeView()?.appendEvent(ev);
@@ -1000,7 +1003,10 @@ export class WikiController {
           try {
             const cur = await this.domainStore.load();
             const next = applyDomainEvent(cur, ev, { vaultRoot });
-            if (next !== cur) await this.domainStore.save(next);
+            if (next !== cur) {
+              await this.domainStore.save(next);
+              observedSuccessfulMutation = true;
+            }
           } catch (e) {
             if (e instanceof DomainCorruptError) {
               new Notice(`Domain map corrupt: ${e.message}`);
@@ -1016,17 +1022,18 @@ export class WikiController {
         }
         this.collectStep(ev, steps);
         if (ev.kind === "result") finalText = ev.text;
-        if (ev.kind === "error") status = "error";
-        if (ev.kind === "exit") {
-          if (ev.code !== 0 && status === "done") status = "error";
-          if (ctrl.signal.aborted) status = "cancelled";
+        if (ev.kind === "file_outcome" && ev.status === "done") {
+          observedSuccessfulMutation = true;
         }
+        status = reduceRunStatus(status, ev);
       }
     } catch (err) {
       status = "error";
-      console.error("[ai-wiki] dispatch failed", err);
-      finalText = i18n().ctrl.errorPrefix((err as Error).message);
-      await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
+      if (!timedOut) {
+        console.error("[ai-wiki] dispatch failed", err);
+        finalText = i18n().ctrl.errorPrefix((err as Error).message);
+        await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
+      }
     } finally {
       if (timeoutId !== null) window.clearTimeout(timeoutId);
       this.current = null;
@@ -1034,21 +1041,22 @@ export class WikiController {
       this.currentOp = null;
       this._currentLogMeta = null;
     }
-    if (ctrl.signal.aborted && status === "done" && !finalText) {
-      if (timedOut) {
-        status = "error";
-        finalText = `Timeout after ${Math.round(timeoutMs / 1000)}s — check LLM backend URL`;
-        this.activeView()?.appendEvent({ kind: "error", message: finalText });
-        await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
-      } else {
-        status = "cancelled";
-      }
+    status = finalizeRunStatus(status, {
+      aborted: ctrl.signal.aborted,
+      timedOut,
+    });
+    if (timedOut) {
+      finalText = `Timeout after ${Math.round(timeoutMs / 1000)}s — check LLM backend URL`;
+      this.activeView()?.appendEvent({ kind: "error", message: finalText });
+      await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
     }
-    if (status === "done") {
-      const mutatesWiki = op === "ingest" || op === "lint" || op === "lint-chat" || op === "init";
-      if (mutatesWiki) {
+    const mutatesWiki = op === "ingest" || op === "lint" || op === "lint-chat" || op === "init";
+    if (mutatesWiki && (status === "done" || observedSuccessfulMutation)) {
+      try {
         const targets = domainId ? [domainId] : (await this.domainStore.load()).map((d) => d.id);
         for (const id of targets) graphCache.invalidate(id);
+      } catch (error) {
+        console.error("[ai-wiki] graph cache invalidation failed", error);
       }
     }
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `finish status=${status} durationMs=${Date.now() - startedAt}` });

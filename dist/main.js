@@ -45508,28 +45508,30 @@ function chunkMarkdownSource(source, options) {
     };
   });
 }
-function createSourceChunkForRange(source, startLine, endLine, ordinal, headingPath) {
+function createSourceChunkRangeFactory(source) {
   const sourceLines2 = splitSourceLines(source);
-  if (!Number.isInteger(startLine) || !Number.isInteger(endLine) || !Number.isInteger(ordinal) || startLine < 1 || endLine < startLine || endLine > sourceLines2.length) {
-    throw new RangeError(`Source range ${startLine}-${endLine} is outside source lines 1-${sourceLines2.length}`);
-  }
   const lines = scanLines(sourceLines2);
-  const range = {
-    startIndex: startLine - 1,
-    endIndex: endLine - 1,
-    headingPath: headingPath ?? [...lines[startLine - 1].headingPath]
-  };
-  const rawMarkdown = rawRangeMarkdown(lines, range.startIndex, range.endIndex);
-  const markdown = renderRangeMarkdown(lines, range);
-  const hash = contentHash(rawMarkdown);
-  return {
-    id: `${ordinal}:${startLine}-${endLine}:${hash}`,
-    headingPath: [...range.headingPath],
-    ordinal,
-    startLine,
-    endLine,
-    markdown,
-    contentHash: hash
+  return (startLine, endLine, ordinal, headingPath) => {
+    if (!Number.isInteger(startLine) || !Number.isInteger(endLine) || !Number.isInteger(ordinal) || startLine < 1 || endLine < startLine || endLine > sourceLines2.length) {
+      throw new RangeError(`Source range ${startLine}-${endLine} is outside source lines 1-${sourceLines2.length}`);
+    }
+    const range = {
+      startIndex: startLine - 1,
+      endIndex: endLine - 1,
+      headingPath: headingPath ?? [...lines[startLine - 1].headingPath]
+    };
+    const rawMarkdown = rawRangeMarkdown(lines, range.startIndex, range.endIndex);
+    const markdown = renderRangeMarkdown(lines, range);
+    const hash = contentHash(rawMarkdown);
+    return {
+      id: `${ordinal}:${startLine}-${endLine}:${hash}`,
+      headingPath: [...range.headingPath],
+      ordinal,
+      startLine,
+      endLine,
+      markdown,
+      contentHash: hash
+    };
   };
 }
 function assertCompleteSourceCoverage(source, chunks) {
@@ -54117,6 +54119,8 @@ var ingest_evidence_reduce_default = 'You reduce only the validated evidence pac
 
 // src/phases/ingest-evidence.ts
 var MAPPER_ESTIMATE_SAFETY_TOKENS = 128;
+var STRUCTURED_REPAIR_DETAIL_MAX_BYTES = 26;
+var structuredRepairEncoder = new TextEncoder();
 var EvidenceCoverageError = class extends Error {
   constructor(message, options) {
     super(message, options);
@@ -54200,7 +54204,7 @@ function globalRange(range, chunk) {
   };
 }
 function sourceLines(source) {
-  return Array.isArray(source) ? source : source.split("\n");
+  return typeof source === "string" ? source.split("\n") : source;
 }
 function sourceForEvidence(source) {
   const lines = source.split("\n");
@@ -54391,9 +54395,10 @@ function noEvidenceWireSchemaFor(chunkId) {
     if (typeof value === "string") return { chunkId, reason: value };
     if (value && typeof value === "object" && !Array.isArray(value)) {
       const record = value;
+      const { summary, ...withoutSummary } = record;
       return {
-        chunkId,
-        reason: typeof record.reason === "string" && record.reason.trim() !== "" ? record.reason : typeof record.summary === "string" && record.summary.trim() !== "" ? record.summary : "No domain evidence in supplied chunk."
+        ...withoutSummary,
+        reason: record.reason === void 0 && typeof summary === "string" && summary.trim() !== "" ? summary : record.reason
       };
     }
     return value;
@@ -54431,12 +54436,14 @@ function mapperSchemaFor(chunk, mode) {
         const declaredId = typeof packetRecord.id === "string" && packetRecord.id.trim() !== "" ? packetRecord.id : void 0;
         const id = declaredId !== void 0 && !usedPacketIds.has(declaredId) ? declaredId : nextPacketId();
         usedPacketIds.add(id);
-        return { ...packetRecord, id, chunkId: chunk.id };
+        return { ...packetRecord, id };
       }) : record.packets;
+      const hasPackets = Array.isArray(record.packets) && record.packets.length > 0;
+      const hasNoEvidence = Array.isArray(record.noEvidence) && record.noEvidence.length > 0;
       return {
         ...record,
-        packets,
-        ...record.noEvidence === void 0 ? { noEvidence: [] } : {}
+        ...record.packets === void 0 && hasNoEvidence ? { packets: [] } : { packets },
+        ...record.noEvidence === void 0 && hasPackets ? { noEvidence: [] } : {}
       };
     }
     return value;
@@ -54445,6 +54452,9 @@ function mapperSchemaFor(chunk, mode) {
   }));
   return structuredWireSchema(schema.superRefine((value, ctx) => {
     try {
+      if (value.packets.length === 0 && value.noEvidence.length === 0) {
+        throw new EvidenceCoverageError("Evidence map must assign packets or explicit noEvidence");
+      }
       buildEvidenceCoverage([chunk.id], value.packets, value.noEvidence);
       for (const packet of value.packets) {
         assertEntityKey(packet.entityKey);
@@ -54495,9 +54505,9 @@ function assertReducedEntity(expected, actual) {
 function compressionOf(policy) {
   return policy.compressionProfile ?? policy.compression ?? "balanced";
 }
-function messagesForMapper(prompt, chunk, domainId, mode, source) {
+function messagesForMapper(prompt, chunk, domainId, mode, preparedSourceLines) {
   const configuredTypes = mode.rejectEntityTypes ? "none" : mode.allowedEntityTypes === void 0 ? "unspecified" : [...mode.allowedEntityTypes].join(", ") || "none";
-  const originalLines = sourceLines(source).slice(chunk.startLine - 1, chunk.endLine);
+  const originalLines = preparedSourceLines.slice(chunk.startLine - 1, chunk.endLine);
   const numberedLines = originalLines.map((line, index) => `CHUNK_LINE ${index + 1} | ${line}`);
   return [
     { role: "system", content: prompt.replace("{{domain_name}}", domainId) },
@@ -54510,11 +54520,11 @@ ${numberedLines.join("\n")}`
     }
   ];
 }
-function mapperRequestDetails(source, chunk, domainId, mode, policy, opts) {
-  const messages = messagesForMapper(ingest_evidence_map_default, chunk, domainId, mode, source);
+function mapperRequestDetails(preparedSourceLines, chunk, domainId, mode, policy, opts) {
+  const messages = messagesForMapper(ingest_evidence_map_default, chunk, domainId, mode, preparedSourceLines);
   const mapperOpts = taskLlmOptions(opts, policy, policy.inputBudgetTokens);
   const prepared = prepareChatMessages(messages, mapperOpts);
-  const original = sourceLines(source).slice(chunk.startLine - 1, chunk.endLine).join("\n");
+  const original = preparedSourceLines.slice(chunk.startLine - 1, chunk.endLine).join("\n");
   return {
     hash: JSON.stringify(prepared),
     estimatedInputTokens: estimateStructuredRequest(messages, mapperOpts, policy.mapperRetries ?? 1),
@@ -54526,19 +54536,28 @@ function estimateLlmMessages(messages, opts) {
   return estimatePreparedMessages(prepareChatMessages(messages, opts));
 }
 function boundedStructuredRepairInstruction(error) {
-  const detail = error instanceof external_exports.ZodError ? error.issues.slice(0, 12).map((issue) => {
+  const unboundedDetail = error instanceof external_exports.ZodError ? error.issues.slice(0, 12).map((issue) => {
     const path5 = issue.path.length ? issue.path.join(".") : "(root)";
-    return `- ${path5}: ${evidenceValidationReason(issue)}`;
+    return `${evidenceValidationReason(issue)} @ ${path5}`;
   }).join("\n") : error?.message;
+  const detail = unboundedDetail === void 0 ? void 0 : boundStructuredRepairDetail(unboundedDetail);
   return [
-    "STRUCTURED_REPAIR: Previous response failed validation.",
-    detail ? `Validation details:
-${detail}` : void 0,
-    "Output only <<<JSON>>>, required JSON, then <<<END>>>.",
-    "For mapper output: cover the supplied chunk exactly once via packets or one noEvidence item.",
-    "Use the exact supplied chunkId. Omit entityType when configured entity types are none.",
-    "Use only chunk-local CHUNK_LINE numbers in exactSourceRanges."
+    "STRUCTURED_REPAIR:",
+    detail,
+    "Return <<<JSON>>>...<<<END>>>; exact chunkId; chunk-local CHUNK_LINE ranges."
   ].filter(Boolean).join("\n");
+}
+function boundStructuredRepairDetail(detail) {
+  const normalized = detail.replace(/\p{Cc}+/gu, " ").replace(/\s+/gu, " ").trim();
+  let bytes = 0;
+  let bounded = "";
+  for (const character of normalized) {
+    const characterBytes = structuredRepairEncoder.encode(character).byteLength;
+    if (bytes + characterBytes > STRUCTURED_REPAIR_DETAIL_MAX_BYTES) break;
+    bounded += character;
+    bytes += characterBytes;
+  }
+  return bounded;
 }
 function evidenceValidationReason(issue) {
   const message = issue.message.replace(/\s+/g, " ").trim().slice(0, 320);
@@ -54558,8 +54577,7 @@ function outputLimitStructuredRepairMessages(messages, error) {
     {
       role: "user",
       content: [
-        "OUTPUT_LIMIT_RETRY: The previous response consumed its output limit without usable structured content.",
-        "Return the complete result now and keep optional detail compact.",
+        "OUTPUT LIMIT RETRY.",
         boundedStructuredRepairInstruction(error)
       ].join("\n")
     }
@@ -54568,7 +54586,12 @@ function outputLimitStructuredRepairMessages(messages, error) {
 function estimateStructuredRequest(messages, opts, retries) {
   const base = estimateLlmMessages(messages, opts);
   if (retries <= 0) return base;
-  return Math.max(base, estimateLlmMessages(structuredRepairMessages(messages), opts));
+  const worstCaseDetail = new Error("\\".repeat(STRUCTURED_REPAIR_DETAIL_MAX_BYTES));
+  return Math.max(
+    base,
+    estimateLlmMessages(structuredRepairMessages(messages, worstCaseDetail), opts),
+    estimateLlmMessages(outputLimitStructuredRepairMessages(messages, worstCaseDetail), opts)
+  );
 }
 async function runBoundedStructuredWithRetry(args) {
   let messages = args.baseMessages;
@@ -54647,6 +54670,17 @@ function chunkSourceForEvidence(source, domainId, policy, opts = {}, configuredE
     rejectEntityTypes: normalizedEntityTypes.length === 0,
     allowedEntityTypes: new Set(normalizedEntityTypes)
   };
+  return planSourceChunksForEvidence(
+    source,
+    sourceLines(source),
+    createSourceChunkRangeFactory(source),
+    domainId,
+    policy,
+    opts,
+    mode
+  );
+}
+function planSourceChunksForEvidence(source, preparedSourceLines, createChunk, domainId, policy, opts, mode) {
   const initialRequestBudget = policy.inputBudgetTokens;
   if (initialRequestBudget <= 0) {
     throw new EvidenceCoverageError("Mapper prompt and repair reserve exceed the input budget");
@@ -54661,9 +54695,18 @@ function chunkSourceForEvidence(source, domainId, policy, opts = {}, configuredE
     } catch {
       return { kind: "too-small" };
     }
+    const mapperOpts = taskLlmOptions(opts, policy, policy.inputBudgetTokens);
+    chunks = packAdjacentMapperChunks(chunks, createChunk, (chunk) => mapperEstimateFits(
+      estimateStructuredRequest(
+        messagesForMapper(ingest_evidence_map_default, chunk, domainId, mode, preparedSourceLines),
+        mapperOpts,
+        policy.mapperRetries ?? 1
+      ),
+      initialRequestBudget
+    ));
     const estimates = chunks.map((chunk) => estimateStructuredRequest(
-      messagesForMapper(ingest_evidence_map_default, chunk, domainId, mode, source),
-      taskLlmOptions(opts, policy, policy.inputBudgetTokens),
+      messagesForMapper(ingest_evidence_map_default, chunk, domainId, mode, preparedSourceLines),
+      mapperOpts,
       policy.mapperRetries ?? 1
     ));
     const largest = Math.max(...estimates);
@@ -54784,12 +54827,12 @@ function forwardContextRepackProgress(runtime, event) {
   });
   runtime.onEvent?.({ kind: "tool_result", ok: true, preview: "retry scheduled" });
 }
-async function mapChunk(source, domainId, chunk, totalChunks, policy, runtime, mode) {
+async function mapChunk(preparedSourceLines, domainId, chunk, totalChunks, policy, runtime, mode) {
   const configuredBudget = policy.inputBudgetTokens;
   const mapCallSite = runtime.mapCallSite ?? "ingest.evidence-map";
   const opts = { ...runtime.opts ?? {}, inputBudgetTokens: configuredBudget };
   try {
-    const messages = messagesForMapper(ingest_evidence_map_default, chunk, domainId, mode, source);
+    const messages = messagesForMapper(ingest_evidence_map_default, chunk, domainId, mode, preparedSourceLines);
     const mapperOpts = taskLlmOptions(opts, policy, configuredBudget);
     const estimatedInputTokens = estimateStructuredRequest(messages, mapperOpts, policy.mapperRetries ?? 1);
     if (estimatedInputTokens > configuredBudget) {
@@ -54822,7 +54865,7 @@ async function mapChunk(source, domainId, chunk, totalChunks, policy, runtime, m
     try {
       mapped = validateEvidenceMap(
         { chunk, packets: result.value.packets, noEvidence: result.value.noEvidence },
-        source
+        preparedSourceLines
       ).map((packet) => ({ ...packet, id: `${chunk.id}:${packet.id}` }));
     } catch (error) {
       runtime.onEvent?.(lifecycleEvent(result.lifecycle.id, result.lifecycle.action, "failed"));
@@ -54846,26 +54889,62 @@ function lineCountOf(chunk) {
 function isStructuredMapperFailure(error) {
   return error instanceof EvidenceCoverageError && error.cause instanceof StructuredValidationError;
 }
-function sourceChunkFromRange(source, parent, startLine, endLine, ordinal) {
-  return createSourceChunkForRange(source, startLine, endLine, ordinal, parent.headingPath);
+function mapperSplitReason(error) {
+  if (!isStructuredMapperFailure(error)) return null;
+  const structured = error.cause;
+  if (structured.errorType === "output_limit") return "output_limit";
+  if (structured.errorType !== "schema_validate" || !(structured.lastError instanceof external_exports.ZodError)) return null;
+  if (structured.lastError.issues.length === 0) return null;
+  const localCodes = /* @__PURE__ */ new Set(["chunk_coverage_mismatch", "source_range_out_of_bounds"]);
+  return structured.lastError.issues.every((issue) => localCodes.has(evidenceValidationReason(issue).split(":", 1)[0])) ? "chunk_local_validation" : null;
 }
-function normalizeSourceChunksFrom(source, chunks, startIndex) {
+function normalizeSourceChunksFrom(chunks, startIndex, createChunk) {
   for (let index = startIndex; index < chunks.length; index++) {
     const chunk = chunks[index];
-    chunks[index] = createSourceChunkForRange(source, chunk.startLine, chunk.endLine, index, chunk.headingPath);
+    chunks[index] = createChunk(chunk.startLine, chunk.endLine, index, chunk.headingPath);
   }
 }
-function splitSourceChunkForEvidenceMap(source, chunk, firstOrdinal) {
+function normalizeMapperChunkWorkFrom(workItems, startIndex, createChunk) {
+  for (let index = startIndex; index < workItems.length; index++) {
+    const work = workItems[index];
+    workItems[index] = {
+      ...work,
+      chunk: createChunk(work.chunk.startLine, work.chunk.endLine, index, work.chunk.headingPath)
+    };
+  }
+}
+function packAdjacentMapperChunks(chunks, createChunk, canFit) {
+  const packed = [];
+  for (const next of chunks) {
+    const previous = packed.at(-1);
+    if (previous !== void 0 && previous.endLine + 1 === next.startLine) {
+      const merged = createChunk(
+        previous.startLine,
+        next.endLine,
+        packed.length - 1,
+        previous.headingPath
+      );
+      if (canFit(merged)) {
+        packed[packed.length - 1] = merged;
+        continue;
+      }
+    }
+    packed.push(next);
+  }
+  normalizeSourceChunksFrom(packed, 0, createChunk);
+  return packed;
+}
+function splitSourceChunkForEvidenceMap(chunk, firstOrdinal, createChunk) {
   if (lineCountOf(chunk) <= 1) {
     throw new EvidenceCoverageError(`Mapper chunk ${chunk.id} cannot be split into a smaller source range`);
   }
   const splitLine = chunk.startLine + Math.floor(lineCountOf(chunk) / 2) - 1;
   return [
-    sourceChunkFromRange(source, chunk, chunk.startLine, splitLine, firstOrdinal),
-    sourceChunkFromRange(source, chunk, splitLine + 1, chunk.endLine, firstOrdinal + 1)
+    createChunk(chunk.startLine, splitLine, firstOrdinal, chunk.headingPath),
+    createChunk(splitLine + 1, chunk.endLine, firstOrdinal + 1, chunk.headingPath)
   ];
 }
-function rechunkMapperSourceForRetry(source, domainId, policy, runtime, mode, maximumRawBudget, effectiveInputBudget) {
+function rechunkMapperSourceForRetry(source, preparedSourceLines, createChunk, domainId, policy, runtime, mode, maximumRawBudget, effectiveInputBudget) {
   const planned = findLargestFeasibleBudget(1, Math.min(maximumRawBudget, effectiveInputBudget), (rawBudget) => {
     let chunks;
     try {
@@ -54877,8 +54956,19 @@ function rechunkMapperSourceForRetry(source, domainId, policy, runtime, mode, ma
       return { kind: "too-small" };
     }
     const mapperOpts = taskLlmOptions(runtime.opts ?? {}, policy, effectiveInputBudget);
+    chunks = packAdjacentMapperChunks(chunks, createChunk, (chunk) => {
+      const details = mapperRequestDetails(
+        preparedSourceLines,
+        chunk,
+        domainId,
+        mode,
+        policy,
+        runtime.opts ?? {}
+      );
+      return details.rawBytes <= maximumRawBudget && mapperEstimateFits(details.estimatedInputTokens, effectiveInputBudget);
+    });
     const largest = Math.max(...chunks.map((chunk) => estimateStructuredRequest(
-      messagesForMapper(ingest_evidence_map_default, chunk, domainId, mode, source),
+      messagesForMapper(ingest_evidence_map_default, chunk, domainId, mode, preparedSourceLines),
       mapperOpts,
       policy.mapperRetries ?? 1
     )));
@@ -54892,8 +54982,10 @@ function rechunkMapperSourceForRetry(source, domainId, policy, runtime, mode, ma
 async function mapChunksWithContextRepack(source, domainId, initialChunks, policy, runtime, mode) {
   const configuredBudget = policy.inputBudgetTokens;
   const mapCallSite = runtime.mapCallSite ?? "ingest.evidence-map";
-  const configuredTypes = mode.rejectEntityTypes ? [] : [...mode.allowedEntityTypes ?? []];
+  const preparedSourceLines = sourceLines(source);
+  const createChunk = createSourceChunkRangeFactory(source);
   let failedMapper;
+  const semanticSplitLineage = [];
   return runWithContextRepack({
     requestBudgetsEmittedByExecute: true,
     callSite: mapCallSite,
@@ -54906,7 +54998,15 @@ async function mapChunksWithContextRepack(source, domainId, initialChunks, polic
       if (failedMapper === void 0 && effectiveInputBudget === configuredBudget) {
         chunks = initialChunks;
       } else if (failedMapper === void 0) {
-        chunks = chunkSourceForEvidence(source, domainId, effectivePolicy, runtime.opts ?? {}, configuredTypes);
+        chunks = planSourceChunksForEvidence(
+          source,
+          preparedSourceLines,
+          createChunk,
+          domainId,
+          effectivePolicy,
+          runtime.opts ?? {},
+          mode
+        );
       } else {
         const forcedRawBudget = failedMapper.rawBytes - 1;
         if (forcedRawBudget <= 0) {
@@ -54914,6 +55014,8 @@ async function mapChunksWithContextRepack(source, domainId, initialChunks, polic
         }
         chunks = rechunkMapperSourceForRetry(
           source,
+          preparedSourceLines,
+          createChunk,
           domainId,
           effectivePolicy,
           runtime,
@@ -54925,7 +55027,7 @@ async function mapChunksWithContextRepack(source, domainId, initialChunks, polic
       assertCompleteSourceCoverage(source, chunks);
       const mapperOpts = taskLlmOptions(runtime.opts ?? {}, policy, effectiveInputBudget);
       const estimates = chunks.map((chunk) => estimateStructuredRequest(
-        messagesForMapper(ingest_evidence_map_default, chunk, domainId, mode, source),
+        messagesForMapper(ingest_evidence_map_default, chunk, domainId, mode, preparedSourceLines),
         mapperOpts,
         policy.mapperRetries ?? 1
       ));
@@ -54939,7 +55041,7 @@ async function mapChunksWithContextRepack(source, domainId, initialChunks, polic
           throw new EvidenceCoverageError(`Mapper failed chunk ${failedMapper.id} has no replacement range`);
         }
         const replacementDetails = replacements.map((chunk) => mapperRequestDetails(
-          source,
+          preparedSourceLines,
           chunk,
           domainId,
           mode,
@@ -54950,33 +55052,81 @@ async function mapChunksWithContextRepack(source, domainId, initialChunks, polic
           throw new EvidenceCoverageError(`Mapper retry for chunk ${failedMapper.id} did not make strict progress`);
         }
       }
+      const workItems = chunks.map((chunk) => ({
+        chunk,
+        splitDepth: failedMapper?.splitDepth === 1 && chunk.endLine >= failedMapper.startLine && chunk.startLine <= failedMapper.endLine || semanticSplitLineage.some((lineage) => chunk.endLine >= lineage.startLine && chunk.startLine <= lineage.endLine) ? 1 : 0
+      }));
       return {
-        value: { chunks, effectiveInputBudget },
+        value: { workItems, effectiveInputBudget },
         estimatedInputTokens,
         contextUnits: chunks.length,
         sourceChunks: chunks.length,
         reductionDepth: 0
       };
     },
-    execute: async ({ chunks, effectiveInputBudget }) => {
+    execute: async ({ workItems, effectiveInputBudget }) => {
       const effectivePolicy = { ...policy, inputBudgetTokens: effectiveInputBudget };
-      const activeChunks = [...chunks];
+      const activeWorkItems = [...workItems];
       const packets = [];
       const noEvidence = [];
-      for (let index = 0; index < activeChunks.length; index++) {
-        const chunk = activeChunks[index];
-        const details = mapperRequestDetails(source, chunk, domainId, mode, effectivePolicy, runtime.opts ?? {});
+      for (let index = 0; index < activeWorkItems.length; index++) {
+        const work = activeWorkItems[index];
+        const chunk = work.chunk;
+        const details = mapperRequestDetails(
+          preparedSourceLines,
+          chunk,
+          domainId,
+          mode,
+          effectivePolicy,
+          runtime.opts ?? {}
+        );
         let mapped;
         try {
-          mapped = await mapChunk(source, domainId, chunk, activeChunks.length, effectivePolicy, runtime, mode);
+          mapped = await mapChunk(
+            preparedSourceLines,
+            domainId,
+            chunk,
+            activeWorkItems.length,
+            effectivePolicy,
+            runtime,
+            mode
+          );
         } catch (error) {
           if (classifyContextError(error) !== null) {
-            failedMapper = { ...details, id: chunk.id, startLine: chunk.startLine, endLine: chunk.endLine };
+            failedMapper = {
+              ...details,
+              id: chunk.id,
+              startLine: chunk.startLine,
+              endLine: chunk.endLine,
+              splitDepth: work.splitDepth
+            };
           }
-          if (isStructuredMapperFailure(error) && lineCountOf(chunk) > 1) {
-            const replacements = splitSourceChunkForEvidenceMap(source, chunk, index);
-            activeChunks.splice(index, 1, ...replacements);
-            normalizeSourceChunksFrom(source, activeChunks, index);
+          const splitReason = mapperSplitReason(error);
+          if (splitReason !== null && work.splitDepth === 0 && lineCountOf(chunk) > 1) {
+            const prospectiveWorkItems = [...activeWorkItems];
+            prospectiveWorkItems.splice(
+              index,
+              1,
+              ...splitSourceChunkForEvidenceMap(chunk, index, createChunk).map((replacement) => ({ chunk: replacement, splitDepth: 1 }))
+            );
+            normalizeMapperChunkWorkFrom(prospectiveWorkItems, index, createChunk);
+            const replacements = prospectiveWorkItems.slice(index, index + 2);
+            const replacementDetails = replacements.map((replacement) => mapperRequestDetails(
+              preparedSourceLines,
+              replacement.chunk,
+              domainId,
+              mode,
+              effectivePolicy,
+              runtime.opts ?? {}
+            ));
+            if (replacementDetails.length !== 2 || replacementDetails.some((replacement) => replacement.estimatedInputTokens >= details.estimatedInputTokens)) {
+              throw error;
+            }
+            activeWorkItems.splice(0, activeWorkItems.length, ...prospectiveWorkItems);
+            semanticSplitLineage.push(...replacements.map(({ chunk: replacement }) => ({
+              startLine: replacement.startLine,
+              endLine: replacement.endLine
+            })));
             index -= 1;
             runtime.onEvent?.({
               kind: "tool_use",
@@ -54985,7 +55135,9 @@ async function mapChunksWithContextRepack(source, domainId, initialChunks, polic
                 chunkId: chunk.id,
                 startLine: chunk.startLine,
                 endLine: chunk.endLine,
-                replacementChunks: replacements.length
+                replacementChunks: replacements.length,
+                reason: splitReason,
+                splitDepth: work.splitDepth
               }
             });
             runtime.onEvent?.({ kind: "tool_result", ok: true, preview: "retry scheduled" });
@@ -54996,7 +55148,7 @@ async function mapChunksWithContextRepack(source, domainId, initialChunks, polic
         if (mapped.length === 0) noEvidence.push({ chunkId: chunk.id, reason: "No domain evidence" });
         packets.push(...mapped);
       }
-      return { chunks: activeChunks, packets, noEvidence };
+      return { chunks: activeWorkItems.map(({ chunk }) => chunk), packets, noEvidence };
     },
     onEvent: (event) => forwardContextRepackProgress(runtime, event)
   });
@@ -55250,7 +55402,7 @@ async function prepareSourceEvidence(source, domainId, policy, runtime) {
     allowedEntityTypes: new Set(configuredEntityTypes)
   });
 }
-async function prepareBootstrapEvidence(source, provisionalDomainId, policy, runtime) {
+async function prepareBootstrapEvidenceBundle(source, provisionalDomainId, sourcePath, policy, runtime) {
   const evidence = await prepareSourceEvidenceInternal(sourceForEvidence(source), provisionalDomainId, policy, runtime, {
     rejectEntityTypes: true,
     allowedEntityTypes: /* @__PURE__ */ new Set()
@@ -55273,14 +55425,20 @@ async function prepareBootstrapEvidence(source, provisionalDomainId, policy, run
   if (!Number.isSafeInteger(payloadBudget) || payloadBudget <= 0) {
     throw new EvidenceCoverageError("Bootstrap payload budget must be a positive safe integer");
   }
-  const result = boundBootstrapPayload({ candidates, domainThemes, languageEvidence }, payloadBudget);
-  const estimated = estimateBootstrapPayload(result);
+  const bootstrap = boundBootstrapPayload({ candidates, domainThemes, languageEvidence }, payloadBudget);
+  const estimated = estimateBootstrapPayload(bootstrap);
   if (estimated > payloadBudget) {
     throw new EvidenceCoverageError(
       `Bootstrap evidence payload requires ${estimated} tokens but budget is ${payloadBudget}`
     );
   }
-  return result;
+  return {
+    bootstrap,
+    evidence,
+    domainId: provisionalDomainId,
+    sourcePath,
+    sourceBodyHash: hashSource(source)
+  };
 }
 
 // prompts/ingest-synthesis.md
@@ -56625,10 +56783,15 @@ function assignSynthesisEvidenceLedger(ledger, bundles, sourcePrimaryEntityKeys2
   }
   return assigned;
 }
+var TRAILING_CONTINUATION_RE = /[ \t]*(?:&&[ \t]*)?\\[ \t]*$/;
+function stripTrailingContinuation(value) {
+  return value.replace(TRAILING_CONTINUATION_RE, "").trimEnd();
+}
 function findMissingSynthesisEvidence(ledger, contents) {
   const corpus = normalizedCoverage(contents.join("\n"));
   return ledger.filter((item) => {
-    const required = item.kind === "code" ? normalizedCoverage(item.coverageUnits.join("\n")) : normalizedCoverage(item.coverageUnits[0] ?? "");
+    const raw = item.kind === "code" ? normalizedCoverage(item.coverageUnits.join("\n")) : normalizedCoverage(item.coverageUnits[0] ?? "");
+    const required = stripTrailingContinuation(raw);
     return required.length > 0 && !corpus.includes(required);
   });
 }
@@ -56713,6 +56876,19 @@ function headingIndexes(lines) {
   }
   return headings;
 }
+var EVIDENCE_HEADINGS = /* @__PURE__ */ new Set([
+  "## \u0422\u043E\u0447\u043D\u044B\u0435 \u0442\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0434\u0430\u043D\u043D\u044B\u0435",
+  "## Evidencia t\xE9cnica exacta",
+  "## Exact technical evidence"
+]);
+function existingEvidenceSection(existing) {
+  const lines = normalizedMarkdown(existing).split("\n");
+  const headings = headingIndexes(lines);
+  const start = headings.find((candidate) => EVIDENCE_HEADINGS.has(candidate.heading));
+  if (start === void 0) return "";
+  const end = headings.find((candidate) => candidate.index > start.index)?.index ?? lines.length;
+  return lines.slice(start.index + 1, end).join("\n");
+}
 function appendEvidenceSection(content, missing, language) {
   if (missing.length === 0) return content;
   const heading = technicalHeading(language);
@@ -56730,10 +56906,24 @@ function appendEvidenceSection(content, missing, language) {
   }
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
 }
+function dedupeEvidenceItems(items) {
+  const seen = /* @__PURE__ */ new Set();
+  const deduped = [];
+  for (const item of items) {
+    const raw = item.kind === "code" ? normalizedCoverage(item.coverageUnits.join("\n")) : normalizedCoverage(item.coverageUnits[0] ?? "");
+    const key = stripTrailingContinuation(raw);
+    if (key.length > 0 && seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+  }
+  return deduped;
+}
 function reconcileSynthesisEvidence(content, existing, ledger, language) {
   const sanitized = sanitizeUnsupportedEvidence(content, allowedEvidence(ledger, existing ?? ""));
+  const carryOver = existing === null ? [] : findMissingSynthesisEvidence(extractLedger(existingEvidenceSection(existing), false), [sanitized.content]);
   const missing = findMissingSynthesisEvidence(ledger, [sanitized.content]);
-  const reconciled = appendEvidenceSection(sanitized.content, missing, language);
+  const appended = dedupeEvidenceItems([...carryOver, ...missing]);
+  const reconciled = appendEvidenceSection(sanitized.content, appended, language);
   const unresolved = findMissingSynthesisEvidence(ledger, [reconciled]);
   if (unresolved.length > 0) {
     throw new TypeError(`source technical evidence reconciliation left ${unresolved.length} item(s) unresolved`);
@@ -56741,7 +56931,7 @@ function reconcileSynthesisEvidence(content, existing, ledger, language) {
   return {
     content: reconciled,
     removedUnits: sanitized.removedUnits,
-    appendedItems: missing.length
+    appendedItems: appended.length
   };
 }
 
@@ -57213,7 +57403,19 @@ async function collectSourceStems(domain, vaultTools, vaultRoot) {
   }
   return stems;
 }
-async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, signal, opts = {}, similarity, cachedAnnotations, graphDepth = 1, wikiLinkValidationRetries = 3, internal) {
+function consumePreparedEvidence(prepared, domain, sourcePath, sourceBodyHash, vaultTools, vaultRoot) {
+  const preparedAbsolute = (0, import_path_browserify6.isAbsolute)(prepared.sourcePath) ? prepared.sourcePath : (0, import_path_browserify6.join)(vaultRoot, prepared.sourcePath);
+  const preparedSourcePath = vaultTools.toVaultPath(preparedAbsolute);
+  if (prepared.domainId !== domain.id || preparedSourcePath !== sourcePath || prepared.sourceBodyHash !== sourceBodyHash) return void 0;
+  const parsed = EntityEvidenceSchema.array().safeParse(prepared.evidence);
+  if (!parsed.success) return void 0;
+  const allowedTypes = new Set((domain.entity_types ?? []).map((entityType) => entityType.type));
+  if (parsed.data.some((item) => item.entityType === void 0 || !allowedTypes.has(item.entityType))) {
+    return void 0;
+  }
+  return parsed.data;
+}
+async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, signal, opts = {}, similarity, cachedAnnotations, graphDepth = 1, wikiLinkValidationRetries = 3, internal, preparedEvidence) {
   void graphDepth;
   const deferred = (effects = {}) => internal === void 0 ? void 0 : {
     ...effects,
@@ -57261,6 +57463,17 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     const message = `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.`;
     yield { kind: "error", message };
     return failure("context", message, sourcePath, false);
+  }
+  const acceptedPreparedEvidence = preparedEvidence === void 0 ? void 0 : consumePreparedEvidence(
+    preparedEvidence,
+    domain,
+    sourcePath,
+    processedSourceBodyHash,
+    vaultTools,
+    vaultRoot
+  );
+  if (preparedEvidence !== void 0 && acceptedPreparedEvidence === void 0) {
+    yield { kind: "rule_fired", ruleId: "preparedEvidenceFallback", count: 1 };
   }
   const startedAt = Date.now();
   const ingestDate = new Date(startedAt).toISOString().slice(0, 10);
@@ -57320,35 +57533,37 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
       kind: "assistant_text",
       delta: i18nFor(resolveLang(opts.outputLanguage)).ingestProgress.synthesizing(domain.id)
     };
-    let evidence;
-    try {
-      evidence = yield* eventBridge.forwardAbortable(signal, (operationSignal) => prepareSourceEvidence(sourceContent, domain.id, {
-        inputBudgetTokens: policy.inputBudgetTokens,
-        outputBudgetTokens: policy.outputBudgetTokens,
-        compressionProfile: policy.compression,
-        mapperRetries: opts.structuredRetries ?? 1,
-        reducerRetries: opts.structuredRetries ?? 1
-      }, {
-        llm,
-        model,
-        opts,
-        signal: operationSignal,
-        configuredEntityTypes: (domain.entity_types ?? []).map((entityType) => entityType.type),
-        onEvent: captureEvent
-      }));
-    } catch (error) {
-      if (signal.aborted || error.name === "AbortError") {
-        return failure("evidence", "ingest cancelled", sourcePath);
+    let evidence = acceptedPreparedEvidence;
+    if (evidence === void 0) {
+      try {
+        evidence = yield* eventBridge.forwardAbortable(signal, (operationSignal) => prepareSourceEvidence(sourceContent, domain.id, {
+          inputBudgetTokens: policy.inputBudgetTokens,
+          outputBudgetTokens: policy.outputBudgetTokens,
+          compressionProfile: policy.compression,
+          mapperRetries: opts.structuredRetries ?? 1,
+          reducerRetries: opts.structuredRetries ?? 1
+        }, {
+          llm,
+          model,
+          opts,
+          signal: operationSignal,
+          configuredEntityTypes: (domain.entity_types ?? []).map((entityType) => entityType.type),
+          onEvent: captureEvent
+        }));
+      } catch (error) {
+        if (signal.aborted || error.name === "AbortError") {
+          return failure("evidence", "ingest cancelled", sourcePath);
+        }
+        const message = `ingest: evidence preparation failed \u2014 ${error.message}`;
+        yield { kind: "error", message };
+        yield { kind: "result", durationMs: Date.now() - startedAt, text: "", outputTokens: 0 };
+        return failure(
+          "evidence",
+          message,
+          sourcePath,
+          error instanceof EvidenceCoverageError || error instanceof EvidenceReducerError
+        );
       }
-      const message = `ingest: evidence preparation failed \u2014 ${error.message}`;
-      yield { kind: "error", message };
-      yield { kind: "result", durationMs: Date.now() - startedAt, text: "", outputTokens: 0 };
-      return failure(
-        "evidence",
-        message,
-        sourcePath,
-        error instanceof EvidenceCoverageError || error instanceof EvidenceReducerError
-      );
     }
     const service = similarity ?? new PageSimilarityService({ mode: "jaccard", topK: 20 });
     const extracted = evidence.map((entity) => ({
@@ -58658,7 +58873,11 @@ function chunkUnitId(chunk) {
     chunk.heading
   ].join(":");
 }
-function selectQueryContextChunks(rankedChunks, contextLimit) {
+function chunkFacets(chunk) {
+  return tokenizeLexical(`${chunk.heading}
+${chunk.body}`);
+}
+function selectQueryContextChunks(rankedChunks, contextLimit, question = "") {
   if (!Number.isSafeInteger(contextLimit) || contextLimit <= 0) return [];
   const limit2 = Math.min(contextLimit, rankedChunks.length);
   const siblingSlots = Math.floor(limit2 / 3);
@@ -58672,6 +58891,17 @@ function selectQueryContextChunks(rankedChunks, contextLimit) {
     selectedIndexes.add(index);
   }
   const orderedIndexes = [...selectedIndexes].sort((left, right) => left - right);
+  let facetSlots = 0;
+  for (const facet of tokenizeLexical(question)) {
+    if (selectedIndexes.size >= limit2 || facetSlots >= siblingSlots) break;
+    const covered = orderedIndexes.some((index2) => chunkFacets(rankedChunks[index2]).has(facet));
+    if (covered) continue;
+    const index = rankedChunks.findIndex((chunk, idx) => !selectedIndexes.has(idx) && chunkFacets(chunk).has(facet));
+    if (index < 0) continue;
+    selectedIndexes.add(index);
+    orderedIndexes.push(index);
+    facetSlots += 1;
+  }
   for (let index = 0; index < rankedChunks.length; index += 1) {
     if (selectedIndexes.size >= limit2) break;
     if (selectedIndexes.has(index) || !anchorArticleIds.has(rankedChunks[index].articleId)) continue;
@@ -58944,7 +59174,11 @@ function extractTechnicalUnits(markdown) {
     [/\bhttps?:\/\/[^\s<>"'`]+/giu, "url", (value) => value.replace(/[.,;:!?)}\]]+$/g, "")],
     [/\b(?:\d{1,3}\.){3}\d{1,3}(?:\/\d{1,2})?\b/g, "ipv4"],
     [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/giu, "uuid"],
-    [/(?<![\p{L}\p{N}])(?:~|\.{1,2})?\/(?:[A-Za-z0-9._~+@%=-]+\/)*[A-Za-z0-9._~+@%=-]+/gu, "path"],
+    [
+      /(?<![\p{L}\p{N}])(?:~|\.{1,2})?\/(?:[A-Za-z0-9._~+@%=-]+\/)*[A-Za-z0-9._~+@%=-]+/gu,
+      "path",
+      (value) => value.replace(/\.+$/, "")
+    ],
     [/\b[A-Za-z_][A-Za-z0-9_.-]*[ \t]*=[ \t]*[^\s,;]+/g, "assignment"],
     [/(?:^|[\s(])--[A-Za-z0-9][A-Za-z0-9-]*/g, "flag", (value) => /--[A-Za-z0-9][A-Za-z0-9-]*/.exec(value)?.[0] ?? ""],
     [/\bv?\d+(?:\.\d+){1,3}\b/giu, "number"],
@@ -58971,11 +59205,24 @@ function containsExactNumber(context, value) {
   }
   return false;
 }
-function findUnsupportedTechnicalUnits(answer, selectedContext) {
+function idForm(value) {
+  return value.normalize("NFC").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+function titleSupported(unit, articleIds) {
+  if (unit.kind === "number") return false;
+  const unitForm = idForm(unit.text);
+  if (!unitForm.includes("_")) return false;
+  return articleIds.some((articleId) => {
+    const articleForm = idForm(articleId);
+    return articleForm === unitForm || articleForm.endsWith(`_${unitForm}`);
+  });
+}
+function findUnsupportedTechnicalUnits(answer, selectedContext, articleIds = []) {
   const context = normalizeText(selectedContext.join("\n"));
   return extractTechnicalUnits(answer).filter((unit) => {
     const value = normalizeText(unit.text);
-    return unit.kind === "number" ? !containsExactNumber(context, value) : !context.includes(value);
+    const supported = unit.kind === "number" ? containsExactNumber(context, value) : context.includes(value);
+    return !supported && !titleSupported(unit, articleIds);
   });
 }
 function unitIdentity(unit) {
@@ -59012,7 +59259,8 @@ function removeInlineCodeUnit(line, target) {
 }
 function cleanSanitizedProseLine(line) {
   const leading = /^[ \t]*/.exec(line)?.[0] ?? "";
-  const body = line.slice(leading.length).replace(/\[([^\]]+)]\([ \t]*\)/g, "$1").replace(/[ \t]+/g, " ").replace(/[ \t]+([,.;:!?])/g, "$1").replace(/([([])[ \t]+/g, "$1").replace(/[ \t]+([)\]])/g, "$1").trim();
+  const body = line.slice(leading.length).replace(/\[([^\]]+)]\([ \t]*\)/g, "$1").replace(/[ \t]+/g, " ").replace(/[ \t]+([,.;:!?])/g, "$1").replace(/([([])[ \t]+/g, "$1").replace(/[ \t]+([)\]])/g, "$1").replace(/\*\*\*\*/g, "").replace(/____/g, "").replace(/(^|[ \t])(\*\*|__|\*|_)(?=[ \t]|$)/g, "$1").replace(/(?<!`)``(?!`)/g, "").replace(/\([ \t]*\)/g, "").replace(/[ \t]+/g, " ").trim();
+  if (body.length === 0 || /^\d{1,9}[.)]$/.test(body)) return "";
   if (!/[\p{L}\p{N}`\]]/u.test(body)) return "";
   return `${leading}${body}`;
 }
@@ -59421,7 +59669,7 @@ async function* answerFromContext(args) {
   const selectedContext = [renderContextChunks(selectedChunks)];
   if (answer && !signal.aborted) {
     yield { kind: "tool_use", name: "ValidateGrounding", input: {} };
-    const unsupported = findUnsupportedTechnicalUnits(answer, selectedContext);
+    const unsupported = findUnsupportedTechnicalUnits(answer, selectedContext, [...knownStems]);
     yield {
       kind: "tool_result",
       ok: unsupported.length === 0,
@@ -59439,7 +59687,7 @@ async function* answerFromContext(args) {
         removedUnits += sanitized.removedUnits;
         if (sanitized.answer === sanitizedAnswer) break;
         sanitizedAnswer = sanitized.answer;
-        sanitizedUnsupported = findUnsupportedTechnicalUnits(sanitizedAnswer, selectedContext);
+        sanitizedUnsupported = findUnsupportedTechnicalUnits(sanitizedAnswer, selectedContext, [...knownStems]);
       }
       let repaired = sanitizedAnswer.length > 0 && sanitizedUnsupported.length === 0;
       let repairPreview = repaired ? `accepted locally; removed ${removedUnits} units across ${removedLines} lines` : sanitizedAnswer.length === 0 ? "local sanitation removed the whole answer" : `${sanitizedUnsupported.length} unsupported after local sanitation`;
@@ -59483,7 +59731,8 @@ async function* answerFromContext(args) {
           outputTokens += repair.outputTokens;
           const repairUnsupported = findUnsupportedTechnicalUnits(
             repair.value.answer_markdown,
-            selectedContext
+            selectedContext,
+            [...knownStems]
           );
           yield lifecycleEvent(repair.lifecycle.id, repair.lifecycle.action, "applying");
           if (repairUnsupported.length === 0) {
@@ -59567,7 +59816,8 @@ ${answer}` }
           const stillBroken = findBrokenLinks(extractAnswerLinks(r.value.answer_markdown), knownStems);
           const stillUnsupported = findUnsupportedTechnicalUnits(
             r.value.answer_markdown,
-            selectedContext
+            selectedContext,
+            [...knownStems]
           );
           if (stillBroken.length === 0 && stillUnsupported.length === 0) {
             if (signal.aborted) {
@@ -59900,7 +60150,7 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
     resultTopN: candidateLimit
   });
   if (signal.aborted) return;
-  const contextChunks = selectQueryContextChunks(reranked.chunks, contextLimit);
+  const contextChunks = selectQueryContextChunks(reranked.chunks, contextLimit, question);
   const entityTypesBlock = buildEntityTypesBlock2(domain);
   const systemPrompt = (packedChunks) => {
     const packedIds = new Set(packedChunks.map((chunk) => chunk.articleId));
@@ -60197,7 +60447,7 @@ async function* runCrossDomainQuery(question, vaultTools, llm, model, domains, s
     resultTopN: candidateLimit
   });
   if (signal.aborted) return;
-  const contextChunks = selectQueryContextChunks(reranked.chunks, contextLimit);
+  const contextChunks = selectQueryContextChunks(reranked.chunks, contextLimit, q);
   const domainsForChunks = (packedChunks) => {
     const packedIds = new Set(packedChunks.map((chunk) => chunk.articleId));
     return [...new Set(
@@ -62166,6 +62416,146 @@ ${schemaContent}` : ""
 // prompts/init.md
 var init_default = 'You are an architect of a wiki knowledge base. Generate a domain entry for domain-map.json.\nReturn ONLY valid JSON of the following structure:\n{\n  "id": "{{domain_id}}",\n  "name": "Human-readable name",\n  "wiki_folder": "{{domain_id}}",\n  "source_paths": [],\n  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"processes"}],\n  "language_notes": ""\n}\n{{schema_block}}\n\nInclude the `reasoning` field first in the JSON response: one short sentence, no step-by-step chain.\n\n## Output JSON Example\n\n{\n  "reasoning": "Analyzed the sources. Identified entities: Process, ServiceContract, Customer.",\n  "id": "{{domain_id}}",\n  "name": "Telecom Operations",\n  "wiki_folder": "{{domain_id}}",\n  "entity_types": [\n    {\n      "type": "Process",\n      "description": "A business process or workflow step",\n      "extraction_cues": ["BPMN", "workflow", "process"],\n      "min_mentions_for_page": 1,\n      "wiki_subfolder": "processes"\n    }\n  ],\n  "language_notes": "Mix of Russian/English; preserve the original spelling of product names."\n}\n\n## Wiki Page Conventions\n\nWiki pages use the `tags` field in the frontmatter: hierarchical tags (category/subcategory, lowercase, separated by `/`, no `#`). During ingest the LLM reuses tags from existing pages and creates new ones following the same scheme.\n\nwiki_subfolder RULE: one word, no slashes, no domain_id.\nNot allowed: "os/network", "os_network". Allowed: "network", "processes", "protocols".\n';
 
+// prompts/init-evidence-types.md
+var init_evidence_types_default = 'Assign exactly one allowed entity type to every supplied evidence unit.\n\nRules:\n- Use only entity types listed in ALLOWED_ENTITY_TYPES.\n- Return every supplied entityKey exactly once.\n- Do not add, remove, rename, or merge entity keys.\n- Use facts only to choose the type. Do not request or infer missing source text.\n- Return no reasoning, prose, markdown, or unsupported fields.\n\nReturn exactly:\n<<<JSON>>>\n{"assignments":[{"entityKey":"entity-key","entityType":"allowed-type"}]}\n<<<END>>>\n';
+
+// src/phases/evidence-type-enrichment.ts
+var EvidenceTypeAssignmentSchema = external_exports.object({
+  entityKey: external_exports.string().min(1),
+  entityType: external_exports.string().min(1)
+}).strict();
+function assignmentSchemaFor(units, allowedTypes) {
+  const expectedKeys = new Set(units.map((unit) => unit.entityKey));
+  return external_exports.object({
+    assignments: external_exports.array(EvidenceTypeAssignmentSchema)
+  }).strict().superRefine((value, ctx) => {
+    const returnedKeys = /* @__PURE__ */ new Set();
+    for (const assignment of value.assignments) {
+      if (returnedKeys.has(assignment.entityKey)) {
+        ctx.addIssue({ code: external_exports.ZodIssueCode.custom, message: `Duplicate evidence type assignment for ${assignment.entityKey}` });
+      }
+      returnedKeys.add(assignment.entityKey);
+      if (!expectedKeys.has(assignment.entityKey)) {
+        ctx.addIssue({ code: external_exports.ZodIssueCode.custom, message: `Foreign evidence type assignment for ${assignment.entityKey}` });
+      }
+      if (!allowedTypes.has(assignment.entityType)) {
+        ctx.addIssue({ code: external_exports.ZodIssueCode.custom, message: `Unknown evidence type assignment ${assignment.entityType}` });
+      }
+    }
+    if (returnedKeys.size !== expectedKeys.size || [...expectedKeys].some((entityKey3) => !returnedKeys.has(entityKey3))) {
+      ctx.addIssue({ code: external_exports.ZodIssueCode.custom, message: "Evidence type assignment coverage mismatch" });
+    }
+  });
+}
+function classifierOptions(policy, runtime) {
+  const opts = {
+    ...runtime.opts ?? {},
+    inputBudgetTokens: policy.inputBudgetTokens,
+    semanticCompression: {
+      profile: policy.compressionProfile ?? policy.compression ?? "balanced",
+      operation: "ingest"
+    }
+  };
+  if (policy.outputBudgetTokens !== void 0) opts.maxTokens = policy.outputBudgetTokens;
+  return opts;
+}
+function messagesForUnits(units, allowedTypes) {
+  return [
+    { role: "system", content: init_evidence_types_default },
+    { role: "user", content: `ALLOWED_ENTITY_TYPES ${JSON.stringify([...allowedTypes])}
+EVIDENCE_TYPE_UNITS ${JSON.stringify(units)}` }
+  ];
+}
+function estimateUnits(units, allowedTypes, opts) {
+  return estimatePreparedMessages(prepareChatMessages(messagesForUnits(units, allowedTypes), opts));
+}
+function partitionTypeUnits(units, allowedTypes, opts, budget) {
+  const batches = [];
+  let current = [];
+  for (const unit of units) {
+    const candidate = [...current, unit];
+    if (estimateUnits(candidate, allowedTypes, opts) <= budget) {
+      current = candidate;
+      continue;
+    }
+    if (current.length === 0) {
+      throw new PromptBudgetExceededError(budget, estimateUnits([unit], allowedTypes, opts), [unit.entityKey]);
+    }
+    batches.push(current);
+    current = [unit];
+    const estimate = estimateUnits(current, allowedTypes, opts);
+    if (estimate > budget) throw new PromptBudgetExceededError(budget, estimate, [unit.entityKey]);
+  }
+  if (current.length > 0) batches.push(current);
+  return batches;
+}
+function forwardClassifierEvent(runtime, event) {
+  runtime.onEvent?.(event);
+}
+async function classifyBatch(units, allowedTypes, policy, runtime, opts) {
+  const messages = messagesForUnits(units, allowedTypes);
+  const estimated = estimatePreparedMessages(prepareChatMessages(messages, opts));
+  if (estimated > policy.inputBudgetTokens) {
+    throw new PromptBudgetExceededError(policy.inputBudgetTokens, estimated, units.map((unit) => unit.entityKey));
+  }
+  const result = await runStructuredWithRetry({
+    llm: runtime.llm,
+    model: runtime.model,
+    baseMessages: messages,
+    opts,
+    profile: sentinelJsonProfile(
+      assignmentSchemaFor(units, allowedTypes),
+      "Return every supplied entityKey exactly once with one allowed entityType.",
+      1
+    ),
+    maxRetries: policy.mapperRetries ?? 1,
+    callSite: "init.bootstrap-type-map",
+    lifecycle: createLlmLifecycle("extract_source_facts"),
+    signal: runtime.signal ?? new AbortController().signal,
+    onEvent: (event) => forwardClassifierEvent(runtime, event),
+    transport: "non-stream",
+    contextErrorsRetry: true
+  });
+  return result.value.assignments;
+}
+function isSizeFailure(error) {
+  if (error instanceof StructuredValidationError) return error.errorType === "output_limit";
+  return error instanceof StructuredOutputTruncatedError || classifyContextError(error) !== null;
+}
+function applyEvidenceTypeAssignments(evidence, assignments, allowedTypes) {
+  const byKey = new Map(assignments.map((item) => [item.entityKey, item.entityType]));
+  if (byKey.size !== assignments.length || byKey.size !== evidence.length) {
+    throw new Error("Evidence type assignment coverage mismatch");
+  }
+  return evidence.map((item) => {
+    const entityType = byKey.get(item.entityKey);
+    if (!entityType || !allowedTypes.has(entityType)) {
+      throw new Error(`Invalid evidence type assignment for ${item.entityKey}`);
+    }
+    return { ...item, entityType };
+  });
+}
+async function enrichEvidenceTypes(evidence, allowedTypes, policy, runtime) {
+  if (evidence.length === 0) return [];
+  if (allowedTypes.size === 0) throw new Error("Evidence type enrichment requires at least one allowed type");
+  const units = evidence.map(({ entityKey: entityKey3, facts }) => ({ entityKey: entityKey3, facts: [...facts] }));
+  const opts = classifierOptions(policy, runtime);
+  const queue = partitionTypeUnits(units, allowedTypes, opts, policy.inputBudgetTokens);
+  const assignments = [];
+  while (queue.length > 0) {
+    const batch = queue.shift();
+    if (!batch) break;
+    try {
+      assignments.push(...await classifyBatch(batch, allowedTypes, policy, runtime, opts));
+    } catch (error) {
+      if (!isSizeFailure(error) || batch.length < 2) throw error;
+      const midpoint = Math.ceil(batch.length / 2);
+      queue.unshift(batch.slice(0, midpoint), batch.slice(midpoint));
+    }
+  }
+  return applyEvidenceTypeAssignments(evidence, assignments, allowedTypes);
+}
+
 // src/wipe-proof.ts
 var WIPE_HASH_ALGORITHM = "sha256-v2";
 var WIPE_EVENT_MAX_BYTES = 256 * 1024;
@@ -62263,10 +62653,20 @@ async function advanceWipeManifestRoot(currentRoot, chunk) {
 }
 
 // src/phases/init.ts
+function safeFileAttemptMessage(error, category) {
+  const constructorName = error !== null && typeof error === "object" ? error.constructor?.name : void 0;
+  const errorClass = typeof constructorName === "string" && /^[A-Za-z][A-Za-z0-9_.:-]{0,63}$/.test(constructorName) ? constructorName : "Error";
+  return category === void 0 ? `class=${errorClass}` : `class=${category === "embedding" ? "EmbeddingUnavailableError" : "IngestOutcomeError"} category=${category}`;
+}
 async function* forwardIngest(generator, onDomainUpdate) {
+  let childError;
   while (true) {
     const next = await generator.next();
-    if (next.done) return next.value;
+    if (next.done) return { outcome: next.value, childError };
+    if (next.value.kind === "error") {
+      childError = next.value.message;
+      continue;
+    }
     if (next.value.kind === "domain_updated") onDomainUpdate(next.value);
     yield next.value;
   }
@@ -62385,9 +62785,10 @@ ${schemaContent}` : ""
     return null;
   }
   const bootstrapEvents = new RunEventBridge();
-  let bootstrapEvidence;
+  let bootstrapEvidenceOutputTokens = 0;
+  let bootstrapBundle;
   try {
-    bootstrapEvidence = yield* bootstrapEvents.forwardAbortable(signal, (operationSignal) => prepareBootstrapEvidence(sourceContent, domainId, {
+    bootstrapBundle = yield* bootstrapEvents.forwardAbortable(signal, (operationSignal) => prepareBootstrapEvidenceBundle(sourceContent, domainId, sourceFile, {
       inputBudgetTokens,
       outputBudgetTokens,
       compressionProfile: compressionProfile2,
@@ -62399,7 +62800,10 @@ ${schemaContent}` : ""
       model,
       opts,
       signal: operationSignal,
-      onEvent: (event) => bootstrapEvents.push(event),
+      onEvent: (event) => {
+        if (event.kind === "llm_call_stats") bootstrapEvidenceOutputTokens += event.outputTokens;
+        bootstrapEvents.push(event);
+      },
       configuredEntityTypes: [],
       mapCallSite: "init.bootstrap-map"
     }));
@@ -62411,6 +62815,7 @@ ${schemaContent}` : ""
     yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
     return null;
   }
+  const bootstrapEvidence = bootstrapBundle.bootstrap;
   const messages = bootstrapMessages(bootstrapEvidence);
   const estimatedInputTokens = estimatePreparedMessages(prepareChatMessages(messages, opts));
   if (estimatedInputTokens > inputBudgetTokens) {
@@ -62517,11 +62922,51 @@ ${schemaContent}` : ""
     yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
     return null;
   }
+  const enrichmentEvents = new RunEventBridge();
+  let enrichmentOutputTokens = 0;
+  let evidence;
+  try {
+    evidence = yield* enrichmentEvents.forwardAbortable(signal, (operationSignal) => enrichEvidenceTypes(
+      bootstrapBundle.evidence,
+      new Set((entry.entity_types ?? []).map((entityType) => entityType.type)),
+      {
+        inputBudgetTokens,
+        outputBudgetTokens,
+        compressionProfile: compressionProfile2,
+        mapperRetries: opts.structuredRetries ?? 1,
+        reducerRetries: opts.structuredRetries ?? 1
+      },
+      {
+        llm,
+        model,
+        opts,
+        signal: operationSignal,
+        onEvent: (event) => {
+          if (event.kind === "llm_call_stats") enrichmentOutputTokens += event.outputTokens;
+          enrichmentEvents.push(event);
+        }
+      }
+    ));
+  } catch (error) {
+    if (error.name === "AbortError" || signal.aborted) return null;
+    yield {
+      kind: "error",
+      message: `init: domain bootstrap failed \u2014 evidence type enrichment failed: ${error.message}. Fix model/prompt and re-run.`
+    };
+    yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
+    return null;
+  }
   return {
     sourceFile,
     sourceContent,
+    preparedEvidence: {
+      domainId,
+      sourcePath: bootstrapBundle.sourcePath,
+      sourceBodyHash: bootstrapBundle.sourceBodyHash,
+      evidence
+    },
     entry,
-    outputTokens: bootstrapOutputTokens
+    outputTokens: bootstrapEvidenceOutputTokens + bootstrapOutputTokens + enrichmentOutputTokens
   };
 }
 async function* forwardBootstrap(generator) {
@@ -62800,6 +63245,8 @@ async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, ll
   let annotationsCache = await readPageDescriptions(vaultTools, initialDomainRoot);
   let currentDomain = existing ?? null;
   let bootstrapApplied = false;
+  let handoffSourceFile = preparedBootstrap?.sourceFile;
+  let firstSourceEvidence = preparedBootstrap?.preparedEvidence;
   let successfulFiles = 0;
   if (force && preparedBootstrap && !existing) {
     const entry = preparedBootstrap.entry;
@@ -62830,11 +63277,13 @@ async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, ll
     } catch {
       yield { kind: "assistant_text", delta: `\u26A0 ${file}: \u043D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C \u0444\u0430\u0439\u043B, \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u0430\u0435\u043C
 ` };
+      yield { kind: "file_outcome", file, status: "skipped" };
       continue;
     }
     yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).initProgress.fileChars(file, fileContent.length) };
     if (i === 0 && !isResuming && !bootstrapApplied) {
       let bootstrapResult = preparedBootstrap;
+      const requiresFreshPreflight = bootstrapResult === void 0;
       if (bootstrapResult) {
         if (bootstrapResult.sourceFile !== file || bootstrapResult.sourceContent !== fileContent) {
           yield { kind: "error", message: `force: prepared bootstrap source changed: ${file}` };
@@ -62865,6 +63314,26 @@ async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, ll
         }
       }
       if (!bootstrapResult) return;
+      const recheckFreshBootstrapSource = async () => {
+        if (!requiresFreshPreflight) return void 0;
+        let freshSourceContent;
+        try {
+          freshSourceContent = await vaultTools.read(file);
+        } catch (error) {
+          return `init: could not recheck bootstrap source ${file}: ${error.message}`;
+        }
+        if (freshSourceContent !== bootstrapResult.sourceContent || hashSource(freshSourceContent) !== bootstrapResult.preparedEvidence.sourceBodyHash) {
+          return `init: source changed during bootstrap preflight: ${file}`;
+        }
+        return void 0;
+      };
+      const initialPreflightIssue = await recheckFreshBootstrapSource();
+      if (initialPreflightIssue) {
+        yield { kind: "error", message: initialPreflightIssue };
+        return;
+      }
+      handoffSourceFile = bootstrapResult.sourceFile;
+      firstSourceEvidence = bootstrapResult.preparedEvidence;
       outputTokens += bootstrapResult.outputTokens;
       const entry = bootstrapResult.entry;
       if (dryRun) {
@@ -62889,6 +63358,12 @@ ${JSON.stringify(entry, null, 2)}
         analyzed_sources_v2: true
       };
       yield { kind: "tool_use", name: existing ? "UpdateDomain" : "SaveDomain", input: { id: domainId } };
+      const persistencePreflightIssue = await recheckFreshBootstrapSource();
+      if (persistencePreflightIssue) {
+        yield { kind: "tool_result", ok: false, preview: "bootstrap source preflight failed" };
+        yield { kind: "error", message: persistencePreflightIssue };
+        return;
+      }
       if (existing) {
         yield {
           kind: "domain_updated",
@@ -62915,10 +63390,12 @@ ${JSON.stringify(entry, null, 2)}
     }
     let retried = false;
     let done = false;
+    let attempt = 1;
     let ingestOutcome;
     while (!done) {
       let caughtErr = null;
       let controlledRetryable;
+      let controlledStage;
       try {
         const forwarded = forwardIngest(
           runIngest(
@@ -62931,7 +63408,11 @@ ${JSON.stringify(entry, null, 2)}
             signal,
             sourceOpts,
             similarity,
-            annotationsCache
+            annotationsCache,
+            void 0,
+            void 0,
+            void 0,
+            file === handoffSourceFile ? firstSourceEvidence : void 0
           ),
           (event) => {
             if (event.domainId === domainId && currentDomain) {
@@ -62942,13 +63423,17 @@ ${JSON.stringify(entry, null, 2)}
         while (true) {
           const next = await forwarded.next();
           if (next.done) {
-            ingestOutcome = next.value;
+            ingestOutcome = next.value.outcome;
+            if (!ingestOutcome.ok && next.value.childError) {
+              ingestOutcome = { ...ingestOutcome, message: next.value.childError };
+            }
             break;
           }
           yield next.value;
         }
         if (!ingestOutcome.ok) {
           controlledRetryable = ingestOutcome.retryable;
+          controlledStage = ingestOutcome.stage;
           caughtErr = new Error(ingestOutcome.message);
           caughtErr.name = ingestOutcome.stage === "embedding" ? "EmbeddingUnavailableError" : "IngestOutcomeError";
         }
@@ -62956,12 +63441,22 @@ ${JSON.stringify(entry, null, 2)}
         caughtErr = e;
       }
       if (caughtErr) {
+        if (caughtErr.name === "AbortError" || signal.aborted) return;
+        const failureRetryable = controlledRetryable ?? true;
+        yield {
+          kind: "file_attempt",
+          file,
+          attempt,
+          state: "failed",
+          retryable: failureRetryable,
+          message: safeFileAttemptMessage(caughtErr, controlledStage)
+        };
         if (caughtErr instanceof EmbeddingUnavailableError || caughtErr.name === "EmbeddingUnavailableError") {
           yield { kind: "error", message: `init stopped \u2014 embedding endpoint failed: ${caughtErr.message}. Fix embedding config and re-run.` };
           yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || void 0 };
           return;
         }
-        const canRetry = !retried && (controlledRetryable ?? true);
+        const canRetry = !retried && failureRetryable;
         let choice = "skip";
         if (onFileError) {
           const progress = i18nFor(resolveLang(sourceOpts.outputLanguage)).initProgress;
@@ -62969,13 +63464,23 @@ ${JSON.stringify(entry, null, 2)}
           choice = await onFileError(file, caughtErr, canRetry);
           yield { kind: "info_text", icon: "\u2139\uFE0F", summary: progress.fileErrorDecision(choice) };
         }
-        if (choice === "stop") return;
+        if (signal.aborted) return;
+        if (choice === "stop") {
+          yield { kind: "file_outcome", file, status: "stopped" };
+          return;
+        }
         if (choice === "retry" && canRetry) {
           retried = true;
+          attempt += 1;
+          yield { kind: "file_attempt", file, attempt, state: "retry_scheduled", retryable: true };
           continue;
         }
+        yield { kind: "file_outcome", file, status: retried ? "exhausted" : "skipped" };
         done = true;
       } else {
+        if (retried) {
+          yield { kind: "file_attempt", file, attempt, state: "recovered", retryable: true };
+        }
         done = true;
       }
     }
@@ -63005,6 +63510,7 @@ ${JSON.stringify(entry, null, 2)}
     };
     yield { kind: "tool_result", ok: true };
     successfulFiles++;
+    yield { kind: "file_outcome", file, status: "done" };
     yield { kind: "file_done", file };
   }
   if (!currentDomain) {
@@ -63043,10 +63549,12 @@ async function* runIncrementalReinit(domainId, changedFiles, vaultTools, llm, mo
     yield { kind: "file_start", file, index: i, total: changedFiles.length };
     let retried = false;
     let fileDone = false;
+    let attempt = 1;
     let ingestOutcome;
     while (!fileDone) {
       let caught = null;
       let controlledRetryable;
+      let controlledStage;
       try {
         const forwarded = forwardIngest(
           runIngest(
@@ -63067,13 +63575,17 @@ async function* runIncrementalReinit(domainId, changedFiles, vaultTools, llm, mo
         while (true) {
           const next = await forwarded.next();
           if (next.done) {
-            ingestOutcome = next.value;
+            ingestOutcome = next.value.outcome;
+            if (!ingestOutcome.ok && next.value.childError) {
+              ingestOutcome = { ...ingestOutcome, message: next.value.childError };
+            }
             break;
           }
           yield next.value;
         }
         if (!ingestOutcome.ok) {
           controlledRetryable = ingestOutcome.retryable;
+          controlledStage = ingestOutcome.stage;
           caught = new Error(ingestOutcome.message);
           caught.name = ingestOutcome.stage === "embedding" ? "EmbeddingUnavailableError" : "IngestOutcomeError";
         }
@@ -63081,13 +63593,22 @@ async function* runIncrementalReinit(domainId, changedFiles, vaultTools, llm, mo
         caught = e;
       }
       if (caught) {
+        if (caught.name === "AbortError" || signal.aborted) return;
+        const failureRetryable = controlledRetryable ?? true;
+        yield {
+          kind: "file_attempt",
+          file,
+          attempt,
+          state: "failed",
+          retryable: failureRetryable,
+          message: safeFileAttemptMessage(caught, controlledStage)
+        };
         if (caught instanceof EmbeddingUnavailableError || caught.name === "EmbeddingUnavailableError") {
           yield { kind: "error", message: `init stopped \u2014 embedding endpoint failed: ${caught.message}. Fix embedding config and re-run.` };
           yield { kind: "result", durationMs: Date.now() - start, text: "" };
           return;
         }
-        if (caught.name === "AbortError" || signal.aborted) return;
-        const canRetry = !retried && (controlledRetryable ?? true);
+        const canRetry = !retried && failureRetryable;
         let choice = "skip";
         if (onFileError) {
           const progress = i18nFor(resolveLang(sourceOpts.outputLanguage)).initProgress;
@@ -63095,13 +63616,23 @@ async function* runIncrementalReinit(domainId, changedFiles, vaultTools, llm, mo
           choice = await onFileError(file, caught, canRetry);
           yield { kind: "info_text", icon: "\u2139\uFE0F", summary: progress.fileErrorDecision(choice) };
         }
-        if (choice === "stop") return;
+        if (signal.aborted) return;
+        if (choice === "stop") {
+          yield { kind: "file_outcome", file, status: "stopped" };
+          return;
+        }
         if (choice === "retry" && canRetry) {
           retried = true;
+          attempt += 1;
+          yield { kind: "file_attempt", file, attempt, state: "retry_scheduled", retryable: true };
           continue;
         }
+        yield { kind: "file_outcome", file, status: retried ? "exhausted" : "skipped" };
         fileDone = true;
       } else {
+        if (retried) {
+          yield { kind: "file_attempt", file, attempt, state: "recovered", retryable: true };
+        }
         fileDone = true;
       }
     }
@@ -63120,6 +63651,7 @@ async function* runIncrementalReinit(domainId, changedFiles, vaultTools, llm, mo
     yield { kind: "domain_updated", domainId, patch: { analyzed_sources: currentDomain.analyzed_sources } };
     yield { kind: "tool_result", ok: true };
     doneCount++;
+    yield { kind: "file_outcome", file, status: "done" };
     yield { kind: "file_done", file };
   }
   yield {
@@ -67849,6 +68381,24 @@ async function processDeleteStateCommitForDispatch(event, dispatch) {
   return { ok: true };
 }
 
+// src/run-status.ts
+function reduceRunStatus(status, event) {
+  if (status === "error") return status;
+  if (event.kind === "error") return "error";
+  if (event.kind === "exit" && event.code !== 0) return "error";
+  if (event.kind === "file_outcome") {
+    if (event.status === "skipped" || event.status === "exhausted") return "error";
+    if (event.status === "stopped") return "cancelled";
+  }
+  return status;
+}
+function finalizeRunStatus(status, options) {
+  if (status === "error") return status;
+  if (options.timedOut) return "error";
+  if (options.aborted) return "cancelled";
+  return status;
+}
+
 // src/controller.ts
 var AGENT_LOG_LINE_MAX_BYTES = WIPE_LOG_LINE_MAX_BYTES;
 var AGENT_LOG_REASONING_CHUNK_BYTES = 128 * 1024;
@@ -68672,6 +69222,7 @@ var WikiController = class {
     const steps = [];
     let finalText = "";
     let status = "done";
+    let observedSuccessfulMutation = false;
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `start op=${op} args=${JSON.stringify(args)} domainId=${domainId ?? ""}` });
     view.setRunning(op, args);
     const timeoutMs = opTimeoutSec * 1e3;
@@ -68715,6 +69266,7 @@ var WikiController = class {
             ctrl.abort();
             break;
           }
+          observedSuccessfulMutation = true;
         } else {
           await this.logEvent(vaultRoot, sessionId, op, domainId, ev);
           this.activeView()?.appendEvent(ev);
@@ -68723,7 +69275,10 @@ var WikiController = class {
           try {
             const cur = await this.domainStore.load();
             const next = applyDomainEvent(cur, ev, { vaultRoot });
-            if (next !== cur) await this.domainStore.save(next);
+            if (next !== cur) {
+              await this.domainStore.save(next);
+              observedSuccessfulMutation = true;
+            }
           } catch (e) {
             if (e instanceof DomainCorruptError) {
               new import_obsidian10.Notice(`Domain map corrupt: ${e.message}`);
@@ -68739,17 +69294,18 @@ var WikiController = class {
         }
         this.collectStep(ev, steps);
         if (ev.kind === "result") finalText = ev.text;
-        if (ev.kind === "error") status = "error";
-        if (ev.kind === "exit") {
-          if (ev.code !== 0 && status === "done") status = "error";
-          if (ctrl.signal.aborted) status = "cancelled";
+        if (ev.kind === "file_outcome" && ev.status === "done") {
+          observedSuccessfulMutation = true;
         }
+        status = reduceRunStatus(status, ev);
       }
     } catch (err) {
       status = "error";
-      console.error("[ai-wiki] dispatch failed", err);
-      finalText = i18n().ctrl.errorPrefix(err.message);
-      await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
+      if (!timedOut) {
+        console.error("[ai-wiki] dispatch failed", err);
+        finalText = i18n().ctrl.errorPrefix(err.message);
+        await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
+      }
     } finally {
       if (timeoutId !== null) window.clearTimeout(timeoutId);
       this.current = null;
@@ -68757,21 +69313,22 @@ var WikiController = class {
       this.currentOp = null;
       this._currentLogMeta = null;
     }
-    if (ctrl.signal.aborted && status === "done" && !finalText) {
-      if (timedOut) {
-        status = "error";
-        finalText = `Timeout after ${Math.round(timeoutMs / 1e3)}s \u2014 check LLM backend URL`;
-        this.activeView()?.appendEvent({ kind: "error", message: finalText });
-        await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
-      } else {
-        status = "cancelled";
-      }
+    status = finalizeRunStatus(status, {
+      aborted: ctrl.signal.aborted,
+      timedOut
+    });
+    if (timedOut) {
+      finalText = `Timeout after ${Math.round(timeoutMs / 1e3)}s \u2014 check LLM backend URL`;
+      this.activeView()?.appendEvent({ kind: "error", message: finalText });
+      await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
     }
-    if (status === "done") {
-      const mutatesWiki = op === "ingest" || op === "lint" || op === "lint-chat" || op === "init";
-      if (mutatesWiki) {
+    const mutatesWiki = op === "ingest" || op === "lint" || op === "lint-chat" || op === "init";
+    if (mutatesWiki && (status === "done" || observedSuccessfulMutation)) {
+      try {
         const targets = domainId ? [domainId] : (await this.domainStore.load()).map((d) => d.id);
         for (const id of targets) graphCache.invalidate(id);
+      } catch (error) {
+        console.error("[ai-wiki] graph cache invalidation failed", error);
       }
     }
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `finish status=${status} durationMs=${Date.now() - startedAt}` });
