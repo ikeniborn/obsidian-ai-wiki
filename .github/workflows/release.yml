@@ -23,14 +23,25 @@ jobs:
 
       - run: npm ci
 
+      - run: npm run release:validate:pre
+
+      - run: npm run lint
+
+      - run: npm run typecheck
+
+      - run: npm test
+
       - name: Build
-        run: node esbuild.config.mjs production
+        run: npm run build
+
+      - run: npm run release:validate:post
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
             dist/main.js
+            dist/manifest.json
             dist/styles.css
 
       - name: Read version

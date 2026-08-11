@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
+import { parse } from "yaml";
 
 const CLI_PATH = fileURLToPath(new URL("../scripts/validate-release.mjs", import.meta.url));
+const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const VERSION = "0.2.2";
 const MANIFEST_TEXT = JSON.stringify({
   id: "ai-wiki",
@@ -216,4 +219,68 @@ test("prebuild validation rejects a non-SemVer package version", async (t) => {
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /\[package\.json\] version v0\.2\.2 is not valid SemVer/);
+});
+
+test("release workflow gates attestation and publication behind validated build assets", () => {
+  const workflow = parse(
+    readFileSync(path.join(REPO_ROOT, ".github/workflows/release.yml"), "utf8"),
+  ) as Record<string, any>;
+  const job = workflow.jobs.release;
+  const steps = job.steps as Array<Record<string, any>>;
+  const identity = (step: Record<string, any>): string => {
+    if (typeof step.uses === "string") return step.uses.replace(/@.*$/, "");
+    if (step.id === "version") return "read-version";
+    return step.run;
+  };
+
+  assert.deepEqual(workflow.on.push, {
+    branches: ["master"],
+    paths: ["src/manifest.json"],
+  });
+  assert.deepEqual(job.permissions, {
+    contents: "write",
+    attestations: "write",
+    "id-token": "write",
+  });
+  assert.deepEqual(steps.map(identity), [
+    "actions/checkout",
+    "actions/setup-node",
+    "npm ci",
+    "npm run release:validate:pre",
+    "npm run lint",
+    "npm run typecheck",
+    "npm test",
+    "npm run build",
+    "npm run release:validate:post",
+    "actions/attest-build-provenance",
+    "read-version",
+    "softprops/action-gh-release",
+  ]);
+
+  const setupNode = steps.find((step) => identity(step) === "actions/setup-node");
+  assert.equal(setupNode?.with?.["node-version"], 20);
+
+  for (const step of steps.slice(0, 9)) {
+    assert.equal(step["continue-on-error"], undefined);
+  }
+  for (const step of steps.slice(9)) {
+    assert.equal(step.if, undefined);
+  }
+
+  const assets = ["dist/main.js", "dist/manifest.json", "dist/styles.css"];
+  const assetLines = (value: unknown): string[] =>
+    String(value)
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+  const attestation = steps.find((step) => identity(step) === "actions/attest-build-provenance");
+  const release = steps.find((step) => identity(step) === "softprops/action-gh-release");
+  assert.deepEqual(assetLines(attestation?.with?.["subject-path"]), assets);
+  assert.deepEqual(assetLines(release?.with?.files), assets);
+
+  const versionOutput = "${{ steps.version.outputs.version }}";
+  assert.equal(steps[10].id, "version");
+  assert.match(steps[10].run, /node -p .*package\.json.*GITHUB_OUTPUT/);
+  assert.equal(release?.with?.tag_name, versionOutput);
+  assert.equal(release?.with?.name, versionOutput);
 });
