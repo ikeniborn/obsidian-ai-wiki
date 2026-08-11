@@ -25,12 +25,16 @@ import { EmbeddingUnavailableError } from "../embedding-error";
 import { hashSource } from "../incremental-sources";
 import {
   prepareBootstrapEvidenceBundle,
+  splitBootstrapPayload,
   worstCaseBootstrapOverheadTokens,
   type BootstrapEvidence,
   type BootstrapEvidenceBundle,
 } from "./ingest-evidence";
 import { enrichEvidenceTypes } from "./evidence-type-enrichment";
-import { estimatePreparedMessages } from "../prompt-budget";
+import {
+  estimatePreparedMessages,
+  PromptBudgetExceededError,
+} from "../prompt-budget";
 import { prepareChatMessages } from "./llm-utils";
 import { RunEventBridge } from "../run-event-bridge";
 import {
@@ -170,14 +174,36 @@ const MIN_BOOTSTRAP_OUTPUT_TOKENS = 2_048;
  */
 const MIN_BOOTSTRAP_CHUNK_TOKENS = 512;
 /**
- * Ceiling on split bootstrap groups, and therefore on the provider requests one
- * bootstrap attempt issues. At the default 16_384-token input budget a group
- * carries roughly 14_500 payload tokens, so 16 groups cover about 230_000
- * tokens of evidence — far more than a single source file can produce — while
- * keeping the worst case at 16 sequential requests per attempt instead of the
- * thousands an unbounded loop would issue.
+ * Ceiling on the bootstrap evidence one Init may carry, in payload tokens.
+ * 240_000 tokens is roughly a megabyte of markdown — beyond any single source
+ * file a domain is bootstrapped from. It is a budget, not a request count, so
+ * the ceiling scales with the model: a narrow window turns it into more, smaller
+ * requests rather than into a refusal.
  */
-export const MAX_BOOTSTRAP_GROUPS = 16;
+const MAX_BOOTSTRAP_EVIDENCE_TOKENS = 240_000;
+/**
+ * Hard ceiling on the provider requests one bootstrap attempt issues, whatever
+ * the arithmetic above allows. It only binds on narrow windows: at the default
+ * 16_384-token input budget a group carries ~12_500 evidence tokens, so the
+ * evidence budget caps first (20 requests); at a 3_686-token input budget a
+ * group carries ~1_200, and 64 requests cover ~75_000 evidence tokens — a
+ * ~300 KB source — instead of the 20 a fixed count allowed.
+ */
+export const MAX_BOOTSTRAP_REQUESTS = 64;
+/**
+ * Worst case for the taxonomy repair instruction appended to a group request.
+ * It is reserved from the packing budget and enforced when the instruction is
+ * rendered, so a repair can never push a packed group past the input budget.
+ */
+const MAX_TAXONOMY_REPAIR_TOKENS = 512;
+
+/** Largest number of split groups this budget may turn into provider requests. */
+function maxBootstrapGroupsFor(evidenceTokensPerGroup: number): number {
+  return Math.max(1, Math.min(
+    MAX_BOOTSTRAP_REQUESTS,
+    Math.ceil(MAX_BOOTSTRAP_EVIDENCE_TOKENS / Math.max(1, evidenceTokensPerGroup)),
+  ));
+}
 
 /**
  * Deterministic merge with no heuristic conflict resolution. Group 0 owns
@@ -187,6 +213,7 @@ export const MAX_BOOTSTRAP_GROUPS = 16;
  */
 export function mergeBootstrapEntries(entries: DomainEntry[]): DomainEntry {
   const [first, ...rest] = entries;
+  if (first === undefined) throw new Error("Cannot merge an empty bootstrap group result");
   let entityTypes = cloneEntityTypes(first.entity_types);
   for (const entry of rest) {
     entityTypes = mergeBootstrapEntityTypes(entityTypes, entry.entity_types ?? []);
@@ -201,6 +228,45 @@ export function mergeBootstrapEntries(entries: DomainEntry[]): DomainEntry {
   };
 }
 
+/**
+ * Maps every size-shaped failure bounded evidence preparation can raise onto the
+ * one enumerated model-context error, so no size condition escapes into a shape
+ * that names neither the model nor a remedy. Anything else is a model or prompt
+ * failure and keeps its own message.
+ */
+function evidencePreparationFailure(
+  error: Error,
+  asModelContext: (needs: string) => string,
+): string {
+  if (error instanceof PromptBudgetExceededError) {
+    return asModelContext(
+      `a bounded evidence request needs ${error.estimated} tokens against a ${error.budget}-token budget`,
+    );
+  }
+  const sizeShaped: Array<[RegExp, string]> = [
+    [
+      /Unable to derive a bounded mapper chunk size|Mapper prompt and repair reserve exceed the input budget/i,
+      "the evidence mapper prompt and its repair reserve fit no source chunk size",
+    ],
+    [
+      /Reducer prompt and repair reserve exceed the input budget/i,
+      "the evidence reducer prompt and its repair reserve do not fit one request",
+    ],
+    [
+      /A single evidence packet cannot fit the reducer budget/i,
+      "one evidence packet does not fit the reducer request budget",
+    ],
+    [
+      /exceeds \d+ byte output budget/i,
+      "the reduced evidence does not fit the output budget this model leaves",
+    ],
+  ];
+  for (const [pattern, needs] of sizeShaped) {
+    if (pattern.test(error.message)) return asModelContext(needs);
+  }
+  return `init: domain bootstrap failed — bounded evidence preparation failed: ${error.message}. Fix model/prompt and re-run.`;
+}
+
 interface BootstrapBudget {
   systemContent: string;
   includeSchema: boolean;
@@ -210,12 +276,20 @@ interface BootstrapBudget {
   payloadBudgetTokens: number;
 }
 
+/**
+ * The repair instruction is appended to an already packed group request, so it
+ * has to fit the reserve the packing budget kept for it. Hints are dropped
+ * largest-first until it does; the issue and the rules — the only parts the
+ * model needs to act — always survive. Existing entity types are named rather
+ * than repeated in full: the group request already carries them.
+ */
 function renderBootstrapTaxonomyRepairPrompt(
   issue: string,
   bootstrapEvidence: BootstrapEvidence,
   existingTypes: readonly EntityType[] | undefined,
+  calibration?: number,
 ): string {
-  return JSON.stringify({
+  const build = (candidates: number, facts: number, themes: number): string => JSON.stringify({
     repair: "Regenerate the domain entry JSON. The previous taxonomy was rejected by local domain validation.",
     issue,
     rules: [
@@ -224,13 +298,26 @@ function renderBootstrapTaxonomyRepairPrompt(
       "Reuse existing entity types when they fit; add only source-supported missing types.",
       "Do not invent a permanent domain-specific fallback list.",
     ],
-    existingEntityTypes: cloneEntityTypes(existingTypes),
-    evidenceCandidates: bootstrapEvidence.candidates.map((candidate) => ({
+    existingEntityTypes: (existingTypes ?? []).map((entityType) => entityType.type),
+    evidenceCandidates: bootstrapEvidence.candidates.slice(0, candidates).map((candidate) => ({
       entityKey: candidate.entityKey,
-      facts: candidate.facts.slice(0, 6),
+      facts: candidate.facts.slice(0, facts),
     })),
-    domainThemes: bootstrapEvidence.domainThemes.slice(0, 12),
+    domainThemes: bootstrapEvidence.domainThemes.slice(0, themes),
   });
+  const fits = (content: string): boolean =>
+    estimatePreparedMessages([{ role: "user", content }], calibration) <= MAX_TAXONOMY_REPAIR_TOKENS;
+  for (const [candidates, facts, themes] of [
+    [bootstrapEvidence.candidates.length, 6, 12],
+    [24, 3, 6],
+    [12, 2, 3],
+    [6, 1, 0],
+    [0, 0, 0],
+  ] as const) {
+    const content = build(candidates, facts, themes);
+    if (fits(content)) return content;
+  }
+  return build(0, 0, 0);
 }
 
 async function* prepareDomainBootstrap(
@@ -351,17 +438,32 @@ async function* prepareDomainBootstrap(
       : ` from a context window of ${opts.contextWindowTokens} token(s)`)
     + ". Choose a model with a larger context window.";
 
-  let budget = budgetFor(true, opts.inputBudgetTokens ?? 16_384, opts.maxTokens);
-  budget = widenBootstrapBudget(budget, worstCaseGroupOverhead + MIN_BOOTSTRAP_CHUNK_TOKENS);
-  const chunkBudgetTokens = budget.payloadBudgetTokens - worstCaseGroupOverhead;
+  /** What one group may pack, keeping the repair instruction's reserve free. */
+  const splitBudgetOf = (current: BootstrapBudget): number =>
+    current.payloadBudgetTokens - MAX_TAXONOMY_REPAIR_TOKENS;
+  const evidencePerGroup = (current: BootstrapBudget): number =>
+    splitBudgetOf(current) - worstCaseGroupOverhead;
+  const groupCeilingOf = (current: BootstrapBudget): number =>
+    maxBootstrapGroupsFor(evidencePerGroup(current));
+
+  const configuredBudget = budgetFor(true, opts.inputBudgetTokens ?? 16_384, opts.maxTokens);
+  // Chunk planning uses the widest prompt the model could be pushed to, because
+  // it decides how much source ONE evidence unit may carry and a unit has to fit
+  // whichever variant is finally sent. Which variant that is stays undecided
+  // here: the levers are only spent once the real evidence says they are needed.
+  const planningBudget = widenBootstrapBudget(
+    configuredBudget,
+    worstCaseGroupOverhead + MIN_BOOTSTRAP_CHUNK_TOKENS + MAX_TAXONOMY_REPAIR_TOKENS,
+  );
+  const chunkBudgetTokens = evidencePerGroup(planningBudget);
   if (chunkBudgetTokens < MIN_BOOTSTRAP_CHUNK_TOKENS) {
     yield {
       kind: "error",
       message: unsupportedModelContext(
-        `the Init prompt needs ${budget.fixedRequestEstimate} tokens and every evidence group up to `
+        `the Init prompt needs ${planningBudget.fixedRequestEstimate} tokens and every evidence group up to `
         + `${worstCaseGroupOverhead} more, leaving ${Math.max(0, chunkBudgetTokens)} token(s) for source `
         + `evidence instead of ${MIN_BOOTSTRAP_CHUNK_TOKENS}`,
-        budget,
+        planningBudget,
       ),
     };
     yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
@@ -372,6 +474,11 @@ async function* prepareDomainBootstrap(
     inputBudgetTokens: current.inputBudgetTokens,
     ...(current.outputBudgetTokens === undefined ? {} : { maxTokens: current.outputBudgetTokens }),
   });
+  // Split with the schema still in the prompt whenever a group can hold one
+  // minimal evidence unit that way. Only an arithmetically impossible with-schema
+  // prompt splits against the widened one.
+  const splitsWithSchema = splitBudgetOf(configuredBudget) >= MIN_BOOTSTRAP_CHUNK_TOKENS;
+  let budget = splitsWithSchema ? configuredBudget : planningBudget;
 
   const bootstrapEvents = new RunEventBridge();
   let bootstrapEvidenceOutputTokens = 0;
@@ -379,18 +486,20 @@ async function* prepareDomainBootstrap(
   try {
     bootstrapBundle = yield* bootstrapEvents.forwardAbortable(signal, (operationSignal) =>
       prepareBootstrapEvidenceBundle(sourceContent, domainId, sourceFile, {
-      inputBudgetTokens: budget.inputBudgetTokens,
-      outputBudgetTokens: budget.outputBudgetTokens,
+      // Evidence preparation keeps the budget the user's settings resolved: the
+      // bootstrap levers pay for the bootstrap request, not for other phases.
+      inputBudgetTokens: configuredBudget.inputBudgetTokens,
+      outputBudgetTokens: configuredBudget.outputBudgetTokens,
       compressionProfile,
       mapperRetries: opts.structuredRetries ?? 1,
       reducerRetries: opts.structuredRetries ?? 1,
-      bootstrapPayloadBudgetTokens: budget.payloadBudgetTokens,
+      bootstrapPayloadBudgetTokens: splitBudgetOf(budget),
       chunkBudgetTokens,
       calibration: opts.tokenCalibration ?? 1,
     }, {
       llm,
       model,
-      opts: budgetOpts(budget),
+      opts: budgetOpts(configuredBudget),
       signal: operationSignal,
       onEvent: (event) => {
         if (event.kind === "llm_call_stats") bootstrapEvidenceOutputTokens += event.outputTokens;
@@ -401,65 +510,92 @@ async function* prepareDomainBootstrap(
     }));
   } catch (error) {
     if ((error as Error).name === "AbortError" || signal.aborted) return null;
-    // The only size-shaped failure evidence preparation can still raise is a
-    // mapper prompt that fits no chunk size at all — a model-context problem,
-    // reported as one, never as a configuration error.
-    const unboundedMapper = /bounded mapper chunk size|mapper prompt and repair reserve/i
-      .test((error as Error).message);
-    const message = unboundedMapper
-      ? unsupportedModelContext(
-        "the evidence mapper prompt and its repair reserve fit no source chunk size",
-        budget,
-      )
-      : `init: domain bootstrap failed — bounded evidence preparation failed: ${(error as Error).message}. Fix model/prompt and re-run.`;
-    yield { kind: "error", message };
+    yield {
+      kind: "error",
+      message: evidencePreparationFailure(
+        error as Error,
+        (needs) => unsupportedModelContext(needs, configuredBudget),
+      ),
+    };
     yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
     return null;
   }
-  const bootstrapGroups = bootstrapBundle.bootstrapGroups;
+  // Validation, the repair prompt and any re-split reason about the whole
+  // taxonomy, so they see the union of every group rather than whichever slice
+  // was sent first. The union is exactly what the splitter was given.
+  const fullBootstrapEvidence: BootstrapEvidence = {
+    candidates: bootstrapBundle.bootstrapGroups.flatMap((group) => group.candidates),
+    domainThemes: bootstrapBundle.bootstrapGroups[0].domainThemes,
+    languageEvidence: bootstrapBundle.bootstrapGroups[0].languageEvidence,
+  };
+  let bootstrapGroups = bootstrapBundle.bootstrapGroups;
+  let bootstrapSubdivided = bootstrapBundle.bootstrapSubdivided;
+  let minimumGroupTokens = bootstrapBundle.bootstrapMinimumGroupTokens;
+  const splitFits = (current: BootstrapBudget): boolean =>
+    minimumGroupTokens <= splitBudgetOf(current)
+    && bootstrapGroups.length <= groupCeilingOf(current);
+  // Only now, with the real evidence measured, are the widening levers spent —
+  // and only if this split does not fit the prompt as configured.
+  if (!splitFits(budget)) {
+    const widened = widenBootstrapBudget(
+      budget,
+      Math.max(minimumGroupTokens, worstCaseGroupOverhead + MIN_BOOTSTRAP_CHUNK_TOKENS)
+      + MAX_TAXONOMY_REPAIR_TOKENS,
+    );
+    if (widened.payloadBudgetTokens > budget.payloadBudgetTokens) {
+      const resplit = splitBootstrapPayload(
+        fullBootstrapEvidence,
+        splitBudgetOf(widened),
+        opts.tokenCalibration,
+      );
+      budget = widened;
+      bootstrapGroups = resplit.groups;
+      bootstrapSubdivided = resplit.subdivided;
+      minimumGroupTokens = resplit.minimumGroupTokens;
+    }
+  }
+  if (configuredBudget.includeSchema && !budget.includeSchema) {
+    yield {
+      kind: "system",
+      message: "init: wiki conventions omitted from the Init prompt to fit the model context",
+    };
+  }
   yield {
     kind: "evidence_split",
     callSite: "init.bootstrap",
     groups: bootstrapGroups.length,
     candidates: bootstrapGroups.reduce((total, group) => total + group.candidates.length, 0),
-    subdivided: bootstrapBundle.bootstrapSubdivided,
-    payloadBudget: budget.payloadBudgetTokens,
+    subdivided: bootstrapSubdivided,
+    payloadBudget: splitBudgetOf(budget),
   };
-  if (bootstrapGroups.length > MAX_BOOTSTRAP_GROUPS) {
+  const groupCeiling = groupCeilingOf(budget);
+  if (bootstrapGroups.length > groupCeiling) {
     yield {
       kind: "error",
       message: unsupportedModelContext(
         `the source evidence needs ${bootstrapGroups.length} bootstrap requests of `
-        + `${budget.payloadBudgetTokens} payload token(s), above the ${MAX_BOOTSTRAP_GROUPS}-request ceiling`,
+        + `${splitBudgetOf(budget)} payload token(s); this model allows at most ${groupCeiling}, `
+        + `about ${groupCeiling * Math.max(1, evidencePerGroup(budget))} tokens of evidence`,
         budget,
       ),
     };
     yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
     return null;
   }
-  // A group above the payload budget here is atomic: one evidence unit that no
-  // further split divides. Widen as far as the model allows, then stop — the
-  // evidence is never cut to fit.
-  budget = widenBootstrapBudget(budget, bootstrapBundle.bootstrapMinimumGroupTokens);
-  if (bootstrapBundle.bootstrapMinimumGroupTokens > budget.payloadBudgetTokens) {
+  // A group still above the payload budget is atomic: one evidence unit that no
+  // further split divides. The levers are spent — the evidence is never cut.
+  if (minimumGroupTokens > splitBudgetOf(budget)) {
     yield {
       kind: "error",
       message: unsupportedModelContext(
-        `one indivisible evidence unit needs ${bootstrapBundle.bootstrapMinimumGroupTokens} payload token(s) `
-        + `and the widest payload this model allows is ${budget.payloadBudgetTokens}`,
+        `one indivisible evidence unit needs ${minimumGroupTokens} payload token(s) `
+        + `and the widest payload this model allows is ${splitBudgetOf(budget)}`,
         budget,
       ),
     };
     yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
     return null;
   }
-  // Validation and the repair prompt reason about the whole taxonomy, so they
-  // see the union of every group rather than whichever slice was sent first.
-  const fullBootstrapEvidence: BootstrapEvidence = {
-    candidates: bootstrapGroups.flatMap((group) => group.candidates),
-    domainThemes: bootstrapGroups[0].domainThemes,
-    languageEvidence: bootstrapGroups[0].languageEvidence,
-  };
   const requestOpts: LlmCallOptions = { ...budgetOpts(budget), nativeFreshConnection: true };
   const groupMessages = bootstrapGroups.map((group) =>
     bootstrapMessages(group, budget.systemContent));
@@ -568,8 +704,20 @@ async function* prepareDomainBootstrap(
       if (semanticAttempt >= (opts.structuredRetries ?? 1)) {
         throw new Error(taxonomyIssue);
       }
-      repairInstructions = bootstrapGroups.map((group) =>
-        renderBootstrapTaxonomyRepairPrompt(taxonomyIssue, group, existing?.entity_types));
+      const repairs = bootstrapGroups.map((group) => renderBootstrapTaxonomyRepairPrompt(
+        taxonomyIssue,
+        group,
+        existing?.entity_types,
+        opts.tokenCalibration,
+      ));
+      // The reserve above keeps room for this, but a request is never dispatched
+      // on the assumption: an unaffordable repair ends the attempt instead.
+      const repairFits = groupMessages.every((messages, index) => estimatePreparedMessages(
+        prepareChatMessages([...messages, { role: "user", content: repairs[index] }], requestOpts),
+        opts.tokenCalibration,
+      ) <= budget.inputBudgetTokens);
+      if (!repairFits) throw new Error(taxonomyIssue);
+      repairInstructions = repairs;
     }
     for (const attemptSink of attemptSinks) {
       yield lifecycleEvent(attemptSink.lifecycle!.id, attemptSink.lifecycle!.action, "applying");
@@ -620,8 +768,10 @@ async function* prepareDomainBootstrap(
         bootstrapBundle.evidence,
         new Set((entry.entity_types ?? []).map((entityType) => entityType.type)),
         {
-          inputBudgetTokens: budget.inputBudgetTokens,
-          outputBudgetTokens: budget.outputBudgetTokens,
+          // Enrichment is a separate phase: it runs on the budget the user's
+          // settings resolved, never on one widened for the bootstrap payload.
+          inputBudgetTokens: configuredBudget.inputBudgetTokens,
+          outputBudgetTokens: configuredBudget.outputBudgetTokens,
           compressionProfile,
           mapperRetries: opts.structuredRetries ?? 1,
           reducerRetries: opts.structuredRetries ?? 1,
@@ -629,7 +779,7 @@ async function* prepareDomainBootstrap(
         {
           llm,
           model,
-          opts: budgetOpts(budget),
+          opts: budgetOpts(configuredBudget),
           signal: operationSignal,
           onEvent: (event) => {
             if (event.kind === "llm_call_stats") enrichmentOutputTokens += event.outputTokens;

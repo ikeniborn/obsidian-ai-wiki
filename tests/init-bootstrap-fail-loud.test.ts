@@ -15,7 +15,7 @@ register(`data:text/javascript,${encodeURIComponent(pathBrowserifyLoader)}`);
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 
 const { VaultTools } = await import("../src/vault-tools");
-const { runInit, runInitWithSources, mergeBootstrapEntries, MAX_BOOTSTRAP_GROUPS } =
+const { runInit, runInitWithSources, mergeBootstrapEntries, MAX_BOOTSTRAP_REQUESTS } =
   await import("../src/phases/init");
 
 function usageChunk() {
@@ -1199,6 +1199,7 @@ test("mergeBootstrapEntries keeps group 0 identity and unions every entity type"
   assert.equal(merged.wiki_folder, "demo");
   assert.deepEqual((merged.entity_types ?? []).map((type) => type.type), ["service", "concept"]);
   assert.equal(merged.language_notes, "mixed ru/en");
+  assert.throws(() => mergeBootstrapEntries([]), /empty bootstrap group result/);
 });
 
 test("a bootstrap payload above twice the budget completes as merged groups", async () => {
@@ -1372,9 +1373,11 @@ test("an evidence unit larger than the model context fails explicitly without tr
 test("evidence needing more groups than the request ceiling fails instead of flooding the provider", async () => {
   const rawAdapter = adapter();
   rawAdapter.files.set("src/a.md", evidenceSourceLines(20));
+  // 25 candidates of ~12k tokens each, against a 13_832-token packing budget:
+  // one candidate per group, above the ceiling the 16_384 budget allows.
   const mock = splittingBootstrapLlm({
-    packetsPerChunk: 20,
-    factChars: 17_000,
+    packetsPerChunk: 25,
+    factChars: 50_000,
     assignedType: "concept",
     bootstrapBody: () => bootstrapDomainBody("concept", ""),
   });
@@ -1383,7 +1386,7 @@ test("evidence needing more groups than the request ceiling fails instead of flo
   for await (const event of runInitWithSources(
     "demo", ["src"], true, new VaultTools(rawAdapter, "/vault"), mock.llm, "m",
     [], "Vault", new AbortController().signal, {
-      inputBudgetTokens: 8_000,
+      inputBudgetTokens: 16_384,
       maxTokens: 2_000,
       structuredRetries: 0,
     }, undefined, false, undefined,
@@ -1393,14 +1396,176 @@ test("evidence needing more groups than the request ceiling fails instead of flo
 
   const split = events.find((event) => event.kind === "evidence_split");
   assert.ok(split && split.kind === "evidence_split", JSON.stringify(events.slice(-3)));
-  assert.ok(split.groups > MAX_BOOTSTRAP_GROUPS, `expected more than the ceiling, got ${split.groups}`);
-  assert.equal(mock.bootstrapPayloads.length, 0);
   const failure = events.find((event) => event.kind === "error");
-  assert.ok(failure && failure.kind === "error");
-  assert.match(failure.message, new RegExp(`above the ${MAX_BOOTSTRAP_GROUPS}-request ceiling`));
+  assert.ok(failure && failure.kind === "error", JSON.stringify(events.slice(-3)));
+  const ceiling = Number(/allows at most (\d+)/.exec(failure.message)?.[1]);
+  assert.ok(Number.isInteger(ceiling) && ceiling > 0, failure.message);
+  assert.ok(split.groups > ceiling, `expected more than the ceiling ${ceiling}, got ${split.groups}`);
+  // The ceiling scales with the payload budget instead of being a fixed count.
+  assert.ok(ceiling < MAX_BOOTSTRAP_REQUESTS, `${ceiling} should scale below the hard request ceiling`);
+  // Exceeding it costs zero provider requests.
+  assert.equal(mock.bootstrapPayloads.length, 0);
+  assert.match(failure.message, /tokens of evidence/);
   assert.match(failure.message, /Choose a model with a larger context window\./);
   assert.equal(events.some((event) =>
     event.kind === "domain_created" || event.kind === "domain_updated"), false);
+});
+
+test("a narrow window keeps the wiki conventions block when the evidence fits with it", async () => {
+  const rawAdapter = adapter();
+  rawAdapter.files.set("src/a.md", "# Source\n\nAlpha source content for a narrow window.");
+  // The input budget an 8_192-token context window resolves to.
+  const mock = splittingBootstrapLlm({
+    packetsPerChunk: 1,
+    factChars: 200,
+    assignedType: "concept",
+    bootstrapBody: () => bootstrapDomainBody("concept", ""),
+  });
+  const events: RunEvent[] = [];
+
+  for await (const event of runInitWithSources(
+    "demo", ["src"], true, new VaultTools(rawAdapter, "/vault"), mock.llm, "m",
+    [], "Vault", new AbortController().signal, {
+      inputBudgetTokens: 3_686,
+      maxTokens: 2_000,
+      structuredRetries: 0,
+    }, undefined, false, undefined,
+  )) {
+    events.push(event);
+  }
+
+  assert.equal(mock.bootstrapRequests.length, 1);
+  const prompt = JSON.stringify(mock.bootstrapRequests[0].messages);
+  assert.match(prompt, /Wiki conventions/);
+  assert.equal(events.some((event) =>
+    event.kind === "system" && /wiki conventions omitted/.test(event.message)), false);
+  assert.equal(events.some((event) => event.kind === "error"), false);
+});
+
+test("the wiki conventions block is dropped only when the evidence does not fit with it", async () => {
+  const rawAdapter = adapter();
+  rawAdapter.files.set("src/a.md", evidenceSourceLines(20));
+  // ~1_500 tokens per candidate: above the 1_134-token packing budget the
+  // schema block leaves at this window, below the 2_439 it leaves without.
+  const mock = splittingBootstrapLlm({
+    packetsPerChunk: 1,
+    factChars: 6_300,
+    assignedType: "type-0",
+    bootstrapBody: (call) => bootstrapDomainBody(`type-${call}`, ""),
+  });
+  const events: RunEvent[] = [];
+
+  for await (const event of runInitWithSources(
+    "demo", ["src"], true, new VaultTools(rawAdapter, "/vault"), mock.llm, "m",
+    [], "Vault", new AbortController().signal, {
+      inputBudgetTokens: 3_686,
+      maxTokens: 2_000,
+      structuredRetries: 0,
+    }, undefined, false, undefined,
+  )) {
+    events.push(event);
+  }
+
+  assert.ok(mock.bootstrapRequests.length >= 1, JSON.stringify(events.slice(-3)));
+  assert.equal(events.some((event) =>
+    event.kind === "system"
+    && event.message === "init: wiki conventions omitted from the Init prompt to fit the model context"), true);
+  for (const request of mock.bootstrapRequests) {
+    assert.doesNotMatch(JSON.stringify(request.messages), /Wiki conventions/);
+    assert.ok(estimatePreparedMessages(request.messages) <= 3_686);
+  }
+  assert.equal(events.some((event) => event.kind === "error"), false);
+});
+
+test("a taxonomy repair across K groups stays inside the input budget", async () => {
+  const rawAdapter = adapter();
+  rawAdapter.files.set("src/a.md", evidenceSourceLines(200));
+  const repaired = JSON.stringify({
+    reasoning: "",
+    id: "demo",
+    name: "Demo",
+    wiki_folder: "demo",
+    entity_types: ["software", "service", "configuration"].map((type) => ({
+      type,
+      description: `Derived ${type}.`,
+      extraction_cues: [type],
+      wiki_subfolder: type,
+    })),
+    language_notes: "",
+  });
+  const requests: Array<{ messages: OpenAI.Chat.ChatCompletionMessageParam[] }> = [];
+  let entityOrdinal = 0;
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      const request = params as { messages: OpenAI.Chat.ChatCompletionMessageParam[] };
+      const serialized = JSON.stringify(request.messages);
+      if (serialized.includes("EVIDENCE_TYPE_UNITS ")) {
+        const marker = "EVIDENCE_TYPE_UNITS ";
+        const text = request.messages
+          .map((message) => typeof message.content === "string" ? message.content : "")
+          .join("\n");
+        const units = JSON.parse(
+          text.slice(text.lastIndexOf(marker) + marker.length).split("\n", 1)[0],
+        ) as Array<{ entityKey: string }>;
+        return mockResponse(params, JSON.stringify({
+          assignments: units.map(({ entityKey }) => ({ entityKey, entityType: "software" })),
+        }));
+      }
+      const chunkId = serialized.match(/CHUNK_ID ([^\s\\"]+)/)?.[1];
+      if (chunkId) {
+        const packets = Array.from({ length: 3 }, () => {
+          const entityKey = `e${entityOrdinal++}`;
+          return {
+            id: `${chunkId}-${entityKey}`,
+            chunkId,
+            entityKey,
+            facts: [`${entityKey} ${"collapsed taxonomy evidence ".repeat(900)}`],
+            exactSourceRanges: [{ startLine: 1, endLine: 1 }],
+            links: [],
+            sourceAnchor: "src/a.md:1",
+          };
+        });
+        return mockResponse(params, JSON.stringify({ packets, noEvidence: [] }));
+      }
+      requests.push(request);
+      return mockResponse(
+        params,
+        serialized.includes("taxonomy too collapsed")
+          ? repaired
+          : bootstrapDomainBody("configuration", ""),
+      );
+    } } },
+  } as unknown as LlmClient;
+  const events: RunEvent[] = [];
+
+  for await (const event of runInitWithSources(
+    "demo", ["src"], true, new VaultTools(rawAdapter, "/vault"), llm, "m",
+    [], "Vault", new AbortController().signal, {
+      inputBudgetTokens: 16_384,
+      maxTokens: 2_000,
+      structuredRetries: 1,
+    }, undefined, false, undefined,
+  )) {
+    events.push(event);
+  }
+
+  const split = events.find((event) => event.kind === "evidence_split");
+  assert.ok(split && split.kind === "evidence_split");
+  assert.ok(split.groups > 1, `expected more than one group, got ${split.groups}`);
+  const repairRequests = requests.filter((request) =>
+    JSON.stringify(request.messages).includes("taxonomy too collapsed"));
+  assert.equal(repairRequests.length, split.groups, "every group is repaired");
+  for (const request of requests) {
+    assert.ok(
+      estimatePreparedMessages(request.messages) <= 16_384,
+      `request of ${estimatePreparedMessages(request.messages)} tokens exceeds the budget`,
+    );
+  }
+  const result = events.find((event) => event.kind === "result");
+  assert.ok(result && result.kind === "result");
+  assert.match(result.text, /"type": "software"/);
+  assert.match(result.text, /"type": "service"/);
+  assert.equal(events.some((event) => event.kind === "error"), false);
 });
 
 test("fixed bootstrap prompt overflow reports an unsupported model context, not a configuration error", async () => {
@@ -1435,7 +1600,7 @@ test("fixed bootstrap prompt overflow reports an unsupported model context, not 
   assert.doesNotMatch(failure.message, /domain was not created/i);
 });
 
-test("bootstrap evidence packing reserves system and schema overhead from the same budget", async () => {
+test("a bootstrap prompt that cannot host one evidence unit reports an unsupported model context", async () => {
   const rawAdapter = adapter();
   const source = `Alpha ${"bounded bootstrap evidence ".repeat(32)}`;
   rawAdapter.files.set("src/a.md", source);
