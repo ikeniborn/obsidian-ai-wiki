@@ -1,7 +1,8 @@
 ---
 review:
-  intent_hash: 77a5215b67e1d735
+  intent_hash: 56cb5d606560c990
   last_run: 2026-08-11
+  revision: 2
   phases:
     structure: { status: passed }
     completeness: { status: passed }
@@ -13,7 +14,7 @@ review:
       phase: clarity
       severity: WARNING
       section: Desired Outcomes
-      section_hash: 3106d50d569e6c5e
+      section_hash: 56d8317900677602
       fragment: "uses substantially more than 4k input tokens"
       text: "Vague quantity with no criterion."
       fix: "State an explicit threshold for the effective input budget."
@@ -23,17 +24,17 @@ review:
       phase: clarity
       severity: WARNING
       section: Desired Outcomes
-      section_hash: 3106d50d569e6c5e
+      section_hash: 56d8317900677602
       fragment: "No separate observable outcome is required for the `claude-agent` backend"
       text: "Scope exclusion listed as a desired outcome; it is not observable."
-      fix: "Move it to Strategic Context, next to the matching hard constraint."
+      fix: "Move it to Strategic Context and to a hard constraint."
       verdict: fixed
       verdict_at: 2026-08-11
     - id: F-003
       phase: clarity
       severity: WARNING
       section: Health Metrics
-      section_hash: 53dd60ae19b4574a
+      section_hash: 4ee2ddb83267090f
       fragment: "The number of LLM calls per Init/Ingest does not grow systematically."
       text: "Not measurable: no baseline and no fixture named."
       fix: "Name the fixtures and the baseline; exempt splits caused by an unreachable payload."
@@ -43,7 +44,7 @@ review:
       phase: clarity
       severity: WARNING
       section: Constraints
-      section_hash: 67ebf9da4c249b7c
+      section_hash: ace48b06f71f1713
       fragment: "fall back to a conservative per-backend default"
       text: "\"Conservative\" carries no criterion and recurs in the Guarded autonomy zone."
       fix: "Define what conservative means for the fallback constant."
@@ -53,23 +54,13 @@ review:
       phase: consistency
       severity: INFO
       section: Health Metrics
-      section_hash: 53dd60ae19b4574a
+      section_hash: 4ee2ddb83267090f
       fragment: "Zero provider context-overflow errors."
       text: "Reads as contradicting the hard constraint that allows a provider rejection after the repack loop is exhausted."
       fix: "Scope the metric to unrecovered overflows surfaced to the user."
       verdict: fixed
       verdict_at: 2026-08-11
     - id: F-006
-      phase: consistency
-      severity: INFO
-      section: Health Metrics
-      section_hash: 53dd60ae19b4574a
-      fragment: "The number of LLM calls per Init/Ingest does not grow systematically."
-      text: "Tension with the Guarded autonomy zone that permits splitting into several calls."
-      fix: "Exempt splits explicitly; resolved together with F-003."
-      verdict: fixed
-      verdict_at: 2026-08-11
-    - id: F-007
       phase: alignment
       severity: INFO
       section: Objective
@@ -78,6 +69,26 @@ review:
       text: "Objective and Desired Outcomes cover the task described in the conversation, including the output budget and markdown-chunks scope added by the user. No extra objectives. iwiki unavailable, so the wiki check was skipped."
       fix: null
       verdict: accepted
+      verdict_at: 2026-08-11
+    - id: F-007
+      phase: clarity
+      severity: WARNING
+      section: Constraints
+      section_hash: ace48b06f71f1713
+      fragment: "keeps a proportionally larger one after the change"
+      text: "Revision 2: \"proportionally larger\" carried no criterion, so the format operation's deliberate 32768 output allowance was unverifiable."
+      fix: "State the multiple explicitly: format keeps at least 4x the derived base."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-008
+      phase: consistency
+      severity: INFO
+      section: Desired Outcomes
+      section_hash: 56d8317900677602
+      fragment: "the `data.json` history entry reports `done`, not `error`"
+      text: "Revision 2: the previous wording expected `ok`, which RunHistoryEntry.status (types.ts:478) cannot produce; its values are done | error | cancelled."
+      fix: "Expect `done`."
+      verdict: fixed
       verdict_at: 2026-08-11
 ---
 
@@ -138,19 +149,24 @@ budgeting.
 ## Desired Outcomes
 
 - Init `os-mac --force --sources ОС/Mac/` on the same vault completes successfully and the
-  domain is created; the `data.json` history entry reports `ok`, not `error`.
+  domain is created; the `data.json` history entry reports `done`, not `error`.
 - In `agent.jsonl`, `estimatedInputTokens` differs from the provider's reported
   `inputTokens` by no more than ~15% (currently a factor of ~4).
 - No Init or Ingest run ends with `configuration error — ... domain was not created` because
   of input size. A long `exactSource[].text` is truncated with an explicit marker or split
   across calls, and the domain is created.
-- The main Settings section no longer shows `Input budget tokens` or `Repair input budget`.
-  Both live under Advanced and are empty by default, meaning automatic. Previously saved
-  values keep working as an explicit override.
-- On a model with a 128k context window the effective input budget for Init is at least 4×
-  the current 16384-byte-derived limit — that is, ≥16k real tokens — and `agent.jsonl`
-  records which source produced that boundary: discovery, a learned value, or the fallback
-  default. It is never the constant 16384.
+- The main Settings section no longer shows `Input budget tokens`, `Repair input budget` or
+  `Output budget tokens` for the native backend. All three live under Advanced and are empty
+  by default, meaning automatic. Previously saved values keep working as an explicit override.
+- On first load after the upgrade, an installation that still holds budget values is offered
+  a single explicit choice — switch to automatic, or keep the saved numbers. Nothing is
+  rewritten without that answer, and the choice is asked once.
+- When discovery reports a context window, the effective input budget for Init is at least 4×
+  the current 16384-byte-derived limit — that is, ≥16k real tokens. When no endpoint reports
+  a window, the conservative fallback applies instead and the budget is smaller; that is a
+  correct outcome, not a failure. In both cases `agent.jsonl` records which source produced
+  the boundary: discovery, a learned value, or the fallback default. It is never the constant
+  16384.
 - A truncated generation (`finish_reason=length`) triggers a retry with a larger output
   limit instead of a `structural_error / schema_validate` failure.
 
@@ -236,8 +252,14 @@ budgeting.
   as an explicit override; migration does not rewrite user values.
 - Existing domains are not re-indexed or re-embedded automatically when chunk boundaries
   change. No auto-migration machinery is built; the user re-runs `Init --force` manually.
-- The `claude-agent` backend — its transport and the external CLI's ownership of the output
-  limit — does not change.
+- Automatic budgeting applies to the `native-agent` backend only. The `claude-agent` backend
+  — its transport, its stored budget defaults, its settings layout, and the external CLI's
+  ownership of the output limit — does not change. It inherits the honest token estimate and
+  nothing else.
+- Output budgets are derived per operation, not from one global constant. An operation whose
+  stored default is a multiple of the base output budget today keeps at least that multiple
+  after the change: `format` carries 32768 against a base of 8192, so it keeps at least 4×
+  whatever the derived base becomes.
 
 ## Autonomy Zones
 
@@ -281,6 +303,8 @@ budgeting.
 - Escalate if: accurate estimation genuinely requires a full tokenizer because coefficients
   cannot close the gap.
 - Done when: `init os-mac --force --sources ОС/Mac/` on the real vault finishes with
-  `status: ok`; `agent.jsonl` shows the input estimate within 15% of the provider's reported
-  value; the main Settings section contains no budget fields; and a reproduced long
-  `exactSource` scenario creates the domain with the truncation recorded in the log.
+  `status: done`; `agent.jsonl` shows the input estimate within 15% of the provider's reported
+  value, correlated per request rather than by array position; the main Settings section
+  contains no native budget fields; a reproduced oversized-evidence scenario creates the
+  domain with the split recorded in the log and no content discarded; and a reproduced
+  provider context-overflow is recovered by the repack loop without surfacing to the user.
