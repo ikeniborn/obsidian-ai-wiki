@@ -29,6 +29,7 @@ import {
   type RunStructuredResult,
 } from "./structured-output";
 import { lifecycleEvent } from "../llm-lifecycle";
+import { hashSource } from "../incremental-sources";
 import { prepareChatMessages } from "./llm-utils";
 import { sentinelJsonProfile } from "./framed-output";
 import mapPrompt from "../../prompts/ingest-evidence-map.md";
@@ -450,6 +451,14 @@ export interface BootstrapEvidence {
   candidates: BootstrapCandidateEvidence[];
   domainThemes: string[];
   languageEvidence: string[];
+}
+
+export interface BootstrapEvidenceBundle {
+  bootstrap: BootstrapEvidence;
+  evidence: EntityEvidence[];
+  domainId: string;
+  sourcePath: string;
+  sourceBodyHash: string;
 }
 
 interface EvidenceMappingMode {
@@ -1849,12 +1858,13 @@ export async function prepareSourceEvidence(
   });
 }
 
-export async function prepareBootstrapEvidence(
+export async function prepareBootstrapEvidenceBundle(
   source: string,
   provisionalDomainId: string,
+  sourcePath: string,
   policy: EvidencePolicy,
   runtime: EvidenceRuntime,
-): Promise<BootstrapEvidence> {
+): Promise<BootstrapEvidenceBundle> {
   const evidence = await prepareSourceEvidenceInternal(sourceForEvidence(source), provisionalDomainId, policy, runtime, {
     rejectEntityTypes: true,
     allowedEntityTypes: new Set(),
@@ -1877,12 +1887,33 @@ export async function prepareBootstrapEvidence(
   if (!Number.isSafeInteger(payloadBudget) || payloadBudget <= 0) {
     throw new EvidenceCoverageError("Bootstrap payload budget must be a positive safe integer");
   }
-  const result = boundBootstrapPayload({ candidates, domainThemes, languageEvidence }, payloadBudget);
-  const estimated = estimateBootstrapPayload(result);
+  const bootstrap = boundBootstrapPayload({ candidates, domainThemes, languageEvidence }, payloadBudget);
+  const estimated = estimateBootstrapPayload(bootstrap);
   if (estimated > payloadBudget) {
     throw new EvidenceCoverageError(
       `Bootstrap evidence payload requires ${estimated} tokens but budget is ${payloadBudget}`,
     );
   }
-  return result;
+  return {
+    bootstrap,
+    evidence,
+    domainId: provisionalDomainId,
+    sourcePath,
+    sourceBodyHash: hashSource(source),
+  };
+}
+
+export async function prepareBootstrapEvidence(
+  source: string,
+  provisionalDomainId: string,
+  policy: EvidencePolicy,
+  runtime: EvidenceRuntime,
+): Promise<BootstrapEvidence> {
+  return (await prepareBootstrapEvidenceBundle(
+    source,
+    provisionalDomainId,
+    "",
+    policy,
+    runtime,
+  )).bootstrap;
 }

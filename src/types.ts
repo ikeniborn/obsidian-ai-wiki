@@ -17,6 +17,7 @@ export type WikiOperation =
 export type StructuredCallSite =
   | "init.bootstrap"
   | "init.bootstrap-map"
+  | "init.bootstrap-type-map"
   | "init.delta"
   | "lint.patch"
   | "lint.fix"
