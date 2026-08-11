@@ -4,11 +4,13 @@ import { register } from "node:module";
 import test from "node:test";
 
 import {
+  applyBudgetInput,
   backendModelControlDescriptor,
   createLiveModelControl,
   normalizePersistedModelControls,
   parsePositiveBudgetInput,
   renderModelControlFields,
+  renderNativeBudgetControls,
   resolveCallPolicy,
 } from "../src/model-call-policy";
 import { DEFAULT_SETTINGS, type LlmWikiPluginSettings } from "../src/types";
@@ -605,6 +607,104 @@ test("Format compression fields are ignored and no compression policy is produce
 
   assert.equal(settings.nativeAgent.operations.format.compressionProfile, undefined);
   assert.equal(settings.claudeAgent.operations.format.compressionProfile, undefined);
+});
+
+test("an automatic budget still renders a control", () => {
+  const rendered = renderNativeBudgetControls({ inputBudgetTokens: undefined }, "Automatic");
+  assert.equal(rendered.length, 1, "an undefined value must not hide the field");
+  assert.equal(rendered[0].value, "");
+  assert.equal(rendered[0].placeholder, "Automatic");
+});
+
+test("a stored override still renders its number, not the automatic placeholder", () => {
+  const rendered = renderNativeBudgetControls({ inputBudgetTokens: 24_000 }, "Automatic");
+  assert.equal(rendered.length, 1);
+  assert.equal(rendered[0].value, "24000");
+  assert.equal(rendered[0].placeholder, "24000");
+});
+
+test("clearing the field deletes the setting rather than keeping the old number", () => {
+  const holder: { inputBudgetTokens?: number } = { inputBudgetTokens: 24_000 };
+  applyBudgetInput(holder, "inputBudgetTokens", "");
+  assert.equal("inputBudgetTokens" in holder, false);
+});
+
+test("a valid edit overwrites the stored override, and an invalid one is ignored", () => {
+  const holder: { inputBudgetTokens?: number } = { inputBudgetTokens: 24_000 };
+  applyBudgetInput(holder, "inputBudgetTokens", "32000");
+  assert.equal(holder.inputBudgetTokens, 32_000);
+  applyBudgetInput(holder, "inputBudgetTokens", "not-a-number");
+  assert.equal(holder.inputBudgetTokens, 32_000, "an invalid entry must keep the previous value");
+  applyBudgetInput(holder, "inputBudgetTokens", "0");
+  assert.equal(holder.inputBudgetTokens, 32_000, "0 is not a strictly positive integer");
+});
+
+test("native budgets are optional by default, so the settings tab must not hide them", () => {
+  assert.equal(DEFAULT_SETTINGS.nativeAgent.inputBudgetTokens, undefined);
+  assert.equal(DEFAULT_SETTINGS.nativeAgent.maxTokens, undefined);
+  assert.equal(DEFAULT_SETTINGS.nativeAgent.repairInputBudgetTokens, undefined);
+  // Task 7 already made claude-agent's field required with a fixed default; that must
+  // stay true so its settings control keeps the unchanged, non-automatic behaviour.
+  assert.equal(DEFAULT_SETTINGS.claudeAgent.inputBudgetTokens, 16_384);
+});
+
+test("addPolicyControls renders a native automatic field even when its value is undefined", () => {
+  // The shared render() helpers (used by both backends) sit before either branch.
+  // Task 7 left a guard in addPolicyControls that returned early on `undefined`,
+  // hiding the control entirely; it must now only guard the non-automatic (claude) path.
+  const start = settingsSource.indexOf("const addAutomaticBudgetControl = (");
+  const end = settingsSource.indexOf("const busy = this.plugin.controller.running;", start);
+  assert.ok(start >= 0 && end > start);
+  const body = settingsSource.slice(start, end);
+  assert.match(body, /T\.settings\.advancedBudgets_name/);
+  assert.match(body, /T\.settings\.budgetAutomatic/);
+  assert.match(body, /addAutomaticBudgetControl/);
+  assert.match(body, /automaticBudgetPlaceholders/);
+  assert.match(body, /automatic\?\.updates\.inputBudgetTokens/);
+  assert.match(body, /automatic\?\.updates\.maxTokens/);
+  // The carried-forward guard must be reachable only after the automatic branch
+  // returns — i.e. it still exists, but no longer fires for an automatic field.
+  assert.match(body, /values\.inputBudgetTokens === undefined \|\| !updates\.inputBudgetTokens\) return;/);
+});
+
+test("only the native-agent call sites opt into automatic budgets; claude-agent call sites do not", () => {
+  const claudeStart = settingsSource.indexOf(
+    'if (eff.backend === "claude-agent" && !Platform.isMobile) {',
+  );
+  const claudeEnd = settingsSource.indexOf(
+    "new Setting(containerEl).setName(T.settings.h3_backendConnection).setHeading();",
+    claudeStart,
+  );
+  assert.ok(claudeStart >= 0 && claudeEnd > claudeStart);
+  const claudeBlock = settingsSource.slice(claudeStart, claudeEnd);
+  // Both claude-agent addPolicyControls calls end right after the boolean flag —
+  // no 5th "automatic" argument — so the plain, always-required budget path runs.
+  const claudeCalls = claudeBlock.match(/addPolicyControls\(\s*modelControls\.[\s\S]*?(?:false|true),\s*\);/g) ?? [];
+  assert.equal(claudeCalls.length, 2, "expected exactly the global and per-operation claude calls");
+
+  const nativeEnd = settingsSource.indexOf(
+    "new Setting(containerEl).setName(T.settings.h3_vision).setHeading();",
+    claudeEnd,
+  );
+  assert.ok(nativeEnd > claudeEnd);
+  const nativeBlock = settingsSource.slice(claudeEnd, nativeEnd);
+  // Global native fallback: representative operation "init", the raw configured model.
+  assert.match(nativeBlock, /model: s\.nativeAgent\.model,\s*\n\s*operation: "init",/);
+  // Per-operation native: the model and operation actually used for that operation.
+  assert.match(nativeBlock, /model: effectiveModel\(s, key\),\s*\n\s*operation: key,/);
+  assert.match(nativeBlock, /addAutomaticBudgetControl\(/);
+});
+
+test("the settings tab reads the cached model context synchronously, without probing", () => {
+  const controllerSource = readFileSync(new URL("../src/controller.ts", import.meta.url), "utf8");
+  const start = controllerSource.indexOf("cachedModelContext(baseUrl: string, model: string)");
+  assert.ok(start >= 0, "controller must expose a cachedModelContext pass-through");
+  const end = controllerSource.indexOf("\n  }", start);
+  const body = controllerSource.slice(start, end);
+  assert.doesNotMatch(body, /async/, "the pass-through must not be async");
+  assert.doesNotMatch(body, /await/, "the pass-through must not await anything");
+  assert.doesNotMatch(body, /\.resolve\(/, "the pass-through must read the cache, never trigger a probe");
+  assert.match(body, /this\.modelContextStore\.get\(baseUrl, model\)/);
 });
 
 test("Embedding Check uses localized success and failure notices", () => {

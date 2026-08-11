@@ -18,12 +18,16 @@ import { DEFAULT_CHUNKING, probeEmbeddingDimensions, probeEmbeddingDimensionsRes
 import type { LocalConfig } from "./local-config";
 import { probeRerankerModel, normalizeRerankerConfig } from "./reranker";
 import {
+  applyBudgetInput,
   backendModelControlDescriptor,
   createLiveModelControl,
+  effectiveModel,
   parsePositiveBudgetInput,
   renderModelControlFields,
+  renderNativeBudgetControls,
   type ModelControlField,
 } from "./model-call-policy";
+import { resolveBudget } from "./budget-resolver";
 import { createRequestUrlVisionTransport, runNativeVisionModelCheck } from "./vision-probe";
 
 async function checkNativeAvailability(baseUrl: string, apiKey: string, model: string): Promise<void> {
@@ -317,6 +321,43 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         }),
       );
     };
+    // Native-only: a budget the user has not overridden is derived from the model's
+    // context window instead of a fixed constant (Task 7). The control must still
+    // render — never hidden by an `undefined` value — showing the resolved automatic
+    // number when a context record is already cached, or the localized "Automatic"
+    // word when nothing has been probed yet. Empty input clears the override.
+    const addAutomaticBudgetControl = (
+      setting: Setting,
+      value: number | undefined,
+      update: (next: number | undefined) => void,
+      placeholder: string,
+    ): void => {
+      const initial = renderNativeBudgetControls({ value }, placeholder)[0];
+      const holder: { value?: number } = { value };
+      setting.addText((text) => {
+        text.setPlaceholder(initial.placeholder).setValue(initial.value);
+        text.onChange(async (raw) => {
+          const previous = holder.value;
+          applyBudgetInput(holder, "value", raw);
+          if (holder.value === previous) return;
+          update(holder.value);
+          await this.plugin.saveSettings();
+        });
+      });
+    };
+    // Cached-only: never probes. `record` is undefined until the first operation has
+    // resolved this (baseUrl, model) pair, in which case the placeholder falls back to
+    // the localized "Automatic" word rather than a guessed number.
+    const automaticBudgetPlaceholders = (
+      model: string,
+      operation: OpKey,
+      overrides: { input?: number; output?: number },
+    ): { input: string; output: string } => {
+      const record = this.plugin.controller.cachedModelContext(s.nativeAgent.baseUrl, model);
+      if (!record) return { input: T.settings.budgetAutomatic, output: T.settings.budgetAutomatic };
+      const budget = resolveBudget(record, operation, overrides);
+      return { input: String(budget.inputBudgetTokens), output: String(budget.outputBudgetTokens) };
+    };
     const addCompressionControl = (
       setting: Setting,
       value: CompressionProfile | undefined,
@@ -349,9 +390,37 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         compressionProfile?: (next: CompressionProfile | undefined) => void;
       },
       useGlobalCompression: boolean,
+      // Native-only. When present, inputBudgetTokens/maxTokens render as automatic
+      // (undefined-capable) fields under an "Advanced" heading instead of the fixed,
+      // always-required claude-agent fields. `model`/`operation` locate the cached
+      // record used only to compute the placeholder text — never to probe.
+      automatic?: {
+        model: string;
+        operation: OpKey;
+        updates: {
+          inputBudgetTokens?: (next: number | undefined) => void;
+          maxTokens?: (next: number | undefined) => void;
+        };
+      },
     ): void => {
       renderModelControlFields(fields, {
         inputBudgetTokens: () => {
+          if (automatic?.updates.inputBudgetTokens) {
+            new Setting(containerEl).setName(T.settings.advancedBudgets_name).setHeading();
+            const placeholder = automaticBudgetPlaceholders(automatic.model, automatic.operation, {
+              input: values.inputBudgetTokens,
+              output: values.maxTokens,
+            }).input;
+            addAutomaticBudgetControl(
+              new Setting(containerEl)
+                .setName(T.settings.inputBudgetTokens_name)
+                .setDesc(T.settings.inputBudgetTokens_descAutomatic),
+              values.inputBudgetTokens,
+              automatic.updates.inputBudgetTokens,
+              placeholder,
+            );
+            return;
+          }
           if (values.inputBudgetTokens === undefined || !updates.inputBudgetTokens) return;
           addBudgetControl(
             new Setting(containerEl)
@@ -362,6 +431,21 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           );
         },
         maxTokens: () => {
+          if (automatic?.updates.maxTokens) {
+            const placeholder = automaticBudgetPlaceholders(automatic.model, automatic.operation, {
+              input: values.inputBudgetTokens,
+              output: values.maxTokens,
+            }).output;
+            addAutomaticBudgetControl(
+              new Setting(containerEl)
+                .setName(T.settings.outputBudgetTokens_name)
+                .setDesc(T.settings.outputBudgetTokens_descAutomatic),
+              values.maxTokens,
+              automatic.updates.maxTokens,
+              placeholder,
+            );
+            return;
+          }
           if (values.maxTokens === undefined || !updates.maxTokens) return;
           addBudgetControl(
             new Setting(containerEl)
@@ -771,19 +855,33 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           compressionProfile: s.nativeAgent.compressionProfile,
         },
         {
-          inputBudgetTokens: (next) => { s.nativeAgent.inputBudgetTokens = next; },
-          maxTokens: (next) => { s.nativeAgent.maxTokens = next; },
           compressionProfile: (next) => { s.nativeAgent.compressionProfile = next ?? "balanced"; },
         },
         false,
+        {
+          // The global fields are the fallback default for every operation, not one
+          // operation in particular; "init" (multiplier 1, no format-style x4) is used
+          // only to compute a representative placeholder number and never changes what
+          // gets stored.
+          model: s.nativeAgent.model,
+          operation: "init",
+          updates: {
+            inputBudgetTokens: (next) => { s.nativeAgent.inputBudgetTokens = next; },
+            maxTokens: (next) => { s.nativeAgent.maxTokens = next; },
+          },
+        },
       );
 
-      addBudgetControl(
+      addAutomaticBudgetControl(
         new Setting(containerEl)
           .setName(T.settings.repairInputBudgetTokens_name)
-          .setDesc(T.settings.repairInputBudgetTokens_desc),
-        s.nativeAgent.repairInputBudgetTokens ?? 65_536,
+          .setDesc(T.settings.repairInputBudgetTokens_descAutomatic),
+        s.nativeAgent.repairInputBudgetTokens,
         (next) => { s.nativeAgent.repairInputBudgetTokens = next; },
+        automaticBudgetPlaceholders(s.nativeAgent.model, "init", {
+          input: s.nativeAgent.inputBudgetTokens,
+          output: s.nativeAgent.maxTokens,
+        }).input,
       );
 
       if (!s.nativeAgent.perOperation) {
@@ -891,11 +989,17 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               compressionProfile: s.nativeAgent.operations[key].compressionProfile,
             },
             {
-              inputBudgetTokens: (next) => { s.nativeAgent.operations[key].inputBudgetTokens = next; },
-              maxTokens: (next) => { s.nativeAgent.operations[key].maxTokens = next; },
               compressionProfile: (next) => { s.nativeAgent.operations[key].compressionProfile = next; },
             },
             true,
+            {
+              model: effectiveModel(s, key),
+              operation: key,
+              updates: {
+                inputBudgetTokens: (next) => { s.nativeAgent.operations[key].inputBudgetTokens = next; },
+                maxTokens: (next) => { s.nativeAgent.operations[key].maxTokens = next; },
+              },
+            },
           );
           new Setting(containerEl)
             .setName(T.settings.opTemperature_name)

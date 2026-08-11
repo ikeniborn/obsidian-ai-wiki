@@ -134,6 +134,46 @@ export function parsePositiveBudgetInput(value: string, previous: number): numbe
   return Number.isSafeInteger(parsed) ? parsed : previous;
 }
 
+/**
+ * Pure: computes what an automatic native-budget text control shows for each field in
+ * `values`. An absent (`undefined`) value still produces an entry — value `""` — so the
+ * field is never hidden; its placeholder carries the resolved automatic number when the
+ * caller has one, or `automaticPlaceholder` (default "Automatic") when it does not. Lives
+ * here, not in settings.ts, so it is importable — and testable — without pulling in
+ * Obsidian (settings.ts imports the `obsidian` module at the top level).
+ */
+export function renderNativeBudgetControls(
+  values: Readonly<Record<string, number | undefined>>,
+  automaticPlaceholder = "Automatic",
+): Array<{ field: string; value: string; placeholder: string }> {
+  return Object.keys(values).map((field) => {
+    const value = values[field];
+    return {
+      field,
+      value: value === undefined ? "" : String(value),
+      placeholder: value === undefined ? automaticPlaceholder : String(value),
+    };
+  });
+}
+
+/**
+ * Pure: applies one budget-field edit to a settings holder in place. An empty/whitespace
+ * input deletes the key — that is how a stored override returns to automatic, never a
+ * written 0 or default. An invalid non-empty entry is ignored, keeping the previous
+ * value. A valid strictly-positive integer overwrites it.
+ */
+export function applyBudgetInput<K extends string>(
+  holder: Partial<Record<K, number>>,
+  key: K,
+  raw: string,
+): void {
+  const trimmed = raw.trim();
+  if (trimmed === "") { delete holder[key]; return; }
+  if (!/^[1-9]\d*$/.test(trimmed)) return;
+  const parsed = Number(trimmed);
+  if (Number.isSafeInteger(parsed)) holder[key] = parsed;
+}
+
 export function normalizePersistedModelControls(settings: LlmWikiPluginSettings): void {
   settings.nativeAgent.inputBudgetTokens = optionalPositiveInt(settings.nativeAgent.inputBudgetTokens);
   settings.nativeAgent.repairInputBudgetTokens = optionalPositiveInt(settings.nativeAgent.repairInputBudgetTokens);

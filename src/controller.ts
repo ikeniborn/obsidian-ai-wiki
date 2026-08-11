@@ -17,7 +17,7 @@ import { arrayBufferToBase64, stripImageDataUriPrefix } from "./phases/attachmen
 import { ClaudeCliClient } from "./claude-cli-client";
 import { maskProxyUrl } from "./proxy";
 import { mobileFetch } from "./mobile-fetch";
-import { ModelContextStore } from "./model-context";
+import { ModelContextStore, type ModelContextRecord } from "./model-context";
 import { createNativeOpenAiClient, createNativeProbeFetch } from "./native-openai-client";
 import { i18n } from "./i18n";
 import { resolveEffective } from "./effective-settings";
@@ -148,6 +148,16 @@ export class WikiController {
       mobileFetch,
       connectionTimeoutMs: s.llmConnectionTimeoutSec * 1000,
     });
+  }
+
+  /**
+   * Cached-only pass-through for the settings tab: reads whatever `ModelContextStore`
+   * already has in memory for this (baseUrl, model) pair without probing or awaiting
+   * anything. Settings rendering is synchronous, so an absent record here must render
+   * as "automatic" rather than trigger a network probe.
+   */
+  cachedModelContext(baseUrl: string, model: string): ModelContextRecord | undefined {
+    return this.modelContextStore.get(baseUrl, model);
   }
 
   isBusy(): boolean { return this.current !== null; }
