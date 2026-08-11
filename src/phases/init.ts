@@ -49,13 +49,33 @@ import {
 } from "../wipe-proof";
 import { cancelRuntimeTimeout, scheduleRuntimeTimeout } from "../runtime-timers";
 
+type IngestFailureStage = Extract<IngestOutcome, { ok: false }>["stage"];
+
+function safeFileAttemptMessage(error: unknown, category?: IngestFailureStage): string {
+  const constructorName = error !== null && typeof error === "object"
+    ? (error as { constructor?: { name?: unknown } }).constructor?.name
+    : undefined;
+  const errorClass = typeof constructorName === "string"
+    && /^[A-Za-z][A-Za-z0-9_.:-]{0,63}$/.test(constructorName)
+    ? constructorName
+    : "Error";
+  return category === undefined
+    ? `class=${errorClass}`
+    : `class=${category === "embedding" ? "EmbeddingUnavailableError" : "IngestOutcomeError"} category=${category}`;
+}
+
 async function* forwardIngest(
   generator: AsyncGenerator<RunEvent, IngestOutcome>,
   onDomainUpdate: (event: Extract<RunEvent, { kind: "domain_updated" }>) => void,
-): AsyncGenerator<RunEvent, IngestOutcome> {
+): AsyncGenerator<RunEvent, { outcome: IngestOutcome; childError?: string }> {
+  let childError: string | undefined;
   while (true) {
     const next = await generator.next();
-    if (next.done) return next.value;
+    if (next.done) return { outcome: next.value, childError };
+    if (next.value.kind === "error") {
+      childError = next.value.message;
+      continue;
+    }
     if (next.value.kind === "domain_updated") onDomainUpdate(next.value);
     yield next.value;
   }
@@ -810,6 +830,7 @@ export async function* runInitWithSources(
         : await vaultTools.read(file);
     } catch {
       yield { kind: "assistant_text", delta: `⚠ ${file}: не удалось прочитать файл, пропускаем\n` };
+      yield { kind: "file_outcome", file, status: "skipped" };
       continue;
     }
 
@@ -930,10 +951,12 @@ export async function* runInitWithSources(
     // --- Ingest: write pages + intercept domain_updated for entity_types propagation ---
     let retried = false;
     let done = false;
+    let attempt = 1;
     let ingestOutcome: IngestOutcome | undefined;
     while (!done) {
       let caughtErr: Error | null = null;
       let controlledRetryable: boolean | undefined;
+      let controlledStage: IngestFailureStage | undefined;
       try {
         const forwarded = forwardIngest(
           runIngest(
@@ -961,13 +984,17 @@ export async function* runInitWithSources(
         while (true) {
           const next = await forwarded.next();
           if (next.done) {
-            ingestOutcome = next.value;
+            ingestOutcome = next.value.outcome;
+            if (!ingestOutcome.ok && next.value.childError) {
+              ingestOutcome = { ...ingestOutcome, message: next.value.childError };
+            }
             break;
           }
           yield next.value;
         }
         if (!ingestOutcome.ok) {
           controlledRetryable = ingestOutcome.retryable;
+          controlledStage = ingestOutcome.stage;
           caughtErr = new Error(ingestOutcome.message);
           caughtErr.name = ingestOutcome.stage === "embedding"
             ? "EmbeddingUnavailableError"
@@ -977,12 +1004,22 @@ export async function* runInitWithSources(
         caughtErr = e as Error;
       }
       if (caughtErr) {
+        if (caughtErr.name === "AbortError" || signal.aborted) return;
+        const failureRetryable = controlledRetryable ?? true;
+        yield {
+          kind: "file_attempt",
+          file,
+          attempt,
+          state: "failed",
+          retryable: failureRetryable,
+          message: safeFileAttemptMessage(caughtErr, controlledStage),
+        };
         if (caughtErr instanceof EmbeddingUnavailableError || caughtErr.name === "EmbeddingUnavailableError") {
           yield { kind: "error", message: `init stopped — embedding endpoint failed: ${caughtErr.message}. Fix embedding config and re-run.` };
           yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
           return;
         }
-        const canRetry = !retried && (controlledRetryable ?? true);
+        const canRetry = !retried && failureRetryable;
         let choice: Awaited<ReturnType<NonNullable<OnFileError>>> = "skip";
         if (onFileError) {
           const progress = i18nFor(resolveLang(sourceOpts.outputLanguage)).initProgress;
@@ -990,10 +1027,23 @@ export async function* runInitWithSources(
           choice = await onFileError(file, caughtErr, canRetry);
           yield { kind: "info_text", icon: "ℹ️", summary: progress.fileErrorDecision(choice) };
         }
-        if (choice === "stop") return;
-        if (choice === "retry" && canRetry) { retried = true; continue; }
+        if (signal.aborted) return;
+        if (choice === "stop") {
+          yield { kind: "file_outcome", file, status: "stopped" };
+          return;
+        }
+        if (choice === "retry" && canRetry) {
+          retried = true;
+          attempt += 1;
+          yield { kind: "file_attempt", file, attempt, state: "retry_scheduled", retryable: true };
+          continue;
+        }
+        yield { kind: "file_outcome", file, status: retried ? "exhausted" : "skipped" };
         done = true;
       } else {
+        if (retried) {
+          yield { kind: "file_attempt", file, attempt, state: "recovered", retryable: true };
+        }
         done = true;
       }
     }
@@ -1028,6 +1078,7 @@ export async function* runInitWithSources(
     yield { kind: "tool_result", ok: true };
 
     successfulFiles++;
+    yield { kind: "file_outcome", file, status: "done" };
     yield { kind: "file_done", file };
   }
 
@@ -1084,10 +1135,12 @@ export async function* runIncrementalReinit(
 
     let retried = false;
     let fileDone = false;
+    let attempt = 1;
     let ingestOutcome: IngestOutcome | undefined;
     while (!fileDone) {
       let caught: Error | null = null;
       let controlledRetryable: boolean | undefined;
+      let controlledStage: IngestFailureStage | undefined;
       try {
         const forwarded = forwardIngest(
           runIngest(
@@ -1108,13 +1161,17 @@ export async function* runIncrementalReinit(
         while (true) {
           const next = await forwarded.next();
           if (next.done) {
-            ingestOutcome = next.value;
+            ingestOutcome = next.value.outcome;
+            if (!ingestOutcome.ok && next.value.childError) {
+              ingestOutcome = { ...ingestOutcome, message: next.value.childError };
+            }
             break;
           }
           yield next.value;
         }
         if (!ingestOutcome.ok) {
           controlledRetryable = ingestOutcome.retryable;
+          controlledStage = ingestOutcome.stage;
           caught = new Error(ingestOutcome.message);
           caught.name = ingestOutcome.stage === "embedding"
             ? "EmbeddingUnavailableError"
@@ -1124,13 +1181,22 @@ export async function* runIncrementalReinit(
         caught = e as Error;
       }
       if (caught) {
+        if (caught.name === "AbortError" || signal.aborted) return;
+        const failureRetryable = controlledRetryable ?? true;
+        yield {
+          kind: "file_attempt",
+          file,
+          attempt,
+          state: "failed",
+          retryable: failureRetryable,
+          message: safeFileAttemptMessage(caught, controlledStage),
+        };
         if (caught instanceof EmbeddingUnavailableError || caught.name === "EmbeddingUnavailableError") {
           yield { kind: "error", message: `init stopped — embedding endpoint failed: ${caught.message}. Fix embedding config and re-run.` };
           yield { kind: "result", durationMs: Date.now() - start, text: "" };
           return;
         }
-        if (caught.name === "AbortError" || signal.aborted) return;
-        const canRetry = !retried && (controlledRetryable ?? true);
+        const canRetry = !retried && failureRetryable;
         let choice: Awaited<ReturnType<NonNullable<OnFileError>>> = "skip";
         if (onFileError) {
           const progress = i18nFor(resolveLang(sourceOpts.outputLanguage)).initProgress;
@@ -1138,10 +1204,23 @@ export async function* runIncrementalReinit(
           choice = await onFileError(file, caught, canRetry);
           yield { kind: "info_text", icon: "ℹ️", summary: progress.fileErrorDecision(choice) };
         }
-        if (choice === "stop") return;
-        if (choice === "retry" && canRetry) { retried = true; continue; }
+        if (signal.aborted) return;
+        if (choice === "stop") {
+          yield { kind: "file_outcome", file, status: "stopped" };
+          return;
+        }
+        if (choice === "retry" && canRetry) {
+          retried = true;
+          attempt += 1;
+          yield { kind: "file_attempt", file, attempt, state: "retry_scheduled", retryable: true };
+          continue;
+        }
+        yield { kind: "file_outcome", file, status: retried ? "exhausted" : "skipped" };
         fileDone = true;
       } else {
+        if (retried) {
+          yield { kind: "file_attempt", file, attempt, state: "recovered", retryable: true };
+        }
         fileDone = true;
       }
     }
@@ -1163,6 +1242,7 @@ export async function* runIncrementalReinit(
     yield { kind: "tool_result", ok: true };
 
     doneCount++;
+    yield { kind: "file_outcome", file, status: "done" };
     yield { kind: "file_done", file };
   }
 

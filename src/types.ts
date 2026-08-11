@@ -439,6 +439,8 @@ export type RunEvent =
   | { kind: "eval_meta"; fields: EvalMetaFields }
   | { kind: "init_start"; totalFiles: number; phase?: "analysis" | "ingest" }
   | { kind: "file_start"; file: string; index: number; total: number; phase?: "analysis" | "ingest" }
+  | { kind: "file_attempt"; file: string; attempt: number; state: "failed" | "retry_scheduled" | "recovered"; retryable: boolean; message?: string }
+  | { kind: "file_outcome"; file: string; status: "done" | "skipped" | "stopped" | "exhausted" }
   | { kind: "file_done"; file: string; phase?: "analysis" | "ingest" }
   | { kind: "format_preview"; tempPath: string; report: string; missingTokens: { token: string; context: string }[]; runId?: string; visionCount?: number }
   | { kind: "format_applied"; path: string }

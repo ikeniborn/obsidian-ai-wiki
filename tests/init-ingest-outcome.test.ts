@@ -6,7 +6,7 @@ import type { DomainEntry } from "../src/domain";
 import { EmbeddingUnavailableError } from "../src/embedding-error";
 import { hashSource } from "../src/incremental-sources";
 import type { PageSimilarityService } from "../src/page-similarity";
-import type { LlmClient, RunEvent } from "../src/types";
+import type { LlmClient, OnFileError, RunEvent } from "../src/types";
 import type { PreparedIngestEvidence } from "../src/phases/ingest";
 import type { VaultAdapter } from "../src/vault-tools";
 import { mockChatResponse } from "./openai-mock-response";
@@ -36,12 +36,14 @@ type FailureCase = "llm" | "coverage" | "patch" | "write" | "index" | "embedding
 
 class MemoryAdapter implements VaultAdapter {
   readonly files = new Map<string, string>([[SOURCE_PATH, SOURCE]]);
+  failSourceRead = false;
   failPageWrite = false;
   failIndexAfterPageWrite = false;
   pageWritten = false;
   afterWrite?: (path: string, data: string) => void | Promise<void>;
 
   async read(path: string): Promise<string> {
+    if (path === SOURCE_PATH && this.failSourceRead) throw new Error(`synthetic read failure: ${path}`);
     const value = this.files.get(path);
     if (value === undefined) throw new Error(`ENOENT: ${path}`);
     return value;
@@ -1037,3 +1039,191 @@ for (const operation of ["full", "incremental"] as const) {
     assert.deepEqual(seen, [true, false]);
   });
 }
+
+async function runAttemptEventCase(
+  operation: "full" | "incremental",
+  options: {
+    decision?: "skip" | "retry" | "stop";
+    recover?: boolean;
+    unreadable?: boolean;
+    abortOnDecision?: boolean;
+    errorMessage?: string;
+  },
+): Promise<RunEvent[]> {
+  const adapter = new MemoryAdapter();
+  adapter.failSourceRead = options.unreadable ?? false;
+  const calls = emptyHandoffCalls();
+  const controller = new AbortController();
+  const onFileError: OnFileError = async () => {
+    if (options.abortOnDecision) controller.abort();
+    return options.decision ?? "skip";
+  };
+  const llm = options.errorMessage === undefined
+    ? options.recover
+      ? handoffLlm(adapter, calls, { directIngest: true, failFirstSynthesis: true })
+      : llmFor("llm", adapter)
+    : {
+        chat: { completions: { create: async () => { throw new Error(options.errorMessage); } } },
+      } as unknown as LlmClient;
+  const currentDomain = domain();
+  const generator = operation === "full"
+    ? runInitWithSources(
+      "demo",
+      ["src"],
+      false,
+      new VaultTools(adapter, "/vault"),
+      llm,
+      "mock",
+      [currentDomain],
+      "Vault",
+      controller.signal,
+      HANDOFF_OPTS,
+      onFileError,
+      false,
+      similarityFor("success"),
+    )
+    : runIncrementalReinit(
+      "demo",
+      [SOURCE_PATH],
+      new VaultTools(adapter, "/vault"),
+      llm,
+      "mock",
+      [currentDomain],
+      controller.signal,
+      HANDOFF_OPTS,
+      onFileError,
+      similarityFor("success"),
+    );
+  return collect(generator);
+}
+
+function fileEvents(events: RunEvent[]): RunEvent[] {
+  return events.filter((event) => event.kind === "file_attempt" || event.kind === "file_outcome");
+}
+
+for (const operation of ["full", "incremental"] as const) {
+  test(`${operation} init scopes a recovered Retry to file attempt events`, async () => {
+    const events = await runAttemptEventCase(operation, { decision: "retry", recover: true });
+    const attempts = fileEvents(events);
+
+    assert.equal(events.some((event) => event.kind === "error"), false);
+    assert.equal(events.some((event) => event.kind === "structural_error"), true);
+    assert.ok(attempts[0]?.kind === "file_attempt");
+    assert.equal(attempts[0].message, "class=IngestOutcomeError category=synthesis");
+    assert.deepEqual(attempts.map((event) => {
+      if (event.kind !== "file_attempt") return event;
+      const { message: _message, ...metadata } = event;
+      return metadata;
+    }), [
+      {
+        kind: "file_attempt",
+        file: SOURCE_PATH,
+        attempt: 1,
+        state: "failed",
+        retryable: true,
+      },
+      {
+        kind: "file_attempt",
+        file: SOURCE_PATH,
+        attempt: 2,
+        state: "retry_scheduled",
+        retryable: true,
+      },
+      {
+        kind: "file_attempt",
+        file: SOURCE_PATH,
+        attempt: 2,
+        state: "recovered",
+        retryable: true,
+      },
+      { kind: "file_outcome", file: SOURCE_PATH, status: "done" },
+    ]);
+    assert.equal(events.filter((event) => event.kind === "file_done" && event.file === SOURCE_PATH).length, 1);
+  });
+
+  test(`${operation} init reports Skip as one skipped file outcome`, async () => {
+    const events = await runAttemptEventCase(operation, { decision: "skip" });
+    assert.equal(events.some((event) => event.kind === "error"), false);
+    assert.deepEqual(fileEvents(events).map((event) =>
+      event.kind === "file_attempt" ? [event.state, event.attempt] : [event.status]), [
+      ["failed", 1],
+      ["skipped"],
+    ]);
+  });
+
+  test(`${operation} init reports Stop as one stopped file outcome`, async () => {
+    const events = await runAttemptEventCase(operation, { decision: "stop" });
+    assert.equal(events.some((event) => event.kind === "error"), false);
+    assert.deepEqual(fileEvents(events).map((event) =>
+      event.kind === "file_attempt" ? [event.state, event.attempt] : [event.status]), [
+      ["failed", 1],
+      ["stopped"],
+    ]);
+  });
+
+  test(`${operation} init reports failure after Retry as one exhausted file outcome`, async () => {
+    const events = await runAttemptEventCase(operation, { decision: "retry" });
+    assert.equal(events.some((event) => event.kind === "error"), false);
+    assert.deepEqual(fileEvents(events).map((event) =>
+      event.kind === "file_attempt" ? [event.state, event.attempt] : [event.status]), [
+      ["failed", 1],
+      ["retry_scheduled", 2],
+      ["failed", 2],
+      ["exhausted"],
+    ]);
+  });
+
+  test(`${operation} init resolves an unreadable file once as skipped`, async () => {
+    const events = await runAttemptEventCase(operation, { unreadable: true });
+    assert.deepEqual(fileEvents(events).filter((event) => event.kind === "file_outcome"), [
+      { kind: "file_outcome", file: SOURCE_PATH, status: "skipped" },
+    ]);
+  });
+
+  test(`${operation} init cancellation leaves the active file without an outcome`, async () => {
+    const events = await runAttemptEventCase(operation, {
+      decision: "retry",
+      abortOnDecision: true,
+    });
+    assert.equal(fileEvents(events).filter((event) => event.kind === "file_outcome").length, 0);
+  });
+
+  test(`${operation} init bounds file attempt diagnostics without leaking child errors`, async () => {
+    const secret = `SECRET_FILE_ATTEMPT_${operation.toUpperCase()}`;
+    const events = await runAttemptEventCase(operation, {
+      decision: "skip",
+      errorMessage: `${secret}:${"payload".repeat(180_000)}`,
+    });
+    const relevant = fileEvents(events);
+    const failed = relevant[0];
+
+    assert.ok(failed?.kind === "file_attempt");
+    assert.equal(failed.state, "failed");
+    assert.equal(failed.message, "class=IngestOutcomeError category=evidence");
+    assert.doesNotMatch(JSON.stringify(events), new RegExp(secret));
+    assert.ok(new TextEncoder().encode(failed.message).byteLength <= 128);
+    assert.ok(new TextEncoder().encode(JSON.stringify(failed)).byteLength < 1_048_576);
+    assert.deepEqual(relevant.map((event) => event.kind === "file_attempt" ? event.state : event.status), [
+      "failed",
+      "skipped",
+    ]);
+  });
+}
+
+test("direct Ingest keeps an unrecovered child error global", async () => {
+  const adapter = new MemoryAdapter();
+  const events = await collect(runIngest(
+    [SOURCE_PATH],
+    new VaultTools(adapter, "/vault"),
+    llmFor("llm", adapter),
+    "mock",
+    [domain()],
+    "/vault",
+    new AbortController().signal,
+    HANDOFF_OPTS,
+    similarityFor("success"),
+  ));
+
+  assert.equal(events.some((event) => event.kind === "error"), true);
+  assert.equal(fileEvents(events).length, 0);
+});
