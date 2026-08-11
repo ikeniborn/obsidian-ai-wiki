@@ -1,8 +1,8 @@
 ---
 review:
-  plan_hash: 637b4c1ac090f6ef
+  plan_hash: dbc2e5a04701e8e4
   last_run: 2026-08-11
-  revision: 2
+  revision: 3
   phases:
     structure: { status: passed }
     coverage: { status: passed }
@@ -10,55 +10,122 @@ review:
     verifiability: { status: passed }
     consistency: { status: passed }
   findings:
-    - id: F-001
+    - id: F-006
+      phase: dependencies
+      severity: CRITICAL
+      section: "Task 10: Init merges K bootstrap groups and stops failing on size"
+      section_hash: c1ec0ec6b3a79b95
+      text: "Revision 2 computed the group overhead from domainThemes and languageEvidence, which do not exist until the evidence preparation that the budget governs has already run. The plan admitted this in prose two paragraphs below the code that did it."
+      fix: "Cap both lists with declared constants and compute a worst-case overhead before chunking."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-007
+      phase: consistency
+      severity: CRITICAL
+      section: "Task 9: Evidence-unit split and the bound chunk budget"
+      section_hash: c519011a63e7d28d
+      text: "The splitter divided an oversized candidate once and then threw EvidenceCoverageError, which is a size failure and is forbidden by the intent's hard constraint."
+      fix: "Iterate until every part fits or is atomic, report the largest atomic group upward, and let Task 10 widen the budget."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-008
+      phase: consistency
+      severity: CRITICAL
+      section: "Task 3: Route the existing estimators through the new one"
+      section_hash: 393587a1c303137a
+      text: "The chunker was left uncalibrated while the payload budget was calibrated, so the two sides of the fit proof were measured on different scales."
+      fix: "Convert the budget into raw estimator units at the one call site that sets it."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-009
+      phase: consistency
+      severity: CRITICAL
+      section: "Task 5: Budget resolver"
+      section_hash: 020e1bd5977491d6
+      text: "An input override was clamped to the whole context window rather than to what remains after the output reserve: window 8192 with override 8192 and output 4096 sums to 12288."
+      fix: "Clamp both the derived value and the override to the same maxInput ceiling; add input-only, output-only and combined override tests."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-010
       phase: dependencies
       severity: CRITICAL
       section: "Task 8: Runtime wiring"
-      section_hash: ffa877745ff779e3
-      fragment: "inputSource: ..., outputSource: ..., calibration: record.calibration"
-      text: "Task 8 read inputSource and outputSource off the policy result, but the return type declared in Task 7 carried only model, policy and opts. The step could not compile."
-      fix: "Task 7 returns a ResolvedModelCall carrying the resolved budget; Task 8 reads the sources from it and uses its presence as the backend guard."
+      section_hash: 467501e7cb7f2aa3
+      text: "Three separate breaks: the probe used global.model and ignored the per-operation model that the policy actually selects; onEvent was called inside buildOptsFor, which has no such parameter; selectNativeFetch was called with a proxy config instead of its actual four inputs."
+      fix: "Resolve the effective model first, return diagnostics as an events array, and pass the real transport inputs."
       verdict: fixed
       verdict_at: 2026-08-11
-    - id: F-002
-      phase: dependencies
+    - id: F-011
+      phase: verifiability
       severity: CRITICAL
-      section: "Task 7: Native call policy"
-      section_hash: f1eb2d2de3f2b60d
-      fragment: "contextWindowTokens: budget.contextWindow"
-      text: "Tasks 7 and 8 set contextWindowTokens and onUsageObserved on LlmCallOptions, but both fields were only declared in Task 11. Neither task would typecheck when executed in order."
-      fix: "Declare both fields in Task 3 Step 1, the first task that touches LlmCallOptions."
+      section: "Task 13: The one-shot upgrade choice, README and changelog"
+      section_hash: 17e16691d6b8099e
+      text: "The upgrade flow called Modal.openAndWait(), which Obsidian does not expose; obsidian.d.ts has only open, close, onOpen and onClose."
+      fix: "Write the promise wrapper explicitly, settle it once, and define dismissal as keeping the stored values."
       verdict: fixed
       verdict_at: 2026-08-11
-    - id: F-003
+    - id: F-012
       phase: verifiability
-      severity: WARNING
-      section: "Task 7: Native call policy"
-      section_hash: f1eb2d2de3f2b60d
-      fragment: "semanticCompression: ...,"
-      text: "The claude-agent branch and the compression assembly were elided, so an implementer reading only this task could not reproduce them."
-      fix: "Spell out both branches in full, with an explicit do-not-edit note on the claude one."
+      severity: CRITICAL
+      section: "Task 12: Settings rendering and strings"
+      section_hash: cb23d617f92317cf
+      text: "The placeholder read an undefined resolvedAutomaticValue, and the settings layer has no ModelContextRecord to compute one from."
+      fix: "Read the cached record synchronously through a controller pass-through; show the word Automatic when nothing is cached. Never probe during render."
       verdict: fixed
       verdict_at: 2026-08-11
-    - id: F-004
+    - id: F-013
       phase: verifiability
-      severity: WARNING
-      section: "Task 11: Per-request output ceiling and usage feedback"
-      section_hash: fce091b78a2a4022
-      fragment: "// drive one call through the stub client used by this suite"
-      text: "A test step whose body is a comment is the no-placeholder rule's exact failure case: it describes what to do without showing how."
-      fix: "Write the full runStructuredStreaming call, and name the existing stub helper rather than inventing a second one."
+      severity: CRITICAL
+      section: "Task 2: Token estimator"
+      section_hash: 0c9b98bd10972866
+      text: "The acceptance test only forbade underestimation, while the intent requires an absolute 15% band. The runtime starts every new model at calibration 1, and the seed coefficients missed the band there; a test that fitted an offline factor first concealed exactly that case."
+      fix: "Fit honest seeds against the recorded fixture, assert the absolute band at calibration 1, and keep a separate no-underestimate case."
       verdict: fixed
       verdict_at: 2026-08-11
-    - id: F-005
-      phase: verifiability
-      severity: INFO
+    - id: F-014
+      phase: consistency
+      severity: CRITICAL
       section: "Task 8: Runtime wiring"
-      section_hash: ffa877745ff779e3
-      fragment: "const resolved = resolveModelCallPolicy(s, op, record, policyOperation);"
-      text: "The remainder of buildOptsFor is elided. Retained deliberately: the elision is labelled as unchanged existing code and naming the two new lines is clearer than reprinting the method."
-      fix: null
-      verdict: accepted
+      section_hash: 467501e7cb7f2aa3
+      text: "Telemetry had no complete data flow: context_probe was declared but never emitted, calibration_sample hardcoded applied true and clamped false even for discarded samples, and the budget provenance Task 11 writes was unreachable from emitBudget."
+      fix: "observeUsage returns a CalibrationOutcome, the probe takes an event sink, and the provenance travels as one budgetTelemetry object on LlmCallOptions."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-015
+      phase: verifiability
+      severity: CRITICAL
+      section: "Task 14: Live verification against the intent"
+      section_hash: d54537e0c6581817
+      text: "The overflow-recovery check provoked an overflow with an oversized override, which the corrected clamp makes impossible."
+      fix: "Poison the cached context record instead, which is also the real-world case this path exists for."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-016
+      phase: verifiability
+      severity: WARNING
+      section: "Task 7: Native call policy"
+      section_hash: 0b7892b3b840b5a2
+      text: "The task demanded a clean typecheck while changing a signature that every caller uses, so it could not be verified on its own."
+      fix: "Add resolveCallPolicy beside the untouched resolveModelCallPolicy; Task 8 switches the callers and deletes the old one."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-017
+      phase: verifiability
+      severity: WARNING
+      section: "Task 1: Capture the health-metric baseline"
+      section_hash: fea087e3a637c80a
+      text: "git checkout -- was used to undo a scratch edit, which discards any other working-tree change to that file."
+      fix: "Copy the file before editing and restore from the copy."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-018
+      phase: coverage
+      severity: CRITICAL
+      section: "Task 15: Update the project wiki"
+      section_hash: 5127e70f1badd69a
+      text: "The plan updated README and CHANGELOG but omitted the mandatory iwiki update. wiki_lint reports architecture/prompt-budget-governor (src/agent-runner.ts) and architecture/model-call-controls (src/model-call-policy.ts) as stale, and both are files this plan rewrites."
+      fix: "Add a wiki task that rewrites both pages, adds one for the new modules, and ends on a clean wiki_lint."
+      verdict: fixed
       verdict_at: 2026-08-11
 chain:
   intent:
@@ -66,7 +133,7 @@ chain:
     hash: 56cb5d606560c990
   spec:
     path: docs/superpowers/specs/2026-08-11-prompt-budget-automation-design.md
-    hash: 4116006016a989c1
+    hash: ae5473b20e8d12e6
 ---
 
 # Prompt Budget Automation Implementation Plan
@@ -79,7 +146,7 @@ chain:
 
 **Tech Stack:** TypeScript 5.4, ESM, `node --import tsx --test` (node:test + node:assert/strict), esbuild bundle, Obsidian plugin API, OpenAI SDK v6, undici.
 
-**Revision:** 2. Revision 1 was superseded after a review found eleven defects; the spec records them in its §9. Every one of them has a task or step here.
+**Revision:** 3. Revision 1 was superseded after a review found eleven defects in the chain, recorded in the spec's §9. Revision 2 was superseded after a second review found seven more, this time in the plan itself; the closing table traces every one. Four decisions were taken along the way: raise the budget for atomic evidence rather than truncate, fit honest seed coefficients rather than allow a warm-up period, ask once before touching stored budgets, and scope automation to native-agent.
 
 ## Global Constraints
 
@@ -186,11 +253,22 @@ node --import tsx --test tests/ingest-bounded.test.ts 2>&1 | tail -12
 ```
 Expected: a node:test summary. Record `tests`, `pass`, `fail`.
 
-- [ ] **Step 5: Revert the temporary instrumentation**
+- [ ] **Step 5: Restore the instrumented file from the copy**
 
-Run:
+Never use `git checkout --` to undo your own scratch edit: it discards whatever else is in the
+working tree for that file, including changes you did not make. Restore from the copy taken
+before the edit.
+
+Before Step 3, save it:
 ```bash
-git checkout -- tests/bounded-operations-acceptance.test.ts && git status --short
+cp tests/bounded-operations-acceptance.test.ts /tmp/baseline-instrumented-original.ts
+```
+
+Now put it back and confirm the tree is clean:
+```bash
+cp /tmp/baseline-instrumented-original.ts tests/bounded-operations-acceptance.test.ts
+rm /tmp/baseline-instrumented-original.ts
+git status --short
 ```
 Expected: no output.
 
@@ -258,12 +336,13 @@ Create `tests/fixtures/recorded-prompts.json`. The four entries come from `agent
 
 ```json
 {
-  "note": "Derived from agent.jsonl messageCharLengths and llm_call_stats.inputTokens. Latin/Cyrillic ratios preserved; text is synthetic but the script mix and lengths are real.",
+  "note": "Character counts, message counts and actualInputTokens are read verbatim from agent.jsonl (messageCharLengths and llm_call_stats.inputTokens) of the failing run. The 60/40 Cyrillic/Latin split of the payload is an explicit modelling assumption, not recorded data: the payload is JSON whose keys and paths are Latin and whose values are Russian. The system message is Latin-only and identical in all four requests, which is what makes the differences between them isolate the payload ratio.",
+  "payloadCyrillicShare": 0.6,
   "cases": [
-    { "id": "llm-1", "system": { "latin": 4181, "cyrillic": 0 }, "user": { "latin": 2080, "cyrillic": 4853 }, "actualInputTokens": 3767 },
-    { "id": "llm-2", "system": { "latin": 4181, "cyrillic": 0 }, "user": { "latin": 2652, "cyrillic": 6188 }, "actualInputTokens": 4381 },
-    { "id": "llm-3", "system": { "latin": 4181, "cyrillic": 0 }, "user": { "latin": 650, "cyrillic": 1518 }, "actualInputTokens": 1809 },
-    { "id": "bounded-1", "system": { "latin": 4181, "cyrillic": 0 }, "user": { "latin": 650, "cyrillic": 1518 }, "actualInputTokens": 1851 }
+    { "id": "llm-1",     "systemChars": 4181, "payloadChars": 6933, "messages": 2, "actualInputTokens": 3767 },
+    { "id": "llm-2",     "systemChars": 4181, "payloadChars": 8840, "messages": 2, "actualInputTokens": 4381 },
+    { "id": "llm-3",     "systemChars": 4181, "payloadChars": 2168, "messages": 2, "actualInputTokens": 1809 },
+    { "id": "bounded-1", "systemChars": 4181, "payloadChars": 2290, "messages": 3, "actualInputTokens": 1851 }
   ]
 }
 ```
@@ -278,46 +357,70 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { estimateMessages, estimateText } from "../src/token-estimate";
 
+interface Case {
+  id: string;
+  systemChars: number;
+  payloadChars: number;
+  messages: number;
+  actualInputTokens: number;
+}
+
 const fixture = JSON.parse(
   readFileSync(new URL("./fixtures/recorded-prompts.json", import.meta.url), "utf8"),
-) as { cases: Array<{ id: string; system: { latin: number; cyrillic: number }; user: { latin: number; cyrillic: number }; actualInputTokens: number }> };
+) as { payloadCyrillicShare: number; cases: Case[] };
 
-const build = (part: { latin: number; cyrillic: number }): string =>
-  "a".repeat(part.latin) + "я".repeat(part.cyrillic);
+/** Rebuilds a prompt with the recorded lengths and the documented script mix. */
+function messagesFor(item: Case): OpenAI.Chat.ChatCompletionMessageParam[] {
+  const cyrillic = Math.round(item.payloadChars * fixture.payloadCyrillicShare);
+  const latin = item.payloadChars - cyrillic;
+  const extra = Array.from({ length: item.messages - 2 }, () => (
+    { role: "user" as const, content: "" }
+  ));
+  return [
+    { role: "system", content: "a".repeat(item.systemChars) },
+    { role: "user", content: "a".repeat(latin) + "я".repeat(cyrillic) },
+    ...extra,
+  ];
+}
 
 test("Cyrillic costs more tokens per character than Latin", () => {
   assert.ok(estimateText("абвгдеёжзи") > estimateText("abcdefghij"));
 });
 
-test("the raw estimate never falls more than 15% below the provider count", () => {
+test("the uncalibrated estimate is within 15% of the provider count on every recorded case", () => {
+  // The intent's metric is an absolute band, and the runtime starts every new
+  // model at calibration 1, so the seed coefficients must satisfy it on their
+  // own. A test that first fits an offline factor would hide exactly the case
+  // that matters: the first request against a model the plugin has never seen.
   for (const item of fixture.cases) {
-    const estimated = estimateMessages([
-      { role: "system", content: build(item.system) },
-      { role: "user", content: build(item.user) },
-    ]);
+    const estimated = estimateMessages(messagesFor(item));
+    const error = estimated / item.actualInputTokens - 1;
     assert.ok(
-      estimated >= item.actualInputTokens * 0.85,
-      `${item.id}: underestimated ${estimated} against ${item.actualInputTokens}`,
+      Math.abs(error) <= 0.15,
+      `${item.id}: ${(error * 100).toFixed(1)}% off at calibration 1 `
+      + `(${estimated} against ${item.actualInputTokens})`,
     );
   }
 });
 
-test("one calibration factor brings every recorded case inside 15%", () => {
-  const ratios = fixture.cases.map((item) => {
-    const estimated = estimateMessages([
-      { role: "system", content: build(item.system) },
-      { role: "user", content: build(item.user) },
-    ]);
-    return item.actualInputTokens / estimated;
-  });
+test("the uncalibrated estimate never falls below the provider count", () => {
+  // Overestimating wastes budget; underestimating produces real provider
+  // context-length errors. The seed is biased upward on purpose.
+  for (const item of fixture.cases) {
+    assert.ok(
+      estimateMessages(messagesFor(item)) >= item.actualInputTokens,
+      `${item.id}: the seed must not underestimate`,
+    );
+  }
+});
+
+test("a fitted calibration factor keeps every case inside 15%", () => {
+  const ratios = fixture.cases.map((item) =>
+    item.actualInputTokens / estimateMessages(messagesFor(item)));
   const calibration = ratios.reduce((sum, value) => sum + value, 0) / ratios.length;
-  for (const [index, item] of fixture.cases.entries()) {
-    const calibrated = estimateMessages([
-      { role: "system", content: build(item.system) },
-      { role: "user", content: build(item.user) },
-    ], calibration);
-    const error = Math.abs(calibrated / item.actualInputTokens - 1);
-    assert.ok(error <= 0.15, `${item.id}: ${(error * 100).toFixed(1)}% off after calibration (ratio ${ratios[index].toFixed(3)})`);
+  for (const item of fixture.cases) {
+    const error = Math.abs(estimateMessages(messagesFor(item), calibration) / item.actualInputTokens - 1);
+    assert.ok(error <= 0.15, `${item.id}: ${(error * 100).toFixed(1)}% off after calibration`);
   }
 });
 
@@ -370,8 +473,11 @@ export const MEDIA_TOKENS = 4_096;
 /** Flat allowance per message for its role and the separators around it. */
 const MESSAGE_OVERHEAD_TOKENS = 4;
 
+// Fitted against tests/fixtures/recorded-prompts.json: these two values put all
+// four recorded requests between +1.6% and +6.6% of the provider's own count at
+// calibration 1 — inside the intent's 15% band, and never below it.
 const CHARS_PER_TOKEN_CYRILLIC = 2;
-const CHARS_PER_TOKEN_DEFAULT = 3.5;
+const CHARS_PER_TOKEN_DEFAULT = 4;
 
 function isCyrillic(code: number): boolean {
   return code >= 0x0400 && code <= 0x052f;
@@ -431,9 +537,26 @@ export function estimateMessages(
 - [ ] **Step 5: Run the test to verify it passes**
 
 Run: `node --import tsx --test tests/token-estimate.test.ts`
-Expected: PASS, 6 tests.
+Expected: PASS, 7 tests.
 
-If the raw-estimate test fails, lower `CHARS_PER_TOKEN_CYRILLIC` or `CHARS_PER_TOKEN_DEFAULT`; never relax the assertion — it is the intent's health metric and its halt condition.
+If a band assertion fails, adjust `CHARS_PER_TOKEN_CYRILLIC` or `CHARS_PER_TOKEN_DEFAULT` and re-fit — never relax the assertion. It is the intent's health metric and its halt condition. The search is two-dimensional and small; this script reproduces the fit:
+
+```bash
+python3 - <<'EOF'
+cases = [("llm-1",4181,6933,2,3767),("llm-2",4181,8840,2,4381),
+         ("llm-3",4181,2168,2,1809),("bounded-1",4181,2290,3,1851)]
+for L in (3.8, 4.0, 4.2):
+    for C in (1.9, 2.0, 2.1, 2.2):
+        errs = []
+        for _, s, p, m, act in cases:
+            cyr = p * 0.6
+            est = s / L + (p - cyr) / L + cyr / C + 4 * m
+            errs.append(est / act - 1)
+        print(f"lat/{L} cyr/{C}: min {min(errs)*100:+5.1f}% max {max(errs)*100:+5.1f}%")
+EOF
+```
+
+Pick the pair whose minimum error is at or above zero — never underestimating — with the smallest maximum.
 
 - [ ] **Step 6: Typecheck, lint, commit**
 
@@ -522,7 +645,23 @@ function estimateTokens(markdown: string): number {
 }
 ```
 
-The chunker is deliberately uncalibrated: chunk boundaries must be reproducible across runs, and a drifting factor would move them.
+`estimateTokens` stays uncalibrated so chunk boundaries are a pure function of the text. The
+calibration is applied to the **budget** instead, at the one call site that sets it, so both
+sides of the comparison are in the same unit:
+
+```ts
+  // policy.chunkBudgetTokens is expressed in calibrated tokens, the same unit
+  // as payloadBudget. chunkMarkdownSource measures in raw estimator tokens, so
+  // the budget is converted rather than the measurement. Without this the
+  // "one evidence unit always fits" proof compares two different scales.
+  const rawChunkBudget = Math.max(
+    1,
+    Math.floor((policy.chunkBudgetTokens ?? policy.inputBudgetTokens) / (policy.calibration ?? 1)),
+  );
+```
+
+Add `calibration?: number` to `EvidencePolicy` in Task 9 Step 5 and set it from
+`opts.tokenCalibration` in Task 10 Step 1.
 
 - [ ] **Step 5: Run the full suite and collect the damage**
 
@@ -1010,9 +1149,29 @@ test("input and output sources move independently", () => {
   assert.equal(budget.inputSource, "discovered", "an output override must not relabel the input");
 });
 
-test("an override larger than the context window is clamped", () => {
-  const budget = resolveBudget(record({ contextWindow: 8_192 }), "init", { input: 999_999 });
-  assert.ok(budget.inputBudgetTokens <= 8_192);
+test("an override is clamped to what is left after the output reserve", () => {
+  const budget = resolveBudget(record({ contextWindow: 8_192 }), "init", { input: 8_192 });
+  assert.equal(budget.outputBudgetTokens, 4_096);
+  assert.equal(budget.inputBudgetTokens, 3_686);
+  assert.ok(
+    budget.inputBudgetTokens + budget.outputBudgetTokens <= 8_192,
+    "input plus output must never exceed the context window",
+  );
+});
+
+test("an output-only override still leaves the input derived and bounded", () => {
+  const budget = resolveBudget(record({ contextWindow: 8_192 }), "init", { output: 3_000 });
+  assert.equal(budget.outputBudgetTokens, 3_000);
+  assert.equal(budget.inputBudgetTokens, Math.floor((8_192 - 3_000) * 0.9));
+  assert.equal(budget.inputSource, "discovered");
+  assert.equal(budget.outputSource, "override");
+});
+
+test("both overrides together still fit the window", () => {
+  const budget = resolveBudget(record({ contextWindow: 8_192 }), "init", { input: 7_000, output: 3_000 });
+  assert.ok(budget.inputBudgetTokens + budget.outputBudgetTokens <= 8_192);
+  assert.equal(budget.inputSource, "override");
+  assert.equal(budget.outputSource, "override");
 });
 
 test("the output ceiling exceeds the output budget so a retry can grow", () => {
@@ -1075,11 +1234,11 @@ export function resolveBudget(
     outputBase * (OUTPUT_MULTIPLIER[operation] ?? 1),
     Math.floor(record.contextWindow * OUTPUT_MAX_SHARE),
   ));
-  const derivedInput = Math.floor((record.contextWindow - outputBudgetTokens) * SAFETY);
-  const inputBudgetTokens = Math.max(1, Math.min(
-    inputOverride ?? derivedInput,
-    record.contextWindow,
-  ));
+  // The ceiling for BOTH the derived value and an override. Clamping an
+  // override to the whole window would let input + output exceed the context:
+  // window 8192, override 8192, output 4096 sums to 12288.
+  const maxInput = Math.max(1, Math.floor((record.contextWindow - outputBudgetTokens) * SAFETY));
+  const inputBudgetTokens = Math.min(inputOverride ?? maxInput, maxInput);
 
   return {
     inputBudgetTokens,
@@ -1241,7 +1400,7 @@ git commit -m "feat: add budget resolution diagnostics to the run event stream"
 
 **Interfaces:**
 - Consumes: `ModelContextRecord` (Task 4); `resolveBudget` (Task 5).
-- Produces: `resolveModelCallPolicy(settings, operation, record, parent?)` — the same return shape, with a `ModelContextRecord` added as the third positional parameter. The parameter is ignored on the `claude-agent` path.
+- Produces: `resolveCallPolicy(settings, operation, record, parent?): ResolvedModelCall` — a new export beside the untouched `resolveModelCallPolicy`, plus `effectiveModel(settings, operation, parent?)`. Task 8 switches the callers and deletes the old function.
 
 - [ ] **Step 1: Make only the native budgets optional**
 
@@ -1271,9 +1430,14 @@ In `normalizePersistedModelControls`, replace the native lines with `optionalPos
 
 Apply the same asymmetry in the per-operation loop.
 
-- [ ] **Step 3: Resolve the native budget through the record**
+- [ ] **Step 3: Add the record-aware resolver beside the existing one**
 
-Change the signature and rewrite only the native branch:
+Do **not** change the signature of `resolveModelCallPolicy` here. Changing it in this task
+would break every call site until Task 8 lands, so this task could not honestly claim a clean
+typecheck — and a task that cannot be verified on its own is not a task.
+
+Instead add a new export. Task 8 switches the callers to it and deletes the old function in
+the same commit, so both tasks compile and both are reviewable alone:
 
 ```ts
 export interface ResolvedModelCall {
@@ -1284,7 +1448,7 @@ export interface ResolvedModelCall {
   budget?: ResolvedBudget;
 }
 
-export function resolveModelCallPolicy(
+export function resolveCallPolicy(
   settings: LlmWikiPluginSettings,
   operation: WikiOperation,
   record: ModelContextRecord,
@@ -1372,28 +1536,28 @@ const rec = (over = {}) => ({ contextWindow: 131_072, source: "discovered" as co
 
 test("an absent native budget yields a context-derived budget, not 16384", () => {
   const settings = defaultSettings();
-  const { policy } = resolveModelCallPolicy(settings, "init", rec());
+  const { policy } = resolveCallPolicy(settings, "init", rec());
   assert.equal(policy.inputBudgetTokens, 110_592);
 });
 
 test("a stored native budget still acts as an explicit override", () => {
   const settings = defaultSettings();
   settings.nativeAgent.inputBudgetTokens = 24_000;
-  const { policy } = resolveModelCallPolicy(settings, "init", rec());
+  const { policy } = resolveCallPolicy(settings, "init", rec());
   assert.equal(policy.inputBudgetTokens, 24_000);
 });
 
 test("the calibration factor reaches the call options", () => {
   const settings = defaultSettings();
-  const { opts } = resolveModelCallPolicy(settings, "init", rec({ calibration: 1.25 }));
+  const { opts } = resolveCallPolicy(settings, "init", rec({ calibration: 1.25 }));
   assert.equal(opts.tokenCalibration, 1.25);
 });
 
 test("the claude-agent path is unaffected by the record", () => {
   const settings = defaultSettings();
   settings.backend = "claude-agent";
-  const a = resolveModelCallPolicy(settings, "init", rec());
-  const b = resolveModelCallPolicy(settings, "init", rec({ contextWindow: 8_192 }));
+  const a = resolveCallPolicy(settings, "init", rec());
+  const b = resolveCallPolicy(settings, "init", rec({ contextWindow: 8_192 }));
   assert.deepEqual(a.policy, b.policy);
   assert.equal(a.policy.inputBudgetTokens, 16_384);
 });
@@ -1402,7 +1566,7 @@ test("the claude-agent path is unaffected by the record", () => {
 - [ ] **Step 5: Run and commit**
 
 Run: `npm run typecheck && npm test 2>&1 | tail -20`
-Expected: baseline plus the four new tests. Compilation errors at `resolveModelCallPolicy` call sites are expected and are fixed in Task 8.
+Expected: a clean typecheck and the baseline plus the four new tests. Nothing breaks, because `resolveModelCallPolicy` is still present and still has its old signature; `resolveCallPolicy` is new and so far only the tests call it.
 
 ```bash
 git add src/model-call-policy.ts src/types.ts tests/model-call-policy.test.ts
@@ -1421,25 +1585,40 @@ Revision 1 referenced a store that does not exist and assumed a synchronous path
 - Test: `tests/controller-run-status.test.ts` or a new `tests/runtime-budget-wiring.test.ts`
 
 **Interfaces:**
-- Consumes: `ModelContextStore` (Task 4); `resolveModelCallPolicy(settings, operation, record, parent?)` (Task 7).
-- Produces: `AgentRunner` accepts a `ModelContextStore`; `AgentRunner.buildOptsFor` returns `Promise<{ model, opts }>`.
+- Consumes: `ModelContextStore` (Task 4); `resolveCallPolicy` and `effectiveModel` (Task 7).
+- Produces: `AgentRunner` accepts a `ModelContextStore`; `buildOptsFor` returns `Promise<{ model, opts, events }>`; `runWithContextRepack` gains `onContextError`; `probeContextWindow` gains `onProbe`; the legacy `resolveModelCallPolicy` is deleted here, once nothing calls it.
 
 - [ ] **Step 1: Build the store in the controller**
 
 In `src/controller.ts`, beside the existing `localConfigStore` (line 124), construct the store once:
+
+`selectNativeFetch` (`src/native-openai-transport.ts:162`) takes
+`{ isMobile, mobileFetch, proxyFetch, directDesktopFetch, preferDesktopHostForNonStream? }` —
+not a proxy config. Build the same four inputs the controller already assembles for the LLM
+client, and reuse them:
 
 ```ts
   private modelContextStore = new ModelContextStore({
     read: async () => (await this.localConfigStore.load()).modelContext ?? {},
     write: async (next) => { await this.localConfigStore.save({ modelContext: next }); },
     fetchFn: selectNativeFetch({
-      proxy: this.plugin.settings.proxy,
-      connectionTimeoutMs: (this.plugin.settings.llmConnectionTimeoutSec ?? 15) * 1000,
+      isMobile: Platform.isMobile,
+      mobileFetch: obsidianRequestFetch,
+      proxyFetch: createProxyFetch(
+        this.plugin.settings.proxy,
+        (this.plugin.settings.llmConnectionTimeoutSec ?? 15) * 1_000,
+      ),
+      directDesktopFetch: () => createDirectDesktopFetch(
+        (this.plugin.settings.llmConnectionTimeoutSec ?? 15) * 1_000,
+      ),
+      // The probe is a plain non-streaming GET/POST.
+      preferDesktopHostForNonStream: false,
     }),
   });
 ```
 
-Match the actual `selectNativeFetch` parameter shape at `src/native-openai-transport.ts:162`; if it differs, adapt the call rather than the transport.
+Take `obsidianRequestFetch` from wherever the controller already obtains the mobile fetch for
+the LLM client; do not introduce a second one.
 
 - [ ] **Step 2: Pass it to the runner**
 
@@ -1451,25 +1630,47 @@ At `src/controller.ts:766`, add the store as a constructor argument, and add the
 
 - [ ] **Step 3: Make `buildOptsFor` async**
 
-In `src/agent-runner.ts`:
+The model to probe is the one the call will actually use. With `perOperation` enabled,
+`resolveModelCallPolicy` picks `local?.model ?? global.model` (`src/model-call-policy.ts:228`),
+so probing `global.model` unconditionally would cache one model's window under another's
+budget. Export the selection so both sides agree:
+
+```ts
+// src/model-call-policy.ts
+export function effectiveModel(
+  settings: LlmWikiPluginSettings,
+  operation: WikiOperation,
+  parent?: OpKey,
+): string {
+  const key = policyKey(operation, parent);
+  const global = settings.backend === "claude-agent" ? settings.claudeAgent : settings.nativeAgent;
+  const local = global.perOperation ? global.operations[key] : undefined;
+  return local?.model ?? global.model;
+}
+```
+
+`buildOptsFor` returns its diagnostics instead of emitting them, because it has no `onEvent`
+in scope — it is a private helper, not a generator step:
 
 ```ts
   private async buildOptsFor(
     op: RunRequest["operation"],
     policyOperation?: RunRequest["policyOperation"],
     signal?: AbortSignal,
-  ): Promise<{ model: string; opts: LlmCallOptions }> {
+  ): Promise<{ model: string; opts: LlmCallOptions; events: RunEvent[] }> {
     const s = this.settings;
+    const events: RunEvent[] = [];
+    const model = effectiveModel(s, op, policyOperation);
     const record = s.backend === "claude-agent"
       ? CLAUDE_PLACEHOLDER_RECORD
       : await this.modelContextStore.resolve(
           s.nativeAgent.baseUrl,
-          s.nativeAgent.model,
+          model,
           this.apiKey,
           Date.now(),
           signal,
         );
-    const resolved = resolveModelCallPolicy(s, op, record, policyOperation);
+    const resolved = resolveCallPolicy(s, op, record, policyOperation);
     // Everything below this line is the body `buildOptsFor` has today, unchanged:
     // the structuredRetries / mergeDeleteWarnThreshold reads, the claude-agent
     // early return, and the native option assembly. Only the two lines above are new.
@@ -1491,12 +1692,13 @@ Await it at both call sites (`:233`, `:238`).
 
 - [ ] **Step 4: Emit `budget_resolved`**
 
-Immediately after resolving. `resolved.budget` is present only on the native path, so the
-guard doubles as the backend check:
+Push it onto the returned `events` array; the generator that called `buildOptsFor` yields
+every entry before it issues the request. `resolved.budget` is present only on the native
+path, so the guard doubles as the backend check:
 
 ```ts
     if (resolved.budget) {
-      onEvent({
+      events.push({
         kind: "budget_resolved",
         operation: policyKey(op, policyOperation),
         model: resolved.model,
@@ -1513,19 +1715,63 @@ guard doubles as the backend check:
 
 - [ ] **Step 5: Close both feedback hooks**
 
-Set `opts.onUsageObserved` (added in Task 11) so a reported usage reaches the store, and classify errors so a context error reaches it too. Without the second hook the `learned` source can never appear:
+**Usage.** `observeUsage` returns what it did, so the event reports the truth instead of
+hardcoding `applied: true, clamped: false`. Change its signature in `src/model-context.ts`:
+
+```ts
+export interface CalibrationOutcome { ratio: number; applied: boolean; clamped: boolean }
+
+  observeUsage(baseUrl: string, model: string, estimated: number, actual: number): CalibrationOutcome {
+    const record = this.get(baseUrl, model);
+    const ratio = estimated > 0 ? actual / estimated : 0;
+    if (!record || estimated <= 0 || actual <= 0) return { ratio, applied: false, clamped: false };
+    if (ratio < CALIBRATION_MIN || ratio > CALIBRATION_MAX) {
+      return { ratio, applied: false, clamped: true };
+    }
+    ...                                    // the averaging body from Task 4
+    return { ratio, applied: true, clamped: false };
+  }
+```
+
+Wire it, emitting through the same `events` channel the request already uses:
 
 ```ts
       onUsageObserved: ({ estimated, actual }) => {
         if (actual === undefined) return;
-        this.modelContextStore.observeUsage(baseUrl, model, estimated, actual);
-        onEvent({ kind: "calibration_sample", model, estimated, actual,
-          ratio: actual / estimated, applied: true, clamped: false });
+        const outcome = this.modelContextStore.observeUsage(baseUrl, model, estimated, actual);
+        onEvent({ kind: "calibration_sample", model, estimated, actual, ...outcome });
       },
 ```
 
-and, where a run's error is already classified, call
-`this.modelContextStore.observeContextError(baseUrl, model, classifyContextError(error)?.maxContextTokens)`.
+**Context errors.** A terminal `catch` never sees an error that `runWithContextRepack`
+successfully recovered from — and a recovered overflow is exactly the signal that teaches the
+cache. Hook it inside the repack boundary instead. `runWithContextRepack`
+(`src/prompt-budget.ts:397-408`) already classifies each failure; add an optional callback to
+`RunWithContextRepackArgs` and invoke it where `details` is computed:
+
+```ts
+  onContextError?: (details: ContextErrorDetails) => void;
+```
+
+```ts
+    const details = repackSuppressed ? null : classifyContextError(error);
+    if (details !== null) args.onContextError?.(details);
+```
+
+The runner passes
+`onContextError: (details) => this.modelContextStore.observeContextError(baseUrl, model, details.maxContextTokens)`.
+Without this the `learned` source can never appear.
+
+**Probe events.** `probeContextWindow` takes an optional sink so `context_probe` is actually
+emitted — Task 6 declares the event and revision 2 never produced it:
+
+```ts
+  onProbe?: (event: Extract<RunEvent, { kind: "context_probe" }>) => void;
+```
+
+One event per endpoint attempted, carrying `endpoint`, `ok`, `ms`, `matchedById` and
+`contextLength` when found. The store forwards the sink from `resolve`, and the runner pushes
+them into `events`.
 
 - [ ] **Step 6: Write the wiring test**
 
@@ -1663,21 +1909,43 @@ function subdivide(candidate: BootstrapCandidate, parts: number): BootstrapCandi
  * subdivided first. Themes and language evidence are duplicated into every
  * group, which is the overhead the chunk budget already subtracts.
  */
+export interface BootstrapSplit {
+  groups: BootstrapEvidence[];
+  /** Largest group that could not be divided any further, in tokens. */
+  minimumGroupTokens: number;
+  subdivided: number;
+}
+
 export function splitBootstrapPayload(
   value: BootstrapEvidence,
   budget: number,
-): BootstrapEvidence[] {
-  if (estimateBootstrapPayload(value) <= budget) return [value];
+): BootstrapSplit {
+  if (estimateBootstrapPayload(value) <= budget) {
+    return { groups: [value], minimumGroupTokens: estimateBootstrapPayload(value), subdivided: 0 };
+  }
 
+  // Divide until every part fits or is atomic. `subdivide` halves by evidence
+  // unit, so the loop terminates: each pass either shrinks a part or reports it
+  // atomic. A single arithmetic pass is not enough — one unit can be far larger
+  // than the average, so ceil(size / budget) parts can still overflow.
+  let subdivided = 0;
   const queue: BootstrapCandidate[] = [];
-  for (const candidate of value.candidates) {
+  const pending = [...value.candidates];
+  while (pending.length > 0) {
+    const candidate = pending.shift()!;
     const probe: BootstrapEvidence = { ...emptyGroup(value), candidates: [candidate] };
     const size = estimateBootstrapPayload(probe);
     if (size <= budget) {
       queue.push(candidate);
       continue;
     }
-    queue.push(...subdivide(candidate, Math.ceil(size / budget)));
+    const units = Math.max(candidate.facts.length, candidate.exactSource.length);
+    if (units <= 1) {
+      queue.push(candidate);   // atomic: one fact and one range, cannot divide
+      continue;
+    }
+    subdivided++;
+    pending.unshift(...subdivide(candidate, 2));
   }
 
   const groups: BootstrapEvidence[] = [];
@@ -1692,11 +1960,17 @@ export function splitBootstrapPayload(
     current = attempt;
   }
   groups.push(current);
-  return groups;
+
+  return {
+    groups,
+    minimumGroupTokens: Math.max(...groups.map(estimateBootstrapPayload)),
+    subdivided,
+  };
 }
 ```
 
-`subdivide` may need a second pass when one part is still too large; the loop in Step 4 asserts the postcondition rather than trusting the arithmetic.
+`minimumGroupTokens` is the contract with Task 10: when it exceeds the budget, the remaining
+groups are atomic and the **caller** must widen the budget rather than the splitter failing.
 
 - [ ] **Step 4: Return the groups and assert the postcondition**
 
@@ -1710,20 +1984,12 @@ Replace the bound-and-throw block in `prepareBootstrapEvidenceBundle` (around li
   if (!Number.isSafeInteger(payloadBudget) || payloadBudget <= 0) {
     throw new EvidenceCoverageError("Bootstrap payload budget must be a positive safe integer");
   }
-  const groups = splitBootstrapPayload({ candidates, domainThemes, languageEvidence }, payloadBudget);
-  for (const group of groups) {
-    const size = estimateBootstrapPayload(group);
-    if (size > payloadBudget) {
-      throw new EvidenceCoverageError(
-        `Chunk budget is misaligned with the bootstrap payload budget: a minimal evidence group `
-        + `needs ${size} tokens but the payload budget is ${payloadBudget}. This is a construction `
-        + `error in the budget wiring, not a user configuration problem.`,
-      );
-    }
-  }
+  const split = splitBootstrapPayload({ candidates, domainThemes, languageEvidence }, payloadBudget);
   return {
-    bootstrap: groups[0],
-    bootstrapGroups: groups,
+    bootstrap: split.groups[0],
+    bootstrapGroups: split.groups,
+    bootstrapMinimumGroupTokens: split.minimumGroupTokens,
+    bootstrapSubdivided: split.subdivided,
     evidence,
     domainId: provisionalDomainId,
     sourcePath,
@@ -1731,7 +1997,15 @@ Replace the bound-and-throw block in `prepareBootstrapEvidenceBundle` (around li
   };
 ```
 
-Add `bootstrapGroups: BootstrapEvidence[]` to `BootstrapEvidenceBundle`.
+No size check throws here. A group larger than the budget means the evidence is atomic, and
+the intent's hard constraint forbids ending the operation on size — so the number is reported
+upward and Task 10 widens the budget. Add three fields to `BootstrapEvidenceBundle`:
+
+```ts
+  bootstrapGroups: BootstrapEvidence[];
+  bootstrapMinimumGroupTokens: number;
+  bootstrapSubdivided: number;
+```
 
 - [ ] **Step 5: Bind the chunk budget net of group overhead**
 
@@ -1774,27 +2048,107 @@ git commit -m "fix: split bootstrap evidence at unit granularity instead of fail
 
 - [ ] **Step 1: Compute the group overhead and pass both budgets**
 
-Replace lines 237-247:
+`domainThemes` and `languageEvidence` do not exist yet when the chunk budget must be decided —
+they are produced by the very evidence preparation the budget governs. Revision 2 used them
+anyway. The fix is to bound them instead of measuring them, so the worst case is computable up
+front.
+
+Add two caps to `src/phases/ingest-evidence.ts` and enforce them where the two lists are
+built, right after the existing `unique(...)` calls:
 
 ```ts
-  const emptyGroupEstimate = estimatePreparedMessages([{
-    role: "user",
-    content: JSON.stringify({ candidates: [], domainThemes, languageEvidence }),
-  }], opts.tokenCalibration);
-  const bootstrapPayloadBudgetTokens = inputBudgetTokens - fixedRequestEstimate + emptyPayloadEstimate;
-  const chunkBudgetTokens = Math.max(1, bootstrapPayloadBudgetTokens - emptyGroupEstimate);
+/** Bounds the per-group overhead so the chunk budget is computable before chunking. */
+export const MAX_DOMAIN_THEMES = 24;
+export const MAX_LANGUAGE_EVIDENCE = 12;
+export const MAX_OVERHEAD_ITEM_CHARS = 240;
 ```
 
-and pass both into `prepareBootstrapEvidenceBundle`:
+```ts
+  const domainThemes = unique(evidence.flatMap((item) => item.facts), (fact) => fact)
+    .slice(0, MAX_DOMAIN_THEMES)
+    .map((theme) => theme.slice(0, MAX_OVERHEAD_ITEM_CHARS));
+  const languageEvidence = unique(
+    evidence.flatMap((item) => item.exactSource.map((range) => range.text)),
+    (text) => text,
+  ).slice(0, MAX_LANGUAGE_EVIDENCE).map((text) => text.slice(0, MAX_OVERHEAD_ITEM_CHARS));
+```
+
+Both lists are signals for domain naming and language inference, not evidence: nothing in the
+coverage invariant reads them, so capping them loses no facts.
+
+Now the worst case is a constant and the budget can be computed before chunking. Replace
+lines 237-247 of `src/phases/init.ts`:
+
+```ts
+  // Worst case a group can carry besides its evidence: both capped lists at full
+  // length plus the JSON envelope. Computable before evidence exists, which is
+  // the whole point of the caps.
+  const worstCaseGroupOverhead = estimatePreparedMessages([{
+    role: "user",
+    content: JSON.stringify({
+      candidates: [],
+      domainThemes: Array.from({ length: MAX_DOMAIN_THEMES }, () => "x".repeat(MAX_OVERHEAD_ITEM_CHARS)),
+      languageEvidence: Array.from({ length: MAX_LANGUAGE_EVIDENCE }, () => "x".repeat(MAX_OVERHEAD_ITEM_CHARS)),
+    }),
+  }], opts.tokenCalibration);
+  const bootstrapPayloadBudgetTokens = inputBudgetTokens - fixedRequestEstimate + emptyPayloadEstimate;
+  const chunkBudgetTokens = Math.max(1, bootstrapPayloadBudgetTokens - worstCaseGroupOverhead);
+```
+
+and pass all three into `prepareBootstrapEvidenceBundle`:
 
 ```ts
       bootstrapPayloadBudgetTokens,
       chunkBudgetTokens,
+      calibration: opts.tokenCalibration ?? 1,
 ```
 
-`domainThemes` and `languageEvidence` are not known before evidence preparation, so estimate the overhead from the previous run's shape when available and otherwise from an empty envelope plus a fixed reserve of 512 tokens. Record the value used in the `evidence_split` event.
+- [ ] **Step 2: Widen the budget when the evidence is atomic**
 
-- [ ] **Step 2: Merge K entries**
+`splitBootstrapPayload` reports `bootstrapMinimumGroupTokens`: the largest group it could not
+divide further. When that exceeds the payload budget, the evidence is atomic and no amount of
+splitting helps. The operation must still complete, so the caller widens the budget instead of
+failing — in this order, stopping as soon as it fits:
+
+```ts
+async function widenForAtomicEvidence(
+  needed: number,
+  current: number,
+): Promise<{ budget: number; droppedSchema: boolean; truncateTo?: number }> {
+  if (needed <= current) return { budget: current, droppedSchema: false };
+
+  // 1. Drop the schema block from the system prompt. Same lever lint-chat.ts:272
+  //    already pulls, and it frees the largest single reclaimable chunk.
+  const withoutSchema = current + schemaBlockEstimate;
+  if (needed <= withoutSchema) return { budget: withoutSchema, droppedSchema: true };
+
+  // 2. Reclaim the output reserve down to a floor that still fits a domain entry.
+  const withMinimalOutput = withoutSchema + (outputBudgetTokens - MIN_BOOTSTRAP_OUTPUT_TOKENS);
+  if (needed <= withMinimalOutput) return { budget: withMinimalOutput, droppedSchema: true };
+
+  // 3. Nothing larger exists: the unit is bigger than the model's whole window,
+  //    so no prompt can contain it. Truncating one range is the only way to keep
+  //    the intent's "no size failure" constraint, and it is explicit and logged.
+  return { budget: withMinimalOutput, droppedSchema: true, truncateTo: withMinimalOutput };
+}
+```
+
+Set `MIN_BOOTSTRAP_OUTPUT_TOKENS = 2048` — enough for a `DomainEntry` with a realistic
+`entity_types` list.
+
+When `truncateTo` is returned, cut the offending `exactSource[].text` on a line boundary,
+append `\n[truncated: <M> of <N> lines omitted]`, leave `exactSourceRanges` untouched so
+coverage is unaffected, and emit:
+
+```ts
+onEvent({ kind: "evidence_truncated", entityKey, range, keptTokens, totalTokens, budget });
+```
+
+Add that fifth event kind alongside the four from Task 6. Reaching branch 3 means a single
+source fragment is larger than the entire model context; it is recorded so it is visible
+rather than silent.
+
+- [ ] **Step 3: Merge K entries**
 
 Add above the bootstrap loop:
 
@@ -1825,7 +2179,7 @@ Run the existing bootstrap call once per entry in `bootstrapBundle.bootstrapGrou
 
 Emit `evidence_split` once, with `groups`, `candidates`, `subdivided` and `payloadBudget`.
 
-- [ ] **Step 3: Remove the size-based hard failure**
+- [ ] **Step 4: Remove the size-based hard failure**
 
 Delete the `isConfigurationError` branch (lines 275-279). Replace the `bootstrapPayloadBudgetTokens <= 0` early return with the schema-drop retry, following `src/phases/lint-chat.ts:272`: rebuild `systemContent` with an empty `schema_block` and re-estimate. Only if it still does not fit:
 
@@ -1837,13 +2191,13 @@ Delete the `isConfigurationError` branch (lines 275-279). Replace the `bootstrap
 
 No "configuration error", because there is nothing for the user to configure.
 
-- [ ] **Step 4: Invert the fail-loud tests**
+- [ ] **Step 5: Invert the fail-loud tests**
 
 In `tests/init-bootstrap-fail-loud.test.ts`, every case asserting `domain was not created` for a size reason now asserts the domain is created and more than one `init.bootstrap` request was issued. Keep the non-size failure cases — invalid entity types, missing required fields — exactly as they are.
 
 Add one case: two groups returning different `id` values produce the group 0 value plus the conflict message.
 
-- [ ] **Step 5: Run and commit**
+- [ ] **Step 6: Run and commit**
 
 Run: `npm run typecheck && npm test 2>&1 | tail -20`
 Expected: suite at the baseline; the inverted cases pass.
@@ -1942,7 +2296,30 @@ In `emitBudget`, after the existing `createPromptBudgetEvent` call:
   opts.onUsageObserved?.({ estimated: estimatedInput, actual: actualInputTokens });
 ```
 
-Pass `contextWindow`, `inputSource`, `outputSource` and `calibration` into the same `createPromptBudgetEvent` call so one record carries both the estimate and the actual.
+`emitBudget` has only `opts` in scope, and `inputSource` / `outputSource` are not call options —
+they describe how the budget was decided, not how the call behaves. Passing them individually
+would mean widening `LlmCallOptions` with fields no caller below this layer reads. Carry them
+as one opaque object instead:
+
+```ts
+// src/types.ts, in LlmCallOptions
+  /** Provenance of the resolved budget, copied verbatim into prompt_budget events. */
+  budgetTelemetry?: {
+    contextWindow: number;
+    inputSource: "override" | "discovered" | "learned" | "default";
+    outputSource: "override" | "default";
+    calibration: number;
+  };
+```
+
+Task 7's native branch sets it from `budget`; `emitBudget` spreads it into the event:
+
+```ts
+      ...(opts.budgetTelemetry ?? {}),
+```
+
+One `prompt_budget` record then carries `estimatedInputTokens`, `actualInputTokens` and the
+provenance together, which is what Task 14 Step 5 correlates on.
 
 - [ ] **Step 4: Run and commit**
 
@@ -2001,12 +2378,39 @@ Extract `renderNativeBudgetControls` and `applyBudgetInput` as small exported he
               .setDesc(T.settings.inputBudgetTokens_desc),
             values.inputBudgetTokens,
             updates.inputBudgetTokens,
-            String(resolvedAutomaticValue),
+            automaticPlaceholder,
           );
         },
 ```
 
 `addBudgetControl` gains a placeholder parameter and treats an empty string as `undefined`.
+
+The placeholder needs a value the settings layer can produce **synchronously and without a
+network call** — rendering a settings tab must not trigger a probe. Read the cached record
+only:
+
+```ts
+  /** Cached-only: never probes. Undefined until the first operation has run. */
+  const cachedRecord = this.plugin.controller.cachedModelContext(
+    s.nativeAgent.baseUrl,
+    effectiveModel(s, "init"),
+  );
+  const automaticPlaceholder = cachedRecord === undefined
+    ? T.settings.budgetAutomatic
+    : String(resolveBudget(cachedRecord, "init", {}).inputBudgetTokens);
+```
+
+Add a synchronous pass-through on the controller:
+
+```ts
+  cachedModelContext(baseUrl: string, model: string): ModelContextRecord | undefined {
+    return this.modelContextStore.get(baseUrl, model);
+  }
+```
+
+`ModelContextStore.get` reads the in-memory cache populated by the last `resolve`, so on a
+fresh install the field shows the word rather than a number. That is honest: no budget has
+been resolved yet.
 
 - [ ] **Step 3: Move the native budget fields under Advanced**
 
@@ -2095,7 +2499,57 @@ test("accepting clears only the native budgets", () => {
 
 - [ ] **Step 2: Implement the helpers and the modal**
 
-Create `src/auto-budget-notice.ts` with `hasStoredNativeBudget`, `clearNativeBudgets` (pure, exported, tested) and an Obsidian `Modal` subclass offering two buttons. The modal is a thin shell; all logic lives in the two pure functions.
+Create `src/auto-budget-notice.ts` with `hasStoredNativeBudget` and `clearNativeBudgets` — pure,
+exported, tested — plus the modal shell.
+
+Obsidian's `Modal` has no `openAndWait`: `node_modules/obsidian/obsidian.d.ts` exposes only
+`open()`, `close()`, `onOpen()` and `onClose()`. Build the promise wrapper explicitly, and
+settle it exactly once so that a button, `Escape` and clicking outside all resolve:
+
+```ts
+export class AutoBudgetNoticeModal extends Modal {
+  private settle?: (switchToAutomatic: boolean) => void;
+
+  constructor(app: App) { super(app); }
+
+  /** Resolves true to switch to automatic, false to keep the stored values. */
+  ask(): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      let settled = false;
+      this.settle = (value) => {
+        if (settled) return;      // close() re-enters through onClose
+        settled = true;
+        resolve(value);
+      };
+      this.open();
+    });
+  }
+
+  onOpen(): void {
+    this.setTitle(T.settings.autoBudgetNotice_title);
+    this.contentEl.createEl("p", { text: T.settings.autoBudgetNotice_body });
+    new Setting(this.contentEl)
+      .addButton((b) => b.setButtonText(T.settings.autoBudgetNotice_switch).setCta()
+        .onClick(() => { this.settle?.(true); this.close(); }))
+      .addButton((b) => b.setButtonText(T.settings.autoBudgetNotice_keep)
+        .onClick(() => { this.settle?.(false); this.close(); }));
+  }
+
+  /** Escape, the close button and clicking outside all land here. */
+  onClose(): void {
+    this.contentEl.empty();
+    this.settle?.(false);   // dismissal keeps the stored values
+  }
+}
+```
+
+Dismissal is deliberately the conservative answer: nothing is rewritten unless the user
+actively chooses it. The `migrated_auto_budget` marker is written in every branch, so the
+question is asked exactly once either way.
+
+Add the three strings to all three locales in `src/i18n.ts` alongside Task 12's, and
+`budgetAutomatic` — English `"Automatic"`, Russian `"Автоматически"`, Spanish
+`"Automático"`.
 
 - [ ] **Step 3: Ask once on load**
 
@@ -2105,13 +2559,12 @@ In `src/main.ts`, beside the existing migrations:
     const local = await this.localConfig.load();
     if (!local.migrated_auto_budget) {
       if (hasStoredNativeBudget(this.settings)) {
-        await new AutoBudgetNoticeModal(this.app, async (switchToAutomatic) => {
-          if (switchToAutomatic) {
-            clearNativeBudgets(this.settings);
-            await this.saveSettings();
-          }
-          await this.localConfig.save({ migrated_auto_budget: true });
-        }).openAndWait();
+        const switchToAutomatic = await new AutoBudgetNoticeModal(this.app).ask();
+        if (switchToAutomatic) {
+          clearNativeBudgets(this.settings);
+          await this.saveSettings();
+        }
+        await this.localConfig.save({ migrated_auto_budget: true });
       } else {
         await this.localConfig.save({ migrated_auto_budget: true });
       }
@@ -2210,9 +2663,30 @@ Expected: a `context_probe` with `ok: true` and `matchedById: true`, and a `budg
 
 - [ ] **Step 7: Check 4 — split and overflow recovery, separately**
 
-Split: temporarily set the Advanced input budget override low enough to force groups, re-run Init, and confirm `evidence_split` with `groups > 1` plus a created domain. Then clear the override.
+**Split.** Set the Advanced input budget override low enough to force groups, re-run Init, and
+confirm `evidence_split` with `groups > 1` plus a created domain. Then clear the override.
 
-Overflow recovery: set the override above the model's real window, re-run, and confirm the run still completes and `agent.jsonl` shows a `prompt_budget` with `retryReason: "provider_context_error"` and no error surfaced. This proves recovery; check 2 measures the estimator and proves nothing about it.
+**Overflow recovery.** An override can no longer trigger this: Task 5 clamps it to
+`(contextWindow − outputBudget) × SAFETY`, so by construction it cannot exceed the window.
+Poison the cache instead — a stale record is exactly the real-world case this path exists for,
+a model swapped behind an unchanged name:
+
+```bash
+cd "/home/ikeniborn/Documents/Project/notes/vaults/Work/.obsidian/plugins/ai-wiki"
+cp local.json local.json.bak
+jq '.modelContext |= with_entries(.value.contextWindow = 900000 | .value.source = "discovered")' \
+  local.json > local.json.tmp && mv local.json.tmp local.json
+```
+
+Re-run Init. Expected: the run completes; `agent.jsonl` carries a `prompt_budget` with
+`retryReason: "provider_context_error"`; no error reaches the user; and the record is rewritten
+with `source: "learned"` and a smaller window. Then restore:
+
+```bash
+mv local.json.bak local.json
+```
+
+This proves recovery. Check 2 measures the estimator and proves nothing about it.
 
 - [ ] **Step 8: Confirm the settings UI**
 
@@ -2226,6 +2700,58 @@ Append the recorded numbers under a new `## After` heading in the baseline file.
 git add docs/superpowers/evals/prompt-budget-automation-baseline.md
 git commit -m "test: record live verification of automatic prompt budgets"
 ```
+
+---
+
+### Task 15: Update the project wiki
+
+`CLAUDE.md` makes this mandatory after any change to functionality, architecture or
+behaviour, and `wiki_lint` already flags the two pages this work invalidates:
+
+```
+architecture/prompt-budget-governor.md   source: src/agent-runner.ts
+architecture/model-call-controls.md      source: src/model-call-policy.ts
+```
+
+Both are exactly the files this plan rewrites. Runs last so the pages describe behaviour that
+Task 14 verified rather than behaviour that was planned.
+
+**Files:**
+- Wiki domain `obsidian-ai-wiki` (outside the repository, at `/home/ikeniborn/Documents/Project/iwiki-personal`)
+
+**Interfaces:**
+- Consumes: the verified behaviour from Task 14.
+- Produces: nothing consumed by later tasks.
+
+- [ ] **Step 1: Bind the domain and read what is there**
+
+```
+wiki_status
+wiki_bind(read=["obsidian-ai-wiki"], write="obsidian-ai-wiki")
+wiki_read_page(domain="obsidian-ai-wiki", slug="architecture/prompt-budget-governor")
+wiki_read_page(domain="obsidian-ai-wiki", slug="architecture/model-call-controls")
+```
+
+Expected: both pages exist and describe the byte-based budget and the settings-owned controls.
+
+- [ ] **Step 2: Rewrite the prompt budget governor page**
+
+`wiki_update_page(domain="obsidian-ai-wiki", slug="architecture/prompt-budget-governor", heading=..., new_body=..., source="src/agent-runner.ts")`, one call per section that changed. Cover: the estimator counts tokens per script rather than serialized bytes; the calibration factor is learned from the provider's reported usage and applied to every estimate; the input budget derives from the model context window; the output ceiling is computed per request; the split path replaces the bounder.
+
+- [ ] **Step 3: Rewrite the model call controls page**
+
+`wiki_update_page(..., slug="architecture/model-call-controls", source="src/model-call-policy.ts")`. Cover: native budgets are automatic with an Advanced override where empty means automatic; output budgets are per operation; `claude-agent` is unchanged; the upgrade asks once before touching stored values.
+
+- [ ] **Step 4: Add a page for the new modules**
+
+`wiki_write_page(domain="obsidian-ai-wiki", slug="architecture/model-context-discovery", markdown=..., source="src/model-context.ts")` describing the probe chain, model-id scoping, the in-flight deduplication, the shared deadline, the fallback TTL and the calibration window.
+
+- [ ] **Step 5: Lint**
+
+```
+wiki_lint(domain="obsidian-ai-wiki")
+```
+Expected: neither `architecture/prompt-budget-governor` nor `architecture/model-call-controls` appears under `stale`; no broken `[[refs]]`; the new page is not an orphan. The writes auto-reindex and auto-commit the wiki base, so no `wiki_index` call follows.
 
 ---
 
@@ -2264,3 +2790,19 @@ git commit -m "test: record live verification of automatic prompt budgets"
 | 9 claude-agent modified | Task 7 Step 1 |
 | 10 probe could adopt another model's window | Task 4 Steps 2, 4 |
 | 11 verification unsound | Task 1 Step 3, Task 14 Steps 4-7 |
+
+| Second-review defect | Fixed by |
+|---|---|
+| Group overhead computed from values that do not exist yet | Task 10 Step 1 — the two lists are capped, so the worst case is a constant |
+| Splitter divided once and then threw on size | Task 9 Step 3 iterates to atomic; Task 10 Step 2 widens the budget instead of failing |
+| Chunker uncalibrated while the payload budget was calibrated | Task 3 Step 4 converts the budget into raw estimator units |
+| Input override could overflow the context | Task 5 Step 3 clamps both the derived value and the override to the same ceiling |
+| Runtime wiring probed the wrong model, emitted through a callback it did not have, and called selectNativeFetch with the wrong arguments | Task 8 Steps 1, 3, 4 |
+| Modal used a method Obsidian does not expose | Task 13 Step 2 — explicit promise wrapper, settled once, dismissal keeps values |
+| Settings placeholder had no data source | Task 12 Step 2 — cached record only, never a probe at render |
+| Estimator test allowed unbounded overestimation at calibration 1 | Task 2 Steps 1, 2, 4 — honest seeds, absolute band, no-underestimate case |
+| context_probe declared but never emitted; calibration_sample hardcoded; budget provenance unreachable from emitBudget | Task 8 Step 5, Task 11 Step 3 |
+| Overflow scenario impossible once overrides are clamped | Task 14 Step 7 — poison the cached record instead |
+| Task 7 demanded a clean typecheck while breaking its callers | Task 7 Step 3 — a parallel export, switched and deleted in Task 8 |
+| `git checkout --` used to undo a scratch edit | Task 1 Step 5 — restore from a copy |
+| iwiki pages left stale, blocking chain closeout | Task 15 |

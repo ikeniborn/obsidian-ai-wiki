@@ -1,42 +1,84 @@
 ---
 review:
-  spec_hash: 4116006016a989c1
+  spec_hash: ae5473b20e8d12e6
   last_run: 2026-08-11
-  revision: 2
+  revision: 3
   phases:
     structure: { status: passed }
     coverage: { status: passed }
     clarity: { status: passed }
     consistency: { status: passed }
   findings:
-    - id: F-006
+    - id: F-009
+      phase: consistency
+      severity: CRITICAL
+      section: 2. Approach decisions
+      section_hash: 9a30098dc903891f
+      text: "Revision 2 asserted that no content is ever truncated, but the residual case it relied on -- one evidence unit larger than the whole model window -- has no split and no widening left. The claim was unfounded rather than merely optimistic."
+      fix: "State the widening order explicitly and name truncation as the sole terminal branch, reachable only past the whole context window and always logged."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-010
+      phase: consistency
+      severity: CRITICAL
+      section: 2. Approach decisions
+      section_hash: 9a30098dc903891f
+      text: "The chunk budget was to subtract a group overhead measured from domainThemes and languageEvidence, which are produced by the evidence preparation the budget governs. The quantity was unavailable at the moment it was needed."
+      fix: "Cap both lists so the worst case is a compile-time constant, and note that neither is read by the coverage invariant."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-011
       phase: consistency
       severity: CRITICAL
       section: 3. Budget arithmetic
-      section_hash: 3d1dc8c66d8f1a8e
-      fragment: "outputBudget = min(outputBase x operationMultiplier(op), contextWindow - 1)"
-      text: "Revision 2 draft: clamping the output budget to contextWindow - 1 leaves nothing for the input at a small window. At the 8192 fallback the formula yields output 8191 and input 0, contradicting the 3686 stated two paragraphs later."
-      fix: "Clamp the output budget to OUTPUT_MAX_SHARE of the window and add worked examples so the formulas are checkable."
+      section_hash: b72b16db2632442c
+      text: "An input override was clamped to the context window, so input plus output could exceed it: window 8192, override 8192, output 4096."
+      fix: "Introduce maxInput as the ceiling for the derived value and the override alike."
       verdict: fixed
       verdict_at: 2026-08-11
-    - id: F-007
+    - id: F-012
       phase: consistency
-      severity: WARNING
-      section: 5. Data flow
-      section_hash: ba8c089760a17928
-      fragment: "input 110479, output 8192"
-      text: "Revision 2 draft: the worked value was wrong. floor((131072 - 8192) x 0.9) is 110592, not 110479."
-      fix: "Correct the example in 5.1 and add the worked-example table to section 3."
+      severity: CRITICAL
+      section: 2. Approach decisions
+      section_hash: 9a30098dc903891f
+      text: "The payload budget was calibrated while the chunker was deliberately not, so the two sides of the fit proof were measured on different scales."
+      fix: "Convert the budget into raw estimator units at the single call site that sets it."
       verdict: fixed
       verdict_at: 2026-08-11
-    - id: F-008
-      phase: consistency
-      severity: INFO
+    - id: F-013
+      phase: clarity
+      severity: CRITICAL
+      section: 2. Approach decisions
+      section_hash: 9a30098dc903891f
+      text: "Seed coefficients were described as needing only to be in the right neighbourhood because calibration would correct them. Every new model starts at calibration 1 and the intent's band is absolute, so the seed governs the first request outright."
+      fix: "Fit the seeds against the recorded data and state the resulting band."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-014
+      phase: coverage
+      severity: CRITICAL
+      section: 4. Components
+      section_hash: 72c73236f4fea440
+      text: "Runtime wiring was underspecified: the probe target, the diagnostics channel of a helper with no onEvent, and the placement of the context-error hook relative to the repack loop were all left implicit, and the plan derived three defects from that."
+      fix: "Name effectiveModel, the returned events array, and onContextError inside the repack boundary."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-015
+      phase: coverage
+      severity: CRITICAL
       section: 6. Error handling
-      section_hash: b2e7f373f52a2688
-      fragment: "Three new events in `agent.jsonl`"
-      text: "Revision 2 draft: four events are listed, not three; evidence_split was added without updating the count."
-      fix: "Say four."
+      section_hash: cf8496a238329475
+      text: "Declared events had no producer: context_probe was never emitted and calibration_sample could not report a discarded sample. The budget provenance was also unreachable from the layer that writes prompt_budget."
+      fix: "Give the probe an event sink, have observeUsage return a CalibrationOutcome, and carry the provenance as one budgetTelemetry object."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-016
+      phase: coverage
+      severity: CRITICAL
+      section: 7. Testing
+      section_hash: af25325eb4798d3f
+      text: "The overflow-recovery check relied on an oversized override, which the corrected clamp makes impossible; and the mandatory iwiki update was absent, with two pages already flagged stale against files this design rewrites."
+      fix: "Poison the cached record instead, and make the wiki update part of closeout."
       verdict: fixed
       verdict_at: 2026-08-11
 chain:
@@ -48,7 +90,7 @@ chain:
 # Design: prompt-budget-automation
 
 **Date:** 2026-08-11
-**Revision:** 2 — rewritten after a review found eleven defects in revision 1; see §9.
+**Revision:** 3 — revision 1 was rewritten after a review found eleven defects (§9); revision 2 was corrected after a second review found seven more in the plan that traced back to this document (§10).
 **Intent:** `docs/superpowers/intents/2026-08-11-prompt-budget-automation-intent.md` (Status: approved, `intent_hash: 56cb5d606560c990`)
 
 ## 1. Problem
@@ -129,16 +171,21 @@ Neither cl100k nor a fixed coefficient predicts the target model's BPE. The prov
 count is available on every call: `usage.prompt_tokens` is already parsed and logged. The
 design therefore measures instead of guessing.
 
-Static coefficients are only the seed. The provider's own numbers close the loop: after every
-call the estimate is compared against the reported `inputTokens`, and the resulting factor is
-applied to **every subsequent estimate** — packing, preflight and telemetry alike. Because the
-factor is applied rather than merely recorded, the starting coefficients need only be in the
-right neighbourhood; they are not a source of truth.
+The provider's own numbers close the loop: after every call the estimate is compared against
+the reported `inputTokens`, and the resulting factor is applied to **every subsequent
+estimate** — packing, preflight and telemetry alike. Applied, not merely recorded: a factor
+that only lands in the cache changes nothing.
 
-Seed coefficients: Cyrillic ÷2, Latin and punctuation ÷3.5, CJK ×1, plus a fixed per-message
-allowance for role and separators. Their calibration target is derived from the four log
-entries, where the system message is identical (4181 chars) in all four requests, so the
-differences isolate the payload ratio:
+The seed still has to be right on its own. Every new model starts at calibration 1, so the
+first request against it is governed by the coefficients alone — and the intent's 15% band is
+absolute, not one-sided. Seed coefficients are therefore **fitted** against the recorded data
+rather than guessed: Cyrillic ÷2, Latin and punctuation ÷4, CJK ×1, plus a flat per-message
+allowance. Those two values place all four recorded requests between +1.6% and +6.6% of the
+provider's own count at calibration 1 — inside the band, and never below it, since
+underestimating is the direction that produces real overflows.
+
+The fit target comes from the four log entries, where the system message is identical
+(4181 chars) in all four requests, so the differences isolate the payload ratio:
 
 ```
 msg2 − msg1:  614 tokens over 1907 chars = 3.11 chars/token
@@ -198,19 +245,50 @@ This is safe because the bootstrap call produces a domain-level result — entit
 and language notes — and the merge (§5.2) unions entity types across groups. A group seeing
 part of an entity's evidence still contributes the same entity type.
 
-The residual case, one evidence unit larger than the budget, is removed structurally by §2.5.
+Division is iterative, not a single arithmetic pass. One evidence unit can be far larger than
+the average, so cutting a candidate into `ceil(size / budget)` parts can still leave a part
+over budget. The splitter halves until every part fits or holds a single unit, then reports
+the largest indivisible group upward.
+
+**When the evidence is atomic, the budget moves, not the evidence.** The splitter never fails
+on size — that would be the hard constraint the whole change exists to remove. The caller
+widens the budget in a fixed order, stopping as soon as the group fits:
+
+1. drop the schema block from the system prompt, the same lever `lint-chat.ts:272` already
+   pulls;
+2. reclaim the output reserve down to a floor that still fits a `DomainEntry`;
+3. only if the unit is larger than the model's entire context window — where no prompt can
+   contain it — truncate that one range on a line boundary with an explicit marker, leave
+   `exactSourceRanges` intact so coverage is unaffected, and record `evidence_truncated`.
+
+Branch 3 is the sole place in this design where content is lost, it is reachable only when a
+single source fragment exceeds the whole model window, and it is always logged. Everything
+short of that is handled by splitting and widening with no loss.
 
 ### 2.5 Chunk budget bound to the payload budget minus group overhead
 
 Chunk size is bounded by `min(mapper request budget, payloadBudget − groupOverhead)` instead
-of the raw input budget, where `groupOverhead` is the estimated cost of everything a group
-carries besides its evidence: the duplicated `domainThemes` and `languageEvidence`, and the
-JSON envelope.
+of the raw input budget, where `groupOverhead` is what a group carries besides its evidence:
+the duplicated `domainThemes` and `languageEvidence`, and the JSON envelope.
 
-A single `exactSource` range is produced inside one chunk (`assertLocalRange`), so its text is
-bounded by the chunk size. With the chunk bounded by the payload budget net of overhead, one
-evidence unit — one fact plus one range — always fits a group by construction. Combined with
-§2.4, no content is ever truncated.
+`groupOverhead` cannot be measured when it is needed. Both lists are produced by the very
+evidence preparation the chunk budget governs. So they are **bounded rather than measured**:
+`domainThemes` is capped at 24 entries, `languageEvidence` at 12, each entry at 240
+characters. Neither list is read by the coverage invariant — they are signals for domain
+naming and language inference, not evidence — so capping them loses no facts, and it makes the
+worst-case overhead a compile-time constant available before chunking.
+
+One further unit mismatch must be closed. `payloadBudget` is expressed in calibrated tokens,
+while `chunkMarkdownSource` measures in raw estimator tokens: the chunker stays uncalibrated
+so its boundaries are a pure function of the text. The **budget** is therefore divided by the
+calibration factor at the single call site that sets it, so both sides of the comparison are
+in the same unit. Comparing the two scales directly, as a first draft did, invalidates the fit
+proof.
+
+With those two corrections a single `exactSource` range, produced inside one chunk
+(`assertLocalRange`), is bounded by the chunk, and the chunk is bounded by the payload budget
+net of the worst-case overhead. One evidence unit therefore fits a group by construction, and
+§2.4's widening covers the residual case where it does not.
 
 This moves chunk boundaries. Existing domains are not re-indexed automatically; the user
 re-runs `Init --force` manually, per the intent's hard constraint.
@@ -232,17 +310,17 @@ recorded. Evaluated strictly in this order, so no value depends on one defined a
 outputBase    = override.output ?? DEFAULT_OUTPUT_BASE                                (1)
 outputBudget  = min(outputBase × operationMultiplier(op),
                     floor(contextWindow × OUTPUT_MAX_SHARE))                           (2)
-inputBudget   = min(override.input ?? floor((contextWindow − outputBudget) × SAFETY),
-                    contextWindow)                                                     (3)
-payloadBudget = inputBudget − fixedPromptEstimate                                      (4)
-groupOverhead = estimate(domainThemes + languageEvidence + envelope)                   (5)
-chunkBudget   = min(mapperRequestBudget, payloadBudget − groupOverhead)                (6)
+maxInput      = floor((contextWindow − outputBudget) × SAFETY)                         (3)
+inputBudget   = min(override.input ?? maxInput, maxInput)                              (4)
+payloadBudget = inputBudget − fixedPromptEstimate                                      (5)
+groupOverhead = worstCase(capped domainThemes + capped languageEvidence + envelope)     (6)
+chunkBudget   = min(mapperRequestBudget, payloadBudget − groupOverhead) / calibration   (7)
 ```
 
 Per request, after the prompt is packed and using the calibrated estimate:
 
 ```
-outputCeiling = contextWindow − estimatedInput                                         (7)
+outputCeiling = contextWindow − estimatedInput                                         (8)
 ```
 
 `outputCeiling` is **not** part of the resolved budget object. Revision 1 stored it
@@ -277,6 +355,10 @@ effective 4.1k. That is the intended trade: it is honest, it never overflows, an
 loop plus the learned cache recover from it. The intent's ≥16k outcome is conditional on
 discovery reporting a window, which is why §2.2 hardens the probe rather than inflating the
 fallback.
+
+`maxInput` in (3) is the ceiling for the derived value **and** for an override. Clamping an
+override to the whole window instead would let input and output together exceed the context:
+window 8192 with an 8192 override and a 4096 output budget sums to 12288.
 
 Two sources are tracked separately, because the input can be automatic while the output is
 overridden and vice versa:
@@ -323,9 +405,12 @@ export interface ModelContextRecord {
 export interface ModelContextStore {
   get(baseUrl: string, model: string): ModelContextRecord | undefined;
   resolve(baseUrl: string, model: string, apiKey: string, signal?: AbortSignal): Promise<ModelContextRecord>;
-  observeUsage(baseUrl: string, model: string, estimated: number, actual: number): void;
+  observeUsage(baseUrl: string, model: string, estimated: number, actual: number): CalibrationOutcome;
   observeContextError(baseUrl: string, model: string, maxContextTokens?: number): void;
 }
+
+/** What observeUsage actually did, so the telemetry reports the truth. */
+export interface CalibrationOutcome { ratio: number; applied: boolean; clamped: boolean }
 
 export function probeContextWindow(
   fetchFn: typeof fetch,
@@ -334,6 +419,7 @@ export function probeContextWindow(
   model: string,
   deadlineMs: number,
   signal?: AbortSignal,
+  onProbe?: (event: ContextProbeEvent) => void,
 ): Promise<number | null>;
 ```
 
@@ -375,10 +461,14 @@ synchronous resolution path that is not one. The real wiring:
 |---|---|
 | `src/controller.ts:124` | `LocalConfigStore` is already injected. Construct one `ModelContextStore` beside it, with `read`/`write` adapters over `LocalConfig.modelContext` and a `fetchFn` from `selectNativeFetch`. |
 | `src/controller.ts:766` | Pass the store into the `AgentRunner` constructor. |
-| `src/agent-runner.ts:52` | `buildOptsFor` becomes `async`: it resolves the record, then calls `resolveModelCallPolicy`. Its two call sites (`:233`, `:238`) await it. For `claude-agent` it returns today's result unchanged and never touches the store. |
-| `src/agent-runner.ts` | After each call, feed `observeUsage`; on a classified context error, feed `observeContextError`. Without the second hook the `learned` source can never appear. |
+| `src/agent-runner.ts:52` | `buildOptsFor` becomes `async` and returns its diagnostics as an array rather than emitting them: it is a private helper with no `onEvent` in scope. Its two call sites (`:233`, `:238`) await it and yield the events. For `claude-agent` it returns today's result unchanged and never touches the store. |
+| `src/model-call-policy.ts` | Exports `effectiveModel(settings, operation, parent?)`. The probe must target the model the call will use: with `perOperation` enabled the policy picks `local?.model ?? global.model` (`:228`), so probing `global.model` unconditionally would cache one model's window under another's budget. |
+| `src/prompt-budget.ts` | `runWithContextRepack` gains an `onContextError` callback, invoked where it already classifies a failure. A terminal `catch` never sees an error the repack loop recovered from — and a recovered overflow is precisely the signal that teaches the cache, so without this hook the `learned` source can never appear. |
 
-`resolveModelCallPolicy` gains a `ModelContextRecord` parameter on the native path only.
+The record-aware resolver is introduced as a **new export beside** the existing
+`resolveModelCallPolicy`, and the old one is deleted only once every caller has moved.
+Changing the signature in place would leave the codebase uncompilable between two units of
+work, which makes neither of them independently verifiable.
 
 ### 4.5 Changes to existing modules
 
@@ -505,7 +595,7 @@ diagnostics, not a reason to change behaviour.
 
 ### 6.3 Diagnostics
 
-Four new events in `agent.jsonl`; existing diagnostics are not reduced:
+Five new events in `agent.jsonl`; existing diagnostics are not reduced:
 
 ```
 budget_resolved     { operation, model, contextWindow, inputSource, outputSource,
@@ -513,9 +603,17 @@ budget_resolved     { operation, model, contextWindow, inputSource, outputSource
 context_probe       { baseUrl, model, endpoint, ok, ms, matchedById, contextLength? }
 calibration_sample  { model, estimated, actual, ratio, applied, clamped }
 evidence_split      { callSite, groups, candidates, subdivided, payloadBudget }
+evidence_truncated  { entityKey, range, keptTokens, totalTokens, budget }
 ```
 
-`prompt_budget` gains `contextWindow`, `inputSource`, `outputSource` and `calibration`. It
+Each event needs a producer, or it is decoration. `context_probe` is emitted by an event sink
+the probe accepts; `calibration_sample` reports the outcome `observeUsage` returns, so a
+discarded sample records `applied: false, clamped: true` rather than a hardcoded success.
+
+`prompt_budget` gains `contextWindow`, `inputSource`, `outputSource` and `calibration`. These
+describe how the budget was decided, not how the call behaves, so they travel as one opaque
+`budgetTelemetry` object on `LlmCallOptions` rather than as four separate call options that
+nothing below this layer reads. It
 already carries both `estimatedInputTokens` and `actualInputTokens` on the same record, which
 is what verification correlates on — never array position across two event streams. Sidebar
 text does not change: numbers go to the log, not the UI.
@@ -542,11 +640,17 @@ it passes; otherwise the next estimator change breaks it again.
 
 ### 7.2 New tests
 
-**`token-estimate.test.ts`.** Fixtures are real recorded prompts, sanitized, not synthetic
-`"x".repeat(n)` strings — revision 1's synthetic case was itself outside the ±15% band it
-asserted. The key case is the intent's health metric: the estimate is never more than 15%
-below the provider's recorded value. Plus: calibration scales the result; image parts cost a
-flat allowance; tool-call metadata is counted.
+**`token-estimate.test.ts`.** Fixtures carry the recorded character counts, message counts and
+provider token totals, with the payload script mix stated as an explicit assumption. Three
+distinct assertions, because one of them alone hides the case that matters:
+
+- the **absolute** band at calibration 1 — `abs(estimated / actual − 1) ≤ 0.15` — which is
+  what the first request against an unseen model actually experiences;
+- no underestimation at calibration 1, since that direction produces real overflows;
+- a fitted factor keeps every case inside the band, which tests the calibration path itself.
+
+A test that fits an offline factor before checking the band, as a first draft did, conceals a
+seed that misses it.
 
 **`model-context.test.ts`.** The probe selects by model `id` and ignores another model's
 context length; garbage and non-matching responses; the deadline is shared across endpoints;
@@ -572,9 +676,12 @@ resulting evidence unit exceeds `payloadBudget − groupOverhead`.
 budgets; declining leaves them; `migrated_auto_budget` is set either way; a second load is
 silent; `claude-agent` values are untouched in both branches.
 
-**Settings rendering.** The control renders when the value is `undefined`, its placeholder
-shows the resolved automatic value, and clearing it deletes the property rather than keeping
-the previous number — the guard at `src/settings.ts:355` returns early today and must go.
+**Settings rendering.** The control renders when the value is `undefined`, and clearing it
+deletes the property rather than keeping the previous number — the guard at
+`src/settings.ts:355` returns early today and must go. The placeholder shows the resolved
+automatic value read from the **cached** context record only: rendering a settings tab must
+never trigger a network probe, and with nothing cached the field shows the word "Automatic",
+which is honest because no budget has been resolved yet.
 
 ### 7.3 Baselines for the health metrics
 
@@ -592,9 +699,18 @@ for another:
    within 15%.
 3. An oversized-evidence scenario produces `evidence_split` and a created domain, with no
    content discarded.
-4. A provider context-overflow is recovered by the repack loop without surfacing — this is a
-   separate scenario from check 2, which measures the estimator and proves nothing about
-   recovery.
+4. A provider context-overflow is recovered by the repack loop without surfacing. An oversized
+   override cannot produce one — §3 clamps it to `maxInput` — so the scenario poisons the
+   cached context record instead, which is also the real-world case the path exists for: a
+   model swapped behind an unchanged name. Afterwards the record must read
+   `source: "learned"` with a smaller window. This is a separate scenario from check 2, which
+   measures the estimator and proves nothing about recovery.
+
+The project wiki is part of closeout, not an afterthought: `wiki_lint` already reports
+`architecture/prompt-budget-governor` (source `src/agent-runner.ts`) and
+`architecture/model-call-controls` (source `src/model-call-policy.ts`) as stale, and both are
+files this design rewrites. Both pages are updated and a page is added for the new modules,
+ending on a clean lint.
 
 ## 8. Acceptance (from intent)
 
@@ -655,3 +771,18 @@ Recorded so the same mistakes are not reintroduced.
 | 9 | `claude-agent` was in fact modified, against a hard constraint | §2.6 |
 | 10 | The probe could adopt another model's context window | §2.2 |
 | 11 | Verification correlated two event streams by array position and expected an impossible status value | §6.3, §7.4 |
+
+## 10. What revision 2 got wrong
+
+A second review, this time of the plan, found seven defects that traced back to this document.
+Recorded so they are not reintroduced.
+
+| # | Defect | Fixed in |
+|---|---|---|
+| 1 | Group overhead was to be computed from `domainThemes` and `languageEvidence`, which do not exist until the evidence preparation the budget governs has run | §2.5 — both lists are capped, so the worst case is a constant |
+| 2 | The splitter divided once and then failed on size, which the intent's hard constraint forbids | §2.4 — iterate to atomic, then widen the budget; truncate only beyond the whole window |
+| 3 | The chunker was uncalibrated while the payload budget was calibrated, so the fit proof compared two scales | §2.5 — the budget is converted into raw estimator units |
+| 4 | An input override was clamped to the window rather than to what remains after the output reserve | §3 — `maxInput` bounds both |
+| 5 | Runtime wiring probed the wrong model and assumed an event channel the helper does not have | §4.4 — `effectiveModel`, a returned events array, `onContextError` inside the repack boundary |
+| 6 | Seed coefficients were treated as approximate because calibration would fix them, but every new model starts at calibration 1 and the intent's band is absolute | §2.1 — fitted seeds, Latin ÷4 |
+| 7 | Declared events had no producer and the overflow scenario became impossible once overrides are clamped | §6.3, §7.4 |
