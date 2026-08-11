@@ -1,3 +1,69 @@
+---
+review:
+  spec_hash: eaf96ca6b05732dd
+  last_run: 2026-08-11
+  phases:
+    structure: { status: passed }
+    coverage: { status: passed }
+    clarity: { status: passed }
+    consistency: { status: passed }
+  findings:
+    - id: F-001
+      phase: coverage
+      severity: WARNING
+      section: 4. Components
+      section_hash: 885066639d44d89a
+      fragment: "settings.ts, i18n.ts | budget fields move to Advanced"
+      text: "The accepted scope item \"keep compressionProfile, it is semantics not arithmetic\" was not reflected anywhere in the spec."
+      fix: "State in 4.4 that Compression profile stays in the main settings section."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-002
+      phase: coverage
+      severity: WARNING
+      section: Acceptance (from intent)
+      section_hash: d0c7f297bc8a24dc
+      fragment: "Two clauses above say \"truncated with an explicit marker\""
+      text: "Overstated: Desired Outcome 3 already permits \"or split across calls\", so only the \"Done when\" clause diverges."
+      fix: "Narrow the note to the \"Done when\" clause and say how result reconciliation should treat the substitution."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-003
+      phase: clarity
+      severity: CRITICAL
+      section: 3. Architecture
+      section_hash: 626bea9a0cb327da
+      fragment: "inputBudget = override ?? floor((contextWindow - outputReserve) x SAFETY)"
+      text: "Circular definition: outputReserve was defined as outputBudget, outputBudget depended on inputBudget, and inputBudget depended on outputReserve. The formulas were not computable."
+      fix: "Order the formulas explicitly and drop outputReserve in favour of outputBudget, which is resolved first."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-004
+      phase: clarity
+      severity: WARNING
+      section: 2. Approach decisions
+      section_hash: c16ec83985780158
+      fragment: "with a short timeout"
+      text: "The probe timeout was the only constant left unquantified after the other constants were pinned."
+      fix: "Pin it to 2000 ms in the constants table and in 2.2."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-005
+      phase: clarity
+      severity: INFO
+      section: 3. Architecture
+      section_hash: 626bea9a0cb327da
+      fragment: "ModelContext store"
+      text: "One entity carried three names: \"ModelContext store\", \"ModelContextStore\", \"model context cache\"."
+      fix: "Use ModelContextStore throughout."
+      verdict: fixed
+      verdict_at: 2026-08-11
+chain:
+  intent:
+    path: docs/superpowers/intents/2026-08-11-prompt-budget-automation-intent.md
+    hash: 77a5215b67e1d735
+---
+
 # Design: prompt-budget-automation
 
 **Date:** 2026-08-11
@@ -93,7 +159,7 @@ calls.
 ### 2.2 Context window: lazy probe, cached
 
 `GET /v1/models`, then Ollama's `POST /api/show`, then a per-backend constant. One probe per
-`(baseUrl, model)` with a short timeout; the result is persisted. Any probe failure falls
+`(baseUrl, model)` with a 2000 ms timeout; the result is persisted. Any probe failure falls
 through silently — it is not an error. Rejected: probing upward by deliberately provoking
 provider rejections, which conflicts with the intent's zero-unrecovered-overflow metric.
 
@@ -141,8 +207,8 @@ source.
         contextWindow  │              │ calibration │  overrides
                        ▼              ▼             ▼
               ┌────────────────┐  ┌────────┐  ┌──────────┐
-              │ ModelContext   │  │ Token  │  │ Settings │
-              │ store (local)  │  │ Estim. │  │ Advanced │
+              │ ModelContext-  │  │ Token  │  │ Settings │
+              │ Store (local)  │  │ Estim. │  │ Advanced │
               └────────────────┘  └────────┘  └──────────┘
                     ▲     ▲            ▲
       probe /v1/models     │           │
@@ -165,23 +231,30 @@ Three sources of truth replace one constant:
 
 Formulas:
 
+Evaluated strictly in this order, so no value depends on one defined after it:
+
 ```
-inputBudget   = override ?? floor((contextWindow − outputReserve) × SAFETY)
-outputBudget  = override ?? min(defaultOutput, contextWindow − inputBudget)
-outputCeiling = contextWindow − estimatedInput          (replaces max(local, global))
-payloadBudget = inputBudget − fixedPromptEstimate
-chunkBudget   = min(mapperRequestBudget, payloadBudget)
+outputBudget  = override.output ?? defaultOutput                        (1)
+inputBudget   = override.input  ?? floor((contextWindow − outputBudget) × SAFETY)   (2)
+outputCeiling = contextWindow − estimatedInput   (replaces max(local, global))      (3)
+payloadBudget = inputBudget − fixedPromptEstimate                       (4)
+chunkBudget   = min(mapperRequestBudget, payloadBudget)                 (5)
 ```
+
+`outputBudget` is the reserve subtracted in (2): the input budget must leave room for the
+reply it is asking for. `outputCeiling` in (3) is computed per request, after the prompt is
+packed, and is what makes `outputRetryOptions` able to grow — it is deliberately larger than
+`outputBudget`.
 
 Constants, fixed here so the formulas are unambiguous:
 
 | Constant | Value | Rationale |
 |---|---|---|
 | `SAFETY` | `0.9` | absorbs estimator error; the measured worst case is well inside 10% |
-| `outputReserve` | `outputBudget` | the input budget must leave room for the reply it is asking for |
 | `defaultOutput` | `8192` | the current per-operation default for Init and Lint; unchanged in meaning |
 | `BACKEND_DEFAULT` | `16384` real tokens | the fallback when no probe answers. Four times the current effective limit, so the ≥16k desired outcome holds even with discovery unavailable, and at or below the context window of any model realistically served by this backend |
 | calibration window `N` | `8` samples | enough to damp a single anomalous `usage` report, short enough to follow a model swap |
+| probe timeout | `2000` ms | the probe runs once per `(baseUrl, model)`; two seconds is short enough not to be felt at operation start and long enough for a local Ollama to answer |
 
 `BACKEND_DEFAULT` is the intent's "conservative" constant: a single value declared in code,
 not derived at runtime.
@@ -271,7 +344,7 @@ settings resolution.
 | `phases/init.ts` | pass `chunkBudget = min(mapperBudget, payloadBudget)`; remove the "configuration error / domain was not created" branch |
 | `phases/ingest-evidence.ts` | `boundBootstrapPayload` → `splitBootstrapPayload(value, budget): BootstrapEvidence[]`; add the K-way merge |
 | `phases/structured-output.ts` | take the ceiling from `outputCeilingTokens`; call `observeUsage` after each call |
-| `settings.ts`, `i18n.ts` | budget fields move to Advanced, empty means automatic; strings in ru/en/es |
+| `settings.ts`, `i18n.ts` | budget fields move to Advanced, empty means automatic; strings in ru/en/es. `Compression profile` stays where it is: it selects semantics, not arithmetic, and the user is still the right owner of that choice |
 | `types.ts` | settings budgets become `number \| undefined` |
 | `main.ts` | migration: clear values exactly equal to the old defaults, set `migrated_auto_budget` |
 
@@ -478,10 +551,16 @@ user's vault, checking `status: ok` in the history and the estimate-to-actual ga
 Settings section contains no budget fields; and a reproduced long `exactSource` scenario
 creates the domain with the truncation recorded in the log.
 
-### Note on two acceptance clauses
+### Note on the "Done when" wording
 
-Two clauses above say "truncated with an explicit marker". Section 2.4 replaces truncation
-with splitting, and section 2.5 removes the oversized-single-range case structurally, so no
-content is truncated at all. The observable requirement — the domain is created rather than
-the run failing on size — is met more strongly than the intent asked. The corresponding
-verification records a `split` event where the intent expected a truncation marker.
+Desired Outcome 3 already allows either resolution — "truncated with an explicit marker **or
+split across calls**" — so the design satisfies it directly through section 2.4.
+
+One clause does diverge: "Done when" says the reproduced long-`exactSource` scenario creates
+the domain "with the truncation recorded in the log". Sections 2.4 and 2.5 remove truncation
+entirely — splitting carries no data loss, and the oversized-single-range case is eliminated
+structurally rather than by cutting content. The observable requirement, that the domain is
+created instead of the run failing on size, is met more strongly than the intent asked. The
+corresponding verification records a `split` event where the intent expected a truncation
+marker; result reconciliation should accept that substitution rather than treat it as a
+missing outcome.
