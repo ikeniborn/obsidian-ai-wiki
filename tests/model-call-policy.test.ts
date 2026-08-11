@@ -1,13 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULT_SETTINGS, type LlmWikiPluginSettings } from "../src/types";
+import type { ModelContextRecord } from "../src/model-context";
 import {
   normalizeModelCallPolicySettings,
+  resolveCallPolicy,
   resolveModelCallPolicy,
 } from "../src/model-call-policy";
 
 function settings(): LlmWikiPluginSettings {
   return structuredClone(DEFAULT_SETTINGS);
+}
+
+function rec(over: Partial<ModelContextRecord> = {}): ModelContextRecord {
+  return { contextWindow: 131_072, source: "discovered", calibration: 1, samples: 0, ...over };
 }
 
 test("native global policy keeps maxTokens as output and adds input budget", () => {
@@ -162,11 +168,14 @@ test("loaded policy fields normalize without changing persisted output budgets",
 
   normalizeModelCallPolicySettings(s);
 
-  assert.equal(s.nativeAgent.inputBudgetTokens, 16_384);
-  assert.equal(s.nativeAgent.repairInputBudgetTokens, 65_536);
+  // Native input budgets are now optional: an absent or invalid stored value stays
+  // absent (yielding a context-derived budget later) instead of being replaced by a
+  // fixed constant. Only the claude-agent path still invents 16_384.
+  assert.equal(s.nativeAgent.inputBudgetTokens, undefined);
+  assert.equal(s.nativeAgent.repairInputBudgetTokens, undefined);
   assert.equal(s.claudeAgent.inputBudgetTokens, 16_384);
   for (const key of keys) {
-    assert.equal(s.nativeAgent.operations[key].inputBudgetTokens, 16_384);
+    assert.equal(s.nativeAgent.operations[key].inputBudgetTokens, undefined);
     assert.equal(s.claudeAgent.operations[key].inputBudgetTokens, 16_384);
   }
   assert.equal(s.nativeAgent.compressionProfile, "balanced");
@@ -195,4 +204,58 @@ test("delete borrows ingest and a query follow-up borrows query", () => {
   s.nativeAgent.operations.query.inputBudgetTokens = 8000;
   assert.equal(resolveModelCallPolicy(s, "delete").policy.inputBudgetTokens, 7000);
   assert.equal(resolveModelCallPolicy(s, "chat", "query").policy.inputBudgetTokens, 8000);
+});
+
+test("an absent native budget yields a context-derived budget, not 16384", () => {
+  const s = settings();
+  const { policy } = resolveCallPolicy(s, "init", rec());
+  assert.equal(policy.inputBudgetTokens, 110_592);
+});
+
+test("a stored native budget still acts as an explicit override", () => {
+  const s = settings();
+  s.nativeAgent.inputBudgetTokens = 24_000;
+  const { policy } = resolveCallPolicy(s, "init", rec());
+  assert.equal(policy.inputBudgetTokens, 24_000);
+});
+
+test("the calibration factor reaches the call options", () => {
+  const s = settings();
+  const { opts } = resolveCallPolicy(s, "init", rec({ calibration: 1.25 }));
+  assert.equal(opts.tokenCalibration, 1.25);
+});
+
+test("the claude-agent path is unaffected by the record", () => {
+  const s = settings();
+  s.backend = "claude-agent";
+  const a = resolveCallPolicy(s, "init", rec());
+  const b = resolveCallPolicy(s, "init", rec({ contextWindow: 8_192 }));
+  assert.deepEqual(a.policy, b.policy);
+  assert.equal(a.policy.inputBudgetTokens, 16_384);
+});
+
+test("a stored repair budget larger than the window clamps to the derived input budget, not 65536", () => {
+  const s = settings();
+  s.nativeAgent.repairInputBudgetTokens = 65_536;
+  const { policy, opts } = resolveCallPolicy(s, "init", rec({ contextWindow: 8_192 }));
+  assert.equal(policy.inputBudgetTokens, 3_686);
+  assert.equal(policy.repairInputBudgetTokens, 3_686);
+  assert.equal(opts.repairInputBudgetTokens, 3_686);
+});
+
+test("budgetTelemetry carries the resolved budget's provenance on the native path only", () => {
+  const s = settings();
+  const { opts, budget } = resolveCallPolicy(s, "init", rec({ calibration: 1.25 }));
+  assert.deepEqual(opts.budgetTelemetry, {
+    contextWindow: budget!.contextWindow,
+    inputSource: budget!.inputSource,
+    outputSource: budget!.outputSource,
+    calibration: budget!.calibration,
+  });
+
+  const c = settings();
+  c.backend = "claude-agent";
+  const claudeResolved = resolveCallPolicy(c, "init", rec());
+  assert.equal(claudeResolved.opts.budgetTelemetry, undefined);
+  assert.equal(claudeResolved.budget, undefined);
 });

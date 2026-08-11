@@ -7,7 +7,13 @@ import type {
   OpKey,
   WikiOperation,
 } from "./types";
+import type { ModelContextRecord } from "./model-context";
+import { resolveBudget, type ResolvedBudget } from "./budget-resolver";
 
+// Retained for `resolveModelCallPolicy` (the claude-agent-era resolver Task 8 removes),
+// which still falls back to fixed literals when a stored value is invalid or absent.
+// `resolveCallPolicy` below does not use these: an absent native budget now derives
+// from the model context instead of inventing a constant.
 const DEFAULT_INPUT_BUDGET = 16_384;
 const DEFAULT_REPAIR_INPUT_BUDGET = 65_536;
 
@@ -101,6 +107,15 @@ function positiveInt(value: unknown, fallback: number): number {
   return fallback;
 }
 
+/** Like `positiveInt`, but an absent or invalid value stays absent instead of
+ * inventing a fallback constant. Used for native budgets, which are now
+ * derived from the model context when unset. */
+function optionalPositiveInt(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  const floored = Math.floor(value);
+  return floored >= 1 ? floored : undefined;
+}
+
 function compressionProfile(value: unknown): CompressionProfile | undefined {
   return value === "maximum" || value === "balanced" || value === "minimum"
     ? value
@@ -121,14 +136,8 @@ export function parsePositiveBudgetInput(value: string, previous: number): numbe
 }
 
 export function normalizePersistedModelControls(settings: LlmWikiPluginSettings): void {
-  settings.nativeAgent.inputBudgetTokens = positiveInt(
-    settings.nativeAgent.inputBudgetTokens,
-    DEFAULT_INPUT_BUDGET,
-  );
-  settings.nativeAgent.repairInputBudgetTokens = positiveInt(
-    settings.nativeAgent.repairInputBudgetTokens,
-    DEFAULT_REPAIR_INPUT_BUDGET,
-  );
+  settings.nativeAgent.inputBudgetTokens = optionalPositiveInt(settings.nativeAgent.inputBudgetTokens);
+  settings.nativeAgent.repairInputBudgetTokens = optionalPositiveInt(settings.nativeAgent.repairInputBudgetTokens);
   settings.claudeAgent.inputBudgetTokens = positiveInt(
     settings.claudeAgent.inputBudgetTokens,
     DEFAULT_INPUT_BUDGET,
@@ -141,7 +150,7 @@ export function normalizePersistedModelControls(settings: LlmWikiPluginSettings)
   for (const key of ["ingest", "query", "lint", "init", "format"] as const) {
     const native = settings.nativeAgent.operations[key];
     const claude = settings.claudeAgent.operations[key];
-    native.inputBudgetTokens = positiveInt(native.inputBudgetTokens, DEFAULT_INPUT_BUDGET);
+    native.inputBudgetTokens = optionalPositiveInt(native.inputBudgetTokens);
     claude.inputBudgetTokens = positiveInt(claude.inputBudgetTokens, DEFAULT_INPUT_BUDGET);
     if (key === "format") {
       delete native.compressionProfile;
@@ -237,6 +246,122 @@ export function resolveModelCallPolicy(
       semanticCompression: compression && compressionOp
         ? { profile: compression, operation: compressionOp }
         : undefined,
+    },
+  };
+}
+
+export interface ResolvedModelCall {
+  model: string;
+  policy: ModelCallPolicy;
+  opts: LlmCallOptions;
+  /** Undefined on the claude-agent path, which does not consult the record. */
+  budget?: ResolvedBudget;
+}
+
+/**
+ * The model that will serve this operation, without resolving its context window or
+ * budgets. Callers resolve the model first, look up its `ModelContextRecord`, then
+ * call `resolveCallPolicy` with that record.
+ */
+export function effectiveModel(
+  settings: LlmWikiPluginSettings,
+  operation: WikiOperation,
+  parent?: OpKey,
+): string {
+  const key = policyKey(operation, parent);
+  const global = settings.backend === "claude-agent" ? settings.claudeAgent : settings.nativeAgent;
+  const local = global.perOperation ? global.operations[key] : undefined;
+  return local?.model ?? global.model;
+}
+
+/**
+ * The record-aware successor to `resolveModelCallPolicy`. On the native-agent path,
+ * input and output budgets are derived from the model's context window
+ * (`resolveBudget`) instead of falling back to fixed constants; a stored budget still
+ * acts as an explicit override. The claude-agent path is unchanged: it does not read
+ * `record` and keeps its fixed 16_384 input-budget default. Task 8 switches every
+ * caller to this function and removes `resolveModelCallPolicy`.
+ */
+export function resolveCallPolicy(
+  settings: LlmWikiPluginSettings,
+  operation: WikiOperation,
+  record: ModelContextRecord,
+  parent?: OpKey,
+): ResolvedModelCall {
+  const key = policyKey(operation, parent);
+  const compressionOp = compressionOperation(key);
+  const model = effectiveModel(settings, operation, parent);
+
+  if (settings.backend === "claude-agent") {
+    // Byte-for-byte the body `resolveModelCallPolicy` has today, returned without a
+    // `budget` field. `record` is not read on this path.
+    const global = settings.claudeAgent;
+    const local = global.perOperation ? global.operations[key] : undefined;
+    const compression = key === "format"
+      ? undefined
+      : compressionProfile(local?.compressionProfile)
+        ?? compressionProfile(global.compressionProfile)
+        ?? "balanced";
+    const policy: ModelCallPolicy = {
+      inputBudgetTokens: positiveInt(local?.inputBudgetTokens ?? global.inputBudgetTokens, DEFAULT_INPUT_BUDGET),
+      ...(compression ? { compression } : {}),
+    };
+    return {
+      model,
+      policy,
+      opts: {
+        inputBudgetTokens: policy.inputBudgetTokens,
+        semanticCompression: compression && compressionOp
+          ? { profile: compression, operation: compressionOp }
+          : undefined,
+      },
+    };
+  }
+
+  const global = settings.nativeAgent;
+  const local = global.perOperation ? global.operations[key] : undefined;
+  const compression = key === "format"
+    ? undefined
+    : compressionProfile(local?.compressionProfile)
+      ?? compressionProfile(global.compressionProfile)
+      ?? "balanced";
+  const budget = resolveBudget(record, key, {
+    input: local?.inputBudgetTokens ?? global.inputBudgetTokens,
+    output: local?.maxTokens ?? global.maxTokens,
+  });
+  // A stored repair budget is still clamped by the window: `resolveBudget`'s
+  // `maxInput` bounds both the derived value AND an override, and a repair prompt
+  // must not exceed the input budget it is repairing.
+  const repairInputBudgetTokens = key === "init" || key === "ingest"
+    ? Math.min(optionalPositiveInt(global.repairInputBudgetTokens) ?? budget.inputBudgetTokens, budget.inputBudgetTokens)
+    : undefined;
+  const policy: ModelCallPolicy = {
+    inputBudgetTokens: budget.inputBudgetTokens,
+    ...(repairInputBudgetTokens === undefined ? {} : { repairInputBudgetTokens }),
+    outputBudgetTokens: budget.outputBudgetTokens,
+    ...(compression ? { compression } : {}),
+  };
+  return {
+    model,
+    policy,
+    budget,
+    opts: {
+      inputBudgetTokens: budget.inputBudgetTokens,
+      repairInputBudgetTokens,
+      maxTokens: budget.outputBudgetTokens,
+      tokenCalibration: budget.calibration,
+      contextWindowTokens: budget.contextWindow,
+      temperature: local?.temperature ?? global.temperature,
+      topP: global.topP,
+      semanticCompression: compression && compressionOp
+        ? { profile: compression, operation: compressionOp }
+        : undefined,
+      budgetTelemetry: {
+        contextWindow: budget.contextWindow,
+        inputSource: budget.inputSource,
+        outputSource: budget.outputSource,
+        calibration: budget.calibration,
+      },
     },
   };
 }

@@ -73,9 +73,12 @@ test("old settings gain model controls without changing output budgets", () => {
 
   assert.equal(settings.nativeAgent.maxTokens, 7777);
   assert.equal(settings.nativeAgent.operations.query.maxTokens, 3333);
-  assert.equal(settings.nativeAgent.inputBudgetTokens, 16_384);
+  // Native input budgets are optional: normalization leaves an absent value absent
+  // (it is derived from the model context later) instead of inventing 16_384. Only
+  // the claude-agent path still falls back to that constant.
+  assert.equal(settings.nativeAgent.inputBudgetTokens, undefined);
   assert.equal(settings.claudeAgent.inputBudgetTokens, 16_384);
-  assert.equal(settings.nativeAgent.operations.query.inputBudgetTokens, 16_384);
+  assert.equal(settings.nativeAgent.operations.query.inputBudgetTokens, undefined);
   assert.equal(settings.claudeAgent.operations.query.inputBudgetTokens, 16_384);
   assert.equal(settings.nativeAgent.compressionProfile, "balanced");
   assert.equal(settings.claudeAgent.compressionProfile, "balanced");

@@ -715,8 +715,8 @@ export interface ClaudeOperationConfig {
 
 export interface NativeOperationConfig {
   model: string;
-  inputBudgetTokens: number;
-  maxTokens: number;
+  inputBudgetTokens?: number;
+  maxTokens?: number;
   temperature: number;
   /** @deprecated Numeric `thinking` is not part of OpenAI Chat Completions. Ignored. */
   thinkingBudgetTokens?: number;
@@ -756,9 +756,9 @@ export interface LlmWikiPluginSettings {
     baseUrl: string;
     apiKey: string;
     model: string;
-    inputBudgetTokens: number;
+    inputBudgetTokens?: number;
     repairInputBudgetTokens?: number;
-    maxTokens: number;
+    maxTokens?: number;
     compressionProfile: CompressionProfile;
     temperature: number;
     topP: number | null;
@@ -901,9 +901,6 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
     baseUrl: "http://localhost:11434/v1",
     apiKey: "ollama",
     model: "llama3.2",
-    inputBudgetTokens: 16384,
-    repairInputBudgetTokens: 65536,
-    maxTokens: 4096,
     compressionProfile: "balanced",
     temperature: 0.2,
     topP: null,
