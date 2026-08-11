@@ -1,8 +1,8 @@
 ---
 review:
-  plan_hash: dbc2e5a04701e8e4
+  plan_hash: 59e037621a6ad2c6
   last_run: 2026-08-11
-  revision: 3
+  revision: 4
   phases:
     structure: { status: passed }
     coverage: { status: passed }
@@ -127,13 +127,76 @@ review:
       fix: "Add a wiki task that rewrites both pages, adds one for the new modules, and ends on a clean wiki_lint."
       verdict: fixed
       verdict_at: 2026-08-11
+    - id: F-019
+      phase: consistency
+      severity: CRITICAL
+      section: Global Constraints
+      section_hash: n/a
+      text: "Revision 3 left revision 2 formulas in the Global Constraints while later tasks used the corrected arithmetic, so the implementer received two normative algorithms."
+      fix: "Rewrite the block and declare that it wins over any task body."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-020
+      phase: consistency
+      severity: CRITICAL
+      section: "Task 4: Model context store"
+      section_hash: 7bd3276a5f38363b
+      text: "The calibration loop averaged actual over an already-calibrated estimate, whose fixed point is the square root of the true factor: a real factor of 2 settles at 1.414, a 29% underestimate that never resolves."
+      fix: "Multiply the factor and add a 20-step convergence test that a single-step test cannot distinguish."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-021
+      phase: consistency
+      severity: CRITICAL
+      section: "Task 5: Budget resolver"
+      section_hash: 153b0e45962cee66
+      text: "The operation multiplier was applied after the override, so the stored format.maxTokens of 32768 in src/types.ts:856 became 131072 before clamping."
+      fix: "Multiply DEFAULT_OUTPUT_BASE only; add a regression test pinning 32768."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-022
+      phase: coverage
+      severity: CRITICAL
+      section: "Task 11: Per-request output ceiling and usage feedback"
+      section_hash: 03693cf9e3fccc20
+      text: "finish_reason=length was tested only through the pure outputRetryOptions. The truncation raises StructuredOutputTruncatedError and propagates past the branch that calls it, so the defect was untouched."
+      fix: "Catch it in the retry loop and grow the limit; integration-test the streaming and non-streaming paths."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-023
+      phase: verifiability
+      severity: CRITICAL
+      section: "Task 14: Live verification against the intent"
+      section_hash: 5048b638879230f6
+      text: "The overflow scenario poisoned local.json while ModelContextStore holds an in-memory cache that outlives the edit, so the poisoned value would never be read."
+      fix: "Poison one key, reload on both sides, wait for persistence, and guarantee the restore with a trap."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-024
+      phase: verifiability
+      severity: WARNING
+      section: "Task 15: Update the project wiki"
+      section_hash: 88d9792fa37081b6
+      text: "A clean domain lint was set as the exit criterion although thirteen stale and two orphan pages predate this work and are outside its scope."
+      fix: "Require the three touched pages to be clean and the pre-existing counts not to grow."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-025
+      phase: verifiability
+      severity: INFO
+      section: "Task 8: Runtime wiring"
+      section_hash: 467501e7cb7f2aa3
+      text: "Three further defects were reported in the inline code -- this.apiKey does not exist, an onEvent callback is absent, the probe sink is never passed -- along with a return-type disagreement in the split task and a missing EvidencePolicy.calibration field. These are compiler-detectable and are deliberately left to execution: the plan now declares its inline TypeScript a reference draft rather than a contract."
+      fix: null
+      verdict: accepted
+      verdict_at: 2026-08-11
 chain:
   intent:
     path: docs/superpowers/intents/2026-08-11-prompt-budget-automation-intent.md
-    hash: 56cb5d606560c990
+    hash: 040e458f7faa2a18
   spec:
     path: docs/superpowers/specs/2026-08-11-prompt-budget-automation-design.md
-    hash: ae5473b20e8d12e6
+    hash: 1321076f9f29aa13
 ---
 
 # Prompt Budget Automation Implementation Plan
@@ -146,26 +209,36 @@ chain:
 
 **Tech Stack:** TypeScript 5.4, ESM, `node --import tsx --test` (node:test + node:assert/strict), esbuild bundle, Obsidian plugin API, OpenAI SDK v6, undici.
 
-**Revision:** 3. Revision 1 was superseded after a review found eleven defects in the chain, recorded in the spec's §9. Revision 2 was superseded after a second review found seven more, this time in the plan itself; the closing table traces every one. Four decisions were taken along the way: raise the budget for atomic evidence rather than truncate, fit honest seed coefficients rather than allow a warm-up period, ask once before touching stored budgets, and scope automation to native-agent.
+**Status of the inline code:** the TypeScript in these tasks is a **reference draft**, not a contract. It has never been compiled. What is normative is the task decomposition, the Global Constraints above, the interface blocks, and the verification steps. Where a code block disagrees with the Global Constraints, the constraints win; where it disagrees with the compiler, the compiler wins. Three review rounds found defects in this prose that `tsc` would have caught in seconds — do not treat a snippet as settled because it is written out.
+
+**Revision:** 4. Revision 1 was superseded after a review found eleven defects in the chain, recorded in the spec's §9. Revision 2 was superseded after a second review found seven more, this time in the plan itself; the closing table traces every one. Four decisions were taken along the way: raise the budget for atomic evidence rather than truncate, fit honest seed coefficients rather than allow a warm-up period, ask once before touching stored budgets, and scope automation to native-agent.
 
 ## Global Constraints
 
 Copied verbatim from the spec and intent; every task's requirements include this section.
 
 - Constants: `SAFETY` = `0.9`. `DEFAULT_OUTPUT_BASE` = `8192`. `OUTPUT_MAX_SHARE` = `0.5`. `operationMultiplier` = `format: 4`, everything else `1`. `BACKEND_DEFAULT` context = `8192` real tokens. Calibration window `N` = `8`. Calibration clamp = `[0.5, 3.0]`. Probe deadline = `2000` ms, shared across endpoints. `default` record TTL = 24 hours.
-- Budget formulas, evaluated strictly in this order:
+- Budget formulas, evaluated strictly in this order. These supersede every earlier draft; where
+  a task body still reads differently, this block wins.
   ```
-  outputBase    = override.output ?? DEFAULT_OUTPUT_BASE                                (1)
-  outputBudget  = min(outputBase × operationMultiplier(op),
-                      floor(contextWindow × OUTPUT_MAX_SHARE))                           (2)
-  inputBudget   = min(override.input ?? floor((contextWindow − outputBudget) × SAFETY),
-                      contextWindow)                                                     (3)
+  outputBudget  = min(override.output ?? DEFAULT_OUTPUT_BASE × operationMultiplier(op),
+                      floor(contextWindow × OUTPUT_MAX_SHARE))                           (1)
+  maxInput      = floor((contextWindow − outputBudget) × SAFETY)                         (2)
+  inputBudget   = min(override.input ?? maxInput, maxInput)                              (3)
   payloadBudget = inputBudget − fixedPromptEstimate                                      (4)
-  groupOverhead = estimate(domainThemes + languageEvidence + envelope)                   (5)
-  chunkBudget   = min(mapperRequestBudget, payloadBudget − groupOverhead)                (6)
+  groupOverhead = worstCase(capped domainThemes + capped languageEvidence + envelope)     (5)
+  chunkBudget   = min(mapperRequestBudget, payloadBudget − groupOverhead) / calibration   (6)
   outputCeiling = contextWindow − estimatedInput      — per request, after packing        (7)
   ```
+  The multiplier scales the **default only**: a stored `format.maxTokens` of 32768 is already
+  the value the user chose, and multiplying it would make a saved setting mean something else.
+  `maxInput` bounds the derived value **and** an override, so input and output can never
+  together exceed the window. `chunkBudget` is divided by the calibration factor because the
+  chunker measures in raw estimator tokens while the payload budget is calibrated.
+
   Worked examples: 131072/`init` → output 8192, input 110592. 131072/`format` → output 32768, input 88473. 8192/`init` → output 4096, input 3686.
+- The calibration correction is multiplicative: `calibration *= actual / calibratedEstimate`,
+  smoothed and clamped. Averaging the ratio into the factor converges on its square root.
 - `outputCeiling` is NOT stored in the resolved budget. It is computed at the call site immediately before dispatch, from the actually packed prompt.
 - `inputSource` and `outputSource` are tracked separately. A stored `maxTokens` must not make the input budget report `override`.
 - The calibration factor is **applied** to every estimate, not merely recorded.
@@ -844,6 +917,23 @@ test("a context error shrinks the window and marks it learned", async () => {
   assert.equal(record.source, "learned");
 });
 
+test("calibration converges on the true factor, not its square root", async () => {
+  const store = storeWith({}, (async () => { throw new Error("offline"); }) as typeof fetch);
+  await store.resolve("http://x/v1", "m1", "", 0);
+  const RAW = 1_000;
+  const TRUE_FACTOR = 2;
+  for (let step = 0; step < 20; step++) {
+    const calibrated = RAW * store.get("http://x/v1", "m1")!.calibration;
+    store.observeUsage("http://x/v1", "m1", calibrated, RAW * TRUE_FACTOR);
+  }
+  const settled = store.get("http://x/v1", "m1")!.calibration;
+  assert.ok(
+    Math.abs(settled - TRUE_FACTOR) < 0.05,
+    `converged on ${settled.toFixed(3)}; averaging the ratio would settle at `
+    + `${Math.sqrt(TRUE_FACTOR).toFixed(3)}`,
+  );
+});
+
 test("calibration is a moving average that discards anomalies", async () => {
   const store = storeWith({}, (async () => { throw new Error("offline"); }) as typeof fetch);
   await store.resolve("http://x/v1", "m1", "", 0);
@@ -1054,8 +1144,15 @@ export class ModelContextStore {
     if (!record || estimated <= 0 || actual <= 0) return;
     const ratio = actual / estimated;
     if (ratio < CALIBRATION_MIN || ratio > CALIBRATION_MAX) return;
+    // MULTIPLICATIVE. `ratio` is measured through the current factor, so
+    // averaging it into the factor converges on sqrt(truth): a real factor of 2
+    // settles at 1.414, a permanent 29% underestimate. Multiply, then smooth.
     const weight = Math.min(record.samples, CALIBRATION_WINDOW - 1);
-    record.calibration = (record.calibration * weight + ratio) / (weight + 1);
+    const target = record.calibration * ratio;
+    record.calibration = Math.min(CALIBRATION_MAX, Math.max(
+      CALIBRATION_MIN,
+      (record.calibration * weight + target) / (weight + 1),
+    ));
     record.samples = Math.min(record.samples + 1, CALIBRATION_WINDOW);
     void this.persist();
   }
@@ -1134,6 +1231,12 @@ test("format keeps four times the base output allowance", () => {
   const budget = resolveBudget(record(), "format", {});
   assert.equal(budget.outputBudgetTokens, DEFAULT_OUTPUT_BASE * 4);
   assert.equal(budget.inputBudgetTokens, 88_473);
+});
+
+test("an output override is taken as given, never multiplied", () => {
+  // src/types.ts:856 stores format.maxTokens = 32768. It must survive as 32768.
+  const budget = resolveBudget(record(), "format", { output: 32_768 });
+  assert.equal(budget.outputBudgetTokens, 32_768);
 });
 
 test("the fallback window still leaves a usable input budget", () => {
@@ -1229,9 +1332,11 @@ export function resolveBudget(
   const outputOverride = positive(overrides.output);
   const inputOverride = positive(overrides.input);
 
-  const outputBase = outputOverride ?? DEFAULT_OUTPUT_BASE;
+  // The multiplier scales the DEFAULT only. An override is already the value the
+  // user chose: multiplying a stored format.maxTokens of 32768 by four would turn
+  // it into 131072 and silently change what a saved setting means.
   const outputBudgetTokens = Math.max(1, Math.min(
-    outputBase * (OUTPUT_MULTIPLIER[operation] ?? 1),
+    outputOverride ?? DEFAULT_OUTPUT_BASE * (OUTPUT_MULTIPLIER[operation] ?? 1),
     Math.floor(record.contextWindow * OUTPUT_MAX_SHARE),
   ));
   // The ceiling for BOTH the derived value and an override. Clamping an
@@ -2220,9 +2325,36 @@ git commit -m "fix: merge split bootstrap groups instead of failing on source si
 - Consumes: `outputCeiling` (Task 5); `estimatePreparedMessages(messages, calibration?)` (Task 3).
 - Produces: nothing new on the type level — `onUsageObserved` and `contextWindowTokens` were declared in Task 3 Step 1. This task is the first to read them. `outputRetryOptions` keeps its signature.
 
-- [ ] **Step 1: Write the failing tests**
+- [ ] **Step 1: Wire the truncation into the retry loop**
 
-Append to `tests/structured-output.test.ts`:
+Correcting the ceiling changes nothing on its own. `outputRetryOptions` is reached only where
+the model returned no usable text and `consumedOutputLimit` is true (`:766`, `:837`). A
+`finish_reason: "length"` raises `StructuredOutputTruncatedError` from
+`callWithFormatFallback` (`:483`, `:640`, `:648`) and propagates straight past that branch, so
+the growth path never runs. Catch it in the loop:
+
+```ts
+      let call;
+      try {
+        call = await callWithFormatFallback({ ...args, opts: currentOpts }, messages, mode, attempt, lifecycle);
+      } catch (error) {
+        if (!(error instanceof StructuredOutputTruncatedError) || attempt === retryLimit) throw error;
+        emitStructuralError(onEvent, callSite, "output_limit", attempt, null, error.message);
+        lifecycle.close("retrying");
+        const grown = outputRetryOptions(optsWithRepairInputBudget(currentOpts), currentOpts.maxTokens ?? 0);
+        if (grown.maxTokens === currentOpts.maxTokens) throw error;   // ceiling reached
+        currentOpts = grown;
+        continue;
+      }
+```
+
+Both transports raise it from different places, so both are covered by catching at the call.
+
+- [ ] **Step 2: Write the failing tests**
+
+Append to `tests/structured-output.test.ts`. The first two cover the pure function; the third
+and fourth are the ones that matter, because revision 3 tested only the pure function and
+declared the defect fixed:
 
 ```ts
 test("the output limit grows when the ceiling is above the current budget", () => {
@@ -2266,11 +2398,43 @@ test("usage is reported once per call with both numbers", async () => {
 });
 ```
 
-`stubLlmClient` is this suite's existing helper; if it is named differently, use whatever
-`tests/structured-output.test.ts` already uses to fake a completion — do not add a second
-stub.
+```ts
+for (const transport of ["stream", "non-stream"] as const) {
+  test(`a ${transport} truncation is retried with a larger limit`, async () => {
+    const requests: Array<{ maxTokens?: number }> = [];
+    const llm = stubLlmClient({
+      transport,
+      responses: [
+        { finishReason: "length", content: '{"ok":' },
+        { finishReason: "stop", content: '{"ok":true}' },
+      ],
+      onRequest: (params) => requests.push({ maxTokens: params.max_tokens }),
+    });
+    const sink: StructuredSink<{ ok: boolean }> = {};
+    for await (const _ of runStructuredStreaming({
+      llm, model: "m1",
+      baseMessages: [{ role: "user", content: "hello" }],
+      opts: { maxTokens: 4_096, contextWindowTokens: 131_072 },
+      profile: { kind: "json-zod", schema: z.object({ ok: z.boolean() }) },
+      maxRetries: 1, callSite: "init.bootstrap",
+      lifecycle: createLlmLifecycle("bootstrap_domain"),
+      signal: new AbortController().signal, onEvent: () => {}, transport,
+    }, sink)) { /* drain */ }
 
-- [ ] **Step 2: Set the ceiling per request**
+    assert.equal(requests.length, 2, "a truncation must produce a second request");
+    assert.ok(
+      (requests[1].maxTokens ?? 0) > (requests[0].maxTokens ?? 0),
+      "the retry must ask for more room",
+    );
+    assert.deepEqual(sink.value, { ok: true });
+  });
+}
+```
+
+`stubLlmClient` is this suite's existing helper; extend it with `responses` and `onRequest` if
+it does not already support them, rather than adding a second stub.
+
+- [ ] **Step 3: Set the ceiling per request**
 
 Immediately before dispatch, where `params` is built, compute the ceiling from the packed prompt and put it into the options used for retries:
 
@@ -2288,7 +2452,7 @@ Immediately before dispatch, where `params` is built, compute the ceiling from t
 `budget.contextWindow`. When it is absent — the `claude-agent` path — behaviour is exactly as
 today, because `perRequestOpts` falls through to `opts` unchanged.
 
-- [ ] **Step 3: Report usage**
+- [ ] **Step 4: Report usage**
 
 In `emitBudget`, after the existing `createPromptBudgetEvent` call:
 
@@ -2321,7 +2485,7 @@ Task 7's native branch sets it from `budget`; `emitBudget` spreads it into the e
 One `prompt_budget` record then carries `estimatedInputTokens`, `actualInputTokens` and the
 provenance together, which is what Task 14 Step 5 correlates on.
 
-- [ ] **Step 4: Run and commit**
+- [ ] **Step 5: Run and commit**
 
 Run: `npm run typecheck && npm test 2>&1 | tail -20`
 Expected: baseline plus three new tests.
@@ -2671,20 +2835,39 @@ confirm `evidence_split` with `groups > 1` plus a created domain. Then clear the
 Poison the cache instead — a stale record is exactly the real-world case this path exists for,
 a model swapped behind an unchanged name:
 
+`ModelContextStore` keeps an in-memory cache that outlives a file edit, so the plugin must be
+reloaded on both sides of the poison. Poison exactly one key — the model actually in use — so
+nothing else in the file is disturbed, and guarantee the restore with a trap:
+
 ```bash
 cd "/home/ikeniborn/Documents/Project/notes/vaults/Work/.obsidian/plugins/ai-wiki"
+KEY="https://homelab.ikeniborn.ru/v1::ollama-deepseek-v4-pro-cloud"
 cp local.json local.json.bak
-jq '.modelContext |= with_entries(.value.contextWindow = 900000 | .value.source = "discovered")' \
+trap 'mv -f local.json.bak local.json 2>/dev/null' EXIT
+jq --arg k "$KEY" \
+  '.modelContext[$k].contextWindow = 900000 | .modelContext[$k].source = "discovered"' \
   local.json > local.json.tmp && mv local.json.tmp local.json
+jq --arg k "$KEY" '.modelContext[$k]' local.json
 ```
 
-Re-run Init. Expected: the run completes; `agent.jsonl` carries a `prompt_budget` with
-`retryReason: "provider_context_error"`; no error reaches the user; and the record is rewritten
-with `source: "learned"` and a smaller window. Then restore:
+Ask the user to **reload the plugin**, then re-run Init. Expected: the run completes;
+`agent.jsonl` carries a `prompt_budget` with `retryReason: "provider_context_error"`; no error
+reaches the user.
+
+Wait for the write to land before reading it back — the store persists asynchronously:
 
 ```bash
-mv local.json.bak local.json
+sleep 2 && jq --arg k "$KEY" '.modelContext[$k] | {contextWindow, source}' local.json
 ```
+Expected: `source: "learned"` with a window below 900000.
+
+Restore, and reload once more so the poisoned value does not survive in memory and get written
+back over the restored file:
+
+```bash
+mv -f local.json.bak local.json && trap - EXIT
+```
+Then ask the user to reload the plugin again.
 
 This proves recovery. Check 2 measures the estimator and proves nothing about it.
 
@@ -2751,7 +2934,16 @@ Expected: both pages exist and describe the byte-based budget and the settings-o
 ```
 wiki_lint(domain="obsidian-ai-wiki")
 ```
-Expected: neither `architecture/prompt-budget-governor` nor `architecture/model-call-controls` appears under `stale`; no broken `[[refs]]`; the new page is not an orphan. The writes auto-reindex and auto-commit the wiki base, so no `wiki_index` call follows.
+The domain already carries thirteen stale and two orphan pages that predate this work, so a
+clean lint of the whole domain is not an achievable criterion. Record the counts before Step 2
+and compare:
+
+- neither `architecture/prompt-budget-governor` nor `architecture/model-call-controls` appears
+  under `stale`;
+- the new `architecture/model-context-discovery` is not an orphan;
+- `broken` stays empty and the pre-existing stale count does not grow.
+
+The writes auto-reindex and auto-commit the wiki base, so no `wiki_index` call follows.
 
 ---
 
@@ -2806,3 +2998,20 @@ Expected: neither `architecture/prompt-budget-governor` nor `architecture/model-
 | Task 7 demanded a clean typecheck while breaking its callers | Task 7 Step 3 — a parallel export, switched and deleted in Task 8 |
 | `git checkout --` used to undo a scratch edit | Task 1 Step 5 — restore from a copy |
 | iwiki pages left stale, blocking chain closeout | Task 15 |
+
+## What revision 3 got wrong
+
+A third review, with the intent and spec corrections it forced.
+
+| # | Defect | Fixed by |
+|---|---|---|
+| 1 | The intent's hard constraint was unsatisfiable, and the spec had broken it to stay implementable | Intent revision 3 allows an unsupported-model-context failure; spec §6.1 |
+| 2 | Global Constraints still carried revision 2 formulas, giving the implementer two normative algorithms | The block is rewritten and declared to win over any task body |
+| 3 | The calibration loop converged on the square root of the true factor | Task 4 — multiplicative correction plus a 20-step convergence test |
+| 4 | The operation multiplier was applied to an output override, turning a stored 32768 into 131072 | Task 5 — the multiplier scales the default only, with a regression test |
+| 5 | Runtime wiring used `this.apiKey`, emitted through a missing callback, and never passed the probe sink | Left to the compiler: the inline code is a reference draft, and `tsc` reports all three in seconds |
+| 6 | `finish_reason=length` was never wired: the truncation propagates past the only branch that grows the limit | Task 11 Steps 1-2 — catch it in the retry loop, integration-test both transports |
+| 7 | The split task's interface, tests and implementation disagreed on the return type and the measurement scale | Left to the compiler, with the Global Constraints as the tiebreaker |
+| 8 | The overflow scenario edited a file while the store holds an in-memory cache | Task 14 Step 7 — reload on both sides, poison one key, guarantee the restore with a trap |
+| — | `repairInputBudgetTokens` bypassed the context-derived ceiling; the placeholder was shared across fields; ÷3.5 lingered in prose | Compiler and review during execution |
+| — | "Clean lint" was unreachable | Task 15 Step 5 — the three touched pages, no new errors |

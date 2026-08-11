@@ -1,8 +1,8 @@
 ---
 review:
-  intent_hash: 56cb5d606560c990
+  intent_hash: 040e458f7faa2a18
   last_run: 2026-08-11
-  revision: 2
+  revision: 3
   phases:
     structure: { status: passed }
     completeness: { status: passed }
@@ -88,6 +88,16 @@ review:
       fragment: "the `data.json` history entry reports `done`, not `error`"
       text: "Revision 2: the previous wording expected `ok`, which RunHistoryEntry.status (types.ts:478) cannot produce; its values are done | error | cancelled."
       fix: "Expect `done`."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-009
+      phase: consistency
+      severity: CRITICAL
+      section: Constraints
+      section_hash: 80b60213c3ce5b7d
+      fragment: "The only acceptable size-related failure is a provider rejection after the repack loop is exhausted."
+      text: "Revision 3: the constraint was not satisfiable. When a model's context window cannot hold the fixed Init prompt there is nothing to send, so no provider rejection can occur and no budgeting removes the case. The spec had already broken the rule to stay implementable."
+      fix: "Allow exactly one further failure -- an unsupported model context -- reported by naming the model and its window. Source size still never ends an operation."
       verdict: fixed
       verdict_at: 2026-08-11
 ---
@@ -242,9 +252,12 @@ budgeting.
 
 ### Hard (architectural enforcement)
 
-- No operation ends with `configuration error` / `domain was not created` because of input
-  size. The only acceptable size-related failure is a provider rejection after the repack
-  loop is exhausted.
+- No operation ends because of the size of the **source**. Exactly two size-related failures
+  remain allowed, and both are properties of the model rather than of the user's content:
+  a provider rejection after the repack loop is exhausted, and a model whose context window
+  cannot hold the fixed prompt at all. The second is reported by naming the model and its
+  window, never as a `configuration error` — there is nothing for the user to configure, and a
+  2k model cannot run Init no matter how the budget is computed.
 - Content truncation is always explicit: a marker in the payload and a record in
   `agent.jsonl`. No silent truncation.
 - Source coverage completeness (`assertCompleteSourceCoverage`) remains a hard invariant.

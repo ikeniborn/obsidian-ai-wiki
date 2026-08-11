@@ -1,8 +1,8 @@
 ---
 review:
-  spec_hash: ae5473b20e8d12e6
+  spec_hash: 1321076f9f29aa13
   last_run: 2026-08-11
-  revision: 3
+  revision: 4
   phases:
     structure: { status: passed }
     coverage: { status: passed }
@@ -81,17 +81,62 @@ review:
       fix: "Poison the cached record instead, and make the wiki update part of closeout."
       verdict: fixed
       verdict_at: 2026-08-11
+    - id: F-017
+      phase: consistency
+      severity: CRITICAL
+      section: 6. Error handling
+      section_hash: 12f7252511c717a7
+      text: "Revision 3 allowed a local preflight refusal when the fixed prompt exceeds the model window, while the intent forbade any size failure other than a provider rejection. The document had broken its own governing constraint to stay implementable."
+      fix: "Amend the intent to allow exactly that failure, and state it as an unsupported model context rather than a configuration error."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-018
+      phase: consistency
+      severity: CRITICAL
+      section: 2. Approach decisions
+      section_hash: e2e23ba82829ff49
+      text: "The calibration loop averaged ratios of actual to already-calibrated estimate, so its fixed point is the square root of the true factor: a real factor of 2 settles at 1.414, a permanent 29% underestimate in the dangerous direction."
+      fix: "Multiply the factor instead of averaging the ratio into it, and require a multi-step convergence test."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-019
+      phase: consistency
+      severity: CRITICAL
+      section: 3. Budget arithmetic
+      section_hash: 50bc91cdec65f75f
+      text: "The operation multiplier was applied after the override, so a stored format.maxTokens of 32768 became 131072 before clamping, silently changing what a saved setting means."
+      fix: "Apply the multiplier to DEFAULT_OUTPUT_BASE only."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-020
+      phase: coverage
+      severity: CRITICAL
+      section: 6. Error handling
+      section_hash: 12f7252511c717a7
+      text: "finish_reason=length was claimed fixed by correcting the ceiling, but outputRetryOptions is only reached where the model returned no text at all; a truncation raises StructuredOutputTruncatedError and propagates past that branch, so the growth path never runs."
+      fix: "Catch the truncation inside the structured retry loop and re-issue with a larger limit; verify with an integration test per transport."
+      verdict: fixed
+      verdict_at: 2026-08-11
+    - id: F-021
+      phase: coverage
+      severity: WARNING
+      section: 7. Testing
+      section_hash: b580e3455f6dc8d0
+      text: "The overflow scenario edited local.json while ModelContextStore holds an in-memory cache that outlives the edit, and a clean domain lint was set as an acceptance criterion although thirteen stale and two orphan pages predate this work."
+      fix: "Reload around the poison and the restore with a guaranteed restore; scope the lint criterion to the three touched pages plus no new errors."
+      verdict: fixed
+      verdict_at: 2026-08-11
 chain:
   intent:
     path: docs/superpowers/intents/2026-08-11-prompt-budget-automation-intent.md
-    hash: 56cb5d606560c990
+    hash: 040e458f7faa2a18
 ---
 
 # Design: prompt-budget-automation
 
 **Date:** 2026-08-11
-**Revision:** 3 — revision 1 was rewritten after a review found eleven defects (§9); revision 2 was corrected after a second review found seven more in the plan that traced back to this document (§10).
-**Intent:** `docs/superpowers/intents/2026-08-11-prompt-budget-automation-intent.md` (Status: approved, `intent_hash: 56cb5d606560c990`)
+**Revision:** 4 — revision 1 was rewritten after a review found eleven defects (§9); revision 2 was corrected after a second review found seven more in the plan that traced back to this document (§10).
+**Intent:** `docs/superpowers/intents/2026-08-11-prompt-budget-automation-intent.md` (Status: approved, `intent_hash: 040e458f7faa2a18`)
 
 ## 1. Problem
 
@@ -175,6 +220,14 @@ The provider's own numbers close the loop: after every call the estimate is comp
 the reported `inputTokens`, and the resulting factor is applied to **every subsequent
 estimate** — packing, preflight and telemetry alike. Applied, not merely recorded: a factor
 that only lands in the cache changes nothing.
+
+The correction is **multiplicative**, and this is not a detail. The observed ratio is
+`actual / calibratedEstimate`, so it is already measured through the current factor. Averaging
+those ratios into the factor makes it converge on the square root of the truth: with a real
+factor of 2 the loop settles at 1.414, a permanent 29% underestimate — in the dangerous
+direction. The factor is therefore multiplied, `calibration *= actual / calibratedEstimate`,
+smoothed over the window and clamped. A convergence test over several steps is mandatory: a
+single-step test cannot distinguish the two formulations.
 
 The seed still has to be right on its own. Every new model starts at calibration 1, so the
 first request against it is governed by the coefficients alone — and the intent's 15% band is
@@ -307,8 +360,7 @@ The budget stops being a number from settings and becomes a computed value whose
 recorded. Evaluated strictly in this order, so no value depends on one defined after it:
 
 ```
-outputBase    = override.output ?? DEFAULT_OUTPUT_BASE                                (1)
-outputBudget  = min(outputBase × operationMultiplier(op),
+outputBudget  = min(override.output ?? DEFAULT_OUTPUT_BASE × operationMultiplier(op),
                     floor(contextWindow × OUTPUT_MAX_SHARE))                           (2)
 maxInput      = floor((contextWindow − outputBudget) × SAFETY)                         (3)
 inputBudget   = min(override.input ?? maxInput, maxInput)                              (4)
@@ -569,7 +621,7 @@ a provider rejection after every recovery loop has run.
 | The model behind a name is swapped for a smaller one | provider returns `context_length_exceeded` → `shrinkInputBudget` → cached as `learned` | no, self-healing |
 | `context_length_exceeded` | existing `runWithContextRepack`, up to two repacks | no, until exhausted |
 | Repack exhausted | the provider error as-is — the only acceptable size failure | yes |
-| `finish_reason=length` | `outputRetryOptions` with the per-request ceiling | no |
+| `finish_reason=length` | caught inside the structured retry loop and retried with a larger limit | no |
 | Output ceiling reached and still truncated | existing structured repair, then an error | yes |
 | Provider reports no `usage` | calibration is not updated, the step is skipped | no |
 | Override exceeds the model context | clamped to the context, the clamp is logged | no |
@@ -586,14 +638,29 @@ Following the existing pattern at `lint-chat.ts:272`, first rebuild the prompt w
 the model and its context window rather than a user setting, and without the words
 "configuration error" — there is nothing for the user to configure.
 
-### 6.2 Corrupted calibration
+### 6.2 Truncated generation
+
+`outputRetryOptions` is not reachable from a truncation today. It is called only where the
+model returned **no usable text at all** and `consumedOutputLimit` is true
+(`src/phases/structured-output.ts:766`, `:837`). A `finish_reason: "length"` raises
+`StructuredOutputTruncatedError` from `callWithFormatFallback` (`:483`, `:640`, `:648`) and
+propagates past that branch, so the growth path never runs. Fixing the ceiling alone, as a
+first draft assumed, changes nothing.
+
+The retry loop must catch `StructuredOutputTruncatedError`, apply `outputRetryOptions` to the
+current options, and re-issue — on both the streaming and the non-streaming path, each of
+which raises it from a different place. Verification is an integration test per path that
+feeds a real `finish_reason: "length"` and asserts a second request with a larger `maxTokens`,
+not a unit test of the pure function.
+
+### 6.3 Corrupted calibration
 
 One anomalous `usage` value must not break budgeting. The correction is a moving average over
 the last 8 samples, hard-clamped to `[0.5, 3.0]`. A sample outside the range is discarded and
 logged: it indicates that the provider counts `usage` differently than assumed, which is
 diagnostics, not a reason to change behaviour.
 
-### 6.3 Diagnostics
+### 6.4 Diagnostics
 
 Five new events in `agent.jsonl`; existing diagnostics are not reduced:
 
@@ -702,15 +769,19 @@ for another:
 4. A provider context-overflow is recovered by the repack loop without surfacing. An oversized
    override cannot produce one — §3 clamps it to `maxInput` — so the scenario poisons the
    cached context record instead, which is also the real-world case the path exists for: a
-   model swapped behind an unchanged name. Afterwards the record must read
-   `source: "learned"` with a smaller window. This is a separate scenario from check 2, which
+   model swapped behind an unchanged name. `ModelContextStore` holds an in-memory cache that
+   outlives a file edit, so the plugin must be reloaded after poisoning and again after
+   restoring, and the restore must be guaranteed rather than left to the last command
+   succeeding. Afterwards the record must read `source: "learned"` with a smaller window. This is a separate scenario from check 2, which
    measures the estimator and proves nothing about recovery.
 
 The project wiki is part of closeout, not an afterthought: `wiki_lint` already reports
 `architecture/prompt-budget-governor` (source `src/agent-runner.ts`) and
 `architecture/model-call-controls` (source `src/model-call-policy.ts`) as stale, and both are
-files this design rewrites. Both pages are updated and a page is added for the new modules,
-ending on a clean lint.
+files this design rewrites. Both pages are updated and a page is added for the new modules. The domain carries thirteen
+stale and two orphan pages unrelated to this work, so a clean lint of the whole domain is not
+an achievable criterion: the requirement is that the three pages touched here are not stale
+and that no new lint error appears.
 
 ## 8. Acceptance (from intent)
 
@@ -786,3 +857,14 @@ Recorded so they are not reintroduced.
 | 5 | Runtime wiring probed the wrong model and assumed an event channel the helper does not have | §4.4 — `effectiveModel`, a returned events array, `onContextError` inside the repack boundary |
 | 6 | Seed coefficients were treated as approximate because calibration would fix them, but every new model starts at calibration 1 and the intent's band is absolute | §2.1 — fitted seeds, Latin ÷4 |
 | 7 | Declared events had no producer and the overflow scenario became impossible once overrides are clamped | §6.3, §7.4 |
+
+## 11. What revision 3 got wrong
+
+| # | Defect | Fixed in |
+|---|---|---|
+| 1 | The intent's hard constraint was unsatisfiable and this document quietly broke it: a model whose window cannot hold the fixed prompt admits no provider rejection either | Intent revision 3 now allows exactly that one further failure; §6.1 states it |
+| 2 | The calibration loop averaged ratios that were themselves measured through the current factor, converging on its square root — a permanent underestimate | §2.1 — multiplicative correction plus a mandatory convergence test |
+| 3 | The operation multiplier was applied to an output override, turning a stored `format.maxTokens` of 32768 into 131072 | §3 (2) — the multiplier scales the default only |
+| 4 | `finish_reason=length` was declared fixed, but the growth path is unreachable from a truncation: the error propagates past the only branch that calls `outputRetryOptions` | §6.2 — catch it in the retry loop, integration-test both transports |
+| 5 | The overflow scenario edited a file while the store holds an in-memory cache that outlives the edit | §7.4 — reload after poisoning and after restoring, with a guaranteed restore |
+| 6 | "Clean lint" was an unreachable acceptance criterion: the domain carries thirteen stale and two orphan pages unrelated to this work | §7.4 — the three touched pages, and no new errors |
