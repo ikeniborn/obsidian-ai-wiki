@@ -1427,7 +1427,7 @@ test("bootstrap derives bounded candidate, theme, and language evidence from val
   assert.ok(nextUseEstimate <= 3500, `bootstrap next-use payload ${nextUseEstimate} exceeded 3500`);
 });
 
-test("bootstrap compresses aggregate evidence payload instead of reconstructing every line", async () => {
+test("bootstrap splits the aggregate evidence payload into budget-sized groups without dropping an entity", async () => {
   const events: RunEvent[] = [];
   const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
   const runtime = mockRuntime((messages) => {

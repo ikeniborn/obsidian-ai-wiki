@@ -167,13 +167,26 @@ function subdivideCandidate(
       exactSource: candidate.exactSource.slice(offset, offset + size).map((range) => ({ ...range })),
     });
   }
+  // Unreachable from the only call site — a candidate of at most one unit is
+  // classified atomic before it gets here, and every part of a candidate with
+  // two or more units carries at least one of them. Kept as a guard so the
+  // helper cannot return empty candidates if it is ever called directly.
   return result.filter((part) => part.facts.length > 0 || part.exactSource.length > 0);
 }
 
 export interface BootstrapSplit {
   groups: BootstrapEvidence[];
-  /** Largest group that could not be divided any further, in tokens. */
+  /**
+   * Size of the largest returned group, in tokens: the smallest budget at which
+   * this split is entirely feasible. Taken over every group, divisible ones
+   * included — when it exceeds the requested budget the excess is atomic and the
+   * caller must widen rather than split further.
+   */
   minimumGroupTokens: number;
+  /**
+   * Number of halving OPERATIONS performed, not the number of candidates that
+   * were divided: dividing one candidate of 5 units into 5 parts counts 4.
+   */
   subdivided: number;
 }
 
@@ -1060,6 +1073,18 @@ function planSourceChunksForEvidence(
   // the bootstrap payload budget. chunkMarkdownSource measures in raw estimator
   // tokens, so the budget is converted rather than the measurement. Without this
   // the "one evidence unit always fits" proof compares two different scales.
+  //
+  // This is not inert when chunkBudgetTokens is unset. Two regimes matter:
+  //   - opts.tokenCalibration below 1 (model-context clamps to [0.5, 3], so 0.5
+  //     is reachable) shrinks the calibrated request estimate, letting
+  //     mapperEstimateFits admit roughly 1/calibration times more raw markdown
+  //     than inputBudgetTokens. The raw ceiling then binds where nothing bound
+  //     before. That is intended: the ceiling keeps a chunk's raw text within
+  //     the configured budget instead of trusting a factor fitted for whole
+  //     requests, it only ever produces smaller chunks, and coverage is
+  //     unaffected, so it costs an extra mapper call and loses nothing.
+  //   - policy.calibration below 1 widens the ceiling instead, because a
+  //     calibrated budget buys proportionally more raw tokens.
   const rawChunkBudget = Math.max(1, Math.floor(
     Math.min(initialRequestBudget, policy.chunkBudgetTokens ?? initialRequestBudget)
     / (policy.calibration ?? 1),
