@@ -893,3 +893,13 @@ test("auto-budget-notice strings exist and differ across en/ru/es", () => {
     assert.notEqual(s.autoBudgetNotice_switch, s.autoBudgetNotice_keep);
   }
 });
+
+test("the auto-budget notice body does not point at the removed Advanced heading", () => {
+  // F1 from review: commit 00478f49 (immediately before Task 13) dropped the "Advanced"
+  // heading over the native budget fields and added a test asserting it appears nowhere
+  // in settings.ts. The notice body must not tell an upgrading user to look for it.
+  assert.doesNotMatch(i18nFor("en").settings.autoBudgetNotice_body, /\bAdvanced\b/);
+  assert.doesNotMatch(i18nFor("ru").settings.autoBudgetNotice_body, /Дополнительно/);
+  assert.doesNotMatch(i18nFor("es").settings.autoBudgetNotice_body, /Avanzado/);
+  assert.doesNotMatch(settingsSource, /advancedBudgets_name/);
+});
