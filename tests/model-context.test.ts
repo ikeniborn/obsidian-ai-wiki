@@ -42,6 +42,18 @@ test("a context length under a different model is ignored", async () => {
   assert.ok(calls.some((url) => url.endsWith("/api/show")), "must fall through to /api/show");
 });
 
+test("an unscoped /models payload is never used, even if it carries a context length", async () => {
+  // No `data` array at all — this must not fall back to an unscoped scan of
+  // the whole payload, which would risk returning a length that belongs to
+  // some other field entirely. It must fall through to /api/show instead,
+  // which here reports nothing usable either.
+  const fetchFn = (async (input: string | URL | Request) =>
+    String(input).endsWith("/models")
+      ? json({ model: "m1", context_length: 999_999 })
+      : json({})) as typeof fetch;
+  assert.equal(await probeContextWindow(fetchFn, "http://x/v1", "", "m1", 2000), null);
+});
+
 test("the probe falls through to /api/show", async () => {
   const fetchFn = (async (input: string | URL | Request) =>
     String(input).endsWith("/models")
@@ -118,6 +130,33 @@ test("a context error shrinks the window and marks it learned", async () => {
   const record = store.get("http://x/v1", "m1")!;
   assert.equal(record.contextWindow, 8_192);
   assert.equal(record.source, "learned");
+});
+
+test("a persistence failure after observeUsage does not surface as an unhandled rejection", async () => {
+  const store = new ModelContextStore({
+    read: async () => ({
+      "http://x/v1::m1": { contextWindow: 131_072, source: "discovered", calibration: 1, samples: 0 },
+    }),
+    write: async () => { throw new Error("disk full"); },
+    fetchFn: (async () => json({})) as typeof fetch,
+  });
+  await store.resolve("http://x/v1", "m1", "", 0);
+
+  let unhandled: unknown;
+  const onUnhandledRejection = (reason: unknown): void => { unhandled = reason; };
+  process.on("unhandledRejection", onUnhandledRejection);
+  try {
+    store.observeUsage("http://x/v1", "m1", 1_000, 2_000);
+    await new Promise((resolve) => setImmediate(resolve));
+  } finally {
+    process.off("unhandledRejection", onUnhandledRejection);
+  }
+
+  assert.equal(unhandled, undefined, "the failed write must not become an unhandled rejection");
+  assert.ok(
+    store.get("http://x/v1", "m1")!.calibration > 1,
+    "the in-memory record keeps the new calibration despite the failed write",
+  );
 });
 
 test("calibration converges on the true factor, not its square root", async () => {

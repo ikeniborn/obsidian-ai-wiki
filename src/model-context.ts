@@ -56,14 +56,18 @@ function findContextLength(value: unknown): number | null {
 }
 
 /**
- * Picks the entry whose `id` equals the model, then reads only that entry.
- * A context length belonging to a different model would be confidently wrong
- * and would produce real overflows.
+ * Picks the `/models`-response entry whose `id` equals the requested model,
+ * then reads only that entry. A context length belonging to a different
+ * model would be confidently wrong and would produce real overflows, so an
+ * unscoped payload (no `data` array, or no matching entry) yields `null`
+ * rather than falling back to an unscoped scan — the caller falls through to
+ * `/api/show`, which is legitimately unscoped because it is queried FOR the
+ * model by name.
  */
 function contextLengthForModel(payload: unknown, model: string): number | null {
   if (payload === null || typeof payload !== "object") return null;
   const data = (payload as { data?: unknown }).data;
-  if (!Array.isArray(data)) return findContextLength(payload);
+  if (!Array.isArray(data)) return null;
   const list = data as unknown[];
   const entry = list.find((item) =>
     item !== null && typeof item === "object" && (item as { id?: unknown }).id === model);
@@ -198,7 +202,11 @@ export class ModelContextStore {
       (record.calibration * weight + target) / (weight + 1),
     ));
     record.samples = Math.min(record.samples + 1, CALIBRATION_WINDOW);
-    void this.persist();
+    // Persist best-effort: the in-memory record already carries the new
+    // calibration regardless of whether the write below succeeds, and a disk
+    // hiccup losing one sample is not worth surfacing as an unhandled
+    // rejection (or failing this call) in the plugin host.
+    this.persist().catch(() => {});
   }
 
   observeContextError(baseUrl: string, model: string, maxContextTokens?: number): void {
@@ -209,7 +217,10 @@ export class ModelContextStore {
     record.contextWindow = Math.max(MIN_PLAUSIBLE_CONTEXT, next);
     record.source = "learned";
     delete record.expiresAt;
-    void this.persist();
+    // Same best-effort persistence as observeUsage: the shrunk window is
+    // already live in memory, so a write failure here must not crash or
+    // surface as an unhandled rejection.
+    this.persist().catch(() => {});
   }
 
   private async persist(): Promise<void> {
