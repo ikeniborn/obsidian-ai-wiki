@@ -50,6 +50,7 @@ test("an override is clamped to what is left after the output reserve", () => {
     budget.inputBudgetTokens + budget.outputBudgetTokens <= 8_192,
     "input plus output must never exceed the context window",
   );
+  assert.equal(budget.outputSource, "default", "an input override must not relabel the output");
 });
 
 test("an output-only override still leaves the input derived and bounded", () => {
