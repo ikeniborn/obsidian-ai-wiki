@@ -182,6 +182,16 @@ export async function* runFormat(
     model: string;
     language?: "auto" | "ru" | "en" | "es";
     imageOnly?: boolean;
+    /**
+     * Derived from the VISION model's own context record, not from this operation's.
+     * Absent on the claude-agent path, which keeps no record — vision then falls
+     * back to the operation's own budget, exactly as before.
+     */
+    inputBudgetTokens?: number;
+    maxTokens?: number;
+    tokenCalibration?: number;
+    nativeRequestRetries?: number;
+    nativeRequestIdleTimeoutMs?: number;
   } = { enabled: false, model: "" },
   visionTempStore?: VisionTempStore,
   progress: FormatProgress = enFormatProgressFallback,
@@ -246,8 +256,11 @@ export async function* runFormat(
             visionSettings.imageOnly ?? false,
             usedVisionTemplates,
             {
-              inputBudgetTokens: opts.inputBudgetTokens,
-              maxTokens: opts.maxTokens,
+              inputBudgetTokens: visionSettings.inputBudgetTokens ?? opts.inputBudgetTokens,
+              maxTokens: visionSettings.maxTokens ?? opts.maxTokens,
+              tokenCalibration: visionSettings.tokenCalibration,
+              nativeRequestRetries: visionSettings.nativeRequestRetries,
+              nativeRequestIdleTimeoutMs: visionSettings.nativeRequestIdleTimeoutMs,
               onEvent: (event) => visionEvents.push(event),
             },
           );

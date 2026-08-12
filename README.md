@@ -275,7 +275,7 @@ Native Agent's request executor, HTTP status matrix, or connection-timeout trans
 | Base URL | OpenAI-compatible endpoint. Ollama: `http://localhost:11434/v1` | `http://localhost:11434/v1` |
 | API key | `ollama` for Ollama; `sk-...` for OpenAI | `ollama` |
 | Connection timeout | Desktop DNS/TCP/TLS establishment only; it does not cap response headers, body, or generation | `15` s |
-| Model context window | Tokens the model holds in one request. Empty (shown as "Automatic") reads the window from the backend. Set a number only when your backend does not report one; every budget is then derived from it and nothing is probed | *(empty = Automatic)* |
+| Model context window | Tokens the model holds in one request. One field per model field — the chat model, each per-operation model, and the vision model — so differently sized models are budgeted separately. Empty (shown as "Automatic") reads the window from the backend. Set a number only when your backend does not report one; every budget for that model is then derived from it and nothing is probed | *(empty = Automatic)* |
 | Input budget tokens | Maximum size of the packed prompt. Empty (shown as "Automatic") derives it from the model's context window, discovered once per model, cached, and self-corrected against the provider's reported usage. Set a number to override it | *(empty = Automatic)* |
 | Output budget tokens | Response cap sent through `maxTokens`/API `max_tokens`. Empty (shown as "Automatic") is derived per operation from the model's context window the same way. Set a number to override it | *(empty = Automatic)* |
 | Semantic compression | Prompt-density profile (`Maximum`/`Balanced`/`Minimum`) with operation-specific preservation rules | `Balanced` |
@@ -317,6 +317,7 @@ model-idle handling remain separate from that limitation.
 | Enable image analysis | Analyze supported images and PDF pages during Format | off |
 | Semantic compression | Vision-specific override; preserves OCR, objects, relationships, layout, page identity, and uncertainty | Use global |
 | Vision model | Multimodal model used for image analysis | — |
+| Model context window | Native Agent only. The **vision** model's window, used to size its own requests — including how many PDF pages go into one call. Empty (shown as "Automatic") reads it from the backend. A vision model is usually much smaller than the chat model, so this is the field to set when PDF analysis reports "Vision skipped" | *(empty = Automatic)* |
 | Vision Check | Native Agent only: sends one real, tiny 1×1 inline PNG request with a short prompt and a 16-token output cap. Reports success/failure without changing settings or vault files. Claude Agent exposes no Check | — |
 
 ### Bounded processing and storage
@@ -362,8 +363,14 @@ example `131072`). AI Wiki then skips the probe entirely for that backend and mo
 derives every budget from your number, exactly as if the backend had reported it — input
 budget, output budget, the per-request output ceiling, chunk budgets, and the Init
 bootstrap split. The agent log reports `inputSource: "configured"` so it is clear the
-number came from you. Clearing the field returns that model to automatic discovery. The
-setting applies to every Native Agent model, including per-operation ones.
+number came from you. Clearing the field returns that model to automatic discovery.
+
+A window belongs to the model it sits next to, not to the backend: the chat model, each
+per-operation model, and the vision model each have their own **Model context window**
+field, and clearing one leaves the others alone. Two roles that name the same model share
+one window, because the plugin caches one context record per model. If you are upgrading
+from the single global field, your saved number is carried onto every Native Agent chat
+model it used to cover.
 
 A value you type here is treated as an instruction, not a guess: if the provider later
 rejects a prompt and reports a smaller window of its own, AI Wiki does **not** silently
@@ -410,6 +417,13 @@ Small sources keep the short path. Oversized sources, pages, histories, notes, o
 require extra bounded model calls, increasing latency and provider cost in exchange for
 complete processing within the configured input budget. Vision Check is also a real
 provider request and may incur a small charge.
+
+Image and PDF analysis is budgeted from the **vision** model's own context window, not
+from the window of the chat model that runs Format. On Native Agent the vision model gets
+its own context record — discovered from the backend or taken from its own **Model context
+window** field — and the number of PDF pages packed into one vision request follows from
+it. A vision model with a small window therefore splits a PDF into more, smaller calls
+instead of sending one oversized request that the provider rejects.
 
 Destructive Re-init acceptance must use a private copied vault, never the working vault.
 The protected replay root must be a recent `/tmp/ai-wiki-bounded-ingest-replay.*`

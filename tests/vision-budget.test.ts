@@ -1187,6 +1187,135 @@ test("Format propagates Vision budget telemetry and a visible warning on attachm
   assert.ok(warningIndex > budgetIndex);
 });
 
+test("Vision sizes its own call from the vision model's budget, not the text model's", async () => {
+  const source = "---\ntags: [vision]\n---\n# Vision\n\n![[image.png]]";
+  const { vaultTools } = memoryVault(source);
+  const events: RunEvent[] = [];
+  const llm = {
+    chat: {
+      completions: {
+        create: async (params: Record<string, unknown>) => {
+          if (params.stream === false) return response([record("image")]);
+          return (async function* () {
+            yield chunk(formatFrame(source, false));
+            yield usageChunk();
+          })();
+        },
+      },
+    },
+  } as unknown as LlmClient;
+
+  for await (const event of runFormat(
+    ["notes/source.md"],
+    vaultTools,
+    llm,
+    "format-model",
+    false,
+    [],
+    new AbortController().signal,
+    // The text model's budget: what vision used to be sized from.
+    { inputBudgetTokens: 88_473, maxTokens: 32_768 },
+    "native-agent",
+    undefined,
+    3,
+    {
+      enabled: true,
+      model: "vision-model",
+      language: "en",
+      // The vision model's own record, resolved for `vision.model`.
+      inputBudgetTokens: 29_491,
+      maxTokens: 4_096,
+      tokenCalibration: 2,
+    },
+  )) {
+    events.push(event);
+  }
+
+  const vision = events.find((event) =>
+    event.kind === "prompt_budget" && event.callSite === "vision.analysis");
+  assert.ok(vision && vision.kind === "prompt_budget");
+  assert.equal(vision.configuredInputBudget, 29_491, "vision packs against its own window");
+  assert.equal(vision.outputBudget, 4_096, "and answers within its own output budget");
+
+  // The calibration the vision record carries is applied to the vision estimate:
+  // the same messages estimated at factor 1 are half the reported number.
+  const uncalibrated: RunEvent[] = [];
+  for await (const event of runFormat(
+    ["notes/source.md"],
+    memoryVault(source).vaultTools,
+    llm,
+    "format-model",
+    false,
+    [],
+    new AbortController().signal,
+    { inputBudgetTokens: 88_473, maxTokens: 32_768 },
+    "native-agent",
+    undefined,
+    3,
+    {
+      enabled: true,
+      model: "vision-model",
+      language: "en",
+      inputBudgetTokens: 29_491,
+      maxTokens: 4_096,
+      tokenCalibration: 1,
+    },
+  )) {
+    uncalibrated.push(event);
+  }
+  const plain = uncalibrated.find((event) =>
+    event.kind === "prompt_budget" && event.callSite === "vision.analysis");
+  assert.ok(plain && plain.kind === "prompt_budget");
+  assert.equal(
+    vision.estimatedInputTokens, plain.estimatedInputTokens * 2,
+    "the vision call estimate carries the vision model's calibration factor",
+  );
+});
+
+test("Vision falls back to the caller's budget when no vision budget is supplied", async () => {
+  const source = "---\ntags: [vision]\n---\n# Vision\n\n![[image.png]]";
+  const { vaultTools } = memoryVault(source);
+  const events: RunEvent[] = [];
+  const llm = {
+    chat: {
+      completions: {
+        create: async (params: Record<string, unknown>) => {
+          if (params.stream === false) return response([record("image")]);
+          return (async function* () {
+            yield chunk(formatFrame(source, false));
+            yield usageChunk();
+          })();
+        },
+      },
+    },
+  } as unknown as LlmClient;
+
+  for await (const event of runFormat(
+    ["notes/source.md"],
+    vaultTools,
+    llm,
+    "format-model",
+    false,
+    [],
+    new AbortController().signal,
+    { inputBudgetTokens: 20_000, maxTokens: 777 },
+    // claude-agent has no model-context record at all, so vision keeps taking the
+    // operation's own budget there.
+    "claude-agent",
+    undefined,
+    3,
+    { enabled: true, model: "vision-model", language: "en" },
+  )) {
+    events.push(event);
+  }
+
+  const vision = events.find((event) =>
+    event.kind === "prompt_budget" && event.callSite === "vision.analysis");
+  assert.ok(vision && vision.kind === "prompt_budget");
+  assert.equal(vision.configuredInputBudget, 20_000);
+  assert.equal(vision.outputBudget, 777);
+});
+
 test("browser PDF renderer exercises pdfjs and canvas boundaries and reports a missing API", async () => {
   const calls = { getPage: 0, viewport: 0, render: 0, blob: 0 };
   const browser = globalThis as unknown as {

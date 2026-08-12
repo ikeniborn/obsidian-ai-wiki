@@ -175,12 +175,82 @@ export function applyBudgetInput<K extends string>(
   if (Number.isSafeInteger(parsed) && parsed >= min) holder[key] = parsed;
 }
 
+type NativeAgentSettings = LlmWikiPluginSettings["nativeAgent"];
+
+/** The window the user configured for one model, or undefined for "ask the backend". */
+export function configuredContextWindowFor(
+  nativeAgent: NativeAgentSettings,
+  model: string,
+): number | undefined {
+  return nativeAgent.contextWindowTokensByModel?.[model];
+}
+
+/**
+ * Writes one model's window in place. `undefined` clears it — and the last entry
+ * going away takes the map with it, so a settings file that never used the feature
+ * keeps the shape it had.
+ */
+export function setConfiguredContextWindow(
+  nativeAgent: NativeAgentSettings,
+  model: string,
+  next: number | undefined,
+): void {
+  if (!model) return;
+  const map = nativeAgent.contextWindowTokensByModel;
+  if (next === undefined) {
+    if (!map) return;
+    delete map[model];
+    if (Object.keys(map).length === 0) delete nativeAgent.contextWindowTokensByModel;
+    return;
+  }
+  if (map) map[model] = next;
+  else nativeAgent.contextWindowTokensByModel = { [model]: next };
+}
+
+/**
+ * Every native chat model the ONE global window used to be applied to. Vision is
+ * absent on purpose: nothing ever resolved a context record for `vision.model`, so
+ * the old number was never that model's window and inheriting it would be a guess.
+ */
+function legacyWindowModels(settings: LlmWikiPluginSettings): string[] {
+  const models = [
+    settings.nativeAgent.model,
+    ...(["ingest", "query", "lint", "init", "format"] as const)
+      .map((key) => settings.nativeAgent.operations[key].model),
+  ];
+  return [...new Set(models.filter((model) => typeof model === "string" && model !== ""))];
+}
+
+function normalizeConfiguredContextWindows(settings: LlmWikiPluginSettings): void {
+  const na = settings.nativeAgent;
+  const stored = na.contextWindowTokensByModel;
+  const normalized: Record<string, number> = {};
+  if (stored !== null && typeof stored === "object") {
+    for (const [model, value] of Object.entries(stored)) {
+      // Floored, not just positive: a persisted 512 would be displayed while the
+      // engine refused it and probed instead.
+      const window = optionalPositiveInt(value);
+      if (model !== "" && window !== undefined && window >= MIN_CONTEXT_WINDOW) {
+        normalized[model] = window;
+      }
+    }
+  }
+  // The pre-per-model setting: one window for every native model. Moved onto each
+  // model it covered, then consumed, so the migration runs exactly once and an
+  // explicit per-model entry always wins. Reached through a cast because this is the
+  // one place allowed to read the retired key.
+  const legacyHolder = na as { contextWindowTokens?: unknown };
+  const legacy = optionalPositiveInt(legacyHolder.contextWindowTokens);
+  if (legacy !== undefined && legacy >= MIN_CONTEXT_WINDOW) {
+    for (const model of legacyWindowModels(settings)) normalized[model] ??= legacy;
+  }
+  delete legacyHolder.contextWindowTokens;
+  if (Object.keys(normalized).length === 0) delete na.contextWindowTokensByModel;
+  else na.contextWindowTokensByModel = normalized;
+}
+
 export function normalizePersistedModelControls(settings: LlmWikiPluginSettings): void {
-  // Floored, not just positive: a persisted 512 would be displayed while the engine
-  // refused it and probed instead.
-  const contextWindow = optionalPositiveInt(settings.nativeAgent.contextWindowTokens);
-  settings.nativeAgent.contextWindowTokens =
-    contextWindow !== undefined && contextWindow >= MIN_CONTEXT_WINDOW ? contextWindow : undefined;
+  normalizeConfiguredContextWindows(settings);
   settings.nativeAgent.inputBudgetTokens = optionalPositiveInt(settings.nativeAgent.inputBudgetTokens);
   settings.nativeAgent.repairInputBudgetTokens = optionalPositiveInt(settings.nativeAgent.repairInputBudgetTokens);
   settings.claudeAgent.inputBudgetTokens = positiveInt(

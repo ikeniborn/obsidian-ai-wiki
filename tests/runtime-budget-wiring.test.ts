@@ -203,11 +203,15 @@ test("a discarded calibration sample is reported as discarded", async () => {
   const events = await drain(instance.run(runRequest()));
   const samples = events.filter((event) => event.kind === "calibration_sample");
   assert.equal(samples.length, 2);
+  // `appliedCalibration` travels with the sample so `agent.jsonl` can be read on its
+  // own: without it, reconstructing what the estimate was measured through needs a
+  // join back to the run's `budget_resolved` record.
   assert.deepEqual(samples[0], {
     kind: "calibration_sample",
     model: "global-model",
     estimated: 100,
     actual: 1_000,
+    appliedCalibration: 1,
     ratio: 10,
     applied: false,
     clamped: true,
@@ -269,7 +273,7 @@ test("a context rejection without a token count leaves the stored window alone",
 
 test("a configured context window skips the probe and drives every derived budget", async () => {
   const settings = nativeSettings();
-  settings.nativeAgent.contextWindowTokens = 131_072;
+  settings.nativeAgent.contextWindowTokensByModel = { "global-model": 131_072 };
   const calls: string[] = [];
   // The live symptom this setting exists for: /v1/models answers, lists the model,
   // and advertises no window anywhere. Probing it would cache 8192.
@@ -300,7 +304,7 @@ test("a configured context window skips the probe and drives every derived budge
 
 test("a context rejection against a configured window is reported, not learned", async () => {
   const settings = nativeSettings();
-  settings.nativeAgent.contextWindowTokens = 131_072;
+  settings.nativeAgent.contextWindowTokensByModel = { "global-model": 131_072 };
   const store = storeWith((async () => { throw new Error("must not probe"); }) as typeof fetch);
   const instance = runner(settings, store);
   captureOperation(instance, (opts) => {
@@ -321,7 +325,7 @@ test("a context rejection against a configured window is reported, not learned",
 
 test("the bootstrap split of an init run follows the configured window", async () => {
   const settings = nativeSettings();
-  settings.nativeAgent.contextWindowTokens = 131_072;
+  settings.nativeAgent.contextWindowTokensByModel = { "global-model": 131_072 };
   const store = storeWith((async () => { throw new Error("must not probe"); }) as typeof fetch);
   const instance = runner(settings, store);
   const captured = captureOperation(instance);

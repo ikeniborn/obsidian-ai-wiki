@@ -245,8 +245,12 @@ async function callVisionLlm(
     onEvent,
     attemptOffset: attempt,
   });
+  // Through the vision model's own calibration factor, like `buildChatParams`'
+  // preflight above: reporting the raw estimate would make the budget event
+  // disagree with the number the request was actually refused or sized against.
   const estimatedInputTokens = estimatePreparedMessages(
     params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+    options.tokenCalibration,
   );
   let providerDispatched = false;
   let response: OpenAI.Chat.ChatCompletion;

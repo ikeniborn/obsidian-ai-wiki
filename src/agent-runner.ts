@@ -26,7 +26,13 @@ import { PageSimilarityService, DEFAULT_CHUNKING } from "./page-similarity";
 import { resolveLang, i18nFor } from "./i18n";
 import type { BoilerplateDemotionConfig } from "./boilerplate-demotion";
 import { normalizeRerankerConfig } from "./reranker";
-import { effectiveModel, policyKey, resolveCallPolicy } from "./model-call-policy";
+import {
+  configuredContextWindowFor,
+  effectiveModel,
+  policyKey,
+  resolveCallPolicy,
+} from "./model-call-policy";
+import { resolveBudget, type ResolvedBudget } from "./budget-resolver";
 import type { ModelContextRecord, ModelContextStore } from "./model-context";
 import { cancelRuntimeTimeout, scheduleRuntimeTimeout, type RuntimeTimer } from "./runtime-timers";
 
@@ -45,6 +51,60 @@ const CLAUDE_PLACEHOLDER_RECORD: ModelContextRecord = Object.freeze({
 
 export function resolveFollowUpPolicyOperation(parent: WikiOperation): OpKey {
   return parent === "query" ? "query" : "lint";
+}
+
+/**
+ * The budget the VISION model is entitled to, resolved from its own context record.
+ * `settings.vision.model` is a separate model from the chat model — commonly a much
+ * smaller one — so sizing its requests from the format operation's budget packed PDF
+ * batches against a window the vision model does not have.
+ *
+ * Returns no budget on the claude-agent path (which keeps its stored budgets and
+ * never consults a record) or when no vision model is configured for this run.
+ * Diagnostics come back as data so the caller can yield them in run order.
+ */
+export async function resolveVisionBudget(
+  store: ModelContextStore,
+  settings: LlmWikiPluginSettings,
+  model: string,
+  signal?: AbortSignal,
+): Promise<{ budget?: ResolvedBudget; events: RunEvent[] }> {
+  const events: RunEvent[] = [];
+  if (settings.backend !== "native-agent" || !model) return { events };
+  const baseUrl = settings.nativeAgent.baseUrl;
+  let record: ModelContextRecord;
+  try {
+    record = await store.resolve(
+      baseUrl,
+      model,
+      settings.nativeAgent.apiKey ?? "",
+      Date.now(),
+      signal,
+      (event) => events.push(event),
+      configuredContextWindowFor(settings.nativeAgent, model),
+    );
+  } catch (error) {
+    // A cancelled run is not a vision failure: the format phase stops at its own
+    // abort check, and falling back to the caller's budget keeps the old behaviour.
+    if (signal?.aborted) return { events: [] };
+    throw error;
+  }
+  // "format" is the operation vision runs inside, so its output share is the one
+  // the vision call already had — only the window it is taken from changes.
+  const budget = resolveBudget(record, "format", {});
+  events.push({
+    kind: "budget_resolved",
+    operation: "format",
+    model,
+    contextWindow: budget.contextWindow,
+    inputSource: budget.inputSource,
+    outputSource: budget.outputSource,
+    calibration: budget.calibration,
+    samples: record.samples,
+    inputBudget: budget.inputBudgetTokens,
+    outputBudget: budget.outputBudgetTokens,
+  });
+  return { budget, events };
 }
 
 export class AgentRunner {
@@ -88,7 +148,10 @@ export class AgentRunner {
           Date.now(),
           signal,
           (event) => events.push(event),
-          s.nativeAgent.contextWindowTokens,
+          // The window the user configured FOR THIS MODEL. The setting is keyed by
+          // model because the store is: one global number forced the same window
+          // onto every per-operation model, however differently sized they are.
+          configuredContextWindowFor(s.nativeAgent, model),
         );
     const resolved = resolveCallPolicy(s, op, record, policyOperation);
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
@@ -155,6 +218,10 @@ export class AgentRunner {
             model: resolved.model,
             estimated,
             actual,
+            // Recorded with the sample so the log line stands alone: the implied
+            // factor this sample argues for is `appliedCalibration * ratio`, and
+            // reconstructing it used to need a join to `budget_resolved`.
+            appliedCalibration: calibration,
             ...outcome,
           });
         },
@@ -299,8 +366,26 @@ export class AgentRunner {
           nativeRequestIdleTimeoutMs: (this.settings.llmIdleTimeoutSec ?? 300) * 1000,
         };
         const visionSettings = noVision ? { ...baseVisionSettings, enabled: false } : baseVisionSettings;
+        // Vision packs against the VISION model's own window. Resolved here rather
+        // than in buildOptsFor because it belongs to one operation, and only when
+        // this run will actually call it — an unused vision model is never probed.
+        const vision = await resolveVisionBudget(
+          this.modelContextStore,
+          this.settings,
+          visionSettings.enabled ? visionSettings.model : "",
+          req.signal,
+        );
+        yield* vision.events;
+        const visionRuntime = vision.budget
+          ? {
+              ...visionSettings,
+              inputBudgetTokens: vision.budget.inputBudgetTokens,
+              maxTokens: vision.budget.outputBudgetTokens,
+              tokenCalibration: vision.budget.calibration,
+            }
+          : visionSettings;
         const progress = i18nFor(resolveLang(this.settings.outputLanguage)).formatProgress;
-        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings, visionTempStore, progress, formatDomain);
+        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionRuntime, visionTempStore, progress, formatDomain);
         break;
       }
       case "delete":

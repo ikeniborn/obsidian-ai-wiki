@@ -387,6 +387,13 @@ export type RunEvent =
       model: string;
       estimated: number;
       actual: number;
+      /**
+       * The factor the estimate was produced with. Carried on the sample so a
+       * reader of `agent.jsonl` can reconstruct the implied factor
+       * (`appliedCalibration * ratio`) from this line alone, instead of joining
+       * back to the run's `budget_resolved` record.
+       */
+      appliedCalibration: number;
       ratio: number;
       applied: boolean;
       clamped: boolean;
@@ -796,12 +803,22 @@ export interface LlmWikiPluginSettings {
     apiKey: string;
     model: string;
     /**
-     * The model's context window in tokens, when the backend does not advertise one.
-     * Set, it replaces the DISCOVERED window (no probe runs) and every budget is
-     * derived from it; empty, the window is probed as before. Applies to every
-     * native-agent model, including per-operation ones.
+     * @deprecated Migration source only. The single global window this setting used
+     * to be is moved onto every native chat model it covered by
+     * `normalizePersistedModelControls`, which then deletes the key.
      */
     contextWindowTokens?: number;
+    /**
+     * Context windows in tokens, keyed by MODEL NAME, for backends that do not
+     * advertise one. An entry replaces the DISCOVERED window for that model (no
+     * probe runs) and every budget for it is derived from that number; no entry
+     * means the window is probed as before.
+     *
+     * Keyed by model rather than by role because `ModelContextStore` is: its cache
+     * key is `${baseUrl}::${model}` and every native role shares one `baseUrl`, so a
+     * per-role setting could hand the same store key two different windows.
+     */
+    contextWindowTokensByModel?: Record<string, number>;
     inputBudgetTokens?: number;
     repairInputBudgetTokens?: number;
     maxTokens?: number;

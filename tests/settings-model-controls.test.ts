@@ -670,20 +670,50 @@ test("addPolicyControls renders a native automatic field even when its value is 
   // compressionProfile is never visually grouped under a budgets-only heading.
   assert.doesNotMatch(settingsSource, /advancedBudgets_name/);
   assert.doesNotMatch(settingsSource, /Advanced: manual budgets/);
-  // Minor: automaticBudgetPlaceholders is called once per addPolicyControls
+  // Minor: automaticBudgetPlaceholders is named once per addPolicyControls
   // invocation (assigned to `placeholders`) and both fields read from it, rather
-  // than each field recomputing the same {input, output} pair.
-  assert.match(body, /const placeholders = automatic\s*\n\s*\? automaticBudgetPlaceholders\(/);
+  // than each field spelling out the same {input, output} lookup. It is a thunk so
+  // a repaint recomputes it — see the stale-placeholder test below.
+  const policyStart = settingsSource.indexOf("const addPolicyControls = (");
+  const policyBody = settingsSource.slice(policyStart, end);
+  assert.ok(policyStart > start);
+  assert.match(policyBody, /const placeholders = automatic\s*\n\s*\? \(\) => automaticBudgetPlaceholders\(/);
   assert.equal(
-    (body.match(/automaticBudgetPlaceholders\(/g) ?? []).length,
+    (policyBody.match(/automaticBudgetPlaceholders\(/g) ?? []).length,
     1,
-    "automaticBudgetPlaceholders must be called once per addPolicyControls invocation",
+    "automaticBudgetPlaceholders must be named once per addPolicyControls invocation",
   );
-  assert.match(body, /placeholders!\.input/);
-  assert.match(body, /placeholders!\.output/);
+  assert.match(body, /placeholders!\(\)\.input/);
+  assert.match(body, /placeholders!\(\)\.output/);
 });
 
-test("the context window renders as a native automatic field and never on the claude path", () => {
+test("a changed context window repaints the dependent placeholders without re-rendering the tab", () => {
+  // The defect: placeholders were computed at render time and the window field's
+  // onChange never refreshed them, so the derived budget numbers went on showing
+  // the old window until the tab was reopened. The fix must not be a re-render:
+  // onChange fires once per typed character and this.display() would rebuild the
+  // input the user is typing into.
+  const start = settingsSource.indexOf("const automaticControls: Array<");
+  const end = settingsSource.indexOf("const automaticBudgetPlaceholders = (", start);
+  assert.ok(start >= 0 && end > start);
+  const body = settingsSource.slice(start, end);
+
+  // Every automatic control registers a repaint, and a committed edit runs them.
+  assert.match(body, /automaticControls\.push\(repaint\)/);
+  assert.match(body, /text\.setPlaceholder\(rendered\.placeholder\)/);
+  assert.match(body, /refreshAutomaticControls\(\);/);
+  // A repaint rewrites the value only when explicitly asked to (a model change),
+  // never on the placeholder-only path a keystroke takes: rewriting the value while
+  // the user types would clobber a half-entered number.
+  assert.match(body, /if \(resetValue\) text\.setValue\(rendered\.value\);/);
+  assert.doesNotMatch(body, /this\.display\(\)/, "no re-render inside the automatic control");
+
+  // …and the value/placeholder sources are lazy, so a repaint sees current settings.
+  assert.match(body, /value: \(\) => number \| undefined/);
+  assert.match(body, /placeholder: \(\) => string/);
+});
+
+test("the context window renders next to every model field, and never on the claude path", () => {
   const claudeStart = settingsSource.indexOf(
     'if (eff.backend === "claude-agent" && !Platform.isMobile) {',
   );
@@ -698,20 +728,37 @@ test("the context window renders as a native automatic field and never on the cl
   assert.ok(claudeStart >= 0 && claudeEnd > claudeStart && nativeEnd > claudeEnd);
   const claudeBlock = settingsSource.slice(claudeStart, claudeEnd);
   const nativeBlock = settingsSource.slice(claudeEnd, nativeEnd);
+  const visionBlock = settingsSource.slice(nativeEnd);
 
-  // Always visible, rendered through the same helper as every other automatic field,
-  // and cleared back to automatic by assigning `undefined` (what applyBudgetInput does
-  // on an empty entry).
+  // One helper, rendered through the same automatic-field control as every other
+  // budget, keyed by the model the field sits next to, and cleared back to automatic
+  // by assigning `undefined` (what applyBudgetInput does on an empty entry).
+  const helperStart = settingsSource.indexOf("const addContextWindowControl = (");
+  const helperEnd = settingsSource.indexOf("const addCompressionControl = (", helperStart);
+  assert.ok(helperStart >= 0 && helperEnd > helperStart);
+  const helper = settingsSource.slice(helperStart, helperEnd);
   assert.match(
-    nativeBlock,
+    helper,
     /addAutomaticBudgetControl\(\s*\n\s*new Setting\(containerEl\)\s*\n\s*\.setName\(T\.settings\.contextWindowTokens_name\)/,
   );
-  assert.match(nativeBlock, /s\.nativeAgent\.contextWindowTokens = next;/);
-  assert.match(nativeBlock, /\}\)\.contextWindow,/);
-  // Automatic budgeting — and this field with it — is native-agent only.
+  assert.match(helper, /configuredContextWindowFor\(s\.nativeAgent, model\(\)\)/);
+  assert.match(helper, /setConfiguredContextWindow\(s\.nativeAgent, model\(\), next\)/);
+  assert.match(helper, /\)\.contextWindow,/);
+  assert.match(helper, /MIN_CONTEXT_WINDOW/);
+  // Automatic budgeting — and this field with it — is native-agent only, and the
+  // field only exists for a role that names a model of its own.
+  assert.match(helper, /if \(eff\.backend !== "native-agent" \|\| !model\(\)\) return;/);
+
+  // Next to the global chat model, next to each per-operation model, next to vision.
+  assert.match(nativeBlock, /addContextWindowControl\(\(\) => s\.nativeAgent\.model\)/);
+  assert.match(nativeBlock, /addContextWindowControl\(\(\) => effectiveModel\(s, key\)\)/);
+  assert.match(visionBlock, /addContextWindowControl\(\(\) => s\.vision\.model\)/);
+
   assert.doesNotMatch(claudeBlock, /contextWindowTokens/);
+  assert.doesNotMatch(claudeBlock, /addContextWindowControl/);
   // The placeholder is still read from the cached record, never probed at render time.
   assert.doesNotMatch(nativeBlock, /probeContextWindow/);
+  assert.doesNotMatch(helper, /probeContextWindow/);
 });
 
 test("a configured window is honoured by the settings placeholders before any run", async () => {
@@ -770,10 +817,15 @@ test("a context window below the engine's floor is refused at entry, not stored 
 });
 
 test("a persisted context window below the floor is dropped, not displayed", () => {
+  // Legacy single-value shape: a sub-floor number is dropped rather than migrated
+  // onto every model.
   const settings = structuredClone(DEFAULT_SETTINGS);
-  settings.nativeAgent.contextWindowTokens = 512;
+  (settings.nativeAgent as { contextWindowTokens?: number }).contextWindowTokens = 512;
   normalizePersistedModelControls(settings);
-  assert.equal(settings.nativeAgent.contextWindowTokens, undefined);
+  assert.equal(
+    (settings.nativeAgent as { contextWindowTokens?: number }).contextWindowTokens, undefined,
+  );
+  assert.equal(settings.nativeAgent.contextWindowTokensByModel, undefined);
 });
 
 test("a cleared setting stops the placeholder from advertising the old configured window", () => {
@@ -787,14 +839,15 @@ test("a cleared setting stops the placeholder from advertising the old configure
 });
 
 test("a persisted context window is normalized like every other optional budget", () => {
-  assert.equal(DEFAULT_SETTINGS.nativeAgent.contextWindowTokens, undefined);
+  assert.equal(DEFAULT_SETTINGS.nativeAgent.contextWindowTokensByModel, undefined);
   const settings = structuredClone(DEFAULT_SETTINGS);
-  (settings.nativeAgent as { contextWindowTokens?: unknown }).contextWindowTokens = 0;
+  const model = settings.nativeAgent.model;
+  settings.nativeAgent.contextWindowTokensByModel = { [model]: 0 as unknown as number };
   normalizePersistedModelControls(settings);
-  assert.equal(settings.nativeAgent.contextWindowTokens, undefined);
-  settings.nativeAgent.contextWindowTokens = 131_072;
+  assert.equal(settings.nativeAgent.contextWindowTokensByModel, undefined);
+  settings.nativeAgent.contextWindowTokensByModel = { [model]: 131_072 };
   normalizePersistedModelControls(settings);
-  assert.equal(settings.nativeAgent.contextWindowTokens, 131_072);
+  assert.deepEqual(settings.nativeAgent.contextWindowTokensByModel, { [model]: 131_072 });
 });
 
 test("only the native-agent call sites opt into automatic budgets; claude-agent call sites do not", () => {
@@ -819,9 +872,9 @@ test("only the native-agent call sites opt into automatic budgets; claude-agent 
   assert.ok(nativeEnd > claudeEnd);
   const nativeBlock = settingsSource.slice(claudeEnd, nativeEnd);
   // Global native fallback: representative operation "init", the raw configured model.
-  assert.match(nativeBlock, /model: s\.nativeAgent\.model,\s*\n\s*operation: "init",/);
+  assert.match(nativeBlock, /model: \(\) => s\.nativeAgent\.model,\s*\n\s*operation: "init",/);
   // Per-operation native: the model and operation actually used for that operation.
-  assert.match(nativeBlock, /model: effectiveModel\(s, key\),\s*\n\s*operation: key,/);
+  assert.match(nativeBlock, /model: \(\) => effectiveModel\(s, key\),\s*\n\s*operation: key,/);
   assert.match(nativeBlock, /addAutomaticBudgetControl\(/);
 });
 
