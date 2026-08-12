@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1 — 2026-08-12
+
+### Other
+- chore(release): republish an identical build. The community-plugin automated review of 0.3.0 ended with "The automated review for this release could not be completed. An administrator will investigate." — a failure that names no rule. The 0.3.0 release itself was audited and is correct: the tag matches the manifest, the assets are attached individually, and the plugin id is free. Bundle properties were ruled out as well, by comparison against 141 currently listed community plugins that ship larger bundles, longer lines, more base64 and even embedded WebAssembly. `main.js` is therefore byte-for-byte identical to 0.3.0; only the version numbers move, so that re-running the review distinguishes a transient failure from a rule the dashboard has yet to name.
+
+---
+
 ## 0.3.0 — 2026-08-12
 
 ### New
