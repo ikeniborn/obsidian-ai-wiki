@@ -7,7 +7,7 @@ import { contentHash } from "../src/content-hash";
 import type { DomainEntry } from "../src/domain";
 import { hashSource } from "../src/incremental-sources";
 import type { PageSimilarityService } from "../src/page-similarity";
-import type { IngestOutcome, LlmClient, RunEvent } from "../src/types";
+import type { IngestOutcome, LlmCallOptions, LlmClient, RunEvent } from "../src/types";
 import type { VaultAdapter } from "../src/vault-tools";
 import { mockChatResponse } from "./openai-mock-response";
 
@@ -180,6 +180,7 @@ async function runCreateIntegrityCase(
     entityType: "concept",
     wikiSubfolder: "concept",
   },
+  optsOverrides: Partial<LlmCallOptions> = {},
 ): Promise<{
   adapter: MemoryAdapter;
   events: RunEvent[];
@@ -263,6 +264,7 @@ async function runCreateIntegrityCase(
       maxTokens: 4_000,
       structuredRetries: 0,
       synthesisMaxEntityBatchSize: 1,
+      ...optsOverrides,
     },
     new PageSimilarityService({ mode: "jaccard", topK: 5 }),
   ));
@@ -2084,7 +2086,19 @@ test("runIngest uses the dedicated repair input budget for a fresh field-frame r
   const synthesisBudgets = events.filter((event): event is Extract<RunEvent, { kind: "prompt_budget" }> =>
     event.kind === "prompt_budget" && event.callSite === "ingest.synthesize");
   assert.deepEqual(synthesisBudgets.map((event) => event.effectiveInputBudget), [12_500, 65_536]);
-  assert.ok((synthesisBudgets[1]?.estimatedInputTokens ?? 0) > 12_500);
+  // The retry always dispatches on the dedicated repair budget (asserted
+  // above), regardless of whether the smaller configured budget would also
+  // have fit it. Under the byte estimator this fixture's field-frame repair
+  // instructions reliably pushed the retry past 12_500; under the token
+  // estimator (task-3 prompt-budget-automation) the fixed repair-instruction
+  // overhead (~479 estimated tokens) is smaller than the packer's own
+  // minimum compaction reserve (512 tokens), so no configured budget can
+  // make the retry exceed it while still letting the first attempt succeed.
+  // Assert the still-meaningful relationship instead: the repair prompt is
+  // larger than the original, because it must explain the missing marker.
+  assert.ok(
+    (synthesisBudgets[1]?.estimatedInputTokens ?? 0) > (synthesisBudgets[0]?.estimatedInputTokens ?? 0),
+  );
   assert.equal(events.some((event) =>
     event.kind === "structural_error"
     && event.callSite === "ingest.synthesize"
@@ -3354,4 +3368,21 @@ test("deferred canonical merge never deletes a duplicate candidate", async () =>
   assert.equal(adapter.files.get(INDEX_PATH)!.includes("wiki_demo_existing_duplicate"), true);
   assert.equal(events.some((event) =>
     event.kind === "info_text" && event.summary === "Duplicate merge deferred"), true);
+});
+
+test("runIngest threads the token calibration into the evidence policy", async () => {
+  // Ingest measures chunk markdown in raw estimator tokens but bounds it with a
+  // calibrated budget, so the factor has to reach the evidence policy. ensurePolicy
+  // rejects a policy whose calibration disagrees with the call options, which is what
+  // an unthreaded factor looks like from inside evidence preparation.
+  const { outcome } = await runCreateIntegrityCase(
+    [{
+      entityKey: "calibrated-unit",
+      annotation: "Server-owned description for a calibrated run.",
+      modelDescription: "Model description.",
+    }],
+    { entityType: "concept", wikiSubfolder: "concept" },
+    { tokenCalibration: 1.25 },
+  );
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
 });

@@ -10,6 +10,7 @@ import {
   type SourceChunk,
 } from "../src/markdown-chunks";
 import { estimatePreparedMessages } from "../src/prompt-budget";
+import { estimateText } from "../src/token-estimate";
 import type {
   LlmChatCompletionCreateOptions,
   LlmClient,
@@ -36,7 +37,10 @@ const {
   dedupeVerifiedEvidencePackets,
   chunkSourceForEvidence,
   prepareBootstrapEvidence,
+  prepareBootstrapEvidenceBundle,
   prepareSourceEvidence,
+  splitBootstrapPayload,
+  estimateBootstrapPayloadForTest,
   EvidenceCoverageError,
   EvidenceReducerError,
   findLargestFeasibleBudget,
@@ -509,9 +513,12 @@ test("packed maximality uses final ordinals at a request boundary", () => {
     { length: 40 },
     (_, index) => `## Neutral heading ${index + 1} ${"x".repeat(24)}`,
   ).join("\n");
+  // Rescaled twice for the token estimator: from a byte-era budget of 4_744,
+  // then to 1_180 once the character-class rules repriced the mapper envelope.
+  // 1_180 tokens reproduces the same paired split.
   const chunks = chunkSourceForEvidence(source, "neutral", {
     ...packingPolicy(),
-    inputBudgetTokens: 4_744,
+    inputBudgetTokens: 1_180,
   });
 
   assert.deepEqual(chunks.slice(0, 10).map((chunk) => [chunk.startLine, chunk.endLine]), [
@@ -571,9 +578,12 @@ test("packed evidence corpus preserves oversized and fenced source authority", (
   }
 
   const fenced = fencedEvidenceSource();
+  // Rescaled from a byte-era budget of 6_000 for the token estimator (task-3
+  // prompt-budget-automation): 1_500 tokens still forces an interior wrapped
+  // fenced chunk.
   const fencedChunks = chunkSourceForEvidence(fenced, "neutral", {
     ...policy,
-    inputBudgetTokens: 6_000,
+    inputBudgetTokens: 1_500,
   });
   assertCompleteSourceCoverage(fenced, fencedChunks);
   assert.ok(fencedChunks.length > 1);
@@ -726,8 +736,11 @@ test("evidence telemetry wrapper preserves native transport diagnostics", async 
 });
 
 function realisticReducerPolicy(): EvidencePolicy {
+  // Rescaled twice for the token estimator: from a byte-era budget of 13_000,
+  // then again once the character-class rules priced the reducer's JSON payload
+  // near twice the old flat rate. Keeps the same relative tightness.
   return {
-    ...evidencePolicy(13_000),
+    ...evidencePolicy(4_400),
     outputBudgetTokens: 4_000,
   };
 }
@@ -1282,8 +1295,11 @@ test("reducer partition non-progress fails typed before looping", async () => {
     return { packets: [validMapperPacket(messages, 700)], noEvidence: [] };
   }, events, requests);
   const source = Array.from({ length: 400 }, (_, index) => `non-progress ${index}`).join("\n");
+  // Rescaled from the default 5_000 budget for the token estimator (task-3
+  // prompt-budget-automation): 1_195 keeps the mapper's oversized packets
+  // just large enough that the reducer can never partition off a first batch.
   await assert.rejects(
-    prepareSourceEvidence(source, "demo", { ...evidencePolicy(), outputBudgetTokens: 2_000 }, runtime),
+    prepareSourceEvidence(source, "demo", { ...evidencePolicy(1_195), outputBudgetTokens: 2_000 }, runtime),
     (error: unknown) => {
       assert.ok(error instanceof EvidenceReducerError);
       assert.match(error.message, /Reducer made no progress at depth 0/);
@@ -1299,8 +1315,12 @@ test("irreducible single evidence packet oversize fails typed", async () => {
     packets: [validMapperPacket(messages, 5000)],
     noEvidence: [],
   }), events);
+  // Rescaled twice for the token estimator: from the default 5_000 budget, then
+  // to 1_400 once the character-class rules priced plain letters at roughly half
+  // the old flat rate. It is still too small for the single 5_000-character
+  // fact, which the default budget now comfortably fits.
   await assert.rejects(
-    prepareSourceEvidence("one source line", "demo", { ...evidencePolicy(), outputBudgetTokens: 6_000 }, runtime),
+    prepareSourceEvidence("one source line", "demo", { ...evidencePolicy(1_400), outputBudgetTokens: 6_000 }, runtime),
     (error: unknown) => {
       assert.ok(error instanceof EvidenceReducerError);
       assert.match(error.message, /A single evidence packet cannot fit the reducer budget/);
@@ -1409,7 +1429,7 @@ test("bootstrap derives bounded candidate, theme, and language evidence from val
   assert.ok(nextUseEstimate <= 3500, `bootstrap next-use payload ${nextUseEstimate} exceeded 3500`);
 });
 
-test("bootstrap compresses aggregate evidence payload instead of reconstructing every line", async () => {
+test("bootstrap splits the aggregate evidence payload into budget-sized groups without dropping an entity", async () => {
   const events: RunEvent[] = [];
   const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
   const runtime = mockRuntime((messages) => {
@@ -1421,19 +1441,33 @@ test("bootstrap compresses aggregate evidence payload instead of reconstructing 
     return { packets: [mapped], noEvidence: [] };
   }, events, requests);
   const source = Array.from({ length: 300 }, (_, index) => `RECONSTRUCT-${index + 1}`).join("\n");
+  // Rescaled from a byte-era budget of 6_000 for the token estimator (task-3
+  // prompt-budget-automation): 1_500 still forces the source to split across
+  // multiple mapper chunks.
   const policy = {
-    ...evidencePolicy(6000),
+    ...evidencePolicy(1500),
     outputBudgetTokens: 256,
-    bootstrapPayloadBudgetTokens: 6000,
+    bootstrapPayloadBudgetTokens: 1500,
   };
   const expectedChunks = chunkSourceForEvidence(source, "bootstrap", policy, runtime.opts ?? {}, []);
   assert.ok(expectedChunks.length > 1);
   assertCompleteSourceCoverage(source, expectedChunks);
-  const result = await prepareBootstrapEvidence(source, "bootstrap", policy, runtime);
-  const estimated = estimatePreparedMessages([{ role: "user", content: JSON.stringify(result) }]);
-  assert.ok(estimated <= 6000, `bootstrap payload ${estimated} exceeded budget`);
-  assert.ok(result.languageEvidence.length < expectedChunks.length);
-  assert.ok(result.candidates.length > 0);
+  const bundle = await prepareBootstrapEvidenceBundle(source, "bootstrap", "", policy, runtime);
+  // The payload used to be trimmed until it fit, which dropped evidence. Task 9
+  // splits it instead: each group is bounded and every candidate survives.
+  for (const group of bundle.bootstrapGroups) {
+    const estimated = estimatePreparedMessages([{ role: "user", content: JSON.stringify(group) }]);
+    assert.ok(estimated <= 1500, `bootstrap group ${estimated} exceeded budget`);
+  }
+  assert.ok(bundle.bootstrapMinimumGroupTokens <= 1500);
+  assert.equal(
+    new Set(bundle.bootstrapGroups.flatMap(
+      (group) => group.candidates.map((candidate) => candidate.entityKey),
+    )).size,
+    expectedChunks.length,
+    "every mapped entity must survive the split",
+  );
+  assert.ok(bundle.bootstrap.candidates.length > 0);
   assert.equal(requests.length, expectedChunks.length);
 });
 
@@ -1541,10 +1575,13 @@ test("evidence mapper and reducer use direct non-stream requests", async () => {
     : { packets: repeatedMapperPackets(messages, 24), noEvidence: [] }, [], requests, params);
   const source = Array.from({ length: 500 }, (_, index) => `non-stream evidence ${index + 1}`).join("\n");
 
+  // Rescaled twice for the token estimator: from a byte-era budget of 14_500,
+  // then again once the character-class rules priced the reducer's JSON payload
+  // near twice the old flat rate.
   await prepareSourceEvidence(
     source,
     "demo",
-    { ...realisticReducerPolicy(), inputBudgetTokens: 14_500, outputBudgetTokens: 7_000 },
+    { ...realisticReducerPolicy(), inputBudgetTokens: 6_200, outputBudgetTokens: 7_000 },
     runtime,
   );
 
@@ -1582,10 +1619,13 @@ test("evidence progress uses ordered human lifecycle actions with visible retry"
   }, events);
   const source = Array.from({ length: 420 }, (_, index) => `${hostileSource} ${index + 1}`).join("\n");
 
+  // Rescaled twice for the token estimator: from a byte-era budget of 14_500,
+  // then again once the character-class rules priced the reducer's JSON payload
+  // near twice the old flat rate.
   await prepareSourceEvidence(
     source,
     "demo",
-    { ...realisticReducerPolicy(), inputBudgetTokens: 14_500, outputBudgetTokens: 7_000 },
+    { ...realisticReducerPolicy(), inputBudgetTokens: 6_200, outputBudgetTokens: 7_000 },
     runtime,
   );
 
@@ -1687,6 +1727,9 @@ test("packet IDs preserve valid values and normalize only missing or duplicate l
 });
 
 test("entity grouping inherits missing types, combines identical types, and rejects conflicts before reduction", async () => {
+  // Budgets below are rescaled from a byte-era 8_000 for the token estimator
+  // (task-3 prompt-budget-automation): divided by the default 4.2 chars-per-
+  // token divisor, so the fixture still splits into 3+ mapper chunks.
   const source = Array.from({ length: 300 }, (_, index) => `type fixture ${index + 1} ${"x".repeat(60)}`).join("\n");
   for (const types of [["tool", undefined], [undefined, "tool"]]) {
     const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
@@ -1704,7 +1747,7 @@ test("entity grouping inherits missing types, combines identical types, and reje
       };
     }, [], requests);
     runtime.configuredEntityTypes = ["tool", "service"];
-    const result = await prepareSourceEvidence(source, "demo", { ...evidencePolicy(8000), outputBudgetTokens: 512 }, runtime);
+    const result = await prepareSourceEvidence(source, "demo", { ...evidencePolicy(1_905), outputBudgetTokens: 512 }, runtime);
     assert.equal(result[0].entityType, "tool");
   }
 
@@ -1724,7 +1767,7 @@ test("entity grouping inherits missing types, combines identical types, and reje
   }, [], requests);
   runtime.configuredEntityTypes = ["tool", "service"];
   await assert.rejects(
-    prepareSourceEvidence(source, "demo", { ...evidencePolicy(8000), outputBudgetTokens: 512 }, runtime),
+    prepareSourceEvidence(source, "demo", { ...evidencePolicy(1_905), outputBudgetTokens: 512 }, runtime),
     (error: unknown) => error instanceof EvidenceCoverageError && /conflicting entity type/i.test(error.message),
   );
   assert.equal(requests.filter(isReducerRequest).length, 0);
@@ -1855,7 +1898,10 @@ test("near-boundary mapper planning reserves the actual output-limit retry envel
   const captured: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
   const attempts = new Map<string, number>();
   const outputBudgetTokens = 256;
-  const inputBudgetTokens = 6_000;
+  // Rescaled from a byte-era budget of 6_000 for the token estimator (task-3
+  // prompt-budget-automation): divided by the default 4.2 chars-per-token
+  // divisor so the source still forces multiple mapper base/retry requests.
+  const inputBudgetTokens = 1_429;
   const llm = {
     chat: { completions: { create: async (params: Record<string, unknown>) => {
       const messages = params.messages as OpenAI.Chat.ChatCompletionMessageParam[];
@@ -2011,9 +2057,12 @@ test("mapper context repack preserves semantic split depth for child replacement
     return { noEvidence: [{ chunkId: meta.id, reason: "none" }] };
   }, events, requests);
 
+  // Rescaled from a byte-era budget of 10_000 for the token estimator (task-3
+  // prompt-budget-automation): 1_800 keeps the initial chunk whole (1-8) so
+  // the split/repack lineage this test asserts still occurs.
   await assert.rejects(
     prepareSourceEvidence(source, "demo", {
-      ...evidencePolicy(10_000),
+      ...evidencePolicy(1_800),
       outputBudgetTokens: 1_000,
       mapperRetries: 1,
     }, runtime),
@@ -2501,5 +2550,164 @@ test("mixed verified and pre-verified packets fail before aggregation", () => {
       links: [],
     }),
     (error: unknown) => error instanceof EvidenceReducerError && /mixed verification state/i.test(error.message),
+  );
+});
+
+const bootstrapCandidate = (key: string, units: number) => ({
+  entityKey: key,
+  packetIds: [`${key}-p`],
+  facts: Array.from({ length: units }, (_, i) => `fact ${i} about ${key} `.repeat(20)),
+  exactSource: Array.from({ length: units }, (_, i) => ({
+    startLine: i * 10 + 1,
+    endLine: i * 10 + 5,
+    text: `source ${i} for ${key} `.repeat(20),
+  })),
+});
+
+test("a bootstrap payload that fits is returned as a single group", () => {
+  const payload = { candidates: [], domainThemes: [], languageEvidence: [] };
+  const split = splitBootstrapPayload(payload, 1_000_000);
+  assert.equal(split.groups.length, 1);
+  assert.equal(split.subdivided, 0);
+  assert.equal(split.minimumGroupTokens, estimateBootstrapPayloadForTest(payload));
+});
+
+test("an oversized bootstrap payload splits across candidates without dropping any", () => {
+  const payload = {
+    candidates: [bootstrapCandidate("a", 1), bootstrapCandidate("b", 1), bootstrapCandidate("c", 1)],
+    domainThemes: ["theme"],
+    languageEvidence: ["evidence"],
+  };
+  const budget = Math.ceil(estimateBootstrapPayloadForTest(payload) / 2);
+  const split = splitBootstrapPayload(payload, budget);
+  assert.ok(split.groups.length >= 2);
+  assert.equal(
+    split.groups.flatMap((group) => group.candidates.map((candidate) => candidate.entityKey)).join(","),
+    "a,b,c",
+    "no candidate may be dropped and the order must be preserved",
+  );
+  for (const group of split.groups) {
+    assert.deepEqual(group.domainThemes, payload.domainThemes);
+    assert.deepEqual(group.languageEvidence, payload.languageEvidence);
+  }
+});
+
+test("a bootstrap candidate aggregating many chunks is subdivided rather than left oversized", () => {
+  // One entity mentioned in 12 chunks: exactly the shape reduceUntilBounded produces.
+  const wide = bootstrapCandidate("wide", 12);
+  const payload = { candidates: [wide], domainThemes: ["t"], languageEvidence: ["e"] };
+  const budget = Math.ceil(estimateBootstrapPayloadForTest(payload) / 4);
+  const split = splitBootstrapPayload(payload, budget);
+
+  assert.ok(split.groups.length >= 2, "a single oversized candidate must be subdivided");
+  assert.ok(split.subdivided > 0);
+  for (const group of split.groups) {
+    assert.ok(
+      estimateBootstrapPayloadForTest(group) <= budget,
+      `group of ${group.candidates.length} needs ${estimateBootstrapPayloadForTest(group)} > ${budget}`,
+    );
+  }
+  assert.ok(split.minimumGroupTokens <= budget);
+  const facts = split.groups.flatMap((group) => group.candidates.flatMap((candidate) => candidate.facts));
+  assert.equal(new Set(facts).size, wide.facts.length, "every fact must survive exactly once");
+  assert.equal(facts.length, wide.facts.length);
+  const ranges = split.groups.flatMap((group) => group.candidates.flatMap(
+    (candidate) => candidate.exactSource.map((range) => range.text),
+  ));
+  assert.equal(new Set(ranges).size, wide.exactSource.length, "every range must survive exactly once");
+  assert.equal(ranges.length, wide.exactSource.length);
+  assert.ok(split.groups.every((group) => group.candidates.every((candidate) => candidate.entityKey === "wide")));
+});
+
+test("an oversized evidence unit is isolated, kept whole, and reported upward", () => {
+  // The divisible units around it must still be separated out, and the unit
+  // that cannot be divided is reported rather than truncated.
+  const mixed = {
+    entityKey: "mixed",
+    packetIds: ["mixed-p"],
+    facts: ["small fact one", "huge ".repeat(4_000), "small fact three"],
+    exactSource: [
+      { startLine: 1, endLine: 2, text: "small source one" },
+      { startLine: 11, endLine: 12, text: "huge source ".repeat(4_000) },
+      { startLine: 21, endLine: 22, text: "small source three" },
+    ],
+  };
+  const payload = { candidates: [mixed], domainThemes: [], languageEvidence: [] };
+  const budget = Math.ceil(estimateBootstrapPayloadForTest(payload) / 8);
+  const split = splitBootstrapPayload(payload, budget);
+
+  assert.ok(split.subdivided > 0);
+  assert.equal(split.groups.length, 3, "the two small units must not share a group with the oversized one");
+  const oversized = split.groups.filter((group) => estimateBootstrapPayloadForTest(group) > budget);
+  assert.equal(oversized.length, 1, "only the indivisible unit may exceed the budget");
+  assert.deepEqual(oversized[0].candidates.map((candidate) => candidate.facts), [[mixed.facts[1]]]);
+  assert.ok(split.minimumGroupTokens > budget, "the caller must learn the budget it needs");
+  assert.equal(split.minimumGroupTokens, estimateBootstrapPayloadForTest(oversized[0]));
+  assert.deepEqual(
+    split.groups.flatMap((group) => group.candidates.flatMap((candidate) => candidate.facts)),
+    mixed.facts,
+    "no fact may be truncated, dropped or reordered",
+  );
+  assert.deepEqual(
+    split.groups.flatMap((group) => group.candidates.flatMap((candidate) => candidate.exactSource)),
+    mixed.exactSource,
+    "no source range may be truncated, dropped or reordered",
+  );
+});
+
+test("a single indivisible evidence unit stays whole and reports the budget it needs", () => {
+  const atomic = {
+    entityKey: "atomic",
+    packetIds: ["atomic-p"],
+    facts: ["fact ".repeat(2_000)],
+    exactSource: [],
+  };
+  const payload = { candidates: [atomic], domainThemes: [], languageEvidence: [] };
+  const budget = 16;
+  const split = splitBootstrapPayload(payload, budget);
+
+  assert.equal(split.groups.length, 1);
+  assert.deepEqual(split.groups[0].candidates, [atomic]);
+  assert.ok(split.minimumGroupTokens > budget);
+  assert.equal(split.minimumGroupTokens, estimateBootstrapPayloadForTest(split.groups[0]));
+});
+
+test("the chunk budget bounds mapper chunks and is converted out of calibrated tokens", () => {
+  const source = Array.from({ length: 240 }, (_, index) => `chunk budget line ${index + 1}`).join("\n");
+  const unbound = chunkSourceForEvidence(source, "demo", evidencePolicy(20_000), {}, []);
+  const bound = chunkSourceForEvidence(
+    source,
+    "demo",
+    { ...evidencePolicy(20_000), chunkBudgetTokens: 200 },
+    {},
+    [],
+  );
+  assert.ok(bound.length > unbound.length, "a chunk budget below the request budget must bind");
+  for (const chunk of bound) {
+    assert.ok(
+      estimateText(chunk.markdown) <= 200,
+      `chunk ${chunk.id} needs ${estimateText(chunk.markdown)} raw tokens for a budget of 200`,
+    );
+  }
+  // The budget is calibrated; chunkMarkdownSource measures raw estimator tokens,
+  // so halving the calibration doubles the raw room a chunk may use.
+  // The policy factor and the call factor are the same number in production, so the
+  // calibrated case sets both; ensurePolicy rejects a policy that disagrees with the
+  // call options it will be measured against.
+  const calibrated = chunkSourceForEvidence(
+    source,
+    "demo",
+    { ...evidencePolicy(20_000), chunkBudgetTokens: 200, calibration: 0.5 },
+    { tokenCalibration: 0.5 },
+    [],
+  );
+  assert.ok(calibrated.length < bound.length, "a calibration below 1 must widen the raw chunk budget");
+  for (const chunk of calibrated) assert.ok(estimateText(chunk.markdown) <= 400);
+});
+
+test("a non-positive token calibration is rejected instead of hanging the chunk search", () => {
+  assert.throws(
+    () => chunkSourceForEvidence("line", "demo", { ...evidencePolicy(5_000), calibration: 0 }, {}, []),
+    (error: unknown) => error instanceof EvidenceCoverageError && /calibration/i.test((error as Error).message),
   );
 });

@@ -10,6 +10,7 @@ import type {
   StructuredCallSite,
 } from "../types";
 import { lifecycleEvent } from "../llm-lifecycle";
+import { outputCeiling } from "../budget-resolver";
 import {
   classifyContextError,
   createPromptBudgetEvent,
@@ -31,6 +32,7 @@ import {
   extractUsage,
   isJsonModeError,
   parseStructured,
+  prepareChatMessages,
   shouldFallbackStreamToNonStream,
   wrapStreamWithStats,
 } from "./llm-utils";
@@ -330,6 +332,7 @@ function repairMessages<T>(
   fullText: string,
   lastError: Error,
   inputBudgetTokens: number | undefined,
+  calibration?: number,
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   if (!fullText.trim()) {
     return [
@@ -342,7 +345,7 @@ function repairMessages<T>(
     { role: "assistant" as const, content: fullText },
     { role: "user" as const, content: repairPrompt(profile, fullText, lastError) },
   ];
-  const fullRepairEstimate = estimatePreparedMessages(fullRepair);
+  const fullRepairEstimate = estimatePreparedMessages(fullRepair, calibration);
   const compactThreshold = profile.compactRepairThresholdTokens;
   if (compactThreshold !== undefined
     && fullRepairEstimate >= compactThreshold) {
@@ -350,7 +353,7 @@ function repairMessages<T>(
       ...baseMessages,
       { role: "user" as const, content: compactRepairPrompt(profile, lastError) },
     ];
-    if (inputBudgetTokens === undefined || estimatePreparedMessages(compactRepair) <= inputBudgetTokens) {
+    if (inputBudgetTokens === undefined || estimatePreparedMessages(compactRepair, calibration) <= inputBudgetTokens) {
       return compactRepair;
     }
   }
@@ -362,7 +365,7 @@ function repairMessages<T>(
     ...baseMessages,
     { role: "user" as const, content: compactRepairPrompt(profile, lastError) },
   ];
-  if (estimatePreparedMessages(compactRepair) <= inputBudgetTokens) return compactRepair;
+  if (estimatePreparedMessages(compactRepair, calibration) <= inputBudgetTokens) return compactRepair;
   return fullRepair;
 }
 
@@ -406,6 +409,30 @@ export function outputRetryOptions(opts: LlmCallOptions, outputTokens: number): 
   const observed = Number.isFinite(outputTokens) && outputTokens > 0 ? outputTokens : current!;
   const next = Math.min(ceiling, Math.max(current!, Math.ceil(observed * 1.5)));
   return next === current ? opts : { ...opts, maxTokens: next };
+}
+
+/**
+ * The per-request output ceiling: whatever the context window has left once the
+ * prompt that is about to be dispatched is packed. It is deliberately NOT part of
+ * the resolved budget — the same resolved budget packs a different prompt on every
+ * attempt, and a truncated reply may only grow into the room that THIS prompt left.
+ *
+ * `prepareChatMessages` is the same preparation `buildChatParams` runs one layer
+ * down, so this estimate is the one the request is actually sent with. Without a
+ * known context window (the `claude-agent` path) the options pass through
+ * untouched and the retry behaves exactly as before.
+ */
+function withOutputCeiling(
+  opts: LlmCallOptions,
+  messages: OpenAI.Chat.ChatCompletionMessageParam[],
+): LlmCallOptions {
+  const contextWindow = opts.contextWindowTokens;
+  if (contextWindow === undefined) return opts;
+  const estimatedInput = estimatePreparedMessages(
+    prepareChatMessages(messages, opts),
+    opts.tokenCalibration,
+  );
+  return { ...opts, outputRetryBudgetTokens: outputCeiling(contextWindow, estimatedInput) };
 }
 
 function optsWithRepairInputBudget(opts: LlmCallOptions): LlmCallOptions {
@@ -520,14 +547,26 @@ async function streamOnce(
       callSite,
     );
   } finally {
+    const estimatedInputTokens = estimatePreparedMessages(
+      params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+      opts.tokenCalibration,
+    );
+    // The calibrated estimate is what the request was actually sized with, so it
+    // is the number the provider's own count must be compared against — reporting
+    // the raw estimate would make the correction converge on the wrong factor. The
+    // factor that produced it travels with it: it is fixed for the whole run, so the
+    // store cannot recover it from its own record once a sample has moved that.
+    opts.onUsageObserved?.({
+      estimated: estimatedInputTokens,
+      actual: inputTokens,
+      calibration: opts.tokenCalibration ?? 1,
+    });
     if (!llm.emitsPromptBudget) onEvent(createPromptBudgetEvent({
       requestId,
       callSite,
       configuredInputBudget: opts.inputBudgetTokens ?? 16_384,
       effectiveInputBudget: opts.inputBudgetTokens ?? 16_384,
-      estimatedInputTokens: estimatePreparedMessages(
-        params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
-      ),
+      estimatedInputTokens,
       actualInputTokens: inputTokens,
       outputBudget: opts.maxTokens,
       compressionProfile: opts.semanticCompression?.profile ?? "balanced",
@@ -535,6 +574,7 @@ async function streamOnce(
       retryReason: classifyContextError(requestError) === null
         ? undefined
         : "provider_context_error",
+      ...(opts.budgetTelemetry ?? {}),
     }));
   }
 }
@@ -583,6 +623,7 @@ async function nonStreamOnce(
       effectiveInputBudget: opts.inputBudgetTokens ?? 16_384,
       estimatedInputTokens: estimatePreparedMessages(
         params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+        opts.tokenCalibration,
       ),
       outputBudget: opts.maxTokens,
       compressionProfile: opts.semanticCompression?.profile ?? "balanced",
@@ -590,23 +631,36 @@ async function nonStreamOnce(
       retryReason: classifyContextError(error) === null
         ? undefined
         : "provider_context_error",
+      ...(opts.budgetTelemetry ?? {}),
     }));
     throw error;
   }
   const emitBudget = (actualInputTokens?: number): void => {
+    const estimatedInputTokens = estimatePreparedMessages(
+      params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+      opts.tokenCalibration,
+    );
+    // Reported even when the client emits its own prompt_budget records: the
+    // estimator learns from every response the provider counted, not only from
+    // the ones this layer happens to be the one to report. `calibration` is the
+    // factor this estimate carries, which the store needs to correct against.
+    opts.onUsageObserved?.({
+      estimated: estimatedInputTokens,
+      actual: actualInputTokens,
+      calibration: opts.tokenCalibration ?? 1,
+    });
     if (llm.emitsPromptBudget) return;
     onEvent(createPromptBudgetEvent({
       requestId,
       callSite,
       configuredInputBudget: opts.inputBudgetTokens ?? 16_384,
       effectiveInputBudget: opts.inputBudgetTokens ?? 16_384,
-      estimatedInputTokens: estimatePreparedMessages(
-        params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
-      ),
+      estimatedInputTokens,
       actualInputTokens,
       outputBudget: opts.maxTokens,
       compressionProfile: opts.semanticCompression?.profile ?? "balanced",
       contextUnits: messages.length,
+      ...(opts.budgetTelemetry ?? {}),
     }));
   };
   if (
@@ -754,7 +808,31 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
       }
       if (attempt > 0) onEvent({ kind: "rule_fired", ruleId: "parseWithRetry", count: 1 });
 
-      const call = await callWithFormatFallback({ ...args, opts: currentOpts }, messages, mode, attempt, lifecycle);
+      // Recomputed per attempt, because a repair prompt is a different prompt and
+      // therefore leaves a different amount of the window free for the reply.
+      currentOpts = withOutputCeiling(currentOpts, messages);
+
+      let call: { result: CallResult; mode: ResponseFormatMode };
+      try {
+        call = await callWithFormatFallback({ ...args, opts: currentOpts }, messages, mode, attempt, lifecycle);
+      } catch (error) {
+        // A `finish_reason=length` truncation is raised from inside the transport,
+        // so it bypasses the `consumedOutputLimit` branch below entirely. This is
+        // the only layer that both sees it and owns the output limit, so it is the
+        // only layer that can retry it with more room.
+        if (!(error instanceof StructuredOutputTruncatedError) || attempt === retryLimit) throw error;
+        const grown = outputRetryOptions(optsWithRepairInputBudget(currentOpts), currentOpts.maxTokens ?? 0);
+        // The ceiling is genuinely reached: retrying at the same limit would only
+        // reproduce the same truncation until the retry budget is spent.
+        if (grown.maxTokens === currentOpts.maxTokens) throw error;
+        lastError = error;
+        lastStructuralErrorType = "output_limit";
+        emitStructuralError(onEvent, callSite, "output_limit", attempt, null, error.message);
+        structuralErrorCounter.record(null, attempt);
+        lifecycle.close("retrying");
+        currentOpts = grown;
+        continue;
+      }
       signal.throwIfAborted();
       mode = call.mode;
       const { fullText, outputTokens, inputTokens, statsEvent } = call.result;
@@ -813,7 +891,7 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
         lifecycle.close("retrying");
         messages = next
           ? messages
-          : repairMessages(baseMessages, profile, fullText, lastError, repairOpts.inputBudgetTokens);
+          : repairMessages(baseMessages, profile, fullText, lastError, repairOpts.inputBudgetTokens, repairOpts.tokenCalibration);
         if (!next) currentOpts = optsWithRepairInputBudget(currentOpts);
         continue;
       }
@@ -860,7 +938,7 @@ export async function runStructuredWithRetry<T>(args: RunStructuredArgs<T>): Pro
           messages = outputLimitRepairMessages(baseMessages, profile, lastError);
           currentOpts = outputRetryOptions(optsWithRepairInputBudget(currentOpts), outputTokens);
         } else {
-          messages = repairMessages(baseMessages, profile, fullText, lastError, repairOpts.inputBudgetTokens);
+          messages = repairMessages(baseMessages, profile, fullText, lastError, repairOpts.inputBudgetTokens, repairOpts.tokenCalibration);
           currentOpts = optsWithRepairInputBudget(currentOpts);
         }
       }

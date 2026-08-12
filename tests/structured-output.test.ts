@@ -24,6 +24,7 @@ const {
 } = await import("../src/phases/llm-utils");
 const {
   createLlmLifecycle,
+  outputRetryOptions,
   runStructuredWithRetry,
   runStructuredStreaming,
   StructuredValidationError,
@@ -919,13 +920,20 @@ test("schema retry recovery emits succeeded structural_error event", async () =>
 test("schema repair retry stays within input budget by compacting previous invalid output", async () => {
   const events: RunEvent[] = [];
   const seenParams: Record<string, unknown>[] = [];
-  const largeInvalid = JSON.stringify({ value: 42, noise: "x".repeat(3_000) });
+  // 12_000 characters of noise: the character-class rules price plain letters
+  // near half the old flat rate, so the invalid output has to be larger to keep
+  // the full repair above the budget the way this test intends.
+  const largeInvalid = JSON.stringify({ value: 42, noise: "x".repeat(12_000) });
 
+  // Rescaled twice for the token estimator: from a byte-era budget of 3_000,
+  // then to 1_000 once the character-class rules priced the repair envelope
+  // above the old flat rate. It is still smaller than the full repair (base +
+  // verbatim invalid output), forcing the compact repair path.
   const result = await runStructuredWithRetry({
     llm: llmFromAttempts([largeInvalid, '{"value":"recovered"}'], seenParams),
     model: "m",
     baseMessages: [{ role: "user", content: "x".repeat(650) }],
-    opts: { inputBudgetTokens: 3_000 },
+    opts: { inputBudgetTokens: 1_000 },
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 1,
     callSite: "query.seeds",
@@ -1772,29 +1780,40 @@ test("structured repair can use a larger repair input budget", async () => {
 });
 
 test("structured repair prefers compact prompt above profile threshold", async () => {
-  const seen: Record<string, unknown>[] = [];
+  // The threshold has to discriminate, so both sides are exercised against the
+  // same fixture: the full repair of this response estimates around 85 tokens
+  // and the compact one around 40, so 60 takes the compact path and 200 takes
+  // the full one. It was 512 in the byte era and 122 under the flat token rate.
+  const run = async (compactRepairThresholdTokens: number) => {
+    const seen: Record<string, unknown>[] = [];
+    const result = await runStructuredWithRetry({
+      llm: llmFromAttempts([`{"value":${JSON.stringify("x".repeat(400))}}`, '{"value":"ok"}'], seen),
+      model: "m",
+      baseMessages: [{ role: "user", content: "x" }],
+      opts: { inputBudgetTokens: 4_096, repairInputBudgetTokens: 8_192 },
+      profile: {
+        kind: "json-zod",
+        schema: z.object({ value: z.literal("ok") }),
+        compactRepairThresholdTokens,
+      },
+      maxRetries: 1,
+      callSite: "query.seeds",
+      lifecycle: { id: "compact-threshold-call", action: "select_relevant_pages" },
+      signal: new AbortController().signal,
+      onEvent: () => {},
+    });
+    return { result, retry: seen[1].messages as Array<{ role: string; content: string }> };
+  };
 
-  const result = await runStructuredWithRetry({
-    llm: llmFromAttempts([`{"value":${JSON.stringify("x".repeat(400))}}`, '{"value":"ok"}'], seen),
-    model: "m",
-    baseMessages: [{ role: "user", content: "x" }],
-    opts: { inputBudgetTokens: 4_096, repairInputBudgetTokens: 8_192 },
-    profile: {
-      kind: "json-zod",
-      schema: z.object({ value: z.literal("ok") }),
-      compactRepairThresholdTokens: 512,
-    },
-    maxRetries: 1,
-    callSite: "query.seeds",
-    lifecycle: { id: "compact-threshold-call", action: "select_relevant_pages" },
-    signal: new AbortController().signal,
-    onEvent: () => {},
-  });
+  const compact = await run(60);
+  assert.equal(compact.result.value.value, "ok");
+  assert.equal(compact.retry.some((message) => message.role === "assistant"), false);
+  assert.match(compact.retry.at(-1)?.content ?? "", /too large to include/);
 
-  assert.equal(result.value.value, "ok");
-  const retryMessages = seen[1].messages as Array<{ role: string; content: string }>;
-  assert.equal(retryMessages.some((message) => message.role === "assistant"), false);
-  assert.match(retryMessages.at(-1)?.content ?? "", /too large to include/);
+  const full = await run(200);
+  assert.equal(full.result.value.value, "ok");
+  assert.equal(full.retry.some((message) => message.role === "assistant"), true);
+  assert.doesNotMatch(full.retry.at(-1)?.content ?? "", /too large to include/);
 });
 
 test("structured retries rebuild compact repair from original messages", async () => {
@@ -1986,4 +2005,232 @@ test("stream transport fallback closes the old ID before a new non-stream lifecy
     .filter((event) => event.kind === "prompt_budget")
     .map((event) => event.kind === "prompt_budget" ? event.requestId : undefined);
   assert.deepEqual(requestIds, ["transport-call", "transport-call:retry-1"]);
+});
+
+/**
+ * One truncated reply, then a complete one. `seen` collects the raw request
+ * params, so a test can assert what the second request actually asked for
+ * instead of asserting on the pure retry helper.
+ */
+function truncatedThenCompleteLlm(
+  transport: "stream" | "non-stream",
+  seen: Record<string, unknown>[],
+): LlmClient {
+  let attempt = 0;
+  return {
+    chat: { completions: { create: async (params: Record<string, unknown>) => {
+      seen.push(params);
+      attempt += 1;
+      const truncated = attempt === 1;
+      const content = truncated ? '{"value":' : '{"value":"ok"}';
+      const finishReason = truncated ? "length" : "stop";
+      if (transport === "stream") {
+        return (async function* () {
+          yield {
+            ...chunk(content),
+            choices: [{ index: 0, delta: { content }, finish_reason: finishReason }],
+          } as OpenAI.Chat.ChatCompletionChunk;
+          yield usageChunk();
+        })();
+      }
+      return {
+        id: `completion-${attempt}`,
+        object: "chat.completion",
+        created: 0,
+        model: "m",
+        choices: [{
+          index: 0,
+          finish_reason: finishReason,
+          message: { role: "assistant", content, refusal: null },
+          logprobs: null,
+        }],
+        usage: { prompt_tokens: 11, completion_tokens: 4, total_tokens: 15 },
+      };
+    } } },
+  } as unknown as LlmClient;
+}
+
+test("the output limit grows when the ceiling is above the current budget", () => {
+  const next = outputRetryOptions({ maxTokens: 4_096, outputRetryBudgetTokens: 120_000 }, 4_096);
+  assert.ok((next.maxTokens ?? 0) > 4_096, "a truncated generation must be retried with more room");
+});
+
+test("the output limit does not grow past the ceiling", () => {
+  const next = outputRetryOptions({ maxTokens: 4_096, outputRetryBudgetTokens: 5_000 }, 4_096);
+  assert.ok((next.maxTokens ?? 0) <= 5_000);
+});
+
+for (const transport of ["stream", "non-stream"] as const) {
+  test(`a ${transport} truncation is retried with a larger output limit`, async () => {
+    const seen: Record<string, unknown>[] = [];
+    const events: RunEvent[] = [];
+
+    const result = await runStructuredWithRetry({
+      llm: truncatedThenCompleteLlm(transport, seen),
+      model: "m",
+      baseMessages: [{ role: "user", content: "Return a compact object." }],
+      opts: { maxTokens: 4_096, contextWindowTokens: 131_072 },
+      profile: { kind: "json-zod", schema: SmallSchema },
+      maxRetries: 1,
+      callSite: "query.seeds",
+      lifecycle: lifecycleFor("query.seeds"),
+      signal: new AbortController().signal,
+      onEvent: (event) => events.push(event),
+      transport,
+    });
+
+    assert.equal(result.value.value, "ok");
+    assert.equal(seen.length, 2, "a truncation must produce a second request");
+    assert.ok(
+      (seen[1].max_completion_tokens as number) > (seen[0].max_completion_tokens as number),
+      "the retry must ask for more room",
+    );
+    assert.equal(
+      events.some((event) => event.kind === "structural_error" && event.errorType === "output_limit"),
+      true,
+    );
+  });
+}
+
+test("a truncation stops retrying once the packed prompt leaves no more room", async () => {
+  const seen: Record<string, unknown>[] = [];
+
+  await assert.rejects(runStructuredWithRetry({
+    llm: truncatedThenCompleteLlm("non-stream", seen),
+    model: "m",
+    baseMessages: [{ role: "user", content: "Return a compact object." }],
+    // The window is already fully claimed by the output budget, so the ceiling
+    // computed from the packed prompt cannot exceed the current limit.
+    opts: { maxTokens: 4_096, contextWindowTokens: 4_096 },
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 3,
+    callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
+    signal: new AbortController().signal,
+    onEvent: () => {},
+    transport: "non-stream",
+  }), StructuredOutputTruncatedError);
+
+  assert.equal(seen.length, 1, "an unreachable ceiling must not burn the retry budget");
+});
+
+test("a truncation without a known context window keeps the claude-agent behaviour", async () => {
+  const seen: Record<string, unknown>[] = [];
+
+  await assert.rejects(runStructuredWithRetry({
+    llm: truncatedThenCompleteLlm("non-stream", seen),
+    model: "m",
+    baseMessages: [{ role: "user", content: "Return a compact object." }],
+    opts: { maxTokens: 4_096 },
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 1,
+    callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
+    signal: new AbortController().signal,
+    onEvent: () => {},
+    transport: "non-stream",
+  }), StructuredOutputTruncatedError);
+
+  assert.equal(seen.length, 1);
+});
+
+test("a completed request reports the estimate it used against the provider's own count", async () => {
+  const observe = async (tokenCalibration: number) => {
+    const samples: Array<{ estimated: number; actual?: number; calibration: number }> = [];
+    const events: RunEvent[] = [];
+    const llm = {
+      chat: { completions: { create: async () => ({
+        id: "completion",
+        object: "chat.completion",
+        created: 0,
+        model: "m",
+        choices: [{
+          index: 0,
+          finish_reason: "stop",
+          message: { role: "assistant", content: '{"value":"ok"}', refusal: null },
+          logprobs: null,
+        }],
+        usage: { prompt_tokens: 123, completion_tokens: 4, total_tokens: 127 },
+      }) } },
+    } as unknown as LlmClient;
+
+    await runStructuredWithRetry({
+      llm,
+      model: "m",
+      baseMessages: [{ role: "user", content: "Return a compact object." }],
+      opts: {
+        maxTokens: 4_096,
+        contextWindowTokens: 131_072,
+        tokenCalibration,
+        onUsageObserved: (sample) => samples.push(sample),
+        budgetTelemetry: {
+          contextWindow: 131_072,
+          inputSource: "discovered",
+          outputSource: "default",
+          calibration: tokenCalibration,
+        },
+      },
+      profile: { kind: "json-zod", schema: SmallSchema },
+      maxRetries: 0,
+      callSite: "query.seeds",
+      lifecycle: lifecycleFor("query.seeds"),
+      signal: new AbortController().signal,
+      onEvent: (event) => events.push(event),
+      transport: "non-stream",
+    });
+    return { samples, events };
+  };
+
+  const plain = await observe(1);
+  assert.equal(plain.samples.length, 1);
+  assert.ok(plain.samples[0].estimated > 0);
+  assert.equal(plain.samples[0].actual, 123);
+
+  // The calibration factor is APPLIED to the estimate that is reported back, so
+  // `calibration *= actual / calibratedEstimate` converges instead of oscillating.
+  const doubled = await observe(2);
+  assert.equal(doubled.samples[0].estimated, plain.samples[0].estimated * 2);
+  // ...and the factor travels WITH the sample. `tokenCalibration` is fixed for the
+  // whole run while the stored factor moves with every sample, so the store cannot
+  // recover which factor sized this request unless the call reports it.
+  assert.equal(plain.samples[0].calibration, 1);
+  assert.equal(doubled.samples[0].calibration, 2);
+
+  const budget = plain.events.find((event) => event.kind === "prompt_budget");
+  assert.ok(budget && budget.kind === "prompt_budget");
+  assert.equal(budget.estimatedInputTokens, plain.samples[0].estimated);
+  assert.equal(budget.actualInputTokens, 123);
+  assert.equal(budget.contextWindow, 131_072);
+  assert.equal(budget.inputSource, "discovered");
+  assert.equal(budget.outputSource, "default");
+  assert.equal(budget.calibration, 1);
+});
+
+test("a provider that reports no usage leaves the observed sample without a counterpart", async () => {
+  const samples: Array<{ estimated: number; actual?: number; calibration: number }> = [];
+
+  await runStructuredWithRetry({
+    llm: llmFromChunks([chunk('{"value":"ok"}')]),
+    model: "m",
+    baseMessages: [{ role: "user", content: "Return a compact object." }],
+    opts: {
+      maxTokens: 4_096,
+      contextWindowTokens: 131_072,
+      tokenCalibration: 2,
+      onUsageObserved: (sample) => samples.push(sample),
+    },
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    lifecycle: lifecycleFor("query.seeds"),
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+
+  assert.equal(samples.length, 1);
+  assert.ok(samples[0].estimated > 0);
+  assert.equal(samples[0].actual, undefined);
+  // The streamed path reports the applied factor too, so a sample that does get a
+  // counterpart is corrected against the factor that sized it.
+  assert.equal(samples[0].calibration, 2);
 });

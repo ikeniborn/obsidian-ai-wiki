@@ -18,12 +18,24 @@ import { DEFAULT_CHUNKING, probeEmbeddingDimensions, probeEmbeddingDimensionsRes
 import type { LocalConfig } from "./local-config";
 import { probeRerankerModel, normalizeRerankerConfig } from "./reranker";
 import {
+  applyBudgetInput,
   backendModelControlDescriptor,
+  configuredContextWindowFor,
   createLiveModelControl,
+  effectiveModel,
+  setConfiguredContextWindow,
   parsePositiveBudgetInput,
   renderModelControlFields,
+  renderNativeBudgetControls,
   type ModelControlField,
 } from "./model-call-policy";
+import { resolveBudget } from "./budget-resolver";
+import {
+  configuredContextRecord,
+  MIN_CONTEXT_WINDOW,
+  placeholderContextWindow,
+  plausibleContextWindow,
+} from "./model-context";
 import { createRequestUrlVisionTransport, runNativeVisionModelCheck } from "./vision-probe";
 
 async function checkNativeAvailability(baseUrl: string, apiKey: string, model: string): Promise<void> {
@@ -317,6 +329,107 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         }),
       );
     };
+    // Every automatic budget field registers how to repaint itself here. A context
+    // window edit changes what the OTHER fields show as their automatic number, and
+    // `onChange` fires once per typed character — re-rendering the tab there would
+    // destroy the input the user is typing into and steal focus. So a committed
+    // change repaints the placeholders of the live controls in place instead.
+    // `resetValue` additionally re-reads the stored value; it is used only after a
+    // model change, which commits discretely (a suggestion is picked, not typed),
+    // because a per-model window belongs to a different model afterwards.
+    const automaticControls: Array<(resetValue: boolean) => void> = [];
+    const refreshAutomaticControls = (resetValue = false): void => {
+      for (const repaint of automaticControls) repaint(resetValue);
+    };
+    // Native-only: a budget the user has not overridden is derived from the model's
+    // context window instead of a fixed constant (Task 7). The control must still
+    // render — never hidden by an `undefined` value — showing the resolved automatic
+    // number when a context record is already cached, or the localized "Automatic"
+    // word when nothing has been probed yet. Empty input clears the override.
+    // `value` and `placeholder` are read lazily, so a repaint reflects the settings
+    // as they are now rather than as they were when the tab was drawn.
+    const addAutomaticBudgetControl = (
+      setting: Setting,
+      value: () => number | undefined,
+      update: (next: number | undefined) => void,
+      placeholder: () => string,
+      // Entries below this are refused rather than stored: a field showing a number
+      // the engine will not use is exactly what this backend's automatic budgeting
+      // is supposed to avoid. Budget fields keep the default floor of 1.
+      min?: number,
+    ): void => {
+      const holder: { value?: number } = {};
+      setting.addText((text) => {
+        const repaint = (resetValue: boolean): void => {
+          if (resetValue) holder.value = value();
+          const rendered = renderNativeBudgetControls({ value: holder.value }, placeholder())[0];
+          text.setPlaceholder(rendered.placeholder);
+          if (resetValue) text.setValue(rendered.value);
+        };
+        repaint(true);
+        automaticControls.push(repaint);
+        text.onChange(async (raw) => {
+          const previous = holder.value;
+          applyBudgetInput(holder, "value", raw, min);
+          if (holder.value === previous) return;
+          update(holder.value);
+          await this.plugin.saveSettings();
+          // Placeholders only: the field being typed into keeps its own text.
+          refreshAutomaticControls();
+        });
+      });
+    };
+    // Cached-only: never probes. `record` is undefined until the first operation has
+    // resolved this (baseUrl, model) pair, in which case the placeholder falls back to
+    // the localized "Automatic" word rather than a guessed number. A configured window
+    // needs no run to take effect: it is the same record `ModelContextStore.resolve`
+    // will build, so the numbers shown here are the ones the next run budgets from.
+    const automaticBudgetPlaceholders = (
+      model: string,
+      operation: OpKey,
+      overrides: { input?: number; output?: number },
+    ): { input: string; output: string; contextWindow: string } => {
+      const cached = this.plugin.controller.cachedModelContext(s.nativeAgent.baseUrl, model);
+      // The window configured FOR THIS MODEL: with a window per model, reading the
+      // setting of another model here would advertise a number this model's runs
+      // will never budget from.
+      const configured = plausibleContextWindow(configuredContextWindowFor(s.nativeAgent, model));
+      // Once the setting is cleared, the record it wrote is already refused by
+      // `resolve` — so the placeholder must not go on advertising its number either.
+      const discovered = cached?.source === "configured" ? undefined : cached;
+      const record = configured === null
+        ? discovered
+        : configuredContextRecord(configured, cached);
+      const automatic = T.settings.budgetAutomatic;
+      if (!record) return { input: automatic, output: automatic, contextWindow: automatic };
+      const budget = resolveBudget(record, operation, overrides);
+      // The budgets are what the next run WILL use, fallback included, so they are
+      // reported either way. The window is a claim about the model: a fallback is
+      // not one, and this field exists to supply it — see `placeholderContextWindow`.
+      const window = placeholderContextWindow(record);
+      return {
+        input: String(budget.inputBudgetTokens),
+        output: String(budget.outputBudgetTokens),
+        contextWindow: window === null ? automatic : String(window),
+      };
+    };
+    // The context-window field that sits next to a model field. One per model role
+    // that names a model — the global chat model, each per-operation model, and the
+    // vision model — because those models can be genuinely different sizes and
+    // `ModelContextStore` already keys its record by model. Native-agent only:
+    // claude-agent keeps its stored budgets and consults no record.
+    const addContextWindowControl = (model: () => string): void => {
+      if (eff.backend !== "native-agent" || !model()) return;
+      addAutomaticBudgetControl(
+        new Setting(containerEl)
+          .setName(T.settings.contextWindowTokens_name)
+          .setDesc(T.settings.contextWindowTokens_desc),
+        () => configuredContextWindowFor(s.nativeAgent, model()),
+        (next) => { setConfiguredContextWindow(s.nativeAgent, model(), next); },
+        () => automaticBudgetPlaceholders(model(), "init", {}).contextWindow,
+        MIN_CONTEXT_WINDOW,
+      );
+    };
     const addCompressionControl = (
       setting: Setting,
       value: CompressionProfile | undefined,
@@ -349,9 +462,43 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         compressionProfile?: (next: CompressionProfile | undefined) => void;
       },
       useGlobalCompression: boolean,
+      // Native-only. When present, inputBudgetTokens/maxTokens render as automatic
+      // (undefined-capable) fields instead of the fixed, always-required claude-agent
+      // fields. `model`/`operation` locate the cached record used only to compute the
+      // placeholder text — never to probe. `model` and `current` are read lazily so a
+      // repaint after a window or model change sees the settings as they are now.
+      automatic?: {
+        model: () => string;
+        operation: OpKey;
+        current: () => { input?: number; output?: number };
+        updates: {
+          inputBudgetTokens?: (next: number | undefined) => void;
+          maxTokens?: (next: number | undefined) => void;
+        };
+      },
     ): void => {
+      // One thunk per call (not one per field): both renderers below read the same
+      // {input, output} pair rather than each triggering its own resolveBudget.
+      const placeholders = automatic
+        ? () => automaticBudgetPlaceholders(
+            automatic.model(),
+            automatic.operation,
+            automatic.current(),
+          )
+        : undefined;
       renderModelControlFields(fields, {
         inputBudgetTokens: () => {
+          if (automatic?.updates.inputBudgetTokens) {
+            addAutomaticBudgetControl(
+              new Setting(containerEl)
+                .setName(T.settings.inputBudgetTokens_name)
+                .setDesc(T.settings.inputBudgetTokens_descAutomatic),
+              () => automatic.current().input,
+              automatic.updates.inputBudgetTokens,
+              () => placeholders!().input,
+            );
+            return;
+          }
           if (values.inputBudgetTokens === undefined || !updates.inputBudgetTokens) return;
           addBudgetControl(
             new Setting(containerEl)
@@ -362,6 +509,17 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           );
         },
         maxTokens: () => {
+          if (automatic?.updates.maxTokens) {
+            addAutomaticBudgetControl(
+              new Setting(containerEl)
+                .setName(T.settings.outputBudgetTokens_name)
+                .setDesc(T.settings.outputBudgetTokens_descAutomatic),
+              () => automatic.current().output,
+              automatic.updates.maxTokens,
+              () => placeholders!().output,
+            );
+            return;
+          }
           if (values.maxTokens === undefined || !updates.maxTokens) return;
           addBudgetControl(
             new Setting(containerEl)
@@ -752,15 +910,31 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         .setName(T.settings.h3_defaultChatModel)
         .setHeading();
 
+      const globalBudgetOverrides = (): { input?: number; output?: number } => ({
+        input: s.nativeAgent.inputBudgetTokens,
+        output: s.nativeAgent.maxTokens,
+      });
+
       if (!s.nativeAgent.perOperation) {
         this.addModelControl(
           new Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native),
           eff.nativeAgent.model,
-          async (v) => { s.nativeAgent.model = v; await this.plugin.saveSettings(); },
+          async (v) => {
+            s.nativeAgent.model = v;
+            await this.plugin.saveSettings();
+            // The window field below belongs to whichever model this names, so it
+            // has to re-read its stored value — not just its placeholder.
+            refreshAutomaticControls(true);
+          },
           false,
           { tooltip: "Verify the chat model is reachable", run: () => this.checkChatModel() },
         );
 
+        // Native-only, next to the model field it belongs to. Empty means "ask the
+        // backend"; a number replaces the discovered window FOR THIS MODEL, and every
+        // budget below is derived from it. Needed on backends that answer /v1/models
+        // without ever advertising a context length.
+        addContextWindowControl(() => s.nativeAgent.model);
       }
 
       addPolicyControls(
@@ -771,19 +945,33 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           compressionProfile: s.nativeAgent.compressionProfile,
         },
         {
-          inputBudgetTokens: (next) => { s.nativeAgent.inputBudgetTokens = next; },
-          maxTokens: (next) => { s.nativeAgent.maxTokens = next; },
           compressionProfile: (next) => { s.nativeAgent.compressionProfile = next ?? "balanced"; },
         },
         false,
+        {
+          // The global fields are the fallback default for every operation, not one
+          // operation in particular; "init" (multiplier 1, no format-style x4) is used
+          // only to compute a representative placeholder number and never changes what
+          // gets stored.
+          model: () => s.nativeAgent.model,
+          operation: "init",
+          current: globalBudgetOverrides,
+          updates: {
+            inputBudgetTokens: (next) => { s.nativeAgent.inputBudgetTokens = next; },
+            maxTokens: (next) => { s.nativeAgent.maxTokens = next; },
+          },
+        },
       );
 
-      addBudgetControl(
+      addAutomaticBudgetControl(
         new Setting(containerEl)
           .setName(T.settings.repairInputBudgetTokens_name)
-          .setDesc(T.settings.repairInputBudgetTokens_desc),
-        s.nativeAgent.repairInputBudgetTokens ?? 65_536,
+          .setDesc(T.settings.repairInputBudgetTokens_descAutomatic),
+        () => s.nativeAgent.repairInputBudgetTokens,
         (next) => { s.nativeAgent.repairInputBudgetTokens = next; },
+        () => automaticBudgetPlaceholders(
+          s.nativeAgent.model, "init", globalBudgetOverrides(),
+        ).input,
       );
 
       if (!s.nativeAgent.perOperation) {
@@ -881,8 +1069,13 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           this.addModelControl(
             new Setting(containerEl).setName(T.settings.opModel_name).setDesc(T.settings.opModel_desc),
             s.nativeAgent.operations[key].model,
-            async (v) => { s.nativeAgent.operations[key].model = v; await this.plugin.saveSettings(); },
+            async (v) => {
+              s.nativeAgent.operations[key].model = v;
+              await this.plugin.saveSettings();
+              refreshAutomaticControls(true);
+            },
           );
+          addContextWindowControl(() => effectiveModel(s, key));
           addPolicyControls(
             modelControls.operations[key],
             {
@@ -891,11 +1084,21 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               compressionProfile: s.nativeAgent.operations[key].compressionProfile,
             },
             {
-              inputBudgetTokens: (next) => { s.nativeAgent.operations[key].inputBudgetTokens = next; },
-              maxTokens: (next) => { s.nativeAgent.operations[key].maxTokens = next; },
               compressionProfile: (next) => { s.nativeAgent.operations[key].compressionProfile = next; },
             },
             true,
+            {
+              model: () => effectiveModel(s, key),
+              operation: key,
+              current: () => ({
+                input: s.nativeAgent.operations[key].inputBudgetTokens,
+                output: s.nativeAgent.operations[key].maxTokens,
+              }),
+              updates: {
+                inputBudgetTokens: (next) => { s.nativeAgent.operations[key].inputBudgetTokens = next; },
+                maxTokens: (next) => { s.nativeAgent.operations[key].maxTokens = next; },
+              },
+            },
           );
           new Setting(containerEl)
             .setName(T.settings.opTemperature_name)
@@ -1197,13 +1400,20 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           .setName(T.settings.visionModel_name)
           .setDesc(T.settings.visionModel_desc),
         s.vision.model,
-        async (v) => { s.vision.model = v; await this.plugin.saveSettings(); },
+        async (v) => {
+          s.vision.model = v;
+          await this.plugin.saveSettings();
+          this.display();
+        },
         false,
         modelControls.vision.check
           ? { tooltip: T.settings.visionCheck_tooltip, run: (model) => this.checkVisionModel(model) }
           : undefined,
       );
 
+      // Vision runs a model of its own, usually a far smaller one than the chat
+      // model, and it now resolves a context record of its own too.
+      addContextWindowControl(() => s.vision.model);
     }
 
     // ── Graph settings ────────────────────────────────────────────────────────

@@ -1,5 +1,7 @@
 import { contentHash } from "./content-hash";
 import { inspectPatchablePage } from "./section-patches";
+import { cappedTokens, measureText, SYMBOL_RUN_TOKENS } from "./token-estimate";
+import type { TextMeasure } from "./token-estimate";
 
 export interface SourceChunk {
   id: string;
@@ -36,9 +38,9 @@ interface FenceState {
   marker: "`" | "~";
   length: number;
   openingLine: string;
-  openingByteLength: number;
+  openingMeasure: TextMeasure;
   closingLine: string;
-  closingByteLength: number;
+  closingMeasure: TextMeasure;
 }
 
 interface HeadingState {
@@ -48,7 +50,7 @@ interface HeadingState {
 
 interface ScannedLine {
   raw: string;
-  byteLength: number;
+  measure: TextMeasure;
   heading?: string;
   headingPath: string[];
   fenceBefore: FenceState | null;
@@ -61,8 +63,6 @@ interface SourceRange {
   headingPath: string[];
 }
 
-const encoder = new TextEncoder();
-
 function splitSourceLines(source: string): string[] {
   return source.length === 0 ? [] : source.split("\n");
 }
@@ -71,7 +71,7 @@ function lineForSyntax(raw: string): string {
   return raw.endsWith("\r") ? raw.slice(0, -1) : raw;
 }
 
-function parseOpeningFence(raw: string, openingByteLength: number): FenceState | null {
+function parseOpeningFence(raw: string, openingMeasure: TextMeasure): FenceState | null {
   const match = /^( {0,3})(`{3,}|~{3,})(.*)$/.exec(lineForSyntax(raw));
   if (!match) return null;
   const delimiter = match[2];
@@ -81,9 +81,9 @@ function parseOpeningFence(raw: string, openingByteLength: number): FenceState |
     marker,
     length: delimiter.length,
     openingLine: raw,
-    openingByteLength,
+    openingMeasure,
     closingLine,
-    closingByteLength: estimateTokens(closingLine),
+    closingMeasure: measureText(closingLine),
   };
 }
 
@@ -107,14 +107,14 @@ function scanLines(lines: string[]): ScannedLine[] {
   let activeFence: FenceState | null = null;
 
   for (const raw of lines) {
-    const byteLength = estimateTokens(raw);
+    const measure = measureText(raw);
     const fenceBefore = activeFence;
     let heading: string | undefined;
 
     if (activeFence) {
       if (closesFence(raw, activeFence)) activeFence = null;
     } else {
-      const openingFence = parseOpeningFence(raw, byteLength);
+      const openingFence = parseOpeningFence(raw, measure);
       if (openingFence) {
         activeFence = openingFence;
       } else {
@@ -131,7 +131,7 @@ function scanLines(lines: string[]): ScannedLine[] {
 
     scanned.push({
       raw,
-      byteLength,
+      measure,
       heading,
       headingPath: headings.map((entry) => entry.heading),
       fenceBefore,
@@ -146,31 +146,58 @@ function rawRangeMarkdown(lines: ScannedLine[], startIndex: number, endIndex: nu
   return lines.slice(startIndex, endIndex + 1).map((line) => line.raw).join("\n");
 }
 
-function buildLineBytePrefix(lines: ScannedLine[]): number[] {
-  const prefix = [0];
-  for (const line of lines) prefix.push(prefix[prefix.length - 1] + line.byteLength);
-  return prefix;
+/** Running sums of the unrounded, uncapped per-line parts. */
+interface LinePrefixes {
+  raw: number[];
+  bytes: number[];
 }
 
-function rawRangeEstimatedTokens(
-  bytePrefix: number[],
+function buildLinePrefixes(lines: ScannedLine[]): LinePrefixes {
+  const prefixes: LinePrefixes = { raw: [0], bytes: [0] };
+  for (const line of lines) {
+    prefixes.raw.push(prefixes.raw[prefixes.raw.length - 1] + line.measure.raw);
+    prefixes.bytes.push(prefixes.bytes[prefixes.bytes.length - 1] + line.measure.bytes);
+  }
+  return prefixes;
+}
+
+function rawRangeMeasure(
+  prefixes: LinePrefixes,
   startIndex: number,
   endIndex: number,
-): number {
-  return bytePrefix[endIndex + 1] - bytePrefix[startIndex] + endIndex - startIndex;
+): TextMeasure {
+  // Per-line parts plus the line breaks that join them: a newline costs the
+  // estimator's run charge and one UTF-8 byte. Neither part is rounded or
+  // capped here. Capping per line and adding would let the sum fall below
+  // `estimateText` of the joined text, because a line whose own class sum is
+  // capped donates its whole overage to the window — a numeric line next to a
+  // prose line is enough — and the window would then render above its budget.
+  const breaks = endIndex - startIndex;
+  return {
+    raw: prefixes.raw[endIndex + 1] - prefixes.raw[startIndex] + breaks * SYMBOL_RUN_TOKENS,
+    bytes: prefixes.bytes[endIndex + 1] - prefixes.bytes[startIndex] + breaks,
+  };
 }
 
 function renderedRangeEstimatedTokens(
   lines: ScannedLine[],
-  bytePrefix: number[],
+  prefixes: LinePrefixes,
   range: SourceRange,
 ): number {
-  let tokens = rawRangeEstimatedTokens(bytePrefix, range.startIndex, range.endIndex);
+  const measure = rawRangeMeasure(prefixes, range.startIndex, range.endIndex);
   const openingFence = lines[range.startIndex].fenceBefore;
   const closingFence = lines[range.endIndex].fenceAfter;
-  if (openingFence) tokens += openingFence.openingByteLength + 1;
-  if (closingFence) tokens += closingFence.closingByteLength + 1;
-  return tokens;
+  // A synthetic wrapper line costs its own parts plus the break that joins it.
+  if (openingFence) {
+    measure.raw += openingFence.openingMeasure.raw + SYMBOL_RUN_TOKENS;
+    measure.bytes += openingFence.openingMeasure.bytes + 1;
+  }
+  if (closingFence) {
+    measure.raw += closingFence.closingMeasure.raw + SYMBOL_RUN_TOKENS;
+    measure.bytes += closingFence.closingMeasure.bytes + 1;
+  }
+  // Capped once, over the whole rendered range, exactly as estimateText caps it.
+  return Math.ceil(cappedTokens(measure));
 }
 
 function renderRangeMarkdown(lines: ScannedLine[], range: SourceRange): string {
@@ -180,10 +207,6 @@ function renderRangeMarkdown(lines: ScannedLine[], range: SourceRange): string {
   if (openingFence) markdown = `${openingFence.openingLine}\n${markdown}`;
   if (closingFence) markdown = `${markdown}\n${closingFence.closingLine}`;
   return markdown;
-}
-
-function estimateTokens(markdown: string): number {
-  return encoder.encode(markdown).byteLength;
 }
 
 function buildSections(lines: ScannedLine[]): MarkdownSection[] {
@@ -293,7 +316,7 @@ function splitParagraphRanges(
 
 function splitLineWindows(
   lines: ScannedLine[],
-  bytePrefix: number[],
+  prefixes: LinePrefixes,
   range: SourceRange,
   options: MarkdownChunkOptions,
 ): SourceRange[] {
@@ -306,7 +329,7 @@ function splitLineWindows(
       endIndex: startIndex,
       headingPath: range.headingPath,
     };
-    const minimumTokens = renderedRangeEstimatedTokens(lines, bytePrefix, minimumRange);
+    const minimumTokens = renderedRangeEstimatedTokens(lines, prefixes, minimumRange);
     if (minimumTokens > options.maxEstimatedTokens) {
       throw new RangeError(
         `Source range ${startIndex + 1}-${startIndex + 1} requires ${minimumTokens} estimated tokens but budget is ${options.maxEstimatedTokens}`,
@@ -323,7 +346,7 @@ function splitLineWindows(
         endIndex: candidate,
         headingPath: range.headingPath,
       };
-      if (renderedRangeEstimatedTokens(lines, bytePrefix, candidateRange) <= options.maxEstimatedTokens) {
+      if (renderedRangeEstimatedTokens(lines, prefixes, candidateRange) <= options.maxEstimatedTokens) {
         endIndex = candidate;
         low = candidate + 1;
       } else {
@@ -350,7 +373,7 @@ function splitLineWindows(
 
 function coalesceBlankOnlyRanges(
   lines: ScannedLine[],
-  bytePrefix: number[],
+  prefixes: LinePrefixes,
   inputRanges: SourceRange[],
   budget: number,
 ): SourceRange[] {
@@ -381,7 +404,7 @@ function coalesceBlankOnlyRanges(
         endIndex: Math.max(previous.endIndex, blankEnd),
         headingPath: [...previous.headingPath],
       };
-      if (renderedRangeEstimatedTokens(lines, bytePrefix, merged) <= budget) {
+      if (renderedRangeEstimatedTokens(lines, prefixes, merged) <= budget) {
         ranges.splice(index - 1, runEnd - index + 2, merged);
         index = Math.max(0, index - 1);
         continue;
@@ -395,7 +418,7 @@ function coalesceBlankOnlyRanges(
         endIndex: next.endIndex,
         headingPath: [...next.headingPath],
       };
-      if (renderedRangeEstimatedTokens(lines, bytePrefix, merged) <= budget) {
+      if (renderedRangeEstimatedTokens(lines, prefixes, merged) <= budget) {
         ranges.splice(index, runEnd - index + 2, merged);
         continue;
       }
@@ -427,7 +450,7 @@ export function chunkMarkdownSource(
   if (sourceLines.length === 0) return [];
 
   const lines = scanLines(sourceLines);
-  const bytePrefix = buildLineBytePrefix(lines);
+  const prefixes = buildLinePrefixes(lines);
   let ranges: SourceRange[];
 
   const fullRange: SourceRange = {
@@ -435,7 +458,7 @@ export function chunkMarkdownSource(
       endIndex: lines.length - 1,
       headingPath: [...lines[0].headingPath],
   };
-  if (renderedRangeEstimatedTokens(lines, bytePrefix, fullRange) <= options.maxEstimatedTokens) {
+  if (renderedRangeEstimatedTokens(lines, prefixes, fullRange) <= options.maxEstimatedTokens) {
     ranges = [fullRange];
   } else {
     ranges = [];
@@ -445,27 +468,27 @@ export function chunkMarkdownSource(
         endIndex: section.endLine - 1,
         headingPath: [...section.headingPath],
       };
-      if (renderedRangeEstimatedTokens(lines, bytePrefix, sectionRange) <= options.maxEstimatedTokens) {
+      if (renderedRangeEstimatedTokens(lines, prefixes, sectionRange) <= options.maxEstimatedTokens) {
         ranges.push(sectionRange);
         continue;
       }
 
       for (const paragraph of splitParagraphRanges(lines, section)) {
-        if (renderedRangeEstimatedTokens(lines, bytePrefix, paragraph) <= options.maxEstimatedTokens) {
+        if (renderedRangeEstimatedTokens(lines, prefixes, paragraph) <= options.maxEstimatedTokens) {
           ranges.push(paragraph);
         } else {
-          ranges.push(...splitLineWindows(lines, bytePrefix, paragraph, options));
+          ranges.push(...splitLineWindows(lines, prefixes, paragraph, options));
         }
       }
     }
   }
 
-  ranges = coalesceBlankOnlyRanges(lines, bytePrefix, ranges, options.maxEstimatedTokens);
+  ranges = coalesceBlankOnlyRanges(lines, prefixes, ranges, options.maxEstimatedTokens);
 
   return ranges.map((range, ordinal) => {
     const rawMarkdown = rawRangeMarkdown(lines, range.startIndex, range.endIndex);
     const markdown = renderRangeMarkdown(lines, range);
-    const requiredTokens = renderedRangeEstimatedTokens(lines, bytePrefix, range);
+    const requiredTokens = renderedRangeEstimatedTokens(lines, prefixes, range);
     if (requiredTokens > options.maxEstimatedTokens) {
       throw new RangeError(
         `Source range ${range.startIndex + 1}-${range.endIndex + 1} requires ${requiredTokens} estimated tokens but budget is ${options.maxEstimatedTokens}`,

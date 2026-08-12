@@ -193,7 +193,12 @@ test("wipe SHA-256 proof distinguishes a known FNV-1a collision", async () => {
   assert.match(left, /^sha256:[0-9a-f]{64}$/);
 });
 
-type RmdirMode = "normal" | "throw-after-delete" | "throw-after-root-delete" | "false-success";
+type RmdirMode =
+  | "normal"
+  | "throw-after-delete"
+  | "throw-after-root-delete"
+  | "false-success"
+  | "fs-rm-eisdir";
 type RenameMode = "normal" | "copy-source";
 type AdapterStat = { type: "file" | "folder"; ctime: number; mtime: number; size: number };
 
@@ -355,6 +360,14 @@ class DirectoryAdapter implements VaultAdapter {
     this.rmdirRecursive.push(recursive);
     this.beforeRmdir?.(path);
     if (this.rmdirMode === "false-success") return;
+    if (this.rmdirMode === "fs-rm-eisdir" && !recursive) {
+      // Obsidian 1.13.6 desktop adapter: rmdir(path, recursive) is
+      // fs.rm(fullPath, { maxRetries: 5, recursive }), and fs.rm rejects any
+      // directory with EISDIR unless recursive is set.
+      throw new Error(
+        `Path is a directory: rm returned EISDIR (is a directory) /vault/${path}`,
+      );
+    }
     if (!recursive) {
       const hasChild = [...this.files.keys(), ...this.binaryFiles.keys(), ...this.folders]
         .some((candidate) => candidate.startsWith(`${path}/`));
@@ -579,6 +592,86 @@ test("force wipe rebuilds and restores the tree when quarantined root rmdir thro
 
   assert.deepEqual(targetSnapshot(adapter), before);
   assert.equal(adapter.rmdirRecursive.every((recursive) => recursive === false), true);
+});
+
+function recordRmdirChildCounts(adapter: DirectoryAdapter): Array<[string, number]> {
+  const observed: Array<[string, number]> = [];
+  adapter.beforeRmdir = (path) => {
+    const children = [...adapter.files.keys(), ...adapter.binaryFiles.keys(), ...adapter.folders]
+      .filter((candidate) => candidate.startsWith(`${path}/`));
+    observed.push([path, children.length]);
+  };
+  return observed;
+}
+
+test("force wipe removes directories on an adapter whose non-recursive rmdir cannot", async () => {
+  const adapter = seededAdapter();
+  const unrelatedBefore = otherSnapshot(adapter);
+  adapter.rmdirMode = "fs-rm-eisdir";
+  const childCounts = recordRmdirChildCounts(adapter);
+
+  const removed = await wipeDomainFolder(new VaultTools(adapter, "/vault"), "demo");
+
+  assert.deepEqual(removed, [
+    "!Wiki/demo/concept/old.md",
+    "!Wiki/demo/index.jsonl",
+    "!Wiki/demo/log.jsonl",
+    "!Wiki/demo/metadata.jsonl",
+    "!Wiki/demo/tmp/deep/state.bin",
+    "!Wiki/demo/tmp/deep/zz-fail.txt",
+  ]);
+  assert.equal(await adapter.exists("!Wiki/demo"), false);
+  assert.deepEqual(targetSnapshot(adapter), { files: [], binaryFiles: [], folders: [] });
+  assert.deepEqual(otherSnapshot(adapter), unrelatedBefore);
+  const transaction = (adapter.renames[0]?.[1] ?? "").slice(0, -"/domain".length);
+  assert.equal(await adapter.exists(transaction), false);
+  assert.equal([...adapter.folders].some((path) => path.includes(".ai-wiki-reinit-txn-")), false);
+  assert.equal(adapter.rmdirRecursive.includes(true), true);
+  // Every rmdir — including each recursive retry — ran on an empty directory.
+  assert.deepEqual(childCounts.filter(([, count]) => count !== 0), []);
+});
+
+test("force wipe rolls back completely when a mid-wipe failure meets fs.rm rmdir semantics", async () => {
+  const adapter = seededAdapter();
+  const before = targetSnapshot(adapter);
+  const unrelatedBefore = otherSnapshot(adapter);
+  adapter.rmdirMode = "fs-rm-eisdir";
+  adapter.failRemovePath = "!Wiki/demo/log.jsonl";
+  const childCounts = recordRmdirChildCounts(adapter);
+
+  await assert.rejects(
+    wipeDomainFolder(new VaultTools(adapter, "/vault"), "demo"),
+    (error: Error) => /synthetic remove failure/.test(error.message)
+      && !/rollback failed/.test(error.message),
+  );
+
+  assert.deepEqual(targetSnapshot(adapter), before);
+  assert.deepEqual(otherSnapshot(adapter), unrelatedBefore);
+  assert.deepEqual(adapter.renames.at(-1), [adapter.renames[0]?.[1], "!Wiki/demo"]);
+  assert.equal([...adapter.folders].some((path) => path.includes(".ai-wiki-reinit-txn-")), false);
+  assert.deepEqual(childCounts.filter(([, count]) => count !== 0), []);
+});
+
+test("force wipe cleans up a cancelled transaction under fs.rm rmdir semantics", async () => {
+  const adapter = seededAdapter();
+  const before = targetSnapshot(adapter);
+  adapter.rmdirMode = "fs-rm-eisdir";
+  const controller = new AbortController();
+  const mkdir = adapter.mkdir.bind(adapter);
+  adapter.mkdir = async (path: string): Promise<void> => {
+    await mkdir(path);
+    if (path.includes(".ai-wiki-reinit-txn-")) controller.abort();
+  };
+
+  await assert.rejects(
+    wipeDomainFolder(new VaultTools(adapter, "/vault"), "demo", controller.signal),
+    (error: Error) => /cancelled/.test(error.message)
+      && !/cleanup failed/.test(error.message),
+  );
+
+  assert.deepEqual(targetSnapshot(adapter), before);
+  assert.deepEqual(adapter.renames, []);
+  assert.equal([...adapter.folders].some((path) => path.includes(".ai-wiki-reinit-txn-")), false);
 });
 
 test("force wipe preflights stat sizes before any binary read or file destruction", async () => {

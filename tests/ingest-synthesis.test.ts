@@ -86,7 +86,7 @@ function bundle(entityKey: string, path?: string, section?: { hash: string; ordi
   const target = path ?? `!Wiki/d/concept/wiki_d_${entityKey}.md`;
   const unit: WikiSectionUnit = {
     id: `${target}::Facts`, source: "wiki", text: section?.span ?? `## Facts\n${entityKey} evidence\n`,
-    required: Boolean(section), priority: 1, estimatedTokens: 8, pageId: entityKey,
+    required: Boolean(section), priority: 1, pageId: entityKey,
     path: target, heading: "## Facts", sectionHash: section?.hash ?? "", score: 1,
     sourceOrdinal: section?.ordinal ?? 0, duplicatePaths: [target],
   };
@@ -219,7 +219,7 @@ test("synthesizeEntityBatch emits create, patch-safe skip, and bounded prompt te
   const result = await synthesizeEntityBatch(synthesisArgs([bundle("b"), existing], llm, {
     existingPaths: new Set([existingPath]),
     existingPageDescriptions: [{ entityKey: "a", path: existingPath, description: "A" }],
-    tagRegistryUnits: [{ id: "tag", source: "registry", text: "tag", required: false, priority: 1, estimatedTokens: 1 }],
+    tagRegistryUnits: [{ id: "tag", source: "registry", text: "tag", required: false, priority: 1 }],
     policy: { inputBudgetTokens: 10000, outputBudgetTokens: 300, compression: "balanced" as const },
     onEvent: (event: RunEvent) => events.push(event),
   }));
@@ -294,7 +294,7 @@ test("context repack drops optional units, changes prompt hash, preserves requir
   const b = bundle("b");
   const optional = {
     id: "optional-a", source: "wiki" as const, text: "OPTIONAL-A-SENTINEL", required: false,
-    priority: 0, estimatedTokens: 20, pageId: "a", path: existingPath, heading: "## Optional",
+    priority: 0, pageId: "a", path: existingPath, heading: "## Optional",
     sectionHash: "", score: 0, sourceOrdinal: 1, duplicatePaths: [existingPath],
   };
   a.units = [...a.units, optional];
@@ -331,8 +331,8 @@ test("context repack drops optional units, changes prompt hash, preserves requir
 
 test("context repack never drops required registry units while dropping optional auxiliary units", async () => {
   const calls: Record<string, unknown>[] = [];
-  const requiredRegistry = { id: "required-registry", source: "registry" as const, text: "REQUIRED-REGISTRY", required: true, priority: 1, estimatedTokens: 1 };
-  const optionalRegistry = { id: "optional-registry", source: "registry" as const, text: "OPTIONAL-REGISTRY-".repeat(450), required: false, priority: 1, estimatedTokens: 90 };
+  const requiredRegistry = { id: "required-registry", source: "registry" as const, text: "REQUIRED-REGISTRY", required: true, priority: 1 };
+  const optionalRegistry = { id: "optional-registry", source: "registry" as const, text: "OPTIONAL-REGISTRY-".repeat(450), required: false, priority: 1 };
   const llm = mockLlm((params) => {
     calls.push(params);
     if (calls.length === 1) throw new Error("prompt 12000 exceeds maximum context 10000");
@@ -344,7 +344,10 @@ test("context repack never drops required registry units while dropping optional
   const result = await synthesizeEntityBatch(synthesisArgs([bundle("a")], llm, {
     existingPageDescriptions: [{ entityKey: "a", path: absentPath, description: "OPTIONAL-DESCRIPTION-".repeat(100) }],
     tagRegistryUnits: [requiredRegistry, optionalRegistry],
-    policy: { inputBudgetTokens: 15_000, outputBudgetTokens: 300, compression: "balanced" as const },
+    // Rescaled from a byte-era budget of 15_000 for the token estimator
+    // (task-3 prompt-budget-automation): 3_571 (15_000 / 4.2) still forces
+    // the optional registry/description text to be dropped on retry.
+    policy: { inputBudgetTokens: 3_571, outputBudgetTokens: 300, compression: "balanced" as const },
   }));
   assert.equal(result.actions.length, 1);
   assert.equal(calls.length, 2);
@@ -679,6 +682,9 @@ test("single-bundle synthesis compresses oversized evidence against the real pro
     ],
     links: Array.from({ length: 100 }, (_, index) => `https://example.com/${index}`),
   };
+  // Rescaled from a byte-era budget of 12_000 for the token estimator
+  // (task-3 prompt-budget-automation): 2_857 (12_000 / 4.2) still forces
+  // the oversized evidence to be compressed rather than fitting whole.
   const seen: Record<string, unknown>[] = [];
   const llm = mockLlm((params) => {
     const prompt = JSON.stringify(params.messages);
@@ -687,14 +693,14 @@ test("single-bundle synthesis compresses oversized evidence against the real pro
     assert.match(prompt, /exact line range validated server-side/);
     assert.equal(
       estimatePreparedMessages(params.messages as OpenAI.Chat.ChatCompletionMessageParam[])
-        <= 12_000 - synthesisCompactRepairReserveTokens(12_000),
+        <= 2_857 - synthesisCompactRepairReserveTokens(2_857),
       true,
     );
     return outputFor(["a"]);
   }, seen, []);
 
   const result = await synthesizeEntityBatch(synthesisArgs([oversized], llm, {
-    policy: { inputBudgetTokens: 12_000, outputBudgetTokens: 300, compression: "balanced" as const },
+    policy: { inputBudgetTokens: 2_857, outputBudgetTokens: 300, compression: "balanced" as const },
   }));
 
   assert.equal(result.actions[0]?.entityKey, "a");
@@ -706,8 +712,10 @@ test("single-bundle synthesis compresses oversized required retrieved units agai
   oversized.units = [{
     ...oversized.units[0],
     required: true,
-    text: "required retrieved context ".repeat(2_000),
-    estimatedTokens: 20_000,
+    // Doubled from 2_000 repeats for the character-class rules, which price
+    // plain letters near half the old flat rate, so this unit still has to be
+    // truncated against the same budget.
+    text: "required retrieved context ".repeat(4_000),
   }];
   const seen: Record<string, unknown>[] = [];
   const llm = mockLlm((params) => {
@@ -736,7 +744,6 @@ test("single-bundle synthesis compacts oversized patch authority exact section b
     ...oversized.units[0],
     required: true,
     text: "compact visible target",
-    estimatedTokens: 8,
   }];
   const seen: Record<string, unknown>[] = [];
   const llm = mockLlm((params) => {
@@ -1263,7 +1270,7 @@ test("synthesis prompt projects allowlisted DTO fields only", async () => {
   const candidate = bundle("a") as EntityContextBundle & { vector?: string; rawRecord?: string };
   candidate.vector = "RAW-VECTOR-SENTINEL";
   candidate.rawRecord = "RAW-RECORD-SENTINEL";
-  const registry = { id: "registry", source: "registry" as const, text: "legitimate vector prose", required: false, priority: 1, estimatedTokens: 1, vector: "RAW-REGISTRY-VECTOR" } as unknown as ContextUnit;
+  const registry = { id: "registry", source: "registry" as const, text: "legitimate vector prose", required: false, priority: 1, vector: "RAW-REGISTRY-VECTOR" } as unknown as ContextUnit;
   const seen: Record<string, unknown>[] = [];
   const llm = mockLlm((params) => {
     const prompt = JSON.stringify(params.messages);

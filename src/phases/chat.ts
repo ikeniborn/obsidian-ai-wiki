@@ -111,6 +111,7 @@ export async function* runLintChat(
   let attempt: ChatAttempt;
   try {
     attempt = yield* runWithLiveEvents((emit, operationSignal) => runWithContextRepack<PackedChatRequest, ChatAttempt>({
+      onContextError: opts.onContextError,
       callSite: opts.semanticCompression?.operation === "query"
         ? "query.answer"
         : "lint-chat.fix",
@@ -247,6 +248,7 @@ export async function* runLintChat(
             effectiveInputBudget: opts.inputBudgetTokens ?? 16_384,
             estimatedInputTokens: estimatePreparedMessages(
               params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+              opts.tokenCalibration,
             ),
             outputBudget: opts.maxTokens,
             compressionProfile: opts.semanticCompression?.profile ?? "balanced",

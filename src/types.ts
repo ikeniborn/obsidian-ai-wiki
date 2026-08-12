@@ -335,6 +335,76 @@ export type RunEvent =
       sourceChunks?: number;
       reductionDepth?: number;
       retryReason?: string;
+      contextWindow?: number;
+      inputSource?: BudgetInputSource;
+      outputSource?: "override" | "default";
+      calibration?: number;
+    }
+  | {
+      kind: "budget_resolved";
+      operation: OpKey;
+      model: string;
+      contextWindow: number;
+      inputSource: BudgetInputSource;
+      outputSource: "override" | "default";
+      calibration: number;
+      samples: number;
+      inputBudget: number;
+      outputBudget: number;
+    }
+  | {
+      kind: "context_probe";
+      baseUrl: string;
+      model: string;
+      endpoint: string;
+      ok: boolean;
+      ms: number;
+      /**
+       * Whether the endpoint listed an entry with this model's id — independent of
+       * whether that entry advertised a window. `matchedById: true` with no
+       * `contextLength` is the aggregating-gateway case ("model found, no window
+       * advertised"); `matchedById: false` is "no such model in this listing".
+       * Absent on endpoints that are queried FOR one model and therefore never
+       * match by id (`/api/show`).
+       */
+      matchedById?: boolean;
+      contextLength?: number;
+    }
+  | {
+      /**
+       * The provider rejected a prompt against a window the user configured
+       * explicitly. The configured window stands (see `observeContextError`); this
+       * event is the only record that the provider disagreed with it.
+       */
+      kind: "context_window_conflict";
+      model: string;
+      contextWindow: number;
+      reportedWindow: number;
+      promptTokens?: number;
+    }
+  | {
+      kind: "calibration_sample";
+      model: string;
+      estimated: number;
+      actual: number;
+      /**
+       * The factor the estimate was produced with. Carried on the sample so a
+       * reader of `agent.jsonl` can reconstruct the implied factor
+       * (`appliedCalibration * ratio`) from this line alone, instead of joining
+       * back to the run's `budget_resolved` record.
+       */
+      appliedCalibration: number;
+      ratio: number;
+      applied: boolean;
+      clamped: boolean;
+    }
+  | {
+      kind: "evidence_split";
+      callSite: StructuredCallSite;
+      groups: number;
+      candidates: number;
+      subdivided: number;
+      payloadBudget: number;
     }
   | {
       kind: "prompt_breakdown";
@@ -487,6 +557,15 @@ export interface RunHistoryEntry {
   steps: Array<{ kind: "tool_use" | "tool_result"; label: string }>;
 }
 
+/**
+ * Where a resolved context window came from. `configured` is a window the user typed
+ * into settings: it is an override of the DISCOVERED value, so every derived budget
+ * follows from it exactly as if the probe had returned it.
+ */
+export type ContextWindowSource = "configured" | "discovered" | "learned" | "default";
+/** Where a resolved input budget came from; `override` is an explicitly stored budget. */
+export type BudgetInputSource = "override" | ContextWindowSource;
+
 export type CompressionProfile = "maximum" | "balanced" | "minimum";
 export type CompressionOperation = "ingest" | "query" | "lint" | "vision";
 
@@ -499,7 +578,6 @@ export interface ModelCallPolicy {
   inputBudgetTokens: number;
   repairInputBudgetTokens?: number;
   outputBudgetTokens?: number;
-  outputRetryBudgetTokens?: number;
   compression?: CompressionProfile;
 }
 
@@ -537,6 +615,30 @@ export interface LlmCallOptions {
   nativeFreshConnection?: boolean;
   /** Prefer compact structured repair once the full repair prompt reaches this estimate. */
   compactRepairThresholdTokens?: number;
+  /** Provider-derived correction applied to every token estimate for this call. */
+  tokenCalibration?: number;
+  /** The model's context window, when known. Absent on the claude-agent path. */
+  contextWindowTokens?: number;
+  /**
+   * Reports the estimate against the provider's own count so the estimator can
+   * self-correct. `calibration` is the factor `estimated` was produced with — it is
+   * part of the measurement, because `tokenCalibration` is fixed for the whole run
+   * while the stored factor moves with every sample.
+   */
+  onUsageObserved?: (sample: { estimated: number; actual?: number; calibration: number }) => void;
+  /**
+   * Reports a provider context rejection so the model's stored window can shrink.
+   * Structurally identical to `ContextErrorDetails` (`src/prompt-budget.ts`), spelled
+   * out here to keep `types.ts` free of an import cycle.
+   */
+  onContextError?: (details: { promptTokens?: number; maxContextTokens?: number }) => void;
+  /** Provenance of the resolved budget, for the prompt_budget diagnostic event. */
+  budgetTelemetry?: {
+    contextWindow: number;
+    inputSource: BudgetInputSource;
+    outputSource: "override" | "default";
+    calibration: number;
+  };
 }
 
 export const NATIVE_TRANSPORT_ATTEMPT_SIGNAL = Symbol("nativeTransportAttemptSignal");
@@ -659,8 +761,8 @@ export interface ClaudeOperationConfig {
 
 export interface NativeOperationConfig {
   model: string;
-  inputBudgetTokens: number;
-  maxTokens: number;
+  inputBudgetTokens?: number;
+  maxTokens?: number;
   temperature: number;
   /** @deprecated Numeric `thinking` is not part of OpenAI Chat Completions. Ignored. */
   thinkingBudgetTokens?: number;
@@ -700,9 +802,26 @@ export interface LlmWikiPluginSettings {
     baseUrl: string;
     apiKey: string;
     model: string;
-    inputBudgetTokens: number;
+    /**
+     * @deprecated Migration source only. The single global window this setting used
+     * to be is moved onto every native chat model it covered by
+     * `normalizePersistedModelControls`, which then deletes the key.
+     */
+    contextWindowTokens?: number;
+    /**
+     * Context windows in tokens, keyed by MODEL NAME, for backends that do not
+     * advertise one. An entry replaces the DISCOVERED window for that model (no
+     * probe runs) and every budget for it is derived from that number; no entry
+     * means the window is probed as before.
+     *
+     * Keyed by model rather than by role because `ModelContextStore` is: its cache
+     * key is `${baseUrl}::${model}` and every native role shares one `baseUrl`, so a
+     * per-role setting could hand the same store key two different windows.
+     */
+    contextWindowTokensByModel?: Record<string, number>;
+    inputBudgetTokens?: number;
     repairInputBudgetTokens?: number;
-    maxTokens: number;
+    maxTokens?: number;
     compressionProfile: CompressionProfile;
     temperature: number;
     topP: number | null;
@@ -845,19 +964,20 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
     baseUrl: "http://localhost:11434/v1",
     apiKey: "ollama",
     model: "llama3.2",
-    inputBudgetTokens: 16384,
-    repairInputBudgetTokens: 65536,
-    maxTokens: 4096,
     compressionProfile: "balanced",
     temperature: 0.2,
     topP: null,
     perOperation: false,
+    // No per-operation `inputBudgetTokens` / `maxTokens` defaults: both are optional and
+    // absent means "derive from the model's context window". A default here would be
+    // re-injected by loadSettings' defaults-first merge on the next start, silently
+    // reviving a cleared override as an explicit one.
     operations: {
-      ingest: { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 4096, temperature: 0.2 },
-      query:  { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 4096, temperature: 0.2 },
-      lint:   { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 8192, temperature: 0.2 },
-      init:   { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 8192, temperature: 0.2 },
-      format: { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 32768, temperature: 0.2 },
+      ingest: { model: "llama3.2", temperature: 0.2 },
+      query:  { model: "llama3.2", temperature: 0.2 },
+      lint:   { model: "llama3.2", temperature: 0.2 },
+      init:   { model: "llama3.2", temperature: 0.2 },
+      format: { model: "llama3.2", temperature: 0.2 },
     },
     structuredRetries: 1,
     rerankerEnabled: false,

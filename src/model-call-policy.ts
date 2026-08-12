@@ -7,9 +7,14 @@ import type {
   OpKey,
   WikiOperation,
 } from "./types";
+import { MIN_CONTEXT_WINDOW, type ModelContextRecord } from "./model-context";
+import { resolveBudget, type ResolvedBudget } from "./budget-resolver";
 
+// The claude-agent input-budget default. That backend keeps its stored defaults and
+// still falls back to a fixed literal when a stored value is invalid or absent; the
+// native path does not, because an absent native budget derives from the model
+// context instead of inventing a constant.
 const DEFAULT_INPUT_BUDGET = 16_384;
-const DEFAULT_REPAIR_INPUT_BUDGET = 65_536;
 
 export type ModelControlField =
   | "inputBudgetTokens"
@@ -101,6 +106,15 @@ function positiveInt(value: unknown, fallback: number): number {
   return fallback;
 }
 
+/** Like `positiveInt`, but an absent or invalid value stays absent instead of
+ * inventing a fallback constant. Used for native budgets, which are now
+ * derived from the model context when unset. */
+function optionalPositiveInt(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  const floored = Math.floor(value);
+  return floored >= 1 ? floored : undefined;
+}
+
 function compressionProfile(value: unknown): CompressionProfile | undefined {
   return value === "maximum" || value === "balanced" || value === "minimum"
     ? value
@@ -120,15 +134,129 @@ export function parsePositiveBudgetInput(value: string, previous: number): numbe
   return Number.isSafeInteger(parsed) ? parsed : previous;
 }
 
+/**
+ * Pure: computes what an automatic native-budget text control shows for each field in
+ * `values`. An absent (`undefined`) value still produces an entry — value `""` — so the
+ * field is never hidden; its placeholder carries the resolved automatic number when the
+ * caller has one, or `automaticPlaceholder` (default "Automatic") when it does not. Lives
+ * here, not in settings.ts, so it is importable — and testable — without pulling in
+ * Obsidian (settings.ts imports the `obsidian` module at the top level).
+ */
+export function renderNativeBudgetControls(
+  values: Readonly<Record<string, number | undefined>>,
+  automaticPlaceholder = "Automatic",
+): Array<{ field: string; value: string; placeholder: string }> {
+  return Object.keys(values).map((field) => {
+    const value = values[field];
+    return {
+      field,
+      value: value === undefined ? "" : String(value),
+      placeholder: value === undefined ? automaticPlaceholder : String(value),
+    };
+  });
+}
+
+/**
+ * Pure: applies one budget-field edit to a settings holder in place. An empty/whitespace
+ * input deletes the key — that is how a stored override returns to automatic, never a
+ * written 0 or default. An invalid non-empty entry is ignored, keeping the previous
+ * value. A valid strictly-positive integer overwrites it.
+ */
+export function applyBudgetInput<K extends string>(
+  holder: Partial<Record<K, number>>,
+  key: K,
+  raw: string,
+  min = 1,
+): void {
+  const trimmed = raw.trim();
+  if (trimmed === "") { delete holder[key]; return; }
+  if (!/^[1-9]\d*$/.test(trimmed)) return;
+  const parsed = Number(trimmed);
+  if (Number.isSafeInteger(parsed) && parsed >= min) holder[key] = parsed;
+}
+
+type NativeAgentSettings = LlmWikiPluginSettings["nativeAgent"];
+
+/** The window the user configured for one model, or undefined for "ask the backend". */
+export function configuredContextWindowFor(
+  nativeAgent: NativeAgentSettings,
+  model: string,
+): number | undefined {
+  return nativeAgent.contextWindowTokensByModel?.[model];
+}
+
+/**
+ * Writes one model's window in place. `undefined` clears it — and the last entry
+ * going away takes the map with it, so a settings file that never used the feature
+ * keeps the shape it had.
+ */
+export function setConfiguredContextWindow(
+  nativeAgent: NativeAgentSettings,
+  model: string,
+  next: number | undefined,
+): void {
+  if (!model) return;
+  const map = nativeAgent.contextWindowTokensByModel;
+  if (next === undefined) {
+    if (!map) return;
+    delete map[model];
+    if (Object.keys(map).length === 0) delete nativeAgent.contextWindowTokensByModel;
+    return;
+  }
+  if (map) map[model] = next;
+  else nativeAgent.contextWindowTokensByModel = { [model]: next };
+}
+
+/**
+ * Every native chat model the ONE global window used to be applied to. Vision is
+ * absent on purpose: nothing ever resolved a context record for `vision.model`, so
+ * the old number was never that model's window and inheriting it would be a guess.
+ */
+function legacyWindowModels(settings: LlmWikiPluginSettings): string[] {
+  const models = [
+    settings.nativeAgent.model,
+    ...(["ingest", "query", "lint", "init", "format"] as const)
+      .map((key) => settings.nativeAgent.operations[key].model),
+  ];
+  return [...new Set(models.filter((model) => typeof model === "string" && model !== ""))];
+}
+
+function normalizeConfiguredContextWindows(settings: LlmWikiPluginSettings): void {
+  const na = settings.nativeAgent;
+  const stored = na.contextWindowTokensByModel;
+  const normalized: Record<string, number> = {};
+  if (stored !== null && typeof stored === "object") {
+    for (const [model, value] of Object.entries(stored)) {
+      // Floored, not just positive: a persisted 512 would be displayed while the
+      // engine refused it and probed instead.
+      const window = optionalPositiveInt(value);
+      if (model !== "" && window !== undefined && window >= MIN_CONTEXT_WINDOW) {
+        normalized[model] = window;
+      }
+    }
+  }
+  // The pre-per-model setting: one window for every native model. Moved onto each
+  // model it covered, then consumed, so the migration runs exactly once and an
+  // explicit per-model entry always wins. Reached through a cast because this is the
+  // one place allowed to read the retired key.
+  //
+  // The key was added and retired inside the same unreleased range, so no released
+  // version ever wrote it: this protects a settings file from a development build,
+  // not a user upgrade path, and is documented nowhere user-facing for that reason.
+  const legacyHolder = na as { contextWindowTokens?: unknown };
+  const legacy = optionalPositiveInt(legacyHolder.contextWindowTokens);
+  if (legacy !== undefined && legacy >= MIN_CONTEXT_WINDOW) {
+    for (const model of legacyWindowModels(settings)) normalized[model] ??= legacy;
+  }
+  delete legacyHolder.contextWindowTokens;
+  if (Object.keys(normalized).length === 0) delete na.contextWindowTokensByModel;
+  else na.contextWindowTokensByModel = normalized;
+}
+
 export function normalizePersistedModelControls(settings: LlmWikiPluginSettings): void {
-  settings.nativeAgent.inputBudgetTokens = positiveInt(
-    settings.nativeAgent.inputBudgetTokens,
-    DEFAULT_INPUT_BUDGET,
-  );
-  settings.nativeAgent.repairInputBudgetTokens = positiveInt(
-    settings.nativeAgent.repairInputBudgetTokens,
-    DEFAULT_REPAIR_INPUT_BUDGET,
-  );
+  normalizeConfiguredContextWindows(settings);
+  settings.nativeAgent.inputBudgetTokens = optionalPositiveInt(settings.nativeAgent.inputBudgetTokens);
+  settings.nativeAgent.repairInputBudgetTokens = optionalPositiveInt(settings.nativeAgent.repairInputBudgetTokens);
   settings.claudeAgent.inputBudgetTokens = positiveInt(
     settings.claudeAgent.inputBudgetTokens,
     DEFAULT_INPUT_BUDGET,
@@ -141,7 +269,7 @@ export function normalizePersistedModelControls(settings: LlmWikiPluginSettings)
   for (const key of ["ingest", "query", "lint", "init", "format"] as const) {
     const native = settings.nativeAgent.operations[key];
     const claude = settings.claudeAgent.operations[key];
-    native.inputBudgetTokens = positiveInt(native.inputBudgetTokens, DEFAULT_INPUT_BUDGET);
+    native.inputBudgetTokens = optionalPositiveInt(native.inputBudgetTokens);
     claude.inputBudgetTokens = positiveInt(claude.inputBudgetTokens, DEFAULT_INPUT_BUDGET);
     if (key === "format") {
       delete native.compressionProfile;
@@ -171,16 +299,73 @@ function compressionOperation(key: OpKey): CompressionOperation | undefined {
   return key;
 }
 
-export function resolveModelCallPolicy(
+export interface ResolvedModelCall {
+  model: string;
+  policy: ModelCallPolicy;
+  opts: LlmCallOptions;
+  /** Undefined on the claude-agent path, which does not consult the record. */
+  budget?: ResolvedBudget;
+}
+
+/**
+ * The model that will serve this operation, without resolving its context window or
+ * budgets. Callers resolve the model first, look up its `ModelContextRecord`, then
+ * call `resolveCallPolicy` with that record.
+ */
+export function effectiveModel(
   settings: LlmWikiPluginSettings,
   operation: WikiOperation,
   parent?: OpKey,
-): { model: string; policy: ModelCallPolicy; opts: LlmCallOptions } {
+): string {
   const key = policyKey(operation, parent);
+  const global = settings.backend === "claude-agent" ? settings.claudeAgent : settings.nativeAgent;
+  const local = global.perOperation ? global.operations[key] : undefined;
+  return local?.model ?? global.model;
+}
+
+/**
+ * The explicit input/output caps that bind one native operation: the per-operation
+ * value when per-operation controls are on, otherwise the global one. Absent means
+ * "derive from the window".
+ *
+ * Exported because vision resolves its budget from the VISION model's own window but
+ * under the FORMAT operation's caps: a number the user typed is a cost decision, and
+ * changing which window a request is measured against does not repeal it.
+ */
+export function nativeBudgetOverrides(
+  settings: LlmWikiPluginSettings,
+  key: OpKey,
+): { input?: number; output?: number } {
+  const global = settings.nativeAgent;
+  const local = global.perOperation ? global.operations[key] : undefined;
+  return {
+    input: local?.inputBudgetTokens ?? global.inputBudgetTokens,
+    output: local?.maxTokens ?? global.maxTokens,
+  };
+}
+
+/**
+ * The record-aware model-call resolver. On the native-agent path,
+ * input and output budgets are derived from the model's context window
+ * (`resolveBudget`) instead of falling back to fixed constants; a stored budget still
+ * acts as an explicit override. The claude-agent path does not read `record` and keeps
+ * its fixed 16_384 input-budget default.
+ */
+export function resolveCallPolicy(
+  settings: LlmWikiPluginSettings,
+  operation: WikiOperation,
+  record: ModelContextRecord,
+  parent?: OpKey,
+): ResolvedModelCall {
+  const key = policyKey(operation, parent);
+  const compressionOp = compressionOperation(key);
+  const model = effectiveModel(settings, operation, parent);
+
   if (settings.backend === "claude-agent") {
+    // The claude-agent-era resolution, unchanged and returned without a `budget`
+    // field. `record` is not read on this path.
     const global = settings.claudeAgent;
     const local = global.perOperation ? global.operations[key] : undefined;
-    const compressionOp = compressionOperation(key);
     const compression = key === "format"
       ? undefined
       : compressionProfile(local?.compressionProfile)
@@ -191,7 +376,7 @@ export function resolveModelCallPolicy(
       ...(compression ? { compression } : {}),
     };
     return {
-      model: local?.model ?? global.model,
+      model,
       policy,
       opts: {
         inputBudgetTokens: policy.inputBudgetTokens,
@@ -204,39 +389,45 @@ export function resolveModelCallPolicy(
 
   const global = settings.nativeAgent;
   const local = global.perOperation ? global.operations[key] : undefined;
-  const compressionOp = compressionOperation(key);
   const compression = key === "format"
     ? undefined
     : compressionProfile(local?.compressionProfile)
       ?? compressionProfile(global.compressionProfile)
       ?? "balanced";
-  const globalOutputBudget = positiveInt(global.maxTokens, 4096);
-  const outputBudget = positiveInt(local?.maxTokens ?? globalOutputBudget, globalOutputBudget);
-  const outputRetryBudget = Math.max(outputBudget, globalOutputBudget);
-  const inputBudget = positiveInt(local?.inputBudgetTokens ?? global.inputBudgetTokens, DEFAULT_INPUT_BUDGET);
-  const repairInputBudget = key === "init" || key === "ingest"
-    ? Math.max(inputBudget, positiveInt(global.repairInputBudgetTokens, DEFAULT_REPAIR_INPUT_BUDGET))
+  const budget = resolveBudget(record, key, nativeBudgetOverrides(settings, key));
+  // A stored repair budget is still clamped by the window: `resolveBudget`'s
+  // `maxInput` bounds both the derived value AND an override, and a repair prompt
+  // must not exceed the input budget it is repairing.
+  const repairInputBudgetTokens = key === "init" || key === "ingest"
+    ? Math.min(optionalPositiveInt(global.repairInputBudgetTokens) ?? budget.inputBudgetTokens, budget.inputBudgetTokens)
     : undefined;
   const policy: ModelCallPolicy = {
-    inputBudgetTokens: inputBudget,
-    ...(repairInputBudget === undefined ? {} : { repairInputBudgetTokens: repairInputBudget }),
-    outputBudgetTokens: outputBudget,
-    outputRetryBudgetTokens: outputRetryBudget,
+    inputBudgetTokens: budget.inputBudgetTokens,
+    ...(repairInputBudgetTokens === undefined ? {} : { repairInputBudgetTokens }),
+    outputBudgetTokens: budget.outputBudgetTokens,
     ...(compression ? { compression } : {}),
   };
   return {
-    model: local?.model ?? global.model,
+    model,
     policy,
+    budget,
     opts: {
-      inputBudgetTokens: policy.inputBudgetTokens,
-      repairInputBudgetTokens: policy.repairInputBudgetTokens,
-      maxTokens: outputBudget,
-      outputRetryBudgetTokens: outputRetryBudget,
+      inputBudgetTokens: budget.inputBudgetTokens,
+      repairInputBudgetTokens,
+      maxTokens: budget.outputBudgetTokens,
+      tokenCalibration: budget.calibration,
+      contextWindowTokens: budget.contextWindow,
       temperature: local?.temperature ?? global.temperature,
       topP: global.topP,
       semanticCompression: compression && compressionOp
         ? { profile: compression, operation: compressionOp }
         : undefined,
+      budgetTelemetry: {
+        contextWindow: budget.contextWindow,
+        inputSource: budget.inputSource,
+        outputSource: budget.outputSource,
+        calibration: budget.calibration,
+      },
     },
   };
 }

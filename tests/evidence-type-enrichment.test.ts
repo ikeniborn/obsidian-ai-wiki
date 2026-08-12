@@ -138,17 +138,25 @@ test("bootstrap bundle retains full evidence and source provenance while the old
   );
   const retained = structuredClone(bundle.evidence);
 
+  const expectedBootstrap = {
+    candidates: [{
+      entityKey: "postgresql",
+      packetIds: bundle.evidence[0].packetIds,
+      facts: ["PostgreSQL is a database"],
+      exactSource: [{ startLine: 1, endLine: 2, text: source }],
+    }],
+    domainThemes: ["PostgreSQL is a database"],
+    languageEvidence: [source],
+  };
   assert.deepEqual(bundle, {
-    bootstrap: {
-      candidates: [{
-        entityKey: "postgresql",
-        packetIds: bundle.evidence[0].packetIds,
-        facts: ["PostgreSQL is a database"],
-        exactSource: [{ startLine: 1, endLine: 2, text: source }],
-      }],
-      domainThemes: ["PostgreSQL is a database"],
-      languageEvidence: [source],
-    },
+    bootstrap: expectedBootstrap,
+    // A payload that fits stays one group; task-9 splits only what is oversized.
+    bootstrapGroups: [expectedBootstrap],
+    bootstrapMinimumGroupTokens: estimatePreparedMessages([{
+      role: "user",
+      content: JSON.stringify(expectedBootstrap),
+    }]),
+    bootstrapSubdivided: 0,
     evidence: retained,
     domainId: "databases",
     sourcePath,
@@ -237,7 +245,10 @@ test("classifier budget-packs compact immutable units and covers every key exact
     `entity-${index + 1}`,
     `bounded fact ${index + 1} ${"x".repeat(360)}`,
   ));
-  const inputPolicy = policy(3_900);
+  // Rescaled from a byte-era budget of 3_900 for the token estimator
+  // (task-3 prompt-budget-automation): 928 (3_900 / 4.2) still forces
+  // multiple classifier batches.
+  const inputPolicy = policy(928);
   const result = await enrichEvidenceTypes(
     input,
     new Set(["database", "cache"]),

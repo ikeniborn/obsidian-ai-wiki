@@ -6,7 +6,7 @@ import type { VaultTools } from "../vault-tools";
 import { parseWithRetry } from "./parse-with-retry";
 import { createLlmLifecycle, runStructuredWithRetry } from "./structured-output";
 import { lifecycleEvent } from "../llm-lifecycle";
-import { runWithContextRepack, classifyContextError, PromptBudgetExceededError } from "../prompt-budget";
+import { runWithContextRepack, classifyContextError, PromptBudgetExceededError, estimatePreparedMessages } from "../prompt-budget";
 import { applyPagePatch } from "../section-patches";
 import { buildLintBatchMessages, buildLintRelatedSections, buildLintWorkItems, lintReplaceAuthorities, mergeLintFindings, validateLintBatchOutput, validateLintCoverage, type LintBatchOutput, type LintFinding, type LintWorkItem } from "./lint-batches";
 import { EntityTypesDeltaSchema, LintBatchOutputSchema } from "./zod-schemas";
@@ -189,11 +189,17 @@ function structuralFindings(allStructuralIssues: string, pages: Map<string, stri
   return findings;
 }
 
-function packLintWorkBatches(
+/**
+ * Packs work items into requests measured in estimator TOKENS, the unit
+ * `inputBudgetTokens` is expressed in. `calibration` is the resolved budget's runtime
+ * factor and scales the estimate, never the budget.
+ */
+export function packLintWorkBatches(
   items: readonly LintWorkItem[],
   domainName: string,
   schema: string,
   inputBudgetTokens: number,
+  calibration?: number,
 ): LintWorkItem[][] {
   const batches: LintWorkItem[][] = [];
   let current: LintWorkItem[] = [];
@@ -205,7 +211,7 @@ function packLintWorkBatches(
       workItems: candidate,
       relatedSections: [],
     });
-    if (estimateMessages(messages) <= inputBudgetTokens || current.length === 0) {
+    if (estimatePreparedMessages(messages, calibration) <= inputBudgetTokens || current.length === 0) {
       current = candidate;
       continue;
     }
@@ -216,11 +222,7 @@ function packLintWorkBatches(
   return batches;
 }
 
-function estimateMessages(messages: OpenAI.Chat.ChatCompletionMessageParam[]): number {
-  return new TextEncoder().encode(JSON.stringify(messages)).byteLength;
-}
-
-async function runLintBatchWithSplit(args: {
+export async function runLintBatchWithSplit(args: {
   items: readonly LintWorkItem[];
   allItems?: readonly LintWorkItem[];
   pages: Map<string, string>;
@@ -238,6 +240,7 @@ async function runLintBatchWithSplit(args: {
 }> {
   try {
     const result = await runWithContextRepack({
+      onContextError: args.opts.onContextError,
       requestBudgetsEmittedByExecute: true,
       callSite: "lint.batch",
       configuredInputBudget: args.opts.inputBudgetTokens ?? 16_384,
@@ -249,6 +252,7 @@ async function runLintBatchWithSplit(args: {
           args.items,
           args.pages,
           Math.floor(effectiveInputBudget * 0.25),
+          args.opts.tokenCalibration,
         );
         let messages = buildLintBatchMessages({
           domainName: args.domainName,
@@ -256,7 +260,7 @@ async function runLintBatchWithSplit(args: {
           workItems: args.items,
           relatedSections,
         });
-        let estimatedInputTokens = estimateMessages(messages);
+        let estimatedInputTokens = estimatePreparedMessages(messages, args.opts.tokenCalibration);
         while (estimatedInputTokens > effectiveInputBudget && relatedSections.length > 0) {
           relatedSections = relatedSections.slice(0, -1);
           messages = buildLintBatchMessages({
@@ -265,7 +269,7 @@ async function runLintBatchWithSplit(args: {
             workItems: args.items,
             relatedSections,
           });
-          estimatedInputTokens = estimateMessages(messages);
+          estimatedInputTokens = estimatePreparedMessages(messages, args.opts.tokenCalibration);
         }
         if (estimatedInputTokens > effectiveInputBudget) {
           throw new PromptBudgetExceededError(
@@ -477,9 +481,11 @@ export async function* runLint(
 
     if (useLlm) {
       const lintPages = new Map(filteredArticlePaths.map((path) => [path, pages.get(path) ?? ""]));
-      const workItems = buildLintWorkItems(lintPages, opts.inputBudgetTokens ?? 16_384);
+      const workItems = buildLintWorkItems(lintPages, opts.inputBudgetTokens ?? 16_384, opts.tokenCalibration);
       validateLintCoverage(lintPages, workItems);
-      const batches = packLintWorkBatches(workItems, domain.name, systemContent, opts.inputBudgetTokens ?? 16_384);
+      const batches = packLintWorkBatches(
+        workItems, domain.name, systemContent, opts.inputBudgetTokens ?? 16_384, opts.tokenCalibration,
+      );
       const batchOutputs: LintBatchOutput[] = [];
       const batchLifecycles: ReturnType<typeof createLlmLifecycle>[] = [];
       const pendingBatchLifecycles = new Map<string, ReturnType<typeof createLlmLifecycle>>();

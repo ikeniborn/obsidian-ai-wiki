@@ -164,7 +164,6 @@ function modelPolicy(opts: LlmCallOptions): ModelCallPolicy {
     inputBudgetTokens: opts.inputBudgetTokens ?? 16_384,
     ...(opts.repairInputBudgetTokens === undefined ? {} : { repairInputBudgetTokens: opts.repairInputBudgetTokens }),
     ...(opts.maxTokens === undefined ? {} : { outputBudgetTokens: opts.maxTokens }),
-    ...(opts.outputRetryBudgetTokens === undefined ? {} : { outputRetryBudgetTokens: opts.outputRetryBudgetTokens }),
     compression: opts.semanticCompression?.profile ?? "balanced",
   };
 }
@@ -216,7 +215,6 @@ function tagRegistryUnits(text: string): ContextUnit[] {
     text,
     required: false,
     priority: 1,
-    estimatedTokens: new TextEncoder().encode(text).byteLength,
   }];
 }
 
@@ -894,6 +892,11 @@ export async function* runIngest(
         compressionProfile: policy.compression,
         mapperRetries: opts.structuredRetries ?? 1,
         reducerRetries: opts.structuredRetries ?? 1,
+        // The budgets above are calibrated tokens. chunkSourceForEvidence converts the
+        // chunk ceiling back to raw estimator tokens with this factor, so omitting it
+        // would compare a calibrated budget against a raw measurement — the unit Init
+        // already supplies at init.ts.
+        calibration: opts.tokenCalibration ?? 1,
       }, {
         llm,
         model,

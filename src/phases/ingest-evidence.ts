@@ -13,6 +13,7 @@ import {
   PromptBudgetExceededError,
   runWithContextRepack,
 } from "../prompt-budget";
+import { estimateText } from "../token-estimate";
 import type {
   CompressionProfile,
   LlmCallOptions,
@@ -132,43 +133,172 @@ function unique<T>(values: T[], key: (value: T) => string): T[] {
   });
 }
 
-function estimateBootstrapPayload(value: BootstrapEvidence): number {
-  return estimatePreparedMessages([{ role: "user", content: JSON.stringify(value) }]);
+function estimateBootstrapPayload(value: BootstrapEvidence, calibration?: number): number {
+  return estimatePreparedMessages([{ role: "user", content: JSON.stringify(value) }], calibration);
 }
 
-function boundBootstrapPayload(value: BootstrapEvidence, budget: number): BootstrapEvidence {
-  const clone: BootstrapEvidence = {
-    candidates: value.candidates.map((candidate) => ({
-      entityKey: candidate.entityKey,
-      packetIds: [...candidate.packetIds],
-      facts: [...candidate.facts],
-      exactSource: candidate.exactSource.map((source) => ({ ...source })),
-    })),
+export { estimateBootstrapPayload as estimateBootstrapPayloadForTest };
+
+/**
+ * Caps for the two lists every split group duplicates. They bound the per-group
+ * overhead so the chunk budget is computable BEFORE the evidence that fills it
+ * exists — the budget governs the very preparation that would otherwise have to
+ * be measured. Both lists are naming and language signals derived from the whole
+ * corpus: no coverage invariant reads them and no later phase consumes them
+ * beyond the Init prompt, so bounding them drops nothing that is not already
+ * carried, in full, by the candidates.
+ */
+export const MAX_DOMAIN_THEMES = 24;
+export const MAX_LANGUAGE_EVIDENCE = 12;
+/**
+ * Per-item ceiling in estimator tokens on the JSON-encoded item, not in
+ * characters: under the character-class rates one Cyrillic character costs 2.3
+ * estimator tokens per word character and one CJK character costs 8, so a
+ * character cap would understate the worst case by the same factors. Measuring
+ * the encoded form also absorbs escaping.
+ */
+export const MAX_OVERHEAD_ITEM_TOKENS = 48;
+
+/** Longest prefix of `value` whose JSON encoding fits `MAX_OVERHEAD_ITEM_TOKENS`. */
+function boundOverheadItem(value: string): string {
+  if (estimateText(JSON.stringify(value)) <= MAX_OVERHEAD_ITEM_TOKENS) return value;
+  const characters = [...value];
+  let low = 0;
+  let high = characters.length;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (estimateText(JSON.stringify(characters.slice(0, middle).join(""))) <= MAX_OVERHEAD_ITEM_TOKENS) {
+      low = middle;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return characters.slice(0, low).join("");
+}
+
+/**
+ * Upper bound, in calibrated tokens, on what one split group carries besides its
+ * candidates: both capped lists at full length plus the JSON envelope. Each item
+ * costs at most `MAX_OVERHEAD_ITEM_TOKENS` encoded, plus one separator character
+ * (below one token) — so the arithmetic bound holds for any script.
+ */
+export function worstCaseBootstrapOverheadTokens(calibration?: number): number {
+  const items = MAX_DOMAIN_THEMES + MAX_LANGUAGE_EVIDENCE;
+  const envelope = estimateBootstrapPayload(
+    { candidates: [], domainThemes: [], languageEvidence: [] },
+    calibration,
+  );
+  return envelope + Math.ceil(items * (MAX_OVERHEAD_ITEM_TOKENS + 1) * (calibration ?? 1));
+}
+
+function emptyBootstrapGroup(value: BootstrapEvidence): BootstrapEvidence {
+  return {
+    candidates: [],
     domainThemes: [...value.domainThemes],
     languageEvidence: [...value.languageEvidence],
   };
-  if (estimateBootstrapPayload(clone) <= budget) return clone;
+}
 
-  while (clone.languageEvidence.length > 0 && estimateBootstrapPayload(clone) > budget) {
-    clone.languageEvidence.pop();
+/**
+ * Splits a candidate into sub-candidates sharing its entityKey and carrying
+ * disjoint evidence. A candidate aggregates facts and ranges across every chunk
+ * that mentions the entity, so bounding the chunk does not bound the candidate.
+ */
+function subdivideCandidate(
+  candidate: BootstrapCandidateEvidence,
+  parts: number,
+): BootstrapCandidateEvidence[] {
+  const total = Math.max(candidate.facts.length, candidate.exactSource.length, 1);
+  const size = Math.max(1, Math.ceil(total / Math.max(1, parts)));
+  const result: BootstrapCandidateEvidence[] = [];
+  for (let offset = 0; offset < total; offset += size) {
+    result.push({
+      entityKey: candidate.entityKey,
+      packetIds: [...candidate.packetIds],
+      facts: candidate.facts.slice(offset, offset + size),
+      exactSource: candidate.exactSource.slice(offset, offset + size).map((range) => ({ ...range })),
+    });
   }
-  while (clone.domainThemes.length > 0 && estimateBootstrapPayload(clone) > budget) {
-    clone.domainThemes.pop();
-  }
-  for (const candidate of clone.candidates) {
-    while (candidate.exactSource.length > 1 && estimateBootstrapPayload(clone) > budget) {
-      candidate.exactSource.pop();
+  // Unreachable from the only call site — a candidate of at most one unit is
+  // classified atomic before it gets here, and every part of a candidate with
+  // two or more units carries at least one of them. Kept as a guard so the
+  // helper cannot return empty candidates if it is ever called directly.
+  return result.filter((part) => part.facts.length > 0 || part.exactSource.length > 0);
+}
+
+export interface BootstrapSplit {
+  groups: BootstrapEvidence[];
+  /**
+   * Size of the largest returned group, in tokens: the smallest budget at which
+   * this split is entirely feasible. Taken over every group, divisible ones
+   * included — when it exceeds the requested budget the excess is atomic and the
+   * caller must widen rather than split further.
+   */
+  minimumGroupTokens: number;
+  /**
+   * Number of halving OPERATIONS performed, not the number of candidates that
+   * were divided: dividing one candidate of 5 units into 5 parts counts 4.
+   */
+  subdivided: number;
+}
+
+/**
+ * Greedy over candidates; a candidate that does not fit an empty group is
+ * subdivided first. Themes and language evidence are duplicated into every
+ * group, which is the overhead the chunk budget already subtracts. Nothing is
+ * ever dropped or truncated: when a single evidence unit still does not fit,
+ * it is kept whole and `minimumGroupTokens` reports the budget it would need.
+ */
+export function splitBootstrapPayload(
+  value: BootstrapEvidence,
+  budget: number,
+  calibration?: number,
+): BootstrapSplit {
+  const estimate = (group: BootstrapEvidence): number => estimateBootstrapPayload(group, calibration);
+  const whole = estimate(value);
+  if (whole <= budget) return { groups: [value], minimumGroupTokens: whole, subdivided: 0 };
+
+  // Divide until every part fits or is atomic. `subdivideCandidate` halves by
+  // evidence unit, so the loop terminates: each pass either shrinks a part or
+  // reports it atomic. A single arithmetic pass is not enough — one unit can be
+  // far larger than the average, so ceil(size / budget) parts can still overflow.
+  let subdivided = 0;
+  const queue: BootstrapCandidateEvidence[] = [];
+  const pending = [...value.candidates];
+  while (pending.length > 0) {
+    const candidate = pending.shift()!;
+    const probe: BootstrapEvidence = { ...emptyBootstrapGroup(value), candidates: [candidate] };
+    if (estimate(probe) <= budget) {
+      queue.push(candidate);
+      continue;
     }
-  }
-  for (const candidate of clone.candidates) {
-    while (candidate.facts.length > 1 && estimateBootstrapPayload(clone) > budget) {
-      candidate.facts.pop();
+    const units = Math.max(candidate.facts.length, candidate.exactSource.length);
+    if (units <= 1) {
+      queue.push(candidate); // atomic: at most one fact and one range, cannot divide
+      continue;
     }
+    subdivided++;
+    pending.unshift(...subdivideCandidate(candidate, 2));
   }
-  while (clone.candidates.length > 1 && estimateBootstrapPayload(clone) > budget) {
-    clone.candidates.pop();
+
+  const groups: BootstrapEvidence[] = [];
+  let current = emptyBootstrapGroup(value);
+  for (const candidate of queue) {
+    const attempt: BootstrapEvidence = { ...current, candidates: [...current.candidates, candidate] };
+    if (current.candidates.length > 0 && estimate(attempt) > budget) {
+      groups.push(current);
+      current = { ...emptyBootstrapGroup(value), candidates: [candidate] };
+      continue;
+    }
+    current = attempt;
   }
-  return clone;
+  groups.push(current);
+
+  return {
+    groups,
+    minimumGroupTokens: Math.max(...groups.map((group) => estimate(group))),
+    subdivided,
+  };
 }
 
 function rangeKey(range: EvidenceRange): string {
@@ -428,6 +558,10 @@ export interface EvidencePolicy {
   reducerRetries?: number;
   maxReductionDepth?: number;
   bootstrapPayloadBudgetTokens?: number;
+  /** Calibrated token ceiling for one mapper source chunk. */
+  chunkBudgetTokens?: number;
+  /** Token calibration factor the budgets above are expressed in. */
+  calibration?: number;
 }
 
 export interface EvidenceRuntime {
@@ -455,6 +589,9 @@ export interface BootstrapEvidence {
 
 export interface BootstrapEvidenceBundle {
   bootstrap: BootstrapEvidence;
+  bootstrapGroups: BootstrapEvidence[];
+  bootstrapMinimumGroupTokens: number;
+  bootstrapSubdivided: number;
   evidence: EntityEvidence[];
   domainId: string;
   sourcePath: string;
@@ -714,7 +851,7 @@ function messagesForMapper(
 interface MapperRequestDetails {
   hash: string;
   estimatedInputTokens: number;
-  rawBytes: number;
+  rawTokens: number;
   lineCount: number;
 }
 
@@ -740,7 +877,7 @@ function mapperRequestDetails(
   return {
     hash: JSON.stringify(prepared),
     estimatedInputTokens: estimateStructuredRequest(messages, mapperOpts, policy.mapperRetries ?? 1),
-    rawBytes: new TextEncoder().encode(original).byteLength,
+    rawTokens: estimateText(original),
     lineCount: chunk.endLine - chunk.startLine + 1,
   };
 }
@@ -749,7 +886,7 @@ function estimateLlmMessages(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   opts: LlmCallOptions,
 ): number {
-  return estimatePreparedMessages(prepareChatMessages(messages, opts));
+  return estimatePreparedMessages(prepareChatMessages(messages, opts), opts.tokenCalibration);
 }
 
 function boundedStructuredRepairInstruction(error?: Error): string {
@@ -953,7 +1090,7 @@ export function chunkSourceForEvidence(
   opts: LlmCallOptions = {},
   configuredEntityTypes?: string[],
 ): SourceChunk[] {
-  ensurePolicy(policy);
+  ensurePolicy(policy, opts);
   if (source.length === 0) return [];
   const normalizedEntityTypes = configuredEntityTypes ?? [];
   const mode: EvidenceMappingMode = {
@@ -984,7 +1121,27 @@ function planSourceChunksForEvidence(
   if (initialRequestBudget <= 0) {
     throw new EvidenceCoverageError("Mapper prompt and repair reserve exceed the input budget");
   }
-  const planned = findLargestFeasibleBudget<SourceChunk[]>(1, initialRequestBudget, (chunkBudget) => {
+  // policy.chunkBudgetTokens is expressed in calibrated tokens, the same unit as
+  // the bootstrap payload budget. chunkMarkdownSource measures in raw estimator
+  // tokens, so the budget is converted rather than the measurement. Without this
+  // the "one evidence unit always fits" proof compares two different scales.
+  //
+  // This is not inert when chunkBudgetTokens is unset. Two regimes matter:
+  //   - opts.tokenCalibration below 1 (model-context clamps to [0.5, 3], so 0.5
+  //     is reachable) shrinks the calibrated request estimate, letting
+  //     mapperEstimateFits admit roughly 1/calibration times more raw markdown
+  //     than inputBudgetTokens. The raw ceiling then binds where nothing bound
+  //     before. That is intended: the ceiling keeps a chunk's raw text within
+  //     the configured budget instead of trusting a factor fitted for whole
+  //     requests, it only ever produces smaller chunks, and coverage is
+  //     unaffected, so it costs an extra mapper call and loses nothing.
+  //   - policy.calibration below 1 widens the ceiling instead, because a
+  //     calibrated budget buys proportionally more raw tokens.
+  const rawChunkBudget = Math.max(1, Math.floor(
+    Math.min(initialRequestBudget, policy.chunkBudgetTokens ?? initialRequestBudget)
+    / (policy.calibration ?? 1),
+  ));
+  const planned = findLargestFeasibleBudget<SourceChunk[]>(1, rawChunkBudget, (chunkBudget) => {
     let chunks: SourceChunk[];
     try {
       chunks = chunkMarkdownSource(source, {
@@ -995,14 +1152,17 @@ function planSourceChunksForEvidence(
       return { kind: "too-small" as const };
     }
     const mapperOpts = taskLlmOptions(opts, policy, policy.inputBudgetTokens);
-    chunks = packAdjacentMapperChunks(chunks, createChunk, (chunk) => mapperEstimateFits(
-      estimateStructuredRequest(
-        messagesForMapper(mapPrompt, chunk, domainId, mode, preparedSourceLines),
-        mapperOpts,
-        policy.mapperRetries ?? 1,
-      ),
-      initialRequestBudget,
-    ));
+    // Packing merges adjacent chunks, so it has to respect the raw chunk budget
+    // too; otherwise the bound the search just applied is immediately undone.
+    chunks = packAdjacentMapperChunks(chunks, createChunk, (chunk) => estimateText(chunk.markdown) <= rawChunkBudget
+      && mapperEstimateFits(
+        estimateStructuredRequest(
+          messagesForMapper(mapPrompt, chunk, domainId, mode, preparedSourceLines),
+          mapperOpts,
+          policy.mapperRetries ?? 1,
+        ),
+        initialRequestBudget,
+      ));
     const estimates = chunks.map((chunk) => estimateStructuredRequest(
       messagesForMapper(mapPrompt, chunk, domainId, mode, preparedSourceLines),
       mapperOpts,
@@ -1024,13 +1184,33 @@ function messagesForReducer(units: EvidenceUnit[]): OpenAI.Chat.ChatCompletionMe
   ];
 }
 
-function ensurePolicy(policy: EvidencePolicy): void {
+function ensurePolicy(policy: EvidencePolicy, opts?: LlmCallOptions): void {
   if (!Number.isSafeInteger(policy.inputBudgetTokens) || policy.inputBudgetTokens <= 0) {
     throw new EvidenceCoverageError("Evidence input budget must be a positive safe integer");
   }
   if (policy.outputBudgetTokens !== undefined
     && (!Number.isSafeInteger(policy.outputBudgetTokens) || policy.outputBudgetTokens <= 0)) {
     throw new EvidenceCoverageError("Evidence output budget must be a positive safe integer");
+  }
+  if (policy.chunkBudgetTokens !== undefined
+    && (!Number.isSafeInteger(policy.chunkBudgetTokens) || policy.chunkBudgetTokens <= 0)) {
+    throw new EvidenceCoverageError("Evidence chunk budget must be a positive safe integer");
+  }
+  // A calibration of zero would make the raw chunk budget infinite and hang the
+  // budget search, so it is rejected rather than clamped.
+  if (policy.calibration !== undefined
+    && (!Number.isFinite(policy.calibration) || policy.calibration <= 0)) {
+    throw new EvidenceCoverageError("Evidence token calibration must be a positive finite number");
+  }
+  // The policy's budgets and the request estimates must be expressed in the same
+  // calibrated unit. A caller that threads the factor into the call options but not
+  // into the policy silently compares a calibrated budget against a raw measurement,
+  // so the mismatch is rejected here instead of producing a wrong chunk ceiling.
+  if (opts !== undefined && (policy.calibration ?? 1) !== (opts.tokenCalibration ?? 1)) {
+    throw new EvidenceCoverageError(
+      `Evidence policy calibration ${policy.calibration ?? 1} does not match the call `
+      + `calibration ${opts.tokenCalibration ?? 1}`,
+    );
   }
 }
 
@@ -1370,7 +1550,7 @@ function rechunkMapperSourceForRetry(
         policy,
         runtime.opts ?? {},
       );
-      return details.rawBytes <= maximumRawBudget
+      return details.rawTokens <= maximumRawBudget
         && mapperEstimateFits(details.estimatedInputTokens, effectiveInputBudget);
     });
     const largest = Math.max(...chunks.map((chunk) => estimateStructuredRequest(
@@ -1403,6 +1583,7 @@ async function mapChunksWithContextRepack(
     & Pick<MapperChunkWork, "splitDepth">) | undefined;
   const semanticSplitLineage: Array<Pick<SourceChunk, "startLine" | "endLine">> = [];
   return runWithContextRepack({
+    onContextError: runtime.opts?.onContextError,
     requestBudgetsEmittedByExecute: true,
     callSite: mapCallSite,
     configuredInputBudget: configuredBudget,
@@ -1424,7 +1605,7 @@ async function mapChunksWithContextRepack(
           mode,
         );
       } else {
-        const forcedRawBudget = failedMapper.rawBytes - 1;
+        const forcedRawBudget = failedMapper.rawTokens - 1;
         if (forcedRawBudget <= 0) {
           throw new EvidenceCoverageError(`Mapper chunk ${failedMapper.id} cannot be split into a smaller original-source range`);
         }
@@ -1677,6 +1858,7 @@ async function reduceBatch(
   const retries = policy.reducerRetries ?? 1;
   let failedReducer: { hash: string; units: EvidenceUnit[]; estimatedInputTokens: number } | undefined;
   return runWithContextRepack({
+    onContextError: runtime.opts?.onContextError,
     requestBudgetsEmittedByExecute: true,
     callSite: "ingest.evidence-reduce",
     configuredInputBudget: configuredBudget,
@@ -1787,7 +1969,7 @@ async function prepareSourceEvidenceInternal(
   runtime: EvidenceRuntime,
   mode: EvidenceMappingMode,
 ): Promise<EntityEvidence[]> {
-  ensurePolicy(policy);
+  ensurePolicy(policy, runtime.opts);
   ensureOutputBudget(policy, runtime.opts);
   const configuredTypes = mode.rejectEntityTypes
     ? []
@@ -1875,11 +2057,13 @@ export async function prepareBootstrapEvidenceBundle(
     facts: [...facts],
     exactSource: exactSource.map((range) => ({ ...range })),
   }));
-  const domainThemes = unique(evidence.flatMap((item) => item.facts), (fact) => fact);
+  const domainThemes = unique(evidence.flatMap((item) => item.facts), (fact) => fact)
+    .slice(0, MAX_DOMAIN_THEMES)
+    .map(boundOverheadItem);
   const languageEvidence = unique(
     evidence.flatMap((item) => item.exactSource.map((range) => range.text)),
     (text) => text,
-  );
+  ).slice(0, MAX_LANGUAGE_EVIDENCE).map(boundOverheadItem);
   const payloadBudget = Math.min(
     policy.inputBudgetTokens,
     policy.bootstrapPayloadBudgetTokens ?? policy.inputBudgetTokens,
@@ -1887,15 +2071,19 @@ export async function prepareBootstrapEvidenceBundle(
   if (!Number.isSafeInteger(payloadBudget) || payloadBudget <= 0) {
     throw new EvidenceCoverageError("Bootstrap payload budget must be a positive safe integer");
   }
-  const bootstrap = boundBootstrapPayload({ candidates, domainThemes, languageEvidence }, payloadBudget);
-  const estimated = estimateBootstrapPayload(bootstrap);
-  if (estimated > payloadBudget) {
-    throw new EvidenceCoverageError(
-      `Bootstrap evidence payload requires ${estimated} tokens but budget is ${payloadBudget}`,
-    );
-  }
+  // No size check throws here. A group larger than the budget means the evidence
+  // is atomic, and the operation must not end on size — so the number is reported
+  // upward and the caller widens the budget instead.
+  const split = splitBootstrapPayload(
+    { candidates, domainThemes, languageEvidence },
+    payloadBudget,
+    runtime.opts?.tokenCalibration,
+  );
   return {
-    bootstrap,
+    bootstrap: split.groups[0],
+    bootstrapGroups: split.groups,
+    bootstrapMinimumGroupTokens: split.minimumGroupTokens,
+    bootstrapSubdivided: split.subdivided,
     evidence,
     domainId: provisionalDomainId,
     sourcePath,

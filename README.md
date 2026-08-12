@@ -106,9 +106,11 @@ Settings → AI Wiki:
 | API Key | `ollama` |
 | Model | `llama3.2` |
 | Temperature | `0.2` |
-| Input budget tokens | `16384` |
-| Output budget tokens | `4096` |
 | Semantic compression | `Balanced` |
+
+Input and output budget tokens are automatic by default — AI Wiki derives them from the
+model's context window, so there is nothing to configure here. Leave them empty unless
+you need to override the automatic value; see [Bounded processing and storage](#bounded-processing-and-storage).
 
 ### 5. Create a knowledge area (domain)
 
@@ -273,8 +275,9 @@ Native Agent's request executor, HTTP status matrix, or connection-timeout trans
 | Base URL | OpenAI-compatible endpoint. Ollama: `http://localhost:11434/v1` | `http://localhost:11434/v1` |
 | API key | `ollama` for Ollama; `sk-...` for OpenAI | `ollama` |
 | Connection timeout | Desktop DNS/TCP/TLS establishment only; it does not cap response headers, body, or generation | `15` s |
-| Input budget tokens | Maximum estimated size of the packed prompt. This is configured explicitly; the plugin does not discover the model's context window | `16384` |
-| Output budget tokens | Response cap sent through the existing `maxTokens`/API `max_tokens` setting | `4096` |
+| Model context window | Tokens the model holds in one request. One field per model field — the chat model, each per-operation model, and the vision model — so differently sized models are budgeted separately. Empty (shown as "Automatic") means the window is read from the backend. Set a number only when your backend does not report one; every budget for that model is then derived from it and nothing is probed. Minimum `1024` tokens; smaller entries are refused | *(empty = Automatic)* |
+| Input budget tokens | Maximum size of the packed prompt. Empty (shown as "Automatic") derives it from the model's context window, discovered once per model, cached, and self-corrected against the provider's reported usage. Set a number to override it | *(empty = Automatic)* |
+| Output budget tokens | Response cap sent through `maxTokens`/API `max_tokens`. Empty (shown as "Automatic") is derived per operation from the model's context window the same way. Set a number to override it | *(empty = Automatic)* |
 | Semantic compression | Prompt-density profile (`Maximum`/`Balanced`/`Minimum`) with operation-specific preservation rules | `Balanced` |
 | Model | Model name (`llama3.2`, `mistral`, `gpt-4o`, …). Shown when per-operation is off | `llama3.2` |
 | Thinking budget tokens | Separate native model reasoning allowance; `0` or empty disables it. It does not increase the input budget | off |
@@ -314,6 +317,7 @@ model-idle handling remain separate from that limitation.
 | Enable image analysis | Analyze supported images and PDF pages during Format | off |
 | Semantic compression | Vision-specific override; preserves OCR, objects, relationships, layout, page identity, and uncertainty | Use global |
 | Vision model | Multimodal model used for image analysis | — |
+| Model context window | Native Agent only. The **vision** model's window, used to size its own requests — including how many PDF pages go into one call. Empty (shown as "Automatic") means the window is read from the backend. Set it whenever your vision model is smaller than your chat model and the backend does not advertise its window: that is what makes a small-window vision model work, not a measure to reach for after seeing "Vision skipped". Minimum `1024` tokens | *(empty = Automatic)* |
 | Vision Check | Native Agent only: sends one real, tiny 1×1 inline PNG request with a short prompt and a 16-token output cap. Reports success/failure without changing settings or vault files. Claude Agent exposes no Check | — |
 
 ### Bounded processing and storage
@@ -327,9 +331,79 @@ remains CLI-owned.
 The input budget governs the complete prepared request, including system/schema
 instructions—not just note text. When content does not fit, AI Wiki packs complete context
 units and uses operation-specific batching or splitting instead of silently truncating
-required content. Provider context errors can trigger a smaller repack. The configured
-budget remains explicit; AI Wiki does not automatically discover a model's context
-window.
+required content. Provider context errors can trigger a smaller repack.
+
+For Native Agent, an empty input or output budget is automatic: AI Wiki discovers the
+model's context window once per model, caches it, and self-corrects the estimate against
+the provider's reported token usage. A number you type in Input budget tokens or Output
+budget tokens still acts as an explicit override — automatic budgeting never overrides a
+value you set. Claude Agent is unchanged: its input budget stays a fixed, explicitly
+configured value.
+
+When the provider does not report a context window for the model, AI Wiki falls back to a
+conservative **8192-token** window and budgets from that. The fallback is cached for
+**24 hours**, so the next run after that re-probes the provider and picks up a real window
+as soon as one is reported; a discovered window is cached without an expiry. In capacity
+terms the fallback is roughly neutral against the byte-based 16384 budget it replaces —
+about 15 kB of Latin text either way — so it is a different unit, not a smaller allowance.
+
+#### When your backend never reports a window
+
+Some OpenAI-compatible backends — aggregating gateways and proxies in particular — answer
+`GET /v1/models` and list your model, but no entry carries a context length, and the
+Ollama-style `/api/show` endpoint does not exist. There is then nothing to discover, so
+every run budgets from the conservative 8192-token fallback even though the real model
+window may be sixteen times larger. What you see: schema or instruction blocks dropped
+from prompts to make them fit, requests reported as truncated ("needs N tokens" against a
+4096-token limit, that limit itself derived from the phantom 8192 window), and
+`agent.jsonl` showing `contextWindow: 8192` with `inputSource: "default"`. The agent log
+is **off by default** — turn on **Agent log (JSONL)** in Settings before looking for those
+entries. The field itself shows "Automatic" while the window is unknown: the fallback is
+not a measurement of your model, so it is never advertised there as one.
+
+Fix it by filling in **Model context window** with the model's real window in tokens (for
+example `131072`; the minimum accepted is `1024`). AI Wiki then skips the probe entirely
+for that backend and model and derives every budget from your number, exactly as if the
+backend had reported it — input budget, output budget, the per-request output ceiling,
+chunk budgets, and the Init bootstrap split. The agent log reports
+`inputSource: "configured"` so it is clear the number came from you. Clearing the field
+returns that model to automatic discovery.
+
+A window belongs to the model it sits next to, not to the backend: the chat model, each
+per-operation model, and the vision model each have their own **Model context window**
+field, and clearing one leaves the others alone. Two roles that name the same model share
+one window, because the plugin caches one context record per model.
+
+A value you type here is treated as an instruction, not a guess: if the provider later
+rejects a prompt and reports a smaller window of its own, AI Wiki does **not** silently
+shrink your value. The disagreement is recorded in `agent.jsonl` as a
+`context_window_conflict` entry with both numbers, so you can correct the setting
+yourself. (A discovered or fallback window, which nobody chose, is still learned down in
+that situation.)
+
+What happens to the operation depends on which one it is. Ingest, Query and Lint — and the
+chat follow-ups — repack the rejected request smaller and complete anyway. **Init cannot:**
+it plans its bootstrap splits from the window *before* sending anything, so a window set
+larger than the model's real one makes Init fail with a bootstrap error instead of
+shrinking into it. The conflict is still recorded, so `agent.jsonl` says why; lower the
+setting to the model's real window (or clear it to return to automatic) and re-run.
+
+Enabling **Per-operation models** does not turn automatic budgeting off. Each operation
+gets its own input and output budget fields, and each is automatic while it is empty. A
+number you type there overrides the automatic value for that operation only; clearing it
+returns that operation to automatic.
+
+If you upgraded from a version where these fields required a number, AI Wiki asks once
+whether to switch your saved value to automatic or keep it; dismissing that prompt keeps
+your saved value. You can change your mind at any time by clearing or setting the field
+in Settings — including the per-operation fields, which stay cleared across restarts.
+
+The prompt estimator counts tokens rather than serialized bytes, and prices characters by
+class: shell commands, config files, paths and JSON cost far more tokens per character
+than prose, so notes full of them are no longer estimated as if they were prose. Both
+changes moved chunk boundaries during ingest. Existing domains are **not** re-indexed
+automatically after upgrading — use the sidebar's **♻ full re-init** (`--force`) on a
+domain to rebuild it with the new chunking.
 
 Ingest splits oversized Markdown at stable section, paragraph, line-window, and fenced-code
 boundaries. Bounded map calls produce source-anchored evidence; reduction calls preserve
@@ -347,6 +421,39 @@ Small sources keep the short path. Oversized sources, pages, histories, notes, o
 require extra bounded model calls, increasing latency and provider cost in exchange for
 complete processing within the configured input budget. Vision Check is also a real
 provider request and may incur a small charge.
+
+Image and PDF analysis is budgeted from the **vision** model's own context window, not
+from the window of the chat model that runs Format. On Native Agent the vision model gets
+its own context record — discovered from the backend or taken from its own **Model context
+window** field — and the number of PDF pages packed into one vision request follows from
+it. A vision model with a small window therefore splits a PDF into more, smaller calls
+instead of sending one oversized request that the provider rejects. Only the window
+changes: an **Input budget tokens** or **Output budget tokens** value you set on the
+Format operation still caps the vision call.
+
+This applies only when the vision model's window is actually **known**. If the backend
+advertises no window for it and you have not set one, vision keeps being sized from the
+Format operation's own budget, exactly as before — the conservative 8192-token fallback is
+not a measurement of your vision model, and budgeting from it would leave less room than a
+single image costs, refusing every attachment before it was sent. So on a backend that
+advertises nothing, **Vision → Model context window** is the field that makes a
+small-window vision model work: set it to the model's real window and PDF batches, the
+output cap and the client-side size check all follow from it.
+
+Vision calls do not feed the context store. A provider rejection of a vision request is
+recovered inside the run and then forgotten, so a vision-only model never learns a window
+from one and its token calibration stays at 1; a rejection is remembered only when the
+same model also serves a chat operation, which shares one context record with it. Setting
+the field is what makes the window stick.
+
+When an attachment is skipped because it does not fit, the `⚠️ Vision skipped` warning
+explains why: it names the vision model and the setting to change, and — when a window is
+known — the window the request was measured against and whether it was configured,
+discovered or learned. With no window known it names no number, because there is none to
+report: it says the backend advertises no window for this model and the request was sized
+from the Format operation's own budget. Those refusals happen before the request is sent,
+so nothing in the provider's answer would explain them. The warning text is English
+regardless of the interface language.
 
 Destructive Re-init acceptance must use a private copied vault, never the working vault.
 The protected replay root must be a recent `/tmp/ai-wiki-bounded-ingest-replay.*`

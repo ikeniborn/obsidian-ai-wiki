@@ -29,6 +29,7 @@ import {
 import { createLlmLifecycle } from "./structured-output";
 import { lifecycleEvent } from "../llm-lifecycle";
 import { VisionRecognitionBatchSchema } from "./zod-schemas";
+import { MEDIA_TOKENS } from "../token-estimate";
 import {
   createNativeRequestLifecycle,
   createNativeRequestRetryContext,
@@ -116,6 +117,8 @@ export interface VisionAnalysisOptions {
   onEvent?: (event: RunEvent) => void;
   nativeRequestRetries?: number;
   nativeRequestIdleTimeoutMs?: number;
+  /** Provider-derived correction applied to every token estimate for this call. */
+  tokenCalibration?: number;
 }
 
 interface ResolvedVisionAnalysisOptions {
@@ -124,6 +127,7 @@ interface ResolvedVisionAnalysisOptions {
   onEvent?: (event: RunEvent) => void;
   nativeRequestRetries?: number;
   nativeRequestIdleTimeoutMs?: number;
+  tokenCalibration?: number;
 }
 
 function resolveVisionOptions(
@@ -135,6 +139,7 @@ function resolveVisionOptions(
     onEvent: options?.onEvent,
     nativeRequestRetries: options?.nativeRequestRetries,
     nativeRequestIdleTimeoutMs: options?.nativeRequestIdleTimeoutMs,
+    tokenCalibration: options?.tokenCalibration,
   };
 }
 
@@ -194,6 +199,7 @@ function visionCallOptions(
     reasoningLanguage,
     nativeRequestRetries: options.nativeRequestRetries,
     nativeRequestIdleTimeoutMs: options.nativeRequestIdleTimeoutMs,
+    tokenCalibration: options.tokenCalibration,
     jsonMode: "json_schema" as const,
     jsonSchema: {
       name: "vision_analysis",
@@ -240,8 +246,12 @@ async function callVisionLlm(
     onEvent,
     attemptOffset: attempt,
   });
+  // Through the vision model's own calibration factor, like `buildChatParams`'
+  // preflight above: reporting the raw estimate would make the budget event
+  // disagree with the number the request was actually refused or sized against.
   const estimatedInputTokens = estimatePreparedMessages(
     params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+    options.tokenCalibration,
   );
   let providerDispatched = false;
   let response: OpenAI.Chat.ChatCompletion;
@@ -460,7 +470,7 @@ export async function analyzePdf(
     }),
     visionCallOptions(resolved, language, reasoningLanguage),
   );
-  const fixedEstimatedTokens = estimatePreparedMessages(fixedMessages);
+  const fixedEstimatedTokens = estimatePreparedMessages(fixedMessages, resolved.tokenCalibration);
   const resizedPages = new Set<string>();
   let visionAttempt = 0;
 
@@ -514,7 +524,10 @@ export async function analyzePdf(
       batches = batchPdfPages(pending, {
         inputBudgetTokens: effectiveInputBudget,
         fixedEstimatedTokens,
-        mediaReservationTokens: 4096,
+        // The same constant `estimateMessages` prices an `image_url` part at: this
+        // number decides how many pages fit a batch, so a second literal here could
+        // drift from what the estimator actually charges.
+        mediaReservationTokens: MEDIA_TOKENS,
       });
     } catch (error) {
       if (originalContextDetails !== undefined) {

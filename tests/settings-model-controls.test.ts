@@ -4,21 +4,30 @@ import { register } from "node:module";
 import test from "node:test";
 
 import {
+  applyBudgetInput,
   backendModelControlDescriptor,
   createLiveModelControl,
   normalizePersistedModelControls,
   parsePositiveBudgetInput,
   renderModelControlFields,
-  resolveModelCallPolicy,
+  renderNativeBudgetControls,
+  resolveCallPolicy,
 } from "../src/model-call-policy";
 import { DEFAULT_SETTINGS, type LlmWikiPluginSettings } from "../src/types";
+import type { ModelContextRecord } from "../src/model-context";
 import { runNativeVisionModelCheck } from "../src/vision-probe";
+import { clearNativeBudgets, hasStoredNativeBudget, settleOnce } from "../src/auto-budget-notice";
 
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
+
+function probeRecord(): ModelContextRecord {
+  return { contextWindow: 131_072, source: "discovered", calibration: 1, samples: 0 };
+}
 const { i18nFor } = await import("../src/i18n");
 const runtimeControls = await import("../src/types") as unknown as Record<string, unknown>;
 const settingsSource = readFileSync(new URL("../src/settings.ts", import.meta.url), "utf8");
 const mainSource = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
+const modalsSource = readFileSync(new URL("../src/modals.ts", import.meta.url), "utf8");
 
 function assertSourceOrder(source: string, markers: readonly string[]): void {
   let previous = -1;
@@ -73,9 +82,12 @@ test("old settings gain model controls without changing output budgets", () => {
 
   assert.equal(settings.nativeAgent.maxTokens, 7777);
   assert.equal(settings.nativeAgent.operations.query.maxTokens, 3333);
-  assert.equal(settings.nativeAgent.inputBudgetTokens, 16_384);
+  // Native input budgets are optional: normalization leaves an absent value absent
+  // (it is derived from the model context later) instead of inventing 16_384. Only
+  // the claude-agent path still falls back to that constant.
+  assert.equal(settings.nativeAgent.inputBudgetTokens, undefined);
   assert.equal(settings.claudeAgent.inputBudgetTokens, 16_384);
-  assert.equal(settings.nativeAgent.operations.query.inputBudgetTokens, 16_384);
+  assert.equal(settings.nativeAgent.operations.query.inputBudgetTokens, undefined);
   assert.equal(settings.claudeAgent.operations.query.inputBudgetTokens, 16_384);
   assert.equal(settings.nativeAgent.compressionProfile, "balanced");
   assert.equal(settings.claudeAgent.compressionProfile, "balanced");
@@ -579,7 +591,7 @@ test("Vision compression override is legacy-only and ignored by Format policy", 
   settings.nativeAgent.compressionProfile = "minimum";
   assert.equal(settings.vision.compressionProfile, "maximum");
 
-  const format = resolveModelCallPolicy(settings, "format");
+  const format = resolveCallPolicy(settings, "format", probeRecord());
   assert.equal(format.policy.compression, undefined);
   assert.equal(format.opts.semanticCompression, undefined);
 });
@@ -591,12 +603,329 @@ test("Format compression fields are ignored and no compression policy is produce
   settings.nativeAgent.operations.format.compressionProfile = "maximum";
 
   normalizePersistedModelControls(settings);
-  const format = resolveModelCallPolicy(settings, "format");
+  const format = resolveCallPolicy(settings, "format", probeRecord());
   assert.equal(format.policy.compression, undefined);
   assert.equal(format.opts.semanticCompression, undefined);
 
   assert.equal(settings.nativeAgent.operations.format.compressionProfile, undefined);
   assert.equal(settings.claudeAgent.operations.format.compressionProfile, undefined);
+});
+
+test("an automatic budget still renders a control", () => {
+  const rendered = renderNativeBudgetControls({ inputBudgetTokens: undefined }, "Automatic");
+  assert.equal(rendered.length, 1, "an undefined value must not hide the field");
+  assert.equal(rendered[0].value, "");
+  assert.equal(rendered[0].placeholder, "Automatic");
+});
+
+test("a stored override still renders its number, not the automatic placeholder", () => {
+  const rendered = renderNativeBudgetControls({ inputBudgetTokens: 24_000 }, "Automatic");
+  assert.equal(rendered.length, 1);
+  assert.equal(rendered[0].value, "24000");
+  assert.equal(rendered[0].placeholder, "24000");
+});
+
+test("clearing the field deletes the setting rather than keeping the old number", () => {
+  const holder: { inputBudgetTokens?: number } = { inputBudgetTokens: 24_000 };
+  applyBudgetInput(holder, "inputBudgetTokens", "");
+  assert.equal("inputBudgetTokens" in holder, false);
+});
+
+test("a valid edit overwrites the stored override, and an invalid one is ignored", () => {
+  const holder: { inputBudgetTokens?: number } = { inputBudgetTokens: 24_000 };
+  applyBudgetInput(holder, "inputBudgetTokens", "32000");
+  assert.equal(holder.inputBudgetTokens, 32_000);
+  applyBudgetInput(holder, "inputBudgetTokens", "not-a-number");
+  assert.equal(holder.inputBudgetTokens, 32_000, "an invalid entry must keep the previous value");
+  applyBudgetInput(holder, "inputBudgetTokens", "0");
+  assert.equal(holder.inputBudgetTokens, 32_000, "0 is not a strictly positive integer");
+});
+
+test("native budgets are optional by default, so the settings tab must not hide them", () => {
+  assert.equal(DEFAULT_SETTINGS.nativeAgent.inputBudgetTokens, undefined);
+  assert.equal(DEFAULT_SETTINGS.nativeAgent.maxTokens, undefined);
+  assert.equal(DEFAULT_SETTINGS.nativeAgent.repairInputBudgetTokens, undefined);
+  // Task 7 already made claude-agent's field required with a fixed default; that must
+  // stay true so its settings control keeps the unchanged, non-automatic behaviour.
+  assert.equal(DEFAULT_SETTINGS.claudeAgent.inputBudgetTokens, 16_384);
+});
+
+test("addPolicyControls renders a native automatic field even when its value is undefined", () => {
+  // The shared render() helpers (used by both backends) sit before either branch.
+  // Task 7 left a guard in addPolicyControls that returned early on `undefined`,
+  // hiding the control entirely; it must now only guard the non-automatic (claude) path.
+  const start = settingsSource.indexOf("const addAutomaticBudgetControl = (");
+  const end = settingsSource.indexOf("const busy = this.plugin.controller.running;", start);
+  assert.ok(start >= 0 && end > start);
+  const body = settingsSource.slice(start, end);
+  assert.match(body, /T\.settings\.budgetAutomatic/);
+  assert.match(body, /addAutomaticBudgetControl/);
+  assert.match(body, /automatic\?\.updates\.inputBudgetTokens/);
+  assert.match(body, /automatic\?\.updates\.maxTokens/);
+  // The carried-forward guard must be reachable only after the automatic branch
+  // returns — i.e. it still exists, but no longer fires for an automatic field.
+  assert.match(body, /values\.inputBudgetTokens === undefined \|\| !updates\.inputBudgetTokens\) return;/);
+  // F1: no heading, and no "Advanced" grouping string anywhere — the automatic
+  // fields render inline, exactly where the fixed fields used to render, so
+  // compressionProfile is never visually grouped under a budgets-only heading.
+  assert.doesNotMatch(settingsSource, /advancedBudgets_name/);
+  assert.doesNotMatch(settingsSource, /Advanced: manual budgets/);
+  // Minor: automaticBudgetPlaceholders is named once per addPolicyControls
+  // invocation (assigned to `placeholders`) and both fields read from it, rather
+  // than each field spelling out the same {input, output} lookup. It is a thunk so
+  // a repaint recomputes it — see the stale-placeholder test below.
+  const policyStart = settingsSource.indexOf("const addPolicyControls = (");
+  const policyBody = settingsSource.slice(policyStart, end);
+  assert.ok(policyStart > start);
+  assert.match(policyBody, /const placeholders = automatic\s*\n\s*\? \(\) => automaticBudgetPlaceholders\(/);
+  assert.equal(
+    (policyBody.match(/automaticBudgetPlaceholders\(/g) ?? []).length,
+    1,
+    "automaticBudgetPlaceholders must be named once per addPolicyControls invocation",
+  );
+  assert.match(body, /placeholders!\(\)\.input/);
+  assert.match(body, /placeholders!\(\)\.output/);
+});
+
+test("a changed context window repaints the dependent placeholders without re-rendering the tab", () => {
+  // The defect: placeholders were computed at render time and the window field's
+  // onChange never refreshed them, so the derived budget numbers went on showing
+  // the old window until the tab was reopened. The fix must not be a re-render:
+  // onChange fires once per typed character and this.display() would rebuild the
+  // input the user is typing into.
+  const start = settingsSource.indexOf("const automaticControls: Array<");
+  const end = settingsSource.indexOf("const automaticBudgetPlaceholders = (", start);
+  assert.ok(start >= 0 && end > start);
+  const body = settingsSource.slice(start, end);
+
+  // Every automatic control registers a repaint, and a committed edit runs them.
+  assert.match(body, /automaticControls\.push\(repaint\)/);
+  assert.match(body, /text\.setPlaceholder\(rendered\.placeholder\)/);
+  assert.match(body, /refreshAutomaticControls\(\);/);
+  // A repaint rewrites the value only when explicitly asked to (a model change),
+  // never on the placeholder-only path a keystroke takes: rewriting the value while
+  // the user types would clobber a half-entered number.
+  assert.match(body, /if \(resetValue\) text\.setValue\(rendered\.value\);/);
+  assert.doesNotMatch(body, /this\.display\(\)/, "no re-render inside the automatic control");
+
+  // …and the value/placeholder sources are lazy, so a repaint sees current settings.
+  assert.match(body, /value: \(\) => number \| undefined/);
+  assert.match(body, /placeholder: \(\) => string/);
+});
+
+test("the context window renders next to every model field, and never on the claude path", () => {
+  const claudeStart = settingsSource.indexOf(
+    'if (eff.backend === "claude-agent" && !Platform.isMobile) {',
+  );
+  const claudeEnd = settingsSource.indexOf(
+    "new Setting(containerEl).setName(T.settings.h3_backendConnection).setHeading();",
+    claudeStart,
+  );
+  const nativeEnd = settingsSource.indexOf(
+    "new Setting(containerEl).setName(T.settings.h3_vision).setHeading();",
+    claudeEnd,
+  );
+  assert.ok(claudeStart >= 0 && claudeEnd > claudeStart && nativeEnd > claudeEnd);
+  const claudeBlock = settingsSource.slice(claudeStart, claudeEnd);
+  const nativeBlock = settingsSource.slice(claudeEnd, nativeEnd);
+  const visionBlock = settingsSource.slice(nativeEnd);
+
+  // One helper, rendered through the same automatic-field control as every other
+  // budget, keyed by the model the field sits next to, and cleared back to automatic
+  // by assigning `undefined` (what applyBudgetInput does on an empty entry).
+  const helperStart = settingsSource.indexOf("const addContextWindowControl = (");
+  const helperEnd = settingsSource.indexOf("const addCompressionControl = (", helperStart);
+  assert.ok(helperStart >= 0 && helperEnd > helperStart);
+  const helper = settingsSource.slice(helperStart, helperEnd);
+  assert.match(
+    helper,
+    /addAutomaticBudgetControl\(\s*\n\s*new Setting\(containerEl\)\s*\n\s*\.setName\(T\.settings\.contextWindowTokens_name\)/,
+  );
+  assert.match(helper, /configuredContextWindowFor\(s\.nativeAgent, model\(\)\)/);
+  assert.match(helper, /setConfiguredContextWindow\(s\.nativeAgent, model\(\), next\)/);
+  assert.match(helper, /\)\.contextWindow,/);
+  assert.match(helper, /MIN_CONTEXT_WINDOW/);
+  // Automatic budgeting — and this field with it — is native-agent only, and the
+  // field only exists for a role that names a model of its own.
+  assert.match(helper, /if \(eff\.backend !== "native-agent" \|\| !model\(\)\) return;/);
+
+  // Next to the global chat model, next to each per-operation model, next to vision.
+  assert.match(nativeBlock, /addContextWindowControl\(\(\) => s\.nativeAgent\.model\)/);
+  assert.match(nativeBlock, /addContextWindowControl\(\(\) => effectiveModel\(s, key\)\)/);
+  assert.match(visionBlock, /addContextWindowControl\(\(\) => s\.vision\.model\)/);
+
+  assert.doesNotMatch(claudeBlock, /contextWindowTokens/);
+  assert.doesNotMatch(claudeBlock, /addContextWindowControl/);
+  // The placeholder is still read from the cached record, never probed at render time.
+  assert.doesNotMatch(nativeBlock, /probeContextWindow/);
+  assert.doesNotMatch(helper, /probeContextWindow/);
+});
+
+test("a configured window is honoured by the settings placeholders before any run", async () => {
+  const { configuredContextRecord, plausibleContextWindow } = await import("../src/model-context");
+  const { resolveBudget } = await import("../src/budget-resolver");
+
+  const record = configuredContextRecord(131_072, { contextWindow: 8_192, source: "default", calibration: 1.2, samples: 3 });
+  assert.equal(record.source, "configured");
+  assert.equal(record.calibration, 1.2, "calibration measures the estimator, not the window");
+
+  const budget = resolveBudget(record, "init", {});
+  assert.equal(budget.contextWindow, 131_072);
+  assert.equal(budget.inputBudgetTokens, 110_592);
+  assert.equal(budget.outputBudgetTokens, 8_192);
+  assert.equal(budget.inputSource, "configured", "the source names the setting, not a probe");
+
+  // Format's x4 output multiplier and the input budget both follow the same window.
+  const format = resolveBudget(record, "format", {});
+  assert.equal(format.outputBudgetTokens, 32_768);
+  assert.equal(format.inputBudgetTokens, 88_473);
+
+  // A stored input override still wins over the derived value, and says so.
+  const overridden = resolveBudget(record, "init", { input: 24_000 });
+  assert.equal(overridden.inputBudgetTokens, 24_000);
+  assert.equal(overridden.inputSource, "override");
+
+  assert.equal(plausibleContextWindow(undefined), null);
+  assert.equal(plausibleContextWindow(12), null, "an implausible window falls back to probing");
+  assert.equal(plausibleContextWindow(131_072), 131_072);
+});
+
+test("the 8192 fallback is never advertised as a model's own context window", async () => {
+  const { placeholderContextWindow } = await import("../src/model-context");
+
+  // The defect: every non-configured cached record was treated as authoritative, so a
+  // gateway that advertises nothing made the Vision window field show 8192 — the one
+  // number `resolveVisionBudget` refuses to size the vision model from. A user who
+  // read it as "already known" left the field empty and vision stayed on the Format
+  // operation's budget.
+  assert.equal(
+    placeholderContextWindow({
+      contextWindow: 8_192, source: "default", calibration: 1, samples: 0,
+      expiresAt: Date.now() + 86_400_000,
+    }),
+    null,
+    "a fallback is not a measurement of this model",
+  );
+  // Everything the engine does treat as a fact about the model still shows its number.
+  for (const source of ["discovered", "configured", "learned"] as const) {
+    assert.equal(
+      placeholderContextWindow({ contextWindow: 131_072, source, calibration: 1, samples: 0 }),
+      131_072,
+      `${source} is a fact about the model`,
+    );
+  }
+
+  // …and the settings placeholder reports the window through it. The derived input
+  // and output budgets keep coming from the record, fallback included: those are the
+  // numbers the next run will actually use.
+  const start = settingsSource.indexOf("const automaticBudgetPlaceholders = (");
+  const end = settingsSource.indexOf("const addContextWindowControl = (", start);
+  assert.ok(start >= 0 && end > start);
+  const body = settingsSource.slice(start, end);
+  assert.match(body, /placeholderContextWindow\(record\)/);
+  assert.match(body, /contextWindow: window === null \? automatic : String\(window\)/);
+  assert.doesNotMatch(body, /contextWindow: String\(record\.contextWindow\)/);
+  assert.match(body, /input: String\(budget\.inputBudgetTokens\)/);
+});
+
+test("a context window below the engine's floor is refused at entry, not stored and ignored", async () => {
+  const { MIN_CONTEXT_WINDOW } = await import("../src/model-context");
+  assert.equal(MIN_CONTEXT_WINDOW, 1_024);
+
+  // The engine refuses anything under the floor, so the field must refuse it too:
+  // storing 512 would show the user a number nothing is budgeting from.
+  const holder: { contextWindowTokens?: number } = { contextWindowTokens: 131_072 };
+  applyBudgetInput(holder, "contextWindowTokens", "512", MIN_CONTEXT_WINDOW);
+  assert.equal(holder.contextWindowTokens, 131_072, "a sub-floor entry keeps the previous value");
+  applyBudgetInput(holder, "contextWindowTokens", "1024", MIN_CONTEXT_WINDOW);
+  assert.equal(holder.contextWindowTokens, 1_024, "the floor itself is accepted");
+  applyBudgetInput(holder, "contextWindowTokens", "", MIN_CONTEXT_WINDOW);
+  assert.equal("contextWindowTokens" in holder, false, "clearing still returns to automatic");
+
+  // Budget fields keep their 1-token floor: only the window control passes a minimum.
+  const budgets: { inputBudgetTokens?: number } = {};
+  applyBudgetInput(budgets, "inputBudgetTokens", "512");
+  assert.equal(budgets.inputBudgetTokens, 512);
+
+  // The control wires the floor through, and the description states the range.
+  assert.match(settingsSource, /MIN_CONTEXT_WINDOW/);
+  for (const lang of ["en", "ru", "es"] as const) {
+    assert.match(i18nFor(lang).settings.contextWindowTokens_desc, /1024/, lang);
+  }
+});
+
+test("a persisted context window below the floor is dropped, not displayed", () => {
+  // Legacy single-value shape: a sub-floor number is dropped rather than migrated
+  // onto every model.
+  const settings = structuredClone(DEFAULT_SETTINGS);
+  (settings.nativeAgent as { contextWindowTokens?: number }).contextWindowTokens = 512;
+  normalizePersistedModelControls(settings);
+  assert.equal(
+    (settings.nativeAgent as { contextWindowTokens?: number }).contextWindowTokens, undefined,
+  );
+  assert.equal(settings.nativeAgent.contextWindowTokensByModel, undefined);
+});
+
+test("a cleared setting stops the placeholder from advertising the old configured window", () => {
+  // resolve() already refuses a `configured` record once the setting is gone; the
+  // placeholder must refuse it too, or it advertises a window nothing will use.
+  const start = settingsSource.indexOf("const automaticBudgetPlaceholders = (");
+  const end = settingsSource.indexOf("const addCompressionControl = (", start);
+  assert.ok(start >= 0 && end > start);
+  const body = settingsSource.slice(start, end);
+  assert.match(body, /cached\?\.source === "configured" \? undefined : cached/);
+});
+
+test("a persisted context window is normalized like every other optional budget", () => {
+  assert.equal(DEFAULT_SETTINGS.nativeAgent.contextWindowTokensByModel, undefined);
+  const settings = structuredClone(DEFAULT_SETTINGS);
+  const model = settings.nativeAgent.model;
+  settings.nativeAgent.contextWindowTokensByModel = { [model]: 0 as unknown as number };
+  normalizePersistedModelControls(settings);
+  assert.equal(settings.nativeAgent.contextWindowTokensByModel, undefined);
+  settings.nativeAgent.contextWindowTokensByModel = { [model]: 131_072 };
+  normalizePersistedModelControls(settings);
+  assert.deepEqual(settings.nativeAgent.contextWindowTokensByModel, { [model]: 131_072 });
+});
+
+test("only the native-agent call sites opt into automatic budgets; claude-agent call sites do not", () => {
+  const claudeStart = settingsSource.indexOf(
+    'if (eff.backend === "claude-agent" && !Platform.isMobile) {',
+  );
+  const claudeEnd = settingsSource.indexOf(
+    "new Setting(containerEl).setName(T.settings.h3_backendConnection).setHeading();",
+    claudeStart,
+  );
+  assert.ok(claudeStart >= 0 && claudeEnd > claudeStart);
+  const claudeBlock = settingsSource.slice(claudeStart, claudeEnd);
+  // Both claude-agent addPolicyControls calls end right after the boolean flag —
+  // no 5th "automatic" argument — so the plain, always-required budget path runs.
+  const claudeCalls = claudeBlock.match(/addPolicyControls\(\s*modelControls\.[\s\S]*?(?:false|true),\s*\);/g) ?? [];
+  assert.equal(claudeCalls.length, 2, "expected exactly the global and per-operation claude calls");
+
+  const nativeEnd = settingsSource.indexOf(
+    "new Setting(containerEl).setName(T.settings.h3_vision).setHeading();",
+    claudeEnd,
+  );
+  assert.ok(nativeEnd > claudeEnd);
+  const nativeBlock = settingsSource.slice(claudeEnd, nativeEnd);
+  // Global native fallback: representative operation "init", the raw configured model.
+  assert.match(nativeBlock, /model: \(\) => s\.nativeAgent\.model,\s*\n\s*operation: "init",/);
+  // Per-operation native: the model and operation actually used for that operation.
+  assert.match(nativeBlock, /model: \(\) => effectiveModel\(s, key\),\s*\n\s*operation: key,/);
+  assert.match(nativeBlock, /addAutomaticBudgetControl\(/);
+});
+
+test("the settings tab reads the cached model context synchronously, without probing", () => {
+  const controllerSource = readFileSync(new URL("../src/controller.ts", import.meta.url), "utf8");
+  const start = controllerSource.indexOf("cachedModelContext(baseUrl: string, model: string)");
+  assert.ok(start >= 0, "controller must expose a cachedModelContext pass-through");
+  const end = controllerSource.indexOf("\n  }", start);
+  const body = controllerSource.slice(start, end);
+  assert.doesNotMatch(body, /async/, "the pass-through must not be async");
+  assert.doesNotMatch(body, /await/, "the pass-through must not await anything");
+  assert.doesNotMatch(body, /\.resolve\(/, "the pass-through must read the cache, never trigger a probe");
+  assert.match(body, /this\.modelContextStore\.get\(baseUrl, model\)/);
 });
 
 test("Embedding Check uses localized success and failure notices", () => {
@@ -616,5 +945,249 @@ test("Embedding Check uses localized success and failure notices", () => {
     assert.equal(typeof labels.embeddingDimensionCheck_native(1024), "string");
     assert.equal(typeof labels.embeddingDimensionCheck_truncated(512, 1024), "string");
     assert.equal(typeof labels.embeddingDimensionCheck_ok(1024, "1024"), "string");
+  }
+});
+
+// --- Task 13: the one-shot auto-budget upgrade choice ---------------------------------
+
+test("a stored native budget is detected, a claude one is not", () => {
+  const settings = structuredClone(DEFAULT_SETTINGS);
+  assert.equal(hasStoredNativeBudget(settings), false);
+  settings.nativeAgent.inputBudgetTokens = 16_384;
+  assert.equal(hasStoredNativeBudget(settings), true);
+});
+
+test("a stored repair or output budget override is also detected", () => {
+  const withMaxTokens = structuredClone(DEFAULT_SETTINGS);
+  withMaxTokens.nativeAgent.maxTokens = 4_096;
+  assert.equal(hasStoredNativeBudget(withMaxTokens), true);
+
+  const withRepair = structuredClone(DEFAULT_SETTINGS);
+  withRepair.nativeAgent.repairInputBudgetTokens = 65_536;
+  assert.equal(hasStoredNativeBudget(withRepair), true);
+});
+
+test("accepting clears only the native budgets", () => {
+  const settings = structuredClone(DEFAULT_SETTINGS);
+  settings.nativeAgent.inputBudgetTokens = 24_000;
+  settings.nativeAgent.operations.init.maxTokens = 8_192;
+  const claudeBefore = structuredClone(settings.claudeAgent);
+  clearNativeBudgets(settings);
+  assert.equal(settings.nativeAgent.inputBudgetTokens, undefined);
+  assert.equal(settings.nativeAgent.operations.init.maxTokens, undefined);
+  assert.deepEqual(settings.claudeAgent, claudeBefore, "claude-agent must be untouched");
+});
+
+test("declining or dismissing keeps the stored native budgets: only clearNativeBudgets rewrites them", () => {
+  const settings = structuredClone(DEFAULT_SETTINGS);
+  settings.nativeAgent.inputBudgetTokens = 24_000;
+  const before = structuredClone(settings);
+  // Neither hasStoredNativeBudget nor "not calling clearNativeBudgets" mutates settings.
+  hasStoredNativeBudget(settings);
+  assert.deepEqual(settings, before);
+});
+
+test("clearing wipes every operation's budget override, not just one", () => {
+  const settings = structuredClone(DEFAULT_SETTINGS);
+  settings.nativeAgent.inputBudgetTokens = 24_000;
+  settings.nativeAgent.repairInputBudgetTokens = 65_536;
+  settings.nativeAgent.maxTokens = 4_096;
+  for (const key of ["ingest", "query", "lint", "init", "format"] as const) {
+    settings.nativeAgent.operations[key].inputBudgetTokens = 12_345;
+    settings.nativeAgent.operations[key].maxTokens = 6_789;
+  }
+  clearNativeBudgets(settings);
+  assert.equal(settings.nativeAgent.inputBudgetTokens, undefined);
+  assert.equal(settings.nativeAgent.repairInputBudgetTokens, undefined);
+  assert.equal(settings.nativeAgent.maxTokens, undefined);
+  for (const key of ["ingest", "query", "lint", "init", "format"] as const) {
+    assert.equal(settings.nativeAgent.operations[key].inputBudgetTokens, undefined, key);
+    assert.equal(settings.nativeAgent.operations[key].maxTokens, undefined, key);
+  }
+});
+
+/**
+ * Reproduces `LlmWikiPlugin.loadSettings`'s per-operation merge: defaults first, then
+ * whatever `data.json` stored. The regex below pins this simulation to the real merge,
+ * so it cannot drift silently.
+ */
+function mergeLikeMain(persisted: unknown): LlmWikiPluginSettings {
+  assert.match(
+    mainSource,
+    /ingest:\s*\{\s*\.\.\.defNA\.operations\.ingest,\s*\.\.\.\(\(naOps\.ingest as object\) \?\? \{\}\)\s*\}/,
+    "loadSettings must still merge native per-operation defaults first, then stored data",
+  );
+  const data = persisted as Record<string, Record<string, Record<string, object>>>;
+  const defNA = structuredClone(DEFAULT_SETTINGS).nativeAgent;
+  const naData = data?.nativeAgent ?? {};
+  const naOps = (naData.operations ?? {}) as Record<string, object>;
+  const merged = structuredClone(DEFAULT_SETTINGS);
+  merged.nativeAgent = {
+    ...defNA,
+    ...(naData as object),
+    operations: {
+      ingest: { ...defNA.operations.ingest, ...((naOps.ingest as object) ?? {}) },
+      query:  { ...defNA.operations.query,  ...((naOps.query  as object) ?? {}) },
+      lint:   { ...defNA.operations.lint,   ...((naOps.lint   as object) ?? {}) },
+      init:   { ...defNA.operations.init,   ...((naOps.init   as object) ?? {}) },
+      format: { ...defNA.operations.format, ...((naOps.format as object) ?? {}) },
+    },
+  } as LlmWikiPluginSettings["nativeAgent"];
+  normalizePersistedModelControls(merged);
+  return merged;
+}
+
+test("clearing a per-operation native budget survives a settings round-trip", () => {
+  const settings = structuredClone(DEFAULT_SETTINGS);
+  settings.nativeAgent.perOperation = true;
+  for (const key of ["ingest", "query", "lint", "init", "format"] as const) {
+    settings.nativeAgent.operations[key].inputBudgetTokens = 12_345;
+    settings.nativeAgent.operations[key].maxTokens = 6_789;
+  }
+  clearNativeBudgets(settings);
+
+  // `saveData` writes JSON, so a deleted key is simply absent from data.json.
+  const reloaded = mergeLikeMain(JSON.parse(JSON.stringify(settings)));
+
+  for (const key of ["ingest", "query", "lint", "init", "format"] as const) {
+    assert.equal(
+      reloaded.nativeAgent.operations[key].inputBudgetTokens, undefined,
+      `${key}: a cleared per-operation input budget must not come back from the defaults`,
+    );
+    assert.equal(
+      reloaded.nativeAgent.operations[key].maxTokens, undefined,
+      `${key}: a cleared per-operation output budget must not come back from the defaults`,
+    );
+  }
+
+  // The user-visible consequence: with per-operation models on, the reloaded settings
+  // must still budget automatically from the model's context window.
+  const resolved = resolveCallPolicy(reloaded, "ingest", probeRecord());
+  assert.equal(resolved.budget?.inputSource, "discovered");
+  assert.equal(resolved.budget?.outputSource, "default");
+  assert.notEqual(resolved.policy.inputBudgetTokens, 16_384);
+  assert.notEqual(resolved.policy.outputBudgetTokens, 4_096);
+});
+
+test("settleOnce resolves to the first value across any number of later calls", async () => {
+  const { promise, settle } = settleOnce<boolean>();
+  settle(true);
+  settle(false); // must be ignored: the promise already settled to true
+  settle(true);  // also ignored
+  assert.equal(await promise, true);
+});
+
+test("settleOnce settles even when only ever called with the dismissal value", async () => {
+  const { promise, settle } = settleOnce<boolean>();
+  // Simulates Escape / clicking outside: onClose is the only caller, exactly once.
+  settle(false);
+  assert.equal(await promise, false);
+});
+
+test("settleOnce never leaves the promise pending: every resolver call is idempotent", async () => {
+  const { promise, settle } = settleOnce<number>();
+  for (let i = 0; i < 5; i++) settle(i);
+  assert.equal(await promise, 0, "the first call must win");
+});
+
+test("AutoBudgetNoticeModal: dismissal (onClose) resolves the same conservative answer as an explicit keep", () => {
+  const block = sourceBlock(modalsSource, "export class AutoBudgetNoticeModal extends Modal {");
+  // The switch button explicitly settles true; every other exit (keep button, and
+  // onClose which covers Escape / outside click / the built-in close control) settles
+  // false. Assert both, and assert onClose settles unconditionally (no branching that
+  // could special-case some dismissal path into "true").
+  assert.match(block.body, /autoBudgetNotice_switch\)\.setCta\(\)\s*\n\s*\.onClick\(\(\) => \{ this\.resolver\.settle\(true\); this\.close\(\); \}\)/);
+  assert.match(block.body, /autoBudgetNotice_keep\)\s*\n\s*\.onClick\(\(\) => \{ this\.resolver\.settle\(false\); this\.close\(\); \}\)/);
+  const onCloseBlock = sourceBlock(block.body, "onClose(): void {");
+  assert.match(onCloseBlock.body, /this\.resolver\.settle\(false\);/);
+  assert.doesNotMatch(onCloseBlock.body, /settle\(true\)/, "onClose must never resolve true");
+  // ask() must call open() (which Obsidian guarantees eventually calls onClose()) and
+  // return the resolver's promise directly — no separate, never-settled promise.
+  const askBlock = sourceBlock(block.body, "ask(): Promise<boolean> {");
+  assert.match(askBlock.body, /this\.open\(\);/);
+  assert.match(askBlock.body, /return this\.resolver\.promise;/);
+  // The class must not call Obsidian's non-existent Modal.openAndWait().
+  assert.doesNotMatch(block.body, /openAndWait/);
+});
+
+test("offerAutoBudgetMigration: a claude-agent user is never prompted, native-agent budgets aside", () => {
+  const block = sourceBlock(mainSource, "export async function offerAutoBudgetMigration(");
+  const backendGateIndex = block.body.indexOf('if (plugin.settings.backend !== "native-agent") return;');
+  const modalIndex = block.body.indexOf("new AutoBudgetNoticeModal(");
+  const hasStoredIndex = block.body.indexOf("hasStoredNativeBudget(plugin.settings)");
+  assert.ok(backendGateIndex >= 0, "must gate on backend === native-agent before anything else");
+  assert.ok(backendGateIndex < hasStoredIndex, "backend gate must run before checking stored budgets");
+  assert.ok(backendGateIndex < modalIndex, "backend gate must run before the modal can be constructed");
+});
+
+test("offerAutoBudgetMigration: a user with nothing stored is never prompted, but the flag is still recorded", () => {
+  const block = sourceBlock(mainSource, "export async function offerAutoBudgetMigration(");
+  const ifBlock = sourceBlock(block.body, "if (hasStoredNativeBudget(plugin.settings)) {");
+  assert.match(ifBlock.body, /new AutoBudgetNoticeModal\(/, "the modal is only constructed inside the hasStoredNativeBudget guard");
+  const saveCallIndex = block.body.lastIndexOf('localConfigStore.save({ migrated_auto_budget: true });');
+  assert.ok(saveCallIndex > ifBlock.end, "migrated_auto_budget must be recorded after (outside) the stored-budget branch, unconditionally");
+});
+
+test("offerAutoBudgetMigration: the prompt is not offered twice, whichever way it was answered", () => {
+  const block = sourceBlock(mainSource, "export async function offerAutoBudgetMigration(");
+  assert.match(
+    block.body.trimStart(),
+    /^const local = await localConfigStore\.load\(\);\s*\n\s*if \(local\.migrated_auto_budget\) return;/,
+    "must return immediately once migrated_auto_budget was already recorded, before any other check",
+  );
+});
+
+test("offerAutoBudgetMigration: clearNativeBudgets only runs on an explicit yes", () => {
+  const block = sourceBlock(mainSource, "export async function offerAutoBudgetMigration(");
+  assert.match(
+    block.body,
+    /if \(switchToAutomatic\) \{\s*\n\s*clearNativeBudgets\(plugin\.settings\);/,
+    "clearNativeBudgets must be gated on switchToAutomatic being true",
+  );
+});
+
+test("auto-budget-notice strings exist and differ across en/ru/es", () => {
+  for (const lang of ["en", "ru", "es"] as const) {
+    const s = i18nFor(lang).settings;
+    for (const key of [
+      "autoBudgetNotice_title",
+      "autoBudgetNotice_body",
+      "autoBudgetNotice_switch",
+      "autoBudgetNotice_keep",
+    ] as const) {
+      assert.equal(typeof s[key], "string", `${lang}.${key}`);
+      assert.ok(s[key].length > 0, `${lang}.${key} must not be empty`);
+    }
+    assert.notEqual(s.autoBudgetNotice_switch, s.autoBudgetNotice_keep);
+  }
+});
+
+test("the auto-budget notice body does not point at the removed Advanced heading", () => {
+  // F1 from review: commit 00478f49 (immediately before Task 13) dropped the "Advanced"
+  // heading over the native budget fields and added a test asserting it appears nowhere
+  // in settings.ts. The notice body must not tell an upgrading user to look for it.
+  assert.doesNotMatch(i18nFor("en").settings.autoBudgetNotice_body, /\bAdvanced\b/);
+  assert.doesNotMatch(i18nFor("ru").settings.autoBudgetNotice_body, /Дополнительно/);
+  assert.doesNotMatch(i18nFor("es").settings.autoBudgetNotice_body, /Avanzado/);
+  assert.doesNotMatch(settingsSource, /advancedBudgets_name/);
+});
+
+test("the auto-budget modal names the settings fields by their real labels, per locale", () => {
+  for (const locale of ["en", "ru", "es"] as const) {
+    const settings = i18nFor(locale).settings;
+    assert.ok(
+      settings.autoBudgetNotice_body.includes(settings.inputBudgetTokens_name),
+      `${locale}: body must name the input budget field by its own label`,
+    );
+    assert.ok(
+      settings.autoBudgetNotice_body.includes(settings.outputBudgetTokens_name),
+      `${locale}: body must name the output budget field by its own label`,
+    );
+    // The label was renamed to "Max completion tokens"; the modal must not keep
+    // sending users looking for a field that no longer exists under that name.
+    assert.equal(
+      settings.autoBudgetNotice_body.includes("Output budget tokens"), false,
+      `${locale}: body still names a field that the settings tab does not show`,
+    );
   }
 });

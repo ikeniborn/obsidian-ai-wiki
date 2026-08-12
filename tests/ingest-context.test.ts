@@ -65,7 +65,10 @@ test("diversity rounds survive packer ordering: A1, B1, then A2", () => {
       ["!Wiki/d/a.md", "## Entity A1\nentity entity entity\n## A2\nentity entity"],
       ["!Wiki/d/b.md", "## B1\nentity\n## B2\nquiet"],
     ]),
-    inputBudgetTokens: 600,
+    // Rescaled twice for the token estimator: from a byte-era budget of 600,
+    // then to 220 once the character-class rules priced these units' markup and
+    // JSON envelope above the old flat rate. It still excludes "## B2".
+    inputBudgetTokens: 220,
     fixedMessages: [],
     opts: {},
   });
@@ -141,7 +144,10 @@ test("required target occupies round zero before optional target-page sections",
       ["!Wiki/d/b.md", "## B1\nentity\n## B2\nquiet"],
     ]),
     targetPath,
-    inputBudgetTokens: 600,
+    // Rescaled twice for the token estimator: from a byte-era budget of 600,
+    // then to 220 once the character-class rules priced these units' markup and
+    // JSON envelope above the old flat rate. It still excludes "## B2".
+    inputBudgetTokens: 220,
     fixedMessages: [],
     opts: {},
   });
@@ -265,7 +271,6 @@ test("entities sharing one existing canonical target consolidate before synthesi
     text: `## ${heading}\n${heading} body`,
     required,
     priority: ordinal + 1,
-    estimatedTokens: 20,
     pageId: "wiki_d_user_management",
     path: target,
     heading: `## ${heading}`,
@@ -818,10 +823,13 @@ test("normalized duplicate section text is emitted once and ties are stable", ()
 });
 
 test("fixed and rendered overhead overflow is rejected", () => {
+  // Rescaled from a byte-era budget of 10 for the token estimator (task-3
+  // prompt-budget-automation): 5 is still smaller than the fixed system
+  // message's own token estimate.
   assert.throws(() => buildEntityContext({
     evidence,
     candidatePages: new Map(),
-    inputBudgetTokens: 10,
+    inputBudgetTokens: 5,
     fixedMessages: [{ role: "system", content: "fixed overhead" }],
     opts: {},
   }), ContextSplitRequiredError);
@@ -863,7 +871,10 @@ test("bundles batch exactly once in stable order and within rendered bounds", ()
 });
 
 test("oversized bundle directs caller to evidence reducer", () => {
-  assert.throws(() => batchEntityContexts([bundle("a", 100)], 10, () => [{ role: "user", content: "oversized" }], {}), ContextSplitRequiredError);
+  // Rescaled from a byte-era budget of 10 for the token estimator (task-3
+  // prompt-budget-automation): 5 is still smaller than the rendered
+  // "oversized" message's own token estimate.
+  assert.throws(() => batchEntityContexts([bundle("a", 100)], 5, () => [{ role: "user", content: "oversized" }], {}), ContextSplitRequiredError);
 });
 
 test("oversized singleton evidence is compressed before batching fails", () => {
@@ -903,12 +914,12 @@ test("oversized singleton batching drops optional units before failing", () => {
   const source = bundle("guide", 100);
   source.units = [
     {
-      id: "required", source: "wiki", text: "required target context", required: true, priority: 10, estimatedTokens: 10,
+      id: "required", source: "wiki", text: "required target context", required: true, priority: 10,
       pageId: "required", path: "!Wiki/d/concept/wiki_d_required.md", heading: "## Required", sectionHash: "required",
       score: 1, sourceOrdinal: 0, duplicatePaths: ["!Wiki/d/concept/wiki_d_required.md"],
     },
     {
-      id: "optional", source: "wiki", text: "optional context " + "x".repeat(4000), required: false, priority: 1, estimatedTokens: 4000,
+      id: "optional", source: "wiki", text: "optional context " + "x".repeat(4000), required: false, priority: 1,
       pageId: "optional", path: "!Wiki/d/concept/wiki_d_optional.md", heading: "## Optional", sectionHash: "optional",
       score: 0.1, sourceOrdinal: 1, duplicatePaths: ["!Wiki/d/concept/wiki_d_optional.md"],
     },
@@ -944,7 +955,7 @@ test("batch renderer receives deep-cloned snapshots", () => {
   const render = (items: EntityContextBundle[]) => {
     items[0].evidence.facts[0] = "mutated";
     items[0].units.push({
-      id: "mutated", source: "wiki", text: "mutated", required: false, priority: 0, estimatedTokens: 1,
+      id: "mutated", source: "wiki", text: "mutated", required: false, priority: 0,
       pageId: "mutated", path: "mutated", heading: "## Mutated", sectionHash: "mutated", score: 0,
       sourceOrdinal: 0, duplicatePaths: [],
     });

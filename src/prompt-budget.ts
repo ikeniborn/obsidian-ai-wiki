@@ -1,12 +1,15 @@
 import type OpenAI from "openai";
 import type {
+  BudgetInputSource,
   CompressionProfile,
   LlmCallOptions,
   RunEvent,
   StructuredCallSite,
 } from "./types";
+import { MEDIA_TOKENS, estimateMessages } from "./token-estimate";
 
-const MEDIA_TOKENS = 4_096;
+export { MEDIA_TOKENS };
+
 const MAX_CONTEXT_REPACKS = 2;
 
 export interface ContextUnit {
@@ -15,7 +18,6 @@ export interface ContextUnit {
   text: string;
   required: boolean;
   priority: number;
-  estimatedTokens: number;
 }
 
 export interface PackedPrompt {
@@ -36,48 +38,15 @@ export class PromptBudgetExceededError extends Error {
   }
 }
 
-interface SanitizedValue {
-  value: unknown;
-  mediaParts: number;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function sanitizeMedia(value: unknown): SanitizedValue {
-  if (Array.isArray(value)) {
-    let mediaParts = 0;
-    const sanitized = value.map((item) => {
-      const result = sanitizeMedia(item);
-      mediaParts += result.mediaParts;
-      return result.value;
-    });
-    return { value: sanitized, mediaParts };
-  }
-
-  if (!isRecord(value)) return { value, mediaParts: 0 };
-
-  let mediaParts = value.type === "image_url" ? 1 : 0;
-  const sanitized: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(value)) {
-    const result = sanitizeMedia(item);
-    mediaParts += result.mediaParts;
-    if (key === "image_url" && isRecord(result.value)) {
-      sanitized[key] = { ...result.value, url: "[media]" };
-    } else {
-      sanitized[key] = result.value;
-    }
-  }
-  return { value: sanitized, mediaParts };
-}
-
 export function estimatePreparedMessages(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  calibration?: number,
 ): number {
-  const sanitized = sanitizeMedia(messages);
-  const serialized = JSON.stringify(sanitized.value) ?? "";
-  return new TextEncoder().encode(serialized).byteLength + sanitized.mediaParts * MEDIA_TOKENS;
+  return estimateMessages(messages, calibration);
 }
 
 export interface PackContextUnitsArgs {
@@ -127,7 +96,7 @@ export function packContextUnits(args: PackContextUnitsArgs): PackedPrompt {
     args.fixedMessages,
   );
   let messages = render(selected);
-  let estimatedInputTokens = estimatePreparedMessages(messages);
+  let estimatedInputTokens = estimatePreparedMessages(messages, args.opts.tokenCalibration);
 
   if (estimatedInputTokens > args.inputBudgetTokens) {
     throw new PromptBudgetExceededError(args.inputBudgetTokens, estimatedInputTokens, []);
@@ -136,7 +105,7 @@ export function packContextUnits(args: PackContextUnitsArgs): PackedPrompt {
   for (const unit of required) {
     selected.push(unit);
     messages = render(selected);
-    estimatedInputTokens = estimatePreparedMessages(messages);
+    estimatedInputTokens = estimatePreparedMessages(messages, args.opts.tokenCalibration);
   }
 
   if (estimatedInputTokens > args.inputBudgetTokens) {
@@ -150,7 +119,7 @@ export function packContextUnits(args: PackContextUnitsArgs): PackedPrompt {
   for (const unit of optional) {
     const candidate = [...selected, unit];
     const candidateMessages = render(candidate);
-    const candidateEstimate = estimatePreparedMessages(candidateMessages);
+    const candidateEstimate = estimatePreparedMessages(candidateMessages, args.opts.tokenCalibration);
     if (candidateEstimate <= args.inputBudgetTokens) {
       selected.push(unit);
       messages = candidateMessages;
@@ -180,7 +149,13 @@ const INPUT_SEMANTICS = /\b(?:input|prompt|messages?)\b/i;
 const CONTEXT_SEMANTICS = /\bcontext(?:\s+(?:length|limit|size|window))?\b/i;
 const OUTPUT_SEMANTICS = /\b(?:completion|generated|output)\b/i;
 const NON_CONTEXT_ERROR_SEMANTICS = /\b(?:account|billing|credits?|deadline|quota|rate\s+limit|time(?:d)?\s*out|timeout)\b/i;
-const OVERFLOW_RELATION = /\b(?:exceeds?|exceeded|exceeding|overflow(?:ed)?|too\s+(?:long|large|many)|over\s+(?:the\s+)?(?:limit|maximum)|greater\s+than|more\s+than|beyond)\b|>/i;
+// No bare ">" alternative: unlike the words below, a lone ">" appears in
+// arbitrary non-overflow text (e.g. a "->" conversion example echoed from an
+// unrelated validation error) and is not itself a reliable overflow signal.
+// Numeric "N > M" comparisons are still classified via reportedOverflow
+// below, which requires actual digit sequences on both sides through
+// extractContextCounts's greaterThanMaximum pattern.
+const OVERFLOW_RELATION = /\b(?:exceeds?|exceeded|exceeding|overflow(?:ed)?|too\s+(?:long|large|many)|over\s+(?:the\s+)?(?:limit|maximum)|greater\s+than|more\s+than|beyond)\b/i;
 const TOKEN_NUMBER = "(\\d[\\d,_]*)";
 const MAXIMUM_INPUT = "(?:maximum\\s+context(?:\\s+length)?|max(?:imum)?\\s+context|context\\s+(?:length|window)|maximum(?:\\s+number)?\\s+of\\s+tokens(?:\\s+allowed)?|maximum\\s+tokens(?:\\s+allowed)?)";
 
@@ -241,6 +216,13 @@ function classifyContextMessage(message: string): ContextErrorDetails | null {
 export function classifyContextError(error: unknown): ContextErrorDetails | null {
   if (!error || typeof error !== "object") return null;
   const record = error as Record<string, unknown>;
+  // A structured-output schema/validation failure is never a context-overflow
+  // signal, even when its message happens to contain overflow-shaped text
+  // (e.g. an echoed Zod issue mentioning "message", or an example containing
+  // a bare "->" that the OVERFLOW_RELATION fallback below would misread as
+  // ">"). Exclude it here rather than loosening the regexes, which stay
+  // meaningful for actual provider error text.
+  if (record.name === "StructuredValidationError") return null;
   const nested = isRecord(record.error) ? record.error : undefined;
   const codes = [record.code, record.type, nested?.code, nested?.type]
     .filter((value): value is string => typeof value === "string")
@@ -299,6 +281,10 @@ export interface PromptBudgetMetadata {
   sourceChunks?: number;
   reductionDepth?: number;
   retryReason?: PromptBudgetRetryReason;
+  contextWindow?: number;
+  inputSource?: BudgetInputSource;
+  outputSource?: "override" | "default";
+  calibration?: number;
 }
 
 export type PromptBudgetEvent = Extract<RunEvent, { kind: "prompt_budget" }>;
@@ -319,6 +305,10 @@ export function createPromptBudgetEvent(metadata: PromptBudgetMetadata): PromptB
   if (metadata.sourceChunks !== undefined) event.sourceChunks = metadata.sourceChunks;
   if (metadata.reductionDepth !== undefined) event.reductionDepth = metadata.reductionDepth;
   if (metadata.retryReason !== undefined) event.retryReason = metadata.retryReason;
+  if (metadata.contextWindow !== undefined) event.contextWindow = metadata.contextWindow;
+  if (metadata.inputSource !== undefined) event.inputSource = metadata.inputSource;
+  if (metadata.outputSource !== undefined) event.outputSource = metadata.outputSource;
+  if (metadata.calibration !== undefined) event.calibration = metadata.calibration;
   return event;
 }
 
@@ -340,6 +330,12 @@ export interface RunWithContextRepackArgs<TBuild, TResult> {
   ) => ContextRepackBuild<TBuild> | Promise<ContextRepackBuild<TBuild>>;
   execute: (value: TBuild) => TResult | Promise<TResult>;
   onEvent: (event: PromptBudgetEvent) => void;
+  /**
+   * Every provider context rejection seen inside this boundary, including the ones
+   * the repack then recovers from. A terminal `catch` never sees a recovered
+   * overflow, and that is exactly the signal the model context learns from.
+   */
+  onContextError?: (details: ContextErrorDetails) => void;
   classifyRepackError?: (error: unknown) => PromptBudgetRetryReason | undefined;
   requestBudgetsEmittedByExecute?: boolean;
   requestId?: (result?: TResult) => string | undefined;
@@ -397,6 +393,7 @@ export async function runWithContextRepack<TBuild, TResult>(
     const error = outcome.error;
     const repackSuppressed = error instanceof ContextRepackSuppressedError;
     const details = repackSuppressed ? null : classifyContextError(error);
+    if (details !== null) args.onContextError?.(details);
     const preflight = error instanceof PromptBudgetExceededError;
     const additionalRetryReason = !repackSuppressed && !preflight && details === null
       ? args.classifyRepackError?.(error)

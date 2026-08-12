@@ -1,0 +1,204 @@
+{
+  "note": "Cases recorded live by the plugin against ollama-deepseek-v4-pro-cloud over a Linux/Unix administration vault. Recorded verbatim from agent.jsonl: id (requestId), callSite, recordedAt, messages and recordedMessageChars (llm_request_fingerprint.messageCount/messageCharLengths), actualInputTokens (calibration_sample.actual, the provider's own input count) and recordedEstimateAtTheTime (llm_request_fingerprint.estimatedInputTokens, produced by the 1.9/4.2 rules this fixture replaced). The log stores lengths, never prompt text, so the character census under `reconstruction` is NOT recorded data - see fittedAgainst.",
+  "fittedAgainst": "scripts/derive-recorded-prompts.py rebuilds each census from the real material the call carried: this repository's prompts/*.md and templates/*.md for the instruction part, sized by the recorded prompt_breakdown section subtotals, plus the JSON-escaped fenced code and prose of sourceNote (the vault note file_start names for that call), mixed so the reconstruction reproduces the recorded total character count and the Cyrillic count implied by recordedEstimateAtTheTime. A case is kept only if it round-trips: the census sums to recordedMessageChars exactly, the pre-fix rules reproduce recordedEstimateAtTheTime within 3%, and tokenizerTokens - the reconstruction measured with the provider family's published tokenizer (DeepSeek-V3 tokenizer.json) - is within 3% of actualInputTokens. Prompts below ~3.4k tokens are absent because the log records no prompt_breakdown for them, so their composition cannot be reconstructed honestly. The character-class rates themselves were fitted separately against tokenizer counts over 973 real texts; the script's docstring states that procedure.",
+  "cases": [
+    {
+      "id": "llm-msq127dw-15",
+      "callSite": "ingest.synthesize",
+      "recordedAt": "2026-08-12T11:50:18.601Z",
+      "messages": 2,
+      "recordedMessageChars": [
+        2042,
+        51333
+      ],
+      "actualInputTokens": 17578,
+      "recordedEstimateAtTheTime": 13667,
+      "sourceNote": "ОС/Unix/Сервисы/Fail2Ban.md",
+      "reconstruction": {
+        "cyrillic": 4137,
+        "cjk": 0,
+        "word": 38840,
+        "symbols": 10213,
+        "symbolRuns": 6561,
+        "newlines": 185,
+        "tokenizerTokens": 17711
+      }
+    },
+    {
+      "id": "llm-msq13wrl-16",
+      "callSite": "ingest.synthesize",
+      "recordedAt": "2026-08-12T11:51:38.148Z",
+      "messages": 2,
+      "recordedMessageChars": [
+        2042,
+        20038
+      ],
+      "actualInputTokens": 6387,
+      "recordedEstimateAtTheTime": 5584,
+      "sourceNote": "ОС/Unix/Сервисы/Fail2Ban.md",
+      "reconstruction": {
+        "cyrillic": 1103,
+        "cjk": 0,
+        "word": 17214,
+        "symbols": 3578,
+        "symbolRuns": 2185,
+        "newlines": 185,
+        "tokenizerTokens": 6556
+      }
+    },
+    {
+      "id": "llm-mspyt2sz-6",
+      "callSite": "ingest.synthesize",
+      "recordedAt": "2026-08-12T10:47:13.526Z",
+      "messages": 2,
+      "recordedMessageChars": [
+        2042,
+        17732
+      ],
+      "actualInputTokens": 5626,
+      "recordedEstimateAtTheTime": 5142,
+      "sourceNote": "ОС/Mac/safari_proxy_guide.md",
+      "reconstruction": {
+        "cyrillic": 1211,
+        "cjk": 0,
+        "word": 14822,
+        "symbols": 3554,
+        "symbolRuns": 1926,
+        "newlines": 187,
+        "tokenizerTokens": 5679
+      }
+    },
+    {
+      "id": "llm-msq2tv4s-3f",
+      "callSite": "ingest.synthesize",
+      "recordedAt": "2026-08-12T12:39:48.703Z",
+      "messages": 2,
+      "recordedMessageChars": [
+        2042,
+        14839
+      ],
+      "actualInputTokens": 4536,
+      "recordedEstimateAtTheTime": 4386,
+      "sourceNote": "ОС/Unix/Сервисы/user.md",
+      "reconstruction": {
+        "cyrillic": 1098,
+        "cjk": 0,
+        "word": 13522,
+        "symbols": 1991,
+        "symbolRuns": 1165,
+        "newlines": 270,
+        "tokenizerTokens": 4439
+      }
+    },
+    {
+      "id": "llm-msq2ozch-37",
+      "callSite": "ingest.synthesize",
+      "recordedAt": "2026-08-12T12:36:00.884Z",
+      "messages": 2,
+      "recordedMessageChars": [
+        2042,
+        13892
+      ],
+      "actualInputTokens": 4282,
+      "recordedEstimateAtTheTime": 4027,
+      "sourceNote": "ОС/Unix/Сервисы/usb.md",
+      "reconstruction": {
+        "cyrillic": 683,
+        "cjk": 0,
+        "word": 12747,
+        "symbols": 2316,
+        "symbolRuns": 1237,
+        "newlines": 188,
+        "tokenizerTokens": 4374
+      }
+    },
+    {
+      "id": "llm-msq231g0-2g",
+      "callSite": "ingest.synthesize",
+      "recordedAt": "2026-08-12T12:18:57.177Z",
+      "messages": 2,
+      "recordedMessageChars": [
+        2042,
+        12778
+      ],
+      "actualInputTokens": 3935,
+      "recordedEstimateAtTheTime": 3691,
+      "sourceNote": "ОС/Unix/Сервисы/ssh.md",
+      "reconstruction": {
+        "cyrillic": 461,
+        "cjk": 0,
+        "word": 12050,
+        "symbols": 2121,
+        "symbolRuns": 1150,
+        "newlines": 188,
+        "tokenizerTokens": 3942
+      }
+    },
+    {
+      "id": "llm-msq1r8b2-1z",
+      "callSite": "ingest.synthesize",
+      "recordedAt": "2026-08-12T12:09:46.192Z",
+      "messages": 2,
+      "recordedMessageChars": [
+        2042,
+        12306
+      ],
+      "actualInputTokens": 3775,
+      "recordedEstimateAtTheTime": 3601,
+      "sourceNote": "ОС/Unix/Сервисы/logrotate.md",
+      "reconstruction": {
+        "cyrillic": 581,
+        "cjk": 0,
+        "word": 11694,
+        "symbols": 1887,
+        "symbolRuns": 1116,
+        "newlines": 186,
+        "tokenizerTokens": 3780
+      }
+    },
+    {
+      "id": "llm-msq24dke-2j",
+      "callSite": "ingest.synthesize",
+      "recordedAt": "2026-08-12T12:19:59.546Z",
+      "messages": 2,
+      "recordedMessageChars": [
+        2042,
+        11786
+      ],
+      "actualInputTokens": 3585,
+      "recordedEstimateAtTheTime": 3447,
+      "sourceNote": "ОС/Unix/Сервисы/ssh.md",
+      "reconstruction": {
+        "cyrillic": 436,
+        "cjk": 0,
+        "word": 11310,
+        "symbols": 1894,
+        "symbolRuns": 1024,
+        "newlines": 188,
+        "tokenizerTokens": 3619
+      }
+    },
+    {
+      "id": "llm-msq1w7uj-28",
+      "callSite": "ingest.synthesize",
+      "recordedAt": "2026-08-12T12:13:38.876Z",
+      "messages": 2,
+      "recordedMessageChars": [
+        2042,
+        11599
+      ],
+      "actualInputTokens": 3530,
+      "recordedEstimateAtTheTime": 3405,
+      "sourceNote": "ОС/Unix/Сервисы/npm.md",
+      "reconstruction": {
+        "cyrillic": 482,
+        "cjk": 0,
+        "word": 11147,
+        "symbols": 1826,
+        "symbolRuns": 1014,
+        "newlines": 186,
+        "tokenizerTokens": 3558
+      }
+    }
+  ]
+}

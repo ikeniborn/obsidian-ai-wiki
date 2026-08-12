@@ -26,13 +26,101 @@ import { PageSimilarityService, DEFAULT_CHUNKING } from "./page-similarity";
 import { resolveLang, i18nFor } from "./i18n";
 import type { BoilerplateDemotionConfig } from "./boilerplate-demotion";
 import { normalizeRerankerConfig } from "./reranker";
-import { resolveModelCallPolicy } from "./model-call-policy";
+import {
+  configuredContextWindowFor,
+  effectiveModel,
+  nativeBudgetOverrides,
+  policyKey,
+  resolveCallPolicy,
+} from "./model-call-policy";
+import { resolveBudget, type ResolvedBudget } from "./budget-resolver";
+import type { ModelContextRecord, ModelContextStore } from "./model-context";
 import { cancelRuntimeTimeout, scheduleRuntimeTimeout, type RuntimeTimer } from "./runtime-timers";
 
 const DISABLED_BOILERPLATE_DEMOTION: BoilerplateDemotionConfig = { enabled: false, factor: 0 };
 
+/**
+ * Satisfies `resolveCallPolicy`'s signature on the claude-agent path, which never
+ * reads the record: that backend keeps its stored budgets and never probes a window.
+ */
+const CLAUDE_PLACEHOLDER_RECORD: ModelContextRecord = Object.freeze({
+  contextWindow: 0,
+  source: "default" as const,
+  calibration: 1,
+  samples: 0,
+});
+
 export function resolveFollowUpPolicyOperation(parent: WikiOperation): OpKey {
   return parent === "query" ? "query" : "lint";
+}
+
+/**
+ * The budget the VISION model is entitled to, resolved from its own context record.
+ * `settings.vision.model` is a separate model from the chat model — commonly a much
+ * smaller one — so sizing its requests from the format operation's budget packed PDF
+ * batches against a window the vision model does not have.
+ *
+ * Returns no budget on the claude-agent path (which keeps its stored budgets and
+ * never consults a record), when no vision model is configured for this run, or when
+ * nothing is actually KNOWN about the vision model's window — see below. The record
+ * still comes back in the last case, so a size failure can name what it was sized
+ * against. Diagnostics come back as data so the caller can yield them in run order.
+ */
+export async function resolveVisionBudget(
+  store: ModelContextStore,
+  settings: LlmWikiPluginSettings,
+  model: string,
+  signal?: AbortSignal,
+): Promise<{ budget?: ResolvedBudget; record?: ModelContextRecord; events: RunEvent[] }> {
+  const events: RunEvent[] = [];
+  if (settings.backend !== "native-agent" || !model) return { events };
+  const baseUrl = settings.nativeAgent.baseUrl;
+  let record: ModelContextRecord;
+  try {
+    record = await store.resolve(
+      baseUrl,
+      model,
+      settings.nativeAgent.apiKey ?? "",
+      Date.now(),
+      signal,
+      (event) => events.push(event),
+      configuredContextWindowFor(settings.nativeAgent, model),
+    );
+  } catch (error) {
+    // A cancelled run is not a vision failure: the format phase stops at its own
+    // abort check, and falling back to the caller's budget keeps the old behaviour.
+    if (signal?.aborted) return { events: [] };
+    throw error;
+  }
+  // A `default` record is the 8192-token fallback: it means the backend advertised
+  // NO window for this model and nobody typed one, so it is not a measurement of the
+  // vision model at all. Budgeting from it would leave 3686 input tokens after the
+  // output share — less than a single image costs (a ~4096-token media reservation
+  // plus the system prompt), so every image, Excalidraw and PDF would be refused
+  // client-side on exactly the backends this feature exists for. The caller's budget
+  // stands there, which is the pre-change behaviour. A window the backend DID
+  // advertise, or one the user typed, is a real fact about the vision model and is
+  // used.
+  if (record.source === "default") return { record, events };
+  // "format" is the operation vision runs inside, so its output share and its
+  // explicit caps are the ones the vision call already had — only the window they
+  // are taken from changes. Dropping the overrides here would silently raise a cap
+  // the user set to bound cost: before vision had a window of its own it inherited
+  // `opts.inputBudgetTokens` / `opts.maxTokens`, which carry exactly these numbers.
+  const budget = resolveBudget(record, "format", nativeBudgetOverrides(settings, "format"));
+  events.push({
+    kind: "budget_resolved",
+    operation: "format",
+    model,
+    contextWindow: budget.contextWindow,
+    inputSource: budget.inputSource,
+    outputSource: budget.outputSource,
+    calibration: budget.calibration,
+    samples: record.samples,
+    inputBudget: budget.inputBudgetTokens,
+    outputBudget: budget.outputBudgetTokens,
+  });
+  return { budget, record, events };
 }
 
 export class AgentRunner {
@@ -43,24 +131,52 @@ export class AgentRunner {
     private vaultTools: VaultTools,
     private vaultName: string,
     private domains: DomainEntry[],
-    private visionTempBaseDir?: string,
+    private visionTempBaseDir: string | undefined = undefined,
     private isMobile: boolean = false,
+    private modelContextStore: ModelContextStore,
   ) {
     this.llm = llm;
   }
 
-  private buildOptsFor(
+  /**
+   * Resolves the model FIRST, then its context record, then the budgets — a window
+   * probed for a different model than the one the call uses would be confidently
+   * wrong. Diagnostics are returned as data (`events`), not emitted: this is a
+   * private helper, not a generator step. `run` yields the array before the request
+   * and drains it again as the operation progresses, so the run-time
+   * `calibration_sample` entries the returned `opts` push onto it are yielded too.
+   */
+  private async buildOptsFor(
     op: RunRequest["operation"],
     policyOperation?: RunRequest["policyOperation"],
-  ): { model: string; opts: LlmCallOptions } {
+    signal?: AbortSignal,
+  ): Promise<{ model: string; opts: LlmCallOptions; events: RunEvent[] }> {
     const s = this.settings;
-    const resolved = resolveModelCallPolicy(s, op, policyOperation);
+    const events: RunEvent[] = [];
+    const model = effectiveModel(s, op, policyOperation);
+    const baseUrl = s.nativeAgent.baseUrl;
+    const record = s.backend === "claude-agent"
+      ? CLAUDE_PLACEHOLDER_RECORD
+      : await this.modelContextStore.resolve(
+          baseUrl,
+          model,
+          s.nativeAgent.apiKey ?? "",
+          Date.now(),
+          signal,
+          (event) => events.push(event),
+          // The window the user configured FOR THIS MODEL. The setting is keyed by
+          // model because the store is: one global number forced the same window
+          // onto every per-operation model, however differently sized they are.
+          configuredContextWindowFor(s.nativeAgent, model),
+        );
+    const resolved = resolveCallPolicy(s, op, record, policyOperation);
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
     const mergeDeleteWarnThreshold = s.nativeAgent.mergeDeleteWarnThreshold;
 
     if (s.backend === "claude-agent") {
       return {
         model: resolved.model,
+        events,
         opts: {
           ...resolved.opts,
           systemPrompt: s.systemPrompt,
@@ -71,9 +187,25 @@ export class AgentRunner {
       };
     }
 
+    if (resolved.budget) {
+      events.push({
+        kind: "budget_resolved",
+        operation: policyKey(op, policyOperation),
+        model: resolved.model,
+        contextWindow: resolved.budget.contextWindow,
+        inputSource: resolved.budget.inputSource,
+        outputSource: resolved.budget.outputSource,
+        calibration: resolved.budget.calibration,
+        samples: record.samples,
+        inputBudget: resolved.budget.inputBudgetTokens,
+        outputBudget: resolved.budget.outputBudgetTokens,
+      });
+    }
+
     const na = s.nativeAgent;
     return {
       model: resolved.model,
+      events,
       opts: {
         ...resolved.opts,
         systemPrompt: s.systemPrompt,
@@ -89,6 +221,42 @@ export class AgentRunner {
         nearDupThreshold: na.nearDupThreshold,
         nativeRequestRetries: s.llmIdleRetries ?? 3,
         nativeRequestIdleTimeoutMs: (s.llmIdleTimeoutSec ?? 300) * 1000,
+        onUsageObserved: ({ estimated, actual, calibration }) => {
+          if (actual === undefined) return;
+          // `calibration` comes from the call, not from the record: the record has
+          // already moved by the time later samples of the same run arrive, and the
+          // correction is only valid against the factor that sized the request.
+          const outcome = this.modelContextStore.observeUsage(
+            baseUrl, resolved.model, estimated, actual, calibration,
+          );
+          events.push({
+            kind: "calibration_sample",
+            model: resolved.model,
+            estimated,
+            actual,
+            // Recorded with the sample so the log line stands alone: the implied
+            // factor this sample argues for is `appliedCalibration * ratio`, and
+            // reconstructing it used to need a join to `budget_resolved`.
+            appliedCalibration: calibration,
+            ...outcome,
+          });
+        },
+        onContextError: (details) => {
+          const outcome = this.modelContextStore.observeContextError(
+            baseUrl, resolved.model, details.maxContextTokens,
+          );
+          // A user-supplied window is never shrunk behind the user's back, so this
+          // event is the only trace that the provider disagreed with it.
+          if (!outcome.applied && outcome.reason === "configured") {
+            events.push({
+              kind: "context_window_conflict",
+              model: resolved.model,
+              contextWindow: outcome.contextWindow,
+              reportedWindow: outcome.reportedWindow,
+              ...(details.promptTokens === undefined ? {} : { promptTokens: details.promptTokens }),
+            });
+          }
+        },
       },
     };
   }
@@ -214,8 +382,33 @@ export class AgentRunner {
           nativeRequestIdleTimeoutMs: (this.settings.llmIdleTimeoutSec ?? 300) * 1000,
         };
         const visionSettings = noVision ? { ...baseVisionSettings, enabled: false } : baseVisionSettings;
+        // Vision packs against the VISION model's own window. Resolved here rather
+        // than in buildOptsFor because it belongs to one operation, and only when
+        // this run will actually call it — an unused vision model is never probed.
+        const vision = await resolveVisionBudget(
+          this.modelContextStore,
+          this.settings,
+          visionSettings.enabled ? visionSettings.model : "",
+          req.signal,
+        );
+        yield* vision.events;
+        const visionRuntime = {
+          ...visionSettings,
+          // Carried even when no budget was derived from it: a client-side size
+          // refusal has to be able to name the window it was measured against and
+          // where that number came from.
+          contextWindow: vision.record?.contextWindow,
+          contextWindowSource: vision.record?.source,
+          ...(vision.budget
+            ? {
+                inputBudgetTokens: vision.budget.inputBudgetTokens,
+                maxTokens: vision.budget.outputBudgetTokens,
+                tokenCalibration: vision.budget.calibration,
+              }
+            : {}),
+        };
         const progress = i18nFor(resolveLang(this.settings.outputLanguage)).formatProgress;
-        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings, visionTempStore, progress, formatDomain);
+        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionRuntime, visionTempStore, progress, formatDomain);
         break;
       }
       case "delete":
@@ -230,13 +423,30 @@ export class AgentRunner {
   }
 
   async *run(req: RunRequest): AsyncGenerator<RunEvent, void, void> {
-    const { model, opts } = this.buildOptsFor(
-      req.operation,
-      req.policyOperation,
-    );
-    const initIngestRuntime = req.operation === "init"
-      ? this.buildOptsFor("ingest")
-      : undefined;
+    let built: { model: string; opts: LlmCallOptions; events: RunEvent[] };
+    let initIngestRuntime: { model: string; opts: LlmCallOptions; events: RunEvent[] } | undefined;
+    try {
+      built = await this.buildOptsFor(req.operation, req.policyOperation, req.signal);
+      initIngestRuntime = req.operation === "init"
+        ? await this.buildOptsFor("ingest", undefined, req.signal)
+        : undefined;
+    } catch (error) {
+      // A cancellation during the context probe is a cancelled run, not a failed
+      // one: returning here leaves the terminal status to the caller's abort check.
+      if (req.signal.aborted) return;
+      throw error;
+    }
+    const { model, opts } = built;
+    // The diagnostic queues stay live for the whole run: `onUsageObserved` pushes a
+    // calibration_sample onto them while the operation is streaming.
+    const diagnosticQueues = initIngestRuntime
+      ? [built.events, initIngestRuntime.events]
+      : [built.events];
+    function* drainDiagnostics(): Generator<RunEvent, void, void> {
+      for (const queue of diagnosticQueues) {
+        while (queue.length > 0) yield queue.shift()!;
+      }
+    }
     const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1000;
     const connectionTimeoutMs = (this.settings.llmConnectionTimeoutSec ?? 15) * 1000;
     yield {
@@ -248,6 +458,7 @@ export class AgentRunner {
       ? ` @ ${this.settings.nativeAgent.baseUrl}`
       : "";
     yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"}${baseUrlHint}` };
+    yield* drainDiagnostics();
 
     if (req.signal.aborted) return;
 
@@ -338,7 +549,9 @@ export class AgentRunner {
             ev.runId = req.runId; // so the view's 👍/👎 buttons know which record to update
           }
           yield ev;
+          yield* drainDiagnostics();
         }
+        yield* drainDiagnostics();
         // Phases swallow AbortError silently (return instead of throw).
         // Detect silent idle abort by checking if idleCtrl fired but user didn't cancel.
         if (idleCtrl.signal.aborted && !req.signal.aborted) {

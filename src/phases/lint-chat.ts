@@ -4,7 +4,7 @@ import type { LlmCallOptions, LlmClient, LlmLifecycleAction, RunEvent, RunReques
 import type { VaultTools } from "../vault-tools";
 import { createLlmLifecycle, runStructuredWithRetry } from "./structured-output";
 import { lifecycleEvent } from "../llm-lifecycle";
-import { runWithContextRepack, PromptBudgetExceededError } from "../prompt-budget";
+import { runWithContextRepack, PromptBudgetExceededError, estimatePreparedMessages } from "../prompt-budget";
 import { applyPagePatch, inspectPatchablePage, type PatchPage, type ReplaceSectionAuthority } from "../section-patches";
 import { LintChatPatchSchema } from "./zod-schemas";
 import type { LintChatPatchResponse } from "./zod-schemas";
@@ -158,6 +158,7 @@ function buildLintChatMessagesWithinBudget(
   olderPairs: readonly OpenAI.Chat.ChatCompletionMessageParam[],
   newestUser: string,
   effectiveInputBudget: number,
+  calibration?: number,
 ): { messages: OpenAI.Chat.ChatCompletionMessageParam[]; estimatedInputTokens: number; contextUnits: number } {
   for (let keep = olderPairs.length; keep >= 0; keep -= 2) {
     const keptPairs = olderPairs.slice(Math.max(0, olderPairs.length - keep));
@@ -166,7 +167,7 @@ function buildLintChatMessagesWithinBudget(
       ...keptPairs,
       { role: "user", content: newestUser },
     ];
-    const estimatedInputTokens = new TextEncoder().encode(JSON.stringify(messages)).byteLength;
+    const estimatedInputTokens = estimatePreparedMessages(messages, calibration);
     if (estimatedInputTokens <= effectiveInputBudget) {
       return {
         messages,
@@ -181,7 +182,7 @@ function buildLintChatMessagesWithinBudget(
   ];
   return {
     messages,
-    estimatedInputTokens: new TextEncoder().encode(JSON.stringify(messages)).byteLength,
+    estimatedInputTokens: estimatePreparedMessages(messages, calibration),
     contextUnits: 1,
   };
 }
@@ -189,11 +190,12 @@ function buildLintChatMessagesWithinBudget(
 function estimateLintChatFixedRequest(
   systemContent: string,
   newestUser: string,
+  calibration?: number,
 ): number {
-  return new TextEncoder().encode(JSON.stringify([
+  return estimatePreparedMessages([
     { role: "system", content: systemContent },
     { role: "user", content: newestUser },
-  ])).byteLength;
+  ], calibration);
 }
 
 export async function* runLintFixChat(
@@ -251,7 +253,7 @@ export async function* runLintFixChat(
   let includeSchema = true;
   let systemContent = renderSystem(activePages, includeSchema);
   while (
-    estimateLintChatFixedRequest(systemContent, lastUser.content) > (opts.inputBudgetTokens ?? 16_384)
+    estimateLintChatFixedRequest(systemContent, lastUser.content, opts.tokenCalibration) > (opts.inputBudgetTokens ?? 16_384)
     && activePaths.length > 0
     && !selected.explicit
   ) {
@@ -269,11 +271,11 @@ export async function* runLintFixChat(
     yield { kind: "result", durationMs: Date.now() - start, text: "" };
     return;
   }
-  if (estimateLintChatFixedRequest(systemContent, lastUser.content) > (opts.inputBudgetTokens ?? 16_384) && includeSchema) {
+  if (estimateLintChatFixedRequest(systemContent, lastUser.content, opts.tokenCalibration) > (opts.inputBudgetTokens ?? 16_384) && includeSchema) {
     includeSchema = false;
     systemContent = renderSystem(activePages, includeSchema);
   }
-  if (estimateLintChatFixedRequest(systemContent, lastUser.content) > (opts.inputBudgetTokens ?? 16_384)) {
+  if (estimateLintChatFixedRequest(systemContent, lastUser.content, opts.tokenCalibration) > (opts.inputBudgetTokens ?? 16_384)) {
     yield { kind: "error", message: "lint-chat: selected referenced page context exceeds input budget" };
     yield { kind: "result", durationMs: Date.now() - start, text: "" };
     return;
@@ -315,6 +317,7 @@ export async function* runLintFixChat(
       return runWithContextRepack({
         requestBudgetsEmittedByExecute: true,
         callSite: "lint-chat.patch",
+        onContextError: opts.onContextError,
         configuredInputBudget: opts.inputBudgetTokens ?? 16_384,
         outputBudget: opts.maxTokens,
         compressionProfile: opts.semanticCompression?.profile ?? "balanced",
@@ -324,6 +327,7 @@ export async function* runLintFixChat(
             olderPairs,
             lastUser.content,
             effectiveInputBudget,
+            opts.tokenCalibration,
           );
           const { messages, estimatedInputTokens } = packed;
           if (estimatedInputTokens > effectiveInputBudget) {

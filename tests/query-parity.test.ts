@@ -16,6 +16,7 @@ import {
   type WikiOperation,
 } from "../src/types";
 import { VaultTools, type VaultAdapter } from "../src/vault-tools";
+import { stubModelContextStore } from "./model-context-stub";
 
 const pathBrowserifyLoader = `
 export async function resolve(specifier, context, nextResolve) {
@@ -679,8 +680,12 @@ test("single- and cross-domain Query keep the post-reranker winner under a one-c
     apiKey: "test",
   };
   const question = "Which reranker ranking evidence wins?";
+  // Rescaled twice for the token estimator: from a byte-era budget of 7_000,
+  // then to 1_350 once the character-class rules priced these letter runs near
+  // half the old flat rate. It still fits only one of the two 2_400-character
+  // candidate chunks.
   const opts = {
-    inputBudgetTokens: 7_000,
+    inputBudgetTokens: 1_350,
     maxTokens: 200,
     semanticCompression: {
       profile: "balanced" as const,
@@ -1013,6 +1018,9 @@ async function captureRunnerPolicy(
     new VaultTools(memoryAdapter(), "/vault"),
     "Vault",
     [],
+    undefined,
+    false,
+    stubModelContextStore(),
   );
   let captured: {
     req: RunRequest;

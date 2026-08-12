@@ -3,10 +3,13 @@ import OpenAI from "openai";
 import { wrapBufferedNoStream } from "./mobile-llm-wrap";
 import { createNativeLlmClient } from "./native-llm-executor";
 import {
+  createDirectDesktopFetch,
   createNativeOpenAiFetch,
+  createProxyFetch,
   sanitizeNativeDiagnosticPath,
+  selectNativeFetch,
 } from "./native-openai-transport";
-import type { ProxyConfig } from "./proxy";
+import { parseNoProxy, shouldBypass, type ProxyConfig } from "./proxy";
 import {
   MAX_SAFE_TIMER_MS,
   type LlmClient,
@@ -45,6 +48,44 @@ function chatCompletionsPath(baseURL: string): string {
   } catch {
     return "/chat/completions";
   }
+}
+
+export interface NativeProbeFetchOptions {
+  baseURL: string;
+  isMobile: boolean;
+  proxyConfig: ProxyConfig;
+  mobileFetch: typeof fetch;
+  connectionTimeoutMs: number;
+}
+
+/**
+ * The transport for a context-window probe. It makes the same route decision this
+ * factory makes for completions against the same base URL — mobile host, proxy, or
+ * desktop hybrid, with the no-proxy bypass honoured — so a probe never travels a
+ * route the completion would not. `preferDesktopHostForNonStream` matches what
+ * `createNativeOpenAiFetch` passes with diagnostics off, which sends every
+ * non-streaming request (a probe is one) through the Obsidian host fetch. Taking the
+ * direct route instead would let a probe fail where the completion succeeds — under
+ * corporate TLS interception or a custom certificate store — and cache the 8_192
+ * default window for a day off the back of it.
+ */
+export function createNativeProbeFetch(options: NativeProbeFetchOptions): typeof fetch {
+  let proxyFetch: typeof fetch | null = null;
+  if (!options.isMobile && options.proxyConfig.enabled) {
+    try {
+      const baseHost = new URL(options.baseURL).hostname;
+      if (!shouldBypass(baseHost, parseNoProxy(options.proxyConfig.noProxy))) {
+        proxyFetch = createProxyFetch(options.proxyConfig, options.connectionTimeoutMs);
+      }
+    } catch { /* an unparseable base URL leaves the probe on the direct route */ }
+  }
+  return selectNativeFetch({
+    isMobile: options.isMobile,
+    mobileFetch: options.mobileFetch,
+    proxyFetch,
+    directDesktopFetch: () => createDirectDesktopFetch(options.connectionTimeoutMs),
+    preferDesktopHostForNonStream: true,
+  });
 }
 
 /** Node-safe production seam shared by the controller and later live evaluation. */

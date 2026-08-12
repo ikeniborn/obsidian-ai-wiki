@@ -1,6 +1,7 @@
 import type OpenAI from "openai";
 import { contentHash } from "../content-hash";
 import { estimatePreparedMessages } from "../prompt-budget";
+import { estimateText } from "../token-estimate";
 import {
   applyPagePatch,
   inspectPatchablePage,
@@ -9,6 +10,10 @@ import {
   type ReplaceSectionAuthority,
 } from "../section-patches";
 
+// Every budget in this module is expressed in estimator TOKENS — the same unit as
+// `opts.inputBudgetTokens`, which is what lint.ts feeds these functions. `calibration`
+// is the runtime factor from the resolved budget and is applied to the measurement,
+// never to the budget.
 const DEFAULT_LINT_ITEM_BUDGET = 12_000;
 const LINT_WORK_ITEM_BUDGET_RATIO = 0.18;
 const PAGE_HEADING = "## Full page";
@@ -60,10 +65,6 @@ interface H2Section {
   hash: string;
 }
 
-function estimateText(text: string): number {
-  return new TextEncoder().encode(text).byteLength;
-}
-
 function idPart(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
@@ -94,7 +95,12 @@ function h2Sections(markdown: string): H2Section[] {
   }));
 }
 
-function windowSection(path: string, section: H2Section, itemBudget: number): LintWorkItem[] {
+function windowSection(
+  path: string,
+  section: H2Section,
+  itemBudget: number,
+  calibration?: number,
+): LintWorkItem[] {
   const lines = splitLines(section.markdown);
   const heading = lines[0] ?? section.heading;
   const body = lines.slice(1);
@@ -105,10 +111,10 @@ function windowSection(path: string, section: H2Section, itemBudget: number): Li
     let end = start;
     while (end < body.length) {
       const candidate = [heading, ...chunk, body[end]].join("\n");
-      if (chunk.length > 0 && estimateText(candidate) > itemBudget) break;
+      if (chunk.length > 0 && estimateText(candidate, calibration) > itemBudget) break;
       chunk.push(body[end]);
       end++;
-      if (estimateText(candidate) >= itemBudget) break;
+      if (estimateText(candidate, calibration) >= itemBudget) break;
     }
     if (chunk.length === 0 && end < body.length) {
       chunk.push(body[end]);
@@ -134,6 +140,7 @@ function windowSection(path: string, section: H2Section, itemBudget: number): Li
 export function buildLintWorkItems(
   pages: ReadonlyMap<string, string>,
   itemBudget: number = DEFAULT_LINT_ITEM_BUDGET,
+  calibration?: number,
 ): LintWorkItem[] {
   if (!Number.isFinite(itemBudget) || itemBudget <= 0) {
     throw new RangeError("itemBudget must be positive");
@@ -143,7 +150,7 @@ export function buildLintWorkItems(
   for (const [path, markdown] of [...pages.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     const pageHeading = `# ${h1Heading(markdown)}`;
     const expectedPageHash = contentHash(markdown);
-    if (estimateText(markdown) <= effectiveBudget) {
+    if (estimateText(markdown, calibration) <= effectiveBudget) {
       items.push({
         id: `${path}\u0000page`,
         path,
@@ -155,7 +162,7 @@ export function buildLintWorkItems(
       continue;
     }
     for (const section of h2Sections(markdown)) {
-      if (estimateText(section.markdown) <= effectiveBudget) {
+      if (estimateText(section.markdown, calibration) <= effectiveBudget) {
         items.push({
           id: `${path}\u0000${idPart(section.heading)}\u0000${section.ordinal}`,
           path,
@@ -165,7 +172,7 @@ export function buildLintWorkItems(
           expectedPageHash,
         });
       } else {
-        items.push(...windowSection(path, section, effectiveBudget).map((item) => ({
+        items.push(...windowSection(path, section, effectiveBudget, calibration).map((item) => ({
           ...item,
           expectedPageHash,
         })));
@@ -189,6 +196,7 @@ export function buildLintRelatedSections(
   submittedItems: readonly LintWorkItem[],
   _pages: ReadonlyMap<string, string>,
   budget: number,
+  calibration?: number,
 ): LintRelatedSection[] {
   if (budget <= 0) return [];
   const submittedIds = new Set(submittedItems.map((item) => item.id));
@@ -214,7 +222,7 @@ export function buildLintRelatedSections(
         expectedPageHash: item.expectedPageHash,
       },
     ];
-    if (estimateText(JSON.stringify(candidate)) > budget) continue;
+    if (estimateText(JSON.stringify(candidate), calibration) > budget) continue;
     selected.push(candidate[candidate.length - 1]);
   }
   return selected;

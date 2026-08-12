@@ -430,6 +430,16 @@ test("view drops telemetry-only events before waiting, step, or DOM mutation", (
   assert.match(source, /event\.kind === "native_transport_trace"/);
   assert.equal(appendEvent.includes("native_transport_correlation"), false);
   assert.equal(appendEvent.includes("native_transport_trace"), false);
+
+  // Automatic-budget telemetry is enumerated by the predicate itself, not left to
+  // appendEvent having no branch for it: adding a branch later would then be the only
+  // thing standing between these numbers and the sidebar.
+  for (const kind of [
+    "budget_resolved", "context_probe", "context_window_conflict", "calibration_sample", "evidence_split",
+  ]) {
+    assert.match(source, new RegExp(`event\\.kind === "${kind}"`), kind);
+    assert.equal(appendEvent.includes(kind), false, kind);
+  }
 });
 
 test("progress scroll preserves manual position and exposes return-to-bottom control", () => {

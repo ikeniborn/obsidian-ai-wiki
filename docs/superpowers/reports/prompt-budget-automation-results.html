@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Отчёт о внедрении — prompt-budget-automation</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s, color .3s;
+}
+.theme-btn{
+  position:sticky; top:.5rem; float:right; z-index:5;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface);
+}
+h1{ font-size:1.7rem; margin:.2rem 0 .3rem; color:var(--accent); }
+h2{ font-size:1.25rem; margin:2.2rem 0 .5rem; padding-bottom:.3rem; border-bottom:2px solid var(--border); }
+h3{ font-size:1.02rem; margin:1.4rem 0 .4rem; color:var(--accent-2); }
+body:has(#theme-toggle:checked) h3{ color:var(--accent); }
+code{ font-family:ui-monospace, monospace; font-size:.88em; background:color-mix(in srgb,var(--accent) 10%,var(--surface)); padding:.05rem .3rem; border-radius:4px; }
+.lead{ font-size:1.08rem; }
+.sub{ color:var(--muted); font-size:.95rem; }
+.note{ border-left:4px solid var(--accent); padding:.55rem 1rem; margin:1rem 0;
+  background:color-mix(in srgb,var(--accent) 8%,var(--surface)); border-radius:0 8px 8px 0;
+  box-shadow:0 1px 8px var(--shadow); }
+.note.warn{ border-left-color:var(--warn); background:color-mix(in srgb,var(--warn) 10%,var(--surface)); }
+.note.ok{ border-left-color:var(--ok); background:color-mix(in srgb,var(--ok) 10%,var(--surface)); }
+details{ background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:.7rem 1rem; margin:.7rem 0; box-shadow:0 1px 8px var(--shadow); }
+details summary{ cursor:pointer; font-weight:600; color:var(--accent); }
+details[open] summary{ margin-bottom:.55rem; }
+ul.tight li{ margin:.28rem 0; }
+.badge{ display:inline-block; font-size:.72rem; padding:.05rem .5rem; border-radius:999px; border:1px solid var(--border); white-space:nowrap; }
+.badge.ok{ color:var(--ok-2); border-color:var(--ok); }
+.badge.warn{ color:var(--warn-2); border-color:var(--warn); }
+.badge.danger{ color:var(--danger-2); border-color:var(--danger); }
+.badge.acc{ color:var(--accent-2); border-color:var(--accent); }
+body:has(#theme-toggle:checked) .badge.ok{ color:var(--ok); }
+body:has(#theme-toggle:checked) .badge.warn{ color:var(--warn); }
+body:has(#theme-toggle:checked) .badge.danger{ color:var(--danger); }
+body:has(#theme-toggle:checked) .badge.acc{ color:var(--accent); }
+.rpt-table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface);
+  margin:1rem 0; font-size:.9rem; border:1px solid var(--border); border-radius:10px;
+  overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
+.rpt-table th, .rpt-table td{ border-bottom:1px solid var(--border); padding:.45rem .7rem; text-align:left; vertical-align:top; }
+.rpt-table tbody tr:last-child td{ border-bottom:none; }
+.rpt-table thead th{ background:var(--accent); color:var(--bg); }
+.rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
+.rpt-table tbody tr:hover{ background:color-mix(in srgb,var(--accent) 14%,var(--surface)); }
+.rpt-table td code{ white-space:nowrap; }
+.num{ font-family:ui-monospace, monospace; white-space:nowrap; }
+.plus{ color:var(--ok-2); } .minus{ color:var(--danger-2); }
+body:has(#theme-toggle:checked) .plus{ color:var(--ok); }
+body:has(#theme-toggle:checked) .minus{ color:var(--danger); }
+.kpis{ display:flex; flex-wrap:wrap; gap:.7rem; margin:1rem 0; }
+.kpi{ flex:1 1 8rem; background:var(--surface); border:1px solid var(--border); border-left:4px solid var(--accent);
+  border-radius:8px; padding:.55rem .8rem; box-shadow:0 1px 8px var(--shadow); }
+.kpi b{ display:block; font-size:1.4rem; font-family:ui-monospace, monospace; color:var(--accent); }
+.kpi span{ font-size:.8rem; color:var(--muted); }
+.kpi.ok{ border-left-color:var(--ok); } .kpi.ok b{ color:var(--ok-2); }
+.kpi.warn{ border-left-color:var(--warn); } .kpi.warn b{ color:var(--warn-2); }
+body:has(#theme-toggle:checked) .kpi.ok b{ color:var(--ok); }
+body:has(#theme-toggle:checked) .kpi.warn b{ color:var(--warn); }
+.amend{ display:grid; grid-template-columns:1fr; gap:.6rem; margin:.8rem 0; }
+@media(min-width:720px){ .amend{ grid-template-columns:1fr 1fr; } }
+.amend .box{ background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:.6rem .85rem; box-shadow:0 1px 8px var(--shadow); }
+.amend .box.was{ border-left:4px solid var(--danger); }
+.amend .box.now{ border-left:4px solid var(--ok); }
+.amend .box h4{ margin:.1rem 0 .35rem; font-size:.85rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+figure.diagram{ margin:1.2rem 0; }
+figure.diagram svg{ width:100%; height:auto; display:block; overflow:visible; }
+figcaption{ color:var(--muted); font-size:.85rem; margin-top:.35rem; text-align:center; }
+.card{ fill:var(--surface); stroke:var(--border); stroke-width:1.5; filter:url(#dropshadow); transition:stroke .15s, stroke-width .15s; }
+.node:hover .card{ stroke:var(--accent); stroke-width:2.5; }
+.bar-accent{ fill:var(--accent); } .bar-ok{ fill:var(--ok); }
+.bar-warn{ fill:var(--warn); } .bar-term{ fill:var(--danger); }
+.t-title{ fill:var(--fg); font:600 13px system-ui, sans-serif; }
+.t-sub{ fill:var(--muted); font:10.5px system-ui, sans-serif; }
+.t-mono{ font-family:ui-monospace, monospace; }
+text{ pointer-events:none; }
+.conn{ fill:none; stroke:var(--line); stroke-width:2; }
+.conn-a{ fill:none; stroke:var(--accent); stroke-width:2; stroke-dasharray:5 5; }
+.conn-term{ fill:none; stroke:var(--danger); stroke-width:2.2; }
+.flow{ fill:none; stroke:var(--accent); stroke-width:2.4; stroke-dasharray:8 6; animation:dash 1.1s linear infinite; }
+.flow-ok{ fill:none; stroke:var(--ok); stroke-width:2.4; stroke-dasharray:8 6; animation:dash 1.1s linear infinite; }
+@keyframes dash{ to{ stroke-dashoffset:-14; } }
+@media (prefers-reduced-motion: reduce){ .flow,.flow-ok{ animation:none; } }
+.lbl-bg{ fill:var(--bg); }
+.lbl{ fill:var(--fg); font:11px system-ui, sans-serif; }
+.boundary-rect{ fill:none; stroke:var(--accent); stroke-width:1.6; stroke-dasharray:7 6; opacity:.85; }
+.rpt-c4 .boundary{
+  border:1.6px dashed var(--accent); border-radius:12px;
+  padding:1.8rem 1rem 1rem; margin:.7rem 0; position:relative;
+  display:flex; flex-wrap:wrap; gap:.6rem;
+  background:color-mix(in srgb,var(--accent) 5%,transparent); }
+.rpt-c4 .boundary::before{
+  content:attr(data-label); position:absolute; top:-.7rem; left:.9rem;
+  background:var(--bg); padding:0 .45rem; font-size:.8rem; color:var(--accent); font-weight:600; }
+.rpt-c4 .comp{
+  background:var(--surface); border:1px solid var(--border); border-radius:8px;
+  padding:.5rem .8rem; min-width:6rem; font-size:.82rem; box-shadow:0 1px 6px var(--shadow);
+  border-left:4px solid var(--line); }
+.rpt-c4 .comp.new{ border-left-color:var(--ok); }
+.rpt-c4 .comp.touch{ border-left-color:var(--warn); }
+.rpt-c4 .comp b{ color:var(--accent); }
+.rpt-c4 .comp .sub{ font-size:.74rem; }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Тёмная / светлая тема">🌙 / ☀️</label>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <filter id="dropshadow" x="-20%" y="-20%" width="140%" height="160%">
+    <feDropShadow dx="0" dy="2.5" stdDeviation="3.5" flood-color="var(--shadow)" flood-opacity="1"/>
+  </filter>
+  <marker id="arr" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="9" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="var(--line)"/></marker>
+  <marker id="arrA" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="9" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="var(--accent)"/></marker>
+  <marker id="arrOk" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="9" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="var(--ok)"/></marker>
+  <marker id="arrTerm" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" refX="9" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="var(--danger)"/></marker>
+</defs></svg>
+
+<main class="report">
+
+<h1>Отчёт о внедрении — prompt-budget-automation</h1>
+<p class="sub">Сверка цепочки IDD→SDD с фактическим диффом · ветка <code>dev-prompt-budget-automation</code> · сгенерировано 2026-08-12</p>
+
+<h2>1. Резюме внедрения</h2>
+
+<p class="lead">Байтовые бюджеты промта, которые пользователь подбирал вручную, заменены на
+программное бюджетирование в токенах: оценка по классам символов с калибровкой по фактическому
+расходу провайдера, обнаружение и кэширование контекстного окна модели, вывод входного и выходного
+бюджета из этого окна, разбиение слишком крупной evidence-нагрузки вместо отказа операции и повтор
+генерации при обрыве по <code>finish_reason=length</code>.</p>
+
+<table class="rpt-table">
+<thead><tr><th>Параметр</th><th>Значение</th></tr></thead>
+<tbody>
+<tr><td>Topic</td><td><code>prompt-budget-automation</code></td></tr>
+<tr><td>Intent</td><td><code>docs/superpowers/intents/2026-08-11-prompt-budget-automation-intent.md</code><br><span class="sub">ревизия 4, хеш тела <code>0259b2c90a49d392</code></span></td></tr>
+<tr><td>Spec</td><td><code>docs/superpowers/specs/2026-08-11-prompt-budget-automation-design.md</code><br><span class="sub">ревизия 5, хеш тела <code>64df2444e33cd388</code></span></td></tr>
+<tr><td>Plan</td><td><code>docs/superpowers/plans/2026-08-11-prompt-budget-automation-plan.md</code><br><span class="sub">ревизия 5, хеш тела <code>31b6b9663dffb91e</code></span></td></tr>
+<tr><td>База диффа</td><td><code>--since=d88ea67d</code> — точка ветвления от <code>master</code>. <code>git diff HEAD</code> пуст: всё закоммичено, 56 коммитов.</td></tr>
+<tr><td>Вердикт стадии result</td><td><span class="badge ok">OK</span> — ни одного шага плана без следов в диффе</td></tr>
+</tbody>
+</table>
+
+<div class="kpis">
+  <div class="kpi ok"><b>85</b><span>шагов DONE из 89</span></div>
+  <div class="kpi warn"><b>3</b><span>шага PARTIAL</span></div>
+  <div class="kpi"><b>1</b><span>шаг SUPERSEDED</span></div>
+  <div class="kpi ok"><b>0</b><span>шагов MISSING</span></div>
+  <div class="kpi ok"><b>7/7</b><span>Desired Outcomes</span></div>
+  <div class="kpi ok"><b>19/19</b><span>требований спеки</span></div>
+</div>
+
+<h3>Поправка к требованию от 2026-08-12 — требование сдвинулось, а не «просто прошло»</h3>
+
+<p>Во время живой проверки владелец изменил одно требование цепочки. Это не переформулировка
+задним числом ради зелёного вердикта: исходное требование оказалось невыполнимым средствами
+Obsidian, и поправка внесена явными датированными записями в <b>intent</b> и <b>spec</b>
+(коммит <code>40d79fc8</code>) и в <b>plan</b> (коммит <code>16f85d9a</code>).</p>
+
+<div class="amend">
+  <div class="box was">
+    <h4>Было — intent, Desired Outcomes и Stop Rules</h4>
+    <p>«Основной раздел настроек больше не показывает <code>Input budget tokens</code>,
+    <code>Repair input budget</code> и <code>Output budget tokens</code> для нативного бэкенда.
+    Все три живут <b>под заголовком Advanced</b> и по умолчанию пусты, что означает
+    «автоматически».»</p>
+    <p class="sub">Критерий <code>Done when:</code> — «основной раздел настроек не содержит
+    нативных полей бюджета».</p>
+  </div>
+  <div class="box now">
+    <h4>Стало — intent ревизии 4, spec ревизии 5</h4>
+    <p>«Нативные поля <code>Input budget tokens</code>, <code>Repair input budget</code> и
+    <code>Max completion tokens</code> <b>пусты по умолчанию и читаются как автоматические</b>:
+    каждое показывает вычисленное значение как placeholder, не сохраняя его, а очистка поля
+    возвращает его в автоматический режим.»</p>
+    <p class="sub">Критерий <code>Done when:</code> — «каждое нативное поле бюджета пусто и
+    показывает вычисленное значение как placeholder».</p>
+  </div>
+</div>
+
+<div class="note warn"><b>Почему требование пришлось изменить.</b> У Obsidian
+<code>Setting.setHeading()</code> нет механизма закрытия или ограничения области: заголовок
+захватывает всё, что отрисовано после него, до следующего заголовка. Заголовок «Advanced» поэтому
+затягивал под себя соседний контрол <code>Compression profile</code>, который выбирает семантику
+сжатия, а не арифметику бюджета, — то есть группировка сообщала пользователю неправду. Переставить
+поля местами было нельзя: их порядок закреплён тестами. Заголовок был добавлен коммитом
+<code>56ced080</code> и снят обратно коммитом <code>00478f49</code>; сейчас два теста в
+<code>tests/settings-model-controls.test.ts</code> запрещают его возвращение — строка
+<code>advancedBudgets_name</code> не должна встречаться в исходниках. Владелец принял размещение
+полей inline с placeholder «Automatic» как эквивалентный наблюдаемый результат: поля в обоих
+вариантах остаются необязательным переопределением, и о необязательности сообщает именно
+placeholder, а не заголовок.</div>
+
+<div class="note"><b>Что это значит для проверки.</b> Правка тел документов сбросила кэш валидации:
+хеши тел всех трёх артефактов перестали совпадать с записанными, поэтому цепочка перепройдена
+целиком, а находки в изменившихся разделах переоткрыты и пересужены — детали в разделе 3.</div>
+
+<h2>2. Выполненные изменения</h2>
+
+<p class="sub">72 файла, <span class="plus num">+12640</span> / <span class="minus num">−625</span> строк,
+56 коммитов от <code>d88ea67d</code> до <code>HEAD</code>.</p>
+
+<h3>Новые модули</h3>
+<table class="rpt-table">
+<thead><tr><th>Файл</th><th>Тип</th><th>± строк</th><th>Что делает изменение</th></tr></thead>
+<tbody>
+<tr><td><code>src/token-estimate.ts</code></td><td><span class="badge ok">добавлен</span></td><td class="num"><span class="plus">+141</span></td><td>Оценка размера промта в токенах: цена символа по его классу — латиница, кириллица, CJK, пунктуация, пробелы — вместо одной ставки на прозу, с потолком «один токен на символ» и калибровочным множителем.</td></tr>
+<tr><td><code>src/model-context.ts</code></td><td><span class="badge ok">добавлен</span></td><td class="num"><span class="plus">+414</span></td><td>Хранилище контекста модели: цепочка проб (<code>/v1/models</code>, <code>/api/show</code> и далее), кэш по паре <code>(baseUrl, model)</code>, дедупликация параллельных проб, общий дедлайн, TTL фолбэка и окно калибровки по фактическому расходу.</td></tr>
+<tr><td><code>src/budget-resolver.ts</code></td><td><span class="badge ok">добавлен</span></td><td class="num"><span class="plus">+63</span></td><td>Арифметика бюджета: из контекстного окна выводит входной бюджет и выходной потолок, применяет операционный множитель только к базе, а override зажимает тем же потолком <code>maxInput</code>.</td></tr>
+<tr><td><code>src/auto-budget-notice.ts</code></td><td><span class="badge ok">добавлен</span></td><td class="num"><span class="plus">+60</span></td><td>Однократный выбор при обновлении: перейти на автоматические бюджеты или сохранить записанные числа. Без ответа ничего не переписывается.</td></tr>
+<tr><td><code>scripts/derive-recorded-prompts.py</code></td><td><span class="badge ok">добавлен</span></td><td class="num"><span class="plus">+412</span></td><td>Выводит фикстуру <code>recorded-prompts.json</code> из записанных <code>agent.jsonl</code>, чтобы seed-коэффициенты оценщика подгонялись по реальным данным. <span class="badge warn">вне плана</span></td></tr>
+</tbody>
+</table>
+
+<h3>Изменённые модули</h3>
+<table class="rpt-table">
+<thead><tr><th>Файл</th><th>± строк</th><th>Что делает изменение</th></tr></thead>
+<tbody>
+<tr><td><code>src/phases/init.ts</code></td><td class="num"><span class="plus">+515</span> <span class="minus">−85</span></td><td>Init сливает K bootstrap-групп вместо отказа по размеру источника; бюджет чанков привязан к бюджету нагрузки за вычетом накладных расходов группы; жёсткий отказ по размеру снят, вместо него — отчёт о непригодном контексте модели.</td></tr>
+<tr><td><code>src/phases/ingest-evidence.ts</code></td><td class="num"><span class="plus">+241</span> <span class="minus">−53</span></td><td><code>boundBootstrapPayload</code> заменён на разбиение на уровне единицы evidence: делит, пока каждая часть не помещается или не становится атомарной, и сообщает наибольшую атомарную группу наверх.</td></tr>
+<tr><td><code>src/agent-runner.ts</code></td><td class="num"><span class="plus">+226</span> <span class="minus">−13</span></td><td>Проводка хранилища контекста и телеметрии бюджета через рантайм: события <code>context_probe</code>, <code>budget_resolved</code>, <code>calibration_sample</code>, <code>evidence_split</code>.</td></tr>
+<tr><td><code>src/model-call-policy.ts</code></td><td class="num"><span class="plus">+221</span> <span class="minus">−30</span></td><td>Новый <code>resolveCallPolicy</code> выводит бюджеты вызова из контекста модели; действует только для бэкенда <code>native-agent</code>, <code>claude-agent</code> не затронут.</td></tr>
+<tr><td><code>src/settings.ts</code></td><td class="num"><span class="plus">+220</span> <span class="minus">−10</span></td><td>Нативные поля бюджета рендерятся всегда и inline, показывают вычисленное значение как placeholder — или слово «Автоматически», если контекст ещё не разрешён; очистка возвращает в автоматический режим. Заголовок «Advanced» не используется.</td></tr>
+<tr><td><code>src/types.ts</code></td><td class="num"><span class="plus">+133</span> <span class="minus">−13</span></td><td>Типы записей контекста модели, телеметрии бюджета и новых диагностических событий; поля настроек контекстного окна.</td></tr>
+<tr><td><code>src/phases/structured-output.ts</code></td><td class="num"><span class="plus">+90</span> <span class="minus">−12</span></td><td>Обрыв генерации ловится внутри цикла повторов и запрос переотправляется с бо́льшим выходным потолком вместо падения в <code>structural_error / schema_validate</code>.</td></tr>
+<tr><td><code>src/phases/format.ts</code></td><td class="num"><span class="plus">+71</span> <span class="minus">−3</span></td><td>Явный бюджет Format, привязанный к vision-вызову; сохранённый <code>32768</code> остаётся кратностью базы, а не превращается в 131072.</td></tr>
+<tr><td><code>src/markdown-chunks.ts</code></td><td class="num"><span class="plus">+64</span> <span class="minus">−41</span></td><td>Оценка чанков переведена с байтов на тот же токенный оценщик; окна чанков ограничиваются один раз на диапазон.</td></tr>
+<tr><td><code>src/modals.ts</code></td><td class="num"><span class="plus">+53</span></td><td>Модальное окно однократного выбора с явной обёрткой промиса — Obsidian не предоставляет <code>openAndWait</code>; закрытие означает «сохранить значения».</td></tr>
+<tr><td><code>src/native-openai-client.ts</code></td><td class="num"><span class="plus">+42</span> <span class="minus">−1</span></td><td>Транспорт сообщает фактический расход провайдера обратно в калибровку и распознаёт отказ по переполнению контекста.</td></tr>
+<tr><td><code>src/prompt-budget.ts</code></td><td class="num"><span class="plus">+38</span> <span class="minus">−41</span></td><td>Двойная JSON-сериализация как мера размера убрана; preflight и <code>runWithContextRepack</code> работают в токенах.</td></tr>
+<tr><td><code>src/controller.ts</code></td><td class="num"><span class="plus">+38</span> <span class="minus">−2</span></td><td>Синхронный проброс кэшированной записи контекста в слой настроек, чтобы placeholder не запускал пробу при отрисовке.</td></tr>
+<tr><td><code>src/main.ts</code></td><td class="num"><span class="plus">+34</span> <span class="minus">−1</span></td><td>Однократный показ уведомления об автоматических бюджетах при первой загрузке после обновления.</td></tr>
+<tr><td><code>src/i18n.ts</code></td><td class="num"><span class="plus">+30</span> <span class="minus">−3</span></td><td>Строки ru/en/es: «Автоматически», описания полей «пусто — автоматически», текст уведомления об обновлении.</td></tr>
+<tr><td><code>src/phases/lint-batches.ts</code>, <code>lint.ts</code>, <code>lint-chat.ts</code></td><td class="num"><span class="plus">+49</span> <span class="minus">−31</span></td><td>Работа и батчи lint измеряются в токенах, а не в байтах.</td></tr>
+<tr><td><code>src/phases/attachment-analyzer.ts</code>, <code>evidence-type-enrichment.ts</code>, <code>ingest.ts</code>, <code>ingest-synthesis.ts</code>, <code>chat.ts</code>, <code>llm-utils.ts</code>, <code>query-answer.ts</code></td><td class="num"><span class="plus">+36</span> <span class="minus">−14</span></td><td>Остальные потребители бюджета переведены на разрешённую политику вызова; переполнение обогащения типов evidence сообщается как отказ по контексту модели.</td></tr>
+<tr><td><code>src/local-config.ts</code></td><td class="num"><span class="plus">+10</span></td><td>Постоянное хранение кэша контекста модели в <code>local.json</code>.</td></tr>
+<tr><td><code>src/view.ts</code></td><td class="num"><span class="plus">+10</span> <span class="minus">−1</span></td><td>Телеметрия бюджета перечислена как подавляемая в сайдбаре — технические числа идут только в <code>agent.jsonl</code>. <span class="badge warn">вне плана</span></td></tr>
+<tr><td><code>src/ingest-context.ts</code></td><td class="num"><span class="plus">+4</span> <span class="minus">−3</span></td><td>Проброс калибровки в политику evidence.</td></tr>
+<tr><td><code>src/phases/query-budget.ts</code></td><td class="num"><span class="minus">−14</span></td><td>Удалены два мёртвых поля бюджета, оставшихся после переноса оценщика. <span class="badge warn">вне плана</span></td></tr>
+</tbody>
+</table>
+
+<details>
+<summary>Тесты — 26 файлов (<span class="plus num">+4900</span> / <span class="minus num">−227</span> строк)</summary>
+<table class="rpt-table">
+<thead><tr><th>Файл</th><th>Тип</th><th>± строк</th><th>Что покрывает</th></tr></thead>
+<tbody>
+<tr><td><code>tests/init-bootstrap-fail-loud.test.ts</code></td><td>изменён</td><td class="num"><span class="plus">+738</span> <span class="minus">−10</span></td><td>Init больше не падает по размеру источника; отказ по контексту модели называет модель и её окно.</td></tr>
+<tr><td><code>tests/settings-model-controls.test.ts</code></td><td>изменён</td><td class="num"><span class="plus">+578</span> <span class="minus">−5</span></td><td>Поля бюджета видимы, пусты, показывают placeholder; два теста запрещают заголовок «Advanced» и строку <code>advancedBudgets_name</code>.</td></tr>
+<tr><td><code>tests/model-context.test.ts</code></td><td><span class="badge ok">добавлен</span></td><td class="num"><span class="plus">+441</span></td><td>Проба, кэш, дедупликация, TTL и сходимость калибровки за 20 шагов.</td></tr>
+<tr><td><code>tests/runtime-budget-wiring.test.ts</code></td><td><span class="badge ok">добавлен</span></td><td class="num"><span class="plus">+416</span></td><td>Сквозная проводка: реальный отказ провайдера по контексту проходит через реальные <code>ModelContextStore</code> и <code>runWithContextRepack</code> — 131072 → 8192, запись становится <code>source: "learned"</code>.</td></tr>
+<tr><td><code>tests/vision-budget.test.ts</code></td><td>изменён</td><td class="num"><span class="plus">+406</span> <span class="minus">−3</span></td><td>Бюджет vision берётся из окна vision только когда оно известно.</td></tr>
+<tr><td><code>tests/per-model-context-window.test.ts</code></td><td><span class="badge ok">добавлен</span></td><td class="num"><span class="plus">+382</span></td><td>Настроенное контекстное окно ключуется по модели.</td></tr>
+<tr><td><code>tests/structured-output.test.ts</code></td><td>изменён</td><td class="num"><span class="plus">+271</span> <span class="minus">−24</span></td><td>Повтор при обрыве генерации на streaming и non-streaming путях.</td></tr>
+<tr><td><code>tests/token-estimate.test.ts</code></td><td><span class="badge ok">добавлен</span></td><td class="num"><span class="plus">+245</span></td><td>Абсолютная полоса ±15% при калибровке 1 и отдельный случай «никогда не занижать».</td></tr>
+<tr><td><code>tests/ingest-evidence.test.ts</code></td><td>изменён</td><td class="num"><span class="plus">+227</span> <span class="minus">−19</span></td><td>Разбиение на единицах evidence вместо ограничителя.</td></tr>
+<tr><td><code>tests/fixtures/recorded-prompts.json</code></td><td><span class="badge ok">добавлен</span></td><td class="num"><span class="plus">+204</span></td><td>Записанные пары «промт → фактический расход» для подгонки seed-коэффициентов.</td></tr>
+<tr><td><code>tests/lint-budget.test.ts</code></td><td>изменён</td><td class="num"><span class="plus">+195</span></td><td>Бюджет lint в токенах.</td></tr>
+<tr><td><code>tests/init-force-domain-wipe.test.ts</code></td><td>изменён</td><td class="num"><span class="plus">+94</span> <span class="minus">−1</span></td><td>Каталоги транзакции wipe удаляются рекурсивно с повтором.</td></tr>
+<tr><td><code>tests/model-call-policy.test.ts</code></td><td>изменён</td><td class="num"><span class="plus">+92</span> <span class="minus">−43</span></td><td>Override только по входу оставляет <code>outputSource</code> в значении default; регрессия, закрепляющая 32768.</td></tr>
+<tr><td><code>tests/prompt-budget.test.ts</code></td><td>изменён</td><td class="num"><span class="plus">+89</span> <span class="minus">−26</span></td><td>Preflight и repack в токенах.</td></tr>
+<tr><td><code>tests/budget-resolver.test.ts</code></td><td><span class="badge ok">добавлен</span></td><td class="num"><span class="plus">+77</span></td><td>Потолок <code>maxInput</code>, комбинированные override входа и выхода.</td></tr>
+<tr><td><code>tests/init-force-retry.test.ts</code></td><td>изменён</td><td class="num"><span class="plus">+69</span> <span class="minus">−15</span></td><td>Повтор Init на новых бюджетах.</td></tr>
+<tr><td><code>tests/markdown-chunks.test.ts</code></td><td>изменён</td><td class="num"><span class="plus">+57</span> <span class="minus">−21</span></td><td>Границы чанков на токенной метрике.</td></tr>
+<tr><td><code>tests/ingest-bounded.test.ts</code>, <code>tests/bounded-operations-acceptance.test.ts</code></td><td>изменены</td><td class="num"><span class="plus">+56</span> <span class="minus">−14</span></td><td>Фикстуры health-метрик: решения create/update и число вызовов LLM.</td></tr>
+<tr><td><code>tests/model-context-stub.ts</code></td><td><span class="badge ok">добавлен</span></td><td class="num"><span class="plus">+25</span></td><td>Общий стаб хранилища контекста для остальных наборов.</td></tr>
+<tr><td><code>tests/format-budget.test.ts</code>, <code>format-response-format.test.ts</code>, <code>ingest-context.test.ts</code>, <code>ingest-synthesis.test.ts</code>, <code>evidence-type-enrichment.test.ts</code>, <code>query-budget.test.ts</code>, <code>query-parity.test.ts</code>, <code>view-llm-lifecycle.test.ts</code>, <code>prompt-call-site.type-test.ts</code></td><td>изменены</td><td class="num"><span class="plus">+129</span> <span class="minus">−68</span></td><td>Перевод существующих байтовых инвариантов на новую метрику.</td></tr>
+</tbody>
+</table>
+</details>
+
+<details>
+<summary>Документация и служебные файлы — 9 файлов</summary>
+<table class="rpt-table">
+<thead><tr><th>Файл</th><th>Тип</th><th>± строк</th><th>Содержание</th></tr></thead>
+<tbody>
+<tr><td><code>docs/superpowers/plans/…-plan.md</code></td><td><span class="badge ok">добавлен</span></td><td class="num"><span class="plus">+3028</span></td><td>План: 15 задач, 89 шагов.</td></tr>
+<tr><td><code>docs/superpowers/specs/…-design.md</code></td><td><span class="badge ok">добавлен</span></td><td class="num"><span class="plus">+873</span></td><td>Проект решения, 11 разделов.</td></tr>
+<tr><td><code>docs/superpowers/intents/…-intent.md</code></td><td><span class="badge ok">добавлен</span></td><td class="num"><span class="plus">+333</span></td><td>Утверждённый intent.</td></tr>
+<tr><td><code>docs/superpowers/evals/prompt-budget-automation-baseline.md</code></td><td><span class="badge ok">добавлен</span></td><td class="num"><span class="plus">+138</span></td><td>Базовая линия health-метрик до изменения и запись живой проверки после.</td></tr>
+<tr><td><code>docs/README.ru.md</code></td><td>изменён</td><td class="num"><span class="plus">+118</span> <span class="minus">−6</span></td><td>Бюджеты описаны как автоматические; ручное переопределение вводится inline.</td></tr>
+<tr><td><code>README.md</code></td><td>изменён</td><td class="num"><span class="plus">+114</span> <span class="minus">−7</span></td><td>То же на английском; оба файла эквивалентны, различается только язык.</td></tr>
+<tr><td><code>CHANGELOG.md</code></td><td>изменён</td><td class="num"><span class="plus">+29</span></td><td>Запись о переходе на автоматические бюджеты.</td></tr>
+<tr><td><code>.iwiki.toml</code></td><td>изменён</td><td class="num"><span class="plus">+2</span> <span class="minus">−1</span></td><td>Нормализация привязки домена iwiki. <span class="badge warn">вне плана</span></td></tr>
+<tr><td><code>docs/TODO.md</code></td><td>изменён</td><td class="num"><span class="plus">+1</span></td><td>Строка задачи в журнале.</td></tr>
+</tbody>
+</table>
+</details>
+
+<h2>3. Результаты</h2>
+
+<h3>Сверка шагов плана с диффом</h3>
+
+<table class="rpt-table">
+<thead><tr><th>Задача</th><th>Шагов</th><th>Статус</th><th>Свидетельство в диффе</th></tr></thead>
+<tbody>
+<tr><td>1. Базовая линия health-метрик</td><td class="num">7</td><td><span class="badge ok">7 DONE</span></td><td><code>docs/superpowers/evals/prompt-budget-automation-baseline.md</code>, коммит <code>e3e2884b</code></td></tr>
+<tr><td>2. Токенный оценщик</td><td class="num">6</td><td><span class="badge ok">6 DONE</span></td><td><code>src/token-estimate.ts</code>, <code>tests/token-estimate.test.ts</code>, <code>tests/fixtures/recorded-prompts.json</code></td></tr>
+<tr><td>3. Перевод существующих оценщиков</td><td class="num">7</td><td><span class="badge ok">7 DONE</span></td><td><code>src/prompt-budget.ts</code>, <code>src/markdown-chunks.ts</code>, коммит <code>5acdc31c</code></td></tr>
+<tr><td>4. Хранилище контекста модели</td><td class="num">6</td><td><span class="badge ok">6 DONE</span></td><td><code>src/model-context.ts</code>, <code>tests/model-context.test.ts</code> — сходимость за 20 шагов</td></tr>
+<tr><td>5. Резолвер бюджета</td><td class="num">4</td><td><span class="badge ok">4 DONE</span></td><td><code>src/budget-resolver.ts</code>, <code>tests/budget-resolver.test.ts</code></td></tr>
+<tr><td>6. Диагностические события</td><td class="num">5</td><td><span class="badge ok">5 DONE</span></td><td><code>src/types.ts</code>, <code>src/agent-runner.ts</code>, коммит <code>71885176</code></td></tr>
+<tr><td>7. Политика нативных вызовов</td><td class="num">5</td><td><span class="badge ok">5 DONE</span></td><td><code>src/model-call-policy.ts</code> — <code>resolveCallPolicy</code> рядом с нетронутой прежней функцией</td></tr>
+<tr><td>8. Проводка рантайма</td><td class="num">7</td><td><span class="badge ok">7 DONE</span></td><td><code>src/controller.ts</code>, <code>src/agent-runner.ts</code>, <code>tests/runtime-budget-wiring.test.ts</code></td></tr>
+<tr><td>9. Разбиение на единицах evidence</td><td class="num">6</td><td><span class="badge ok">6 DONE</span></td><td><code>src/phases/ingest-evidence.ts</code>, коммиты <code>aed1d466</code>, <code>8ffd9d58</code></td></tr>
+<tr><td>10. Слияние K bootstrap-групп</td><td class="num">6</td><td><span class="badge ok">6 DONE</span></td><td><code>src/phases/init.ts</code>, коммиты <code>b77951b2</code>, <code>cb31abcc</code></td></tr>
+<tr><td>11. Выходной потолок и обратная связь по расходу</td><td class="num">5</td><td><span class="badge ok">5 DONE</span></td><td><code>src/phases/structured-output.ts</code>, коммит <code>869efe89</code></td></tr>
+<tr><td>12. Отрисовка настроек и строки</td><td class="num">5</td><td><span class="badge ok">4 DONE</span> <span class="badge acc">1 SUPERSEDED</span></td><td><code>src/settings.ts</code>, <code>src/i18n.ts</code>; шаг 3 отменён поправкой</td></tr>
+<tr><td>13. Однократный выбор при обновлении, README, changelog</td><td class="num">6</td><td><span class="badge ok">6 DONE</span></td><td><code>src/auto-budget-notice.ts</code>, <code>src/modals.ts</code>, <code>src/main.ts</code>, оба README, <code>CHANGELOG.md</code></td></tr>
+<tr><td>14. Живая проверка против intent</td><td class="num">9</td><td><span class="badge ok">7 DONE</span> <span class="badge warn">2 PARTIAL</span></td><td>Запись в <code>…-baseline.md</code>, коммит <code>8b0d61a8</code></td></tr>
+<tr><td>15. Обновление вики проекта</td><td class="num">5</td><td><span class="badge ok">4 DONE</span> <span class="badge warn">1 PARTIAL</span></td><td>Страницы <code>architecture/prompt-budget-governor</code>, <code>architecture/model-call-controls</code>, <code>architecture/model-context-discovery</code> существуют и не помечены stale</td></tr>
+<tr><td><b>Итого</b></td><td class="num"><b>89</b></td><td colspan="2"><b>85 DONE · 3 PARTIAL · 1 SUPERSEDED · 0 MISSING</b></td></tr>
+</tbody>
+</table>
+
+<h3>Что именно не закрыто полностью</h3>
+
+<div class="note warn"><b>Задача 14, шаг 8 — визуальное подтверждение UI настроек не получено.</b>
+Из четырёх подкритериев три доказаны кодом и тестами: поля присутствуют, поля пусты, поля показывают
+вычисленное значение как placeholder (<code>src/settings.ts</code>,
+<code>tests/settings-model-controls.test.ts</code>). Сам визуальный осмотр владельцем не выполнен и в
+свидетельствах не зафиксирован, поэтому шаг оставлен PARTIAL, а не поднят до DONE.</div>
+
+<div class="note warn"><b>Задача 14, шаг 7 — восстановление после переполнения контекста не
+воспроизведено вживую.</b> Разбиение подтверждено вживую: при бюджете нагрузки 3988 токенов
+<code>evidence_split { groups: 3, candidates: 36 }</code>, и операция завершилась. Переполнение на
+этом корпусе воспроизвести нельзя: отравленное окно только поднимает потолок, но не раздувает промт,
+а источник <code>ОС/Mac/</code> даёт около 10k токенов против реального окна 131072. Путь закрыт
+интеграционным тестом <code>tests/runtime-budget-wiring.test.ts</code> и записан именно так — как
+покрытый тестом, а не как проверенный вживую.</div>
+
+<div class="note warn"><b>Задача 15, шаг 5 — критерий lint выполнен наполовину.</b> Три затронутых
+страницы чистые: ни одной из них нет в списке stale, битых ссылок в домене нет. Но вторая половина
+критерия — «ранее существовавшие счётчики не растут» — не выполнена: домен показывает
+<b>14 stale</b> против базовой линии 13 до ветки; сирот 2, без изменений. Прирост даёт страница, чей
+источник переписан этой веткой, но которая не входит в область задачи 15.</div>
+
+<h3>Покрытие Desired Outcomes из intent — 7/7</h3>
+<table class="rpt-table">
+<thead><tr><th>Desired Outcome</th><th>Отражён</th><th>Свидетельство</th></tr></thead>
+<tbody>
+<tr><td>Init <code>os-mac --force</code> завершается, домен создан, история <code>done</code></td><td><span class="badge ok">да</span></td><td>Живой прогон: <code>init done</code> за 198 с, затем <code>query done</code>; строки <code>domain was not created</code> больше нет в <code>src/</code>.</td></tr>
+<tr><td><code>estimatedInputTokens</code> отличается от <code>inputTokens</code> провайдера не более чем на ~15%</td><td><span class="badge ok">да, с записанным исключением</span></td><td>7 из 9 вызовов в полосе; оба промаха — завышения (1.181 и 1.216) на двух самых мелких промтах. Крупные промты, где бюджет и связывает, лежат в 0.914–1.060. Условие остановки из intent — занижение ниже 0.85 — не наступало ни разу.</td></tr>
+<tr><td>Ни один прогон не заканчивается <code>configuration error … domain was not created</code> из-за размера входа</td><td><span class="badge ok">да</span></td><td>Разбиение на единицах evidence в <code>ingest-evidence.ts</code> плюс слияние групп в <code>init.ts</code>; отказ по размеру источника удалён.</td></tr>
+<tr><td>Нативные поля бюджета пусты и читаются как автоматические, значение показано как placeholder <span class="badge acc">поправка</span></td><td><span class="badge ok">да — код и тесты</span><br><span class="badge warn">визуально не подтверждено</span></td><td><code>src/settings.ts</code> и <code>tests/settings-model-controls.test.ts</code>; визуальная проверка — шаг 14.8, см. выше.</td></tr>
+<tr><td>Однократный явный выбор при обновлении, ничего не переписывается без ответа</td><td><span class="badge ok">да</span></td><td><code>src/auto-budget-notice.ts</code>, <code>src/modals.ts</code>, <code>src/main.ts</code>; закрытие окна означает «сохранить значения».</td></tr>
+<tr><td>Эффективный входной бюджет ≥16k реальных токенов при известном окне; источник границы записан</td><td><span class="badge ok">да</span></td><td><code>budget_resolved contextWindow 131072 inputBudget 110592 inputSource "configured" outputSource "default"</code> — это не константа 16384.</td></tr>
+<tr><td>Обрыв генерации вызывает повтор с бо́льшим выходным лимитом</td><td><span class="badge ok">да</span></td><td><code>src/phases/structured-output.ts</code>, коммит <code>869efe89</code>, интеграционные тесты на оба транспорта.</td></tr>
+</tbody>
+</table>
+
+<h3>Покрытие требований спеки — 19/19</h3>
+<details>
+<summary>Разбор по разделам спеки: §2.1–2.6, §3, §4.1–4.5, §5.1–5.3, §6.1–6.4</summary>
+<table class="rpt-table">
+<thead><tr><th>§</th><th>Требование</th><th>Отражено в</th></tr></thead>
+<tbody>
+<tr><td>2.1</td><td>Оценка по классам символов плюс калибровка в рантайме</td><td><code>src/token-estimate.ts</code>, <code>src/model-context.ts</code></td></tr>
+<tr><td>2.2</td><td>Контекстное окно: ленивая проба, кэш, ключ по модели</td><td><code>src/model-context.ts</code>, <code>tests/per-model-context-window.test.ts</code></td></tr>
+<tr><td>2.3</td><td>Миграция: спросить один раз, без ответа ничего не переписывать</td><td><code>src/auto-budget-notice.ts</code>, <code>src/modals.ts</code></td></tr>
+<tr><td>2.4</td><td>Разбиение слишком крупной нагрузки на единицах evidence</td><td><code>src/phases/ingest-evidence.ts</code></td></tr>
+<tr><td>2.5</td><td>Бюджет чанков привязан к бюджету нагрузки минус накладные расходы группы</td><td><code>src/phases/init.ts</code>, <code>src/markdown-chunks.ts</code></td></tr>
+<tr><td>2.6</td><td>Область: только <code>native-agent</code></td><td><code>src/model-call-policy.ts</code></td></tr>
+<tr><td>3</td><td>Арифметика бюджета, <code>maxInput</code> как общий потолок</td><td><code>src/budget-resolver.ts</code>, <code>tests/budget-resolver.test.ts</code></td></tr>
+<tr><td>4.1</td><td>Модуль <code>token-estimate.ts</code></td><td>добавлен</td></tr>
+<tr><td>4.2</td><td>Модуль <code>model-context.ts</code></td><td>добавлен</td></tr>
+<tr><td>4.3</td><td>Модуль <code>budget-resolver.ts</code></td><td>добавлен</td></tr>
+<tr><td>4.4</td><td>Проводка рантайма: <code>effectiveModel</code>, массив событий, <code>onContextError</code> внутри repack</td><td><code>src/controller.ts</code>, <code>src/agent-runner.ts</code></td></tr>
+<tr><td>4.5</td><td>Изменения существующих модулей, включая строку <code>src/settings.ts</code> <span class="badge acc">поправка</span></td><td>21 файл в <code>src/</code></td></tr>
+<tr><td>5.1</td><td>Init от начала до конца</td><td><code>src/phases/init.ts</code></td></tr>
+<tr><td>5.2</td><td>Семантика слияния</td><td><code>src/phases/init.ts</code></td></tr>
+<tr><td>5.3</td><td>Группировка</td><td><code>src/phases/ingest-evidence.ts</code></td></tr>
+<tr><td>6.1</td><td>Фиксированный промт не помещается в контекст модели</td><td>коммиты <code>18f450d4</code>, <code>19afdf00</code>, <code>41b8b506</code></td></tr>
+<tr><td>6.2</td><td>Обрыв генерации</td><td><code>src/phases/structured-output.ts</code></td></tr>
+<tr><td>6.3</td><td>Испорченная калибровка</td><td>коммиты <code>18216a27</code>, <code>b8ba5e56</code></td></tr>
+<tr><td>6.4</td><td>Диагностика</td><td><code>src/types.ts</code>, <code>src/agent-runner.ts</code>, <code>src/view.ts</code></td></tr>
+</tbody>
+</table>
+</details>
+
+<h3>Изменения вне плана (EXCESS)</h3>
+<p class="sub">Файлы в диффе, для которых в плане нет шага с явным путём. Ни один не отменяет вердикт; все привязаны к intent.</p>
+<table class="rpt-table">
+<thead><tr><th>Файл</th><th>Оценка</th></tr></thead>
+<tbody>
+<tr><td><code>scripts/derive-recorded-prompts.py</code></td><td>Инструмент вывода фикстуры для задачи 2: план требует фикстуру, но не называет скрипт.</td></tr>
+<tr><td><code>src/view.ts</code>, <code>tests/view-llm-lifecycle.test.ts</code></td><td>Реализует управляющее ограничение intent: технические числа идут в <code>agent.jsonl</code>, а не в текст прогресса сайдбара.</td></tr>
+<tr><td><code>src/phases/query-budget.ts</code>, <code>tests/query-budget.test.ts</code></td><td>Удаление мёртвых полей бюджета после переноса оценщика; модуль назван в Strategic Context intent.</td></tr>
+<tr><td><code>.iwiki.toml</code></td><td>Нормализация привязки домена iwiki; к теме не относится.</td></tr>
+</tbody>
+</table>
+
+<h3>Находки, переоткрытые поправкой</h3>
+<p>Правка тел документов сбросила кэш валидации. Находки в изменившихся разделах переоткрыты и
+пересужены заново; ни одна не превратилась в открытую CRITICAL.</p>
+<table class="rpt-table">
+<thead><tr><th>Артефакт</th><th>Изменившиеся разделы</th><th>Переоткрыто</th><th>Итог пересуждения</th></tr></thead>
+<tbody>
+<tr><td>Intent</td><td>Desired Outcomes, Autonomy Zones, Stop Rules</td><td>F-001, F-002, F-008</td><td>Все три остаются <code>fixed</code>: их фрагменты либо отсутствуют в новом тексте, либо исправлены как требовалось. Добавлена F-010 (INFO) — запись самой поправки.</td></tr>
+<tr><td>Spec</td><td>§4 Components через §4.5, §8 Acceptance через Desired Outcomes</td><td>F-014</td><td>Остаётся <code>fixed</code>: поправка трогает только строку настроек, а не проводку рантайма, которую находка покрывала. Добавлена F-022 (INFO).</td></tr>
+<tr><td>Plan</td><td>Задачи 12, 13, 14, 15</td><td>F-011, F-012, F-015, F-018, F-023, F-024</td><td>Все шесть остаются <code>fixed</code>. Добавлены F-026 (WARNING, принята) — остаточные инструкции шага 4 задачи 12 читаются отменёнными вместе с заголовком, что подтверждено отсутствием <code>advancedBudgets_name</code> в исходниках, — и F-027 (INFO), сводка изменений.</td></tr>
+</tbody>
+</table>
+
+<div class="note ok"><b>Вердикт стадии result: OK.</b> Ни одного шага плана без следов в диффе:
+0 MISSING. Три PARTIAL и один SUPERSEDED зафиксированы явно и не скрыты. Покрытие intent 7/7,
+покрытие спеки 19/19.</div>
+
+<h2>4. Влияние на систему</h2>
+
+<table class="rpt-table">
+<thead><tr><th>Область</th><th>Что изменилось в поведении</th><th>Риск и хвосты</th></tr></thead>
+<tbody>
+<tr><td><b>Измерение размера промта</b><br><span class="sub"><code>token-estimate.ts</code>, <code>prompt-budget.ts</code>, <code>markdown-chunks.ts</code></span></td><td>Размер считается в токенах по классам символов вместо UTF-8 байтов двойной JSON-сериализации. Прежняя оценка завышала в 3.6–4.1 раза; калибровочный множитель осел на 1.0143 после 8 образцов.</td><td>Границы чанков сдвинулись. Существующие домены автоматически не переиндексируются — пользователь запускает <code>Init --force</code> вручную; это заложено в intent как жёсткое ограничение.</td></tr>
+<tr><td><b>Источник бюджета</b><br><span class="sub"><code>model-context.ts</code>, <code>budget-resolver.ts</code>, <code>model-call-policy.ts</code></span></td><td>Входной бюджет и выходной потолок выводятся из контекстного окна модели, обнаруженного пробой и закэшированного по паре <code>(baseUrl, model)</code>. Источник границы — <code>discovered</code>, <code>learned</code>, <code>configured</code> или <code>default</code> — пишется в <code>agent.jsonl</code>.</td><td>Провайдер в этой установке не сообщает длину контекста ни на одном эндпоинте: <code>/v1/models</code> отдаёт 200 без поля длины, а <code>/api/show</code>, <code>/v1/model/info</code>, <code>/model/info</code> и <code>/v1/models/&lt;id&gt;</code> — 404. Окно берётся из настройки, добавленной этой веткой. Проба остаётся best-effort по замыслу.</td></tr>
+<tr><td><b>Устойчивость Init и Ingest</b><br><span class="sub"><code>init.ts</code>, <code>ingest-evidence.ts</code></span></td><td>Слишком крупная evidence-нагрузка делится на единицах evidence и сливается K группами вместо отказа операции. Отказ по размеру источника снят полностью.</td><td>Разбиение добавляет вызовы LLM; intent явно это разрешает и требует записи <code>evidence_split</code>. Полнота покрытия источника (<code>assertCompleteSourceCoverage</code>) остаётся жёстким инвариантом.</td></tr>
+<tr><td><b>Выходная сторона</b><br><span class="sub"><code>structured-output.ts</code>, <code>format.ts</code></span></td><td>Обрыв по <code>finish_reason=length</code> ловится внутри цикла повторов, и запрос переотправляется с бо́льшим потолком вместо падения в <code>structural_error</code>.</td><td>Сохранённый <code>format.maxTokens = 32768</code> закреплён регрессионным тестом, чтобы множитель операции не превратил его в 131072.</td></tr>
+<tr><td><b>Настройки и совместимость</b><br><span class="sub"><code>settings.ts</code>, <code>i18n.ts</code>, <code>auto-budget-notice.ts</code>, <code>main.ts</code></span></td><td>Поля бюджета остаются на месте, но пусты и показывают вычисленное значение как placeholder. Установка с сохранёнными числами один раз получает явный выбор.</td><td>Визуальная проверка UI владельцем не выполнена — шаг 14.8. Смысл сохранённых значений не меняется молча: сохранённый <code>inputBudgetTokens</code> продолжает работать как явное переопределение.</td></tr>
+<tr><td><b>Бэкенд <code>claude-agent</code></b></td><td>Транспорт, сохранённые значения бюджета по умолчанию, раскладка настроек и владение выходным лимитом внешним CLI не изменены; наследуется только честная оценка токенов.</td><td>Соответствует жёсткому ограничению intent и зоне «без автономии».</td></tr>
+<tr><td><b>Документация</b><br><span class="sub">README, docs/README.ru.md, CHANGELOG, вики</span></td><td>Оба README описывают автоматические бюджеты и inline-переопределение и остаются эквивалентными. Три страницы вики обновлены или созданы.</td><td>Домен вики показывает 14 stale против базовой линии 13 — прирост от страницы вне области задачи 15.</td></tr>
+</tbody>
+</table>
+
+<h2>5. Схемы</h2>
+
+<p class="sub">Раздел включён, потому что дифф добавляет новые модули — <code>token-estimate.ts</code>,
+<code>model-context.ts</code>, <code>budget-resolver.ts</code>, <code>auto-budget-notice.ts</code> —
+и новые связи между компонентами.</p>
+
+<h3>Поток разрешения бюджета: от вызова до калибровки</h3>
+
+<figure class="diagram">
+<svg viewBox="0 0 940 400" role="img" aria-label="Поток разрешения бюджета с петлёй калибровки и ветвями завершения">
+  <rect class="boundary-rect" x="20" y="20" width="900" height="200" rx="16"/>
+  <rect class="lbl-bg" x="38" y="12" width="330" height="18"/>
+  <text class="lbl" x="46" y="25" font-weight="600">На каждый вызов LLM · бэкенд native-agent</text>
+
+  <g class="node"><rect class="card" x="40" y="58" width="158" height="62" rx="12"/><rect class="bar-accent" x="48" y="70" width="5" height="38" rx="2.5"/><text class="t-title" x="119" y="84" text-anchor="middle">ModelContextStore</text><text class="t-sub" x="119" y="101" text-anchor="middle">проба · кэш · TTL</text></g>
+  <g class="node"><rect class="card" x="238" y="58" width="158" height="62" rx="12"/><rect class="bar-ok" x="246" y="70" width="5" height="38" rx="2.5"/><text class="t-title" x="317" y="84" text-anchor="middle">budgetResolver</text><text class="t-sub" x="317" y="101" text-anchor="middle">maxInput · outputCeiling</text></g>
+  <g class="node"><rect class="card" x="436" y="58" width="158" height="62" rx="12"/><rect class="bar-ok" x="444" y="70" width="5" height="38" rx="2.5"/><text class="t-title" x="515" y="84" text-anchor="middle">tokenEstimate</text><text class="t-sub" x="515" y="101" text-anchor="middle">классы символов × factor</text></g>
+  <g class="node"><rect class="card" x="634" y="58" width="158" height="62" rx="12"/><rect class="bar-warn" x="642" y="70" width="5" height="38" rx="2.5"/><text class="t-title" x="713" y="84" text-anchor="middle">упаковка / split</text><text class="t-sub" x="713" y="101" text-anchor="middle">единицы evidence</text></g>
+
+  <path class="flow" marker-end="url(#arrA)" d="M198,89 H231"/>
+  <path class="flow" marker-end="url(#arrA)" d="M396,89 H429"/>
+  <path class="flow" marker-end="url(#arrA)" d="M594,89 H627"/>
+
+  <g class="node"><rect class="card" x="634" y="150" width="158" height="56" rx="12"/><rect class="bar-accent" x="642" y="161" width="5" height="34" rx="2.5"/><text class="t-title" x="713" y="174" text-anchor="middle">запрос провайдеру</text><text class="t-sub" x="713" y="191" text-anchor="middle">native-openai-client</text></g>
+  <path class="flow" marker-end="url(#arrA)" d="M713,120 V143"/>
+
+  <path class="conn-a" marker-end="url(#arrA)" d="M630,178 H150 Q119,178 119,166 V124"/>
+  <rect class="lbl-bg" x="286" y="169" width="258" height="18"/>
+  <text class="lbl" x="415" y="182" text-anchor="middle">calibration_sample · factor ×= actual / estimate</text>
+
+  <g class="node"><rect class="card" x="40" y="262" width="250" height="62" rx="12"/><rect class="bar-ok" x="48" y="274" width="5" height="38" rx="2.5"/><text class="t-title" x="165" y="288" text-anchor="middle">операция завершена</text><text class="t-sub" x="165" y="305" text-anchor="middle">домен создан · groups ≥ 1</text></g>
+  <g class="node"><rect class="card" x="340" y="262" width="250" height="62" rx="12"/><rect class="bar-warn" x="348" y="274" width="5" height="38" rx="2.5"/><text class="t-title" x="465" y="288" text-anchor="middle">runWithContextRepack</text><text class="t-sub" x="465" y="305" text-anchor="middle">окно сжимается · source: learned</text></g>
+  <g class="node"><rect class="card" x="640" y="262" width="270" height="62" rx="12"/><rect class="bar-term" x="648" y="274" width="5" height="38" rx="2.5"/><text class="t-title t-mono" x="775" y="288" text-anchor="middle">unsupported model context</text><text class="t-sub" x="775" y="305" text-anchor="middle">названы модель и её окно</text></g>
+
+  <path class="flow-ok" marker-end="url(#arrOk)" d="M690,206 C610,238 300,232 190,258"/>
+  <path class="conn-a" marker-end="url(#arrA)" d="M713,206 C713,234 560,232 480,258"/>
+  <path class="conn-term" marker-end="url(#arrTerm)" d="M762,206 C792,230 792,236 780,258"/>
+
+  <rect class="lbl-bg" x="326" y="226" width="80" height="18"/><text class="lbl" x="366" y="239" text-anchor="middle">успех</text>
+  <rect class="lbl-bg" x="510" y="226" width="146" height="18"/><text class="lbl" x="583" y="239" text-anchor="middle">отказ по контексту</text>
+  <rect class="lbl-bg" x="792" y="226" width="140" height="18"/><text class="lbl" x="862" y="239" text-anchor="middle">промт не помещается</text>
+
+  <path class="conn-a" marker-end="url(#arrA)" d="M340,293 H298"/>
+</svg>
+<figcaption>Размер источника больше не заканчивает операцию. Остаются ровно два допустимых отказа по
+размеру, и оба — свойства модели: отказ провайдера после исчерпания repack-петли и модель, чьё окно
+не вмещает фиксированный промт.</figcaption>
+</figure>
+
+<h3>Карта влияния: изменённые компоненты и затронутые области</h3>
+
+<figure class="rpt-c4">
+  <div class="boundary" data-label="Плагин obsidian-ai-wiki">
+    <div class="boundary" data-label="Новый слой бюджетирования">
+      <div class="comp new"><b>token-estimate.ts</b><br><span class="sub">оценка в токенах</span></div>
+      <div class="comp new"><b>model-context.ts</b><br><span class="sub">проба · кэш · калибровка</span></div>
+      <div class="comp new"><b>budget-resolver.ts</b><br><span class="sub">арифметика бюджета</span></div>
+      <div class="comp new"><b>auto-budget-notice.ts</b><br><span class="sub">однократный выбор</span></div>
+    </div>
+    <div class="boundary" data-label="Проводка рантайма">
+      <div class="comp touch"><b>model-call-policy.ts</b><br><span class="sub">resolveCallPolicy</span></div>
+      <div class="comp touch"><b>agent-runner.ts</b><br><span class="sub">телеметрия бюджета</span></div>
+      <div class="comp touch"><b>controller.ts</b><br><span class="sub">проброс записи контекста</span></div>
+      <div class="comp touch"><b>prompt-budget.ts</b><br><span class="sub">preflight · repack</span></div>
+    </div>
+    <div class="boundary" data-label="Потребители бюджета">
+      <div class="comp touch"><b>phases/init.ts</b><br><span class="sub">слияние K групп</span></div>
+      <div class="comp touch"><b>phases/ingest-evidence.ts</b><br><span class="sub">split вместо bounder</span></div>
+      <div class="comp touch"><b>phases/structured-output.ts</b><br><span class="sub">повтор при обрыве</span></div>
+      <div class="comp touch"><b>phases/lint · format · chat · query</b><br><span class="sub">токены вместо байтов</span></div>
+      <div class="comp touch"><b>markdown-chunks.ts</b><br><span class="sub">границы чанков</span></div>
+    </div>
+    <div class="boundary" data-label="Интерфейс и совместимость">
+      <div class="comp touch"><b>settings.ts</b><br><span class="sub">inline-поля + placeholder</span></div>
+      <div class="comp touch"><b>i18n.ts · modals.ts · main.ts</b><br><span class="sub">строки ru/en/es · миграция</span></div>
+      <div class="comp"><b>claude-agent</b><br><span class="sub">не изменён</span></div>
+    </div>
+    <div class="boundary" data-label="Внешнее">
+      <div class="comp"><b>OpenAI-совместимый провайдер</b><br><span class="sub">длину контекста не сообщает</span></div>
+      <div class="comp"><b>local.json</b><br><span class="sub">кэш контекста модели</span></div>
+    </div>
+  </div>
+  <figcaption style="text-align:left">Зелёная полоса — новый модуль, жёлтая — изменённый, серая — затронут, но не изменён.</figcaption>
+</figure>
+
+<p class="sub" style="margin-top:2.5rem">Отчёт сгенерирован стадией <code>result</code> проверки
+цепочки <code>/check-chain</code>. База диффа <code>d88ea67d</code>. Все три артефакта цепочки
+перепроверены после поправки от 2026-08-12.</p>
+
+</main>
+</body>
+</html>

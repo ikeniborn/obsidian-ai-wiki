@@ -1,4 +1,5 @@
 import type { Plugin } from "obsidian";
+import type { ContextWindowSource } from "./types";
 export type { ProxyConfig } from "./proxy";
 
 export interface LocalConfig {
@@ -13,6 +14,15 @@ export interface LocalConfig {
   migrated_okf_frontmatter?: boolean;
   shellConsentGiven?: boolean;
   lastDomain?: string;
+  migrated_auto_budget?: boolean;
+  /** Keyed by `${baseUrl}::${model}`. */
+  modelContext?: Record<string, {
+    contextWindow: number;
+    source: ContextWindowSource;
+    calibration: number;
+    samples: number;
+    expiresAt?: number;
+  }>;
 }
 
 const DEFAULTS: LocalConfig = { iclaudePath: "" };

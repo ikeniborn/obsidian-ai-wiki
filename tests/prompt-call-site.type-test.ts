@@ -44,7 +44,6 @@ renderUnits.push({
   text: "mutated",
   required: false,
   priority: 0,
-  estimatedTokens: 0,
 });
 
 export type {

@@ -1,6 +1,7 @@
 import type OpenAI from "openai";
 import type {
   ChatMessage,
+  ContextWindowSource,
   LlmCallOptions,
   LlmClient,
   RunEvent,
@@ -165,6 +166,53 @@ const enFormatProgressFallback: FormatProgress = {
   truncationHintSettings: "raise the limit: Settings → per-operation → format → maxTokens",
 };
 
+const VISION_WINDOW_FIELD = "Settings → Vision → Model context window";
+
+const VISION_WINDOW_SOURCE_LABEL: Record<ContextWindowSource, string> = {
+  configured: "you set this window",
+  discovered: "reported by the backend",
+  learned: "learned from a provider rejection",
+  default: "fallback",
+};
+
+/** Size refusals are decided before the request leaves: the budget, not the provider. */
+function isVisionSizeError(error: unknown): boolean {
+  return error instanceof PromptBudgetExceededError
+    || (error instanceof Error && error.message.includes("context recovery exhausted"));
+}
+
+/**
+ * Why a Vision attachment was skipped FOR SIZE, in terms the user can act on. Both
+ * size failures are decided client-side — `buildChatParams` refuses a prompt over the
+ * input budget, `batchPdfPages` refuses a page that cannot fit one batch — so the
+ * provider's answer explains nothing, and the budget telemetry that would
+ * (`budget_resolved`, `context_probe`) is agent-log-only and off by default. Names the
+ * vision model, the window it was measured against, where that number came from, and
+ * the field that changes it. Returns null for a non-size failure, and for a backend
+ * with no vision context record at all (claude-agent), which has no such field.
+ */
+export function visionSizeSkipReason(
+  error: unknown,
+  vision: {
+    model: string;
+    contextWindow?: number;
+    contextWindowSource?: ContextWindowSource;
+  },
+): string | null {
+  if (!isVisionSizeError(error)) return null;
+  if (vision.contextWindow === undefined || vision.contextWindowSource === undefined) return null;
+  if (vision.contextWindowSource === "default") {
+    return `${vision.model}: the backend advertises no context window for this vision model, `
+      + "so the request was sized from the Format operation's own budget. "
+      + `Set ${VISION_WINDOW_FIELD} to this model's real window.`;
+  }
+  const advice = vision.contextWindowSource === "configured"
+    ? `Raise or clear ${VISION_WINDOW_FIELD}.`
+    : `Set ${VISION_WINDOW_FIELD} if this model's real window is larger.`;
+  return `${vision.model}: the request does not fit its ${vision.contextWindow}-token context `
+    + `window (${VISION_WINDOW_SOURCE_LABEL[vision.contextWindowSource]}). ${advice}`;
+}
+
 export async function* runFormat(
   args: string[],
   vaultTools: VaultTools,
@@ -182,6 +230,18 @@ export async function* runFormat(
     model: string;
     language?: "auto" | "ru" | "en" | "es";
     imageOnly?: boolean;
+    /**
+     * Derived from the VISION model's own context record, not from this operation's.
+     * Absent on the claude-agent path, which keeps no record, and on a backend that
+     * advertises no window for the vision model — vision then falls back to the
+     * operation's own budget, exactly as before.
+     */
+    inputBudgetTokens?: number;
+    maxTokens?: number;
+    tokenCalibration?: number;
+    /** The vision model's own window, reported when a size refusal has to explain itself. */
+    contextWindow?: number;
+    contextWindowSource?: ContextWindowSource;
   } = { enabled: false, model: "" },
   visionTempStore?: VisionTempStore,
   progress: FormatProgress = enFormatProgressFallback,
@@ -246,8 +306,9 @@ export async function* runFormat(
             visionSettings.imageOnly ?? false,
             usedVisionTemplates,
             {
-              inputBudgetTokens: opts.inputBudgetTokens,
-              maxTokens: opts.maxTokens,
+              inputBudgetTokens: visionSettings.inputBudgetTokens ?? opts.inputBudgetTokens,
+              maxTokens: visionSettings.maxTokens ?? opts.maxTokens,
+              tokenCalibration: visionSettings.tokenCalibration,
               onEvent: (event) => visionEvents.push(event),
             },
           );
@@ -267,7 +328,13 @@ export async function* runFormat(
             for (const event of visionEvents) yield event;
           }
           yield { kind: "tool_result", ok: false, preview: (e as Error)?.message ?? "failed" };
-          yield { kind: "info_text", icon: "⚠️", summary: "Vision skipped", details: [path] };
+          const sizeReason = visionSizeSkipReason(e, visionSettings);
+          yield {
+            kind: "info_text",
+            icon: "⚠️",
+            summary: "Vision skipped",
+            details: sizeReason === null ? [path] : [path, sizeReason],
+          };
         }
       }
     }
@@ -371,6 +438,7 @@ export async function* runFormat(
     effectiveInputBudget: opts.inputBudgetTokens ?? 0,
     estimatedInputTokens: estimatePreparedMessages(
       params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+      opts.tokenCalibration,
     ),
     actualInputTokens,
     outputBudget: opts.maxTokens,

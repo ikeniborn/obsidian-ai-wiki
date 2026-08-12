@@ -3,6 +3,7 @@ import { register } from "node:module";
 import test from "node:test";
 import type OpenAI from "openai";
 import {
+  MEDIA_TOKENS,
   PromptBudgetExceededError,
   classifyContextError,
   createPromptBudgetEvent,
@@ -15,9 +16,11 @@ import {
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 const { buildChatParams, prepareChatMessages } = await import("../src/phases/llm-utils");
 
-test("UTF-8 text uses one byte as one conservative estimated token", () => {
-  const ascii = estimatePreparedMessages([{ role: "user", content: "abc" }]);
-  const cyrillic = estimatePreparedMessages([{ role: "user", content: "абв" }]);
+test("Cyrillic text costs more estimated tokens than the same length of ASCII", () => {
+  // Long enough to clear the per-message rounding: the character-class rates
+  // differ by roughly a factor of two, so three characters cannot show it.
+  const ascii = estimatePreparedMessages([{ role: "user", content: "abc".repeat(40) }]);
+  const cyrillic = estimatePreparedMessages([{ role: "user", content: "абв".repeat(40) }]);
   assert.ok(cyrillic > ascii);
 });
 
@@ -32,8 +35,12 @@ test("image URL payload reserves media tokens without counting base64 text", () 
   assert.ok(short >= 4096);
 });
 
-test("estimator serializes role, name, tool-call, and tool-result metadata exactly", () => {
-  const messages = [
+// The estimator walks every string field of a message (task-3
+// prompt-budget-automation: it no longer JSON-serializes and byte-counts),
+// so these tests assert the relationship — metadata contributes to the
+// estimate — rather than an exact byte count tied to JSON.stringify.
+test("estimator counts role, name, tool-call, and tool-result metadata, not just content", () => {
+  const full = [
     { role: "system", name: "policy", content: "contract" },
     {
       role: "assistant",
@@ -46,13 +53,34 @@ test("estimator serializes role, name, tool-call, and tool-result metadata exact
     },
     { role: "tool", tool_call_id: "call_1", content: "result" },
   ] as OpenAI.Chat.ChatCompletionMessageParam[];
+  const withoutName = [
+    { role: "system", content: "contract" },
+    full[1],
+    full[2],
+  ] as OpenAI.Chat.ChatCompletionMessageParam[];
+  const withoutToolCallMetadata = [
+    full[0],
+    {
+      role: "assistant",
+      content: null,
+      tool_calls: [{ id: "", type: "function", function: { name: "", arguments: "" } }],
+    },
+    full[2],
+  ] as OpenAI.Chat.ChatCompletionMessageParam[];
+  const withoutToolCallId = [
+    full[0],
+    full[1],
+    { role: "tool", tool_call_id: "", content: "result" },
+  ] as OpenAI.Chat.ChatCompletionMessageParam[];
 
-  const expected = new TextEncoder().encode(JSON.stringify(messages)).byteLength;
-  assert.equal(estimatePreparedMessages(messages), expected);
+  const fullEstimate = estimatePreparedMessages(full);
+  assert.ok(fullEstimate > estimatePreparedMessages(withoutName));
+  assert.ok(fullEstimate > estimatePreparedMessages(withoutToolCallMetadata));
+  assert.ok(fullEstimate > estimatePreparedMessages(withoutToolCallId));
 });
 
-test("estimator reserves every media part and serializes other non-text parts", () => {
-  const messages = [{
+test("estimator reserves a flat media cost per image part and still counts other non-text parts", () => {
+  const withMedia = [{
     role: "user",
     content: [
       { type: "text", text: "inspect" },
@@ -61,34 +89,48 @@ test("estimator reserves every media part and serializes other non-text parts", 
       { type: "image_url", image_url: { url: "https://example.invalid/image.png" } },
     ],
   }] as unknown as OpenAI.Chat.ChatCompletionMessageParam[];
-  const serialized = [{
+  const withoutMedia = [{
     role: "user",
     content: [
       { type: "text", text: "inspect" },
-      { type: "image_url", image_url: { url: "[media]", detail: "high" } },
       { type: "input_audio", input_audio: { data: "audio-bytes", format: "wav" } },
-      { type: "image_url", image_url: { url: "[media]" } },
     ],
-  }];
-  const expected = new TextEncoder().encode(JSON.stringify(serialized)).byteLength + 2 * 4_096;
+  }] as unknown as OpenAI.Chat.ChatCompletionMessageParam[];
+  const withoutAudioData = [{
+    role: "user",
+    content: [
+      { type: "text", text: "inspect" },
+      { type: "image_url", image_url: { url: "data:image/png;base64,short", detail: "high" } },
+      { type: "input_audio", input_audio: { data: "", format: "wav" } },
+      { type: "image_url", image_url: { url: "https://example.invalid/image.png" } },
+    ],
+  }] as unknown as OpenAI.Chat.ChatCompletionMessageParam[];
 
-  assert.equal(estimatePreparedMessages(messages), expected);
+  assert.equal(
+    estimatePreparedMessages(withMedia) - estimatePreparedMessages(withoutMedia),
+    2 * MEDIA_TOKENS,
+  );
+  assert.ok(estimatePreparedMessages(withMedia) > estimatePreparedMessages(withoutAudioData));
 });
 
 test("packer keeps required units whole and drops lower-priority optional units", () => {
+  // Rescaled twice for the token estimator: from a byte-era budget of 170, then
+  // to 25 once the character-class rules priced these letter runs near half the
+  // old flat rate. 25 fits "required"+"high" (22 tokens) but not "low" as well
+  // (33 tokens).
   const packed = packContextUnits({
-    inputBudgetTokens: 170,
+    inputBudgetTokens: 25,
     fixedMessages: [{ role: "system", content: "contract" }],
     opts: {},
     units: [
-      { id: "required", source: "source", text: "r".repeat(40), required: true, priority: 0, estimatedTokens: 40 },
-      { id: "high", source: "wiki", text: "h".repeat(40), required: false, priority: 10, estimatedTokens: 40 },
-      { id: "low", source: "wiki", text: "l".repeat(80), required: false, priority: 1, estimatedTokens: 80 },
+      { id: "required", source: "source", text: "r".repeat(40), required: true, priority: 0 },
+      { id: "high", source: "wiki", text: "h".repeat(40), required: false, priority: 10 },
+      { id: "low", source: "wiki", text: "l".repeat(80), required: false, priority: 1 },
     ],
     render: (units) => [{ role: "system", content: "contract" }, { role: "user", content: units.map((u) => u.text).join("\n") }],
   });
   assert.deepEqual(packed.selected.map((unit) => unit.id), ["required", "high"]);
-  assert.ok(packed.estimatedInputTokens <= 170);
+  assert.ok(packed.estimatedInputTokens <= 25);
 });
 
 test("packer renders fixed-only prompts before estimating and returning them", () => {
@@ -133,8 +175,8 @@ test("packer rejects duplicate context unit IDs", () => {
     fixedMessages: [],
     opts: {},
     units: [
-      { id: "duplicate", source: "source", text: "required", required: true, priority: 1, estimatedTokens: 8 },
-      { id: "duplicate", source: "wiki", text: "optional", required: false, priority: 1, estimatedTokens: 8 },
+      { id: "duplicate", source: "source", text: "required", required: true, priority: 1 },
+      { id: "duplicate", source: "wiki", text: "optional", required: false, priority: 1 },
     ],
     render: (units) => [{ role: "user", content: units.map((unit) => unit.text).join("\n") }],
   }), /duplicate context unit id/i);
@@ -146,8 +188,8 @@ test("equal-priority optional units use locale-independent code-point ID order",
     fixedMessages: [],
     opts: {},
     units: [
-      { id: "ä", source: "wiki", text: "umlaut", required: false, priority: 1, estimatedTokens: 6 },
-      { id: "z", source: "wiki", text: "latin", required: false, priority: 1, estimatedTokens: 5 },
+      { id: "ä", source: "wiki", text: "umlaut", required: false, priority: 1 },
+      { id: "z", source: "wiki", text: "latin", required: false, priority: 1 },
     ],
     render: (units) => [{ role: "user", content: units.map((unit) => unit.text).join("\n") }],
   });
@@ -162,7 +204,6 @@ test("renderer mutation cannot corrupt selected context units", () => {
     text: "original",
     required: true,
     priority: 1,
-    estimatedTokens: 8,
   };
   const packed = packContextUnits({
     inputBudgetTokens: 1_000,
@@ -186,7 +227,7 @@ test("required overflow fails instead of truncating", () => {
     inputBudgetTokens: estimatePreparedMessages(emptyMessages),
     fixedMessages: [],
     opts: {},
-    units: [{ id: "q", source: "source", text: "question", required: true, priority: 1, estimatedTokens: 8 }],
+    units: [{ id: "q", source: "source", text: "question", required: true, priority: 1 }],
     render: (units) => [{ role: "user", content: units[0]?.text ?? "" }],
   }), PromptBudgetExceededError);
 });
@@ -524,4 +565,26 @@ test("buildChatParams rejects the complete prepared message above budget", () =>
       return true;
     },
   );
+});
+
+test("budget metadata carries the window, both sources and the calibration", () => {
+  const event = createPromptBudgetEvent({
+    requestId: "r1",
+    callSite: "init.bootstrap",
+    configuredInputBudget: 100,
+    effectiveInputBudget: 100,
+    estimatedInputTokens: 50,
+    actualInputTokens: 48,
+    contextUnits: 1,
+    contextWindow: 131_072,
+    inputSource: "discovered",
+    outputSource: "default",
+    calibration: 1.1,
+  });
+  assert.equal(event.contextWindow, 131_072);
+  assert.equal(event.inputSource, "discovered");
+  assert.equal(event.outputSource, "default");
+  assert.equal(event.calibration, 1.1);
+  assert.equal(event.estimatedInputTokens, 50);
+  assert.equal(event.actualInputTokens, 48);
 });

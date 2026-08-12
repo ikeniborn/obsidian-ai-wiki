@@ -525,7 +525,6 @@ function boundedOptions(
     ...baseOpts,
     inputBudgetTokens,
     repairInputBudgetTokens: policy.repairInputBudgetTokens,
-    outputRetryBudgetTokens: policy.outputRetryBudgetTokens,
     semanticCompression: { profile: policy.compression ?? "balanced", operation: "ingest" },
   };
   if (policy.outputBudgetTokens !== undefined) opts.maxTokens = policy.outputBudgetTokens;
@@ -598,7 +597,6 @@ function unitDto(unit: WikiSectionUnit): Record<string, unknown> {
     text: unit.text,
     required: unit.required,
     priority: unit.priority,
-    estimatedTokens: unit.estimatedTokens,
     pageId: unit.pageId,
     path: unit.path,
     heading: unit.heading,
@@ -635,7 +633,6 @@ function registryDto(unit: ContextUnit): Record<string, unknown> {
     text: unit.text,
     required: unit.required,
     priority: unit.priority,
-    estimatedTokens: unit.estimatedTokens,
   };
 }
 
@@ -1033,7 +1030,7 @@ function repackSynthesisBundles(
       .map((entry) => entry.id));
     const messages = renderSynthesisMessages(input, selected, opts, selectedOptionalIds);
     const prepared = prepareChatMessages(messages, opts);
-    const estimatedInputTokens = estimatePreparedMessages(prepared);
+    const estimatedInputTokens = estimatePreparedMessages(prepared, opts.tokenCalibration);
     const promptHash = contentHash(JSON.stringify(prepared));
     return {
       bundles: selected,
@@ -1068,12 +1065,13 @@ function repackSynthesisBundles(
     const renderCompressed = (): RepackedSynthesisRequest => {
       const messages = renderSynthesisMessages(input, [compressed], opts, new Set());
       const prepared = prepareChatMessages(messages, opts);
+      const estimatedInputTokens = estimatePreparedMessages(prepared, opts.tokenCalibration);
       return {
         bundles: [compressed],
         messages,
         promptHash: contentHash(JSON.stringify(prepared)),
-        estimatedInputTokens: estimatePreparedMessages(prepared),
-        promptBreakdown: synthesisPromptBreakdown(input, [compressed], new Set(), estimatePreparedMessages(prepared)),
+        estimatedInputTokens,
+        promptBreakdown: synthesisPromptBreakdown(input, [compressed], new Set(), estimatedInputTokens),
       };
     };
     let candidate = renderCompressed();
@@ -1131,6 +1129,7 @@ async function executeSynthesisBatch(
 ): Promise<SynthesisOutput> {
   let failedPromptHash: string | undefined;
   return runWithContextRepack({
+    onContextError: input.opts.onContextError,
     requestBudgetsEmittedByExecute: true,
     callSite: "ingest.synthesize",
     configuredInputBudget: input.policy.inputBudgetTokens,
@@ -1315,7 +1314,7 @@ async function executeSingleRegenerationRequest(input: ConflictRegenerationInput
     structuredRetries: 0,
   };
   const messages = renderConflictRegenerationMessages(input, opts);
-  const estimatedInputTokens = estimatePreparedMessages(prepareChatMessages(messages, opts));
+  const estimatedInputTokens = estimatePreparedMessages(prepareChatMessages(messages, opts), opts.tokenCalibration);
   if (estimatedInputTokens > input.policy.inputBudgetTokens) {
     throw new PromptBudgetExceededError(
       input.policy.inputBudgetTokens,

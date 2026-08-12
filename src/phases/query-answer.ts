@@ -176,6 +176,7 @@ export async function* answerFromContext(args: {
   let attempt: AnswerAttempt;
   try {
     attempt = yield* runWithLiveEvents((emit, operationSignal) => runWithContextRepack<PackedAnswerRequest, AnswerAttempt>({
+      onContextError: opts.onContextError,
       callSite: "query.answer",
       configuredInputBudget: opts.inputBudgetTokens ?? 16_384,
       outputBudget: opts.maxTokens,
@@ -317,6 +318,7 @@ export async function* answerFromContext(args: {
             effectiveInputBudget: opts.inputBudgetTokens ?? 16_384,
             estimatedInputTokens: estimatePreparedMessages(
               params.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+              opts.tokenCalibration,
             ),
             outputBudget: opts.maxTokens,
             compressionProfile: opts.semanticCompression?.profile ?? "balanced",

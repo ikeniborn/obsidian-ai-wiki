@@ -1,2 +1,3 @@
 read = ["obsidian-ai-wiki", "personal-ai-wiki", "iwiki-mcp"]
-write = "obsidian-ai-wiki"
+write = ["obsidian-ai-wiki"]
+primary = "obsidian-ai-wiki"
