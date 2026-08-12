@@ -197,6 +197,10 @@ chain:
   spec:
     path: docs/superpowers/specs/2026-08-11-prompt-budget-automation-design.md
     hash: 1321076f9f29aa13
+result_check:
+  verdict: OK
+  plan_hash: 59e037621a6ad2c6
+  last_run: 2026-08-12
 ---
 
 # Prompt Budget Automation Implementation Plan
@@ -2576,7 +2580,14 @@ Add a synchronous pass-through on the controller:
 fresh install the field shows the word rather than a number. That is honest: no budget has
 been resolved yet.
 
-- [ ] **Step 3: Move the native budget fields under Advanced**
+- [ ] **Step 3: Move the native budget fields under Advanced** — **SUPERSEDED 2026-08-12.**
+Obsidian's `Setting.setHeading()` has no closing or scoping mechanism, so the heading also
+captured the neighbouring compression-profile control, which selects semantics rather than
+arithmetic; the field order is pinned by tests, so reordering was not available either. The
+owner amended the intent and the spec to accept inline placement with the "Automatic"
+placeholder as the equivalent outcome. The heading was added in `56ced080` and removed again
+in `00478f49`, and two tests now forbid it. Keep the rest of this step (always-visible
+fields, placeholder, clearing returns to automatic); ignore the heading below.
 
 Render the native `inputBudgetTokens`, `repairInputBudgetTokens`, `maxTokens` and their per-operation counterparts after a heading:
 
@@ -2744,7 +2755,7 @@ Run:
 grep -n "budget\|бюджет\|16384\|Input budget" README.md docs/README.ru.md
 ```
 
-Rewrite those sections: input and output budgets are automatic, derived from the model's context window, discovered once per model and cached, self-correcting against the provider's reported usage; manual override lives under Advanced and empty means automatic; this applies to the native backend, while the Claude Agent CLI backend is unchanged. Keep both files equivalent — only the language differs.
+Rewrite those sections: input and output budgets are automatic, derived from the model's context window, discovered once per model and cached, self-correcting against the provider's reported usage; a manual override is entered inline and empty means automatic; this applies to the native backend, while the Claude Agent CLI backend is unchanged. Keep both files equivalent — only the language differs.
 
 - [ ] **Step 5: Add the changelog entry**
 
@@ -2827,7 +2838,7 @@ Expected: a `context_probe` with `ok: true` and `matchedById: true`, and a `budg
 
 - [ ] **Step 7: Check 4 — split and overflow recovery, separately**
 
-**Split.** Set the Advanced input budget override low enough to force groups, re-run Init, and
+**Split.** Set the input budget override low enough to force groups, re-run Init, and
 confirm `evidence_split` with `groups > 1` plus a created domain. Then clear the override.
 
 **Overflow recovery.** An override can no longer trigger this: Task 5 clamps it to
@@ -2873,7 +2884,7 @@ This proves recovery. Check 2 measures the estimator and proves nothing about it
 
 - [ ] **Step 8: Confirm the settings UI**
 
-Ask the user to confirm that the main settings section shows no native `Input budget tokens`, `Output budget tokens` or `Repair input budget`; that all three appear under Advanced; that all three are empty; and that each shows the resolved automatic value as a placeholder.
+Ask the user to confirm that the native `Input budget tokens`, `Max completion tokens` and `Repair input budget` fields are all present, all empty, and each shows its resolved automatic value as a placeholder. (Amended 2026-08-12 with the intent: the Advanced grouping was superseded — see Task 12 Step 3.)
 
 - [ ] **Step 9: Record the evidence and commit**
 
@@ -2923,7 +2934,7 @@ Expected: both pages exist and describe the byte-based budget and the settings-o
 
 - [ ] **Step 3: Rewrite the model call controls page**
 
-`wiki_update_page(..., slug="architecture/model-call-controls", source="src/model-call-policy.ts")`. Cover: native budgets are automatic with an Advanced override where empty means automatic; output budgets are per operation; `claude-agent` is unchanged; the upgrade asks once before touching stored values.
+`wiki_update_page(..., slug="architecture/model-call-controls", source="src/model-call-policy.ts")`. Cover: native budgets are automatic with an inline override where empty means automatic; output budgets are per operation; `claude-agent` is unchanged; the upgrade asks once before touching stored values.
 
 - [ ] **Step 4: Add a page for the new modules**
 
