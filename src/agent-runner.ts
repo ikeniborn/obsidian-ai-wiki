@@ -60,15 +60,17 @@ export function resolveFollowUpPolicyOperation(parent: WikiOperation): OpKey {
  * batches against a window the vision model does not have.
  *
  * Returns no budget on the claude-agent path (which keeps its stored budgets and
- * never consults a record) or when no vision model is configured for this run.
- * Diagnostics come back as data so the caller can yield them in run order.
+ * never consults a record), when no vision model is configured for this run, or when
+ * nothing is actually KNOWN about the vision model's window — see below. The record
+ * still comes back in the last case, so a size failure can name what it was sized
+ * against. Diagnostics come back as data so the caller can yield them in run order.
  */
 export async function resolveVisionBudget(
   store: ModelContextStore,
   settings: LlmWikiPluginSettings,
   model: string,
   signal?: AbortSignal,
-): Promise<{ budget?: ResolvedBudget; events: RunEvent[] }> {
+): Promise<{ budget?: ResolvedBudget; record?: ModelContextRecord; events: RunEvent[] }> {
   const events: RunEvent[] = [];
   if (settings.backend !== "native-agent" || !model) return { events };
   const baseUrl = settings.nativeAgent.baseUrl;
@@ -89,6 +91,16 @@ export async function resolveVisionBudget(
     if (signal?.aborted) return { events: [] };
     throw error;
   }
+  // A `default` record is the 8192-token fallback: it means the backend advertised
+  // NO window for this model and nobody typed one, so it is not a measurement of the
+  // vision model at all. Budgeting from it would leave 3686 input tokens after the
+  // output share — less than a single image costs (a ~4096-token media reservation
+  // plus the system prompt), so every image, Excalidraw and PDF would be refused
+  // client-side on exactly the backends this feature exists for. The caller's budget
+  // stands there, which is the pre-change behaviour. A window the backend DID
+  // advertise, or one the user typed, is a real fact about the vision model and is
+  // used.
+  if (record.source === "default") return { record, events };
   // "format" is the operation vision runs inside, so its output share is the one
   // the vision call already had — only the window it is taken from changes.
   const budget = resolveBudget(record, "format", {});
@@ -104,7 +116,7 @@ export async function resolveVisionBudget(
     inputBudget: budget.inputBudgetTokens,
     outputBudget: budget.outputBudgetTokens,
   });
-  return { budget, events };
+  return { budget, record, events };
 }
 
 export class AgentRunner {
@@ -376,14 +388,21 @@ export class AgentRunner {
           req.signal,
         );
         yield* vision.events;
-        const visionRuntime = vision.budget
-          ? {
-              ...visionSettings,
-              inputBudgetTokens: vision.budget.inputBudgetTokens,
-              maxTokens: vision.budget.outputBudgetTokens,
-              tokenCalibration: vision.budget.calibration,
-            }
-          : visionSettings;
+        const visionRuntime = {
+          ...visionSettings,
+          // Carried even when no budget was derived from it: a client-side size
+          // refusal has to be able to name the window it was measured against and
+          // where that number came from.
+          contextWindow: vision.record?.contextWindow,
+          contextWindowSource: vision.record?.source,
+          ...(vision.budget
+            ? {
+                inputBudgetTokens: vision.budget.inputBudgetTokens,
+                maxTokens: vision.budget.outputBudgetTokens,
+                tokenCalibration: vision.budget.calibration,
+              }
+            : {}),
+        };
         const progress = i18nFor(resolveLang(this.settings.outputLanguage)).formatProgress;
         yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionRuntime, visionTempStore, progress, formatDomain);
         break;

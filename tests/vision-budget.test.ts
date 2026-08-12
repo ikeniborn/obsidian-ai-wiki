@@ -1316,6 +1316,161 @@ test("Vision falls back to the caller's budget when no vision budget is supplied
   assert.equal(vision.outputBudget, 777);
 });
 
+test("Vision keeps working on a backend that advertises no window for the vision model", async () => {
+  // The live configuration this whole feature exists for: an aggregating gateway that
+  // reports no context length for anything. The chat model's window is the user's own
+  // 131072, so Format's budget is 88473/32768 — and vision must go on being sized from
+  // it, because the 8192-token fallback is not a measurement of the vision model.
+  const source = "---\ntags: [vision]\n---\n# Vision\n\n![[image.png]]";
+  const { vaultTools } = memoryVault(source);
+  const events: RunEvent[] = [];
+  const llm = {
+    chat: {
+      completions: {
+        create: async (params: Record<string, unknown>) => {
+          if (params.stream === false) return response([record("image")]);
+          return (async function* () {
+            yield chunk(formatFrame(source, false));
+            yield usageChunk();
+          })();
+        },
+      },
+    },
+  } as unknown as LlmClient;
+
+  for await (const event of runFormat(
+    ["notes/source.md"],
+    vaultTools,
+    llm,
+    "format-model",
+    false,
+    [],
+    new AbortController().signal,
+    { inputBudgetTokens: 88_473, maxTokens: 32_768 },
+    "native-agent",
+    undefined,
+    3,
+    {
+      enabled: true,
+      model: "vision-model",
+      language: "en",
+      // Resolved, reported, and deliberately NOT turned into a budget.
+      contextWindow: 8_192,
+      contextWindowSource: "default",
+    },
+  )) {
+    events.push(event);
+  }
+
+  const vision = events.find((event) =>
+    event.kind === "prompt_budget" && event.callSite === "vision.analysis");
+  assert.ok(vision && vision.kind === "prompt_budget");
+  assert.equal(vision.configuredInputBudget, 88_473, "the operation's budget still sizes vision");
+  assert.equal(
+    events.some((event) => event.kind === "info_text" && event.summary === "Vision skipped"),
+    false,
+    "an unadvertised vision window must not disable vision",
+  );
+  assert.ok(events.some((event) => event.kind === "tool_result" && event.ok === true));
+});
+
+test("a Vision size refusal names the model, its window and where to change it", async () => {
+  const source = "---\ntags: [vision]\n---\n# Vision\n\n![[image.png]]";
+  const { vaultTools } = memoryVault(source);
+  const events: RunEvent[] = [];
+  const llm = {
+    chat: {
+      completions: {
+        create: async (params: Record<string, unknown>) => {
+          if (params.stream === false) throw new Error("vision must be refused before dispatch");
+          return (async function* () {
+            yield chunk(formatFrame(source, false));
+            yield usageChunk();
+          })();
+        },
+      },
+    },
+  } as unknown as LlmClient;
+
+  for await (const event of runFormat(
+    ["notes/source.md"],
+    vaultTools,
+    llm,
+    "format-model",
+    false,
+    [],
+    new AbortController().signal,
+    { inputBudgetTokens: 88_473, maxTokens: 32_768 },
+    "native-agent",
+    undefined,
+    3,
+    {
+      enabled: true,
+      model: "vision-model",
+      language: "en",
+      // A real 8192-token vision window: budgeted from, and too small for one image.
+      inputBudgetTokens: 3_686,
+      maxTokens: 4_096,
+      contextWindow: 8_192,
+      contextWindowSource: "discovered",
+    },
+  )) {
+    events.push(event);
+  }
+
+  const skipped = events.find((event) =>
+    event.kind === "info_text" && event.summary === "Vision skipped");
+  assert.ok(skipped && skipped.kind === "info_text");
+  const detail = (skipped.details ?? []).join("\n");
+  assert.match(detail, /vision-model/, "names the vision model");
+  assert.match(detail, /8192-token context window/, "names the window it was measured against");
+  assert.match(detail, /reported by the backend/, "says where that number came from");
+  assert.match(detail, /Settings → Vision → Model context window/, "says where to change it");
+});
+
+test("visionSizeSkipReason explains only size failures, and only when a window is known", async () => {
+  const { visionSizeSkipReason } = await import("../src/phases/format");
+  const { PromptBudgetExceededError } = await import("../src/prompt-budget");
+  const tooBig = new PromptBudgetExceededError(3_686, 4_694, ["image"]);
+
+  // A provider/network failure is not a budget problem and must not blame the window.
+  assert.equal(
+    visionSizeSkipReason(new Error("fetch failed"), {
+      model: "vision-model", contextWindow: 8_192, contextWindowSource: "discovered",
+    }),
+    null,
+  );
+  // claude-agent resolves no vision record, and has no such field to point at.
+  assert.equal(visionSizeSkipReason(tooBig, { model: "vision-model" }), null);
+
+  // A configured window is the user's own instruction, so the advice is to change it.
+  const configured = visionSizeSkipReason(tooBig, {
+    model: "vision-model", contextWindow: 8_192, contextWindowSource: "configured",
+  });
+  assert.match(configured ?? "", /you set this window/);
+  assert.match(configured ?? "", /Raise or clear/);
+
+  // A fallback window was never budgeted from, so the message must not claim it was.
+  const fallback = visionSizeSkipReason(tooBig, {
+    model: "vision-model", contextWindow: 8_192, contextWindowSource: "default",
+  });
+  assert.match(fallback ?? "", /advertises no context window/);
+  assert.match(fallback ?? "", /sized from the Format operation's own budget/);
+  assert.doesNotMatch(fallback ?? "", /8192-token context window/);
+
+  // The PDF recovery path fails with a plain Error, and is a size failure too.
+  const exhausted = new Error(
+    "vision.analysis context recovery exhausted (configuredInputBudget=3686, "
+    + "finalEffectiveInputBudget=2000): provider context limit (promptTokens=9000)",
+  );
+  assert.match(
+    visionSizeSkipReason(exhausted, {
+      model: "vision-model", contextWindow: 8_192, contextWindowSource: "learned",
+    }) ?? "",
+    /learned from a provider rejection/,
+  );
+});
+
 test("browser PDF renderer exercises pdfjs and canvas boundaries and reports a missing API", async () => {
   const calls = { getPage: 0, viewport: 0, render: 0, blob: 0 };
   const browser = globalThis as unknown as {

@@ -29,6 +29,7 @@ import {
 import { createLlmLifecycle } from "./structured-output";
 import { lifecycleEvent } from "../llm-lifecycle";
 import { VisionRecognitionBatchSchema } from "./zod-schemas";
+import { MEDIA_TOKENS } from "../token-estimate";
 import {
   createNativeRequestLifecycle,
   createNativeRequestRetryContext,
@@ -523,7 +524,10 @@ export async function analyzePdf(
       batches = batchPdfPages(pending, {
         inputBudgetTokens: effectiveInputBudget,
         fixedEstimatedTokens,
-        mediaReservationTokens: 4096,
+        // The same constant `estimateMessages` prices an `image_url` part at: this
+        // number decides how many pages fit a batch, so a second literal here could
+        // drift from what the estimator actually charges.
+        mediaReservationTokens: MEDIA_TOKENS,
       });
     } catch (error) {
       if (originalContextDetails !== undefined) {

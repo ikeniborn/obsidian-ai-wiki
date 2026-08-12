@@ -326,6 +326,48 @@ test("vision gets no record of its own on the claude-agent path", async () => {
   assert.deepEqual(resolved.events, []);
 });
 
+test("a backend that advertises no vision window leaves the caller's budget alone", async () => {
+  // The regression this guards. A `default` record is the 8192-token fallback, not a
+  // measurement: budgeting from it leaves floor((8192 - 4096) * 0.9) = 3686 input
+  // tokens, while ONE image costs the ~4096-token media reservation plus the system
+  // prompt — so `buildChatParams` would refuse every image, Excalidraw and PDF before
+  // anything is sent. On a gateway that advertises no window for any model (exactly
+  // the setup this feature exists for) that would turn working vision into no vision.
+  const settings = nativeSettings();
+  settings.vision = { enabled: true, model: "vision-model" };
+  const store = storeWith((async () => json({ data: [{ id: "vision-model", owned_by: "gateway" }] })) as typeof fetch);
+
+  const resolved = await resolveVisionBudget(store, settings, "vision-model");
+
+  assert.equal(resolved.budget, undefined, "no budget: the caller's own budget stands");
+  assert.equal(resolved.record?.source, "default");
+  assert.equal(resolved.record?.contextWindow, 8_192);
+  assert.equal(
+    resolved.events.some((event) => event.kind === "budget_resolved"), false,
+    "nothing was resolved, so nothing claims to have been",
+  );
+  // The probe is still reported: it is what established that no window is advertised.
+  assert.ok(resolved.events.some((event) => event.kind === "context_probe"));
+});
+
+test("a learned vision window is still a real fact about the model and is used", async () => {
+  const settings = nativeSettings();
+  settings.vision = { enabled: true, model: "vision-model" };
+  const store = new ModelContextStore({
+    read: async () => ({
+      "http://host/v1::vision-model": {
+        contextWindow: 32_768, source: "learned" as const, calibration: 1, samples: 0,
+      },
+    }),
+    write: async () => {},
+    fetchFn: (async () => { throw new Error("must not probe"); }) as typeof fetch,
+  });
+
+  const resolved = await resolveVisionBudget(store, settings, "vision-model");
+  assert.equal(resolved.budget?.contextWindow, 32_768);
+  assert.equal(resolved.budget?.inputBudgetTokens, 14_745);
+});
+
 test("vision without a model of its own resolves nothing", async () => {
   const settings = nativeSettings();
   settings.vision = { enabled: false, model: "" };

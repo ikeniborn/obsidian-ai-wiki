@@ -317,7 +317,7 @@ model-idle handling remain separate from that limitation.
 | Enable image analysis | Analyze supported images and PDF pages during Format | off |
 | Semantic compression | Vision-specific override; preserves OCR, objects, relationships, layout, page identity, and uncertainty | Use global |
 | Vision model | Multimodal model used for image analysis | — |
-| Model context window | Native Agent only. The **vision** model's window, used to size its own requests — including how many PDF pages go into one call. Empty (shown as "Automatic") reads it from the backend. A vision model is usually much smaller than the chat model, so this is the field to set when PDF analysis reports "Vision skipped" | *(empty = Automatic)* |
+| Model context window | Native Agent only. The **vision** model's window, used to size its own requests — including how many PDF pages go into one call. Empty (shown as "Automatic") reads it from the backend. Set it whenever your vision model is smaller than your chat model and the backend does not advertise its window: that is what makes a small-window vision model work, rather than something to reach for only after seeing "Vision skipped" | *(empty = Automatic)* |
 | Vision Check | Native Agent only: sends one real, tiny 1×1 inline PNG request with a short prompt and a 16-token output cap. Reports success/failure without changing settings or vault files. Claude Agent exposes no Check | — |
 
 ### Bounded processing and storage
@@ -420,10 +420,25 @@ provider request and may incur a small charge.
 
 Image and PDF analysis is budgeted from the **vision** model's own context window, not
 from the window of the chat model that runs Format. On Native Agent the vision model gets
-its own context record — discovered from the backend or taken from its own **Model context
-window** field — and the number of PDF pages packed into one vision request follows from
-it. A vision model with a small window therefore splits a PDF into more, smaller calls
-instead of sending one oversized request that the provider rejects.
+its own context record — discovered from the backend, taken from its own **Model context
+window** field, or learned from a provider rejection — and the number of PDF pages packed
+into one vision request follows from it. A vision model with a small window therefore
+splits a PDF into more, smaller calls instead of sending one oversized request that the
+provider rejects.
+
+This applies only when the vision model's window is actually **known**. If the backend
+advertises no window for it and you have not set one, vision keeps being sized from the
+Format operation's own budget, exactly as before — the conservative 8192-token fallback is
+not a measurement of your vision model, and budgeting from it would leave less room than a
+single image costs, refusing every attachment before it was sent. So on a backend that
+advertises nothing, **Vision → Model context window** is the field that makes a
+small-window vision model work: set it to the model's real window and PDF batches, the
+output cap and the client-side size check all follow from it.
+
+When an attachment is skipped because it does not fit, the `⚠️ Vision skipped` warning says
+so in full: the vision model, the window it was measured against, whether that window was
+configured, discovered, learned or a fallback, and the setting to change. Those refusals
+happen before the request is sent, so nothing in the provider's answer would explain them.
 
 Destructive Re-init acceptance must use a private copied vault, never the working vault.
 The protected replay root must be a recent `/tmp/ai-wiki-bounded-ingest-replay.*`
