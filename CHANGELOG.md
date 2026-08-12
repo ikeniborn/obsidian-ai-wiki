@@ -14,6 +14,7 @@
 - fix(lint): measure Lint work items and batches in tokens instead of bytes, so Lint packs the requests its budget allows.
 - fix(settings): clearing a per-operation native budget now stays cleared across a restart, instead of being refilled from a stored default and silently disabling automatic budgeting.
 - fix(init): report a provider context rejection during domain bootstrap. Init has no repack loop, so such a rejection used to end the run without ever reaching the model-context store — no learned window, and no diagnostic.
+- fix(native-agent): correct the token calibration against the factor that actually produced the estimate. The factor is fixed for a whole run while the stored value moves with every sample, so correcting against the stored value folded the same bias in once per sample: an estimator running 4.7% low settled the factor at 25% high after eight samples, and the next run then oversized every estimate by a fifth and packed a fifth less into each prompt.
 - fix(telemetry): the `context_probe` event no longer reports `matchedById: false` for a model the endpoint did list — "no such model" and "model found, no window advertised" are now two separate facts in the log.
 
 ### Other

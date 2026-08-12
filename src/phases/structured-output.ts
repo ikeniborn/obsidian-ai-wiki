@@ -553,8 +553,14 @@ async function streamOnce(
     );
     // The calibrated estimate is what the request was actually sized with, so it
     // is the number the provider's own count must be compared against — reporting
-    // the raw estimate would make the correction converge on the wrong factor.
-    opts.onUsageObserved?.({ estimated: estimatedInputTokens, actual: inputTokens });
+    // the raw estimate would make the correction converge on the wrong factor. The
+    // factor that produced it travels with it: it is fixed for the whole run, so the
+    // store cannot recover it from its own record once a sample has moved that.
+    opts.onUsageObserved?.({
+      estimated: estimatedInputTokens,
+      actual: inputTokens,
+      calibration: opts.tokenCalibration ?? 1,
+    });
     if (!llm.emitsPromptBudget) onEvent(createPromptBudgetEvent({
       requestId,
       callSite,
@@ -636,8 +642,13 @@ async function nonStreamOnce(
     );
     // Reported even when the client emits its own prompt_budget records: the
     // estimator learns from every response the provider counted, not only from
-    // the ones this layer happens to be the one to report.
-    opts.onUsageObserved?.({ estimated: estimatedInputTokens, actual: actualInputTokens });
+    // the ones this layer happens to be the one to report. `calibration` is the
+    // factor this estimate carries, which the store needs to correct against.
+    opts.onUsageObserved?.({
+      estimated: estimatedInputTokens,
+      actual: actualInputTokens,
+      calibration: opts.tokenCalibration ?? 1,
+    });
     if (llm.emitsPromptBudget) return;
     onEvent(createPromptBudgetEvent({
       requestId,

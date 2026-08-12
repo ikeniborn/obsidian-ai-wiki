@@ -301,11 +301,19 @@ export class ModelContextStore {
     return task;
   }
 
+  /**
+   * `appliedCalibration` is the factor the reported `estimated` was produced with —
+   * NOT whatever the record holds now. The two differ because
+   * `LlmCallOptions.tokenCalibration` is resolved once per run: every sample of a run
+   * is measured through the factor the record held when that run started, while the
+   * record moves with each sample.
+   */
   observeUsage(
     baseUrl: string,
     model: string,
     estimated: number,
     actual: number,
+    appliedCalibration: number,
   ): CalibrationOutcome {
     const record = this.get(baseUrl, model);
     const ratio = estimated > 0 ? actual / estimated : 0;
@@ -313,11 +321,18 @@ export class ModelContextStore {
     if (ratio < CALIBRATION_MIN || ratio > CALIBRATION_MAX) {
       return { ratio, applied: false, clamped: true };
     }
-    // MULTIPLICATIVE. `ratio` is measured through the current factor, so
+    // MULTIPLICATIVE. `ratio` is measured THROUGH `appliedCalibration`, so
     // averaging it into the factor converges on sqrt(truth): a real factor of 2
     // settles at 1.414, a permanent 29% underestimate. Multiply, then smooth.
+    //
+    // The multiplication is against the factor that produced this estimate, not
+    // against `record.calibration`. When the estimate carries a stale factor —
+    // which is the normal case after the first sample of a run — multiplying by
+    // the already-corrected record folds the same bias in a second time, and the
+    // factor compounds away from the truth instead of converging on it
+    // (a +10% raw bias landed on +25% over eight samples in one observed run).
     const weight = Math.min(record.samples, CALIBRATION_WINDOW - 1);
-    const target = record.calibration * ratio;
+    const target = appliedCalibration * ratio;
     record.calibration = Math.min(CALIBRATION_MAX, Math.max(
       CALIBRATION_MIN,
       (record.calibration * weight + target) / (weight + 1),

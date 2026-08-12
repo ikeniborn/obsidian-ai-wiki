@@ -293,7 +293,7 @@ test("a persistence failure after observeUsage does not surface as an unhandled 
   const onUnhandledRejection = (reason: unknown): void => { unhandled = reason; };
   process.on("unhandledRejection", onUnhandledRejection);
   try {
-    store.observeUsage("http://x/v1", "m1", 1_000, 2_000);
+    store.observeUsage("http://x/v1", "m1", 1_000, 2_000, 1);
     await new Promise((resolve) => setImmediate(resolve));
   } finally {
     process.off("unhandledRejection", onUnhandledRejection);
@@ -312,8 +312,8 @@ test("calibration converges on the true factor, not its square root", async () =
   const RAW = 1_000;
   const TRUE_FACTOR = 2;
   for (let step = 0; step < 20; step++) {
-    const calibrated = RAW * store.get("http://x/v1", "m1")!.calibration;
-    store.observeUsage("http://x/v1", "m1", calibrated, RAW * TRUE_FACTOR);
+    const applied = store.get("http://x/v1", "m1")!.calibration;
+    store.observeUsage("http://x/v1", "m1", RAW * applied, RAW * TRUE_FACTOR, applied);
   }
   const settled = store.get("http://x/v1", "m1")!.calibration;
   assert.ok(
@@ -323,13 +323,69 @@ test("calibration converges on the true factor, not its square root", async () =
   );
 });
 
+test("samples measured at a stale factor converge on the true bias instead of compounding", async () => {
+  const store = storeWith({}, (async () => { throw new Error("offline"); }) as typeof fetch);
+  await store.resolve("http://x/v1", "m1", "", 0);
+  const RAW = 4_000;
+  const TRUE_FACTOR = 1.1;
+  // `LlmCallOptions.tokenCalibration` is resolved ONCE per run, so every estimate a
+  // run produces carries the factor the record held when that run started — earlier
+  // samples of the same run move the record but never the factor already in flight.
+  const applied = store.get("http://x/v1", "m1")!.calibration;
+  for (let step = 0; step < 8; step++) {
+    store.observeUsage("http://x/v1", "m1", RAW * applied, RAW * TRUE_FACTOR, applied);
+  }
+  const settled = store.get("http://x/v1", "m1")!.calibration;
+  assert.ok(
+    Math.abs(settled - TRUE_FACTOR) < 0.01,
+    `eight samples measured at factor ${applied} settled on ${settled.toFixed(4)}; the true `
+    + `bias is ${TRUE_FACTOR}. Correcting against the record's CURRENT factor instead of the `
+    + `one that produced the estimate multiplies the same bias in again on every sample.`,
+  );
+});
+
+test("a factor left too high by an earlier session decays back over one window", async () => {
+  const store = storeWith(
+    { "http://x/v1::m1": { contextWindow: 131_072, source: "discovered", calibration: 1.25, samples: 8 } },
+    (async () => { throw new Error("offline"); }) as typeof fetch,
+  );
+  await store.resolve("http://x/v1", "m1", "", 0);
+  const RAW = 4_000;
+  const TRUE_FACTOR = 1.02;
+  // One run: eight samples, all measured at the factor the run started with.
+  const firstRun = store.get("http://x/v1", "m1")!.calibration;
+  for (let step = 0; step < 8; step++) {
+    store.observeUsage("http://x/v1", "m1", RAW * firstRun, RAW * TRUE_FACTOR, firstRun);
+  }
+  // A full window at weight 7 keeps (7/8)^8 ≈ 34% of the starting error, so one run's
+  // worth of samples takes 1.25 to roughly 1.10.
+  const afterOneRun = store.get("http://x/v1", "m1")!.calibration;
+  assert.ok(
+    afterOneRun > TRUE_FACTOR && afterOneRun < 1.11,
+    `an inherited 1.25 must decay toward ${TRUE_FACTOR}; after one window it is ${afterOneRun.toFixed(4)}`,
+  );
+
+  // Two more runs, each measured at the factor its own run started with.
+  for (let run = 0; run < 2; run++) {
+    const applied = store.get("http://x/v1", "m1")!.calibration;
+    for (let step = 0; step < 8; step++) {
+      store.observeUsage("http://x/v1", "m1", RAW * applied, RAW * TRUE_FACTOR, applied);
+    }
+  }
+  const settled = store.get("http://x/v1", "m1")!.calibration;
+  assert.ok(
+    Math.abs(settled - TRUE_FACTOR) < 0.01,
+    `an inherited factor must settle ON the true bias, not drift past it; landed on ${settled.toFixed(4)}`,
+  );
+});
+
 test("calibration is a moving average that discards anomalies", async () => {
   const store = storeWith({}, (async () => { throw new Error("offline"); }) as typeof fetch);
   await store.resolve("http://x/v1", "m1", "", 0);
-  store.observeUsage("http://x/v1", "m1", 1_000, 2_000);
+  store.observeUsage("http://x/v1", "m1", 1_000, 2_000, 1);
   assert.ok(store.get("http://x/v1", "m1")!.calibration > 1);
   const beforeAnomaly = store.get("http://x/v1", "m1")!.calibration;
-  store.observeUsage("http://x/v1", "m1", 1_000, 100_000);
+  store.observeUsage("http://x/v1", "m1", 1_000, 100_000, 1);
   assert.equal(
     store.get("http://x/v1", "m1")!.calibration, beforeAnomaly,
     "an out-of-range ratio must leave the calibration unchanged",

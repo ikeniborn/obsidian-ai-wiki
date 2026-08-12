@@ -612,8 +612,13 @@ export interface LlmCallOptions {
   tokenCalibration?: number;
   /** The model's context window, when known. Absent on the claude-agent path. */
   contextWindowTokens?: number;
-  /** Reports the estimate against the provider's own count so the estimator can self-correct. */
-  onUsageObserved?: (sample: { estimated: number; actual?: number }) => void;
+  /**
+   * Reports the estimate against the provider's own count so the estimator can
+   * self-correct. `calibration` is the factor `estimated` was produced with — it is
+   * part of the measurement, because `tokenCalibration` is fixed for the whole run
+   * while the stored factor moves with every sample.
+   */
+  onUsageObserved?: (sample: { estimated: number; actual?: number; calibration: number }) => void;
   /**
    * Reports a provider context rejection so the model's stored window can shrink.
    * Structurally identical to `ContextErrorDetails` (`src/prompt-budget.ts`), spelled

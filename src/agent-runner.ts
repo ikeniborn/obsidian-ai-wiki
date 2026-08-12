@@ -142,9 +142,14 @@ export class AgentRunner {
         nearDupThreshold: na.nearDupThreshold,
         nativeRequestRetries: s.llmIdleRetries ?? 3,
         nativeRequestIdleTimeoutMs: (s.llmIdleTimeoutSec ?? 300) * 1000,
-        onUsageObserved: ({ estimated, actual }) => {
+        onUsageObserved: ({ estimated, actual, calibration }) => {
           if (actual === undefined) return;
-          const outcome = this.modelContextStore.observeUsage(baseUrl, resolved.model, estimated, actual);
+          // `calibration` comes from the call, not from the record: the record has
+          // already moved by the time later samples of the same run arrive, and the
+          // correction is only valid against the factor that sized the request.
+          const outcome = this.modelContextStore.observeUsage(
+            baseUrl, resolved.model, estimated, actual, calibration,
+          );
           events.push({
             kind: "calibration_sample",
             model: resolved.model,

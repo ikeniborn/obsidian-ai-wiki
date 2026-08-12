@@ -2125,7 +2125,7 @@ test("a truncation without a known context window keeps the claude-agent behavio
 
 test("a completed request reports the estimate it used against the provider's own count", async () => {
   const observe = async (tokenCalibration: number) => {
-    const samples: Array<{ estimated: number; actual?: number }> = [];
+    const samples: Array<{ estimated: number; actual?: number; calibration: number }> = [];
     const events: RunEvent[] = [];
     const llm = {
       chat: { completions: { create: async () => ({
@@ -2179,6 +2179,11 @@ test("a completed request reports the estimate it used against the provider's ow
   // `calibration *= actual / calibratedEstimate` converges instead of oscillating.
   const doubled = await observe(2);
   assert.equal(doubled.samples[0].estimated, plain.samples[0].estimated * 2);
+  // ...and the factor travels WITH the sample. `tokenCalibration` is fixed for the
+  // whole run while the stored factor moves with every sample, so the store cannot
+  // recover which factor sized this request unless the call reports it.
+  assert.equal(plain.samples[0].calibration, 1);
+  assert.equal(doubled.samples[0].calibration, 2);
 
   const budget = plain.events.find((event) => event.kind === "prompt_budget");
   assert.ok(budget && budget.kind === "prompt_budget");
@@ -2191,7 +2196,7 @@ test("a completed request reports the estimate it used against the provider's ow
 });
 
 test("a provider that reports no usage leaves the observed sample without a counterpart", async () => {
-  const samples: Array<{ estimated: number; actual?: number }> = [];
+  const samples: Array<{ estimated: number; actual?: number; calibration: number }> = [];
 
   await runStructuredWithRetry({
     llm: llmFromChunks([chunk('{"value":"ok"}')]),
@@ -2200,6 +2205,7 @@ test("a provider that reports no usage leaves the observed sample without a coun
     opts: {
       maxTokens: 4_096,
       contextWindowTokens: 131_072,
+      tokenCalibration: 2,
       onUsageObserved: (sample) => samples.push(sample),
     },
     profile: { kind: "json-zod", schema: SmallSchema },
@@ -2213,4 +2219,7 @@ test("a provider that reports no usage leaves the observed sample without a coun
   assert.equal(samples.length, 1);
   assert.ok(samples[0].estimated > 0);
   assert.equal(samples[0].actual, undefined);
+  // The streamed path reports the applied factor too, so a sample that does get a
+  // counterpart is corrected against the factor that sized it.
+  assert.equal(samples[0].calibration, 2);
 });

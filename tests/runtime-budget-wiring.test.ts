@@ -196,8 +196,8 @@ test("a discarded calibration sample is reported as discarded", async () => {
   const instance = runner(nativeSettings(), store);
   captureOperation(instance, (opts) => {
     // Ten times the estimate: outside the plausible band, so it is thrown away.
-    opts.onUsageObserved?.({ estimated: 100, actual: 1_000 });
-    opts.onUsageObserved?.({ estimated: 100, actual: 120 });
+    opts.onUsageObserved?.({ estimated: 100, actual: 1_000, calibration: 1 });
+    opts.onUsageObserved?.({ estimated: 100, actual: 120, calibration: 1 });
   });
 
   const events = await drain(instance.run(runRequest()));
