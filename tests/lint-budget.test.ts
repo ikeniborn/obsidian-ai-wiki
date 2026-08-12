@@ -5,6 +5,7 @@ import test from "node:test";
 import type OpenAI from "openai";
 import { contentHash } from "../src/content-hash";
 import { estimatePreparedMessages } from "../src/prompt-budget";
+import { estimateText } from "../src/token-estimate";
 import { inspectPatchablePage } from "../src/section-patches";
 import type { DomainEntry } from "../src/domain";
 import type { LlmClient, RunEvent, RunRequest } from "../src/types";
@@ -31,6 +32,8 @@ export async function resolve(specifier, context, nextResolve) {
 `;
 register(`data:text/javascript,${encodeURIComponent(pathBrowserifyLoader)}`);
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
+
+const { packLintWorkBatches, runLintBatchWithSplit } = await import("../src/phases/lint");
 
 class MemoryAdapter implements VaultAdapter {
   readonly reads: string[] = [];
@@ -1247,4 +1250,116 @@ test("Lint transport and applying boundaries remain explicit", () => {
   const configApplying = source.lastIndexOf('"applying"', domainUpdate);
   const configCompleted = source.indexOf('"completed"', domainUpdate);
   assert.ok(configApplying < domainUpdate && domainUpdate < configCompleted);
+});
+
+// --- Lint budgets are measured in tokens, not serialized bytes -----------------------
+
+test("lint work items are sized in tokens, so a page under the token budget stays whole", () => {
+  // ~2_600 Latin characters: about 620 estimator tokens, but 2_600 bytes. The item
+  // budget is 18% of the input budget, so at 6_000 it is 1_080 — above the token
+  // estimate and far below the byte length. Measured in bytes this page was cut into
+  // line windows; measured in tokens it is one work item.
+  const body = "alpha beta gamma delta epsilon zeta eta theta\n".repeat(56);
+  const pages = new Map([["!Wiki/d/concept/a.md", `# A\n\n## Facts\n${body}`]]);
+  assert.ok(estimateText(pages.get("!Wiki/d/concept/a.md")!) < 1_080);
+  assert.ok(new TextEncoder().encode(pages.get("!Wiki/d/concept/a.md")!).byteLength > 1_080);
+
+  const items = buildLintWorkItems(pages, 6_000);
+  assert.equal(items.length, 1, JSON.stringify(items.map((item) => item.id)));
+  assert.doesNotThrow(() => validateLintCoverage(pages, items));
+});
+
+test("the lint item budget applies calibration to the measurement, never to the budget", () => {
+  const body = "alpha beta gamma delta epsilon zeta eta theta\n".repeat(56);
+  const pages = new Map([["!Wiki/d/concept/a.md", `# A\n\n## Facts\n${body}`]]);
+  // Calibration 3 inflates the same text past the same budget, so the page splits.
+  const calibrated = buildLintWorkItems(pages, 6_000, 3);
+  assert.ok(calibrated.length > 1, JSON.stringify(calibrated.map((item) => item.id)));
+  assert.doesNotThrow(() => validateLintCoverage(pages, calibrated));
+});
+
+test("packLintWorkBatches fills a request to its token budget instead of its byte length", () => {
+  const pages = new Map<string, string>();
+  for (let i = 0; i < 12; i++) {
+    pages.set(`!Wiki/d/concept/wiki_d_page_${i}.md`, `# Page ${i}\n\n## Facts\nfact ${i} ${"detail ".repeat(40)}`);
+  }
+  const items = buildLintWorkItems(pages, 20_000);
+  assert.equal(items.length, 12);
+
+  const messages = buildLintBatchMessages({
+    domainName: "Demo", schema: "", workItems: items, relatedSections: [],
+  });
+  const tokens = estimatePreparedMessages(messages);
+  const bytes = new TextEncoder().encode(JSON.stringify(messages)).byteLength;
+  // A budget above the token estimate but below the byte length: exactly the band in
+  // which a byte-based packer under-fills the request.
+  const budget = Math.floor((tokens + bytes) / 2);
+  assert.ok(tokens < budget && budget < bytes);
+
+  const batches = packLintWorkBatches(items, "Demo", "", budget);
+  assert.equal(batches.length, 1);
+  assert.equal(batches[0].length, items.length);
+
+  // Calibration scales the estimate, so a calibrated run may need more requests.
+  const calibrated = packLintWorkBatches(items, "Demo", "", budget, 3);
+  assert.ok(calibrated.length >= batches.length);
+  assert.equal(calibrated.flat().length, items.length, "no work item is ever dropped");
+});
+
+test("packLintWorkBatches never drops an item that alone exceeds the budget", () => {
+  const pages = new Map([["!Wiki/d/concept/a.md", `# A\n\n## Facts\n${"x ".repeat(2_000)}`]]);
+  const items = buildLintWorkItems(pages, 400);
+  const batches = packLintWorkBatches(items, "Demo", "", 10);
+  assert.equal(batches.flat().length, items.length);
+  assert.ok(batches.every((batch) => batch.length === 1));
+});
+
+test("runLintBatchWithSplit sends one request when the batch fits the token budget", async () => {
+  const pages = new Map([
+    ["!Wiki/d/concept/wiki_d_alpha.md", "# Alpha\n\n## Facts\nalpha fact text"],
+    ["!Wiki/d/concept/wiki_d_beta.md", "# Beta\n\n## Facts\nbeta fact text"],
+  ]);
+  const items = buildLintWorkItems(pages, 20_000);
+  assert.equal(items.length, 2);
+  // Answers each request with exactly the work ids that request carried, so a split
+  // batch still validates and the only observable difference is the request count.
+  const seen: Record<string, unknown>[] = [];
+  const echoingLlm = {
+    chat: { completions: { create: async (params: unknown) => {
+      seen.push(params as Record<string, unknown>);
+      const serialized = JSON.stringify(params);
+      const coveredWorkIds = items
+        .filter((item) => serialized.includes(item.path))
+        .map((item) => item.id);
+      return {
+        choices: [{
+          finish_reason: "stop",
+          message: {
+            role: "assistant",
+            content: JSON.stringify({ coveredWorkIds, findings: [], patches: [], deletes: [] }),
+          },
+        }],
+        usage: { prompt_tokens: 10, completion_tokens: 3, total_tokens: 13 },
+      };
+    } } },
+  } as unknown as LlmClient;
+
+  const events: RunEvent[] = [];
+  const result = await runLintBatchWithSplit({
+    items,
+    pages,
+    domainName: "Demo",
+    schema: "",
+    llm: echoingLlm,
+    model: "m",
+    // The pair estimates ~220 tokens but serializes to ~1_020 bytes, so this budget
+    // fits it whole in tokens while a byte-based estimate overflowed and split it
+    // into two requests.
+    opts: { inputBudgetTokens: 800, structuredRetries: 0 },
+    signal: new AbortController().signal,
+    onEvent: (event) => events.push(event),
+  });
+
+  assert.equal(seen.length, 1, "a fitting batch must not be split into extra requests");
+  assert.deepEqual(result.output.coveredWorkIds, items.map((item) => item.id));
 });
