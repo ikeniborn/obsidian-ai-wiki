@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-08-12
 
 ### New
 - feat(native-agent): derive input and output budgets automatically from the model's context window, discovered once per model, cached, and self-corrected against the provider's reported usage. A stored value still acts as an explicit override; Claude Agent is unaffected.

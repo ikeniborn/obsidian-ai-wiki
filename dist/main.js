@@ -10743,7 +10743,7 @@ var require_data_url = __commonJS({
   "node_modules/undici/lib/web/fetch/data-url.js"(exports2, module2) {
     "use strict";
     var assert = require("node:assert");
-    var encoder3 = new TextEncoder();
+    var encoder = new TextEncoder();
     var HTTP_TOKEN_CODEPOINTS = /^[!#$%&'*+\-.^_|~A-Za-z0-9]+$/;
     var HTTP_WHITESPACE_REGEX = /[\u000A\u000D\u0009\u0020]/;
     var ASCII_WHITESPACE_REPLACE_REGEX = /[\u0009\u000A\u000C\u000D\u0020]/g;
@@ -10816,7 +10816,7 @@ var require_data_url = __commonJS({
       return input.slice(start, position.position);
     }
     function stringPercentDecode(input) {
-      const bytes = encoder3.encode(input);
+      const bytes = encoder.encode(input);
       return percentDecode(bytes);
     }
     function isHexCharByte(byte) {
@@ -26266,7 +26266,8 @@ __export(main_exports, {
   migrateDomainWikiFolder: () => migrateDomainWikiFolder,
   migrateLegacyData: () => migrateLegacyData,
   migrateToLocalV1: () => migrateToLocalV1,
-  migrateToLocalV2: () => migrateToLocalV2
+  migrateToLocalV2: () => migrateToLocalV2,
+  offerAutoBudgetMigration: () => offerAutoBudgetMigration
 });
 module.exports = __toCommonJS(main_exports);
 var import_obsidian14 = require("obsidian");
@@ -26347,19 +26348,20 @@ var DEFAULT_SETTINGS = {
     baseUrl: "http://localhost:11434/v1",
     apiKey: "ollama",
     model: "llama3.2",
-    inputBudgetTokens: 16384,
-    repairInputBudgetTokens: 65536,
-    maxTokens: 4096,
     compressionProfile: "balanced",
     temperature: 0.2,
     topP: null,
     perOperation: false,
+    // No per-operation `inputBudgetTokens` / `maxTokens` defaults: both are optional and
+    // absent means "derive from the model's context window". A default here would be
+    // re-injected by loadSettings' defaults-first merge on the next start, silently
+    // reviving a cleared override as an explicit one.
     operations: {
-      ingest: { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 4096, temperature: 0.2 },
-      query: { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 4096, temperature: 0.2 },
-      lint: { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 8192, temperature: 0.2 },
-      init: { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 8192, temperature: 0.2 },
-      format: { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 32768, temperature: 0.2 }
+      ingest: { model: "llama3.2", temperature: 0.2 },
+      query: { model: "llama3.2", temperature: 0.2 },
+      lint: { model: "llama3.2", temperature: 0.2 },
+      init: { model: "llama3.2", temperature: 0.2 },
+      format: { model: "llama3.2", temperature: 0.2 }
     },
     structuredRetries: 1,
     rerankerEnabled: false,
@@ -26397,9 +26399,272 @@ var DEFAULT_SETTINGS = {
   llmIdleRetries: 3
 };
 
+// src/model-context.ts
+var BACKEND_DEFAULT_CONTEXT = 8192;
+var PROBE_DEADLINE_MS = 2e3;
+var DEFAULT_TTL_MS = 864e5;
+var MIN_CONTEXT_WINDOW = 1024;
+var MIN_PLAUSIBLE_CONTEXT = MIN_CONTEXT_WINDOW;
+var MAX_PLAUSIBLE_CONTEXT = 2e6;
+var CALIBRATION_WINDOW = 8;
+var CALIBRATION_MIN = 0.5;
+var CALIBRATION_MAX = 3;
+function cacheKey(baseUrl, model) {
+  return `${baseUrl}::${model}`;
+}
+function plausible(value) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) return null;
+  if (value < MIN_PLAUSIBLE_CONTEXT || value > MAX_PLAUSIBLE_CONTEXT) return null;
+  return value;
+}
+function findContextLength(value) {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findContextLength(item);
+      if (found !== null) return found;
+    }
+    return null;
+  }
+  if (value === null || typeof value !== "object") return null;
+  for (const [key, item] of Object.entries(value)) {
+    if (key.endsWith("context_length") || key === "max_context_length" || key === "n_ctx") {
+      const direct = plausible(item);
+      if (direct !== null) return direct;
+    }
+    const nested = findContextLength(item);
+    if (nested !== null) return nested;
+  }
+  return null;
+}
+function modelEntry(payload, model) {
+  if (payload === null || typeof payload !== "object") return null;
+  const data = payload.data;
+  if (!Array.isArray(data)) return null;
+  const found = data.find((item) => item !== null && typeof item === "object" && item.id === model);
+  return found === void 0 ? null : { entry: found };
+}
+async function getJson(fetchFn, url, apiKey, deadline, now, signal, body) {
+  const remaining = deadline - now();
+  if (remaining <= 0) return null;
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  signal?.addEventListener("abort", onAbort, { once: true });
+  const timer = window.setTimeout(() => controller.abort(), remaining);
+  try {
+    const response = await fetchFn(url, {
+      method: body === void 0 ? "GET" : "POST",
+      signal: controller.signal,
+      headers: {
+        "content-type": "application/json",
+        ...apiKey ? { authorization: `Bearer ${apiKey}` } : {}
+      },
+      ...body === void 0 ? {} : { body: JSON.stringify(body) }
+    });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timer);
+    signal?.removeEventListener("abort", onAbort);
+  }
+}
+async function probeContextWindow(fetchFn, baseUrl, apiKey, model, deadlineMs = PROBE_DEADLINE_MS, signal, onProbe) {
+  const started = Date.now();
+  const now = () => Date.now() - started;
+  const deadline = deadlineMs;
+  const root = baseUrl.replace(/\/+$/, "");
+  const report = (endpoint, ok, startedAt, matchedById, contextLength) => {
+    onProbe?.({
+      kind: "context_probe",
+      baseUrl,
+      model,
+      endpoint,
+      ok,
+      ms: now() - startedAt,
+      ...matchedById === void 0 ? {} : { matchedById },
+      ...contextLength === null ? {} : { contextLength }
+    });
+  };
+  const modelsUrl = `${root}/models`;
+  const modelsStartedAt = now();
+  const models = await getJson(fetchFn, modelsUrl, apiKey, deadline, now, signal);
+  const matched = models === null ? null : modelEntry(models, model);
+  const fromModels = matched === null ? null : findContextLength(matched.entry);
+  report(modelsUrl, models !== null, modelsStartedAt, matched !== null, fromModels);
+  if (fromModels !== null) return fromModels;
+  const ollamaRoot = root.replace(/\/v1$/, "");
+  const showUrl = `${ollamaRoot}/api/show`;
+  const showStartedAt = now();
+  const show = await getJson(fetchFn, showUrl, apiKey, deadline, now, signal, { model });
+  const fromShow = show === null ? null : findContextLength(show);
+  report(showUrl, show !== null, showStartedAt, void 0, fromShow);
+  return fromShow;
+}
+function configuredContextRecord(contextWindow, previous) {
+  return {
+    contextWindow,
+    source: "configured",
+    calibration: previous?.calibration ?? 1,
+    samples: previous?.samples ?? 0
+  };
+}
+function plausibleContextWindow(value) {
+  return plausible(value);
+}
+function placeholderContextWindow(record) {
+  return record.source === "default" ? null : record.contextWindow;
+}
+var ModelContextStore = class {
+  constructor(deps) {
+    this.deps = deps;
+  }
+  deps;
+  cache = null;
+  inFlight = /* @__PURE__ */ new Map();
+  get(baseUrl, model) {
+    return this.cache?.[cacheKey(baseUrl, model)];
+  }
+  /**
+   * `configuredWindow` is the user's own setting. When it is plausible, it replaces
+   * the discovered window outright: no probe runs, and the record is cached so the
+   * settings tab and the next run read the same number.
+   */
+  async resolve(baseUrl, model, apiKey, now, signal, onProbe, configuredWindow) {
+    signal?.throwIfAborted();
+    if (this.cache === null) this.cache = await this.deps.read();
+    const key = cacheKey(baseUrl, model);
+    const configured = plausible(configuredWindow);
+    const cached = this.cache[key];
+    if (configured !== null) {
+      if (cached?.source === "configured" && cached.contextWindow === configured) return cached;
+      const record = configuredContextRecord(configured, cached);
+      this.cache[key] = record;
+      try {
+        await this.deps.write(this.cache);
+      } catch {
+      }
+      return record;
+    }
+    if (cached && cached.source !== "configured" && (cached.expiresAt === void 0 || cached.expiresAt > now)) return cached;
+    const pending = this.inFlight.get(key);
+    if (pending) return pending;
+    const task = (async () => {
+      const probed = await probeContextWindow(
+        this.deps.fetchFn,
+        baseUrl,
+        apiKey,
+        model,
+        PROBE_DEADLINE_MS,
+        signal,
+        onProbe
+      );
+      signal?.throwIfAborted();
+      const record = probed === null ? {
+        contextWindow: BACKEND_DEFAULT_CONTEXT,
+        source: "default",
+        calibration: cached?.calibration ?? 1,
+        samples: cached?.samples ?? 0,
+        expiresAt: now + DEFAULT_TTL_MS
+      } : {
+        contextWindow: probed,
+        source: "discovered",
+        calibration: cached?.calibration ?? 1,
+        samples: cached?.samples ?? 0
+      };
+      this.cache[key] = record;
+      try {
+        await this.deps.write(this.cache);
+      } catch {
+      }
+      return record;
+    })().finally(() => this.inFlight.delete(key));
+    this.inFlight.set(key, task);
+    return task;
+  }
+  /**
+   * `appliedCalibration` is the factor the reported `estimated` was produced with —
+   * NOT whatever the record holds now. The two differ because
+   * `LlmCallOptions.tokenCalibration` is resolved once per run: every sample of a run
+   * is measured through the factor the record held when that run started, while the
+   * record moves with each sample.
+   */
+  observeUsage(baseUrl, model, estimated, actual, appliedCalibration) {
+    const record = this.get(baseUrl, model);
+    const ratio = estimated > 0 ? actual / estimated : 0;
+    if (!record || estimated <= 0 || actual <= 0) return { ratio, applied: false, clamped: false };
+    const target = appliedCalibration * ratio;
+    if (target < CALIBRATION_MIN || target > CALIBRATION_MAX) {
+      return { ratio, applied: false, clamped: true };
+    }
+    const weight = Math.min(record.samples, CALIBRATION_WINDOW - 1);
+    record.calibration = Math.min(CALIBRATION_MAX, Math.max(
+      CALIBRATION_MIN,
+      (record.calibration * weight + target) / (weight + 1)
+    ));
+    record.samples = Math.min(record.samples + 1, CALIBRATION_WINDOW);
+    this.persist().catch(() => {
+    });
+    return { ratio, applied: true, clamped: false };
+  }
+  observeContextError(baseUrl, model, maxContextTokens) {
+    const record = this.get(baseUrl, model);
+    if (!record) return { applied: false, reason: "unknown-model" };
+    const next = plausible(maxContextTokens);
+    if (next === null) return { applied: false, reason: "no-reported-window" };
+    if (record.source === "configured") {
+      return {
+        applied: false,
+        reason: "configured",
+        contextWindow: record.contextWindow,
+        reportedWindow: next
+      };
+    }
+    if (next >= record.contextWindow) return { applied: false, reason: "not-smaller" };
+    record.contextWindow = Math.max(MIN_PLAUSIBLE_CONTEXT, next);
+    record.source = "learned";
+    delete record.expiresAt;
+    this.persist().catch(() => {
+    });
+    return { applied: true, reason: "learned", contextWindow: record.contextWindow, reportedWindow: next };
+  }
+  async persist() {
+    if (this.cache) await this.deps.write(this.cache);
+  }
+};
+
+// src/budget-resolver.ts
+var SAFETY = 0.9;
+var DEFAULT_OUTPUT_BASE = 8192;
+var OUTPUT_MAX_SHARE = 0.5;
+var OUTPUT_MULTIPLIER = { format: 4 };
+function positive(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : void 0;
+}
+function resolveBudget(record, operation, overrides) {
+  const outputOverride = positive(overrides.output);
+  const inputOverride = positive(overrides.input);
+  const outputBudgetTokens = Math.max(1, Math.min(
+    outputOverride ?? DEFAULT_OUTPUT_BASE * (OUTPUT_MULTIPLIER[operation] ?? 1),
+    Math.floor(record.contextWindow * OUTPUT_MAX_SHARE)
+  ));
+  const maxInput = Math.max(1, Math.floor((record.contextWindow - outputBudgetTokens) * SAFETY));
+  const inputBudgetTokens = Math.min(inputOverride ?? maxInput, maxInput);
+  return {
+    inputBudgetTokens,
+    outputBudgetTokens,
+    contextWindow: record.contextWindow,
+    inputSource: inputOverride === void 0 ? record.source : "override",
+    outputSource: outputOverride === void 0 ? "default" : "override",
+    calibration: record.calibration
+  };
+}
+function outputCeiling(contextWindow, estimatedInput) {
+  return Math.max(1, contextWindow - Math.max(0, estimatedInput));
+}
+
 // src/model-call-policy.ts
 var DEFAULT_INPUT_BUDGET = 16384;
-var DEFAULT_REPAIR_INPUT_BUDGET = 65536;
 function backendModelControlDescriptor(backend) {
   if (backend === "claude-agent") {
     const fields2 = ["inputBudgetTokens", "compressionProfile"];
@@ -26458,6 +26723,11 @@ function positiveInt(value, fallback) {
   }
   return fallback;
 }
+function optionalPositiveInt(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return void 0;
+  const floored = Math.floor(value);
+  return floored >= 1 ? floored : void 0;
+}
 function compressionProfile(value) {
   return value === "maximum" || value === "balanced" || value === "minimum" ? value : void 0;
 }
@@ -26472,15 +26742,73 @@ function parsePositiveBudgetInput(value, previous) {
   const parsed = Number(trimmed);
   return Number.isSafeInteger(parsed) ? parsed : previous;
 }
+function renderNativeBudgetControls(values, automaticPlaceholder = "Automatic") {
+  return Object.keys(values).map((field) => {
+    const value = values[field];
+    return {
+      field,
+      value: value === void 0 ? "" : String(value),
+      placeholder: value === void 0 ? automaticPlaceholder : String(value)
+    };
+  });
+}
+function applyBudgetInput(holder, key, raw, min = 1) {
+  const trimmed = raw.trim();
+  if (trimmed === "") {
+    delete holder[key];
+    return;
+  }
+  if (!/^[1-9]\d*$/.test(trimmed)) return;
+  const parsed = Number(trimmed);
+  if (Number.isSafeInteger(parsed) && parsed >= min) holder[key] = parsed;
+}
+function configuredContextWindowFor(nativeAgent, model) {
+  return nativeAgent.contextWindowTokensByModel?.[model];
+}
+function setConfiguredContextWindow(nativeAgent, model, next) {
+  if (!model) return;
+  const map = nativeAgent.contextWindowTokensByModel;
+  if (next === void 0) {
+    if (!map) return;
+    delete map[model];
+    if (Object.keys(map).length === 0) delete nativeAgent.contextWindowTokensByModel;
+    return;
+  }
+  if (map) map[model] = next;
+  else nativeAgent.contextWindowTokensByModel = { [model]: next };
+}
+function legacyWindowModels(settings) {
+  const models = [
+    settings.nativeAgent.model,
+    ...["ingest", "query", "lint", "init", "format"].map((key) => settings.nativeAgent.operations[key].model)
+  ];
+  return [...new Set(models.filter((model) => typeof model === "string" && model !== ""))];
+}
+function normalizeConfiguredContextWindows(settings) {
+  const na = settings.nativeAgent;
+  const stored = na.contextWindowTokensByModel;
+  const normalized = {};
+  if (stored !== null && typeof stored === "object") {
+    for (const [model, value] of Object.entries(stored)) {
+      const window2 = optionalPositiveInt(value);
+      if (model !== "" && window2 !== void 0 && window2 >= MIN_CONTEXT_WINDOW) {
+        normalized[model] = window2;
+      }
+    }
+  }
+  const legacyHolder = na;
+  const legacy = optionalPositiveInt(legacyHolder.contextWindowTokens);
+  if (legacy !== void 0 && legacy >= MIN_CONTEXT_WINDOW) {
+    for (const model of legacyWindowModels(settings)) normalized[model] ??= legacy;
+  }
+  delete legacyHolder.contextWindowTokens;
+  if (Object.keys(normalized).length === 0) delete na.contextWindowTokensByModel;
+  else na.contextWindowTokensByModel = normalized;
+}
 function normalizePersistedModelControls(settings) {
-  settings.nativeAgent.inputBudgetTokens = positiveInt(
-    settings.nativeAgent.inputBudgetTokens,
-    DEFAULT_INPUT_BUDGET
-  );
-  settings.nativeAgent.repairInputBudgetTokens = positiveInt(
-    settings.nativeAgent.repairInputBudgetTokens,
-    DEFAULT_REPAIR_INPUT_BUDGET
-  );
+  normalizeConfiguredContextWindows(settings);
+  settings.nativeAgent.inputBudgetTokens = optionalPositiveInt(settings.nativeAgent.inputBudgetTokens);
+  settings.nativeAgent.repairInputBudgetTokens = optionalPositiveInt(settings.nativeAgent.repairInputBudgetTokens);
   settings.claudeAgent.inputBudgetTokens = positiveInt(
     settings.claudeAgent.inputBudgetTokens,
     DEFAULT_INPUT_BUDGET
@@ -26490,7 +26818,7 @@ function normalizePersistedModelControls(settings) {
   for (const key of ["ingest", "query", "lint", "init", "format"]) {
     const native = settings.nativeAgent.operations[key];
     const claude = settings.claudeAgent.operations[key];
-    native.inputBudgetTokens = positiveInt(native.inputBudgetTokens, DEFAULT_INPUT_BUDGET);
+    native.inputBudgetTokens = optionalPositiveInt(native.inputBudgetTokens);
     claude.inputBudgetTokens = positiveInt(claude.inputBudgetTokens, DEFAULT_INPUT_BUDGET);
     if (key === "format") {
       delete native.compressionProfile;
@@ -26516,53 +26844,71 @@ function compressionOperation(key) {
   if (key === "init" || key === "ingest") return "ingest";
   return key;
 }
-function resolveModelCallPolicy(settings, operation, parent) {
+function effectiveModel(settings, operation, parent) {
   const key = policyKey(operation, parent);
+  const global2 = settings.backend === "claude-agent" ? settings.claudeAgent : settings.nativeAgent;
+  const local = global2.perOperation ? global2.operations[key] : void 0;
+  return local?.model ?? global2.model;
+}
+function nativeBudgetOverrides(settings, key) {
+  const global2 = settings.nativeAgent;
+  const local = global2.perOperation ? global2.operations[key] : void 0;
+  return {
+    input: local?.inputBudgetTokens ?? global2.inputBudgetTokens,
+    output: local?.maxTokens ?? global2.maxTokens
+  };
+}
+function resolveCallPolicy(settings, operation, record, parent) {
+  const key = policyKey(operation, parent);
+  const compressionOp = compressionOperation(key);
+  const model = effectiveModel(settings, operation, parent);
   if (settings.backend === "claude-agent") {
     const global3 = settings.claudeAgent;
     const local2 = global3.perOperation ? global3.operations[key] : void 0;
-    const compressionOp2 = compressionOperation(key);
     const compression2 = key === "format" ? void 0 : compressionProfile(local2?.compressionProfile) ?? compressionProfile(global3.compressionProfile) ?? "balanced";
     const policy2 = {
       inputBudgetTokens: positiveInt(local2?.inputBudgetTokens ?? global3.inputBudgetTokens, DEFAULT_INPUT_BUDGET),
       ...compression2 ? { compression: compression2 } : {}
     };
     return {
-      model: local2?.model ?? global3.model,
+      model,
       policy: policy2,
       opts: {
         inputBudgetTokens: policy2.inputBudgetTokens,
-        semanticCompression: compression2 && compressionOp2 ? { profile: compression2, operation: compressionOp2 } : void 0
+        semanticCompression: compression2 && compressionOp ? { profile: compression2, operation: compressionOp } : void 0
       }
     };
   }
   const global2 = settings.nativeAgent;
   const local = global2.perOperation ? global2.operations[key] : void 0;
-  const compressionOp = compressionOperation(key);
   const compression = key === "format" ? void 0 : compressionProfile(local?.compressionProfile) ?? compressionProfile(global2.compressionProfile) ?? "balanced";
-  const globalOutputBudget = positiveInt(global2.maxTokens, 4096);
-  const outputBudget = positiveInt(local?.maxTokens ?? globalOutputBudget, globalOutputBudget);
-  const outputRetryBudget = Math.max(outputBudget, globalOutputBudget);
-  const inputBudget = positiveInt(local?.inputBudgetTokens ?? global2.inputBudgetTokens, DEFAULT_INPUT_BUDGET);
-  const repairInputBudget = key === "init" || key === "ingest" ? Math.max(inputBudget, positiveInt(global2.repairInputBudgetTokens, DEFAULT_REPAIR_INPUT_BUDGET)) : void 0;
+  const budget = resolveBudget(record, key, nativeBudgetOverrides(settings, key));
+  const repairInputBudgetTokens = key === "init" || key === "ingest" ? Math.min(optionalPositiveInt(global2.repairInputBudgetTokens) ?? budget.inputBudgetTokens, budget.inputBudgetTokens) : void 0;
   const policy = {
-    inputBudgetTokens: inputBudget,
-    ...repairInputBudget === void 0 ? {} : { repairInputBudgetTokens: repairInputBudget },
-    outputBudgetTokens: outputBudget,
-    outputRetryBudgetTokens: outputRetryBudget,
+    inputBudgetTokens: budget.inputBudgetTokens,
+    ...repairInputBudgetTokens === void 0 ? {} : { repairInputBudgetTokens },
+    outputBudgetTokens: budget.outputBudgetTokens,
     ...compression ? { compression } : {}
   };
   return {
-    model: local?.model ?? global2.model,
+    model,
     policy,
+    budget,
     opts: {
-      inputBudgetTokens: policy.inputBudgetTokens,
-      repairInputBudgetTokens: policy.repairInputBudgetTokens,
-      maxTokens: outputBudget,
-      outputRetryBudgetTokens: outputRetryBudget,
+      inputBudgetTokens: budget.inputBudgetTokens,
+      repairInputBudgetTokens,
+      maxTokens: budget.outputBudgetTokens,
+      tokenCalibration: budget.calibration,
+      contextWindowTokens: budget.contextWindow,
       temperature: local?.temperature ?? global2.temperature,
       topP: global2.topP,
-      semanticCompression: compression && compressionOp ? { profile: compression, operation: compressionOp } : void 0
+      semanticCompression: compression && compressionOp ? { profile: compression, operation: compressionOp } : void 0,
+      budgetTelemetry: {
+        contextWindow: budget.contextWindow,
+        inputSource: budget.inputSource,
+        outputSource: budget.outputSource,
+        calibration: budget.calibration
+      }
     }
   };
 }
@@ -26620,9 +26966,18 @@ var en = {
     inputBudgetTokens_name: "Input budget tokens",
     inputBudgetTokens_desc: "Maximum packed prompt budget. Default 16384. Only finite positive integers are saved.",
     repairInputBudgetTokens_name: "Repair input budget tokens",
-    repairInputBudgetTokens_desc: "Upper input budget for structured repair retries. Default 65536. Used when a valid request needs a larger repair prompt.",
     outputBudgetTokens_name: "Max completion tokens",
     outputBudgetTokens_desc: "OpenAI max_completion_tokens cap, including visible output and reasoning tokens. Stored internally as maxTokens; only finite positive integers are saved.",
+    budgetAutomatic: "Automatic",
+    inputBudgetTokens_descAutomatic: "Leave empty for automatic. The budget is derived from the model's context window. Set a value only to override it.",
+    outputBudgetTokens_descAutomatic: "Leave empty for automatic. Derived per operation from the model's context window.",
+    repairInputBudgetTokens_descAutomatic: "Leave empty for automatic. Only used when a valid request needs a larger repair prompt.",
+    contextWindowTokens_name: "Model context window",
+    contextWindowTokens_desc: "How many tokens the model holds in one request. Leave empty for automatic \u2014 the window is read from the backend. Set it only when your backend does not report one: the symptom is a fallback window of 8192 in the agent log, dropped schema blocks, and requests truncated against a 4096-token limit. Every budget is then derived from your number. Minimum 1024 tokens; smaller entries are refused. Applies to the model named above only \u2014 each model field has a window of its own, so a small vision model and a large chat model are sized separately.",
+    autoBudgetNotice_title: "Switch native budgets to automatic?",
+    autoBudgetNotice_body: `Native input and output budgets are now derived automatically from the model's context window. You have a stored budget override from before this change. Switch to automatic, or keep your stored values? The Input budget tokens and Max completion tokens fields in Settings stay visible either way and show "Automatic" until you type a number.`,
+    autoBudgetNotice_switch: "Switch to automatic",
+    autoBudgetNotice_keep: "Keep stored values",
     compressionProfile_name: "Semantic compression",
     compressionProfile_desc: "Controls prompt density while preserving operation-specific evidence. Format receives no compression instruction.",
     compressionUseGlobal: "Use global",
@@ -27066,9 +27421,18 @@ var ru = {
     inputBudgetTokens_name: "\u0411\u044E\u0434\u0436\u0435\u0442 \u0442\u043E\u043A\u0435\u043D\u043E\u0432 \u0432\u0432\u043E\u0434\u0430",
     inputBudgetTokens_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0430\u043B\u044C\u043D\u044B\u0439 \u0431\u044E\u0434\u0436\u0435\u0442 \u0443\u043F\u0430\u043A\u043E\u0432\u0430\u043D\u043D\u043E\u0433\u043E \u043F\u0440\u043E\u043C\u0442\u0430. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 16384. \u0421\u043E\u0445\u0440\u0430\u043D\u044F\u044E\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043A\u043E\u043D\u0435\u0447\u043D\u044B\u0435 \u043F\u043E\u043B\u043E\u0436\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0435 \u0446\u0435\u043B\u044B\u0435 \u0447\u0438\u0441\u043B\u0430.",
     repairInputBudgetTokens_name: "\u0411\u044E\u0434\u0436\u0435\u0442 \u0432\u0432\u043E\u0434\u0430 \u0434\u043B\u044F repair",
-    repairInputBudgetTokens_desc: "\u0412\u0435\u0440\u0445\u043D\u0438\u0439 \u0431\u044E\u0434\u0436\u0435\u0442 \u0432\u0432\u043E\u0434\u0430 \u0434\u043B\u044F structured repair retry. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 65536. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442\u0441\u044F, \u043A\u043E\u0433\u0434\u0430 \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 \u0437\u0430\u043F\u0440\u043E\u0441 \u0442\u0440\u0435\u0431\u0443\u0435\u0442 \u0431\u043E\u043B\u0435\u0435 \u043A\u0440\u0443\u043F\u043D\u044B\u0439 repair prompt.",
     outputBudgetTokens_name: "\u041C\u0430\u043A\u0441. \u0442\u043E\u043A\u0435\u043D\u044B completion",
     outputBudgetTokens_desc: "\u041B\u0438\u043C\u0438\u0442 OpenAI max_completion_tokens: \u0432\u0438\u0434\u0438\u043C\u044B\u0439 \u043E\u0442\u0432\u0435\u0442 \u0438 reasoning-\u0442\u043E\u043A\u0435\u043D\u044B \u0432\u043C\u0435\u0441\u0442\u0435. \u0412\u043D\u0443\u0442\u0440\u0438 \u0445\u0440\u0430\u043D\u0438\u0442\u0441\u044F \u043A\u0430\u043A maxTokens; \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u044E\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043A\u043E\u043D\u0435\u0447\u043D\u044B\u0435 \u043F\u043E\u043B\u043E\u0436\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0435 \u0446\u0435\u043B\u044B\u0435 \u0447\u0438\u0441\u043B\u0430.",
+    budgetAutomatic: "\u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438",
+    inputBudgetTokens_descAutomatic: "\u041F\u0443\u0441\u0442\u043E \u2014 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438. \u0411\u044E\u0434\u0436\u0435\u0442 \u0432\u044B\u0432\u043E\u0434\u0438\u0442\u0441\u044F \u0438\u0437 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u043D\u043E\u0433\u043E \u043E\u043A\u043D\u0430 \u043C\u043E\u0434\u0435\u043B\u0438. \u0417\u0430\u0434\u0430\u0432\u0430\u0439\u0442\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435 \u0442\u043E\u043B\u044C\u043A\u043E \u0447\u0442\u043E\u0431\u044B \u043F\u0435\u0440\u0435\u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0438\u0442\u044C \u0435\u0433\u043E.",
+    outputBudgetTokens_descAutomatic: "\u041F\u0443\u0441\u0442\u043E \u2014 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438. \u0412\u044B\u0432\u043E\u0434\u0438\u0442\u0441\u044F \u043F\u043E \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044F\u043C \u0438\u0437 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u043D\u043E\u0433\u043E \u043E\u043A\u043D\u0430 \u043C\u043E\u0434\u0435\u043B\u0438.",
+    repairInputBudgetTokens_descAutomatic: "\u041F\u0443\u0441\u0442\u043E \u2014 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442\u0441\u044F, \u0442\u043E\u043B\u044C\u043A\u043E \u043A\u043E\u0433\u0434\u0430 \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 \u0437\u0430\u043F\u0440\u043E\u0441 \u0442\u0440\u0435\u0431\u0443\u0435\u0442 \u0431\u043E\u043B\u0435\u0435 \u043A\u0440\u0443\u043F\u043D\u044B\u0439 repair prompt.",
+    contextWindowTokens_name: "\u041A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u043D\u043E\u0435 \u043E\u043A\u043D\u043E \u043C\u043E\u0434\u0435\u043B\u0438",
+    contextWindowTokens_desc: "\u0421\u043A\u043E\u043B\u044C\u043A\u043E \u0442\u043E\u043A\u0435\u043D\u043E\u0432 \u043C\u043E\u0434\u0435\u043B\u044C \u0432\u043C\u0435\u0449\u0430\u0435\u0442 \u0432 \u043E\u0434\u0438\u043D \u0437\u0430\u043F\u0440\u043E\u0441. \u041F\u0443\u0441\u0442\u043E \u2014 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438: \u043E\u043A\u043D\u043E \u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044F \u0443 \u0431\u044D\u043A\u0435\u043D\u0434\u0430. \u0417\u0430\u0434\u0430\u0432\u0430\u0439\u0442\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435, \u0442\u043E\u043B\u044C\u043A\u043E \u0435\u0441\u043B\u0438 \u0431\u044D\u043A\u0435\u043D\u0434 \u0435\u0433\u043E \u043D\u0435 \u0441\u043E\u043E\u0431\u0449\u0430\u0435\u0442: \u043F\u0440\u0438\u0437\u043D\u0430\u043A\u0438 \u2014 \u0437\u0430\u043F\u0430\u0441\u043D\u043E\u0435 \u043E\u043A\u043D\u043E 8192 \u0432 agent-\u043B\u043E\u0433\u0435, \u0432\u044B\u0431\u0440\u043E\u0448\u0435\u043D\u043D\u044B\u0435 \u0431\u043B\u043E\u043A\u0438 \u0441\u0445\u0435\u043C\u044B \u0438 \u0437\u0430\u043F\u0440\u043E\u0441\u044B, \u043E\u0431\u0440\u0435\u0437\u0430\u043D\u043D\u044B\u0435 \u043B\u0438\u043C\u0438\u0442\u043E\u043C \u0432 4096 \u0442\u043E\u043A\u0435\u043D\u043E\u0432. \u0422\u043E\u0433\u0434\u0430 \u0432\u0441\u0435 \u0431\u044E\u0434\u0436\u0435\u0442\u044B \u0432\u044B\u0432\u043E\u0434\u044F\u0442\u0441\u044F \u0438\u0437 \u0432\u0430\u0448\u0435\u0433\u043E \u0447\u0438\u0441\u043B\u0430. \u041C\u0438\u043D\u0438\u043C\u0443\u043C \u2014 1024 \u0442\u043E\u043A\u0435\u043D\u0430, \u043C\u0435\u043D\u044C\u0448\u0438\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u043D\u0435 \u043F\u0440\u0438\u043D\u0438\u043C\u0430\u044E\u0442\u0441\u044F. \u041F\u0440\u0438\u043C\u0435\u043D\u044F\u0435\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043A \u043C\u043E\u0434\u0435\u043B\u0438, \u0443\u043A\u0430\u0437\u0430\u043D\u043D\u043E\u0439 \u0432\u044B\u0448\u0435: \u0443 \u043A\u0430\u0436\u0434\u043E\u0433\u043E \u043F\u043E\u043B\u044F \u043C\u043E\u0434\u0435\u043B\u0438 \u0441\u0432\u043E\u0451 \u043E\u043A\u043D\u043E, \u043F\u043E\u044D\u0442\u043E\u043C\u0443 \u043D\u0435\u0431\u043E\u043B\u044C\u0448\u0430\u044F vision-\u043C\u043E\u0434\u0435\u043B\u044C \u0438 \u0431\u043E\u043B\u044C\u0448\u0430\u044F \u0447\u0430\u0442-\u043C\u043E\u0434\u0435\u043B\u044C \u0440\u0430\u0441\u0441\u0447\u0438\u0442\u044B\u0432\u0430\u044E\u0442\u0441\u044F \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E.",
+    autoBudgetNotice_title: "\u041F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u043D\u0430\u0442\u0438\u0432\u043D\u044B\u0435 \u0431\u044E\u0434\u0436\u0435\u0442\u044B \u043D\u0430 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438\u0435?",
+    autoBudgetNotice_body: "\u0411\u044E\u0434\u0436\u0435\u0442\u044B \u0432\u0432\u043E\u0434\u0430 \u0438 \u0432\u044B\u0432\u043E\u0434\u0430 \u0434\u043B\u044F \u043D\u0430\u0442\u0438\u0432\u043D\u043E\u0433\u043E \u0431\u044D\u043A\u0435\u043D\u0434\u0430 \u0442\u0435\u043F\u0435\u0440\u044C \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u0432\u044B\u0432\u043E\u0434\u044F\u0442\u0441\u044F \u0438\u0437 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u043D\u043E\u0433\u043E \u043E\u043A\u043D\u0430 \u043C\u043E\u0434\u0435\u043B\u0438. \u0423 \u0432\u0430\u0441 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E \u043F\u0435\u0440\u0435\u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u0435 \u0431\u044E\u0434\u0436\u0435\u0442\u0430, \u0437\u0430\u0434\u0430\u043D\u043D\u043E\u0435 \u0434\u043E \u044D\u0442\u043E\u0433\u043E \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F. \u041F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0438\u0442\u044C\u0441\u044F \u043D\u0430 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438\u0439 \u0440\u0435\u0436\u0438\u043C \u0438\u043B\u0438 \u043E\u0441\u0442\u0430\u0432\u0438\u0442\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u044F? \u041F\u043E\u043B\u044F \xAB\u0411\u044E\u0434\u0436\u0435\u0442 \u0442\u043E\u043A\u0435\u043D\u043E\u0432 \u0432\u0432\u043E\u0434\u0430\xBB \u0438 \xAB\u041C\u0430\u043A\u0441. \u0442\u043E\u043A\u0435\u043D\u044B completion\xBB \u0432 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430\u0445 \u043E\u0441\u0442\u0430\u044E\u0442\u0441\u044F \u0432\u0438\u0434\u0438\u043C\u044B\u043C\u0438 \u0432 \u043B\u044E\u0431\u043E\u043C \u0441\u043B\u0443\u0447\u0430\u0435 \u0438 \u043F\u043E\u043A\u0430\u0437\u044B\u0432\u0430\u044E\u0442 \xAB\u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438\xBB, \u043F\u043E\u043A\u0430 \u0432\u044B \u043D\u0435 \u0432\u0432\u0435\u0434\u0451\u0442\u0435 \u0447\u0438\u0441\u043B\u043E.",
+    autoBudgetNotice_switch: "\u041F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u043D\u0430 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438\u0439",
+    autoBudgetNotice_keep: "\u041E\u0441\u0442\u0430\u0432\u0438\u0442\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u044F",
     compressionProfile_name: "\u0421\u0435\u043C\u0430\u043D\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0435 \u0441\u0436\u0430\u0442\u0438\u0435",
     compressionProfile_desc: "\u0423\u043F\u0440\u0430\u0432\u043B\u044F\u0435\u0442 \u043F\u043B\u043E\u0442\u043D\u043E\u0441\u0442\u044C\u044E \u043F\u0440\u043E\u043C\u0442\u0430, \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u044F \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0435 \u0434\u0430\u043D\u043D\u044B\u0435 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438. Format \u043D\u0435 \u043F\u043E\u043B\u0443\u0447\u0430\u0435\u0442 \u0438\u043D\u0441\u0442\u0440\u0443\u043A\u0446\u0438\u044E \u0441\u0436\u0430\u0442\u0438\u044F.",
     compressionUseGlobal: "\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u044C \u0433\u043B\u043E\u0431\u0430\u043B\u044C\u043D\u043E\u0435",
@@ -27511,9 +27875,18 @@ var es = {
     inputBudgetTokens_name: "Presupuesto de tokens de entrada",
     inputBudgetTokens_desc: "Presupuesto m\xE1ximo del prompt empaquetado. Por defecto 16384. Solo se guardan enteros positivos finitos.",
     repairInputBudgetTokens_name: "Presupuesto de entrada para reparaci\xF3n",
-    repairInputBudgetTokens_desc: "Presupuesto m\xE1ximo de entrada para reintentos de reparaci\xF3n estructurada. Por defecto 65536. Se usa cuando una solicitud v\xE1lida requiere un prompt de reparaci\xF3n mayor.",
     outputBudgetTokens_name: "M\xE1ximo de tokens de completion",
     outputBudgetTokens_desc: "L\xEDmite OpenAI max_completion_tokens, incluidos la salida visible y los tokens de razonamiento. Se guarda internamente como maxTokens; solo se guardan enteros positivos finitos.",
+    budgetAutomatic: "Autom\xE1tico",
+    inputBudgetTokens_descAutomatic: "Vac\xEDo significa autom\xE1tico. El presupuesto se deriva de la ventana de contexto del modelo. Defina un valor solo para anularlo.",
+    outputBudgetTokens_descAutomatic: "Vac\xEDo significa autom\xE1tico. Se deriva por operaci\xF3n de la ventana de contexto del modelo.",
+    repairInputBudgetTokens_descAutomatic: "Vac\xEDo significa autom\xE1tico. Solo se usa cuando una solicitud v\xE1lida requiere un prompt de reparaci\xF3n mayor.",
+    contextWindowTokens_name: "Ventana de contexto del modelo",
+    contextWindowTokens_desc: "Cu\xE1ntos tokens admite el modelo en una sola solicitud. Vac\xEDo significa autom\xE1tico: la ventana se lee del backend. Ind\xEDcala solo cuando tu backend no la informe: los s\xEDntomas son una ventana de reserva de 8192 en el registro del agente, bloques de esquema descartados y solicitudes truncadas contra un l\xEDmite de 4096 tokens. Entonces todos los presupuestos se derivan de tu n\xFAmero. M\xEDnimo 1024 tokens; los valores menores se rechazan. Se aplica solo al modelo indicado arriba: cada campo de modelo tiene su propia ventana, de modo que un modelo de visi\xF3n peque\xF1o y un modelo de chat grande se dimensionan por separado.",
+    autoBudgetNotice_title: "\xBFCambiar los presupuestos nativos a autom\xE1tico?",
+    autoBudgetNotice_body: 'Los presupuestos nativos de entrada y salida ahora se derivan autom\xE1ticamente de la ventana de contexto del modelo. Tiene guardada una anulaci\xF3n de presupuesto de antes de este cambio. \xBFCambiar a autom\xE1tico o conservar sus valores guardados? Los campos \xABPresupuesto de tokens de entrada\xBB y \xABM\xE1ximo de tokens de completion\xBB en Ajustes siguen visibles en cualquier caso y muestran "Autom\xE1tico" hasta que escriba un n\xFAmero.',
+    autoBudgetNotice_switch: "Cambiar a autom\xE1tico",
+    autoBudgetNotice_keep: "Conservar valores guardados",
     compressionProfile_name: "Compresi\xF3n sem\xE1ntica",
     compressionProfile_desc: "Controla la densidad del prompt preservando la evidencia espec\xEDfica de la operaci\xF3n. Format no recibe instrucciones de compresi\xF3n.",
     compressionUseGlobal: "Usar global",
@@ -28762,6 +29135,36 @@ function consolidateSourcePaths(existing, newPath, vaultRoot) {
   return [...filtered, newPath];
 }
 
+// src/auto-budget-notice.ts
+var NATIVE_BUDGET_OPERATIONS = ["ingest", "query", "lint", "init", "format"];
+function hasStoredNativeBudget(settings) {
+  const native = settings.nativeAgent;
+  return native.inputBudgetTokens !== void 0 || native.maxTokens !== void 0 || native.repairInputBudgetTokens !== void 0;
+}
+function clearNativeBudgets(settings) {
+  const native = settings.nativeAgent;
+  delete native.inputBudgetTokens;
+  delete native.maxTokens;
+  delete native.repairInputBudgetTokens;
+  for (const key of NATIVE_BUDGET_OPERATIONS) {
+    const op = native.operations[key];
+    delete op.inputBudgetTokens;
+    delete op.maxTokens;
+  }
+}
+function settleOnce() {
+  let settle;
+  const promise = new Promise((resolve) => {
+    let settled = false;
+    settle = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+  });
+  return { promise, settle };
+}
+
 // src/modals.ts
 var BusyCloseModal = class extends import_obsidian2.Modal {
   constructor(app, onAbort) {
@@ -29592,6 +29995,43 @@ var LintOptionsModal = class extends import_obsidian2.Modal {
   }
   onClose() {
     this.contentEl.empty();
+  }
+};
+var AutoBudgetNoticeModal = class extends import_obsidian2.Modal {
+  resolver = settleOnce();
+  constructor(app) {
+    super(app);
+  }
+  /**
+   * Resolves true to switch to automatic, false to keep the stored values. Settles
+   * exactly once no matter how the modal is closed.
+   */
+  ask() {
+    this.open();
+    return this.resolver.promise;
+  }
+  onOpen() {
+    const T = i18n().settings;
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: T.autoBudgetNotice_title });
+    contentEl.createEl("p", { text: T.autoBudgetNotice_body });
+    new import_obsidian2.Setting(contentEl).addButton((b) => b.setButtonText(T.autoBudgetNotice_keep).onClick(() => {
+      this.resolver.settle(false);
+      this.close();
+    })).addButton((b) => b.setButtonText(T.autoBudgetNotice_switch).setCta().onClick(() => {
+      this.resolver.settle(true);
+      this.close();
+    }));
+  }
+  /**
+   * Escape, the built-in close control, and clicking outside the modal all land here —
+   * and so does the explicit `close()` call a button handler makes after it already
+   * settled the promise. `settleOnce` makes that second call a no-op; every other path
+   * through `onClose()` is a real dismissal, which keeps the stored values (`false`).
+   */
+  onClose() {
+    this.contentEl.empty();
+    this.resolver.settle(false);
   }
 };
 
@@ -33378,6 +33818,58 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         })
       );
     };
+    const automaticControls = [];
+    const refreshAutomaticControls = (resetValue = false) => {
+      for (const repaint of automaticControls) repaint(resetValue);
+    };
+    const addAutomaticBudgetControl = (setting, value, update, placeholder, min) => {
+      const holder = {};
+      setting.addText((text) => {
+        const repaint = (resetValue) => {
+          if (resetValue) holder.value = value();
+          const rendered = renderNativeBudgetControls({ value: holder.value }, placeholder())[0];
+          text.setPlaceholder(rendered.placeholder);
+          if (resetValue) text.setValue(rendered.value);
+        };
+        repaint(true);
+        automaticControls.push(repaint);
+        text.onChange(async (raw) => {
+          const previous = holder.value;
+          applyBudgetInput(holder, "value", raw, min);
+          if (holder.value === previous) return;
+          update(holder.value);
+          await this.plugin.saveSettings();
+          refreshAutomaticControls();
+        });
+      });
+    };
+    const automaticBudgetPlaceholders = (model, operation, overrides) => {
+      const cached = this.plugin.controller.cachedModelContext(s.nativeAgent.baseUrl, model);
+      const configured = plausibleContextWindow(configuredContextWindowFor(s.nativeAgent, model));
+      const discovered = cached?.source === "configured" ? void 0 : cached;
+      const record = configured === null ? discovered : configuredContextRecord(configured, cached);
+      const automatic = T.settings.budgetAutomatic;
+      if (!record) return { input: automatic, output: automatic, contextWindow: automatic };
+      const budget = resolveBudget(record, operation, overrides);
+      const window2 = placeholderContextWindow(record);
+      return {
+        input: String(budget.inputBudgetTokens),
+        output: String(budget.outputBudgetTokens),
+        contextWindow: window2 === null ? automatic : String(window2)
+      };
+    };
+    const addContextWindowControl = (model) => {
+      if (eff.backend !== "native-agent" || !model()) return;
+      addAutomaticBudgetControl(
+        new import_obsidian5.Setting(containerEl).setName(T.settings.contextWindowTokens_name).setDesc(T.settings.contextWindowTokens_desc),
+        () => configuredContextWindowFor(s.nativeAgent, model()),
+        (next) => {
+          setConfiguredContextWindow(s.nativeAgent, model(), next);
+        },
+        () => automaticBudgetPlaceholders(model(), "init", {}).contextWindow,
+        MIN_CONTEXT_WINDOW
+      );
+    };
     const addCompressionControl = (setting, value, useGlobal, update) => {
       setting.addDropdown((dropdown) => {
         if (useGlobal) dropdown.addOption("", T.settings.compressionUseGlobal);
@@ -33387,9 +33879,23 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         });
       });
     };
-    const addPolicyControls = (fields, values, updates, useGlobalCompression) => {
+    const addPolicyControls = (fields, values, updates, useGlobalCompression, automatic) => {
+      const placeholders = automatic ? () => automaticBudgetPlaceholders(
+        automatic.model(),
+        automatic.operation,
+        automatic.current()
+      ) : void 0;
       renderModelControlFields(fields, {
         inputBudgetTokens: () => {
+          if (automatic?.updates.inputBudgetTokens) {
+            addAutomaticBudgetControl(
+              new import_obsidian5.Setting(containerEl).setName(T.settings.inputBudgetTokens_name).setDesc(T.settings.inputBudgetTokens_descAutomatic),
+              () => automatic.current().input,
+              automatic.updates.inputBudgetTokens,
+              () => placeholders().input
+            );
+            return;
+          }
           if (values.inputBudgetTokens === void 0 || !updates.inputBudgetTokens) return;
           addBudgetControl(
             new import_obsidian5.Setting(containerEl).setName(T.settings.inputBudgetTokens_name).setDesc(T.settings.inputBudgetTokens_desc),
@@ -33398,6 +33904,15 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
           );
         },
         maxTokens: () => {
+          if (automatic?.updates.maxTokens) {
+            addAutomaticBudgetControl(
+              new import_obsidian5.Setting(containerEl).setName(T.settings.outputBudgetTokens_name).setDesc(T.settings.outputBudgetTokens_descAutomatic),
+              () => automatic.current().output,
+              automatic.updates.maxTokens,
+              () => placeholders().output
+            );
+            return;
+          }
           if (values.maxTokens === void 0 || !updates.maxTokens) return;
           addBudgetControl(
             new import_obsidian5.Setting(containerEl).setName(T.settings.outputBudgetTokens_name).setDesc(T.settings.outputBudgetTokens_desc),
@@ -33689,6 +34204,10 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         })
       );
       new import_obsidian5.Setting(containerEl).setName(T.settings.h3_defaultChatModel).setHeading();
+      const globalBudgetOverrides = () => ({
+        input: s.nativeAgent.inputBudgetTokens,
+        output: s.nativeAgent.maxTokens
+      });
       if (!s.nativeAgent.perOperation) {
         this.addModelControl(
           new import_obsidian5.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native),
@@ -33696,10 +34215,12 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
           async (v) => {
             s.nativeAgent.model = v;
             await this.plugin.saveSettings();
+            refreshAutomaticControls(true);
           },
           false,
           { tooltip: "Verify the chat model is reachable", run: () => this.checkChatModel() }
         );
+        addContextWindowControl(() => s.nativeAgent.model);
       }
       addPolicyControls(
         modelControls.globalFields,
@@ -33709,24 +34230,40 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
           compressionProfile: s.nativeAgent.compressionProfile
         },
         {
-          inputBudgetTokens: (next) => {
-            s.nativeAgent.inputBudgetTokens = next;
-          },
-          maxTokens: (next) => {
-            s.nativeAgent.maxTokens = next;
-          },
           compressionProfile: (next) => {
             s.nativeAgent.compressionProfile = next ?? "balanced";
           }
         },
-        false
+        false,
+        {
+          // The global fields are the fallback default for every operation, not one
+          // operation in particular; "init" (multiplier 1, no format-style x4) is used
+          // only to compute a representative placeholder number and never changes what
+          // gets stored.
+          model: () => s.nativeAgent.model,
+          operation: "init",
+          current: globalBudgetOverrides,
+          updates: {
+            inputBudgetTokens: (next) => {
+              s.nativeAgent.inputBudgetTokens = next;
+            },
+            maxTokens: (next) => {
+              s.nativeAgent.maxTokens = next;
+            }
+          }
+        }
       );
-      addBudgetControl(
-        new import_obsidian5.Setting(containerEl).setName(T.settings.repairInputBudgetTokens_name).setDesc(T.settings.repairInputBudgetTokens_desc),
-        s.nativeAgent.repairInputBudgetTokens ?? 65536,
+      addAutomaticBudgetControl(
+        new import_obsidian5.Setting(containerEl).setName(T.settings.repairInputBudgetTokens_name).setDesc(T.settings.repairInputBudgetTokens_descAutomatic),
+        () => s.nativeAgent.repairInputBudgetTokens,
         (next) => {
           s.nativeAgent.repairInputBudgetTokens = next;
-        }
+        },
+        () => automaticBudgetPlaceholders(
+          s.nativeAgent.model,
+          "init",
+          globalBudgetOverrides()
+        ).input
       );
       if (!s.nativeAgent.perOperation) {
         new import_obsidian5.Setting(containerEl).setName(T.settings.temperature_name).setDesc(T.settings.temperature_desc).addText(
@@ -33798,8 +34335,10 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
             async (v) => {
               s.nativeAgent.operations[key].model = v;
               await this.plugin.saveSettings();
+              refreshAutomaticControls(true);
             }
           );
+          addContextWindowControl(() => effectiveModel(s, key));
           addPolicyControls(
             modelControls.operations[key],
             {
@@ -33808,17 +34347,27 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
               compressionProfile: s.nativeAgent.operations[key].compressionProfile
             },
             {
-              inputBudgetTokens: (next) => {
-                s.nativeAgent.operations[key].inputBudgetTokens = next;
-              },
-              maxTokens: (next) => {
-                s.nativeAgent.operations[key].maxTokens = next;
-              },
               compressionProfile: (next) => {
                 s.nativeAgent.operations[key].compressionProfile = next;
               }
             },
-            true
+            true,
+            {
+              model: () => effectiveModel(s, key),
+              operation: key,
+              current: () => ({
+                input: s.nativeAgent.operations[key].inputBudgetTokens,
+                output: s.nativeAgent.operations[key].maxTokens
+              }),
+              updates: {
+                inputBudgetTokens: (next) => {
+                  s.nativeAgent.operations[key].inputBudgetTokens = next;
+                },
+                maxTokens: (next) => {
+                  s.nativeAgent.operations[key].maxTokens = next;
+                }
+              }
+            }
           );
           new import_obsidian5.Setting(containerEl).setName(T.settings.opTemperature_name).setDesc(T.settings.opTemperature_desc).addText(
             (t) => t.setValue(String(s.nativeAgent.operations[key].temperature)).onChange(async (v) => {
@@ -34084,10 +34633,12 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         async (v) => {
           s.vision.model = v;
           await this.plugin.saveSettings();
+          this.display();
         },
         false,
         modelControls.vision.check ? { tooltip: T.settings.visionCheck_tooltip, run: (model) => this.checkVisionModel(model) } : void 0
       );
+      addContextWindowControl(() => s.vision.model);
     }
     new import_obsidian5.Setting(containerEl).setName(T.settings.h3_graph).setHeading();
     new import_obsidian5.Setting(containerEl).setName(T.settings.graphDepth_name).setDesc(T.settings.graphDepth_desc).addText(
@@ -34824,7 +35375,7 @@ function is_non_nullish_primitive(v) {
   return typeof v === "string" || typeof v === "number" || typeof v === "boolean" || typeof v === "symbol" || typeof v === "bigint";
 }
 var sentinel = {};
-function inner_stringify(object, prefix, generateArrayPrefix, commaRoundTrip, allowEmptyArrays, strictNullHandling, skipNulls, encodeDotInKeys, encoder3, filter, sort, allowDots, serializeDate, format, formatter, encodeValuesOnly, charset, sideChannel) {
+function inner_stringify(object, prefix, generateArrayPrefix, commaRoundTrip, allowEmptyArrays, strictNullHandling, skipNulls, encodeDotInKeys, encoder, filter, sort, allowDots, serializeDate, format, formatter, encodeValuesOnly, charset, sideChannel) {
   let obj = object;
   let tmp_sc = sideChannel;
   let step = 0;
@@ -34857,19 +35408,19 @@ function inner_stringify(object, prefix, generateArrayPrefix, commaRoundTrip, al
   }
   if (obj === null) {
     if (strictNullHandling) {
-      return encoder3 && !encodeValuesOnly ? (
+      return encoder && !encodeValuesOnly ? (
         // @ts-expect-error
-        encoder3(prefix, defaults.encoder, charset, "key", format)
+        encoder(prefix, defaults.encoder, charset, "key", format)
       ) : prefix;
     }
     obj = "";
   }
   if (is_non_nullish_primitive(obj) || is_buffer(obj)) {
-    if (encoder3) {
-      const key_value = encodeValuesOnly ? prefix : encoder3(prefix, defaults.encoder, charset, "key", format);
+    if (encoder) {
+      const key_value = encodeValuesOnly ? prefix : encoder(prefix, defaults.encoder, charset, "key", format);
       return [
         formatter?.(key_value) + "=" + // @ts-expect-error
-        formatter?.(encoder3(obj, defaults.encoder, charset, "value", format))
+        formatter?.(encoder(obj, defaults.encoder, charset, "value", format))
       ];
     }
     return [formatter?.(prefix) + "=" + formatter?.(String(obj))];
@@ -34880,8 +35431,8 @@ function inner_stringify(object, prefix, generateArrayPrefix, commaRoundTrip, al
   }
   let obj_keys;
   if (generateArrayPrefix === "comma" && isArray(obj)) {
-    if (encodeValuesOnly && encoder3) {
-      obj = maybe_map(obj, encoder3);
+    if (encodeValuesOnly && encoder) {
+      obj = maybe_map(obj, encoder);
     }
     obj_keys = [{ value: obj.length > 0 ? obj.join(",") || null : void 0 }];
   } else if (isArray(filter)) {
@@ -34919,7 +35470,7 @@ function inner_stringify(object, prefix, generateArrayPrefix, commaRoundTrip, al
       skipNulls,
       encodeDotInKeys,
       // @ts-ignore
-      generateArrayPrefix === "comma" && encodeValuesOnly && isArray(obj) ? null : encoder3,
+      generateArrayPrefix === "comma" && encodeValuesOnly && isArray(obj) ? null : encoder,
       filter,
       sort,
       allowDots,
@@ -35080,8 +35631,8 @@ function concatBytes(buffers) {
 }
 var encodeUTF8_;
 function encodeUTF8(str2) {
-  let encoder3;
-  return (encodeUTF8_ ?? (encoder3 = new globalThis.TextEncoder(), encodeUTF8_ = encoder3.encode.bind(encoder3)))(str2);
+  let encoder;
+  return (encodeUTF8_ ?? (encoder = new globalThis.TextEncoder(), encodeUTF8_ = encoder.encode.bind(encoder)))(str2);
 }
 var decodeUTF8_;
 function decodeUTF8(bytes) {
@@ -41384,8 +41935,87 @@ OpenAI.Containers = Containers;
 OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
-// src/prompt-budget.ts
+// src/token-estimate.ts
 var MEDIA_TOKENS = 4096;
+var MESSAGE_OVERHEAD_TOKENS = 4;
+var CHARS_PER_TOKEN_CYRILLIC = 3.5;
+var CHARS_PER_TOKEN_WORD = 8.1;
+var CHARS_PER_TOKEN_SYMBOL = 2.1;
+var SYMBOL_RUN_TOKENS = 1.1;
+var WORD_CHARACTER = /[\p{L}\p{M}\s]/u;
+function classify(code, char) {
+  if (code < 128) {
+    if (code === 10) return "newline";
+    if (code >= 48 && code <= 57) return "digit";
+    if (code >= 65 && code <= 90 || code >= 97 && code <= 122 || code === 32 || code === 9 || code === 13) return "word";
+    return "symbol";
+  }
+  if (code >= 1024 && code <= 1327) return "cyrillic";
+  if (code >= 12352 && code <= 12543 || code >= 19968 && code <= 40959 || code >= 44032 && code <= 55215) return "cjk";
+  return WORD_CHARACTER.test(char) ? "word" : "symbol";
+}
+function measureText(text) {
+  let bytes = 0;
+  let cyrillic = 0;
+  let cjk = 0;
+  let word = 0;
+  let symbol = 0;
+  let runs = 0;
+  let previous;
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0;
+    bytes += code < 128 ? 1 : code < 2048 ? 2 : code < 65536 ? 3 : 4;
+    const cls = classify(code, char);
+    switch (cls) {
+      case "cyrillic":
+        cyrillic++;
+        break;
+      case "cjk":
+        cjk++;
+        break;
+      case "word":
+        word++;
+        break;
+      case "newline":
+        runs++;
+        break;
+      default:
+        symbol++;
+        if (cls !== previous) runs++;
+        break;
+    }
+    previous = cls;
+  }
+  return {
+    raw: cyrillic / CHARS_PER_TOKEN_CYRILLIC + cjk + word / CHARS_PER_TOKEN_WORD + symbol / CHARS_PER_TOKEN_SYMBOL + runs * SYMBOL_RUN_TOKENS,
+    bytes
+  };
+}
+function cappedTokens(measure) {
+  return Math.min(measure.raw, measure.bytes);
+}
+function estimateText(text, calibration = 1) {
+  return Math.ceil(cappedTokens(measureText(text)) * calibration);
+}
+function isRecord3(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+function rawValueTokens(value) {
+  if (typeof value === "string") return estimateText(value);
+  if (Array.isArray(value)) return value.reduce((sum, item) => sum + rawValueTokens(item), 0);
+  if (!isRecord3(value)) return 0;
+  if (value.type === "image_url") return MEDIA_TOKENS;
+  let total = 0;
+  for (const item of Object.values(value)) total += rawValueTokens(item);
+  return total;
+}
+function estimateMessages(messages, calibration = 1) {
+  let total = 0;
+  for (const message of messages) total += MESSAGE_OVERHEAD_TOKENS + rawValueTokens(message);
+  return Math.ceil(total * calibration);
+}
+
+// src/prompt-budget.ts
 var MAX_CONTEXT_REPACKS = 2;
 var PromptBudgetExceededError = class extends Error {
   constructor(budget, estimated, requiredIds) {
@@ -41399,37 +42029,11 @@ var PromptBudgetExceededError = class extends Error {
   estimated;
   requiredIds;
 };
-function isRecord3(value) {
+function isRecord4(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
-function sanitizeMedia(value) {
-  if (Array.isArray(value)) {
-    let mediaParts2 = 0;
-    const sanitized2 = value.map((item) => {
-      const result = sanitizeMedia(item);
-      mediaParts2 += result.mediaParts;
-      return result.value;
-    });
-    return { value: sanitized2, mediaParts: mediaParts2 };
-  }
-  if (!isRecord3(value)) return { value, mediaParts: 0 };
-  let mediaParts = value.type === "image_url" ? 1 : 0;
-  const sanitized = {};
-  for (const [key, item] of Object.entries(value)) {
-    const result = sanitizeMedia(item);
-    mediaParts += result.mediaParts;
-    if (key === "image_url" && isRecord3(result.value)) {
-      sanitized[key] = { ...result.value, url: "[media]" };
-    } else {
-      sanitized[key] = result.value;
-    }
-  }
-  return { value: sanitized, mediaParts };
-}
-function estimatePreparedMessages(messages) {
-  const sanitized = sanitizeMedia(messages);
-  const serialized = JSON.stringify(sanitized.value) ?? "";
-  return new TextEncoder().encode(serialized).byteLength + sanitized.mediaParts * MEDIA_TOKENS;
+function estimatePreparedMessages(messages, calibration) {
+  return estimateMessages(messages, calibration);
 }
 function compareCodePointIds(left, right) {
   const leftPoints = Array.from(left, (value) => value.codePointAt(0) ?? 0);
@@ -41456,14 +42060,14 @@ function packContextUnits(args) {
     args.fixedMessages
   );
   let messages = render2(selected);
-  let estimatedInputTokens = estimatePreparedMessages(messages);
+  let estimatedInputTokens = estimatePreparedMessages(messages, args.opts.tokenCalibration);
   if (estimatedInputTokens > args.inputBudgetTokens) {
     throw new PromptBudgetExceededError(args.inputBudgetTokens, estimatedInputTokens, []);
   }
   for (const unit of required) {
     selected.push(unit);
     messages = render2(selected);
-    estimatedInputTokens = estimatePreparedMessages(messages);
+    estimatedInputTokens = estimatePreparedMessages(messages, args.opts.tokenCalibration);
   }
   if (estimatedInputTokens > args.inputBudgetTokens) {
     throw new PromptBudgetExceededError(
@@ -41475,7 +42079,7 @@ function packContextUnits(args) {
   for (const unit of optional) {
     const candidate = [...selected, unit];
     const candidateMessages = render2(candidate);
-    const candidateEstimate = estimatePreparedMessages(candidateMessages);
+    const candidateEstimate = estimatePreparedMessages(candidateMessages, args.opts.tokenCalibration);
     if (candidateEstimate <= args.inputBudgetTokens) {
       selected.push(unit);
       messages = candidateMessages;
@@ -41497,7 +42101,7 @@ var INPUT_SEMANTICS = /\b(?:input|prompt|messages?)\b/i;
 var CONTEXT_SEMANTICS = /\bcontext(?:\s+(?:length|limit|size|window))?\b/i;
 var OUTPUT_SEMANTICS = /\b(?:completion|generated|output)\b/i;
 var NON_CONTEXT_ERROR_SEMANTICS = /\b(?:account|billing|credits?|deadline|quota|rate\s+limit|time(?:d)?\s*out|timeout)\b/i;
-var OVERFLOW_RELATION = /\b(?:exceeds?|exceeded|exceeding|overflow(?:ed)?|too\s+(?:long|large|many)|over\s+(?:the\s+)?(?:limit|maximum)|greater\s+than|more\s+than|beyond)\b|>/i;
+var OVERFLOW_RELATION = /\b(?:exceeds?|exceeded|exceeding|overflow(?:ed)?|too\s+(?:long|large|many)|over\s+(?:the\s+)?(?:limit|maximum)|greater\s+than|more\s+than|beyond)\b/i;
 var TOKEN_NUMBER = "(\\d[\\d,_]*)";
 var MAXIMUM_INPUT = "(?:maximum\\s+context(?:\\s+length)?|max(?:imum)?\\s+context|context\\s+(?:length|window)|maximum(?:\\s+number)?\\s+of\\s+tokens(?:\\s+allowed)?|maximum\\s+tokens(?:\\s+allowed)?)";
 function parseTokenCount(value) {
@@ -41548,7 +42152,8 @@ function classifyContextMessage(message) {
 function classifyContextError(error) {
   if (!error || typeof error !== "object") return null;
   const record = error;
-  const nested = isRecord3(record.error) ? record.error : void 0;
+  if (record.name === "StructuredValidationError") return null;
+  const nested = isRecord4(record.error) ? record.error : void 0;
   const codes = [record.code, record.type, nested?.code, nested?.type].filter((value) => typeof value === "string").map((value) => value.toLowerCase());
   const messages = [record.message, nested?.message].filter((value) => typeof value === "string" && value.length > 0);
   const details = messages.map(extractContextCounts).find((value) => value.promptTokens !== void 0 || value.maxContextTokens !== void 0) ?? {};
@@ -41585,6 +42190,10 @@ function createPromptBudgetEvent(metadata2) {
   if (metadata2.sourceChunks !== void 0) event.sourceChunks = metadata2.sourceChunks;
   if (metadata2.reductionDepth !== void 0) event.reductionDepth = metadata2.reductionDepth;
   if (metadata2.retryReason !== void 0) event.retryReason = metadata2.retryReason;
+  if (metadata2.contextWindow !== void 0) event.contextWindow = metadata2.contextWindow;
+  if (metadata2.inputSource !== void 0) event.inputSource = metadata2.inputSource;
+  if (metadata2.outputSource !== void 0) event.outputSource = metadata2.outputSource;
+  if (metadata2.calibration !== void 0) event.calibration = metadata2.calibration;
   return event;
 }
 var ContextRepackSuppressedError = class extends Error {
@@ -41596,7 +42205,7 @@ var ContextRepackSuppressedError = class extends Error {
   original;
 };
 function resultInputTokens(result) {
-  if (!isRecord3(result)) return void 0;
+  if (!isRecord4(result)) return void 0;
   return typeof result.inputTokens === "number" ? result.inputTokens : void 0;
 }
 async function runWithContextRepack(args) {
@@ -41632,6 +42241,7 @@ async function runWithContextRepack(args) {
     const error = outcome.error;
     const repackSuppressed = error instanceof ContextRepackSuppressedError;
     const details = repackSuppressed ? null : classifyContextError(error);
+    if (details !== null) args.onContextError?.(details);
     const preflight = error instanceof PromptBudgetExceededError;
     const additionalRetryReason = !repackSuppressed && !preflight && details === null ? args.classifyRepackError?.(error) : void 0;
     const retryReason = preflight ? "preflight_budget_exceeded" : details !== null ? "provider_context_error" : additionalRetryReason;
@@ -42557,7 +43167,7 @@ async function* runWithLiveEvents(work, callerSignal) {
 function buildChatParams(model, messages, opts, stream = false) {
   const msgs = prepareChatMessages(messages, opts);
   if (opts.inputBudgetTokens !== void 0) {
-    const estimated = estimatePreparedMessages(msgs);
+    const estimated = estimatePreparedMessages(msgs, opts.tokenCalibration);
     if (estimated > opts.inputBudgetTokens) {
       throw new PromptBudgetExceededError(opts.inputBudgetTokens, estimated, []);
     }
@@ -43129,7 +43739,7 @@ function parseWikiSources(content) {
 // src/view.ts
 var AI_WIKI_VIEW_TYPE = "ai-wiki-view";
 function isTelemetryOnlyRunEvent(event) {
-  return event.kind === "run_config" || event.kind === "wipe_manifest_chunk" || event.kind === "wipe_complete" || event.kind === "index_effect" || event.kind === "llm_request_fingerprint" || event.kind === "native_transport_correlation" || event.kind === "native_http_response" || event.kind === "native_transport_trace";
+  return event.kind === "run_config" || event.kind === "wipe_manifest_chunk" || event.kind === "wipe_complete" || event.kind === "index_effect" || event.kind === "llm_request_fingerprint" || event.kind === "native_transport_correlation" || event.kind === "native_http_response" || event.kind === "native_transport_trace" || event.kind === "budget_resolved" || event.kind === "context_probe" || event.kind === "context_window_conflict" || event.kind === "calibration_sample" || event.kind === "evidence_split";
 }
 function formatGraphStatsLines(ev, agentLogEnabled) {
   if (!agentLogEnabled) {
@@ -45171,14 +45781,13 @@ function applyPagePatch(currentPage, patch, replaceAuthorities) {
 }
 
 // src/markdown-chunks.ts
-var encoder = new TextEncoder();
 function splitSourceLines(source) {
   return source.length === 0 ? [] : source.split("\n");
 }
 function lineForSyntax(raw) {
   return raw.endsWith("\r") ? raw.slice(0, -1) : raw;
 }
-function parseOpeningFence(raw, openingByteLength) {
+function parseOpeningFence(raw, openingMeasure) {
   const match = /^( {0,3})(`{3,}|~{3,})(.*)$/.exec(lineForSyntax(raw));
   if (!match) return null;
   const delimiter = match[2];
@@ -45188,9 +45797,9 @@ function parseOpeningFence(raw, openingByteLength) {
     marker,
     length: delimiter.length,
     openingLine: raw,
-    openingByteLength,
+    openingMeasure,
     closingLine,
-    closingByteLength: estimateTokens(closingLine)
+    closingMeasure: measureText(closingLine)
   };
 }
 function closesFence2(raw, fence) {
@@ -45208,13 +45817,13 @@ function scanLines(lines) {
   const headings = [];
   let activeFence = null;
   for (const raw of lines) {
-    const byteLength = estimateTokens(raw);
+    const measure = measureText(raw);
     const fenceBefore = activeFence;
     let heading;
     if (activeFence) {
       if (closesFence2(raw, activeFence)) activeFence = null;
     } else {
-      const openingFence5 = parseOpeningFence(raw, byteLength);
+      const openingFence5 = parseOpeningFence(raw, measure);
       if (openingFence5) {
         activeFence = openingFence5;
       } else {
@@ -45230,7 +45839,7 @@ function scanLines(lines) {
     }
     scanned.push({
       raw,
-      byteLength,
+      measure,
       heading,
       headingPath: headings.map((entry) => entry.heading),
       fenceBefore,
@@ -45242,21 +45851,34 @@ function scanLines(lines) {
 function rawRangeMarkdown(lines, startIndex, endIndex) {
   return lines.slice(startIndex, endIndex + 1).map((line) => line.raw).join("\n");
 }
-function buildLineBytePrefix(lines) {
-  const prefix = [0];
-  for (const line of lines) prefix.push(prefix[prefix.length - 1] + line.byteLength);
-  return prefix;
+function buildLinePrefixes(lines) {
+  const prefixes = { raw: [0], bytes: [0] };
+  for (const line of lines) {
+    prefixes.raw.push(prefixes.raw[prefixes.raw.length - 1] + line.measure.raw);
+    prefixes.bytes.push(prefixes.bytes[prefixes.bytes.length - 1] + line.measure.bytes);
+  }
+  return prefixes;
 }
-function rawRangeEstimatedTokens(bytePrefix, startIndex, endIndex) {
-  return bytePrefix[endIndex + 1] - bytePrefix[startIndex] + endIndex - startIndex;
+function rawRangeMeasure(prefixes, startIndex, endIndex) {
+  const breaks = endIndex - startIndex;
+  return {
+    raw: prefixes.raw[endIndex + 1] - prefixes.raw[startIndex] + breaks * SYMBOL_RUN_TOKENS,
+    bytes: prefixes.bytes[endIndex + 1] - prefixes.bytes[startIndex] + breaks
+  };
 }
-function renderedRangeEstimatedTokens(lines, bytePrefix, range) {
-  let tokens = rawRangeEstimatedTokens(bytePrefix, range.startIndex, range.endIndex);
+function renderedRangeEstimatedTokens(lines, prefixes, range) {
+  const measure = rawRangeMeasure(prefixes, range.startIndex, range.endIndex);
   const openingFence5 = lines[range.startIndex].fenceBefore;
   const closingFence = lines[range.endIndex].fenceAfter;
-  if (openingFence5) tokens += openingFence5.openingByteLength + 1;
-  if (closingFence) tokens += closingFence.closingByteLength + 1;
-  return tokens;
+  if (openingFence5) {
+    measure.raw += openingFence5.openingMeasure.raw + SYMBOL_RUN_TOKENS;
+    measure.bytes += openingFence5.openingMeasure.bytes + 1;
+  }
+  if (closingFence) {
+    measure.raw += closingFence.closingMeasure.raw + SYMBOL_RUN_TOKENS;
+    measure.bytes += closingFence.closingMeasure.bytes + 1;
+  }
+  return Math.ceil(cappedTokens(measure));
 }
 function renderRangeMarkdown(lines, range) {
   let markdown = rawRangeMarkdown(lines, range.startIndex, range.endIndex);
@@ -45267,9 +45889,6 @@ ${markdown}`;
   if (closingFence) markdown = `${markdown}
 ${closingFence.closingLine}`;
   return markdown;
-}
-function estimateTokens(markdown) {
-  return encoder.encode(markdown).byteLength;
 }
 function buildSections(lines) {
   if (lines.length === 0) return [];
@@ -45350,7 +45969,7 @@ function splitParagraphRanges(lines, section) {
   }
   return ranges;
 }
-function splitLineWindows(lines, bytePrefix, range, options) {
+function splitLineWindows(lines, prefixes, range, options) {
   const windows = [];
   let startIndex = range.startIndex;
   while (startIndex <= range.endIndex) {
@@ -45359,7 +45978,7 @@ function splitLineWindows(lines, bytePrefix, range, options) {
       endIndex: startIndex,
       headingPath: range.headingPath
     };
-    const minimumTokens = renderedRangeEstimatedTokens(lines, bytePrefix, minimumRange);
+    const minimumTokens = renderedRangeEstimatedTokens(lines, prefixes, minimumRange);
     if (minimumTokens > options.maxEstimatedTokens) {
       throw new RangeError(
         `Source range ${startIndex + 1}-${startIndex + 1} requires ${minimumTokens} estimated tokens but budget is ${options.maxEstimatedTokens}`
@@ -45375,7 +45994,7 @@ function splitLineWindows(lines, bytePrefix, range, options) {
         endIndex: candidate,
         headingPath: range.headingPath
       };
-      if (renderedRangeEstimatedTokens(lines, bytePrefix, candidateRange) <= options.maxEstimatedTokens) {
+      if (renderedRangeEstimatedTokens(lines, prefixes, candidateRange) <= options.maxEstimatedTokens) {
         endIndex = candidate;
         low = candidate + 1;
       } else {
@@ -45397,7 +46016,7 @@ function splitLineWindows(lines, bytePrefix, range, options) {
   }
   return windows;
 }
-function coalesceBlankOnlyRanges(lines, bytePrefix, inputRanges, budget) {
+function coalesceBlankOnlyRanges(lines, prefixes, inputRanges, budget) {
   const ranges = inputRanges.map((range) => ({ ...range, headingPath: [...range.headingPath] }));
   let index = 0;
   while (index < ranges.length) {
@@ -45419,7 +46038,7 @@ function coalesceBlankOnlyRanges(lines, bytePrefix, inputRanges, budget) {
         endIndex: Math.max(previous.endIndex, blankEnd),
         headingPath: [...previous.headingPath]
       };
-      if (renderedRangeEstimatedTokens(lines, bytePrefix, merged) <= budget) {
+      if (renderedRangeEstimatedTokens(lines, prefixes, merged) <= budget) {
         ranges.splice(index - 1, runEnd - index + 2, merged);
         index = Math.max(0, index - 1);
         continue;
@@ -45432,7 +46051,7 @@ function coalesceBlankOnlyRanges(lines, bytePrefix, inputRanges, budget) {
         endIndex: next.endIndex,
         headingPath: [...next.headingPath]
       };
-      if (renderedRangeEstimatedTokens(lines, bytePrefix, merged) <= budget) {
+      if (renderedRangeEstimatedTokens(lines, prefixes, merged) <= budget) {
         ranges.splice(index, runEnd - index + 2, merged);
         continue;
       }
@@ -45456,14 +46075,14 @@ function chunkMarkdownSource(source, options) {
   const sourceLines2 = splitSourceLines(source);
   if (sourceLines2.length === 0) return [];
   const lines = scanLines(sourceLines2);
-  const bytePrefix = buildLineBytePrefix(lines);
+  const prefixes = buildLinePrefixes(lines);
   let ranges;
   const fullRange = {
     startIndex: 0,
     endIndex: lines.length - 1,
     headingPath: [...lines[0].headingPath]
   };
-  if (renderedRangeEstimatedTokens(lines, bytePrefix, fullRange) <= options.maxEstimatedTokens) {
+  if (renderedRangeEstimatedTokens(lines, prefixes, fullRange) <= options.maxEstimatedTokens) {
     ranges = [fullRange];
   } else {
     ranges = [];
@@ -45473,24 +46092,24 @@ function chunkMarkdownSource(source, options) {
         endIndex: section.endLine - 1,
         headingPath: [...section.headingPath]
       };
-      if (renderedRangeEstimatedTokens(lines, bytePrefix, sectionRange) <= options.maxEstimatedTokens) {
+      if (renderedRangeEstimatedTokens(lines, prefixes, sectionRange) <= options.maxEstimatedTokens) {
         ranges.push(sectionRange);
         continue;
       }
       for (const paragraph of splitParagraphRanges(lines, section)) {
-        if (renderedRangeEstimatedTokens(lines, bytePrefix, paragraph) <= options.maxEstimatedTokens) {
+        if (renderedRangeEstimatedTokens(lines, prefixes, paragraph) <= options.maxEstimatedTokens) {
           ranges.push(paragraph);
         } else {
-          ranges.push(...splitLineWindows(lines, bytePrefix, paragraph, options));
+          ranges.push(...splitLineWindows(lines, prefixes, paragraph, options));
         }
       }
     }
   }
-  ranges = coalesceBlankOnlyRanges(lines, bytePrefix, ranges, options.maxEstimatedTokens);
+  ranges = coalesceBlankOnlyRanges(lines, prefixes, ranges, options.maxEstimatedTokens);
   return ranges.map((range, ordinal) => {
     const rawMarkdown = rawRangeMarkdown(lines, range.startIndex, range.endIndex);
     const markdown = renderRangeMarkdown(lines, range);
-    const requiredTokens = renderedRangeEstimatedTokens(lines, bytePrefix, range);
+    const requiredTokens = renderedRangeEstimatedTokens(lines, prefixes, range);
     if (requiredTokens > options.maxEstimatedTokens) {
       throw new RangeError(
         `Source range ${range.startIndex + 1}-${range.endIndex + 1} requires ${requiredTokens} estimated tokens but budget is ${options.maxEstimatedTokens}`
@@ -45677,7 +46296,6 @@ function makeUnit(path5, markdown, heading, sourceOrdinal, score, required, dupl
     text: markdown,
     required,
     priority: score,
-    estimatedTokens: new TextEncoder().encode(markdown).byteLength,
     pageId: pageId(path5),
     path: path5,
     heading,
@@ -46012,7 +46630,6 @@ function consolidateSmallEntityBundles(sourceBundles, maxEntities, createPathEnt
 }
 function batchEntityContexts(bundles, inputBudgetTokens, renderBatch, opts) {
   validateBudget(inputBudgetTokens);
-  void opts;
   const sorted = [...bundles].sort((a, b) => compareCodePoints2(a.entityKey, b.entityKey));
   const duplicateKeys = sorted.filter((bundle, index) => index > 0 && bundle.entityKey === sorted[index - 1].entityKey).map((bundle) => bundle.entityKey);
   if (duplicateKeys.length > 0) throw new DuplicateEntityContextError([...new Set(duplicateKeys)]);
@@ -46030,7 +46647,10 @@ function batchEntityContexts(bundles, inputBudgetTokens, renderBatch, opts) {
     replaceAuthorities: bundle.replaceAuthorities.map((authority) => ({ ...authority })),
     ...bundle.consolidatedEntityKeys === void 0 ? {} : { consolidatedEntityKeys: [...bundle.consolidatedEntityKeys] }
   });
-  const estimateBatch = (items) => estimatePreparedMessages(renderBatch(items.map(cloneBundle2)));
+  const estimateBatch = (items) => estimatePreparedMessages(
+    renderBatch(items.map(cloneBundle2)),
+    opts.tokenCalibration
+  );
   const compressSingletonEvidence = (bundle) => {
     const compressed = cloneBundle2(bundle);
     if (estimateBatch([compressed]) <= inputBudgetTokens) return compressed;
@@ -52758,7 +53378,7 @@ function compactRepairPrompt(profile, lastError) {
 
 ${profile.repairInstruction}` : feedback;
 }
-function repairMessages(baseMessages, profile, fullText, lastError, inputBudgetTokens) {
+function repairMessages(baseMessages, profile, fullText, lastError, inputBudgetTokens, calibration) {
   if (!fullText.trim()) {
     return [
       ...baseMessages,
@@ -52770,14 +53390,14 @@ function repairMessages(baseMessages, profile, fullText, lastError, inputBudgetT
     { role: "assistant", content: fullText },
     { role: "user", content: repairPrompt(profile, fullText, lastError) }
   ];
-  const fullRepairEstimate = estimatePreparedMessages(fullRepair);
+  const fullRepairEstimate = estimatePreparedMessages(fullRepair, calibration);
   const compactThreshold = profile.compactRepairThresholdTokens;
   if (compactThreshold !== void 0 && fullRepairEstimate >= compactThreshold) {
     const compactRepair2 = [
       ...baseMessages,
       { role: "user", content: compactRepairPrompt(profile, lastError) }
     ];
-    if (inputBudgetTokens === void 0 || estimatePreparedMessages(compactRepair2) <= inputBudgetTokens) {
+    if (inputBudgetTokens === void 0 || estimatePreparedMessages(compactRepair2, calibration) <= inputBudgetTokens) {
       return compactRepair2;
     }
   }
@@ -52788,7 +53408,7 @@ function repairMessages(baseMessages, profile, fullText, lastError, inputBudgetT
     ...baseMessages,
     { role: "user", content: compactRepairPrompt(profile, lastError) }
   ];
-  if (estimatePreparedMessages(compactRepair) <= inputBudgetTokens) return compactRepair;
+  if (estimatePreparedMessages(compactRepair, calibration) <= inputBudgetTokens) return compactRepair;
   return fullRepair;
 }
 function outputLimitRepairMessages(baseMessages, profile, lastError) {
@@ -52818,6 +53438,15 @@ function outputRetryOptions(opts, outputTokens) {
   const observed = Number.isFinite(outputTokens) && outputTokens > 0 ? outputTokens : current;
   const next = Math.min(ceiling, Math.max(current, Math.ceil(observed * 1.5)));
   return next === current ? opts : { ...opts, maxTokens: next };
+}
+function withOutputCeiling(opts, messages) {
+  const contextWindow = opts.contextWindowTokens;
+  if (contextWindow === void 0) return opts;
+  const estimatedInput = estimatePreparedMessages(
+    prepareChatMessages(messages, opts),
+    opts.tokenCalibration
+  );
+  return { ...opts, outputRetryBudgetTokens: outputCeiling(contextWindow, estimatedInput) };
 }
 function optsWithRepairInputBudget(opts) {
   const repairBudget = opts.repairInputBudgetTokens;
@@ -52912,19 +53541,27 @@ async function streamOnce(llm, model, messages, opts, signal, onEvent, lifecycle
       callSite
     );
   } finally {
+    const estimatedInputTokens = estimatePreparedMessages(
+      params.messages,
+      opts.tokenCalibration
+    );
+    opts.onUsageObserved?.({
+      estimated: estimatedInputTokens,
+      actual: inputTokens,
+      calibration: opts.tokenCalibration ?? 1
+    });
     if (!llm.emitsPromptBudget) onEvent(createPromptBudgetEvent({
       requestId,
       callSite,
       configuredInputBudget: opts.inputBudgetTokens ?? 16384,
       effectiveInputBudget: opts.inputBudgetTokens ?? 16384,
-      estimatedInputTokens: estimatePreparedMessages(
-        params.messages
-      ),
+      estimatedInputTokens,
       actualInputTokens: inputTokens,
       outputBudget: opts.maxTokens,
       compressionProfile: opts.semanticCompression?.profile ?? "balanced",
       contextUnits: messages.length,
-      retryReason: classifyContextError(requestError) === null ? void 0 : "provider_context_error"
+      retryReason: classifyContextError(requestError) === null ? void 0 : "provider_context_error",
+      ...opts.budgetTelemetry ?? {}
     }));
   }
 }
@@ -52961,29 +53598,39 @@ async function nonStreamOnce(llm, model, messages, opts, signal, onEvent, lifecy
       configuredInputBudget: opts.inputBudgetTokens ?? 16384,
       effectiveInputBudget: opts.inputBudgetTokens ?? 16384,
       estimatedInputTokens: estimatePreparedMessages(
-        params.messages
+        params.messages,
+        opts.tokenCalibration
       ),
       outputBudget: opts.maxTokens,
       compressionProfile: opts.semanticCompression?.profile ?? "balanced",
       contextUnits: messages.length,
-      retryReason: classifyContextError(error) === null ? void 0 : "provider_context_error"
+      retryReason: classifyContextError(error) === null ? void 0 : "provider_context_error",
+      ...opts.budgetTelemetry ?? {}
     }));
     throw error;
   }
   const emitBudget = (actualInputTokens) => {
+    const estimatedInputTokens = estimatePreparedMessages(
+      params.messages,
+      opts.tokenCalibration
+    );
+    opts.onUsageObserved?.({
+      estimated: estimatedInputTokens,
+      actual: actualInputTokens,
+      calibration: opts.tokenCalibration ?? 1
+    });
     if (llm.emitsPromptBudget) return;
     onEvent(createPromptBudgetEvent({
       requestId,
       callSite,
       configuredInputBudget: opts.inputBudgetTokens ?? 16384,
       effectiveInputBudget: opts.inputBudgetTokens ?? 16384,
-      estimatedInputTokens: estimatePreparedMessages(
-        params.messages
-      ),
+      estimatedInputTokens,
       actualInputTokens,
       outputBudget: opts.maxTokens,
       compressionProfile: opts.semanticCompression?.profile ?? "balanced",
-      contextUnits: messages.length
+      contextUnits: messages.length,
+      ...opts.budgetTelemetry ?? {}
     }));
   };
   if (response && typeof response === "object" && Symbol.asyncIterator in response) {
@@ -53100,7 +53747,22 @@ async function runStructuredWithRetry(args) {
         throw err;
       }
       if (attempt > 0) onEvent({ kind: "rule_fired", ruleId: "parseWithRetry", count: 1 });
-      const call = await callWithFormatFallback({ ...args, opts: currentOpts }, messages, mode, attempt, lifecycle);
+      currentOpts = withOutputCeiling(currentOpts, messages);
+      let call;
+      try {
+        call = await callWithFormatFallback({ ...args, opts: currentOpts }, messages, mode, attempt, lifecycle);
+      } catch (error) {
+        if (!(error instanceof StructuredOutputTruncatedError) || attempt === retryLimit) throw error;
+        const grown = outputRetryOptions(optsWithRepairInputBudget(currentOpts), currentOpts.maxTokens ?? 0);
+        if (grown.maxTokens === currentOpts.maxTokens) throw error;
+        lastError = error;
+        lastStructuralErrorType = "output_limit";
+        emitStructuralError(onEvent, callSite, "output_limit", attempt, null, error.message);
+        structuralErrorCounter.record(null, attempt);
+        lifecycle.close("retrying");
+        currentOpts = grown;
+        continue;
+      }
       signal.throwIfAborted();
       mode = call.mode;
       const { fullText, outputTokens, inputTokens, statsEvent } = call.result;
@@ -53154,7 +53816,7 @@ async function runStructuredWithRetry(args) {
           );
         }
         lifecycle.close("retrying");
-        messages = next ? messages : repairMessages(baseMessages, profile, fullText, lastError, repairOpts.inputBudgetTokens);
+        messages = next ? messages : repairMessages(baseMessages, profile, fullText, lastError, repairOpts.inputBudgetTokens, repairOpts.tokenCalibration);
         if (!next) currentOpts = optsWithRepairInputBudget(currentOpts);
         continue;
       }
@@ -53198,7 +53860,7 @@ async function runStructuredWithRetry(args) {
           messages = outputLimitRepairMessages(baseMessages, profile, lastError);
           currentOpts = outputRetryOptions(optsWithRepairInputBudget(currentOpts), outputTokens);
         } else {
-          messages = repairMessages(baseMessages, profile, fullText, lastError, repairOpts.inputBudgetTokens);
+          messages = repairMessages(baseMessages, profile, fullText, lastError, repairOpts.inputBudgetTokens, repairOpts.tokenCalibration);
           currentOpts = optsWithRepairInputBudget(currentOpts);
         }
       }
@@ -54150,41 +54812,95 @@ function unique(values, key) {
     return true;
   });
 }
-function estimateBootstrapPayload(value) {
-  return estimatePreparedMessages([{ role: "user", content: JSON.stringify(value) }]);
+function estimateBootstrapPayload(value, calibration) {
+  return estimatePreparedMessages([{ role: "user", content: JSON.stringify(value) }], calibration);
 }
-function boundBootstrapPayload(value, budget) {
-  const clone = {
-    candidates: value.candidates.map((candidate) => ({
-      entityKey: candidate.entityKey,
-      packetIds: [...candidate.packetIds],
-      facts: [...candidate.facts],
-      exactSource: candidate.exactSource.map((source) => ({ ...source }))
-    })),
+var MAX_DOMAIN_THEMES = 24;
+var MAX_LANGUAGE_EVIDENCE = 12;
+var MAX_OVERHEAD_ITEM_TOKENS = 48;
+function boundOverheadItem(value) {
+  if (estimateText(JSON.stringify(value)) <= MAX_OVERHEAD_ITEM_TOKENS) return value;
+  const characters = [...value];
+  let low = 0;
+  let high = characters.length;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (estimateText(JSON.stringify(characters.slice(0, middle).join(""))) <= MAX_OVERHEAD_ITEM_TOKENS) {
+      low = middle;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return characters.slice(0, low).join("");
+}
+function worstCaseBootstrapOverheadTokens(calibration) {
+  const items = MAX_DOMAIN_THEMES + MAX_LANGUAGE_EVIDENCE;
+  const envelope = estimateBootstrapPayload(
+    { candidates: [], domainThemes: [], languageEvidence: [] },
+    calibration
+  );
+  return envelope + Math.ceil(items * (MAX_OVERHEAD_ITEM_TOKENS + 1) * (calibration ?? 1));
+}
+function emptyBootstrapGroup(value) {
+  return {
+    candidates: [],
     domainThemes: [...value.domainThemes],
     languageEvidence: [...value.languageEvidence]
   };
-  if (estimateBootstrapPayload(clone) <= budget) return clone;
-  while (clone.languageEvidence.length > 0 && estimateBootstrapPayload(clone) > budget) {
-    clone.languageEvidence.pop();
+}
+function subdivideCandidate(candidate, parts) {
+  const total = Math.max(candidate.facts.length, candidate.exactSource.length, 1);
+  const size = Math.max(1, Math.ceil(total / Math.max(1, parts)));
+  const result = [];
+  for (let offset = 0; offset < total; offset += size) {
+    result.push({
+      entityKey: candidate.entityKey,
+      packetIds: [...candidate.packetIds],
+      facts: candidate.facts.slice(offset, offset + size),
+      exactSource: candidate.exactSource.slice(offset, offset + size).map((range) => ({ ...range }))
+    });
   }
-  while (clone.domainThemes.length > 0 && estimateBootstrapPayload(clone) > budget) {
-    clone.domainThemes.pop();
-  }
-  for (const candidate of clone.candidates) {
-    while (candidate.exactSource.length > 1 && estimateBootstrapPayload(clone) > budget) {
-      candidate.exactSource.pop();
+  return result.filter((part) => part.facts.length > 0 || part.exactSource.length > 0);
+}
+function splitBootstrapPayload(value, budget, calibration) {
+  const estimate = (group) => estimateBootstrapPayload(group, calibration);
+  const whole = estimate(value);
+  if (whole <= budget) return { groups: [value], minimumGroupTokens: whole, subdivided: 0 };
+  let subdivided = 0;
+  const queue = [];
+  const pending = [...value.candidates];
+  while (pending.length > 0) {
+    const candidate = pending.shift();
+    const probe = { ...emptyBootstrapGroup(value), candidates: [candidate] };
+    if (estimate(probe) <= budget) {
+      queue.push(candidate);
+      continue;
     }
-  }
-  for (const candidate of clone.candidates) {
-    while (candidate.facts.length > 1 && estimateBootstrapPayload(clone) > budget) {
-      candidate.facts.pop();
+    const units = Math.max(candidate.facts.length, candidate.exactSource.length);
+    if (units <= 1) {
+      queue.push(candidate);
+      continue;
     }
+    subdivided++;
+    pending.unshift(...subdivideCandidate(candidate, 2));
   }
-  while (clone.candidates.length > 1 && estimateBootstrapPayload(clone) > budget) {
-    clone.candidates.pop();
+  const groups = [];
+  let current = emptyBootstrapGroup(value);
+  for (const candidate of queue) {
+    const attempt = { ...current, candidates: [...current.candidates, candidate] };
+    if (current.candidates.length > 0 && estimate(attempt) > budget) {
+      groups.push(current);
+      current = { ...emptyBootstrapGroup(value), candidates: [candidate] };
+      continue;
+    }
+    current = attempt;
   }
-  return clone;
+  groups.push(current);
+  return {
+    groups,
+    minimumGroupTokens: Math.max(...groups.map((group) => estimate(group))),
+    subdivided
+  };
 }
 function rangeKey(range) {
   return `${range.startLine}:${range.endLine}`;
@@ -54528,12 +55244,12 @@ function mapperRequestDetails(preparedSourceLines, chunk, domainId, mode, policy
   return {
     hash: JSON.stringify(prepared),
     estimatedInputTokens: estimateStructuredRequest(messages, mapperOpts, policy.mapperRetries ?? 1),
-    rawBytes: new TextEncoder().encode(original).byteLength,
+    rawTokens: estimateText(original),
     lineCount: chunk.endLine - chunk.startLine + 1
   };
 }
 function estimateLlmMessages(messages, opts) {
-  return estimatePreparedMessages(prepareChatMessages(messages, opts));
+  return estimatePreparedMessages(prepareChatMessages(messages, opts), opts.tokenCalibration);
 }
 function boundedStructuredRepairInstruction(error) {
   const unboundedDetail = error instanceof external_exports.ZodError ? error.issues.slice(0, 12).map((issue) => {
@@ -54663,7 +55379,7 @@ function assertReducerOutputFits(units, depth, outputBudget) {
   }
 }
 function chunkSourceForEvidence(source, domainId, policy, opts = {}, configuredEntityTypes) {
-  ensurePolicy(policy);
+  ensurePolicy(policy, opts);
   if (source.length === 0) return [];
   const normalizedEntityTypes = configuredEntityTypes ?? [];
   const mode = {
@@ -54685,7 +55401,10 @@ function planSourceChunksForEvidence(source, preparedSourceLines, createChunk, d
   if (initialRequestBudget <= 0) {
     throw new EvidenceCoverageError("Mapper prompt and repair reserve exceed the input budget");
   }
-  const planned = findLargestFeasibleBudget(1, initialRequestBudget, (chunkBudget) => {
+  const rawChunkBudget = Math.max(1, Math.floor(
+    Math.min(initialRequestBudget, policy.chunkBudgetTokens ?? initialRequestBudget) / (policy.calibration ?? 1)
+  ));
+  const planned = findLargestFeasibleBudget(1, rawChunkBudget, (chunkBudget) => {
     let chunks;
     try {
       chunks = chunkMarkdownSource(source, {
@@ -54696,7 +55415,7 @@ function planSourceChunksForEvidence(source, preparedSourceLines, createChunk, d
       return { kind: "too-small" };
     }
     const mapperOpts = taskLlmOptions(opts, policy, policy.inputBudgetTokens);
-    chunks = packAdjacentMapperChunks(chunks, createChunk, (chunk) => mapperEstimateFits(
+    chunks = packAdjacentMapperChunks(chunks, createChunk, (chunk) => estimateText(chunk.markdown) <= rawChunkBudget && mapperEstimateFits(
       estimateStructuredRequest(
         messagesForMapper(ingest_evidence_map_default, chunk, domainId, mode, preparedSourceLines),
         mapperOpts,
@@ -54722,12 +55441,23 @@ REDUCE_EVIDENCE` },
     { role: "user", content: `REDUCE_INPUT ${JSON.stringify(units)}` }
   ];
 }
-function ensurePolicy(policy) {
+function ensurePolicy(policy, opts) {
   if (!Number.isSafeInteger(policy.inputBudgetTokens) || policy.inputBudgetTokens <= 0) {
     throw new EvidenceCoverageError("Evidence input budget must be a positive safe integer");
   }
   if (policy.outputBudgetTokens !== void 0 && (!Number.isSafeInteger(policy.outputBudgetTokens) || policy.outputBudgetTokens <= 0)) {
     throw new EvidenceCoverageError("Evidence output budget must be a positive safe integer");
+  }
+  if (policy.chunkBudgetTokens !== void 0 && (!Number.isSafeInteger(policy.chunkBudgetTokens) || policy.chunkBudgetTokens <= 0)) {
+    throw new EvidenceCoverageError("Evidence chunk budget must be a positive safe integer");
+  }
+  if (policy.calibration !== void 0 && (!Number.isFinite(policy.calibration) || policy.calibration <= 0)) {
+    throw new EvidenceCoverageError("Evidence token calibration must be a positive finite number");
+  }
+  if (opts !== void 0 && (policy.calibration ?? 1) !== (opts.tokenCalibration ?? 1)) {
+    throw new EvidenceCoverageError(
+      `Evidence policy calibration ${policy.calibration ?? 1} does not match the call calibration ${opts.tokenCalibration ?? 1}`
+    );
   }
 }
 function mapperEstimateFits(estimate, budget) {
@@ -54965,7 +55695,7 @@ function rechunkMapperSourceForRetry(source, preparedSourceLines, createChunk, d
         policy,
         runtime.opts ?? {}
       );
-      return details.rawBytes <= maximumRawBudget && mapperEstimateFits(details.estimatedInputTokens, effectiveInputBudget);
+      return details.rawTokens <= maximumRawBudget && mapperEstimateFits(details.estimatedInputTokens, effectiveInputBudget);
     });
     const largest = Math.max(...chunks.map((chunk) => estimateStructuredRequest(
       messagesForMapper(ingest_evidence_map_default, chunk, domainId, mode, preparedSourceLines),
@@ -54987,6 +55717,7 @@ async function mapChunksWithContextRepack(source, domainId, initialChunks, polic
   let failedMapper;
   const semanticSplitLineage = [];
   return runWithContextRepack({
+    onContextError: runtime.opts?.onContextError,
     requestBudgetsEmittedByExecute: true,
     callSite: mapCallSite,
     configuredInputBudget: configuredBudget,
@@ -55008,7 +55739,7 @@ async function mapChunksWithContextRepack(source, domainId, initialChunks, polic
           mode
         );
       } else {
-        const forcedRawBudget = failedMapper.rawBytes - 1;
+        const forcedRawBudget = failedMapper.rawTokens - 1;
         if (forcedRawBudget <= 0) {
           throw new EvidenceCoverageError(`Mapper chunk ${failedMapper.id} cannot be split into a smaller original-source range`);
         }
@@ -55242,6 +55973,7 @@ async function reduceBatch(units, totalChunks, depth, reducerBudget, policy, run
   const retries = policy.reducerRetries ?? 1;
   let failedReducer;
   return runWithContextRepack({
+    onContextError: runtime.opts?.onContextError,
     requestBudgetsEmittedByExecute: true,
     callSite: "ingest.evidence-reduce",
     configuredInputBudget: configuredBudget,
@@ -55344,7 +56076,7 @@ async function reduceUntilBounded(units, totalChunks, depth, policy, runtime) {
   return reduceUntilBounded(reduced, totalChunks, depth + 1, policy, runtime);
 }
 async function prepareSourceEvidenceInternal(source, domainId, policy, runtime, mode) {
-  ensurePolicy(policy);
+  ensurePolicy(policy, runtime.opts);
   ensureOutputBudget(policy, runtime.opts);
   const configuredTypes = mode.rejectEntityTypes ? [] : mode.allowedEntityTypes === void 0 ? void 0 : [...mode.allowedEntityTypes];
   const chunks = chunkSourceForEvidence(
@@ -55413,11 +56145,11 @@ async function prepareBootstrapEvidenceBundle(source, provisionalDomainId, sourc
     facts: [...facts],
     exactSource: exactSource.map((range) => ({ ...range }))
   }));
-  const domainThemes = unique(evidence.flatMap((item) => item.facts), (fact) => fact);
+  const domainThemes = unique(evidence.flatMap((item) => item.facts), (fact) => fact).slice(0, MAX_DOMAIN_THEMES).map(boundOverheadItem);
   const languageEvidence = unique(
     evidence.flatMap((item) => item.exactSource.map((range) => range.text)),
     (text) => text
-  );
+  ).slice(0, MAX_LANGUAGE_EVIDENCE).map(boundOverheadItem);
   const payloadBudget = Math.min(
     policy.inputBudgetTokens,
     policy.bootstrapPayloadBudgetTokens ?? policy.inputBudgetTokens
@@ -55425,15 +56157,16 @@ async function prepareBootstrapEvidenceBundle(source, provisionalDomainId, sourc
   if (!Number.isSafeInteger(payloadBudget) || payloadBudget <= 0) {
     throw new EvidenceCoverageError("Bootstrap payload budget must be a positive safe integer");
   }
-  const bootstrap = boundBootstrapPayload({ candidates, domainThemes, languageEvidence }, payloadBudget);
-  const estimated = estimateBootstrapPayload(bootstrap);
-  if (estimated > payloadBudget) {
-    throw new EvidenceCoverageError(
-      `Bootstrap evidence payload requires ${estimated} tokens but budget is ${payloadBudget}`
-    );
-  }
+  const split = splitBootstrapPayload(
+    { candidates, domainThemes, languageEvidence },
+    payloadBudget,
+    runtime.opts?.tokenCalibration
+  );
   return {
-    bootstrap,
+    bootstrap: split.groups[0],
+    bootstrapGroups: split.groups,
+    bootstrapMinimumGroupTokens: split.minimumGroupTokens,
+    bootstrapSubdivided: split.subdivided,
     evidence,
     domainId: provisionalDomainId,
     sourcePath,
@@ -55796,7 +56529,6 @@ function boundedOptions(baseOpts, policy, inputBudgetTokens) {
     ...baseOpts,
     inputBudgetTokens,
     repairInputBudgetTokens: policy.repairInputBudgetTokens,
-    outputRetryBudgetTokens: policy.outputRetryBudgetTokens,
     semanticCompression: { profile: policy.compression ?? "balanced", operation: "ingest" }
   };
   if (policy.outputBudgetTokens !== void 0) opts.maxTokens = policy.outputBudgetTokens;
@@ -55859,7 +56591,6 @@ function unitDto(unit) {
     text: unit.text,
     required: unit.required,
     priority: unit.priority,
-    estimatedTokens: unit.estimatedTokens,
     pageId: unit.pageId,
     path: unit.path,
     heading: unit.heading,
@@ -55892,8 +56623,7 @@ function registryDto(unit) {
     source: unit.source,
     text: unit.text,
     required: unit.required,
-    priority: unit.priority,
-    estimatedTokens: unit.estimatedTokens
+    priority: unit.priority
   };
 }
 function allowedEntityKeysDto(bundles, createPathsByEntityKey) {
@@ -56198,7 +56928,7 @@ function repackSynthesisBundles(input, sourceBundles, packingInputBudget, failed
     const selectedOptionalIds = new Set(optionalEntries.filter((entry) => entry.kind !== "bundle" && !droppedIds.has(entry.id)).map((entry) => entry.id));
     const messages = renderSynthesisMessages(input, selected, opts, selectedOptionalIds);
     const prepared = prepareChatMessages(messages, opts);
-    const estimatedInputTokens = estimatePreparedMessages(prepared);
+    const estimatedInputTokens = estimatePreparedMessages(prepared, opts.tokenCalibration);
     const promptHash = contentHash(JSON.stringify(prepared));
     return {
       bundles: selected,
@@ -56230,12 +56960,13 @@ function repackSynthesisBundles(input, sourceBundles, packingInputBudget, failed
     const renderCompressed = () => {
       const messages = renderSynthesisMessages(input, [compressed], opts, /* @__PURE__ */ new Set());
       const prepared = prepareChatMessages(messages, opts);
+      const estimatedInputTokens = estimatePreparedMessages(prepared, opts.tokenCalibration);
       return {
         bundles: [compressed],
         messages,
         promptHash: contentHash(JSON.stringify(prepared)),
-        estimatedInputTokens: estimatePreparedMessages(prepared),
-        promptBreakdown: synthesisPromptBreakdown(input, [compressed], /* @__PURE__ */ new Set(), estimatePreparedMessages(prepared))
+        estimatedInputTokens,
+        promptBreakdown: synthesisPromptBreakdown(input, [compressed], /* @__PURE__ */ new Set(), estimatedInputTokens)
       };
     };
     let candidate = renderCompressed();
@@ -56284,6 +57015,7 @@ function repackSynthesisBundles(input, sourceBundles, packingInputBudget, failed
 async function executeSynthesisBatch(input, bundles, maxRetries) {
   let failedPromptHash;
   return runWithContextRepack({
+    onContextError: input.opts.onContextError,
     requestBudgetsEmittedByExecute: true,
     callSite: "ingest.synthesize",
     configuredInputBudget: input.policy.inputBudgetTokens,
@@ -56453,7 +57185,7 @@ async function executeSingleRegenerationRequest(input) {
     structuredRetries: 0
   };
   const messages = renderConflictRegenerationMessages(input, opts);
-  const estimatedInputTokens = estimatePreparedMessages(prepareChatMessages(messages, opts));
+  const estimatedInputTokens = estimatePreparedMessages(prepareChatMessages(messages, opts), opts.tokenCalibration);
   if (estimatedInputTokens > input.policy.inputBudgetTokens) {
     throw new PromptBudgetExceededError(
       input.policy.inputBudgetTokens,
@@ -56939,7 +57671,7 @@ function reconcileSynthesisEvidence(content, existing, ledger, language) {
 function stemOf(path5) {
   return path5.split("/").pop().replace(/\.md$/, "");
 }
-async function routeAndValidatePages(pages, entities, domain, wikiVaultPath, classify, maxClassifyRounds = 2) {
+async function routeAndValidatePages(pages, entities, domain, wikiVaultPath, classify2, maxClassifyRounds = 2) {
   const typeToEt = /* @__PURE__ */ new Map();
   for (const et of domain.entity_types ?? []) typeToEt.set(et.type, et);
   const stemToType = /* @__PURE__ */ new Map();
@@ -56957,7 +57689,7 @@ async function routeAndValidatePages(pages, entities, domain, wikiVaultPath, cla
   for (let round = 0; round < maxClassifyRounds && unresolvedStems().length > 0; round++) {
     let assignments;
     try {
-      assignments = await classify(unresolvedStems());
+      assignments = await classify2(unresolvedStems());
     } catch {
       break;
     }
@@ -57015,7 +57747,6 @@ function modelPolicy(opts) {
     inputBudgetTokens: opts.inputBudgetTokens ?? 16384,
     ...opts.repairInputBudgetTokens === void 0 ? {} : { repairInputBudgetTokens: opts.repairInputBudgetTokens },
     ...opts.maxTokens === void 0 ? {} : { outputBudgetTokens: opts.maxTokens },
-    ...opts.outputRetryBudgetTokens === void 0 ? {} : { outputRetryBudgetTokens: opts.outputRetryBudgetTokens },
     compression: opts.semanticCompression?.profile ?? "balanced"
   };
 }
@@ -57057,8 +57788,7 @@ function tagRegistryUnits(text) {
     source: "registry",
     text,
     required: false,
-    priority: 1,
-    estimatedTokens: new TextEncoder().encode(text).byteLength
+    priority: 1
   }];
 }
 function actionAuthorities(bundles, path5) {
@@ -57541,7 +58271,12 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
           outputBudgetTokens: policy.outputBudgetTokens,
           compressionProfile: policy.compression,
           mapperRetries: opts.structuredRetries ?? 1,
-          reducerRetries: opts.structuredRetries ?? 1
+          reducerRetries: opts.structuredRetries ?? 1,
+          // The budgets above are calibrated tokens. chunkSourceForEvidence converts the
+          // chunk ceiling back to raw estimator tokens with this factor, so omitting it
+          // would compare a calibrated budget against a raw measurement — the unit Init
+          // already supplies at init.ts.
+          calibration: opts.tokenCalibration ?? 1
         }, {
           llm,
           model,
@@ -58849,10 +59584,6 @@ function resolveLink(brokenStem, candidates) {
 }
 
 // src/phases/query-budget.ts
-var encoder2 = new TextEncoder();
-function estimatedTokens(text) {
-  return encoder2.encode(text).byteLength;
-}
 function preparedMessages(messages, opts) {
   const params = buildChatParams(
     "__prompt_budget__",
@@ -58923,8 +59654,7 @@ function packQueryChunks(args) {
     source: "source",
     text: args.question,
     required: true,
-    priority: Number.POSITIVE_INFINITY,
-    estimatedTokens: estimatedTokens(args.question)
+    priority: Number.POSITIVE_INFINITY
   }];
   args.chunks.forEach((chunk, index) => {
     const id = chunkUnitId(chunk);
@@ -58934,8 +59664,7 @@ function packQueryChunks(args) {
       source: "wiki",
       text: renderContextChunks([chunk]),
       required: false,
-      priority: args.chunks.length - index,
-      estimatedTokens: estimatedTokens(renderContextChunks([chunk]))
+      priority: args.chunks.length - index
     });
   });
   const renderSystemPrompt = (selectedChunks) => typeof args.systemPrompt === "function" ? args.systemPrompt(selectedChunks) : args.systemPrompt;
@@ -59005,19 +59734,14 @@ function packChatHistory(args) {
       source: "source",
       text: args.history[currentUserIndex].content,
       required: true,
-      priority: Number.POSITIVE_INFINITY,
-      estimatedTokens: estimatedTokens(args.history[currentUserIndex].content)
+      priority: Number.POSITIVE_INFINITY
     },
     ...historyUnits.map((unit) => ({
       id: unit.id,
       source: "source",
       text: unit.messages.map((message) => `${message.role}: ${message.content}`).join("\n"),
       required: false,
-      priority: 1e6 + unit.start,
-      estimatedTokens: unit.messages.reduce(
-        (total, message) => total + estimatedTokens(message.content),
-        0
-      )
+      priority: 1e6 + unit.start
     }))
   ];
   if (args.context) {
@@ -59026,8 +59750,7 @@ function packChatHistory(args) {
       source: "wiki",
       text: args.context,
       required: false,
-      priority: 0,
-      estimatedTokens: estimatedTokens(args.context)
+      priority: 0
     });
   }
   const fixedMessages = [
@@ -59405,6 +60128,7 @@ async function* answerFromContext(args) {
   let attempt;
   try {
     attempt = yield* runWithLiveEvents((emit, operationSignal) => runWithContextRepack({
+      onContextError: opts.onContextError,
       callSite: "query.answer",
       configuredInputBudget: opts.inputBudgetTokens ?? 16384,
       outputBudget: opts.maxTokens,
@@ -59538,7 +60262,8 @@ async function* answerFromContext(args) {
               configuredInputBudget: opts.inputBudgetTokens ?? 16384,
               effectiveInputBudget: opts.inputBudgetTokens ?? 16384,
               estimatedInputTokens: estimatePreparedMessages(
-                params.messages
+                params.messages,
+                opts.tokenCalibration
               ),
               outputBudget: opts.maxTokens,
               compressionProfile: opts.semanticCompression?.profile ?? "balanced",
@@ -60574,9 +61299,6 @@ var import_path_browserify7 = __toESM(require_path_browserify(), 1);
 var DEFAULT_LINT_ITEM_BUDGET = 12e3;
 var LINT_WORK_ITEM_BUDGET_RATIO = 0.18;
 var PAGE_HEADING = "## Full page";
-function estimateText(text) {
-  return new TextEncoder().encode(text).byteLength;
-}
 function idPart(value) {
   return value.trim().replace(/\s+/g, " ");
 }
@@ -60603,7 +61325,7 @@ function h2Sections(markdown) {
     hash: section.hash
   }));
 }
-function windowSection(path5, section, itemBudget) {
+function windowSection(path5, section, itemBudget, calibration) {
   const lines = splitLines(section.markdown);
   const heading = lines[0] ?? section.heading;
   const body = lines.slice(1);
@@ -60614,10 +61336,10 @@ function windowSection(path5, section, itemBudget) {
     let end = start;
     while (end < body.length) {
       const candidate = [heading, ...chunk, body[end]].join("\n");
-      if (chunk.length > 0 && estimateText(candidate) > itemBudget) break;
+      if (chunk.length > 0 && estimateText(candidate, calibration) > itemBudget) break;
       chunk.push(body[end]);
       end++;
-      if (estimateText(candidate) >= itemBudget) break;
+      if (estimateText(candidate, calibration) >= itemBudget) break;
     }
     if (chunk.length === 0 && end < body.length) {
       chunk.push(body[end]);
@@ -60639,7 +61361,7 @@ function windowSection(path5, section, itemBudget) {
   }
   return items;
 }
-function buildLintWorkItems(pages, itemBudget = DEFAULT_LINT_ITEM_BUDGET) {
+function buildLintWorkItems(pages, itemBudget = DEFAULT_LINT_ITEM_BUDGET, calibration) {
   if (!Number.isFinite(itemBudget) || itemBudget <= 0) {
     throw new RangeError("itemBudget must be positive");
   }
@@ -60648,7 +61370,7 @@ function buildLintWorkItems(pages, itemBudget = DEFAULT_LINT_ITEM_BUDGET) {
   for (const [path5, markdown] of [...pages.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     const pageHeading = `# ${h1Heading(markdown)}`;
     const expectedPageHash = contentHash(markdown);
-    if (estimateText(markdown) <= effectiveBudget) {
+    if (estimateText(markdown, calibration) <= effectiveBudget) {
       items.push({
         id: `${path5}\0page`,
         path: path5,
@@ -60660,7 +61382,7 @@ function buildLintWorkItems(pages, itemBudget = DEFAULT_LINT_ITEM_BUDGET) {
       continue;
     }
     for (const section of h2Sections(markdown)) {
-      if (estimateText(section.markdown) <= effectiveBudget) {
+      if (estimateText(section.markdown, calibration) <= effectiveBudget) {
         items.push({
           id: `${path5}\0${idPart(section.heading)}\0${section.ordinal}`,
           path: path5,
@@ -60670,7 +61392,7 @@ function buildLintWorkItems(pages, itemBudget = DEFAULT_LINT_ITEM_BUDGET) {
           expectedPageHash
         });
       } else {
-        items.push(...windowSection(path5, section, effectiveBudget).map((item) => ({
+        items.push(...windowSection(path5, section, effectiveBudget, calibration).map((item) => ({
           ...item,
           expectedPageHash
         })));
@@ -60687,7 +61409,7 @@ function lexicalOverlap(left, right) {
   }
   return score;
 }
-function buildLintRelatedSections(allItems, submittedItems, _pages, budget) {
+function buildLintRelatedSections(allItems, submittedItems, _pages, budget, calibration) {
   if (budget <= 0) return [];
   const submittedIds = new Set(submittedItems.map((item) => item.id));
   const submittedText = submittedItems.map((item) => `${item.heading}
@@ -60709,7 +61431,7 @@ ${item.markdown}`)
         expectedPageHash: item.expectedPageHash
       }
     ];
-    if (estimateText(JSON.stringify(candidate)) > budget) continue;
+    if (estimateText(JSON.stringify(candidate), calibration) > budget) continue;
     selected.push(candidate[candidate.length - 1]);
   }
   return selected;
@@ -60983,7 +61705,7 @@ function structuralFindings(allStructuralIssues, pages) {
   }
   return findings;
 }
-function packLintWorkBatches(items, domainName, schema, inputBudgetTokens) {
+function packLintWorkBatches(items, domainName, schema, inputBudgetTokens, calibration) {
   const batches = [];
   let current = [];
   for (const item of items) {
@@ -60994,7 +61716,7 @@ function packLintWorkBatches(items, domainName, schema, inputBudgetTokens) {
       workItems: candidate,
       relatedSections: []
     });
-    if (estimateMessages(messages) <= inputBudgetTokens || current.length === 0) {
+    if (estimatePreparedMessages(messages, calibration) <= inputBudgetTokens || current.length === 0) {
       current = candidate;
       continue;
     }
@@ -61004,12 +61726,10 @@ function packLintWorkBatches(items, domainName, schema, inputBudgetTokens) {
   if (current.length > 0) batches.push(current);
   return batches;
 }
-function estimateMessages(messages) {
-  return new TextEncoder().encode(JSON.stringify(messages)).byteLength;
-}
 async function runLintBatchWithSplit(args) {
   try {
     const result = await runWithContextRepack({
+      onContextError: args.opts.onContextError,
       requestBudgetsEmittedByExecute: true,
       callSite: "lint.batch",
       configuredInputBudget: args.opts.inputBudgetTokens ?? 16384,
@@ -61020,7 +61740,8 @@ async function runLintBatchWithSplit(args) {
           args.allItems ?? args.items,
           args.items,
           args.pages,
-          Math.floor(effectiveInputBudget * 0.25)
+          Math.floor(effectiveInputBudget * 0.25),
+          args.opts.tokenCalibration
         );
         let messages = buildLintBatchMessages({
           domainName: args.domainName,
@@ -61028,7 +61749,7 @@ async function runLintBatchWithSplit(args) {
           workItems: args.items,
           relatedSections
         });
-        let estimatedInputTokens = estimateMessages(messages);
+        let estimatedInputTokens = estimatePreparedMessages(messages, args.opts.tokenCalibration);
         while (estimatedInputTokens > effectiveInputBudget && relatedSections.length > 0) {
           relatedSections = relatedSections.slice(0, -1);
           messages = buildLintBatchMessages({
@@ -61037,7 +61758,7 @@ async function runLintBatchWithSplit(args) {
             workItems: args.items,
             relatedSections
           });
-          estimatedInputTokens = estimateMessages(messages);
+          estimatedInputTokens = estimatePreparedMessages(messages, args.opts.tokenCalibration);
         }
         if (estimatedInputTokens > effectiveInputBudget) {
           throw new PromptBudgetExceededError(
@@ -61215,9 +61936,15 @@ ${schemaContent}` : ""
     let mergedFindings = structuralFindings(allStructuralIssues, pages);
     if (useLlm) {
       const lintPages = new Map(filteredArticlePaths.map((path5) => [path5, pages.get(path5) ?? ""]));
-      const workItems = buildLintWorkItems(lintPages, opts.inputBudgetTokens ?? 16384);
+      const workItems = buildLintWorkItems(lintPages, opts.inputBudgetTokens ?? 16384, opts.tokenCalibration);
       validateLintCoverage(lintPages, workItems);
-      const batches = packLintWorkBatches(workItems, domain.name, systemContent, opts.inputBudgetTokens ?? 16384);
+      const batches = packLintWorkBatches(
+        workItems,
+        domain.name,
+        systemContent,
+        opts.inputBudgetTokens ?? 16384,
+        opts.tokenCalibration
+      );
       const batchOutputs = [];
       const batchLifecycles = [];
       const pendingBatchLifecycles = /* @__PURE__ */ new Map();
@@ -61742,6 +62469,7 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
   let attempt;
   try {
     attempt = yield* runWithLiveEvents((emit, operationSignal) => runWithContextRepack({
+      onContextError: opts.onContextError,
       callSite: opts.semanticCompression?.operation === "query" ? "query.answer" : "lint-chat.fix",
       configuredInputBudget: opts.inputBudgetTokens ?? 16384,
       outputBudget: opts.maxTokens,
@@ -61864,7 +62592,8 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
               configuredInputBudget: opts.inputBudgetTokens ?? 16384,
               effectiveInputBudget: opts.inputBudgetTokens ?? 16384,
               estimatedInputTokens: estimatePreparedMessages(
-                params.messages
+                params.messages,
+                opts.tokenCalibration
               ),
               outputBudget: opts.maxTokens,
               compressionProfile: opts.semanticCompression?.profile ?? "balanced",
@@ -62136,7 +62865,7 @@ function compactOlderPairs(messages) {
   }
   return pairs;
 }
-function buildLintChatMessagesWithinBudget(systemContent, olderPairs, newestUser, effectiveInputBudget) {
+function buildLintChatMessagesWithinBudget(systemContent, olderPairs, newestUser, effectiveInputBudget, calibration) {
   for (let keep = olderPairs.length; keep >= 0; keep -= 2) {
     const keptPairs = olderPairs.slice(Math.max(0, olderPairs.length - keep));
     const messages2 = [
@@ -62144,7 +62873,7 @@ function buildLintChatMessagesWithinBudget(systemContent, olderPairs, newestUser
       ...keptPairs,
       { role: "user", content: newestUser }
     ];
-    const estimatedInputTokens = new TextEncoder().encode(JSON.stringify(messages2)).byteLength;
+    const estimatedInputTokens = estimatePreparedMessages(messages2, calibration);
     if (estimatedInputTokens <= effectiveInputBudget) {
       return {
         messages: messages2,
@@ -62159,15 +62888,15 @@ function buildLintChatMessagesWithinBudget(systemContent, olderPairs, newestUser
   ];
   return {
     messages,
-    estimatedInputTokens: new TextEncoder().encode(JSON.stringify(messages)).byteLength,
+    estimatedInputTokens: estimatePreparedMessages(messages, calibration),
     contextUnits: 1
   };
 }
-function estimateLintChatFixedRequest(systemContent, newestUser) {
-  return new TextEncoder().encode(JSON.stringify([
+function estimateLintChatFixedRequest(systemContent, newestUser, calibration) {
+  return estimatePreparedMessages([
     { role: "system", content: systemContent },
     { role: "user", content: newestUser }
-  ])).byteLength;
+  ], calibration);
 }
 async function* runLintFixChat(req, vaultTools, _vaultRoot, domain, llm, model, opts, signal) {
   const start = Date.now();
@@ -62208,7 +62937,7 @@ ${schemaContent}` : ""
   let activePages = new Map([...pages].filter(([path5]) => activePaths.includes(path5)));
   let includeSchema = true;
   let systemContent = renderSystem(activePages, includeSchema);
-  while (estimateLintChatFixedRequest(systemContent, lastUser.content) > (opts.inputBudgetTokens ?? 16384) && activePaths.length > 0 && !selected.explicit) {
+  while (estimateLintChatFixedRequest(systemContent, lastUser.content, opts.tokenCalibration) > (opts.inputBudgetTokens ?? 16384) && activePaths.length > 0 && !selected.explicit) {
     activePaths = activePaths.slice(0, -1);
     activePages = new Map([...pages].filter(([path5]) => activePaths.includes(path5)));
     systemContent = renderSystem(activePages, includeSchema);
@@ -62223,11 +62952,11 @@ ${schemaContent}` : ""
     yield { kind: "result", durationMs: Date.now() - start, text: "" };
     return;
   }
-  if (estimateLintChatFixedRequest(systemContent, lastUser.content) > (opts.inputBudgetTokens ?? 16384) && includeSchema) {
+  if (estimateLintChatFixedRequest(systemContent, lastUser.content, opts.tokenCalibration) > (opts.inputBudgetTokens ?? 16384) && includeSchema) {
     includeSchema = false;
     systemContent = renderSystem(activePages, includeSchema);
   }
-  if (estimateLintChatFixedRequest(systemContent, lastUser.content) > (opts.inputBudgetTokens ?? 16384)) {
+  if (estimateLintChatFixedRequest(systemContent, lastUser.content, opts.tokenCalibration) > (opts.inputBudgetTokens ?? 16384)) {
     yield { kind: "error", message: "lint-chat: selected referenced page context exceeds input budget" };
     yield { kind: "result", durationMs: Date.now() - start, text: "" };
     return;
@@ -62259,6 +62988,7 @@ ${schemaContent}` : ""
       return runWithContextRepack({
         requestBudgetsEmittedByExecute: true,
         callSite: "lint-chat.patch",
+        onContextError: opts.onContextError,
         configuredInputBudget: opts.inputBudgetTokens ?? 16384,
         outputBudget: opts.maxTokens,
         compressionProfile: opts.semanticCompression?.profile ?? "balanced",
@@ -62267,7 +62997,8 @@ ${schemaContent}` : ""
             systemContent,
             olderPairs,
             lastUser.content,
-            effectiveInputBudget
+            effectiveInputBudget,
+            opts.tokenCalibration
           );
           const { messages, estimatedInputTokens } = packed;
           if (estimatedInputTokens > effectiveInputBudget) {
@@ -62467,7 +63198,10 @@ EVIDENCE_TYPE_UNITS ${JSON.stringify(units)}` }
   ];
 }
 function estimateUnits(units, allowedTypes, opts) {
-  return estimatePreparedMessages(prepareChatMessages(messagesForUnits(units, allowedTypes), opts));
+  return estimatePreparedMessages(
+    prepareChatMessages(messagesForUnits(units, allowedTypes), opts),
+    opts.tokenCalibration
+  );
 }
 function partitionTypeUnits(units, allowedTypes, opts, budget) {
   const batches = [];
@@ -62494,7 +63228,7 @@ function forwardClassifierEvent(runtime, event) {
 }
 async function classifyBatch(units, allowedTypes, policy, runtime, opts) {
   const messages = messagesForUnits(units, allowedTypes);
-  const estimated = estimatePreparedMessages(prepareChatMessages(messages, opts));
+  const estimated = estimatePreparedMessages(prepareChatMessages(messages, opts), opts.tokenCalibration);
   if (estimated > policy.inputBudgetTokens) {
     throw new PromptBudgetExceededError(policy.inputBudgetTokens, estimated, units.map((unit) => unit.entityKey));
   }
@@ -62717,8 +63451,65 @@ function bootstrapTaxonomyIssue(entry, bootstrapEvidence) {
   }
   return null;
 }
-function renderBootstrapTaxonomyRepairPrompt(issue, bootstrapEvidence, existingTypes) {
-  return JSON.stringify({
+var MIN_BOOTSTRAP_OUTPUT_TOKENS = 2048;
+var MIN_BOOTSTRAP_CHUNK_TOKENS = 512;
+var MAX_BOOTSTRAP_EVIDENCE_TOKENS = 24e4;
+var MAX_BOOTSTRAP_REQUESTS = 64;
+var MAX_TAXONOMY_REPAIR_TOKENS = 512;
+function maxBootstrapGroupsFor(evidenceTokensPerGroup) {
+  return Math.max(1, Math.min(
+    MAX_BOOTSTRAP_REQUESTS,
+    Math.ceil(MAX_BOOTSTRAP_EVIDENCE_TOKENS / Math.max(1, evidenceTokensPerGroup))
+  ));
+}
+function mergeBootstrapEntries(entries) {
+  const [first, ...rest] = entries;
+  if (first === void 0) throw new Error("Cannot merge an empty bootstrap group result");
+  let entityTypes = cloneEntityTypes(first.entity_types);
+  for (const entry of rest) {
+    entityTypes = mergeBootstrapEntityTypes(entityTypes, entry.entity_types ?? []);
+  }
+  return {
+    id: first.id,
+    name: first.name,
+    wiki_folder: first.wiki_folder,
+    entity_types: entityTypes,
+    language_notes: entries.find((entry) => entry.language_notes?.trim())?.language_notes ?? first.language_notes
+  };
+}
+function evidencePreparationFailure(error, asModelContext) {
+  const overflow = error instanceof PromptBudgetExceededError ? { estimated: error.estimated, budget: error.budget } : /Prompt requires (\d+) estimated tokens but budget is (\d+)/.exec(error.message);
+  if (overflow) {
+    const [estimated, budget] = Array.isArray(overflow) ? [overflow[1], overflow[2]] : [overflow.estimated, overflow.budget];
+    return asModelContext(
+      `a bounded evidence request needs ${estimated} tokens against a ${budget}-token budget`
+    );
+  }
+  const sizeShaped = [
+    [
+      /Unable to derive a bounded mapper chunk size|Mapper prompt and repair reserve exceed the input budget/i,
+      "the evidence mapper prompt and its repair reserve fit no source chunk size"
+    ],
+    [
+      /Reducer prompt and repair reserve exceed the input budget/i,
+      "the evidence reducer prompt and its repair reserve do not fit one request"
+    ],
+    [
+      /A single evidence packet cannot fit the reducer budget/i,
+      "one evidence packet does not fit the reducer request budget"
+    ],
+    [
+      /exceeds \d+ byte output budget/i,
+      "the reduced evidence does not fit the output budget this model leaves"
+    ]
+  ];
+  for (const [pattern, needs] of sizeShaped) {
+    if (pattern.test(error.message)) return asModelContext(needs);
+  }
+  return `init: domain bootstrap failed \u2014 bounded evidence preparation failed: ${error.message}. Fix model/prompt and re-run.`;
+}
+function renderBootstrapTaxonomyRepairPrompt(issue, bootstrapEvidence, existingTypes, calibration) {
+  const build = (candidates, facts, themes, existingNames) => JSON.stringify({
     repair: "Regenerate the domain entry JSON. The previous taxonomy was rejected by local domain validation.",
     issue,
     rules: [
@@ -62727,29 +63518,40 @@ function renderBootstrapTaxonomyRepairPrompt(issue, bootstrapEvidence, existingT
       "Reuse existing entity types when they fit; add only source-supported missing types.",
       "Do not invent a permanent domain-specific fallback list."
     ],
-    existingEntityTypes: cloneEntityTypes(existingTypes),
-    evidenceCandidates: bootstrapEvidence.candidates.map((candidate) => ({
+    existingEntityTypes: (existingTypes ?? []).slice(0, existingNames).map((entityType) => entityType.type),
+    evidenceCandidates: bootstrapEvidence.candidates.slice(0, candidates).map((candidate) => ({
       entityKey: candidate.entityKey,
-      facts: candidate.facts.slice(0, 6)
+      facts: candidate.facts.slice(0, facts)
     })),
-    domainThemes: bootstrapEvidence.domainThemes.slice(0, 12)
+    domainThemes: bootstrapEvidence.domainThemes.slice(0, themes)
   });
+  const fits = (content) => estimatePreparedMessages([{ role: "user", content }], calibration) <= MAX_TAXONOMY_REPAIR_TOKENS;
+  const allExisting = existingTypes?.length ?? 0;
+  for (const [candidates, facts, themes, existingNames] of [
+    [bootstrapEvidence.candidates.length, 6, 12, allExisting],
+    [24, 3, 6, Math.min(allExisting, 48)],
+    [12, 2, 3, Math.min(allExisting, 24)],
+    [6, 1, 0, Math.min(allExisting, 12)],
+    [0, 0, 0, 0]
+  ]) {
+    const content = build(candidates, facts, themes, existingNames);
+    if (fits(content)) return content;
+  }
+  return build(0, 0, 0, 0);
 }
 async function* prepareDomainBootstrap(domainId, sourcePaths, sourceFile, sourceContent, existing, force, vaultName, llm, model, signal, opts, startedAt) {
-  const inputBudgetTokens = opts.inputBudgetTokens ?? 16384;
-  const outputBudgetTokens = opts.maxTokens;
   const compressionProfile2 = opts.semanticCompression?.profile ?? "balanced";
   const schemaContent = render(wiki_schema_default, {
     section_conventions: wikiSections(resolveLang(opts.outputLanguage))
   });
-  const systemContent = render(init_default, {
+  const renderSystemContent = (includeSchema) => render(init_default, {
     domain_id: domainId,
     vault_name: vaultName,
-    schema_block: schemaContent ? `
+    schema_block: includeSchema && schemaContent ? `
 Wiki conventions (_wiki_schema.md):
 ${schemaContent}` : ""
   });
-  const bootstrapMessages = (bootstrapEvidence2) => [
+  const bootstrapMessages = (bootstrapEvidence, systemContent) => [
     { role: "system", content: systemContent },
     {
       role: "user",
@@ -62759,7 +63561,7 @@ ${schemaContent}` : ""
         sourcePaths,
         sourceFile,
         existingEntityTypes: cloneEntityTypes(existing?.entity_types),
-        bootstrapEvidence: bootstrapEvidence2
+        bootstrapEvidence
       })
     }
   ];
@@ -62768,37 +63570,94 @@ ${schemaContent}` : ""
     domainThemes: [],
     languageEvidence: []
   };
-  const fixedRequestEstimate = estimatePreparedMessages(
-    prepareChatMessages(bootstrapMessages(emptyBootstrapEvidence), opts)
-  );
   const emptyPayloadEstimate = estimatePreparedMessages([{
     role: "user",
     content: JSON.stringify(emptyBootstrapEvidence)
-  }]);
-  const bootstrapPayloadBudgetTokens = inputBudgetTokens - fixedRequestEstimate + emptyPayloadEstimate;
-  if (bootstrapPayloadBudgetTokens <= 0) {
+  }], opts.tokenCalibration);
+  const worstCaseGroupOverhead = worstCaseBootstrapOverheadTokens(opts.tokenCalibration);
+  const budgetFor = (includeSchema, inputBudgetTokens, outputBudgetTokens) => {
+    const systemContent = renderSystemContent(includeSchema);
+    const fixedRequestEstimate = estimatePreparedMessages(
+      prepareChatMessages(bootstrapMessages(emptyBootstrapEvidence, systemContent), opts),
+      opts.tokenCalibration
+    );
+    return {
+      systemContent,
+      includeSchema,
+      inputBudgetTokens,
+      outputBudgetTokens,
+      fixedRequestEstimate,
+      // + emptyPayloadEstimate cancels the empty payload already counted inside
+      // fixedRequestEstimate, leaving what a real payload may add.
+      payloadBudgetTokens: inputBudgetTokens - fixedRequestEstimate + emptyPayloadEstimate
+    };
+  };
+  const widenBootstrapBudget = (current, requiredPayloadTokens) => {
+    if (current.payloadBudgetTokens >= requiredPayloadTokens) return current;
+    let widened = current;
+    if (widened.includeSchema) {
+      widened = budgetFor(false, widened.inputBudgetTokens, widened.outputBudgetTokens);
+      if (widened.payloadBudgetTokens >= requiredPayloadTokens) return widened;
+    }
+    const contextWindowTokens = opts.contextWindowTokens;
+    if (contextWindowTokens !== void 0 && widened.outputBudgetTokens !== void 0 && widened.outputBudgetTokens > MIN_BOOTSTRAP_OUTPUT_TOKENS) {
+      const reclaimed = Math.min(
+        contextWindowTokens - MIN_BOOTSTRAP_OUTPUT_TOKENS,
+        widened.inputBudgetTokens + widened.outputBudgetTokens - MIN_BOOTSTRAP_OUTPUT_TOKENS
+      );
+      if (reclaimed > widened.inputBudgetTokens) {
+        widened = budgetFor(widened.includeSchema, reclaimed, MIN_BOOTSTRAP_OUTPUT_TOKENS);
+      }
+    }
+    return widened;
+  };
+  const unsupportedModelContext = (needs, current) => `init: ${needs}, but model ${model} allows ${current.inputBudgetTokens} input token(s)` + (opts.contextWindowTokens === void 0 ? "" : ` from a context window of ${opts.contextWindowTokens} token(s)`) + ". Choose a model with a larger context window.";
+  const splitBudgetOf = (current) => current.payloadBudgetTokens - MAX_TAXONOMY_REPAIR_TOKENS;
+  const evidencePerGroup = (current) => splitBudgetOf(current) - worstCaseGroupOverhead;
+  const groupCeilingOf = (current) => maxBootstrapGroupsFor(evidencePerGroup(current));
+  const configuredBudget = budgetFor(true, opts.inputBudgetTokens ?? 16384, opts.maxTokens);
+  const planningBudget = widenBootstrapBudget(
+    configuredBudget,
+    worstCaseGroupOverhead + MIN_BOOTSTRAP_CHUNK_TOKENS + MAX_TAXONOMY_REPAIR_TOKENS
+  );
+  const chunkBudgetTokens = evidencePerGroup(planningBudget);
+  if (chunkBudgetTokens < MIN_BOOTSTRAP_CHUNK_TOKENS) {
     yield {
       kind: "error",
-      message: `init: configuration error \u2014 fixed bootstrap prompt requires ${fixedRequestEstimate} tokens but input budget is ${inputBudgetTokens}; domain was not created.`
+      message: unsupportedModelContext(
+        `the Init prompt needs ${planningBudget.fixedRequestEstimate} tokens and every evidence group up to ${worstCaseGroupOverhead} more, leaving ${Math.max(0, chunkBudgetTokens)} token(s) for source evidence instead of ${MIN_BOOTSTRAP_CHUNK_TOKENS}`,
+        planningBudget
+      )
     };
     yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
     return null;
   }
+  const budgetOpts = (current) => ({
+    ...opts,
+    inputBudgetTokens: current.inputBudgetTokens,
+    ...current.outputBudgetTokens === void 0 ? {} : { maxTokens: current.outputBudgetTokens }
+  });
+  const splitsWithSchema = splitBudgetOf(configuredBudget) >= MIN_BOOTSTRAP_CHUNK_TOKENS;
+  let budget = splitsWithSchema ? configuredBudget : planningBudget;
   const bootstrapEvents = new RunEventBridge();
   let bootstrapEvidenceOutputTokens = 0;
   let bootstrapBundle;
   try {
     bootstrapBundle = yield* bootstrapEvents.forwardAbortable(signal, (operationSignal) => prepareBootstrapEvidenceBundle(sourceContent, domainId, sourceFile, {
-      inputBudgetTokens,
-      outputBudgetTokens,
+      // Evidence preparation keeps the budget the user's settings resolved: the
+      // bootstrap levers pay for the bootstrap request, not for other phases.
+      inputBudgetTokens: configuredBudget.inputBudgetTokens,
+      outputBudgetTokens: configuredBudget.outputBudgetTokens,
       compressionProfile: compressionProfile2,
       mapperRetries: opts.structuredRetries ?? 1,
       reducerRetries: opts.structuredRetries ?? 1,
-      bootstrapPayloadBudgetTokens
+      bootstrapPayloadBudgetTokens: splitBudgetOf(budget),
+      chunkBudgetTokens,
+      calibration: opts.tokenCalibration ?? 1
     }, {
       llm,
       model,
-      opts,
+      opts: budgetOpts(configuredBudget),
       signal: operationSignal,
       onEvent: (event) => {
         if (event.kind === "llm_call_stats") bootstrapEvidenceOutputTokens += event.outputTokens;
@@ -62809,22 +63668,97 @@ ${schemaContent}` : ""
     }));
   } catch (error) {
     if (error.name === "AbortError" || signal.aborted) return null;
-    const isConfigurationError = error instanceof PromptBudgetExceededError || /bounded mapper chunk size|requires .*budget|exceeds .*budget/i.test(error.message);
-    const message = isConfigurationError ? `init: configuration error \u2014 fixed bootstrap evidence prompt exceeds input budget: ${error.message}; domain was not created.` : `init: domain bootstrap failed \u2014 bounded evidence preparation failed: ${error.message}. Fix model/prompt and re-run.`;
-    yield { kind: "error", message };
-    yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
-    return null;
-  }
-  const bootstrapEvidence = bootstrapBundle.bootstrap;
-  const messages = bootstrapMessages(bootstrapEvidence);
-  const estimatedInputTokens = estimatePreparedMessages(prepareChatMessages(messages, opts));
-  if (estimatedInputTokens > inputBudgetTokens) {
     yield {
       kind: "error",
-      message: `init: configuration error \u2014 fixed bootstrap prompt requires ${estimatedInputTokens} tokens but input budget is ${inputBudgetTokens}; domain was not created.`
+      message: evidencePreparationFailure(
+        error,
+        (needs) => unsupportedModelContext(needs, configuredBudget)
+      )
     };
     yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
     return null;
+  }
+  const fullBootstrapEvidence = {
+    candidates: bootstrapBundle.bootstrapGroups.flatMap((group) => group.candidates),
+    domainThemes: bootstrapBundle.bootstrapGroups[0].domainThemes,
+    languageEvidence: bootstrapBundle.bootstrapGroups[0].languageEvidence
+  };
+  let bootstrapGroups = bootstrapBundle.bootstrapGroups;
+  let bootstrapSubdivided = bootstrapBundle.bootstrapSubdivided;
+  let minimumGroupTokens = bootstrapBundle.bootstrapMinimumGroupTokens;
+  const splitFits = (current) => minimumGroupTokens <= splitBudgetOf(current) && bootstrapGroups.length <= groupCeilingOf(current);
+  if (!splitFits(budget)) {
+    const widened = widenBootstrapBudget(
+      budget,
+      Math.max(minimumGroupTokens, worstCaseGroupOverhead + MIN_BOOTSTRAP_CHUNK_TOKENS) + MAX_TAXONOMY_REPAIR_TOKENS
+    );
+    if (widened.payloadBudgetTokens > budget.payloadBudgetTokens) {
+      const resplit = splitBootstrapPayload(
+        fullBootstrapEvidence,
+        splitBudgetOf(widened),
+        opts.tokenCalibration
+      );
+      budget = widened;
+      bootstrapGroups = resplit.groups;
+      bootstrapSubdivided = resplit.subdivided;
+      minimumGroupTokens = resplit.minimumGroupTokens;
+    }
+  }
+  yield {
+    kind: "evidence_split",
+    callSite: "init.bootstrap",
+    groups: bootstrapGroups.length,
+    candidates: bootstrapGroups.reduce((total, group) => total + group.candidates.length, 0),
+    subdivided: bootstrapSubdivided,
+    payloadBudget: splitBudgetOf(budget)
+  };
+  const groupCeiling = groupCeilingOf(budget);
+  if (bootstrapGroups.length > groupCeiling) {
+    yield {
+      kind: "error",
+      message: unsupportedModelContext(
+        `the source evidence needs ${bootstrapGroups.length} bootstrap requests of ${splitBudgetOf(budget)} payload token(s); this model allows at most ${groupCeiling}, about ${groupCeiling * Math.max(1, evidencePerGroup(budget))} tokens of evidence`,
+        budget
+      )
+    };
+    yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
+    return null;
+  }
+  if (minimumGroupTokens > splitBudgetOf(budget)) {
+    yield {
+      kind: "error",
+      message: unsupportedModelContext(
+        `one indivisible evidence unit needs ${minimumGroupTokens} payload token(s) and the widest payload this model allows is ${splitBudgetOf(budget)}`,
+        budget
+      )
+    };
+    yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
+    return null;
+  }
+  const requestOpts = { ...budgetOpts(budget), nativeFreshConnection: true };
+  const groupMessages = bootstrapGroups.map((group) => bootstrapMessages(group, budget.systemContent));
+  for (const messages of groupMessages) {
+    const estimatedInputTokens = estimatePreparedMessages(
+      prepareChatMessages(messages, requestOpts),
+      opts.tokenCalibration
+    );
+    if (estimatedInputTokens > budget.inputBudgetTokens) {
+      yield {
+        kind: "error",
+        message: unsupportedModelContext(
+          `a bootstrap request needs ${estimatedInputTokens} tokens`,
+          budget
+        )
+      };
+      yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
+      return null;
+    }
+  }
+  if (configuredBudget.includeSchema && !budget.includeSchema) {
+    yield {
+      kind: "system",
+      message: "init: wiki conventions omitted from the Init prompt to fit the model context"
+    };
   }
   yield { kind: "tool_use", name: "Initialising domain", input: {} };
   if (llm.nativeRequestExecutor) {
@@ -62835,39 +63769,57 @@ ${schemaContent}` : ""
       throw error;
     }
   }
-  let sink = {};
-  let parsed;
-  let bootstrapRequestMessages = messages;
+  let attemptSinks = [];
   let bootstrapOutputTokens = 0;
   let entry;
   try {
+    let repairInstructions = groupMessages.map(() => void 0);
     for (let semanticAttempt = 0; ; semanticAttempt++) {
-      sink = {};
-      const bootstrapLifecycle = createLlmLifecycle("bootstrap_domain");
-      for await (const event of runStructuredStreaming({
-        llm,
-        model,
-        baseMessages: bootstrapRequestMessages,
-        opts: { ...opts, nativeFreshConnection: true },
-        profile: { kind: "json-zod", schema: DomainEntrySchema },
-        maxRetries: opts.structuredRetries ?? 1,
-        callSite: "init.bootstrap",
-        lifecycle: bootstrapLifecycle,
-        signal,
-        onEvent: () => {
-        },
-        transport: "non-stream"
-      }, sink)) {
-        yield event;
+      const groupEntries = [];
+      attemptSinks = [];
+      for (const [index, messages] of groupMessages.entries()) {
+        const sink = {};
+        const repair = repairInstructions[index];
+        const bootstrapLifecycle = createLlmLifecycle("bootstrap_domain");
+        for await (const event of runStructuredStreaming({
+          llm,
+          model,
+          baseMessages: repair === void 0 ? messages : [...messages, { role: "user", content: repair }],
+          opts: requestOpts,
+          profile: { kind: "json-zod", schema: DomainEntrySchema },
+          maxRetries: opts.structuredRetries ?? 1,
+          callSite: "init.bootstrap",
+          lifecycle: bootstrapLifecycle,
+          signal,
+          onEvent: () => {
+          },
+          transport: "non-stream"
+        }, sink)) {
+          yield event;
+        }
+        bootstrapOutputTokens += sink.outputTokens ?? 0;
+        attemptSinks.push(sink);
+        const parsed = sink.value;
+        groupEntries.push({
+          id: parsed.id,
+          name: parsed.name,
+          wiki_folder: parsed.wiki_folder,
+          entity_types: parsed.entity_types,
+          language_notes: parsed.language_notes
+        });
       }
-      bootstrapOutputTokens += sink.outputTokens ?? 0;
-      parsed = sink.value;
+      for (const field of ["id", "wiki_folder"]) {
+        if (groupEntries.some((groupEntry) => groupEntry[field] !== groupEntries[0][field])) {
+          yield { kind: "system", message: `bootstrap group conflict on ${field}; group 0 wins` };
+        }
+      }
+      const merged = mergeBootstrapEntries(groupEntries);
       entry = {
-        id: parsed.id,
-        name: parsed.name,
-        wiki_folder: sanitizeWikiFolder(parsed.wiki_folder),
-        entity_types: mergeBootstrapEntityTypes(existing?.entity_types, parsed.entity_types),
-        language_notes: parsed.language_notes
+        id: merged.id,
+        name: merged.name,
+        wiki_folder: sanitizeWikiFolder(merged.wiki_folder),
+        entity_types: mergeBootstrapEntityTypes(existing?.entity_types, merged.entity_types ?? []),
+        language_notes: merged.language_notes
       };
       for (const entityType of entry.entity_types ?? []) {
         if (entityType.wiki_subfolder) {
@@ -62877,23 +63829,38 @@ ${schemaContent}` : ""
       }
       if (!entry.id || !entry.wiki_folder) throw new Error("Missing required fields");
       if (force && existing) entry.wiki_folder = existing.wiki_folder;
-      const taxonomyIssue = bootstrapTaxonomyIssue(entry, bootstrapEvidence);
+      const taxonomyIssue = bootstrapTaxonomyIssue(entry, fullBootstrapEvidence);
       if (taxonomyIssue === null) break;
-      yield lifecycleEvent(sink.lifecycle.id, sink.lifecycle.action, "failed");
+      for (const attemptSink of attemptSinks) {
+        yield lifecycleEvent(attemptSink.lifecycle.id, attemptSink.lifecycle.action, "failed");
+      }
       if (semanticAttempt >= (opts.structuredRetries ?? 1)) {
         throw new Error(taxonomyIssue);
       }
-      bootstrapRequestMessages = [
-        ...messages,
-        { role: "user", content: renderBootstrapTaxonomyRepairPrompt(taxonomyIssue, bootstrapEvidence, existing?.entity_types) }
-      ];
+      const repairs = bootstrapGroups.map((group) => renderBootstrapTaxonomyRepairPrompt(
+        taxonomyIssue,
+        group,
+        existing?.entity_types,
+        opts.tokenCalibration
+      ));
+      const repairFits = groupMessages.every((messages, index) => estimatePreparedMessages(
+        prepareChatMessages([...messages, { role: "user", content: repairs[index] }], requestOpts),
+        opts.tokenCalibration
+      ) <= budget.inputBudgetTokens);
+      if (!repairFits) throw new Error(taxonomyIssue);
+      repairInstructions = repairs;
     }
-    parsed = sink.value;
-    yield lifecycleEvent(sink.lifecycle.id, sink.lifecycle.action, "applying");
-    yield lifecycleEvent(sink.lifecycle.id, sink.lifecycle.action, "completed");
-    yield { kind: "tool_result", ok: true, preview: `domain: ${parsed.id}` };
-    if (sink.fullText) yield { kind: "assistant_text", delta: sink.fullText };
+    for (const attemptSink of attemptSinks) {
+      yield lifecycleEvent(attemptSink.lifecycle.id, attemptSink.lifecycle.action, "applying");
+      yield lifecycleEvent(attemptSink.lifecycle.id, attemptSink.lifecycle.action, "completed");
+    }
+    yield { kind: "tool_result", ok: true, preview: `domain: ${entry.id}` };
+    for (const attemptSink of attemptSinks) {
+      if (attemptSink.fullText) yield { kind: "assistant_text", delta: attemptSink.fullText };
+    }
   } catch (error) {
+    const contextError = classifyContextError(error);
+    if (contextError !== null) requestOpts.onContextError?.(contextError);
     yield { kind: "tool_result", ok: false, preview: error.message };
     if (error.name === "AbortError" || signal.aborted) return null;
     yield {
@@ -62930,8 +63897,10 @@ ${schemaContent}` : ""
       bootstrapBundle.evidence,
       new Set((entry.entity_types ?? []).map((entityType) => entityType.type)),
       {
-        inputBudgetTokens,
-        outputBudgetTokens,
+        // Enrichment is a separate phase: it runs on the budget the user's
+        // settings resolved, never on one widened for the bootstrap payload.
+        inputBudgetTokens: configuredBudget.inputBudgetTokens,
+        outputBudgetTokens: configuredBudget.outputBudgetTokens,
         compressionProfile: compressionProfile2,
         mapperRetries: opts.structuredRetries ?? 1,
         reducerRetries: opts.structuredRetries ?? 1
@@ -62939,7 +63908,7 @@ ${schemaContent}` : ""
       {
         llm,
         model,
-        opts,
+        opts: budgetOpts(configuredBudget),
         signal: operationSignal,
         onEvent: (event) => {
           if (event.kind === "llm_call_stats") enrichmentOutputTokens += event.outputTokens;
@@ -62951,7 +63920,15 @@ ${schemaContent}` : ""
     if (error.name === "AbortError" || signal.aborted) return null;
     yield {
       kind: "error",
-      message: `init: domain bootstrap failed \u2014 evidence type enrichment failed: ${error.message}. Fix model/prompt and re-run.`
+      // Enrichment raises the same size-shaped failures as the bootstrap payload —
+      // partitionTypeUnits throws PromptBudgetExceededError for a single oversized
+      // {entityKey, facts} unit — so it reports through the same enumerated
+      // model-context error instead of a third message shape that names neither the
+      // model nor its window. Anything that is not size-shaped keeps its own text.
+      message: evidencePreparationFailure(
+        error,
+        (needs) => unsupportedModelContext(needs, configuredBudget)
+      )
     };
     yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
     return null;
@@ -63899,7 +64876,7 @@ async function wipeDomainFolderLocked(vaultTools, root, signal, snapshotByteLimi
     for (const folder of foldersDeepestFirst(snapshot.folders)) {
       await requireOriginalRootAbsent(vaultTools, root, signal);
       await requireEmptyDirectory(vaultTools, folder, signal, "quarantined folder");
-      await vaultTools.rmdir(folder, false);
+      await rmdirEmptyDirectory(vaultTools, folder, signal, "quarantined folder");
       throwIfWipeAborted(signal);
       if (await checkedExists(vaultTools, folder, signal)) {
         throw new Error(`force: non-recursive rmdir did not remove ${folder}`);
@@ -64000,7 +64977,7 @@ async function createWipeTransaction(vaultTools, signal) {
         if (mkdirSucceeded && await vaultTools.exists(candidate)) {
           const listed = await vaultTools.adapter.list(candidate);
           if (listed.files.length === 0 && listed.folders.length === 0) {
-            await vaultTools.rmdir(candidate, false);
+            await rmdirEmptyDirectory(vaultTools, candidate, void 0, "new transaction");
           }
         }
       } catch (cleanupError) {
@@ -64065,9 +65042,22 @@ async function requireDirectEntries(vaultTools, path5, expectedFiles, expectedFo
 async function requireEmptyDirectory(vaultTools, path5, signal, label) {
   await requireDirectEntries(vaultTools, path5, [], [], signal, label);
 }
+async function rmdirEmptyDirectory(vaultTools, path5, signal, label) {
+  try {
+    await vaultTools.rmdir(path5, false);
+  } catch (error) {
+    if (!await vaultTools.exists(path5)) throw error;
+    try {
+      await requireEmptyDirectory(vaultTools, path5, signal, label);
+    } catch {
+      throw error;
+    }
+    await vaultTools.rmdir(path5, true);
+  }
+}
 async function removeKnownEmptyDirectory(vaultTools, path5, signal, label) {
   await requireEmptyDirectory(vaultTools, path5, signal, label);
-  await vaultTools.rmdir(path5, false);
+  await rmdirEmptyDirectory(vaultTools, path5, signal, label);
   throwIfWipeAborted(signal);
   if (await checkedExists(vaultTools, path5, signal)) {
     throw new Error(`force: non-recursive rmdir did not remove ${label} ${path5}`);
@@ -64329,7 +65319,7 @@ async function rollbackWipeTransaction(vaultTools, root, transaction, quarantine
     if (await vaultTools.exists(transaction)) {
       const listed = await vaultTools.adapter.list(transaction);
       if (listed.files.length === 0 && listed.folders.length === 0) {
-        await vaultTools.rmdir(transaction, false);
+        await rmdirEmptyDirectory(vaultTools, transaction, void 0, "rollback transaction");
       }
     }
     return;
@@ -64500,7 +65490,8 @@ function resolveVisionOptions(options) {
     maxTokens: options?.maxTokens,
     onEvent: options?.onEvent,
     nativeRequestRetries: options?.nativeRequestRetries,
-    nativeRequestIdleTimeoutMs: options?.nativeRequestIdleTimeoutMs
+    nativeRequestIdleTimeoutMs: options?.nativeRequestIdleTimeoutMs,
+    tokenCalibration: options?.tokenCalibration
   };
 }
 function visionContextRecoveryError(options, effectiveInputBudget, details) {
@@ -64541,6 +65532,7 @@ function visionCallOptions(options, language, reasoningLanguage, effectiveInputB
     reasoningLanguage,
     nativeRequestRetries: options.nativeRequestRetries,
     nativeRequestIdleTimeoutMs: options.nativeRequestIdleTimeoutMs,
+    tokenCalibration: options.tokenCalibration,
     jsonMode: "json_schema",
     jsonSchema: {
       name: "vision_analysis",
@@ -64576,7 +65568,8 @@ async function callVisionLlm(llm, model, systemPrompt, pages, signal, language, 
     attemptOffset: attempt
   });
   const estimatedInputTokens = estimatePreparedMessages(
-    params.messages
+    params.messages,
+    options.tokenCalibration
   );
   let providerDispatched = false;
   let response;
@@ -64739,7 +65732,7 @@ async function analyzePdf(buffer, llm, model, signal, language = "auto", reasoni
     }),
     visionCallOptions(resolved, language, reasoningLanguage)
   );
-  const fixedEstimatedTokens = estimatePreparedMessages(fixedMessages);
+  const fixedEstimatedTokens = estimatePreparedMessages(fixedMessages, resolved.tokenCalibration);
   const resizedPages = /* @__PURE__ */ new Set();
   let visionAttempt = 0;
   const recognize = (batch, effectiveInputBudget2) => callVisionLlm(
@@ -64784,7 +65777,10 @@ async function analyzePdf(buffer, llm, model, signal, language = "auto", reasoni
       batches = batchPdfPages(pending, {
         inputBudgetTokens: effectiveInputBudget,
         fixedEstimatedTokens,
-        mediaReservationTokens: 4096
+        // The same constant `estimateMessages` prices an `image_url` part at: this
+        // number decides how many pages fit a batch, so a second literal here could
+        // drift from what the estimator actually charges.
+        mediaReservationTokens: MEDIA_TOKENS
       });
     } catch (error) {
       if (originalContextDetails !== void 0) {
@@ -65242,6 +66238,25 @@ var enFormatProgressFallback = {
   truncationHintEnv: "raise the limit: env CLAUDE_CODE_MAX_OUTPUT_TOKENS in iclaude.sh",
   truncationHintSettings: "raise the limit: Settings \u2192 per-operation \u2192 format \u2192 maxTokens"
 };
+var VISION_WINDOW_FIELD = "Settings \u2192 Vision \u2192 Model context window";
+var VISION_WINDOW_SOURCE_LABEL = {
+  configured: "you set this window",
+  discovered: "reported by the backend",
+  learned: "learned from a provider rejection",
+  default: "fallback"
+};
+function isVisionSizeError(error) {
+  return error instanceof PromptBudgetExceededError || error instanceof Error && error.message.includes("context recovery exhausted");
+}
+function visionSizeSkipReason(error, vision) {
+  if (!isVisionSizeError(error)) return null;
+  if (vision.contextWindow === void 0 || vision.contextWindowSource === void 0) return null;
+  if (vision.contextWindowSource === "default") {
+    return `${vision.model}: the backend advertises no context window for this vision model, so the request was sized from the Format operation's own budget. Set ${VISION_WINDOW_FIELD} to this model's real window.`;
+  }
+  const advice = vision.contextWindowSource === "configured" ? `Raise or clear ${VISION_WINDOW_FIELD}.` : `Set ${VISION_WINDOW_FIELD} if this model's real window is larger.`;
+  return `${vision.model}: the request does not fit its ${vision.contextWindow}-token context window (${VISION_WINDOW_SOURCE_LABEL[vision.contextWindowSource]}). ${advice}`;
+}
 async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, signal, opts = {}, backend = "native-agent", wikiVaultPath, wikiLinkValidationRetries = 3, visionSettings = { enabled: false, model: "" }, visionTempStore, progress = enFormatProgressFallback, formatDomain) {
   const start = Date.now();
   const filePath = args[0];
@@ -65298,8 +66313,9 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
             visionSettings.imageOnly ?? false,
             usedVisionTemplates,
             {
-              inputBudgetTokens: opts.inputBudgetTokens,
-              maxTokens: opts.maxTokens,
+              inputBudgetTokens: visionSettings.inputBudgetTokens ?? opts.inputBudgetTokens,
+              maxTokens: visionSettings.maxTokens ?? opts.maxTokens,
+              tokenCalibration: visionSettings.tokenCalibration,
               onEvent: (event) => visionEvents.push(event)
             }
           );
@@ -65319,7 +66335,13 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
             for (const event of visionEvents) yield event;
           }
           yield { kind: "tool_result", ok: false, preview: e?.message ?? "failed" };
-          yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "Vision skipped", details: [path5] };
+          const sizeReason = visionSizeSkipReason(e, visionSettings);
+          yield {
+            kind: "info_text",
+            icon: "\u26A0\uFE0F",
+            summary: "Vision skipped",
+            details: sizeReason === null ? [path5] : [path5, sizeReason]
+          };
         }
       }
     }
@@ -65402,7 +66424,8 @@ ${tagRegistryBlock}` : ""}`;
     configuredInputBudget: opts.inputBudgetTokens ?? 0,
     effectiveInputBudget: opts.inputBudgetTokens ?? 0,
     estimatedInputTokens: estimatePreparedMessages(
-      params.messages
+      params.messages,
+      opts.tokenCalibration
     ),
     actualInputTokens,
     outputBudget: opts.maxTokens,
@@ -66997,17 +68020,59 @@ var VisionTempStore = class {
 
 // src/agent-runner.ts
 var DISABLED_BOILERPLATE_DEMOTION = { enabled: false, factor: 0 };
+var CLAUDE_PLACEHOLDER_RECORD = Object.freeze({
+  contextWindow: 0,
+  source: "default",
+  calibration: 1,
+  samples: 0
+});
 function resolveFollowUpPolicyOperation(parent) {
   return parent === "query" ? "query" : "lint";
 }
+async function resolveVisionBudget(store, settings, model, signal) {
+  const events = [];
+  if (settings.backend !== "native-agent" || !model) return { events };
+  const baseUrl = settings.nativeAgent.baseUrl;
+  let record;
+  try {
+    record = await store.resolve(
+      baseUrl,
+      model,
+      settings.nativeAgent.apiKey ?? "",
+      Date.now(),
+      signal,
+      (event) => events.push(event),
+      configuredContextWindowFor(settings.nativeAgent, model)
+    );
+  } catch (error) {
+    if (signal?.aborted) return { events: [] };
+    throw error;
+  }
+  if (record.source === "default") return { record, events };
+  const budget = resolveBudget(record, "format", nativeBudgetOverrides(settings, "format"));
+  events.push({
+    kind: "budget_resolved",
+    operation: "format",
+    model,
+    contextWindow: budget.contextWindow,
+    inputSource: budget.inputSource,
+    outputSource: budget.outputSource,
+    calibration: budget.calibration,
+    samples: record.samples,
+    inputBudget: budget.inputBudgetTokens,
+    outputBudget: budget.outputBudgetTokens
+  });
+  return { budget, record, events };
+}
 var AgentRunner = class {
-  constructor(llm, settings, vaultTools, vaultName, domains, visionTempBaseDir, isMobile = false) {
+  constructor(llm, settings, vaultTools, vaultName, domains, visionTempBaseDir = void 0, isMobile = false, modelContextStore) {
     this.settings = settings;
     this.vaultTools = vaultTools;
     this.vaultName = vaultName;
     this.domains = domains;
     this.visionTempBaseDir = visionTempBaseDir;
     this.isMobile = isMobile;
+    this.modelContextStore = modelContextStore;
     this.llm = llm;
   }
   settings;
@@ -67016,15 +68081,40 @@ var AgentRunner = class {
   domains;
   visionTempBaseDir;
   isMobile;
+  modelContextStore;
   llm;
-  buildOptsFor(op, policyOperation) {
+  /**
+   * Resolves the model FIRST, then its context record, then the budgets — a window
+   * probed for a different model than the one the call uses would be confidently
+   * wrong. Diagnostics are returned as data (`events`), not emitted: this is a
+   * private helper, not a generator step. `run` yields the array before the request
+   * and drains it again as the operation progresses, so the run-time
+   * `calibration_sample` entries the returned `opts` push onto it are yielded too.
+   */
+  async buildOptsFor(op, policyOperation, signal) {
     const s = this.settings;
-    const resolved = resolveModelCallPolicy(s, op, policyOperation);
+    const events = [];
+    const model = effectiveModel(s, op, policyOperation);
+    const baseUrl = s.nativeAgent.baseUrl;
+    const record = s.backend === "claude-agent" ? CLAUDE_PLACEHOLDER_RECORD : await this.modelContextStore.resolve(
+      baseUrl,
+      model,
+      s.nativeAgent.apiKey ?? "",
+      Date.now(),
+      signal,
+      (event) => events.push(event),
+      // The window the user configured FOR THIS MODEL. The setting is keyed by
+      // model because the store is: one global number forced the same window
+      // onto every per-operation model, however differently sized they are.
+      configuredContextWindowFor(s.nativeAgent, model)
+    );
+    const resolved = resolveCallPolicy(s, op, record, policyOperation);
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
     const mergeDeleteWarnThreshold = s.nativeAgent.mergeDeleteWarnThreshold;
     if (s.backend === "claude-agent") {
       return {
         model: resolved.model,
+        events,
         opts: {
           ...resolved.opts,
           systemPrompt: s.systemPrompt,
@@ -67034,9 +68124,24 @@ var AgentRunner = class {
         }
       };
     }
+    if (resolved.budget) {
+      events.push({
+        kind: "budget_resolved",
+        operation: policyKey(op, policyOperation),
+        model: resolved.model,
+        contextWindow: resolved.budget.contextWindow,
+        inputSource: resolved.budget.inputSource,
+        outputSource: resolved.budget.outputSource,
+        calibration: resolved.budget.calibration,
+        samples: record.samples,
+        inputBudget: resolved.budget.inputBudgetTokens,
+        outputBudget: resolved.budget.outputBudgetTokens
+      });
+    }
     const na = s.nativeAgent;
     return {
       model: resolved.model,
+      events,
       opts: {
         ...resolved.opts,
         systemPrompt: s.systemPrompt,
@@ -67051,7 +68156,44 @@ var AgentRunner = class {
         lintNearDuplicate: na.lintNearDuplicate,
         nearDupThreshold: na.nearDupThreshold,
         nativeRequestRetries: s.llmIdleRetries ?? 3,
-        nativeRequestIdleTimeoutMs: (s.llmIdleTimeoutSec ?? 300) * 1e3
+        nativeRequestIdleTimeoutMs: (s.llmIdleTimeoutSec ?? 300) * 1e3,
+        onUsageObserved: ({ estimated, actual, calibration }) => {
+          if (actual === void 0) return;
+          const outcome = this.modelContextStore.observeUsage(
+            baseUrl,
+            resolved.model,
+            estimated,
+            actual,
+            calibration
+          );
+          events.push({
+            kind: "calibration_sample",
+            model: resolved.model,
+            estimated,
+            actual,
+            // Recorded with the sample so the log line stands alone: the implied
+            // factor this sample argues for is `appliedCalibration * ratio`, and
+            // reconstructing it used to need a join to `budget_resolved`.
+            appliedCalibration: calibration,
+            ...outcome
+          });
+        },
+        onContextError: (details) => {
+          const outcome = this.modelContextStore.observeContextError(
+            baseUrl,
+            resolved.model,
+            details.maxContextTokens
+          );
+          if (!outcome.applied && outcome.reason === "configured") {
+            events.push({
+              kind: "context_window_conflict",
+              model: resolved.model,
+              contextWindow: outcome.contextWindow,
+              reportedWindow: outcome.reportedWindow,
+              ...details.promptTokens === void 0 ? {} : { promptTokens: details.promptTokens }
+            });
+          }
+        }
       }
     };
   }
@@ -67173,8 +68315,28 @@ var AgentRunner = class {
           nativeRequestIdleTimeoutMs: (this.settings.llmIdleTimeoutSec ?? 300) * 1e3
         };
         const visionSettings = noVision ? { ...baseVisionSettings, enabled: false } : baseVisionSettings;
+        const vision = await resolveVisionBudget(
+          this.modelContextStore,
+          this.settings,
+          visionSettings.enabled ? visionSettings.model : "",
+          req.signal
+        );
+        yield* vision.events;
+        const visionRuntime = {
+          ...visionSettings,
+          // Carried even when no budget was derived from it: a client-side size
+          // refusal has to be able to name the window it was measured against and
+          // where that number came from.
+          contextWindow: vision.record?.contextWindow,
+          contextWindowSource: vision.record?.source,
+          ...vision.budget ? {
+            inputBudgetTokens: vision.budget.inputBudgetTokens,
+            maxTokens: vision.budget.outputBudgetTokens,
+            tokenCalibration: vision.budget.calibration
+          } : {}
+        };
         const progress = i18nFor(resolveLang(this.settings.outputLanguage)).formatProgress;
-        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings, visionTempStore, progress, formatDomain);
+        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionRuntime, visionTempStore, progress, formatDomain);
         break;
       }
       case "delete":
@@ -67188,11 +68350,22 @@ var AgentRunner = class {
     }
   }
   async *run(req) {
-    const { model, opts } = this.buildOptsFor(
-      req.operation,
-      req.policyOperation
-    );
-    const initIngestRuntime = req.operation === "init" ? this.buildOptsFor("ingest") : void 0;
+    let built;
+    let initIngestRuntime;
+    try {
+      built = await this.buildOptsFor(req.operation, req.policyOperation, req.signal);
+      initIngestRuntime = req.operation === "init" ? await this.buildOptsFor("ingest", void 0, req.signal) : void 0;
+    } catch (error) {
+      if (req.signal.aborted) return;
+      throw error;
+    }
+    const { model, opts } = built;
+    const diagnosticQueues = initIngestRuntime ? [built.events, initIngestRuntime.events] : [built.events];
+    function* drainDiagnostics() {
+      for (const queue of diagnosticQueues) {
+        while (queue.length > 0) yield queue.shift();
+      }
+    }
     const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1e3;
     const connectionTimeoutMs = (this.settings.llmConnectionTimeoutSec ?? 15) * 1e3;
     yield {
@@ -67202,6 +68375,7 @@ var AgentRunner = class {
     };
     const baseUrlHint = this.settings.backend === "native-agent" ? ` @ ${this.settings.nativeAgent.baseUrl}` : "";
     yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"}${baseUrlHint}` };
+    yield* drainDiagnostics();
     if (req.signal.aborted) return;
     const vaultRoot = req.cwd ?? "";
     const domains = req.domainId && req.domainId !== "*" ? this.domains.filter((d) => d.id === req.domainId) : this.domains;
@@ -67272,7 +68446,9 @@ var AgentRunner = class {
               ev.runId = req.runId;
             }
             yield ev;
+            yield* drainDiagnostics();
           }
+          yield* drainDiagnostics();
           if (idleCtrl.signal.aborted && !req.signal.aborted) {
             if (visibleAssistantTextSeen) throw idleAfterVisibleOutputAbort();
             if (attempt < maxRetries) {
@@ -67579,6 +68755,9 @@ function createUndiciRequestAdapterFetch(connectionTimeoutMs, finalizers) {
     }
   };
   return wrapped;
+}
+function selectNativeFetch(options) {
+  return selectNativeTransport(options).fetch;
 }
 function selectNativeTransport(options) {
   if (options.isMobile) {
@@ -68178,6 +69357,25 @@ function chatCompletionsPath(baseURL) {
     return "/chat/completions";
   }
 }
+function createNativeProbeFetch(options) {
+  let proxyFetch = null;
+  if (!options.isMobile && options.proxyConfig.enabled) {
+    try {
+      const baseHost = new URL(options.baseURL).hostname;
+      if (!shouldBypass(baseHost, parseNoProxy(options.proxyConfig.noProxy))) {
+        proxyFetch = createProxyFetch(options.proxyConfig, options.connectionTimeoutMs);
+      }
+    } catch {
+    }
+  }
+  return selectNativeFetch({
+    isMobile: options.isMobile,
+    mobileFetch: options.mobileFetch,
+    proxyFetch,
+    directDesktopFetch: () => createDirectDesktopFetch(options.connectionTimeoutMs),
+    preferDesktopHostForNonStream: true
+  });
+}
 function createNativeOpenAiClient(options) {
   let nativeTransportDiagnostic;
   const nativeHttpResponseDiagnostics = /* @__PURE__ */ new WeakMap();
@@ -68460,6 +69658,40 @@ var WikiController = class {
   _reasoningRetainedBytes = 0;
   _reasoningOmittedBytes = 0;
   _reasoningTruncationReported = false;
+  /**
+   * One store for the whole plugin session, so a window probed for one operation is
+   * reused by the next. `fetchFn` is resolved per request rather than captured at
+   * construction: the settings it depends on (proxy, connection timeout, base URL)
+   * change while the plugin is loaded, and `plugin.settings` is not populated yet
+   * when the controller is constructed.
+   */
+  modelContextStore = new ModelContextStore({
+    read: async () => (await this.localConfigStore.load()).modelContext ?? {},
+    write: async (next) => {
+      await this.localConfigStore.save({ modelContext: next });
+    },
+    fetchFn: async (input, init) => (await this.probeFetch())(input, init)
+  });
+  /** Transport construction stays in the native factory; this only supplies the inputs. */
+  async probeFetch() {
+    const s = resolveEffective(this.plugin.settings, await this.localConfigStore.load());
+    return createNativeProbeFetch({
+      baseURL: s.nativeAgent.baseUrl,
+      isMobile: import_obsidian10.Platform.isMobile,
+      proxyConfig: s.proxy,
+      mobileFetch,
+      connectionTimeoutMs: s.llmConnectionTimeoutSec * 1e3
+    });
+  }
+  /**
+   * Cached-only pass-through for the settings tab: reads whatever `ModelContextStore`
+   * already has in memory for this (baseUrl, model) pair without probing or awaiting
+   * anything. Settings rendering is synchronous, so an absent record here must render
+   * as "automatic" rather than trigger a network probe.
+   */
+  cachedModelContext(baseUrl, model) {
+    return this.modelContextStore.get(baseUrl, model);
+  }
   isBusy() {
     return this.current !== null;
   }
@@ -69060,7 +70292,7 @@ var WikiController = class {
       });
     }
     this._currentNativeTransportDiagnostic = llm.nativeTransportDiagnostic;
-    return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`, import_obsidian10.Platform.isMobile);
+    return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`, import_obsidian10.Platform.isMobile, this.modelContextStore);
   }
   async logEvent(_vaultRoot, sessionId, op, domainId, ev) {
     if (ev.kind === "run_config" && this._currentNativeTransportDiagnostic) {
@@ -70052,6 +71284,7 @@ var LlmWikiPlugin = class extends import_obsidian14.Plugin {
     await this.loadSettings();
     await migrateToLocalV1(this, this.localConfigStore);
     await migrateToLocalV2(this, this.localConfigStore);
+    await offerAutoBudgetMigration(this, this.localConfigStore);
     try {
       const domains = await this.domainStore.load();
       await migrateIndexFormat(this.app.vault, domains);
@@ -70436,12 +71669,26 @@ async function migrateToLocalV2(plugin, localConfigStore) {
   await adapter.write(localPath, JSON.stringify(newLocal, null, 2));
   localConfigStore["cache"] = null;
 }
+async function offerAutoBudgetMigration(plugin, localConfigStore) {
+  const local = await localConfigStore.load();
+  if (local.migrated_auto_budget) return;
+  if (plugin.settings.backend !== "native-agent") return;
+  if (hasStoredNativeBudget(plugin.settings)) {
+    const switchToAutomatic = await new AutoBudgetNoticeModal(plugin.app).ask();
+    if (switchToAutomatic) {
+      clearNativeBudgets(plugin.settings);
+      await plugin.saveSettings();
+    }
+  }
+  await localConfigStore.save({ migrated_auto_budget: true });
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   migrateDomainWikiFolder,
   migrateLegacyData,
   migrateToLocalV1,
-  migrateToLocalV2
+  migrateToLocalV2,
+  offerAutoBudgetMigration
 });
 /*! Bundled license information:
 
