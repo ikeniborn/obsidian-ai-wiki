@@ -7,7 +7,7 @@ import { contentHash } from "../src/content-hash";
 import type { DomainEntry } from "../src/domain";
 import { hashSource } from "../src/incremental-sources";
 import type { PageSimilarityService } from "../src/page-similarity";
-import type { IngestOutcome, LlmClient, RunEvent } from "../src/types";
+import type { IngestOutcome, LlmCallOptions, LlmClient, RunEvent } from "../src/types";
 import type { VaultAdapter } from "../src/vault-tools";
 import { mockChatResponse } from "./openai-mock-response";
 
@@ -180,6 +180,7 @@ async function runCreateIntegrityCase(
     entityType: "concept",
     wikiSubfolder: "concept",
   },
+  optsOverrides: Partial<LlmCallOptions> = {},
 ): Promise<{
   adapter: MemoryAdapter;
   events: RunEvent[];
@@ -263,6 +264,7 @@ async function runCreateIntegrityCase(
       maxTokens: 4_000,
       structuredRetries: 0,
       synthesisMaxEntityBatchSize: 1,
+      ...optsOverrides,
     },
     new PageSimilarityService({ mode: "jaccard", topK: 5 }),
   ));
@@ -3366,4 +3368,21 @@ test("deferred canonical merge never deletes a duplicate candidate", async () =>
   assert.equal(adapter.files.get(INDEX_PATH)!.includes("wiki_demo_existing_duplicate"), true);
   assert.equal(events.some((event) =>
     event.kind === "info_text" && event.summary === "Duplicate merge deferred"), true);
+});
+
+test("runIngest threads the token calibration into the evidence policy", async () => {
+  // Ingest measures chunk markdown in raw estimator tokens but bounds it with a
+  // calibrated budget, so the factor has to reach the evidence policy. ensurePolicy
+  // rejects a policy whose calibration disagrees with the call options, which is what
+  // an unthreaded factor looks like from inside evidence preparation.
+  const { outcome } = await runCreateIntegrityCase(
+    [{
+      entityKey: "calibrated-unit",
+      annotation: "Server-owned description for a calibrated run.",
+      modelDescription: "Model description.",
+    }],
+    { entityType: "concept", wikiSubfolder: "concept" },
+    { tokenCalibration: 1.25 },
+  );
+  assert.equal(outcome.ok, true, JSON.stringify(outcome));
 });

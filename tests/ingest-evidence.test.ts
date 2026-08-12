@@ -2689,11 +2689,14 @@ test("the chunk budget bounds mapper chunks and is converted out of calibrated t
   }
   // The budget is calibrated; chunkMarkdownSource measures raw estimator tokens,
   // so halving the calibration doubles the raw room a chunk may use.
+  // The policy factor and the call factor are the same number in production, so the
+  // calibrated case sets both; ensurePolicy rejects a policy that disagrees with the
+  // call options it will be measured against.
   const calibrated = chunkSourceForEvidence(
     source,
     "demo",
     { ...evidencePolicy(20_000), chunkBudgetTokens: 200, calibration: 0.5 },
-    {},
+    { tokenCalibration: 0.5 },
     [],
   );
   assert.ok(calibrated.length < bound.length, "a calibration below 1 must widen the raw chunk budget");

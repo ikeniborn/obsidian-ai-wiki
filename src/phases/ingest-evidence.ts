@@ -1089,7 +1089,7 @@ export function chunkSourceForEvidence(
   opts: LlmCallOptions = {},
   configuredEntityTypes?: string[],
 ): SourceChunk[] {
-  ensurePolicy(policy);
+  ensurePolicy(policy, opts);
   if (source.length === 0) return [];
   const normalizedEntityTypes = configuredEntityTypes ?? [];
   const mode: EvidenceMappingMode = {
@@ -1183,7 +1183,7 @@ function messagesForReducer(units: EvidenceUnit[]): OpenAI.Chat.ChatCompletionMe
   ];
 }
 
-function ensurePolicy(policy: EvidencePolicy): void {
+function ensurePolicy(policy: EvidencePolicy, opts?: LlmCallOptions): void {
   if (!Number.isSafeInteger(policy.inputBudgetTokens) || policy.inputBudgetTokens <= 0) {
     throw new EvidenceCoverageError("Evidence input budget must be a positive safe integer");
   }
@@ -1200,6 +1200,16 @@ function ensurePolicy(policy: EvidencePolicy): void {
   if (policy.calibration !== undefined
     && (!Number.isFinite(policy.calibration) || policy.calibration <= 0)) {
     throw new EvidenceCoverageError("Evidence token calibration must be a positive finite number");
+  }
+  // The policy's budgets and the request estimates must be expressed in the same
+  // calibrated unit. A caller that threads the factor into the call options but not
+  // into the policy silently compares a calibrated budget against a raw measurement,
+  // so the mismatch is rejected here instead of producing a wrong chunk ceiling.
+  if (opts !== undefined && (policy.calibration ?? 1) !== (opts.tokenCalibration ?? 1)) {
+    throw new EvidenceCoverageError(
+      `Evidence policy calibration ${policy.calibration ?? 1} does not match the call `
+      + `calibration ${opts.tokenCalibration ?? 1}`,
+    );
   }
 }
 
@@ -1958,7 +1968,7 @@ async function prepareSourceEvidenceInternal(
   runtime: EvidenceRuntime,
   mode: EvidenceMappingMode,
 ): Promise<EntityEvidence[]> {
-  ensurePolicy(policy);
+  ensurePolicy(policy, runtime.opts);
   ensureOutputBudget(policy, runtime.opts);
   const configuredTypes = mode.rejectEntityTypes
     ? []

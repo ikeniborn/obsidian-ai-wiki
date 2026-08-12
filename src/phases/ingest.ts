@@ -894,6 +894,11 @@ export async function* runIngest(
         compressionProfile: policy.compression,
         mapperRetries: opts.structuredRetries ?? 1,
         reducerRetries: opts.structuredRetries ?? 1,
+        // The budgets above are calibrated tokens. chunkSourceForEvidence converts the
+        // chunk ceiling back to raw estimator tokens with this factor, so omitting it
+        // would compare a calibrated budget against a raw measurement — the unit Init
+        // already supplies at init.ts.
+        calibration: opts.tokenCalibration ?? 1,
       }, {
         llm,
         model,
