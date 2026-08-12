@@ -318,7 +318,14 @@ export class ModelContextStore {
     const record = this.get(baseUrl, model);
     const ratio = estimated > 0 ? actual / estimated : 0;
     if (!record || estimated <= 0 || actual <= 0) return { ratio, applied: false, clamped: false };
-    if (ratio < CALIBRATION_MIN || ratio > CALIBRATION_MAX) {
+    // The plausibility band belongs to the IMPLIED factor, not to the raw ratio.
+    // `ratio` is measured through `appliedCalibration`, so a record parked near a
+    // clamp produces a raw ratio near the reciprocal of that clamp: with a stored
+    // factor of 3 and a true factor of 1, every corrective sample has a raw ratio
+    // of 1/3 and a raw gate discards all of them — the record never recovers.
+    // `target` is what the update aims at, so it is what has to be plausible.
+    const target = appliedCalibration * ratio;
+    if (target < CALIBRATION_MIN || target > CALIBRATION_MAX) {
       return { ratio, applied: false, clamped: true };
     }
     // MULTIPLICATIVE. `ratio` is measured THROUGH `appliedCalibration`, so
@@ -332,7 +339,6 @@ export class ModelContextStore {
     // factor compounds away from the truth instead of converging on it
     // (a +10% raw bias landed on +25% over eight samples in one observed run).
     const weight = Math.min(record.samples, CALIBRATION_WINDOW - 1);
-    const target = appliedCalibration * ratio;
     record.calibration = Math.min(CALIBRATION_MAX, Math.max(
       CALIBRATION_MIN,
       (record.calibration * weight + target) / (weight + 1),

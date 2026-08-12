@@ -392,3 +392,50 @@ test("calibration is a moving average that discards anomalies", async () => {
   );
   assert.equal(store.get("http://x/v1", "m1")!.samples, 1, "the anomaly must not count as a sample");
 });
+
+test("the anomaly gate judges the implied factor, so a record at the clamp can still recover", async () => {
+  // A record parked at the top of the band: every estimate it produces is three
+  // times the truth, so every corrective sample has a RAW ratio of 1/3 — below the
+  // 0.5 floor. Gating on the raw ratio throws all of them away and the record can
+  // never come back down; gating on the IMPLIED factor (applied x ratio = 1.0)
+  // accepts them.
+  const store = storeWith(
+    { "http://x/v1::m1": { contextWindow: 131_072, source: "discovered", calibration: 3, samples: 8 } },
+    (async () => { throw new Error("offline"); }) as typeof fetch,
+  );
+  await store.resolve("http://x/v1", "m1", "", 0);
+  const RAW = 1_000;
+  const TRUE_FACTOR = 1;
+
+  const first = store.observeUsage("http://x/v1", "m1", RAW * 3, RAW * TRUE_FACTOR, 3);
+  assert.equal(first.applied, true, "a sample implying a factor of 1.0 is plausible");
+  assert.equal(first.clamped, false);
+
+  for (let run = 0; run < 10; run++) {
+    const applied = store.get("http://x/v1", "m1")!.calibration;
+    for (let step = 0; step < 8; step++) {
+      store.observeUsage("http://x/v1", "m1", RAW * applied, RAW * TRUE_FACTOR, applied);
+    }
+  }
+  const settled = store.get("http://x/v1", "m1")!.calibration;
+  assert.ok(
+    Math.abs(settled - TRUE_FACTOR) < 0.01,
+    `a record stuck at the clamp must decay back to ${TRUE_FACTOR}; it settled on ${settled.toFixed(4)}`,
+  );
+});
+
+test("an implausible implied factor is still discarded even at a corrected calibration", async () => {
+  const store = storeWith(
+    { "http://x/v1::m1": { contextWindow: 131_072, source: "discovered", calibration: 2, samples: 8 } },
+    (async () => { throw new Error("offline"); }) as typeof fetch,
+  );
+  await store.resolve("http://x/v1", "m1", "", 0);
+  const before = store.get("http://x/v1", "m1")!.calibration;
+  // Raw ratio 2.5 sits inside the old [0.5, 3] band, but it was measured through a
+  // factor of 2, so it implies a factor of 5 — the estimator is not off by 5x.
+  const outcome = store.observeUsage("http://x/v1", "m1", 1_000, 2_500, 2);
+  assert.equal(outcome.applied, false);
+  assert.equal(outcome.clamped, true);
+  assert.equal(store.get("http://x/v1", "m1")!.calibration, before);
+  assert.equal(store.get("http://x/v1", "m1")!.samples, 8);
+});
