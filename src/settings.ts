@@ -28,6 +28,7 @@ import {
   type ModelControlField,
 } from "./model-call-policy";
 import { resolveBudget } from "./budget-resolver";
+import { configuredContextRecord, plausibleContextWindow } from "./model-context";
 import { createRequestUrlVisionTransport, runNativeVisionModelCheck } from "./vision-probe";
 
 async function checkNativeAvailability(baseUrl: string, apiKey: string, model: string): Promise<void> {
@@ -347,16 +348,25 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     };
     // Cached-only: never probes. `record` is undefined until the first operation has
     // resolved this (baseUrl, model) pair, in which case the placeholder falls back to
-    // the localized "Automatic" word rather than a guessed number.
+    // the localized "Automatic" word rather than a guessed number. A configured window
+    // needs no run to take effect: it is the same record `ModelContextStore.resolve`
+    // will build, so the numbers shown here are the ones the next run budgets from.
     const automaticBudgetPlaceholders = (
       model: string,
       operation: OpKey,
       overrides: { input?: number; output?: number },
-    ): { input: string; output: string } => {
-      const record = this.plugin.controller.cachedModelContext(s.nativeAgent.baseUrl, model);
-      if (!record) return { input: T.settings.budgetAutomatic, output: T.settings.budgetAutomatic };
+    ): { input: string; output: string; contextWindow: string } => {
+      const cached = this.plugin.controller.cachedModelContext(s.nativeAgent.baseUrl, model);
+      const configured = plausibleContextWindow(s.nativeAgent.contextWindowTokens);
+      const record = configured === null ? cached : configuredContextRecord(configured, cached);
+      const automatic = T.settings.budgetAutomatic;
+      if (!record) return { input: automatic, output: automatic, contextWindow: automatic };
       const budget = resolveBudget(record, operation, overrides);
-      return { input: String(budget.inputBudgetTokens), output: String(budget.outputBudgetTokens) };
+      return {
+        input: String(budget.inputBudgetTokens),
+        output: String(budget.outputBudgetTokens),
+        contextWindow: String(record.contextWindow),
+      };
     };
     const addCompressionControl = (
       setting: Setting,
@@ -845,6 +855,22 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         );
 
       }
+
+      // Native-only, always visible. Empty means "ask the backend"; a number replaces
+      // the discovered window for every native model, and every budget below is
+      // derived from it. Needed on backends that answer /v1/models without ever
+      // advertising a context length.
+      addAutomaticBudgetControl(
+        new Setting(containerEl)
+          .setName(T.settings.contextWindowTokens_name)
+          .setDesc(T.settings.contextWindowTokens_desc),
+        s.nativeAgent.contextWindowTokens,
+        (next) => { s.nativeAgent.contextWindowTokens = next; },
+        automaticBudgetPlaceholders(s.nativeAgent.model, "init", {
+          input: s.nativeAgent.inputBudgetTokens,
+          output: s.nativeAgent.maxTokens,
+        }).contextWindow,
+      );
 
       addPolicyControls(
         modelControls.globalFields,

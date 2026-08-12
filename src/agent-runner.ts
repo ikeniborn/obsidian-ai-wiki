@@ -88,6 +88,7 @@ export class AgentRunner {
           Date.now(),
           signal,
           (event) => events.push(event),
+          s.nativeAgent.contextWindowTokens,
         );
     const resolved = resolveCallPolicy(s, op, record, policyOperation);
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
@@ -153,7 +154,20 @@ export class AgentRunner {
           });
         },
         onContextError: (details) => {
-          this.modelContextStore.observeContextError(baseUrl, resolved.model, details.maxContextTokens);
+          const outcome = this.modelContextStore.observeContextError(
+            baseUrl, resolved.model, details.maxContextTokens,
+          );
+          // A user-supplied window is never shrunk behind the user's back, so this
+          // event is the only trace that the provider disagreed with it.
+          if (!outcome.applied && outcome.reason === "configured") {
+            events.push({
+              kind: "context_window_conflict",
+              model: resolved.model,
+              contextWindow: outcome.contextWindow,
+              reportedWindow: outcome.reportedWindow,
+              ...(details.promptTokens === undefined ? {} : { promptTokens: details.promptTokens }),
+            });
+          }
         },
       },
     };

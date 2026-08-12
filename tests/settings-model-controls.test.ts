@@ -683,6 +683,77 @@ test("addPolicyControls renders a native automatic field even when its value is 
   assert.match(body, /placeholders!\.output/);
 });
 
+test("the context window renders as a native automatic field and never on the claude path", () => {
+  const claudeStart = settingsSource.indexOf(
+    'if (eff.backend === "claude-agent" && !Platform.isMobile) {',
+  );
+  const claudeEnd = settingsSource.indexOf(
+    "new Setting(containerEl).setName(T.settings.h3_backendConnection).setHeading();",
+    claudeStart,
+  );
+  const nativeEnd = settingsSource.indexOf(
+    "new Setting(containerEl).setName(T.settings.h3_vision).setHeading();",
+    claudeEnd,
+  );
+  assert.ok(claudeStart >= 0 && claudeEnd > claudeStart && nativeEnd > claudeEnd);
+  const claudeBlock = settingsSource.slice(claudeStart, claudeEnd);
+  const nativeBlock = settingsSource.slice(claudeEnd, nativeEnd);
+
+  // Always visible, rendered through the same helper as every other automatic field,
+  // and cleared back to automatic by assigning `undefined` (what applyBudgetInput does
+  // on an empty entry).
+  assert.match(
+    nativeBlock,
+    /addAutomaticBudgetControl\(\s*\n\s*new Setting\(containerEl\)\s*\n\s*\.setName\(T\.settings\.contextWindowTokens_name\)/,
+  );
+  assert.match(nativeBlock, /s\.nativeAgent\.contextWindowTokens = next;/);
+  assert.match(nativeBlock, /\}\)\.contextWindow,/);
+  // Automatic budgeting — and this field with it — is native-agent only.
+  assert.doesNotMatch(claudeBlock, /contextWindowTokens/);
+  // The placeholder is still read from the cached record, never probed at render time.
+  assert.doesNotMatch(nativeBlock, /probeContextWindow/);
+});
+
+test("a configured window is honoured by the settings placeholders before any run", async () => {
+  const { configuredContextRecord, plausibleContextWindow } = await import("../src/model-context");
+  const { resolveBudget } = await import("../src/budget-resolver");
+
+  const record = configuredContextRecord(131_072, { contextWindow: 8_192, source: "default", calibration: 1.2, samples: 3 });
+  assert.equal(record.source, "configured");
+  assert.equal(record.calibration, 1.2, "calibration measures the estimator, not the window");
+
+  const budget = resolveBudget(record, "init", {});
+  assert.equal(budget.contextWindow, 131_072);
+  assert.equal(budget.inputBudgetTokens, 110_592);
+  assert.equal(budget.outputBudgetTokens, 8_192);
+  assert.equal(budget.inputSource, "configured", "the source names the setting, not a probe");
+
+  // Format's x4 output multiplier and the input budget both follow the same window.
+  const format = resolveBudget(record, "format", {});
+  assert.equal(format.outputBudgetTokens, 32_768);
+  assert.equal(format.inputBudgetTokens, 88_473);
+
+  // A stored input override still wins over the derived value, and says so.
+  const overridden = resolveBudget(record, "init", { input: 24_000 });
+  assert.equal(overridden.inputBudgetTokens, 24_000);
+  assert.equal(overridden.inputSource, "override");
+
+  assert.equal(plausibleContextWindow(undefined), null);
+  assert.equal(plausibleContextWindow(12), null, "an implausible window falls back to probing");
+  assert.equal(plausibleContextWindow(131_072), 131_072);
+});
+
+test("a persisted context window is normalized like every other optional budget", () => {
+  assert.equal(DEFAULT_SETTINGS.nativeAgent.contextWindowTokens, undefined);
+  const settings = structuredClone(DEFAULT_SETTINGS);
+  (settings.nativeAgent as { contextWindowTokens?: unknown }).contextWindowTokens = 0;
+  normalizePersistedModelControls(settings);
+  assert.equal(settings.nativeAgent.contextWindowTokens, undefined);
+  settings.nativeAgent.contextWindowTokens = 131_072;
+  normalizePersistedModelControls(settings);
+  assert.equal(settings.nativeAgent.contextWindowTokens, 131_072);
+});
+
 test("only the native-agent call sites opt into automatic budgets; claude-agent call sites do not", () => {
   const claudeStart = settingsSource.indexOf(
     'if (eff.backend === "claude-agent" && !Platform.isMobile) {',

@@ -1,4 +1,5 @@
 import type { Plugin } from "obsidian";
+import type { ContextWindowSource } from "./types";
 export type { ProxyConfig } from "./proxy";
 
 export interface LocalConfig {
@@ -17,7 +18,7 @@ export interface LocalConfig {
   /** Keyed by `${baseUrl}::${model}`. */
   modelContext?: Record<string, {
     contextWindow: number;
-    source: "discovered" | "learned" | "default";
+    source: ContextWindowSource;
     calibration: number;
     samples: number;
     expiresAt?: number;

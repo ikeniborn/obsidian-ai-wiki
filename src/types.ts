@@ -336,7 +336,7 @@ export type RunEvent =
       reductionDepth?: number;
       retryReason?: string;
       contextWindow?: number;
-      inputSource?: "override" | "discovered" | "learned" | "default";
+      inputSource?: BudgetInputSource;
       outputSource?: "override" | "default";
       calibration?: number;
     }
@@ -345,7 +345,7 @@ export type RunEvent =
       operation: OpKey;
       model: string;
       contextWindow: number;
-      inputSource: "override" | "discovered" | "learned" | "default";
+      inputSource: BudgetInputSource;
       outputSource: "override" | "default";
       calibration: number;
       samples: number;
@@ -359,8 +359,28 @@ export type RunEvent =
       endpoint: string;
       ok: boolean;
       ms: number;
-      matchedById: boolean;
+      /**
+       * Whether the endpoint listed an entry with this model's id — independent of
+       * whether that entry advertised a window. `matchedById: true` with no
+       * `contextLength` is the aggregating-gateway case ("model found, no window
+       * advertised"); `matchedById: false` is "no such model in this listing".
+       * Absent on endpoints that are queried FOR one model and therefore never
+       * match by id (`/api/show`).
+       */
+      matchedById?: boolean;
       contextLength?: number;
+    }
+  | {
+      /**
+       * The provider rejected a prompt against a window the user configured
+       * explicitly. The configured window stands (see `observeContextError`); this
+       * event is the only record that the provider disagreed with it.
+       */
+      kind: "context_window_conflict";
+      model: string;
+      contextWindow: number;
+      reportedWindow: number;
+      promptTokens?: number;
     }
   | {
       kind: "calibration_sample";
@@ -530,6 +550,15 @@ export interface RunHistoryEntry {
   steps: Array<{ kind: "tool_use" | "tool_result"; label: string }>;
 }
 
+/**
+ * Where a resolved context window came from. `configured` is a window the user typed
+ * into settings: it is an override of the DISCOVERED value, so every derived budget
+ * follows from it exactly as if the probe had returned it.
+ */
+export type ContextWindowSource = "configured" | "discovered" | "learned" | "default";
+/** Where a resolved input budget came from; `override` is an explicitly stored budget. */
+export type BudgetInputSource = "override" | ContextWindowSource;
+
 export type CompressionProfile = "maximum" | "balanced" | "minimum";
 export type CompressionOperation = "ingest" | "query" | "lint" | "vision";
 
@@ -594,7 +623,7 @@ export interface LlmCallOptions {
   /** Provenance of the resolved budget, for the prompt_budget diagnostic event. */
   budgetTelemetry?: {
     contextWindow: number;
-    inputSource: "override" | "discovered" | "learned" | "default";
+    inputSource: BudgetInputSource;
     outputSource: "override" | "default";
     calibration: number;
   };
@@ -761,6 +790,13 @@ export interface LlmWikiPluginSettings {
     baseUrl: string;
     apiKey: string;
     model: string;
+    /**
+     * The model's context window in tokens, when the backend does not advertise one.
+     * Set, it replaces the DISCOVERED window (no probe runs) and every budget is
+     * derived from it; empty, the window is probed as before. Applies to every
+     * native-agent model, including per-operation ones.
+     */
+    contextWindowTokens?: number;
     inputBudgetTokens?: number;
     repairInputBudgetTokens?: number;
     maxTokens?: number;

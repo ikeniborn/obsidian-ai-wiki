@@ -152,6 +152,119 @@ test("a context error without a token count never shrinks the window", async () 
   assert.equal(record.source, "discovered");
 });
 
+test("a configured window is used verbatim and no probe fires", async () => {
+  let probes = 0;
+  const fetchFn = (async () => { probes++; return json({ data: [{ id: "m1", context_length: 8_192 }] }); }) as typeof fetch;
+  const store = storeWith({}, fetchFn);
+
+  const record = await store.resolve("http://x/v1", "m1", "", 0, undefined, undefined, 131_072);
+
+  assert.equal(record.contextWindow, 131_072);
+  assert.equal(record.source, "configured");
+  assert.equal(record.expiresAt, undefined, "a user-supplied window never expires into a re-probe");
+  assert.equal(probes, 0, "a user-supplied window is authoritative: the network is skipped");
+});
+
+test("a configured window replaces a stale cached record but keeps its calibration", async () => {
+  const store = storeWith(
+    { "http://x/v1::m1": { contextWindow: 8_192, source: "learned", calibration: 1.25, samples: 4 } },
+    (async () => { throw new Error("must not probe"); }) as typeof fetch,
+  );
+
+  const record = await store.resolve("http://x/v1", "m1", "", 0, undefined, undefined, 131_072);
+
+  assert.equal(record.contextWindow, 131_072);
+  assert.equal(record.source, "configured");
+  assert.equal(record.calibration, 1.25, "calibration is a measurement of the estimator, not of the window");
+  assert.equal(record.samples, 4);
+});
+
+test("clearing the configured window restores probing", async () => {
+  let probes = 0;
+  const fetchFn = (async () => { probes++; return json({ data: [{ id: "m1", context_length: 65_536 }] }); }) as typeof fetch;
+  const store = storeWith(
+    { "http://x/v1::m1": { contextWindow: 131_072, source: "configured", calibration: 1, samples: 0 } },
+    fetchFn,
+  );
+
+  const record = await store.resolve("http://x/v1", "m1", "", 9_999_999);
+
+  assert.equal(probes, 1, "a cleared setting must not stay pinned by the record it wrote");
+  assert.equal(record.source, "discovered");
+  assert.equal(record.contextWindow, 65_536);
+});
+
+test("an implausible configured window is ignored and the probe runs", async () => {
+  let probes = 0;
+  const fetchFn = (async () => { probes++; return json({ data: [{ id: "m1", context_length: 65_536 }] }); }) as typeof fetch;
+  const store = storeWith({}, fetchFn);
+
+  const record = await store.resolve("http://x/v1", "m1", "", 0, undefined, undefined, 12);
+
+  assert.equal(probes, 1);
+  assert.equal(record.source, "discovered");
+  assert.equal(record.contextWindow, 65_536);
+});
+
+test("a context error never shrinks a user-supplied window, and says so", async () => {
+  const store = storeWith({}, (async () => { throw new Error("must not probe"); }) as typeof fetch);
+  await store.resolve("http://x/v1", "m1", "", 0, undefined, undefined, 131_072);
+
+  const outcome = store.observeContextError("http://x/v1", "m1", 8_192);
+
+  assert.deepEqual(outcome, {
+    applied: false,
+    reason: "configured",
+    contextWindow: 131_072,
+    reportedWindow: 8_192,
+  });
+  const record = store.get("http://x/v1", "m1")!;
+  assert.equal(record.contextWindow, 131_072, "an explicit instruction is not overwritten behind the user's back");
+  assert.equal(record.source, "configured");
+});
+
+test("observeContextError reports what it did to a discovered window", async () => {
+  const store = storeWith(
+    { "http://x/v1::m1": { contextWindow: 131_072, source: "discovered", calibration: 1, samples: 0 } },
+    (async () => json({})) as typeof fetch,
+  );
+  await store.resolve("http://x/v1", "m1", "", 0);
+
+  assert.deepEqual(
+    store.observeContextError("http://x/v1", "m1", undefined),
+    { applied: false, reason: "no-reported-window" },
+  );
+  assert.deepEqual(
+    store.observeContextError("http://x/v1", "m1", 8_192),
+    { applied: true, reason: "learned", contextWindow: 8_192, reportedWindow: 8_192 },
+  );
+  assert.deepEqual(
+    store.observeContextError("http://x/v1", "m1", 65_536),
+    { applied: false, reason: "not-smaller" },
+  );
+});
+
+test("the probe separates 'no such model' from 'model found, no window advertised'", async () => {
+  const events: Array<{ endpoint: string; matchedById?: boolean; contextLength?: number }> = [];
+  const fetchFn = (async (input: string | URL | Request) =>
+    String(input).endsWith("/models")
+      ? json({ data: [{ id: "m1", owned_by: "gateway" }, { id: "other", context_length: 131_072 }] })
+      : json({})) as typeof fetch;
+
+  assert.equal(
+    await probeContextWindow(fetchFn, "http://x/v1", "", "m1", 2000, undefined, (event) => events.push(event)),
+    null,
+  );
+
+  const models = events.find((event) => event.endpoint.endsWith("/models"))!;
+  assert.equal(models.matchedById, true, "the entry WAS matched by id — it just advertises no window");
+  assert.equal(models.contextLength, undefined);
+
+  const missing: Array<{ endpoint: string; matchedById?: boolean }> = [];
+  await probeContextWindow(fetchFn, "http://x/v1", "", "absent", 2000, undefined, (event) => missing.push(event));
+  assert.equal(missing.find((event) => event.endpoint.endsWith("/models"))!.matchedById, false);
+});
+
 test("a cache write failure while resolving does not fail the caller", async () => {
   const store = new ModelContextStore({
     read: async () => ({}),

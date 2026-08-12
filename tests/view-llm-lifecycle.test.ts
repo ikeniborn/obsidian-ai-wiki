@@ -434,7 +434,9 @@ test("view drops telemetry-only events before waiting, step, or DOM mutation", (
   // Automatic-budget telemetry is enumerated by the predicate itself, not left to
   // appendEvent having no branch for it: adding a branch later would then be the only
   // thing standing between these numbers and the sidebar.
-  for (const kind of ["budget_resolved", "context_probe", "calibration_sample", "evidence_split"]) {
+  for (const kind of [
+    "budget_resolved", "context_probe", "context_window_conflict", "calibration_sample", "evidence_split",
+  ]) {
     assert.match(source, new RegExp(`event\\.kind === "${kind}"`), kind);
     assert.equal(appendEvent.includes(kind), false, kind);
   }

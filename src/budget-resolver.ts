@@ -1,5 +1,5 @@
 import type { ModelContextRecord } from "./model-context";
-import type { OpKey } from "./types";
+import type { BudgetInputSource, OpKey } from "./types";
 
 export const SAFETY = 0.9;
 export const DEFAULT_OUTPUT_BASE = 8_192;
@@ -12,7 +12,7 @@ export interface ResolvedBudget {
   inputBudgetTokens: number;
   outputBudgetTokens: number;
   contextWindow: number;
-  inputSource: "override" | "discovered" | "learned" | "default";
+  inputSource: BudgetInputSource;
   outputSource: "override" | "default";
   calibration: number;
 }

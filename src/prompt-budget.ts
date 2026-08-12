@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 import type {
+  BudgetInputSource,
   CompressionProfile,
   LlmCallOptions,
   RunEvent,
@@ -281,7 +282,7 @@ export interface PromptBudgetMetadata {
   reductionDepth?: number;
   retryReason?: PromptBudgetRetryReason;
   contextWindow?: number;
-  inputSource?: "override" | "discovered" | "learned" | "default";
+  inputSource?: BudgetInputSource;
   outputSource?: "override" | "default";
   calibration?: number;
 }

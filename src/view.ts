@@ -46,6 +46,7 @@ export function isTelemetryOnlyRunEvent(event: RunEvent): boolean {
     // rather than by appendEvent happening to have no branch for them.
     || event.kind === "budget_resolved"
     || event.kind === "context_probe"
+    || event.kind === "context_window_conflict"
     || event.kind === "calibration_sample"
     || event.kind === "evidence_split";
 }

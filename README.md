@@ -275,6 +275,7 @@ Native Agent's request executor, HTTP status matrix, or connection-timeout trans
 | Base URL | OpenAI-compatible endpoint. Ollama: `http://localhost:11434/v1` | `http://localhost:11434/v1` |
 | API key | `ollama` for Ollama; `sk-...` for OpenAI | `ollama` |
 | Connection timeout | Desktop DNS/TCP/TLS establishment only; it does not cap response headers, body, or generation | `15` s |
+| Model context window | Tokens the model holds in one request. Empty (shown as "Automatic") reads the window from the backend. Set a number only when your backend does not report one; every budget is then derived from it and nothing is probed | *(empty = Automatic)* |
 | Input budget tokens | Maximum size of the packed prompt. Empty (shown as "Automatic") derives it from the model's context window, discovered once per model, cached, and self-corrected against the provider's reported usage. Set a number to override it | *(empty = Automatic)* |
 | Output budget tokens | Response cap sent through `maxTokens`/API `max_tokens`. Empty (shown as "Automatic") is derived per operation from the model's context window the same way. Set a number to override it | *(empty = Automatic)* |
 | Semantic compression | Prompt-density profile (`Maximum`/`Balanced`/`Minimum`) with operation-specific preservation rules | `Balanced` |
@@ -344,6 +345,33 @@ conservative **8192-token** window and budgets from that. The fallback is cached
 as soon as one is reported; a discovered window is cached without an expiry. In capacity
 terms the fallback is roughly neutral against the byte-based 16384 budget it replaces —
 about 15 kB of Latin text either way — so it is a different unit, not a smaller allowance.
+
+#### When your backend never reports a window
+
+Some OpenAI-compatible backends — aggregating gateways and proxies in particular — answer
+`GET /v1/models` and list your model, but no entry carries a context length, and the
+Ollama-style `/api/show` endpoint does not exist. There is then nothing to discover, so
+every run budgets from the conservative 8192-token fallback even though the real model
+window may be sixteen times larger. What you see: schema or instruction blocks dropped
+from prompts to make them fit, requests reported as truncated ("needs N tokens" against a
+4096-token limit, that limit itself derived from the phantom 8192 window), and
+`agent.jsonl` showing `contextWindow: 8192` with `inputSource: "default"`.
+
+Fix it by filling in **Model context window** with the model's real window in tokens (for
+example `131072`). AI Wiki then skips the probe entirely for that backend and model and
+derives every budget from your number, exactly as if the backend had reported it — input
+budget, output budget, the per-request output ceiling, chunk budgets, and the Init
+bootstrap split. The agent log reports `inputSource: "configured"` so it is clear the
+number came from you. Clearing the field returns that model to automatic discovery. The
+setting applies to every Native Agent model, including per-operation ones.
+
+A value you type here is treated as an instruction, not a guess: if the provider later
+rejects a prompt and reports a smaller window of its own, AI Wiki does **not** silently
+shrink your value. The affected request is repacked smaller so the operation still
+completes, and the disagreement is recorded in `agent.jsonl` as a
+`context_window_conflict` entry with both numbers, so you can correct the setting
+yourself. (A discovered or fallback window, which nobody chose, is still learned down in
+that situation.)
 
 Enabling **Per-operation models** does not turn automatic budgeting off. Each operation
 gets its own input and output budget fields, and each is automatic while it is empty. A

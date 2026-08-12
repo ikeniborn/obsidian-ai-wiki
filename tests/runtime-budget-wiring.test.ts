@@ -267,6 +267,72 @@ test("a context rejection without a token count leaves the stored window alone",
   assert.equal(record?.source, "discovered");
 });
 
+test("a configured context window skips the probe and drives every derived budget", async () => {
+  const settings = nativeSettings();
+  settings.nativeAgent.contextWindowTokens = 131_072;
+  const calls: string[] = [];
+  // The live symptom this setting exists for: /v1/models answers, lists the model,
+  // and advertises no window anywhere. Probing it would cache 8192.
+  const store = storeWith((async (input: string | URL | Request) => {
+    calls.push(String(input));
+    return json({ data: [{ id: "global-model", owned_by: "gateway" }] });
+  }) as typeof fetch);
+  const instance = runner(settings, store);
+  const captured = captureOperation(instance);
+
+  const events = await drain(instance.run(runRequest()));
+
+  assert.deepEqual(calls, [], "a user-supplied window is authoritative: nothing is probed");
+  assert.equal(events.some((event) => event.kind === "context_probe"), false);
+
+  const resolved = events.find((event) => event.kind === "budget_resolved");
+  assert.ok(resolved && resolved.kind === "budget_resolved");
+  assert.equal(resolved.contextWindow, 131_072);
+  assert.equal(resolved.inputSource, "configured", "the source names the setting, not a phantom probe");
+  assert.equal(resolved.inputBudget, 110_592);
+  assert.equal(resolved.outputBudget, 8_192);
+  // The per-request output ceiling and the bootstrap split both read this.
+  assert.equal(captured.opts?.contextWindowTokens, 131_072);
+  assert.equal(captured.opts?.inputBudgetTokens, 110_592);
+  assert.equal(captured.opts?.maxTokens, 8_192);
+  assert.equal(captured.opts?.repairInputBudgetTokens, undefined, "query has no repair budget");
+});
+
+test("a context rejection against a configured window is reported, not learned", async () => {
+  const settings = nativeSettings();
+  settings.nativeAgent.contextWindowTokens = 131_072;
+  const store = storeWith((async () => { throw new Error("must not probe"); }) as typeof fetch);
+  const instance = runner(settings, store);
+  captureOperation(instance, (opts) => {
+    opts.onContextError?.({ promptTokens: 20_000, maxContextTokens: 8_192 });
+  });
+
+  const events = await drain(instance.run(runRequest()));
+
+  const conflict = events.find((event) => event.kind === "context_window_conflict");
+  assert.ok(conflict && conflict.kind === "context_window_conflict");
+  assert.equal(conflict.model, "global-model");
+  assert.equal(conflict.contextWindow, 131_072);
+  assert.equal(conflict.reportedWindow, 8_192);
+  const record = store.get("http://host/v1", "global-model");
+  assert.equal(record?.contextWindow, 131_072);
+  assert.equal(record?.source, "configured");
+});
+
+test("the bootstrap split of an init run follows the configured window", async () => {
+  const settings = nativeSettings();
+  settings.nativeAgent.contextWindowTokens = 131_072;
+  const store = storeWith((async () => { throw new Error("must not probe"); }) as typeof fetch);
+  const instance = runner(settings, store);
+  const captured = captureOperation(instance);
+
+  await drain(instance.run(runRequest("init")));
+
+  assert.equal(captured.opts?.contextWindowTokens, 131_072);
+  // init keeps a repair budget, clamped by the derived input budget.
+  assert.equal(captured.opts?.repairInputBudgetTokens, 110_592);
+});
+
 test("a cache write failure does not fail the run", async () => {
   const store = new ModelContextStore({
     read: async () => ({}),

@@ -5,6 +5,7 @@
 ### New
 - feat(native-agent): derive input and output budgets automatically from the model's context window, discovered once per model, cached, and self-corrected against the provider's reported usage. A stored value still acts as an explicit override; Claude Agent is unaffected.
 - feat(settings): ask an existing user once, on upgrade, whether to switch a stored native budget override to automatic — dismissing the prompt keeps the stored values, same as an explicit "keep".
+- feat(native-agent): add a "Model context window" setting for backends that never advertise one (aggregating gateways that list the model in `/v1/models` without a context length and have no `/api/show`). A value there replaces the discovered window, skips the probe entirely, and every derived budget follows from it; clearing it returns to automatic discovery. A provider context rejection no longer shrinks a user-supplied window silently — the request is still repacked smaller and the disagreement is recorded as a `context_window_conflict` run event.
 
 ### Fixes
 - fix(llm): measure prompt budgets in tokens instead of serialized bytes, so Init no longer fails with "domain was not created" purely because of source size.
@@ -12,6 +13,7 @@
 - fix(llm): let a generation truncated by the output limit retry with a per-request output ceiling computed from the prompt actually dispatched, instead of retrying with the same limit.
 - fix(lint): measure Lint work items and batches in tokens instead of bytes, so Lint packs the requests its budget allows.
 - fix(settings): clearing a per-operation native budget now stays cleared across a restart, instead of being refilled from a stored default and silently disabling automatic budgeting.
+- fix(telemetry): the `context_probe` event no longer reports `matchedById: false` for a model the endpoint did list — "no such model" and "model found, no window advertised" are now two separate facts in the log.
 
 ### Other
 - Chunk boundaries moved with the token-based estimator. Rebuild an existing domain with `Init --force` to re-chunk it; existing domains are not re-indexed automatically.

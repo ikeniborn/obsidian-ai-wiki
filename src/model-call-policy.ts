@@ -175,6 +175,7 @@ export function applyBudgetInput<K extends string>(
 }
 
 export function normalizePersistedModelControls(settings: LlmWikiPluginSettings): void {
+  settings.nativeAgent.contextWindowTokens = optionalPositiveInt(settings.nativeAgent.contextWindowTokens);
   settings.nativeAgent.inputBudgetTokens = optionalPositiveInt(settings.nativeAgent.inputBudgetTokens);
   settings.nativeAgent.repairInputBudgetTokens = optionalPositiveInt(settings.nativeAgent.repairInputBudgetTokens);
   settings.claudeAgent.inputBudgetTokens = positiveInt(

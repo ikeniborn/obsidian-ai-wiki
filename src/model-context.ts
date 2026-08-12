@@ -1,4 +1,4 @@
-import type { RunEvent } from "./types";
+import type { ContextWindowSource, RunEvent } from "./types";
 
 export const BACKEND_DEFAULT_CONTEXT = 8_192;
 export const PROBE_DEADLINE_MS = 2_000;
@@ -12,7 +12,7 @@ const CALIBRATION_MAX = 3;
 
 export interface ModelContextRecord {
   contextWindow: number;
-  source: "discovered" | "learned" | "default";
+  source: ContextWindowSource;
   calibration: number;
   samples: number;
   expiresAt?: number;
@@ -29,6 +29,16 @@ export interface CalibrationOutcome {
   applied: boolean;
   clamped: boolean;
 }
+
+/**
+ * What `observeContextError` did with a provider rejection. Returned rather than
+ * swallowed so the caller can put the `configured` case — the one where the provider
+ * contradicts an explicit user instruction — into the run log.
+ */
+export type ContextErrorOutcome =
+  | { applied: false; reason: "unknown-model" | "no-reported-window" | "not-smaller" }
+  | { applied: false; reason: "configured"; contextWindow: number; reportedWindow: number }
+  | { applied: true; reason: "learned"; contextWindow: number; reportedWindow: number };
 
 export interface ModelContextStoreDeps {
   read: () => Promise<ModelContextMap>;
@@ -68,22 +78,20 @@ function findContextLength(value: unknown): number | null {
 }
 
 /**
- * Picks the `/models`-response entry whose `id` equals the requested model,
- * then reads only that entry. A context length belonging to a different
- * model would be confidently wrong and would produce real overflows, so an
- * unscoped payload (no `data` array, or no matching entry) yields `null`
- * rather than falling back to an unscoped scan — the caller falls through to
- * `/api/show`, which is legitimately unscoped because it is queried FOR the
- * model by name.
+ * Picks the `/models`-response entry whose `id` equals the requested model.
+ * A context length belonging to a different model would be confidently wrong and
+ * would produce real overflows, so an unscoped payload (no `data` array, or no
+ * matching entry) yields `undefined` rather than falling back to an unscoped scan —
+ * the caller falls through to `/api/show`, which is legitimately unscoped because it
+ * is queried FOR the model by name.
  */
-function contextLengthForModel(payload: unknown, model: string): number | null {
+function modelEntry(payload: unknown, model: string): { entry: unknown } | null {
   if (payload === null || typeof payload !== "object") return null;
   const data = (payload as { data?: unknown }).data;
   if (!Array.isArray(data)) return null;
-  const list = data as unknown[];
-  const entry = list.find((item) =>
+  const found = (data as unknown[]).find((item) =>
     item !== null && typeof item === "object" && (item as { id?: unknown }).id === model);
-  return entry === undefined ? null : findContextLength(entry);
+  return found === undefined ? null : { entry: found };
 }
 
 async function getJson(
@@ -139,7 +147,7 @@ export async function probeContextWindow(
     endpoint: string,
     ok: boolean,
     startedAt: number,
-    matchedById: boolean,
+    matchedById: boolean | undefined,
     contextLength: number | null,
   ): void => {
     onProbe?.({
@@ -149,7 +157,7 @@ export async function probeContextWindow(
       endpoint,
       ok,
       ms: now() - startedAt,
-      matchedById,
+      ...(matchedById === undefined ? {} : { matchedById }),
       ...(contextLength === null ? {} : { contextLength }),
     });
   };
@@ -157,10 +165,13 @@ export async function probeContextWindow(
   const modelsUrl = `${root}/models`;
   const modelsStartedAt = now();
   const models = await getJson(fetchFn, modelsUrl, apiKey, deadline, now, signal);
-  const fromModels = models === null ? null : contextLengthForModel(models, model);
-  // `matchedById` is true only when the length came from the entry whose id is
-  // this model — the /models endpoint is the only one scoped that way.
-  report(modelsUrl, models !== null, modelsStartedAt, fromModels !== null, fromModels);
+  // Two independent facts, reported separately: whether the listing contained this
+  // model at all, and whether that entry advertised a window. Conflating them (the
+  // pre-fix behavior) made an aggregating gateway that lists the model without any
+  // context-length field look identical to one that has never heard of it.
+  const matched = models === null ? null : modelEntry(models, model);
+  const fromModels = matched === null ? null : findContextLength(matched.entry);
+  report(modelsUrl, models !== null, modelsStartedAt, matched !== null, fromModels);
   if (fromModels !== null) return fromModels;
 
   const ollamaRoot = root.replace(/\/v1$/, "");
@@ -168,8 +179,36 @@ export async function probeContextWindow(
   const showStartedAt = now();
   const show = await getJson(fetchFn, showUrl, apiKey, deadline, now, signal, { model });
   const fromShow = show === null ? null : findContextLength(show);
-  report(showUrl, show !== null, showStartedAt, false, fromShow);
+  // `/api/show` is queried FOR one model by name, so "matched by id" has no meaning
+  // here; reporting `false` would read as "no such model".
+  report(showUrl, show !== null, showStartedAt, undefined, fromShow);
   return fromShow;
+}
+
+/**
+ * The record a user-supplied window produces. Shared by `ModelContextStore.resolve`
+ * and the settings tab, so the numbers the settings page shows for a window the user
+ * just typed are the same ones the next run will budget from.
+ *
+ * `calibration`/`samples` carry over from any previous record: they measure the token
+ * ESTIMATOR against the provider, not the window, so a new window does not invalidate
+ * them.
+ */
+export function configuredContextRecord(
+  contextWindow: number,
+  previous?: ModelContextRecord,
+): ModelContextRecord {
+  return {
+    contextWindow,
+    source: "configured",
+    calibration: previous?.calibration ?? 1,
+    samples: previous?.samples ?? 0,
+  };
+}
+
+/** A configured window is honoured only when it is a plausible one; see `plausible`. */
+export function plausibleContextWindow(value: unknown): number | null {
+  return plausible(value);
 }
 
 export class ModelContextStore {
@@ -182,6 +221,11 @@ export class ModelContextStore {
     return this.cache?.[cacheKey(baseUrl, model)];
   }
 
+  /**
+   * `configuredWindow` is the user's own setting. When it is plausible, it replaces
+   * the discovered window outright: no probe runs, and the record is cached so the
+   * settings tab and the next run read the same number.
+   */
   async resolve(
     baseUrl: string,
     model: string,
@@ -189,13 +233,31 @@ export class ModelContextStore {
     now: number,
     signal?: AbortSignal,
     onProbe?: (event: ContextProbeEvent) => void,
+    configuredWindow?: number,
   ): Promise<ModelContextRecord> {
     signal?.throwIfAborted();
     if (this.cache === null) this.cache = await this.deps.read();
     const key = cacheKey(baseUrl, model);
+    const configured = plausible(configuredWindow);
 
     const cached = this.cache[key];
-    if (cached && (cached.expiresAt === undefined || cached.expiresAt > now)) return cached;
+    if (configured !== null) {
+      if (cached?.source === "configured" && cached.contextWindow === configured) return cached;
+      const record = configuredContextRecord(configured, cached);
+      this.cache[key] = record;
+      // Best-effort, like every other write here: the record is already live in
+      // memory, so a failed write costs nothing but a re-read next session.
+      try {
+        await this.deps.write(this.cache);
+      } catch { /* the in-memory record stands */ }
+      return record;
+    }
+    // A record this store wrote from a since-cleared setting must not pin the window
+    // forever: clearing the setting returns the pair to probing.
+    if (
+      cached && cached.source !== "configured"
+      && (cached.expiresAt === undefined || cached.expiresAt > now)
+    ) return cached;
 
     const pending = this.inFlight.get(key);
     if (pending) return pending;
@@ -263,9 +325,9 @@ export class ModelContextStore {
     return { ratio, applied: true, clamped: false };
   }
 
-  observeContextError(baseUrl: string, model: string, maxContextTokens?: number): void {
+  observeContextError(baseUrl: string, model: string, maxContextTokens?: number): ContextErrorOutcome {
     const record = this.get(baseUrl, model);
-    if (!record) return;
+    if (!record) return { applied: false, reason: "unknown-model" };
     // ONLY a window the provider actually reported is learned. A rejection that
     // carries no token count (an error code alone) says the prompt was too big,
     // not how big the window is, and guessing -25% here would compound: the
@@ -274,7 +336,23 @@ export class ModelContextStore {
     // repack already shrinks the effective input budget for such a failure, so
     // the operation still recovers — only the durable cache stops guessing.
     const next = plausible(maxContextTokens);
-    if (next === null || next >= record.contextWindow) return;
+    if (next === null) return { applied: false, reason: "no-reported-window" };
+    // A window the user typed is an instruction, not a guess to be corrected. The
+    // learning path exists because a probed/defaulted window has nobody to ask;
+    // silently shrinking a configured one would make the settings field describe a
+    // number the engine is not using, and the user would have no way to see why.
+    // The in-run repack still shrinks the effective input budget, so the operation
+    // recovers either way — and the conflict is reported so the user can correct
+    // the setting themselves.
+    if (record.source === "configured") {
+      return {
+        applied: false,
+        reason: "configured",
+        contextWindow: record.contextWindow,
+        reportedWindow: next,
+      };
+    }
+    if (next >= record.contextWindow) return { applied: false, reason: "not-smaller" };
     record.contextWindow = Math.max(MIN_PLAUSIBLE_CONTEXT, next);
     record.source = "learned";
     delete record.expiresAt;
@@ -282,6 +360,7 @@ export class ModelContextStore {
     // already live in memory, so a write failure here must not crash or
     // surface as an unhandled rejection.
     this.persist().catch(() => {});
+    return { applied: true, reason: "learned", contextWindow: record.contextWindow, reportedWindow: next };
   }
 
   private async persist(): Promise<void> {
