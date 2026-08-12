@@ -30,7 +30,12 @@ import {
   type ModelControlField,
 } from "./model-call-policy";
 import { resolveBudget } from "./budget-resolver";
-import { configuredContextRecord, MIN_CONTEXT_WINDOW, plausibleContextWindow } from "./model-context";
+import {
+  configuredContextRecord,
+  MIN_CONTEXT_WINDOW,
+  placeholderContextWindow,
+  plausibleContextWindow,
+} from "./model-context";
 import { createRequestUrlVisionTransport, runNativeVisionModelCheck } from "./vision-probe";
 
 async function checkNativeAvailability(baseUrl: string, apiKey: string, model: string): Promise<void> {
@@ -398,10 +403,14 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       const automatic = T.settings.budgetAutomatic;
       if (!record) return { input: automatic, output: automatic, contextWindow: automatic };
       const budget = resolveBudget(record, operation, overrides);
+      // The budgets are what the next run WILL use, fallback included, so they are
+      // reported either way. The window is a claim about the model: a fallback is
+      // not one, and this field exists to supply it — see `placeholderContextWindow`.
+      const window = placeholderContextWindow(record);
       return {
         input: String(budget.inputBudgetTokens),
         output: String(budget.outputBudgetTokens),
-        contextWindow: String(record.contextWindow),
+        contextWindow: window === null ? automatic : String(window),
       };
     };
     // The context-window field that sits next to a model field. One per model role

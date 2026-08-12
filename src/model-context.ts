@@ -217,6 +217,24 @@ export function plausibleContextWindow(value: unknown): number | null {
   return plausible(value);
 }
 
+/**
+ * The window the settings tab may show as this model's own, or null when nothing
+ * about the model is actually known and the field must read "Automatic".
+ *
+ * A `default` record is the 8192-token fallback `resolve` writes when the backend
+ * advertised no window and nobody typed one. It is not a measurement of the model:
+ * `resolveVisionBudget` refuses to size the vision model from it, so a Vision field
+ * showing 8192 would advertise the one number the engine will not use and tell the
+ * user the missing window is already handled.
+ *
+ * A `default` record is also the only one that carries `expiresAt` (see
+ * `DEFAULT_TTL_MS`; `observeContextError` deletes it when the record becomes
+ * `learned`), so an expired record needs no case of its own here.
+ */
+export function placeholderContextWindow(record: ModelContextRecord): number | null {
+  return record.source === "default" ? null : record.contextWindow;
+}
+
 export class ModelContextStore {
   private cache: ModelContextMap | null = null;
   private inFlight = new Map<string, Promise<ModelContextRecord>>();

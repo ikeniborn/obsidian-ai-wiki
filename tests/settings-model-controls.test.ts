@@ -790,6 +790,44 @@ test("a configured window is honoured by the settings placeholders before any ru
   assert.equal(plausibleContextWindow(131_072), 131_072);
 });
 
+test("the 8192 fallback is never advertised as a model's own context window", async () => {
+  const { placeholderContextWindow } = await import("../src/model-context");
+
+  // The defect: every non-configured cached record was treated as authoritative, so a
+  // gateway that advertises nothing made the Vision window field show 8192 — the one
+  // number `resolveVisionBudget` refuses to size the vision model from. A user who
+  // read it as "already known" left the field empty and vision stayed on the Format
+  // operation's budget.
+  assert.equal(
+    placeholderContextWindow({
+      contextWindow: 8_192, source: "default", calibration: 1, samples: 0,
+      expiresAt: Date.now() + 86_400_000,
+    }),
+    null,
+    "a fallback is not a measurement of this model",
+  );
+  // Everything the engine does treat as a fact about the model still shows its number.
+  for (const source of ["discovered", "configured", "learned"] as const) {
+    assert.equal(
+      placeholderContextWindow({ contextWindow: 131_072, source, calibration: 1, samples: 0 }),
+      131_072,
+      `${source} is a fact about the model`,
+    );
+  }
+
+  // …and the settings placeholder reports the window through it. The derived input
+  // and output budgets keep coming from the record, fallback included: those are the
+  // numbers the next run will actually use.
+  const start = settingsSource.indexOf("const automaticBudgetPlaceholders = (");
+  const end = settingsSource.indexOf("const addContextWindowControl = (", start);
+  assert.ok(start >= 0 && end > start);
+  const body = settingsSource.slice(start, end);
+  assert.match(body, /placeholderContextWindow\(record\)/);
+  assert.match(body, /contextWindow: window === null \? automatic : String\(window\)/);
+  assert.doesNotMatch(body, /contextWindow: String\(record\.contextWindow\)/);
+  assert.match(body, /input: String\(budget\.inputBudgetTokens\)/);
+});
+
 test("a context window below the engine's floor is refused at entry, not stored and ignored", async () => {
   const { MIN_CONTEXT_WINDOW } = await import("../src/model-context");
   assert.equal(MIN_CONTEXT_WINDOW, 1_024);
