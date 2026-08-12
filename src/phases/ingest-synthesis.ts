@@ -525,7 +525,6 @@ function boundedOptions(
     ...baseOpts,
     inputBudgetTokens,
     repairInputBudgetTokens: policy.repairInputBudgetTokens,
-    outputRetryBudgetTokens: policy.outputRetryBudgetTokens,
     semanticCompression: { profile: policy.compression ?? "balanced", operation: "ingest" },
   };
   if (policy.outputBudgetTokens !== undefined) opts.maxTokens = policy.outputBudgetTokens;
@@ -598,7 +597,6 @@ function unitDto(unit: WikiSectionUnit): Record<string, unknown> {
     text: unit.text,
     required: unit.required,
     priority: unit.priority,
-    estimatedTokens: unit.estimatedTokens,
     pageId: unit.pageId,
     path: unit.path,
     heading: unit.heading,
@@ -635,7 +633,6 @@ function registryDto(unit: ContextUnit): Record<string, unknown> {
     text: unit.text,
     required: unit.required,
     priority: unit.priority,
-    estimatedTokens: unit.estimatedTokens,
   };
 }
 

@@ -190,7 +190,6 @@ function makeUnit(
     text: markdown,
     required,
     priority: score,
-    estimatedTokens: new TextEncoder().encode(markdown).byteLength,
     pageId: pageId(path),
     path,
     heading,

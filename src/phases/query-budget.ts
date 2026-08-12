@@ -59,12 +59,6 @@ interface ChatHistoryUnit {
   messages: ChatMessage[];
 }
 
-const encoder = new TextEncoder();
-
-function estimatedTokens(text: string): number {
-  return encoder.encode(text).byteLength;
-}
-
 function preparedMessages(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   opts: LlmCallOptions,
@@ -152,7 +146,6 @@ export function packQueryChunks(args: PackQueryChunksArgs): PackedQueryChunks {
     text: args.question,
     required: true,
     priority: Number.POSITIVE_INFINITY,
-    estimatedTokens: estimatedTokens(args.question),
   }];
 
   args.chunks.forEach((chunk, index) => {
@@ -164,7 +157,6 @@ export function packQueryChunks(args: PackQueryChunksArgs): PackedQueryChunks {
       text: renderContextChunks([chunk]),
       required: false,
       priority: args.chunks.length - index,
-      estimatedTokens: estimatedTokens(renderContextChunks([chunk])),
     });
   });
 
@@ -255,7 +247,6 @@ export function packChatHistory(args: PackChatHistoryArgs): PackedChatHistory {
       text: args.history[currentUserIndex].content,
       required: true,
       priority: Number.POSITIVE_INFINITY,
-      estimatedTokens: estimatedTokens(args.history[currentUserIndex].content),
     },
     ...historyUnits.map((unit) => ({
       id: unit.id,
@@ -263,10 +254,6 @@ export function packChatHistory(args: PackChatHistoryArgs): PackedChatHistory {
       text: unit.messages.map((message) => `${message.role}: ${message.content}`).join("\n"),
       required: false,
       priority: 1_000_000 + unit.start,
-      estimatedTokens: unit.messages.reduce(
-        (total, message) => total + estimatedTokens(message.content),
-        0,
-      ),
     })),
   ];
 
@@ -277,7 +264,6 @@ export function packChatHistory(args: PackChatHistoryArgs): PackedChatHistory {
       text: args.context,
       required: false,
       priority: 0,
-      estimatedTokens: estimatedTokens(args.context),
     });
   }
 

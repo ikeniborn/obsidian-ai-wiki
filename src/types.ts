@@ -542,7 +542,6 @@ export interface ModelCallPolicy {
   inputBudgetTokens: number;
   repairInputBudgetTokens?: number;
   outputBudgetTokens?: number;
-  outputRetryBudgetTokens?: number;
   compression?: CompressionProfile;
 }
 

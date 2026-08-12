@@ -120,9 +120,9 @@ test("packer keeps required units whole and drops lower-priority optional units"
     fixedMessages: [{ role: "system", content: "contract" }],
     opts: {},
     units: [
-      { id: "required", source: "source", text: "r".repeat(40), required: true, priority: 0, estimatedTokens: 40 },
-      { id: "high", source: "wiki", text: "h".repeat(40), required: false, priority: 10, estimatedTokens: 40 },
-      { id: "low", source: "wiki", text: "l".repeat(80), required: false, priority: 1, estimatedTokens: 80 },
+      { id: "required", source: "source", text: "r".repeat(40), required: true, priority: 0 },
+      { id: "high", source: "wiki", text: "h".repeat(40), required: false, priority: 10 },
+      { id: "low", source: "wiki", text: "l".repeat(80), required: false, priority: 1 },
     ],
     render: (units) => [{ role: "system", content: "contract" }, { role: "user", content: units.map((u) => u.text).join("\n") }],
   });
@@ -172,8 +172,8 @@ test("packer rejects duplicate context unit IDs", () => {
     fixedMessages: [],
     opts: {},
     units: [
-      { id: "duplicate", source: "source", text: "required", required: true, priority: 1, estimatedTokens: 8 },
-      { id: "duplicate", source: "wiki", text: "optional", required: false, priority: 1, estimatedTokens: 8 },
+      { id: "duplicate", source: "source", text: "required", required: true, priority: 1 },
+      { id: "duplicate", source: "wiki", text: "optional", required: false, priority: 1 },
     ],
     render: (units) => [{ role: "user", content: units.map((unit) => unit.text).join("\n") }],
   }), /duplicate context unit id/i);
@@ -185,8 +185,8 @@ test("equal-priority optional units use locale-independent code-point ID order",
     fixedMessages: [],
     opts: {},
     units: [
-      { id: "ä", source: "wiki", text: "umlaut", required: false, priority: 1, estimatedTokens: 6 },
-      { id: "z", source: "wiki", text: "latin", required: false, priority: 1, estimatedTokens: 5 },
+      { id: "ä", source: "wiki", text: "umlaut", required: false, priority: 1 },
+      { id: "z", source: "wiki", text: "latin", required: false, priority: 1 },
     ],
     render: (units) => [{ role: "user", content: units.map((unit) => unit.text).join("\n") }],
   });
@@ -201,7 +201,6 @@ test("renderer mutation cannot corrupt selected context units", () => {
     text: "original",
     required: true,
     priority: 1,
-    estimatedTokens: 8,
   };
   const packed = packContextUnits({
     inputBudgetTokens: 1_000,
@@ -225,7 +224,7 @@ test("required overflow fails instead of truncating", () => {
     inputBudgetTokens: estimatePreparedMessages(emptyMessages),
     fixedMessages: [],
     opts: {},
-    units: [{ id: "q", source: "source", text: "question", required: true, priority: 1, estimatedTokens: 8 }],
+    units: [{ id: "q", source: "source", text: "question", required: true, priority: 1 }],
     render: (units) => [{ role: "user", content: units[0]?.text ?? "" }],
   }), PromptBudgetExceededError);
 });

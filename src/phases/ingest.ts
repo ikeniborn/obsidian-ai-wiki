@@ -164,7 +164,6 @@ function modelPolicy(opts: LlmCallOptions): ModelCallPolicy {
     inputBudgetTokens: opts.inputBudgetTokens ?? 16_384,
     ...(opts.repairInputBudgetTokens === undefined ? {} : { repairInputBudgetTokens: opts.repairInputBudgetTokens }),
     ...(opts.maxTokens === undefined ? {} : { outputBudgetTokens: opts.maxTokens }),
-    ...(opts.outputRetryBudgetTokens === undefined ? {} : { outputRetryBudgetTokens: opts.outputRetryBudgetTokens }),
     compression: opts.semanticCompression?.profile ?? "balanced",
   };
 }
@@ -216,7 +215,6 @@ function tagRegistryUnits(text: string): ContextUnit[] {
     text,
     required: false,
     priority: 1,
-    estimatedTokens: new TextEncoder().encode(text).byteLength,
   }];
 }
 

@@ -86,7 +86,7 @@ function bundle(entityKey: string, path?: string, section?: { hash: string; ordi
   const target = path ?? `!Wiki/d/concept/wiki_d_${entityKey}.md`;
   const unit: WikiSectionUnit = {
     id: `${target}::Facts`, source: "wiki", text: section?.span ?? `## Facts\n${entityKey} evidence\n`,
-    required: Boolean(section), priority: 1, estimatedTokens: 8, pageId: entityKey,
+    required: Boolean(section), priority: 1, pageId: entityKey,
     path: target, heading: "## Facts", sectionHash: section?.hash ?? "", score: 1,
     sourceOrdinal: section?.ordinal ?? 0, duplicatePaths: [target],
   };
@@ -219,7 +219,7 @@ test("synthesizeEntityBatch emits create, patch-safe skip, and bounded prompt te
   const result = await synthesizeEntityBatch(synthesisArgs([bundle("b"), existing], llm, {
     existingPaths: new Set([existingPath]),
     existingPageDescriptions: [{ entityKey: "a", path: existingPath, description: "A" }],
-    tagRegistryUnits: [{ id: "tag", source: "registry", text: "tag", required: false, priority: 1, estimatedTokens: 1 }],
+    tagRegistryUnits: [{ id: "tag", source: "registry", text: "tag", required: false, priority: 1 }],
     policy: { inputBudgetTokens: 10000, outputBudgetTokens: 300, compression: "balanced" as const },
     onEvent: (event: RunEvent) => events.push(event),
   }));
@@ -294,7 +294,7 @@ test("context repack drops optional units, changes prompt hash, preserves requir
   const b = bundle("b");
   const optional = {
     id: "optional-a", source: "wiki" as const, text: "OPTIONAL-A-SENTINEL", required: false,
-    priority: 0, estimatedTokens: 20, pageId: "a", path: existingPath, heading: "## Optional",
+    priority: 0, pageId: "a", path: existingPath, heading: "## Optional",
     sectionHash: "", score: 0, sourceOrdinal: 1, duplicatePaths: [existingPath],
   };
   a.units = [...a.units, optional];
@@ -331,8 +331,8 @@ test("context repack drops optional units, changes prompt hash, preserves requir
 
 test("context repack never drops required registry units while dropping optional auxiliary units", async () => {
   const calls: Record<string, unknown>[] = [];
-  const requiredRegistry = { id: "required-registry", source: "registry" as const, text: "REQUIRED-REGISTRY", required: true, priority: 1, estimatedTokens: 1 };
-  const optionalRegistry = { id: "optional-registry", source: "registry" as const, text: "OPTIONAL-REGISTRY-".repeat(450), required: false, priority: 1, estimatedTokens: 90 };
+  const requiredRegistry = { id: "required-registry", source: "registry" as const, text: "REQUIRED-REGISTRY", required: true, priority: 1 };
+  const optionalRegistry = { id: "optional-registry", source: "registry" as const, text: "OPTIONAL-REGISTRY-".repeat(450), required: false, priority: 1 };
   const llm = mockLlm((params) => {
     calls.push(params);
     if (calls.length === 1) throw new Error("prompt 12000 exceeds maximum context 10000");
@@ -713,7 +713,6 @@ test("single-bundle synthesis compresses oversized required retrieved units agai
     ...oversized.units[0],
     required: true,
     text: "required retrieved context ".repeat(2_000),
-    estimatedTokens: 20_000,
   }];
   const seen: Record<string, unknown>[] = [];
   const llm = mockLlm((params) => {
@@ -742,7 +741,6 @@ test("single-bundle synthesis compacts oversized patch authority exact section b
     ...oversized.units[0],
     required: true,
     text: "compact visible target",
-    estimatedTokens: 8,
   }];
   const seen: Record<string, unknown>[] = [];
   const llm = mockLlm((params) => {
@@ -1269,7 +1267,7 @@ test("synthesis prompt projects allowlisted DTO fields only", async () => {
   const candidate = bundle("a") as EntityContextBundle & { vector?: string; rawRecord?: string };
   candidate.vector = "RAW-VECTOR-SENTINEL";
   candidate.rawRecord = "RAW-RECORD-SENTINEL";
-  const registry = { id: "registry", source: "registry" as const, text: "legitimate vector prose", required: false, priority: 1, estimatedTokens: 1, vector: "RAW-REGISTRY-VECTOR" } as unknown as ContextUnit;
+  const registry = { id: "registry", source: "registry" as const, text: "legitimate vector prose", required: false, priority: 1, vector: "RAW-REGISTRY-VECTOR" } as unknown as ContextUnit;
   const seen: Record<string, unknown>[] = [];
   const llm = mockLlm((params) => {
     const prompt = JSON.stringify(params.messages);

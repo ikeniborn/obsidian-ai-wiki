@@ -269,7 +269,6 @@ test("entities sharing one existing canonical target consolidate before synthesi
     text: `## ${heading}\n${heading} body`,
     required,
     priority: ordinal + 1,
-    estimatedTokens: 20,
     pageId: "wiki_d_user_management",
     path: target,
     heading: `## ${heading}`,
@@ -913,12 +912,12 @@ test("oversized singleton batching drops optional units before failing", () => {
   const source = bundle("guide", 100);
   source.units = [
     {
-      id: "required", source: "wiki", text: "required target context", required: true, priority: 10, estimatedTokens: 10,
+      id: "required", source: "wiki", text: "required target context", required: true, priority: 10,
       pageId: "required", path: "!Wiki/d/concept/wiki_d_required.md", heading: "## Required", sectionHash: "required",
       score: 1, sourceOrdinal: 0, duplicatePaths: ["!Wiki/d/concept/wiki_d_required.md"],
     },
     {
-      id: "optional", source: "wiki", text: "optional context " + "x".repeat(4000), required: false, priority: 1, estimatedTokens: 4000,
+      id: "optional", source: "wiki", text: "optional context " + "x".repeat(4000), required: false, priority: 1,
       pageId: "optional", path: "!Wiki/d/concept/wiki_d_optional.md", heading: "## Optional", sectionHash: "optional",
       score: 0.1, sourceOrdinal: 1, duplicatePaths: ["!Wiki/d/concept/wiki_d_optional.md"],
     },
@@ -954,7 +953,7 @@ test("batch renderer receives deep-cloned snapshots", () => {
   const render = (items: EntityContextBundle[]) => {
     items[0].evidence.facts[0] = "mutated";
     items[0].units.push({
-      id: "mutated", source: "wiki", text: "mutated", required: false, priority: 0, estimatedTokens: 1,
+      id: "mutated", source: "wiki", text: "mutated", required: false, priority: 0,
       pageId: "mutated", path: "mutated", heading: "## Mutated", sectionHash: "mutated", score: 0,
       sourceOrdinal: 0, duplicatePaths: [],
     });

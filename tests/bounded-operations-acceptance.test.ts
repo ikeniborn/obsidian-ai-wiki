@@ -1201,7 +1201,6 @@ async function exerciseContextRecovery(): Promise<void> {
             text: "CURRENT QUESTION",
             required: true,
             priority: 100,
-            estimatedTokens: 16,
           },
           ...Array.from({ length: 6 }, (_, index) => ({
             id: `optional-${index}`,
@@ -1209,7 +1208,6 @@ async function exerciseContextRecovery(): Promise<void> {
             text: `OPTIONAL_${index}_${"x".repeat(115)}`,
             required: false,
             priority: 10 - index,
-            estimatedTokens: 126,
           })),
         ],
         render: (units) => [{

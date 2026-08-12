@@ -17,7 +17,6 @@ export interface ContextUnit {
   text: string;
   required: boolean;
   priority: number;
-  estimatedTokens: number;
 }
 
 export interface PackedPrompt {
