@@ -4,34 +4,77 @@ import test from "node:test";
 import type OpenAI from "openai";
 import { estimateMessages, estimateText } from "../src/token-estimate";
 
+interface Reconstruction {
+  cyrillic: number;
+  cjk: number;
+  word: number;
+  symbols: number;
+  symbolRuns: number;
+  newlines: number;
+  tokenizerTokens: number;
+}
+
 interface Case {
   id: string;
-  systemChars: number;
-  payloadChars: number;
+  callSite: string;
   messages: number;
   actualInputTokens: number;
+  recordedEstimateAtTheTime: number;
+  reconstruction: Reconstruction;
 }
 
 const fixture = JSON.parse(
   readFileSync(new URL("./fixtures/recorded-prompts.json", import.meta.url), "utf8"),
-) as { payloadCyrillicShare: number; cases: Case[] };
+) as { cases: Case[] };
 
-/** Rebuilds a prompt with the recorded lengths and the documented script mix. */
+/**
+ * Rebuilds a prompt with the recorded character census. The fixture stores
+ * counts rather than text - the prompts carried a private vault's notes - so
+ * the payload is synthesised: symbol runs separated by word characters, then
+ * the remaining word and Cyrillic characters, then the newlines. Any rule that
+ * reads text as character classes and symbol runs sees the same prompt the
+ * provider counted.
+ */
 function messagesFor(item: Case): OpenAI.Chat.ChatCompletionMessageParam[] {
-  const cyrillic = Math.round(item.payloadChars * fixture.payloadCyrillicShare);
-  const latin = item.payloadChars - cyrillic;
+  const census = item.reconstruction;
+  const runs = Math.max(census.symbolRuns, 1);
+  const perRun = Math.floor(census.symbols / runs);
+  const parts: string[] = [];
+  let symbolsLeft = census.symbols;
+  let wordLeft = census.word;
+  for (let index = 0; index < runs && symbolsLeft > 0; index++) {
+    const size = index === runs - 1 ? symbolsLeft : Math.max(perRun, 1);
+    parts.push("a", ".".repeat(size));
+    wordLeft -= 1;
+    symbolsLeft -= size;
+  }
+  parts.push(
+    "a".repeat(Math.max(wordLeft, 0)),
+    "я".repeat(census.cyrillic),
+    "\n".repeat(census.newlines),
+  );
   const extra = Array.from({ length: item.messages - 2 }, () => (
     { role: "user" as const, content: "" }
   ));
   return [
-    { role: "system", content: "a".repeat(item.systemChars) },
-    { role: "user", content: "a".repeat(latin) + "я".repeat(cyrillic) },
+    { role: "system", content: "" },
+    { role: "user", content: parts.join("") },
     ...extra,
   ];
 }
 
 test("Cyrillic costs more tokens per character than Latin", () => {
   assert.ok(estimateText("абвгдеёжзи") > estimateText("abcdefghij"));
+});
+
+test("symbol-dense text costs more tokens per character than prose", () => {
+  // The defect these rules fix: shell commands, config files and JSON envelopes
+  // carry several times more tokens per character than prose, and a single
+  // default rate for everything but Cyrillic made large prompts look small.
+  const prose = "the service reads its configuration from a file on disk again";
+  const config = "iptables -A INPUT -p tcp --dport=22 -j DROP; ufw allow 22/tcp";
+  assert.equal(prose.length, config.length);
+  assert.ok(estimateText(config) > 2 * estimateText(prose));
 });
 
 test("the uncalibrated estimate is within 15% of the provider count on every recorded case", () => {
@@ -59,6 +102,21 @@ test("the uncalibrated estimate never falls below the provider count", () => {
       `${item.id}: the seed must not underestimate`,
     );
   }
+});
+
+test("the error does not grow with prompt size", () => {
+  // The rules these replaced were unbiased on 3.5k-token prompts and 22% low on
+  // a 17.6k-token one: a slope, not a constant, and no calibration factor - a
+  // single multiplier - can remove a slope. The fixture spans that range on
+  // purpose, so comparing the extremes is what keeps a size-dependent rule out.
+  const sorted = [...fixture.cases].sort((a, b) => a.actualInputTokens - b.actualInputTokens);
+  const ratio = (item: Case) => estimateMessages(messagesFor(item)) / item.actualInputTokens;
+  const smallest = ratio(sorted[0]);
+  const largest = ratio(sorted[sorted.length - 1]);
+  assert.ok(
+    Math.abs(largest / smallest - 1) <= 0.1,
+    `the largest case is ${((largest / smallest - 1) * 100).toFixed(1)}% off relative to the smallest`,
+  );
 });
 
 test("a fitted calibration factor keeps every case inside 15%", () => {

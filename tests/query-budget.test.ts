@@ -298,7 +298,7 @@ test("packQueryChunks keeps the exact current question and complete highest-scor
     question,
     systemPrompt: "Answer with citations.",
     chunks,
-    inputBudgetTokens: 714,
+    inputBudgetTokens: 600,
     opts: {},
   });
 
@@ -306,7 +306,7 @@ test("packQueryChunks keeps the exact current question and complete highest-scor
     .map((message) => typeof message.content === "string" ? message.content : "")
     .join("\n");
   assert.match(messageText, new RegExp(question.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  assert.ok(result.estimatedInputTokens <= 714);
+  assert.ok(result.estimatedInputTokens <= 600);
   assert.ok(result.selected.length > 0);
   assert.ok(result.selected.length < chunks.length);
   assert.deepEqual(result.selected, chunks.slice(0, result.selected.length));
@@ -408,14 +408,15 @@ test("packChatHistory keeps the newest user turn and drops old turns as whole pa
     { role: "user" as const, content: newest },
   ];
 
-  // Rescaled from a byte-era budget of 3_000 for the token estimator
-  // (task-3 prompt-budget-automation): 714 (3_000 / 4.2) still forces the
+  // Rescaled twice for the token estimator: from a byte-era budget of 3_000,
+  // then to 600 once the character-class rules priced the fixed contract above
+  // the old flat rate while halving these letter runs. It still forces the
   // oldest chat pair to be dropped.
   const result = packChatHistory({
     systemPrompt: "Follow-up contract.",
     context: "LOW_PRIORITY_CONTEXT",
     history,
-    inputBudgetTokens: 714,
+    inputBudgetTokens: 600,
     opts: {},
   });
 
@@ -425,7 +426,7 @@ test("packChatHistory keeps the newest user turn and drops old turns as whole pa
   assert.match(serialized, /RECENT_ASSISTANT_START[\s\S]*RECENT_ASSISTANT_END/);
   assert.doesNotMatch(serialized, /OLD_USER_START|OLD_USER_END/);
   assert.doesNotMatch(serialized, /OLD_ASSISTANT_START|OLD_ASSISTANT_END/);
-  assert.ok(result.estimatedInputTokens <= 714);
+  assert.ok(result.estimatedInputTokens <= 600);
 });
 
 test("packQueryChunks rejects an oversized current question instead of truncating it", () => {

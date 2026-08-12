@@ -1205,7 +1205,10 @@ async function exerciseContextRecovery(): Promise<void> {
           ...Array.from({ length: 6 }, (_, index) => ({
             id: `optional-${index}`,
             source: "wiki" as const,
-            text: `OPTIONAL_${index}_${"x".repeat(115)}`,
+            // Doubled from 115 characters for the character-class rules, which
+            // price plain letters near half the old flat rate, so each shrink
+            // still drops optional units and changes the request.
+            text: `OPTIONAL_${index}_${"x".repeat(230)}`,
             required: false,
             priority: 10 - index,
           })),

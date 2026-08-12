@@ -398,10 +398,12 @@ whether to switch your saved value to automatic or keep it; dismissing that prom
 your saved value. You can change your mind at any time by clearing or setting the field
 in Settings — including the per-operation fields, which stay cleared across restarts.
 
-The prompt estimator counts tokens rather than serialized bytes, which also moved chunk
-boundaries during ingest. Existing domains are **not** re-indexed automatically after
-upgrading — use the sidebar's **♻ full re-init** (`--force`) on a domain to rebuild it
-with the new chunking.
+The prompt estimator counts tokens rather than serialized bytes, and prices characters by
+class: shell commands, config files, paths and JSON cost far more tokens per character
+than prose, so notes full of them are no longer estimated as if they were prose. Both
+changes moved chunk boundaries during ingest. Existing domains are **not** re-indexed
+automatically after upgrading — use the sidebar's **♻ full re-init** (`--force`) on a
+domain to rebuild it with the new chunking.
 
 Ingest splits oversized Markdown at stable section, paragraph, line-window, and fenced-code
 boundaries. Bounded map calls produce source-anchored evidence; reduction calls preserve

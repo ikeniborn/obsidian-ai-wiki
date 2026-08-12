@@ -1249,9 +1249,12 @@ test("mergeBootstrapEntries keeps group 0 identity and unions every entity type"
 test("a bootstrap payload above twice the budget completes as merged groups", async () => {
   const rawAdapter = adapter();
   rawAdapter.files.set("src/a.md", evidenceSourceLines(200));
+  // 12_000 fact characters, doubled from 6_000: the character-class rules price
+  // plain letters near half the old flat rate, so the payload needs twice the
+  // text to stay above twice the per-request budget.
   const mock = splittingBootstrapLlm({
     packetsPerChunk: 3,
-    factChars: 6_000,
+    factChars: 12_000,
     assignedType: "type-0",
     bootstrapBody: (call) => bootstrapDomainBody(`type-${call}`, call === 0 ? "" : `notes ${call}`),
   });
@@ -1362,7 +1365,10 @@ test("an evidence unit larger than the model context fails explicitly without tr
     analyzed_sources_v2: true,
     analyzed_sources_v3: true,
   };
-  const atomicFact = `atomic ${"indivisible evidence unit ".repeat(1_300)}`;
+  // Doubled from 1_300 repeats: the character-class rules price plain letters
+  // near half the old flat rate, so the unit needs twice the text to stay
+  // larger than the model context.
+  const atomicFact = `atomic ${"indivisible evidence unit ".repeat(2_600)}`;
   let bootstrapRequests = 0;
   const requests: string[] = [];
   const llm = {
@@ -1541,7 +1547,9 @@ test("a wrapped reducer budget overflow reports the model context, not a bare wr
     sourceLines: 20,
     packetsPerChunk: 8,
     sameEntity: true,
-    factRepeat: 1_400,
+    // Doubled from 1_400 repeats for the character-class rules, which price
+    // plain letters near half the old flat rate.
+    factRepeat: 2_800,
     maxTokens: 400_000,
   });
 
@@ -1665,7 +1673,9 @@ test("a taxonomy repair across K groups stays inside the input budget", async ()
             id: `${chunkId}-${entityKey}`,
             chunkId,
             entityKey,
-            facts: [`${entityKey} ${"collapsed taxonomy evidence ".repeat(900)}`],
+            // Doubled from 900 repeats for the character-class rules, which
+            // price plain letters near half the old flat rate.
+            facts: [`${entityKey} ${"collapsed taxonomy evidence ".repeat(1_800)}`],
             exactSourceRanges: [{ startLine: 1, endLine: 1 }],
             links: [],
             sourceAnchor: "src/a.md:1",

@@ -920,17 +920,20 @@ test("schema retry recovery emits succeeded structural_error event", async () =>
 test("schema repair retry stays within input budget by compacting previous invalid output", async () => {
   const events: RunEvent[] = [];
   const seenParams: Record<string, unknown>[] = [];
-  const largeInvalid = JSON.stringify({ value: 42, noise: "x".repeat(3_000) });
+  // 12_000 characters of noise: the character-class rules price plain letters
+  // near half the old flat rate, so the invalid output has to be larger to keep
+  // the full repair above the budget the way this test intends.
+  const largeInvalid = JSON.stringify({ value: 42, noise: "x".repeat(12_000) });
 
-  // Rescaled from a byte-era budget of 3_000 for the token estimator
-  // (task-3 prompt-budget-automation): 714 (3_000 / 4.2) is still smaller
-  // than the full repair (base + verbatim invalid output), forcing the
-  // compact repair path.
+  // Rescaled twice for the token estimator: from a byte-era budget of 3_000,
+  // then to 1_000 once the character-class rules priced the repair envelope
+  // above the old flat rate. It is still smaller than the full repair (base +
+  // verbatim invalid output), forcing the compact repair path.
   const result = await runStructuredWithRetry({
     llm: llmFromAttempts([largeInvalid, '{"value":"recovered"}'], seenParams),
     model: "m",
     baseMessages: [{ role: "user", content: "x".repeat(650) }],
-    opts: { inputBudgetTokens: 714 },
+    opts: { inputBudgetTokens: 1_000 },
     profile: { kind: "json-zod", schema: SmallSchema },
     maxRetries: 1,
     callSite: "query.seeds",
@@ -1787,10 +1790,11 @@ test("structured repair prefers compact prompt above profile threshold", async (
     profile: {
       kind: "json-zod",
       schema: z.object({ value: z.literal("ok") }),
-      // Rescaled from a byte-era 512 for the token estimator (task-3
-      // prompt-budget-automation): 122 (512 / 4.2) is still smaller than
-      // the full repair's own token estimate, forcing the compact path.
-      compactRepairThresholdTokens: 122,
+      // Rescaled twice for the token estimator: from a byte-era 512, then to 60
+      // once the character-class rules priced this letter-heavy payload near
+      // half the old flat rate. It is still smaller than the full repair's own
+      // token estimate, forcing the compact path.
+      compactRepairThresholdTokens: 60,
     },
     maxRetries: 1,
     callSite: "query.seeds",

@@ -712,7 +712,10 @@ test("single-bundle synthesis compresses oversized required retrieved units agai
   oversized.units = [{
     ...oversized.units[0],
     required: true,
-    text: "required retrieved context ".repeat(2_000),
+    // Doubled from 2_000 repeats for the character-class rules, which price
+    // plain letters near half the old flat rate, so this unit still has to be
+    // truncated against the same budget.
+    text: "required retrieved context ".repeat(4_000),
   }];
   const seen: Record<string, unknown>[] = [];
   const llm = mockLlm((params) => {

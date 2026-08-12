@@ -65,9 +65,10 @@ test("diversity rounds survive packer ordering: A1, B1, then A2", () => {
       ["!Wiki/d/a.md", "## Entity A1\nentity entity entity\n## A2\nentity entity"],
       ["!Wiki/d/b.md", "## B1\nentity\n## B2\nquiet"],
     ]),
-    // Rescaled from a byte-era budget of 600 for the token estimator (task-3
-    // prompt-budget-automation): 130 still excludes the lowest-score "## B2".
-    inputBudgetTokens: 130,
+    // Rescaled twice for the token estimator: from a byte-era budget of 600,
+    // then to 220 once the character-class rules priced these units' markup and
+    // JSON envelope above the old flat rate. It still excludes "## B2".
+    inputBudgetTokens: 220,
     fixedMessages: [],
     opts: {},
   });
@@ -143,9 +144,10 @@ test("required target occupies round zero before optional target-page sections",
       ["!Wiki/d/b.md", "## B1\nentity\n## B2\nquiet"],
     ]),
     targetPath,
-    // Rescaled from a byte-era budget of 600 for the token estimator (task-3
-    // prompt-budget-automation): 130 still excludes the lowest-score "## B2".
-    inputBudgetTokens: 130,
+    // Rescaled twice for the token estimator: from a byte-era budget of 600,
+    // then to 220 once the character-class rules priced these units' markup and
+    // JSON envelope above the old flat rate. It still excludes "## B2".
+    inputBudgetTokens: 220,
     fixedMessages: [],
     opts: {},
   });

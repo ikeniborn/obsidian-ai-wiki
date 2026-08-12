@@ -16,9 +16,11 @@ import {
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 const { buildChatParams, prepareChatMessages } = await import("../src/phases/llm-utils");
 
-test("UTF-8 text uses one byte as one conservative estimated token", () => {
-  const ascii = estimatePreparedMessages([{ role: "user", content: "abc" }]);
-  const cyrillic = estimatePreparedMessages([{ role: "user", content: "абв" }]);
+test("Cyrillic text costs more estimated tokens than the same length of ASCII", () => {
+  // Long enough to clear the per-message rounding: the character-class rates
+  // differ by roughly a factor of two, so three characters cannot show it.
+  const ascii = estimatePreparedMessages([{ role: "user", content: "abc".repeat(40) }]);
+  const cyrillic = estimatePreparedMessages([{ role: "user", content: "абв".repeat(40) }]);
   assert.ok(cyrillic > ascii);
 });
 
@@ -112,11 +114,12 @@ test("estimator reserves a flat media cost per image part and still counts other
 });
 
 test("packer keeps required units whole and drops lower-priority optional units", () => {
-  // Rescaled from a byte-era budget of 170 for the token estimator (task-3
-  // prompt-budget-automation): 40 fits "required"+"high" (33 tokens) but not
-  // "low" as well (52 tokens).
+  // Rescaled twice for the token estimator: from a byte-era budget of 170, then
+  // to 25 once the character-class rules priced these letter runs near half the
+  // old flat rate. 25 fits "required"+"high" (22 tokens) but not "low" as well
+  // (33 tokens).
   const packed = packContextUnits({
-    inputBudgetTokens: 40,
+    inputBudgetTokens: 25,
     fixedMessages: [{ role: "system", content: "contract" }],
     opts: {},
     units: [
@@ -127,7 +130,7 @@ test("packer keeps required units whole and drops lower-priority optional units"
     render: (units) => [{ role: "system", content: "contract" }, { role: "user", content: units.map((u) => u.text).join("\n") }],
   });
   assert.deepEqual(packed.selected.map((unit) => unit.id), ["required", "high"]);
-  assert.ok(packed.estimatedInputTokens <= 40);
+  assert.ok(packed.estimatedInputTokens <= 25);
 });
 
 test("packer renders fixed-only prompts before estimating and returning them", () => {

@@ -6,22 +6,44 @@ export const MEDIA_TOKENS = 4_096;
 /** Flat allowance per message for its role and the separators around it. */
 const MESSAGE_OVERHEAD_TOKENS = 4;
 
-// Fitted against tests/fixtures/recorded-prompts.json with the grid search in
-// task-2-brief.md Step 5. Among the pairs whose minimum error is at or above
-// zero (never underestimating), lat/4.2 cyr/1.9 has the smallest maximum: all
-// four recorded requests land between +2.3% and +5.8% of the provider's own
-// count at calibration 1 — inside the intent's 15% band.
-const CHARS_PER_TOKEN_CYRILLIC = 1.9;
-const CHARS_PER_TOKEN_DEFAULT = 4.2;
+// A single chars-per-token rate for everything but Cyrillic is a prose rate,
+// and it collapses on the shell commands, config files and JSON envelopes that
+// dominate large prompts: those carry three to four times more tokens per
+// character than prose, so the error grew with prompt size instead of staying
+// flat. The rates below split the classes a byte-pair tokenizer actually treats
+// differently and were fitted against tests/fixtures/recorded-prompts.json —
+// see its `fittedAgainst` note for the corpus and the ground truth.
+//
+// Words absorb the space in front of them, which is why letters and spaces
+// share one generous rate. Digits and symbols cost a token per run plus a small
+// per-character rate, because a tokenizer opens a new token at every switch
+// into punctuation and then merges only short spans of it. Every newline opens
+// its own token.
+const CHARS_PER_TOKEN_CYRILLIC = 3.5;
+const CHARS_PER_TOKEN_WORD = 8.1;
+const CHARS_PER_TOKEN_SYMBOL = 2.1;
+const SYMBOL_RUN_TOKENS = 1.1;
 
-function isCyrillic(code: number): boolean {
-  return code >= 0x0400 && code <= 0x052f;
-}
+type CharClass = "cyrillic" | "cjk" | "word" | "digit" | "symbol" | "newline";
 
-function isCjk(code: number): boolean {
-  return (code >= 0x3040 && code <= 0x30ff)
+/** Letters of any remaining script, plus the whitespace that binds them into words. */
+const WORD_CHARACTER = /[\p{L}\p{M}\s]/u;
+
+function classify(code: number, char: string): CharClass {
+  // ASCII first: this runs per character of every packing candidate, and the
+  // prompts it walks are mostly ASCII.
+  if (code < 0x80) {
+    if (code === 0x0a) return "newline";
+    if (code >= 0x30 && code <= 0x39) return "digit";
+    if ((code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a)
+      || code === 0x20 || code === 0x09 || code === 0x0d) return "word";
+    return "symbol";
+  }
+  if (code >= 0x0400 && code <= 0x052f) return "cyrillic";
+  if ((code >= 0x3040 && code <= 0x30ff)
     || (code >= 0x4e00 && code <= 0x9fff)
-    || (code >= 0xac00 && code <= 0xd7af);
+    || (code >= 0xac00 && code <= 0xd7af)) return "cjk";
+  return WORD_CHARACTER.test(char) ? "word" : "symbol";
 }
 
 /**
@@ -33,14 +55,29 @@ function isCjk(code: number): boolean {
 export function estimateText(text: string, calibration = 1): number {
   let cyrillic = 0;
   let cjk = 0;
-  let other = 0;
+  let word = 0;
+  let symbol = 0;
+  let runs = 0;
+  let previous: CharClass | undefined;
   for (const char of text) {
-    const code = char.codePointAt(0) ?? 0;
-    if (isCyrillic(code)) cyrillic++;
-    else if (isCjk(code)) cjk++;
-    else other++;
+    const cls = classify(char.codePointAt(0) ?? 0, char);
+    switch (cls) {
+      case "cyrillic": cyrillic++; break;
+      case "cjk": cjk++; break;
+      case "word": word++; break;
+      case "newline": runs++; break;
+      default:
+        symbol++;
+        if (cls !== previous) runs++;
+        break;
+    }
+    previous = cls;
   }
-  const raw = cyrillic / CHARS_PER_TOKEN_CYRILLIC + cjk + other / CHARS_PER_TOKEN_DEFAULT;
+  const raw = cyrillic / CHARS_PER_TOKEN_CYRILLIC
+    + cjk
+    + word / CHARS_PER_TOKEN_WORD
+    + symbol / CHARS_PER_TOKEN_SYMBOL
+    + runs * SYMBOL_RUN_TOKENS;
   return Math.ceil(raw * calibration);
 }
 

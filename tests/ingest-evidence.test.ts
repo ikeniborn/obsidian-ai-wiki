@@ -513,11 +513,12 @@ test("packed maximality uses final ordinals at a request boundary", () => {
     { length: 40 },
     (_, index) => `## Neutral heading ${index + 1} ${"x".repeat(24)}`,
   ).join("\n");
-  // Rescaled from a byte-era budget of 4_744 for the token estimator (task-3
-  // prompt-budget-automation): 1_190 tokens reproduces the same paired split.
+  // Rescaled twice for the token estimator: from a byte-era budget of 4_744,
+  // then to 1_180 once the character-class rules repriced the mapper envelope.
+  // 1_180 tokens reproduces the same paired split.
   const chunks = chunkSourceForEvidence(source, "neutral", {
     ...packingPolicy(),
-    inputBudgetTokens: 1_190,
+    inputBudgetTokens: 1_180,
   });
 
   assert.deepEqual(chunks.slice(0, 10).map((chunk) => [chunk.startLine, chunk.endLine]), [
@@ -735,11 +736,11 @@ test("evidence telemetry wrapper preserves native transport diagnostics", async 
 });
 
 function realisticReducerPolicy(): EvidencePolicy {
-  // Rescaled from a byte-era budget of 13_000 for the token estimator
-  // (task-3 prompt-budget-automation): divided by the default 4.2 chars-per-
-  // token divisor to keep the same relative tightness against these fixtures.
+  // Rescaled twice for the token estimator: from a byte-era budget of 13_000,
+  // then again once the character-class rules priced the reducer's JSON payload
+  // near twice the old flat rate. Keeps the same relative tightness.
   return {
-    ...evidencePolicy(3_095),
+    ...evidencePolicy(4_400),
     outputBudgetTokens: 4_000,
   };
 }
@@ -1314,11 +1315,12 @@ test("irreducible single evidence packet oversize fails typed", async () => {
     packets: [validMapperPacket(messages, 5000)],
     noEvidence: [],
   }), events);
-  // Rescaled from the default 5_000 budget for the token estimator (task-3
-  // prompt-budget-automation): 2_000 tokens is still too small for the
-  // single 5_000-character fact, which the default budget now comfortably fits.
+  // Rescaled twice for the token estimator: from the default 5_000 budget, then
+  // to 1_400 once the character-class rules priced plain letters at roughly half
+  // the old flat rate. It is still too small for the single 5_000-character
+  // fact, which the default budget now comfortably fits.
   await assert.rejects(
-    prepareSourceEvidence("one source line", "demo", { ...evidencePolicy(2_000), outputBudgetTokens: 6_000 }, runtime),
+    prepareSourceEvidence("one source line", "demo", { ...evidencePolicy(1_400), outputBudgetTokens: 6_000 }, runtime),
     (error: unknown) => {
       assert.ok(error instanceof EvidenceReducerError);
       assert.match(error.message, /A single evidence packet cannot fit the reducer budget/);
@@ -1573,13 +1575,13 @@ test("evidence mapper and reducer use direct non-stream requests", async () => {
     : { packets: repeatedMapperPackets(messages, 24), noEvidence: [] }, [], requests, params);
   const source = Array.from({ length: 500 }, (_, index) => `non-stream evidence ${index + 1}`).join("\n");
 
-  // Rescaled from a byte-era budget of 14_500 for the token estimator
-  // (task-3 prompt-budget-automation): divided by the default 4.2 chars-per-
-  // token divisor.
+  // Rescaled twice for the token estimator: from a byte-era budget of 14_500,
+  // then again once the character-class rules priced the reducer's JSON payload
+  // near twice the old flat rate.
   await prepareSourceEvidence(
     source,
     "demo",
-    { ...realisticReducerPolicy(), inputBudgetTokens: 3_452, outputBudgetTokens: 7_000 },
+    { ...realisticReducerPolicy(), inputBudgetTokens: 6_200, outputBudgetTokens: 7_000 },
     runtime,
   );
 
@@ -1617,13 +1619,13 @@ test("evidence progress uses ordered human lifecycle actions with visible retry"
   }, events);
   const source = Array.from({ length: 420 }, (_, index) => `${hostileSource} ${index + 1}`).join("\n");
 
-  // Rescaled from a byte-era budget of 14_500 for the token estimator
-  // (task-3 prompt-budget-automation): divided by the default 4.2 chars-per-
-  // token divisor.
+  // Rescaled twice for the token estimator: from a byte-era budget of 14_500,
+  // then again once the character-class rules priced the reducer's JSON payload
+  // near twice the old flat rate.
   await prepareSourceEvidence(
     source,
     "demo",
-    { ...realisticReducerPolicy(), inputBudgetTokens: 3_452, outputBudgetTokens: 7_000 },
+    { ...realisticReducerPolicy(), inputBudgetTokens: 6_200, outputBudgetTokens: 7_000 },
     runtime,
   );
 

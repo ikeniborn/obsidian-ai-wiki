@@ -505,10 +505,12 @@ test("lint-chat fails closed instead of calling LLM with empty pages after lexic
 
 test("lint-chat fixed-request budget check is token-based, not raw serialized bytes", async () => {
   // The full rendered request (lint-chat template + wiki schema + this page)
-  // serializes to 10,486 raw bytes, but estimates at ~2,415 tokens. A budget
-  // of 2,500 is far too small for the old byte-based check (which would fail
+  // serializes to 10,486 raw bytes but estimates well below that. A budget of
+  // 4,500 is far too small for the old byte-based check (which would fail
   // closed exactly like the oversized-page test above) but comfortably fits
-  // the token estimate. This is the fix-loop I1 regression test: it fails if
+  // the token estimate. It was 2,500 until the character-class rules priced the
+  // template's punctuation and JSON schema above the old flat rate.
+  // This is the fix-loop I1 regression test: it fails if
   // buildLintChatMessagesWithinBudget / estimateLintChatFixedRequest revert
   // to byte-length estimation.
   const path = "!Wiki/d/concept/wiki_d_page.md";
@@ -530,14 +532,14 @@ test("lint-chat fixed-request budget check is token-based, not raw serialized by
     { id: "d", name: "Demo", wiki_folder: "d", entity_types: [], language_notes: "" } as DomainEntry,
     jsonLlm(JSON.stringify({ summary: "ok", patches: [] }), seen),
     "m",
-    { inputBudgetTokens: 2_500, semanticCompression: { profile: "balanced", operation: "lint" } },
+    { inputBudgetTokens: 4_500, semanticCompression: { profile: "balanced", operation: "lint" } },
     new AbortController().signal,
   ));
   assert.equal(seen.length, 1);
   const fullRequestBytes = new TextEncoder().encode(JSON.stringify(seen[0].messages)).byteLength;
-  assert.ok(fullRequestBytes > 2_500, `fixture must exceed the budget in raw bytes (got ${fullRequestBytes})`);
+  assert.ok(fullRequestBytes > 4_500, `fixture must exceed the budget in raw bytes (got ${fullRequestBytes})`);
   assert.ok(
-    estimatePreparedMessages((seen[0].messages ?? []) as OpenAI.Chat.ChatCompletionMessageParam[]) <= 2_500,
+    estimatePreparedMessages((seen[0].messages ?? []) as OpenAI.Chat.ChatCompletionMessageParam[]) <= 4_500,
   );
   assert.equal(events.some((event) => event.kind === "error"), false);
 });
@@ -564,7 +566,7 @@ test("lint-chat fixed-request budget check applies tokenCalibration", async () =
       { id: "d", name: "Demo", wiki_folder: "d", entity_types: [], language_notes: "" } as DomainEntry,
       jsonLlm(JSON.stringify({ summary: "ok", patches: [] }), seen),
       "m",
-      { inputBudgetTokens: 2_500, tokenCalibration, semanticCompression: { profile: "balanced", operation: "lint" } },
+      { inputBudgetTokens: 4_500, tokenCalibration, semanticCompression: { profile: "balanced", operation: "lint" } },
       new AbortController().signal,
     ));
     return { seen, events };

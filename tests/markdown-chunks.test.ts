@@ -115,12 +115,12 @@ test("a source line larger than the budget fails with its range and required siz
 
 test("mandatory fence wrappers larger than the budget fail with their source range", () => {
   const source = "```lang\n1234567890\n```";
-  // Budget 4 is large enough for the opening fence line alone but too small
+  // Budget 8 is large enough for the opening fence line alone but too small
   // for the fenced content line, which must carry synthetic open/close
   // fence overhead — so range 2-2 is the one that fails.
   assert.throws(
-    () => chunkMarkdownSource(source, { maxEstimatedTokens: 4, overlapLines: 0 }),
-    /range 2-2 requires \d+ estimated tokens but budget is 4/i,
+    () => chunkMarkdownSource(source, { maxEstimatedTokens: 8, overlapLines: 0 }),
+    /range 2-2 requires \d+ estimated tokens but budget is 8/i,
   );
 });
 
@@ -265,11 +265,12 @@ test("chunking never emits a blank-only leading preamble chunk", () => {
 });
 
 test("a leading blank range fails loud when it cannot share the heading budget", () => {
-  // Rescaled from a byte-era budget of 3 for the token estimator (task-3
-  // prompt-budget-automation): budget 1 is still too small to coalesce.
+  // Rescaled twice for the token estimator: from a byte-era budget of 3, then
+  // to 2 when the character-class rules made a heading line cost 2 tokens.
+  // Budget 2 fits the heading alone and is still too small to coalesce.
   assert.throws(
-    () => chunkMarkdownSource("\n# H", { maxEstimatedTokens: 1, overlapLines: 0 }),
-    /blank source range 1-1 cannot be coalesced.*budget 1/i,
+    () => chunkMarkdownSource("\n# H", { maxEstimatedTokens: 2, overlapLines: 0 }),
+    /blank source range 1-1 cannot be coalesced.*budget 2/i,
   );
 });
 
@@ -347,7 +348,7 @@ test("longer backtick fences are not closed by shorter delimiters", () => {
 
 test("line windows overlap by the configured number of original lines", () => {
   const source = Array.from({ length: 12 }, (_, i) => `line ${i} ${"x".repeat(12)}`).join("\n");
-  const chunks = chunkMarkdownSource(source, { maxEstimatedTokens: 70, overlapLines: 2 });
+  const chunks = chunkMarkdownSource(source, { maxEstimatedTokens: 30, overlapLines: 2 });
 
   assert.ok(chunks.length > 1);
   for (let index = 1; index < chunks.length; index++) {
@@ -382,10 +383,11 @@ test("line-window sizing performs bounded byte-encoding work", () => {
 
 test("overlap that cannot preserve progress is rejected clearly", () => {
   const source = Array.from({ length: 6 }, (_, i) => `${i}:${"x".repeat(18)}`).join("\n");
-  // Rescaled from a byte-era budget of 41 for the token estimator (task-3
-  // prompt-budget-automation): 12 tokens still forces the range 1-2 window.
+  // Rescaled twice for the token estimator: from a byte-era budget of 41, then
+  // to 13 when the character-class rules repriced these lines. It still forces
+  // the range 1-2 window.
   assert.throws(
-    () => chunkMarkdownSource(source, { maxEstimatedTokens: 12, overlapLines: 2 }),
+    () => chunkMarkdownSource(source, { maxEstimatedTokens: 13, overlapLines: 2 }),
     /overlapLines 2 prevents progress after source range 1-2/i,
   );
 });
@@ -471,7 +473,7 @@ test("coverage validation rejects an altered synthetic fence wrapper", () => {
 
 test("coverage validation rejects a stale range even when overlap keeps full coverage", () => {
   const source = Array.from({ length: 12 }, (_, i) => `line ${i} ${"x".repeat(12)}`).join("\n");
-  const chunks = chunkMarkdownSource(source, { maxEstimatedTokens: 70, overlapLines: 2 });
+  const chunks = chunkMarkdownSource(source, { maxEstimatedTokens: 30, overlapLines: 2 });
   const stale = chunks[1];
   stale.startLine += 1;
   stale.id = `${stale.ordinal}:${stale.startLine}-${stale.endLine}:${stale.contentHash}`;
