@@ -320,6 +320,27 @@ export function effectiveModel(
 }
 
 /**
+ * The explicit input/output caps that bind one native operation: the per-operation
+ * value when per-operation controls are on, otherwise the global one. Absent means
+ * "derive from the window".
+ *
+ * Exported because vision resolves its budget from the VISION model's own window but
+ * under the FORMAT operation's caps: a number the user typed is a cost decision, and
+ * changing which window a request is measured against does not repeal it.
+ */
+export function nativeBudgetOverrides(
+  settings: LlmWikiPluginSettings,
+  key: OpKey,
+): { input?: number; output?: number } {
+  const global = settings.nativeAgent;
+  const local = global.perOperation ? global.operations[key] : undefined;
+  return {
+    input: local?.inputBudgetTokens ?? global.inputBudgetTokens,
+    output: local?.maxTokens ?? global.maxTokens,
+  };
+}
+
+/**
  * The record-aware model-call resolver. On the native-agent path,
  * input and output budgets are derived from the model's context window
  * (`resolveBudget`) instead of falling back to fixed constants; a stored budget still
@@ -369,10 +390,7 @@ export function resolveCallPolicy(
     : compressionProfile(local?.compressionProfile)
       ?? compressionProfile(global.compressionProfile)
       ?? "balanced";
-  const budget = resolveBudget(record, key, {
-    input: local?.inputBudgetTokens ?? global.inputBudgetTokens,
-    output: local?.maxTokens ?? global.maxTokens,
-  });
+  const budget = resolveBudget(record, key, nativeBudgetOverrides(settings, key));
   // A stored repair budget is still clamped by the window: `resolveBudget`'s
   // `maxInput` bounds both the derived value AND an override, and a repair prompt
   // must not exceed the input budget it is repairing.

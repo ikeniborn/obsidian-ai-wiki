@@ -15,6 +15,7 @@ import {
 } from "../src/prompt-budget";
 import { VaultTools, type VaultAdapter } from "../src/vault-tools";
 import { stubModelContextStore } from "./model-context-stub";
+import type { ModelContextRecord, ModelContextStore } from "../src/model-context";
 import {
   batchPdfPages,
   mergeRecognitionRecords,
@@ -296,6 +297,113 @@ test("AgentRunner keeps Chat compression out of Vision analysis messages", async
   }
 
   assert.equal(new Set(formatSystems).size, 1);
+});
+
+/** A store that answers with a different record per model, and never probes. */
+function perModelStore(records: Record<string, ModelContextRecord>): ModelContextStore {
+  const store: Pick<ModelContextStore, "get" | "resolve" | "observeUsage" | "observeContextError"> = {
+    get: (_baseUrl: string, model: string) => records[model],
+    resolve: async (_baseUrl: string, model: string) => {
+      const found = records[model];
+      if (!found) throw new Error(`unexpected model resolved: ${model}`);
+      return found;
+    },
+    observeUsage: () => ({ ratio: 1, applied: true, clamped: false }),
+    observeContextError: () => ({ applied: false, reason: "unknown-model" }),
+  };
+  return store as ModelContextStore;
+}
+
+/** Drives the real `AgentRunner` -> `runFormat` path over one embedded image. */
+async function runFormatThroughRunner(
+  settings: LlmWikiPluginSettings,
+  store: ModelContextStore,
+): Promise<{ params: Record<string, unknown>[]; events: RunEvent[] }> {
+  const { vaultTools } = memoryVault();
+  const params: Record<string, unknown>[] = [];
+  const llm = {
+    chat: {
+      completions: {
+        create: async (sent: Record<string, unknown>) => {
+          params.push(sent);
+          if (sent.stream === false) return response([record("image")]);
+          return (async function* () {
+            yield chunk(formatFrame(
+              "---\ntags: [vision]\n---\n# Vision\n\n![[image.png]]",
+              true,
+            ));
+            yield usageChunk();
+          })();
+        },
+      },
+    },
+  } as unknown as LlmClient;
+  const runner = new AgentRunner(
+    llm, settings, vaultTools, "Vault", [], undefined, false, store,
+  );
+  const events: RunEvent[] = [];
+  for await (const event of runner.run({
+    operation: "format",
+    args: ["notes/source.md"],
+    cwd: "/vault",
+    signal: new AbortController().signal,
+    timeoutMs: 0,
+  })) events.push(event);
+  return { params, events };
+}
+
+const discoveredRecord = (contextWindow: number): ModelContextRecord =>
+  ({ contextWindow, source: "discovered", calibration: 1, samples: 0 });
+
+test("AgentRunner sizes the vision call from the vision window while an explicit Format cap still binds", async () => {
+  const settings = formatSettings("balanced", false);
+  // What a user sets to cap cost. It is not a window: it must survive the switch to
+  // the vision model's own window, which is the only thing that changes here.
+  settings.nativeAgent.maxTokens = 2_000;
+  settings.nativeAgent.inputBudgetTokens = 5_000;
+
+  const { params, events } = await runFormatThroughRunner(settings, perModelStore({
+    "format-model": discoveredRecord(131_072),
+    "vision-model": discoveredRecord(65_536),
+  }));
+
+  const vision = params.find((sent) => sent.stream === false);
+  const format = params.find((sent) => sent.stream === true);
+  assert.ok(vision && format);
+  assert.equal(format.max_completion_tokens, 2_000, "the cap binds the operation itself");
+  assert.equal(vision.max_completion_tokens, 2_000, "and the vision call it runs");
+
+  const budget = events.find((event) =>
+    event.kind === "budget_resolved" && event.model === "vision-model");
+  assert.ok(budget && budget.kind === "budget_resolved");
+  assert.equal(budget.contextWindow, 65_536, "the window is still the vision model's own");
+  assert.equal(budget.outputBudget, 2_000);
+  assert.equal(budget.inputBudget, 5_000);
+  assert.equal(budget.inputSource, "override");
+});
+
+test("AgentRunner leaves vision on the Format budget when only the 8192 fallback is known", async () => {
+  const settings = formatSettings("balanced", false);
+
+  const { params, events } = await runFormatThroughRunner(settings, perModelStore({
+    "format-model": discoveredRecord(131_072),
+    // What a gateway that advertises no window produces for the vision model.
+    "vision-model": {
+      contextWindow: 8_192, source: "default", calibration: 1, samples: 0,
+      expiresAt: Date.now() + 86_400_000,
+    },
+  }));
+
+  const vision = params.find((sent) => sent.stream === false);
+  assert.ok(vision);
+  // Format's own output budget: min(8192 * 4, 131_072 / 2). Budgeting from the
+  // fallback instead would cap the reply at 4096 and the prompt at 3686 — less than
+  // one image costs.
+  assert.equal(vision.max_completion_tokens, 32_768);
+  assert.ok(
+    !events.some((event) => event.kind === "budget_resolved" && event.model === "vision-model"),
+    "the fallback is not a measurement of the vision model, so no budget is derived from it",
+  );
 });
 
 test("recognition coverage rejects missing pages, duplicate pages, and missing fields", () => {

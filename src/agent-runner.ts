@@ -29,6 +29,7 @@ import { normalizeRerankerConfig } from "./reranker";
 import {
   configuredContextWindowFor,
   effectiveModel,
+  nativeBudgetOverrides,
   policyKey,
   resolveCallPolicy,
 } from "./model-call-policy";
@@ -101,9 +102,12 @@ export async function resolveVisionBudget(
   // advertise, or one the user typed, is a real fact about the vision model and is
   // used.
   if (record.source === "default") return { record, events };
-  // "format" is the operation vision runs inside, so its output share is the one
-  // the vision call already had — only the window it is taken from changes.
-  const budget = resolveBudget(record, "format", {});
+  // "format" is the operation vision runs inside, so its output share and its
+  // explicit caps are the ones the vision call already had — only the window they
+  // are taken from changes. Dropping the overrides here would silently raise a cap
+  // the user set to bound cost: before vision had a window of its own it inherited
+  // `opts.inputBudgetTokens` / `opts.maxTokens`, which carry exactly these numbers.
+  const budget = resolveBudget(record, "format", nativeBudgetOverrides(settings, "format"));
   events.push({
     kind: "budget_resolved",
     operation: "format",
