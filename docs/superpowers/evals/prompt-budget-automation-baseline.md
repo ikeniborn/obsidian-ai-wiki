@@ -136,3 +136,19 @@ The intent's health metrics are met with one recorded exception: the ±15% band 
 7 of 9 calls, and the two misses are conservative overestimates on prompts far below the
 budget. Extra provider calls caused by splitting an otherwise unreachable payload are
 allowed by the intent and are recorded as `evidence_split`.
+
+## Check 4b — the settings UI, confirmed by the owner
+
+Confirmed on 2026-08-12 against the deployed build, closing the last open step of
+Task 14 (Step 8) under the amended criterion:
+
+- `Input budget tokens`, `Max completion tokens` and `Repair input budget` are all
+  present and all empty.
+- Each shows its resolved automatic value as a placeholder: 110592, 8192 and 110592
+  respectively, derived from the configured 131072-token window.
+- The vision model carries its own context-window field, empty, showing "Automatic".
+
+The Advanced grouping the plan originally required was superseded on the same day:
+Obsidian's `Setting.setHeading()` has no closing or scoping mechanism, so the heading
+also captured the neighbouring compression-profile control, and the field order is
+pinned by tests. The intent, the spec and the plan record the amendment and its reason.
