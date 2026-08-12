@@ -911,12 +911,16 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
     temperature: 0.2,
     topP: null,
     perOperation: false,
+    // No per-operation `inputBudgetTokens` / `maxTokens` defaults: both are optional and
+    // absent means "derive from the model's context window". A default here would be
+    // re-injected by loadSettings' defaults-first merge on the next start, silently
+    // reviving a cleared override as an explicit one.
     operations: {
-      ingest: { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 4096, temperature: 0.2 },
-      query:  { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 4096, temperature: 0.2 },
-      lint:   { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 8192, temperature: 0.2 },
-      init:   { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 8192, temperature: 0.2 },
-      format: { model: "llama3.2", inputBudgetTokens: 16384, maxTokens: 32768, temperature: 0.2 },
+      ingest: { model: "llama3.2", temperature: 0.2 },
+      query:  { model: "llama3.2", temperature: 0.2 },
+      lint:   { model: "llama3.2", temperature: 0.2 },
+      init:   { model: "llama3.2", temperature: 0.2 },
+      format: { model: "llama3.2", temperature: 0.2 },
     },
     structuredRetries: 1,
     rerankerEnabled: false,

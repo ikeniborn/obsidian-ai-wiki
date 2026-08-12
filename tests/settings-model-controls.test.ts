@@ -801,6 +801,69 @@ test("clearing wipes every operation's budget override, not just one", () => {
   }
 });
 
+/**
+ * Reproduces `LlmWikiPlugin.loadSettings`'s per-operation merge: defaults first, then
+ * whatever `data.json` stored. The regex below pins this simulation to the real merge,
+ * so it cannot drift silently.
+ */
+function mergeLikeMain(persisted: unknown): LlmWikiPluginSettings {
+  assert.match(
+    mainSource,
+    /ingest:\s*\{\s*\.\.\.defNA\.operations\.ingest,\s*\.\.\.\(\(naOps\.ingest as object\) \?\? \{\}\)\s*\}/,
+    "loadSettings must still merge native per-operation defaults first, then stored data",
+  );
+  const data = persisted as Record<string, Record<string, Record<string, object>>>;
+  const defNA = structuredClone(DEFAULT_SETTINGS).nativeAgent;
+  const naData = data?.nativeAgent ?? {};
+  const naOps = (naData.operations ?? {}) as Record<string, object>;
+  const merged = structuredClone(DEFAULT_SETTINGS);
+  merged.nativeAgent = {
+    ...defNA,
+    ...(naData as object),
+    operations: {
+      ingest: { ...defNA.operations.ingest, ...((naOps.ingest as object) ?? {}) },
+      query:  { ...defNA.operations.query,  ...((naOps.query  as object) ?? {}) },
+      lint:   { ...defNA.operations.lint,   ...((naOps.lint   as object) ?? {}) },
+      init:   { ...defNA.operations.init,   ...((naOps.init   as object) ?? {}) },
+      format: { ...defNA.operations.format, ...((naOps.format as object) ?? {}) },
+    },
+  } as LlmWikiPluginSettings["nativeAgent"];
+  normalizePersistedModelControls(merged);
+  return merged;
+}
+
+test("clearing a per-operation native budget survives a settings round-trip", () => {
+  const settings = structuredClone(DEFAULT_SETTINGS);
+  settings.nativeAgent.perOperation = true;
+  for (const key of ["ingest", "query", "lint", "init", "format"] as const) {
+    settings.nativeAgent.operations[key].inputBudgetTokens = 12_345;
+    settings.nativeAgent.operations[key].maxTokens = 6_789;
+  }
+  clearNativeBudgets(settings);
+
+  // `saveData` writes JSON, so a deleted key is simply absent from data.json.
+  const reloaded = mergeLikeMain(JSON.parse(JSON.stringify(settings)));
+
+  for (const key of ["ingest", "query", "lint", "init", "format"] as const) {
+    assert.equal(
+      reloaded.nativeAgent.operations[key].inputBudgetTokens, undefined,
+      `${key}: a cleared per-operation input budget must not come back from the defaults`,
+    );
+    assert.equal(
+      reloaded.nativeAgent.operations[key].maxTokens, undefined,
+      `${key}: a cleared per-operation output budget must not come back from the defaults`,
+    );
+  }
+
+  // The user-visible consequence: with per-operation models on, the reloaded settings
+  // must still budget automatically from the model's context window.
+  const resolved = resolveCallPolicy(reloaded, "ingest", probeRecord());
+  assert.equal(resolved.budget?.inputSource, "discovered");
+  assert.equal(resolved.budget?.outputSource, "default");
+  assert.notEqual(resolved.policy.inputBudgetTokens, 16_384);
+  assert.notEqual(resolved.policy.outputBudgetTokens, 4_096);
+});
+
 test("settleOnce resolves to the first value across any number of later calls", async () => {
   const { promise, settle } = settleOnce<boolean>();
   settle(true);
