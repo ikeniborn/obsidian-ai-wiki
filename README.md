@@ -338,10 +338,22 @@ budget tokens still acts as an explicit override — automatic budgeting never o
 value you set. Claude Agent is unchanged: its input budget stays a fixed, explicitly
 configured value.
 
+When the provider does not report a context window for the model, AI Wiki falls back to a
+conservative **8192-token** window and budgets from that. The fallback is cached for
+**24 hours**, so the next run after that re-probes the provider and picks up a real window
+as soon as one is reported; a discovered window is cached without an expiry. In capacity
+terms the fallback is roughly neutral against the byte-based 16384 budget it replaces —
+about 15 kB of Latin text either way — so it is a different unit, not a smaller allowance.
+
+Enabling **Per-operation models** does not turn automatic budgeting off. Each operation
+gets its own input and output budget fields, and each is automatic while it is empty. A
+number you type there overrides the automatic value for that operation only; clearing it
+returns that operation to automatic.
+
 If you upgraded from a version where these fields required a number, AI Wiki asks once
 whether to switch your saved value to automatic or keep it; dismissing that prompt keeps
 your saved value. You can change your mind at any time by clearing or setting the field
-in Settings.
+in Settings — including the per-operation fields, which stay cleared across restarts.
 
 The prompt estimator counts tokens rather than serialized bytes, which also moved chunk
 boundaries during ingest. Existing domains are **not** re-indexed automatically after

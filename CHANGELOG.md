@@ -8,9 +8,14 @@
 
 ### Fixes
 - fix(llm): measure prompt budgets in tokens instead of serialized bytes, so Init no longer fails with "domain was not created" purely because of source size.
+- fix(init): split oversized bootstrap evidence at evidence-unit granularity and merge the split groups back, instead of failing on source size. A size condition that no split can resolve now reports the model and its context window rather than a configuration error.
+- fix(llm): let a generation truncated by the output limit retry with a per-request output ceiling computed from the prompt actually dispatched, instead of retrying with the same limit.
+- fix(lint): measure Lint work items and batches in tokens instead of bytes, so Lint packs the requests its budget allows.
+- fix(settings): clearing a per-operation native budget now stays cleared across a restart, instead of being refilled from a stored default and silently disabling automatic budgeting.
 
 ### Other
 - Chunk boundaries moved with the token-based estimator. Rebuild an existing domain with `Init --force` to re-chunk it; existing domains are not re-indexed automatically.
+- chore(telemetry): add an `evidence_split` run event recording how bootstrap evidence was divided, alongside the existing budget, context-probe and calibration telemetry. All of it goes to `agent.jsonl` only.
 
 ---
 
