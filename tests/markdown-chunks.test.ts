@@ -115,12 +115,12 @@ test("a source line larger than the budget fails with its range and required siz
 
 test("mandatory fence wrappers larger than the budget fail with their source range", () => {
   const source = "```lang\n1234567890\n```";
-  // Budget 8 is large enough for the opening fence line alone but too small
+  // Budget 9 is large enough for the opening fence line alone but too small
   // for the fenced content line, which must carry synthetic open/close
   // fence overhead — so range 2-2 is the one that fails.
   assert.throws(
-    () => chunkMarkdownSource(source, { maxEstimatedTokens: 8, overlapLines: 0 }),
-    /range 2-2 requires \d+ estimated tokens but budget is 8/i,
+    () => chunkMarkdownSource(source, { maxEstimatedTokens: 9, overlapLines: 0 }),
+    /range 2-2 requires \d+ estimated tokens but budget is 9/i,
   );
 });
 
@@ -276,14 +276,14 @@ test("a leading blank range fails loud when it cannot share the heading budget",
 
 test("blank paragraph separators coalesce with an adjacent range when the result fits", () => {
   const source = "a\n\n\nb";
-  const chunks = chunkMarkdownSource(source, { maxEstimatedTokens: 2, overlapLines: 0 });
+  const chunks = chunkMarkdownSource(source, { maxEstimatedTokens: 3, overlapLines: 0 });
 
   assert.deepEqual(chunks.map((chunk) => [chunk.startLine, chunk.endLine, chunk.markdown]), [
     [1, 2, "a\n"],
     [3, 4, "\nb"],
   ]);
   assert.equal(chunks.every((chunk) => chunk.markdown.length > 0), true);
-  assert.equal(chunks.every((chunk) => estimateText(chunk.markdown) <= 2), true);
+  assert.equal(chunks.every((chunk) => estimateText(chunk.markdown) <= 3), true);
   assert.doesNotThrow(() => assertCompleteSourceCoverage(source, chunks));
 });
 
@@ -384,10 +384,10 @@ test("line-window sizing performs bounded byte-encoding work", () => {
 test("overlap that cannot preserve progress is rejected clearly", () => {
   const source = Array.from({ length: 6 }, (_, i) => `${i}:${"x".repeat(18)}`).join("\n");
   // Rescaled twice for the token estimator: from a byte-era budget of 41, then
-  // to 13 when the character-class rules repriced these lines. It still forces
+  // to 14 when the character-class rules repriced these lines. It still forces
   // the range 1-2 window.
   assert.throws(
-    () => chunkMarkdownSource(source, { maxEstimatedTokens: 13, overlapLines: 2 }),
+    () => chunkMarkdownSource(source, { maxEstimatedTokens: 14, overlapLines: 2 }),
     /overlapLines 2 prevents progress after source range 1-2/i,
   );
 });

@@ -18,11 +18,12 @@ const MESSAGE_OVERHEAD_TOKENS = 4;
 // share one generous rate. Digits and symbols cost a token per run plus a small
 // per-character rate, because a tokenizer opens a new token at every switch
 // into punctuation and then merges only short spans of it. Every newline opens
-// its own token.
-const CHARS_PER_TOKEN_CYRILLIC = 3.5;
-const CHARS_PER_TOKEN_WORD = 8.1;
-const CHARS_PER_TOKEN_SYMBOL = 2.1;
-const SYMBOL_RUN_TOKENS = 1.1;
+// its own token — `SYMBOL_RUN_TOKENS` is exported because line-window sizing
+// in markdown-chunks has to charge a joined line break the same amount.
+const CHARS_PER_TOKEN_CYRILLIC = 3.45;
+const CHARS_PER_TOKEN_WORD = 8.0;
+const CHARS_PER_TOKEN_SYMBOL = 2.07;
+export const SYMBOL_RUN_TOKENS = 1.12;
 
 type CharClass = "cyrillic" | "cjk" | "word" | "digit" | "symbol" | "newline";
 
@@ -53,6 +54,7 @@ function classify(code: number, char: string): CharClass {
  * the remaining bias per model.
  */
 export function estimateText(text: string, calibration = 1): number {
+  let characters = 0;
   let cyrillic = 0;
   let cjk = 0;
   let word = 0;
@@ -60,6 +62,7 @@ export function estimateText(text: string, calibration = 1): number {
   let runs = 0;
   let previous: CharClass | undefined;
   for (const char of text) {
+    characters++;
     const cls = classify(char.codePointAt(0) ?? 0, char);
     switch (cls) {
       case "cyrillic": cyrillic++; break;
@@ -78,7 +81,13 @@ export function estimateText(text: string, calibration = 1): number {
     + word / CHARS_PER_TOKEN_WORD
     + symbol / CHARS_PER_TOKEN_SYMBOL
     + runs * SYMBOL_RUN_TOKENS;
-  return Math.ceil(raw * calibration);
+  // The per-run charge can otherwise exceed one token per character on text
+  // that alternates classes every character — "1.1.1", an IP list, a numeric
+  // table. No byte-level tokenizer emits more than one token per ASCII
+  // character, so the character count is a hard ceiling. It never binds on the
+  // fitted rates for prose in any script (Cyrillic is 0.29 tokens/char) and sits
+  // exactly at the CJK rate, so clamping costs nothing on real text.
+  return Math.ceil(Math.min(raw, characters) * calibration);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

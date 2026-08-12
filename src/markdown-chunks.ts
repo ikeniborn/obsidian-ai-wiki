@@ -1,6 +1,6 @@
 import { contentHash } from "./content-hash";
 import { inspectPatchablePage } from "./section-patches";
-import { estimateText } from "./token-estimate";
+import { estimateText, SYMBOL_RUN_TOKENS } from "./token-estimate";
 
 export interface SourceChunk {
   id: string;
@@ -156,7 +156,14 @@ function rawRangeEstimatedTokens(
   startIndex: number,
   endIndex: number,
 ): number {
-  return bytePrefix[endIndex + 1] - bytePrefix[startIndex] + endIndex - startIndex;
+  // Per-line estimates plus the line breaks that join them. A joined newline
+  // costs what the estimator charges it, not one token: charging less made a
+  // window of many short lines measure below the estimate of the rendered
+  // chunk, which is the one number the budget promise is about. Each line's own
+  // estimate is already rounded up, and joining can only merge runs, so this
+  // sum stays at or above `estimateText` of the rendered range.
+  return bytePrefix[endIndex + 1] - bytePrefix[startIndex]
+    + (endIndex - startIndex) * SYMBOL_RUN_TOKENS;
 }
 
 function renderedRangeEstimatedTokens(
@@ -167,9 +174,10 @@ function renderedRangeEstimatedTokens(
   let tokens = rawRangeEstimatedTokens(bytePrefix, range.startIndex, range.endIndex);
   const openingFence = lines[range.startIndex].fenceBefore;
   const closingFence = lines[range.endIndex].fenceAfter;
-  if (openingFence) tokens += openingFence.openingByteLength + 1;
-  if (closingFence) tokens += closingFence.closingByteLength + 1;
-  return tokens;
+  if (openingFence) tokens += openingFence.openingByteLength + SYMBOL_RUN_TOKENS;
+  if (closingFence) tokens += closingFence.closingByteLength + SYMBOL_RUN_TOKENS;
+  // A whole number, like every other token count the caller compares or reports.
+  return Math.ceil(tokens);
 }
 
 function renderRangeMarkdown(lines: ScannedLine[], range: SourceRange): string {

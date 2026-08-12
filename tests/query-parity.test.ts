@@ -681,11 +681,11 @@ test("single- and cross-domain Query keep the post-reranker winner under a one-c
   };
   const question = "Which reranker ranking evidence wins?";
   // Rescaled twice for the token estimator: from a byte-era budget of 7_000,
-  // then to 1_300 once the character-class rules priced these letter runs near
+  // then to 1_350 once the character-class rules priced these letter runs near
   // half the old flat rate. It still fits only one of the two 2_400-character
   // candidate chunks.
   const opts = {
-    inputBudgetTokens: 1_300,
+    inputBudgetTokens: 1_350,
     maxTokens: 200,
     semanticCompression: {
       profile: "balanced" as const,

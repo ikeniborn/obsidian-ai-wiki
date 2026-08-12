@@ -44,7 +44,11 @@ function messagesFor(item: Case): OpenAI.Chat.ChatCompletionMessageParam[] {
   let wordLeft = census.word;
   for (let index = 0; index < runs && symbolsLeft > 0; index++) {
     const size = index === runs - 1 ? symbolsLeft : Math.max(perRun, 1);
-    parts.push("a", ".".repeat(size));
+    // Runs alternate between digits and punctuation, as they do in the paths,
+    // versions and timestamps these prompts carry. Each run stays one class, so
+    // the run count is the recorded one; the word character in front keeps two
+    // runs of the same class from merging into one.
+    parts.push("a", (index % 2 === 0 ? "1" : ".").repeat(size));
     wordLeft -= 1;
     symbolsLeft -= size;
   }
@@ -75,6 +79,59 @@ test("symbol-dense text costs more tokens per character than prose", () => {
   const config = "iptables -A INPUT -p tcp --dport=22 -j DROP; ufw allow 22/tcp";
   assert.equal(prose.length, config.length);
   assert.ok(estimateText(config) > 2 * estimateText(prose));
+});
+
+test("no text costs more than one token per character", () => {
+  // A run charge plus a per-character charge can otherwise exceed one token per
+  // character on text that switches class every character, which no byte-level
+  // tokenizer can do. An IP list, a numeric table and a timestamp are the real
+  // shapes that hit it, and over-counting them shrinks every chunk budget.
+  for (const dense of [".1".repeat(400), "1.1.1.1, ".repeat(80), "10.0.0.1\n".repeat(90)]) {
+    assert.ok(
+      estimateText(dense) <= [...dense].length,
+      `${estimateText(dense)} tokens for ${[...dense].length} characters`,
+    );
+  }
+});
+
+test("digits and timestamps cost more per character than words, and stay under the ceiling", () => {
+  const stamp = "2026-08-12T11:36:44.787Z";
+  const word = "configuration providers ";
+  assert.equal(stamp.length, word.length);
+  assert.ok(estimateText(stamp) > estimateText(word));
+  assert.ok(estimateText(stamp) <= stamp.length);
+  // The ceiling must not flatten a page of numbers into a page of prose.
+  const numbers = Array.from({ length: 40 }, (_, row) => `${row} 10.0.${row}.1 4096 0.75`).join("\n");
+  const prose = "the quick brown fox jumps over the lazy dog and then some ".repeat(20);
+  assert.ok(estimateText(numbers) / numbers.length > 2 * (estimateText(prose) / prose.length));
+});
+
+test("the fixture census matches the recorded prompt length", () => {
+  // The census is reconstructed, so it can drift from the prompt it claims to
+  // describe; the recorded per-message character lengths are what it has to add
+  // up to. A case that fails this is not the prompt the provider counted.
+  for (const item of fixture.cases) {
+    const census = item.reconstruction;
+    const characters = census.cyrillic + census.cjk + census.word + census.symbols + census.newlines;
+    assert.equal(
+      characters,
+      item.recordedMessageChars.reduce((sum, value) => sum + value, 0),
+      `${item.id}: census sums to ${characters}`,
+    );
+  }
+});
+
+test("the estimate never falls below the tokenizer count of the same census", () => {
+  // `actualInputTokens` is the provider's count of the real prompt; the test
+  // feeds a reconstruction of it. `tokenizerTokens` is that same reconstruction
+  // measured with a real tokenizer, so it is the one exact comparison here —
+  // it isolates the rules from the reconstruction's own error.
+  for (const item of fixture.cases) {
+    const estimated = estimateMessages(messagesFor(item));
+    const ratio = estimated / item.reconstruction.tokenizerTokens;
+    assert.ok(ratio >= 1, `${item.id}: ${estimated} against ${item.reconstruction.tokenizerTokens}`);
+    assert.ok(ratio <= 1.15, `${item.id}: ${((ratio - 1) * 100).toFixed(1)}% above the tokenizer`);
+  }
 });
 
 test("the uncalibrated estimate is within 15% of the provider count on every recorded case", () => {

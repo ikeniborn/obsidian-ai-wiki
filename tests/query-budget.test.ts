@@ -298,7 +298,7 @@ test("packQueryChunks keeps the exact current question and complete highest-scor
     question,
     systemPrompt: "Answer with citations.",
     chunks,
-    inputBudgetTokens: 600,
+    inputBudgetTokens: 714,
     opts: {},
   });
 
@@ -306,7 +306,7 @@ test("packQueryChunks keeps the exact current question and complete highest-scor
     .map((message) => typeof message.content === "string" ? message.content : "")
     .join("\n");
   assert.match(messageText, new RegExp(question.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  assert.ok(result.estimatedInputTokens <= 600);
+  assert.ok(result.estimatedInputTokens <= 714);
   assert.ok(result.selected.length > 0);
   assert.ok(result.selected.length < chunks.length);
   assert.deepEqual(result.selected, chunks.slice(0, result.selected.length));

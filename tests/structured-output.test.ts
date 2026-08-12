@@ -1780,33 +1780,40 @@ test("structured repair can use a larger repair input budget", async () => {
 });
 
 test("structured repair prefers compact prompt above profile threshold", async () => {
-  const seen: Record<string, unknown>[] = [];
+  // The threshold has to discriminate, so both sides are exercised against the
+  // same fixture: the full repair of this response estimates around 85 tokens
+  // and the compact one around 40, so 60 takes the compact path and 200 takes
+  // the full one. It was 512 in the byte era and 122 under the flat token rate.
+  const run = async (compactRepairThresholdTokens: number) => {
+    const seen: Record<string, unknown>[] = [];
+    const result = await runStructuredWithRetry({
+      llm: llmFromAttempts([`{"value":${JSON.stringify("x".repeat(400))}}`, '{"value":"ok"}'], seen),
+      model: "m",
+      baseMessages: [{ role: "user", content: "x" }],
+      opts: { inputBudgetTokens: 4_096, repairInputBudgetTokens: 8_192 },
+      profile: {
+        kind: "json-zod",
+        schema: z.object({ value: z.literal("ok") }),
+        compactRepairThresholdTokens,
+      },
+      maxRetries: 1,
+      callSite: "query.seeds",
+      lifecycle: { id: "compact-threshold-call", action: "select_relevant_pages" },
+      signal: new AbortController().signal,
+      onEvent: () => {},
+    });
+    return { result, retry: seen[1].messages as Array<{ role: string; content: string }> };
+  };
 
-  const result = await runStructuredWithRetry({
-    llm: llmFromAttempts([`{"value":${JSON.stringify("x".repeat(400))}}`, '{"value":"ok"}'], seen),
-    model: "m",
-    baseMessages: [{ role: "user", content: "x" }],
-    opts: { inputBudgetTokens: 4_096, repairInputBudgetTokens: 8_192 },
-    profile: {
-      kind: "json-zod",
-      schema: z.object({ value: z.literal("ok") }),
-      // Rescaled twice for the token estimator: from a byte-era 512, then to 60
-      // once the character-class rules priced this letter-heavy payload near
-      // half the old flat rate. It is still smaller than the full repair's own
-      // token estimate, forcing the compact path.
-      compactRepairThresholdTokens: 60,
-    },
-    maxRetries: 1,
-    callSite: "query.seeds",
-    lifecycle: { id: "compact-threshold-call", action: "select_relevant_pages" },
-    signal: new AbortController().signal,
-    onEvent: () => {},
-  });
+  const compact = await run(60);
+  assert.equal(compact.result.value.value, "ok");
+  assert.equal(compact.retry.some((message) => message.role === "assistant"), false);
+  assert.match(compact.retry.at(-1)?.content ?? "", /too large to include/);
 
-  assert.equal(result.value.value, "ok");
-  const retryMessages = seen[1].messages as Array<{ role: string; content: string }>;
-  assert.equal(retryMessages.some((message) => message.role === "assistant"), false);
-  assert.match(retryMessages.at(-1)?.content ?? "", /too large to include/);
+  const full = await run(200);
+  assert.equal(full.result.value.value, "ok");
+  assert.equal(full.retry.some((message) => message.role === "assistant"), true);
+  assert.doesNotMatch(full.retry.at(-1)?.content ?? "", /too large to include/);
 });
 
 test("structured retries rebuild compact repair from original messages", async () => {

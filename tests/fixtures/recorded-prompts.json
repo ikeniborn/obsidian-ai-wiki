@@ -1,6 +1,6 @@
 {
   "note": "Cases recorded live by the plugin against ollama-deepseek-v4-pro-cloud over a Linux/Unix administration vault. Recorded verbatim from agent.jsonl: id (requestId), callSite, recordedAt, messages and recordedMessageChars (llm_request_fingerprint.messageCount/messageCharLengths), actualInputTokens (calibration_sample.actual, the provider's own input count) and recordedEstimateAtTheTime (llm_request_fingerprint.estimatedInputTokens, produced by the 1.9/4.2 rules this fixture replaced). The log stores lengths, never prompt text, so the character census under `reconstruction` is NOT recorded data - see fittedAgainst.",
-  "fittedAgainst": "The census is reconstructed, per case, from the real material the call carried: the plugin's own prompts/*.md and templates/*.md for the instruction part, sized by the recorded prompt_breakdown section subtotals, plus the fenced code blocks and prose of sourceNote (the vault note that file_start names for that call), JSON-escaped as the payload carries them, mixed so that the reconstruction reproduces the recorded total character count and the Cyrillic count implied by recordedEstimateAtTheTime. tokenizerTokens is that reconstruction measured with the provider family's published tokenizer (DeepSeek-V3 tokenizer.json); it stays within 3% of actualInputTokens on every case here, which is the evidence that the reconstruction carries the composition the provider actually billed. Cases whose reconstruction missed that 3% check were excluded, and prompts below ~3.4k tokens are absent because the log records no breakdown for them, so their composition cannot be reconstructed honestly.",
+  "fittedAgainst": "scripts/derive-recorded-prompts.py rebuilds each census from the real material the call carried: this repository's prompts/*.md and templates/*.md for the instruction part, sized by the recorded prompt_breakdown section subtotals, plus the JSON-escaped fenced code and prose of sourceNote (the vault note file_start names for that call), mixed so the reconstruction reproduces the recorded total character count and the Cyrillic count implied by recordedEstimateAtTheTime. A case is kept only if it round-trips: the census sums to recordedMessageChars exactly, the pre-fix rules reproduce recordedEstimateAtTheTime within 3%, and tokenizerTokens - the reconstruction measured with the provider family's published tokenizer (DeepSeek-V3 tokenizer.json) - is within 3% of actualInputTokens. Prompts below ~3.4k tokens are absent because the log records no prompt_breakdown for them, so their composition cannot be reconstructed honestly. The character-class rates themselves were fitted separately against tokenizer counts over 973 real texts; the script's docstring states that procedure.",
   "cases": [
     {
       "id": "llm-msq127dw-15",
@@ -39,11 +39,11 @@
       "reconstruction": {
         "cyrillic": 1103,
         "cjk": 0,
-        "word": 17208,
-        "symbols": 3584,
-        "symbolRuns": 2187,
+        "word": 17214,
+        "symbols": 3578,
+        "symbolRuns": 2185,
         "newlines": 185,
-        "tokenizerTokens": 6565
+        "tokenizerTokens": 6556
       }
     },
     {
@@ -59,57 +59,57 @@
       "recordedEstimateAtTheTime": 5142,
       "sourceNote": "ОС/Mac/safari_proxy_guide.md",
       "reconstruction": {
-        "cyrillic": 1220,
+        "cyrillic": 1211,
         "cjk": 0,
-        "word": 14817,
-        "symbols": 3550,
-        "symbolRuns": 1924,
+        "word": 14822,
+        "symbols": 3554,
+        "symbolRuns": 1926,
         "newlines": 187,
         "tokenizerTokens": 5679
       }
     },
     {
-      "id": "llm-msq1xqsf-2d",
+      "id": "llm-msq2tv4s-3f",
       "callSite": "ingest.synthesize",
-      "recordedAt": "2026-08-12T12:14:50.081Z",
+      "recordedAt": "2026-08-12T12:39:48.703Z",
       "messages": 2,
       "recordedMessageChars": [
         2042,
-        13924
+        14839
       ],
-      "actualInputTokens": 4337,
-      "recordedEstimateAtTheTime": 4014,
-      "sourceNote": "ОС/Unix/Сервисы/rc.local.md",
+      "actualInputTokens": 4536,
+      "recordedEstimateAtTheTime": 4386,
+      "sourceNote": "ОС/Unix/Сервисы/user.md",
       "reconstruction": {
-        "cyrillic": 0,
+        "cyrillic": 1098,
         "cjk": 0,
-        "word": 12803,
-        "symbols": 2477,
-        "symbolRuns": 1491,
-        "newlines": 188,
-        "tokenizerTokens": 4351
+        "word": 13522,
+        "symbols": 1991,
+        "symbolRuns": 1165,
+        "newlines": 270,
+        "tokenizerTokens": 4439
       }
     },
     {
-      "id": "llm-msq1h8lc-1h",
+      "id": "llm-msq2ozch-37",
       "callSite": "ingest.synthesize",
-      "recordedAt": "2026-08-12T12:02:00.006Z",
+      "recordedAt": "2026-08-12T12:36:00.884Z",
       "messages": 2,
       "recordedMessageChars": [
         2042,
-        12992
+        13892
       ],
-      "actualInputTokens": 4034,
-      "recordedEstimateAtTheTime": 3774,
-      "sourceNote": "ОС/Unix/Сервисы/cache.md",
+      "actualInputTokens": 4282,
+      "recordedEstimateAtTheTime": 4027,
+      "sourceNote": "ОС/Unix/Сервисы/usb.md",
       "reconstruction": {
-        "cyrillic": 293,
+        "cyrillic": 683,
         "cjk": 0,
-        "word": 12293,
-        "symbols": 2262,
-        "symbolRuns": 1331,
-        "newlines": 186,
-        "tokenizerTokens": 4123
+        "word": 12747,
+        "symbols": 2316,
+        "symbolRuns": 1237,
+        "newlines": 188,
+        "tokenizerTokens": 4374
       }
     },
     {
@@ -125,13 +125,13 @@
       "recordedEstimateAtTheTime": 3691,
       "sourceNote": "ОС/Unix/Сервисы/ssh.md",
       "reconstruction": {
-        "cyrillic": 462,
+        "cyrillic": 461,
         "cjk": 0,
-        "word": 12049,
+        "word": 12050,
         "symbols": 2121,
         "symbolRuns": 1150,
         "newlines": 188,
-        "tokenizerTokens": 3943
+        "tokenizerTokens": 3942
       }
     },
     {
@@ -147,13 +147,13 @@
       "recordedEstimateAtTheTime": 3601,
       "sourceNote": "ОС/Unix/Сервисы/logrotate.md",
       "reconstruction": {
-        "cyrillic": 587,
+        "cyrillic": 581,
         "cjk": 0,
-        "word": 11691,
-        "symbols": 1884,
-        "symbolRuns": 1115,
+        "word": 11694,
+        "symbols": 1887,
+        "symbolRuns": 1116,
         "newlines": 186,
-        "tokenizerTokens": 3778
+        "tokenizerTokens": 3780
       }
     },
     {
