@@ -966,3 +966,23 @@ test("the auto-budget notice body does not point at the removed Advanced heading
   assert.doesNotMatch(i18nFor("es").settings.autoBudgetNotice_body, /Avanzado/);
   assert.doesNotMatch(settingsSource, /advancedBudgets_name/);
 });
+
+test("the auto-budget modal names the settings fields by their real labels, per locale", () => {
+  for (const locale of ["en", "ru", "es"] as const) {
+    const settings = i18nFor(locale).settings;
+    assert.ok(
+      settings.autoBudgetNotice_body.includes(settings.inputBudgetTokens_name),
+      `${locale}: body must name the input budget field by its own label`,
+    );
+    assert.ok(
+      settings.autoBudgetNotice_body.includes(settings.outputBudgetTokens_name),
+      `${locale}: body must name the output budget field by its own label`,
+    );
+    // The label was renamed to "Max completion tokens"; the modal must not keep
+    // sending users looking for a field that no longer exists under that name.
+    assert.equal(
+      settings.autoBudgetNotice_body.includes("Output budget tokens"), false,
+      `${locale}: body still names a field that the settings tab does not show`,
+    );
+  }
+});

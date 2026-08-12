@@ -39,7 +39,15 @@ export function isTelemetryOnlyRunEvent(event: RunEvent): boolean {
     || event.kind === "llm_request_fingerprint"
     || event.kind === "native_transport_correlation"
     || event.kind === "native_http_response"
-    || event.kind === "native_transport_trace";
+    || event.kind === "native_transport_trace"
+    // Automatic-budget telemetry: resolved budgets, context-window probes, calibration
+    // samples and evidence splits are agent-log numbers, never sidebar text. Listed
+    // here so "technical numbers never reach the sidebar" is enforced by this predicate
+    // rather than by appendEvent happening to have no branch for them.
+    || event.kind === "budget_resolved"
+    || event.kind === "context_probe"
+    || event.kind === "calibration_sample"
+    || event.kind === "evidence_split";
 }
 
 export function formatGraphStatsLines(
