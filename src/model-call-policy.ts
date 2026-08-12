@@ -7,7 +7,7 @@ import type {
   OpKey,
   WikiOperation,
 } from "./types";
-import type { ModelContextRecord } from "./model-context";
+import { MIN_CONTEXT_WINDOW, type ModelContextRecord } from "./model-context";
 import { resolveBudget, type ResolvedBudget } from "./budget-resolver";
 
 // The claude-agent input-budget default. That backend keeps its stored defaults and
@@ -166,16 +166,21 @@ export function applyBudgetInput<K extends string>(
   holder: Partial<Record<K, number>>,
   key: K,
   raw: string,
+  min = 1,
 ): void {
   const trimmed = raw.trim();
   if (trimmed === "") { delete holder[key]; return; }
   if (!/^[1-9]\d*$/.test(trimmed)) return;
   const parsed = Number(trimmed);
-  if (Number.isSafeInteger(parsed)) holder[key] = parsed;
+  if (Number.isSafeInteger(parsed) && parsed >= min) holder[key] = parsed;
 }
 
 export function normalizePersistedModelControls(settings: LlmWikiPluginSettings): void {
-  settings.nativeAgent.contextWindowTokens = optionalPositiveInt(settings.nativeAgent.contextWindowTokens);
+  // Floored, not just positive: a persisted 512 would be displayed while the engine
+  // refused it and probed instead.
+  const contextWindow = optionalPositiveInt(settings.nativeAgent.contextWindowTokens);
+  settings.nativeAgent.contextWindowTokens =
+    contextWindow !== undefined && contextWindow >= MIN_CONTEXT_WINDOW ? contextWindow : undefined;
   settings.nativeAgent.inputBudgetTokens = optionalPositiveInt(settings.nativeAgent.inputBudgetTokens);
   settings.nativeAgent.repairInputBudgetTokens = optionalPositiveInt(settings.nativeAgent.repairInputBudgetTokens);
   settings.claudeAgent.inputBudgetTokens = positiveInt(

@@ -367,11 +367,17 @@ setting applies to every Native Agent model, including per-operation ones.
 
 A value you type here is treated as an instruction, not a guess: if the provider later
 rejects a prompt and reports a smaller window of its own, AI Wiki does **not** silently
-shrink your value. The affected request is repacked smaller so the operation still
-completes, and the disagreement is recorded in `agent.jsonl` as a
+shrink your value. The disagreement is recorded in `agent.jsonl` as a
 `context_window_conflict` entry with both numbers, so you can correct the setting
 yourself. (A discovered or fallback window, which nobody chose, is still learned down in
 that situation.)
+
+What happens to the operation depends on which one it is. Ingest, Query and Lint — and the
+chat follow-ups — repack the rejected request smaller and complete anyway. **Init cannot:**
+it plans its bootstrap splits from the window *before* sending anything, so a window set
+larger than the model's real one makes Init fail with a bootstrap error instead of
+shrinking into it. The conflict is still recorded, so `agent.jsonl` says why; lower the
+setting to the model's real window (or clear it to return to automatic) and re-run.
 
 Enabling **Per-operation models** does not turn automatic budgeting off. Each operation
 gets its own input and output budget fields, and each is automatic while it is empty. A

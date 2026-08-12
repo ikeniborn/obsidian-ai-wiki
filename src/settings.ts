@@ -28,7 +28,7 @@ import {
   type ModelControlField,
 } from "./model-call-policy";
 import { resolveBudget } from "./budget-resolver";
-import { configuredContextRecord, plausibleContextWindow } from "./model-context";
+import { configuredContextRecord, MIN_CONTEXT_WINDOW, plausibleContextWindow } from "./model-context";
 import { createRequestUrlVisionTransport, runNativeVisionModelCheck } from "./vision-probe";
 
 async function checkNativeAvailability(baseUrl: string, apiKey: string, model: string): Promise<void> {
@@ -332,6 +332,10 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       value: number | undefined,
       update: (next: number | undefined) => void,
       placeholder: string,
+      // Entries below this are refused rather than stored: a field showing a number
+      // the engine will not use is exactly what this backend's automatic budgeting
+      // is supposed to avoid. Budget fields keep the default floor of 1.
+      min?: number,
     ): void => {
       const initial = renderNativeBudgetControls({ value }, placeholder)[0];
       const holder: { value?: number } = { value };
@@ -339,7 +343,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         text.setPlaceholder(initial.placeholder).setValue(initial.value);
         text.onChange(async (raw) => {
           const previous = holder.value;
-          applyBudgetInput(holder, "value", raw);
+          applyBudgetInput(holder, "value", raw, min);
           if (holder.value === previous) return;
           update(holder.value);
           await this.plugin.saveSettings();
@@ -358,7 +362,12 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     ): { input: string; output: string; contextWindow: string } => {
       const cached = this.plugin.controller.cachedModelContext(s.nativeAgent.baseUrl, model);
       const configured = plausibleContextWindow(s.nativeAgent.contextWindowTokens);
-      const record = configured === null ? cached : configuredContextRecord(configured, cached);
+      // Once the setting is cleared, the record it wrote is already refused by
+      // `resolve` — so the placeholder must not go on advertising its number either.
+      const discovered = cached?.source === "configured" ? undefined : cached;
+      const record = configured === null
+        ? discovered
+        : configuredContextRecord(configured, cached);
       const automatic = T.settings.budgetAutomatic;
       if (!record) return { input: automatic, output: automatic, contextWindow: automatic };
       const budget = resolveBudget(record, operation, overrides);
@@ -870,6 +879,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           input: s.nativeAgent.inputBudgetTokens,
           output: s.nativeAgent.maxTokens,
         }).contextWindow,
+        MIN_CONTEXT_WINDOW,
       );
 
       addPolicyControls(

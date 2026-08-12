@@ -743,6 +743,49 @@ test("a configured window is honoured by the settings placeholders before any ru
   assert.equal(plausibleContextWindow(131_072), 131_072);
 });
 
+test("a context window below the engine's floor is refused at entry, not stored and ignored", async () => {
+  const { MIN_CONTEXT_WINDOW } = await import("../src/model-context");
+  assert.equal(MIN_CONTEXT_WINDOW, 1_024);
+
+  // The engine refuses anything under the floor, so the field must refuse it too:
+  // storing 512 would show the user a number nothing is budgeting from.
+  const holder: { contextWindowTokens?: number } = { contextWindowTokens: 131_072 };
+  applyBudgetInput(holder, "contextWindowTokens", "512", MIN_CONTEXT_WINDOW);
+  assert.equal(holder.contextWindowTokens, 131_072, "a sub-floor entry keeps the previous value");
+  applyBudgetInput(holder, "contextWindowTokens", "1024", MIN_CONTEXT_WINDOW);
+  assert.equal(holder.contextWindowTokens, 1_024, "the floor itself is accepted");
+  applyBudgetInput(holder, "contextWindowTokens", "", MIN_CONTEXT_WINDOW);
+  assert.equal("contextWindowTokens" in holder, false, "clearing still returns to automatic");
+
+  // Budget fields keep their 1-token floor: only the window control passes a minimum.
+  const budgets: { inputBudgetTokens?: number } = {};
+  applyBudgetInput(budgets, "inputBudgetTokens", "512");
+  assert.equal(budgets.inputBudgetTokens, 512);
+
+  // The control wires the floor through, and the description states the range.
+  assert.match(settingsSource, /MIN_CONTEXT_WINDOW/);
+  for (const lang of ["en", "ru", "es"] as const) {
+    assert.match(i18nFor(lang).settings.contextWindowTokens_desc, /1024/, lang);
+  }
+});
+
+test("a persisted context window below the floor is dropped, not displayed", () => {
+  const settings = structuredClone(DEFAULT_SETTINGS);
+  settings.nativeAgent.contextWindowTokens = 512;
+  normalizePersistedModelControls(settings);
+  assert.equal(settings.nativeAgent.contextWindowTokens, undefined);
+});
+
+test("a cleared setting stops the placeholder from advertising the old configured window", () => {
+  // resolve() already refuses a `configured` record once the setting is gone; the
+  // placeholder must refuse it too, or it advertises a window nothing will use.
+  const start = settingsSource.indexOf("const automaticBudgetPlaceholders = (");
+  const end = settingsSource.indexOf("const addCompressionControl = (", start);
+  assert.ok(start >= 0 && end > start);
+  const body = settingsSource.slice(start, end);
+  assert.match(body, /cached\?\.source === "configured" \? undefined : cached/);
+});
+
 test("a persisted context window is normalized like every other optional budget", () => {
   assert.equal(DEFAULT_SETTINGS.nativeAgent.contextWindowTokens, undefined);
   const settings = structuredClone(DEFAULT_SETTINGS);

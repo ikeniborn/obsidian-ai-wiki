@@ -4,7 +4,13 @@ export const BACKEND_DEFAULT_CONTEXT = 8_192;
 export const PROBE_DEADLINE_MS = 2_000;
 export const DEFAULT_TTL_MS = 86_400_000;
 
-const MIN_PLAUSIBLE_CONTEXT = 1_024;
+/**
+ * The smallest window this plugin will budget from — exported so the settings field
+ * can refuse what the engine would refuse, instead of storing and displaying a number
+ * nothing uses.
+ */
+export const MIN_CONTEXT_WINDOW = 1_024;
+const MIN_PLAUSIBLE_CONTEXT = MIN_CONTEXT_WINDOW;
 const MAX_PLAUSIBLE_CONTEXT = 2_000_000;
 const CALIBRATION_WINDOW = 8;
 const CALIBRATION_MIN = 0.5;

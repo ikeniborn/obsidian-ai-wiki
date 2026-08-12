@@ -694,6 +694,50 @@ test("bootstrap failure stops init with a loud error and creates no domain", asy
   assert.equal(events.some((e) => e.kind === "domain_created" || e.kind === "domain_updated"), false);
 });
 
+test("a bootstrap rejected for context reports the rejection even though Init cannot repack", async () => {
+  // Init plans its splits from the window up front and has no repack loop, so a
+  // provider context rejection reaches the terminal catch. It must still be
+  // reported: this is the one operation the configured-window setting exists for,
+  // and agent.jsonl is where a user would look for the disagreement.
+  const vt = new VaultTools(adapter(), "/vault");
+  const seen: Array<{ promptTokens?: number; maxContextTokens?: number }> = [];
+  const rejectingLlm = {
+    chat: { completions: { create: async () => {
+      throw new Error(
+        "This model's maximum context length is 8192 tokens, however you requested 20000 tokens",
+      );
+    } } },
+  } as unknown as LlmClient;
+  const events: RunEvent[] = [];
+
+  for await (const ev of runInitWithSources(
+    "demo", ["src"], false, vt, rejectingLlm, "m",
+    [], "Vault", new AbortController().signal,
+    { structuredRetries: 0, onContextError: (details) => seen.push(details) },
+    undefined, false, undefined,
+  )) {
+    events.push(ev);
+  }
+
+  assert.ok(seen.length >= 1, "the provider's context rejection must reach onContextError");
+  assert.deepEqual(seen[0], { promptTokens: 20_000, maxContextTokens: 8_192 });
+  assert.ok(events.some((e) => e.kind === "error" && /domain bootstrap failed/i.test(e.message)));
+});
+
+test("a bootstrap failure that is not a context rejection reports nothing", async () => {
+  const vt = new VaultTools(adapter(), "/vault");
+  const seen: unknown[] = [];
+
+  for await (const _ of runInitWithSources(
+    "demo", ["src"], false, vt, brokenBootstrapLlm(), "m",
+    [], "Vault", new AbortController().signal,
+    { structuredRetries: 0, onContextError: (details) => seen.push(details) },
+    undefined, false, undefined,
+  )) { /* drained */ }
+
+  assert.deepEqual(seen, [], "a schema failure is not an overflow signal");
+});
+
 test("init runs bootstrap for a registered domain with empty entity_types (analyzed_sources defined)", async () => {
   // A domain added via the wizard and reloaded has analyzed_sources:{} (defined)
   // but no entity_types yet. Bootstrap MUST still run to derive the types — the

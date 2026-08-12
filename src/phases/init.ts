@@ -32,6 +32,7 @@ import {
 } from "./ingest-evidence";
 import { enrichEvidenceTypes } from "./evidence-type-enrichment";
 import {
+  classifyContextError,
   estimatePreparedMessages,
   PromptBudgetExceededError,
 } from "../prompt-budget";
@@ -751,6 +752,14 @@ async function* prepareDomainBootstrap(
       if (attemptSink.fullText) yield { kind: "assistant_text", delta: attemptSink.fullText };
     }
   } catch (error) {
+    // Init plans its bootstrap splits from the context window up front and has no
+    // repack loop, so a provider context rejection is terminal here rather than
+    // recovered. Report it anyway: this is the operation the context-window setting
+    // exists for, so a window set larger than the model's real one must still leave
+    // a trace where the user looks for it (a `context_window_conflict` line in
+    // agent.jsonl), and a probed window can still be learned down for the next run.
+    const contextError = classifyContextError(error);
+    if (contextError !== null) requestOpts.onContextError?.(contextError);
     yield { kind: "tool_result", ok: false, preview: (error as Error).message };
     if ((error as Error).name === "AbortError" || signal.aborted) return null;
     yield {
