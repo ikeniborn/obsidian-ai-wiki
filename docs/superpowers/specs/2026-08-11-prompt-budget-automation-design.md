@@ -1,8 +1,8 @@
 ---
 review:
-  spec_hash: 1321076f9f29aa13
-  last_run: 2026-08-11
-  revision: 4
+  spec_hash: 64df2444e33cd388
+  last_run: 2026-08-12
+  revision: 5
   phases:
     structure: { status: passed }
     coverage: { status: passed }
@@ -13,7 +13,7 @@ review:
       phase: consistency
       severity: CRITICAL
       section: 2. Approach decisions
-      section_hash: 9a30098dc903891f
+      section_hash: 5ea34cfbadfb6138
       text: "Revision 2 asserted that no content is ever truncated, but the residual case it relied on -- one evidence unit larger than the whole model window -- has no split and no widening left. The claim was unfounded rather than merely optimistic."
       fix: "State the widening order explicitly and name truncation as the sole terminal branch, reachable only past the whole context window and always logged."
       verdict: fixed
@@ -22,7 +22,7 @@ review:
       phase: consistency
       severity: CRITICAL
       section: 2. Approach decisions
-      section_hash: 9a30098dc903891f
+      section_hash: 5ea34cfbadfb6138
       text: "The chunk budget was to subtract a group overhead measured from domainThemes and languageEvidence, which are produced by the evidence preparation the budget governs. The quantity was unavailable at the moment it was needed."
       fix: "Cap both lists so the worst case is a compile-time constant, and note that neither is read by the coverage invariant."
       verdict: fixed
@@ -31,7 +31,7 @@ review:
       phase: consistency
       severity: CRITICAL
       section: 3. Budget arithmetic
-      section_hash: b72b16db2632442c
+      section_hash: 23ef076efe667f47
       text: "An input override was clamped to the context window, so input plus output could exceed it: window 8192, override 8192, output 4096."
       fix: "Introduce maxInput as the ceiling for the derived value and the override alike."
       verdict: fixed
@@ -40,7 +40,7 @@ review:
       phase: consistency
       severity: CRITICAL
       section: 2. Approach decisions
-      section_hash: 9a30098dc903891f
+      section_hash: 5ea34cfbadfb6138
       text: "The payload budget was calibrated while the chunker was deliberately not, so the two sides of the fit proof were measured on different scales."
       fix: "Convert the budget into raw estimator units at the single call site that sets it."
       verdict: fixed
@@ -49,7 +49,7 @@ review:
       phase: clarity
       severity: CRITICAL
       section: 2. Approach decisions
-      section_hash: 9a30098dc903891f
+      section_hash: 5ea34cfbadfb6138
       text: "Seed coefficients were described as needing only to be in the right neighbourhood because calibration would correct them. Every new model starts at calibration 1 and the intent's band is absolute, so the seed governs the first request outright."
       fix: "Fit the seeds against the recorded data and state the resulting band."
       verdict: fixed
@@ -58,16 +58,16 @@ review:
       phase: coverage
       severity: CRITICAL
       section: 4. Components
-      section_hash: 72c73236f4fea440
+      section_hash: e65a4762a716a28d
       text: "Runtime wiring was underspecified: the probe target, the diagnostics channel of a helper with no onEvent, and the placement of the context-error hook relative to the repack loop were all left implicit, and the plan derived three defects from that."
       fix: "Name effectiveModel, the returned events array, and onContextError inside the repack boundary."
       verdict: fixed
-      verdict_at: 2026-08-11
+      verdict_at: 2026-08-12
     - id: F-015
       phase: coverage
       severity: CRITICAL
       section: 6. Error handling
-      section_hash: cf8496a238329475
+      section_hash: 60d56decd3611b6a
       text: "Declared events had no producer: context_probe was never emitted and calibration_sample could not report a discarded sample. The budget provenance was also unreachable from the layer that writes prompt_budget."
       fix: "Give the probe an event sink, have observeUsage return a CalibrationOutcome, and carry the provenance as one budgetTelemetry object."
       verdict: fixed
@@ -76,7 +76,7 @@ review:
       phase: coverage
       severity: CRITICAL
       section: 7. Testing
-      section_hash: af25325eb4798d3f
+      section_hash: 4c6f53c293187547
       text: "The overflow-recovery check relied on an oversized override, which the corrected clamp makes impossible; and the mandatory iwiki update was absent, with two pages already flagged stale against files this design rewrites."
       fix: "Poison the cached record instead, and make the wiki update part of closeout."
       verdict: fixed
@@ -85,7 +85,7 @@ review:
       phase: consistency
       severity: CRITICAL
       section: 6. Error handling
-      section_hash: 12f7252511c717a7
+      section_hash: 60d56decd3611b6a
       text: "Revision 3 allowed a local preflight refusal when the fixed prompt exceeds the model window, while the intent forbade any size failure other than a provider rejection. The document had broken its own governing constraint to stay implementable."
       fix: "Amend the intent to allow exactly that failure, and state it as an unsupported model context rather than a configuration error."
       verdict: fixed
@@ -94,7 +94,7 @@ review:
       phase: consistency
       severity: CRITICAL
       section: 2. Approach decisions
-      section_hash: e2e23ba82829ff49
+      section_hash: 5ea34cfbadfb6138
       text: "The calibration loop averaged ratios of actual to already-calibrated estimate, so its fixed point is the square root of the true factor: a real factor of 2 settles at 1.414, a permanent 29% underestimate in the dangerous direction."
       fix: "Multiply the factor instead of averaging the ratio into it, and require a multi-step convergence test."
       verdict: fixed
@@ -103,7 +103,7 @@ review:
       phase: consistency
       severity: CRITICAL
       section: 3. Budget arithmetic
-      section_hash: 50bc91cdec65f75f
+      section_hash: 23ef076efe667f47
       text: "The operation multiplier was applied after the override, so a stored format.maxTokens of 32768 became 131072 before clamping, silently changing what a saved setting means."
       fix: "Apply the multiplier to DEFAULT_OUTPUT_BASE only."
       verdict: fixed
@@ -112,7 +112,7 @@ review:
       phase: coverage
       severity: CRITICAL
       section: 6. Error handling
-      section_hash: 12f7252511c717a7
+      section_hash: 60d56decd3611b6a
       text: "finish_reason=length was claimed fixed by correcting the ceiling, but outputRetryOptions is only reached where the model returned no text at all; a truncation raises StructuredOutputTruncatedError and propagates past that branch, so the growth path never runs."
       fix: "Catch the truncation inside the structured retry loop and re-issue with a larger limit; verify with an integration test per transport."
       verdict: fixed
@@ -121,15 +121,25 @@ review:
       phase: coverage
       severity: WARNING
       section: 7. Testing
-      section_hash: b580e3455f6dc8d0
+      section_hash: 4c6f53c293187547
       text: "The overflow scenario edited local.json while ModelContextStore holds an in-memory cache that outlives the edit, and a clean domain lint was set as an acceptance criterion although thirteen stale and two orphan pages predate this work."
       fix: "Reload around the poison and the restore with a guaranteed restore; scope the lint criterion to the three touched pages plus no new errors."
       verdict: fixed
       verdict_at: 2026-08-11
+    - id: F-022
+      phase: consistency
+      severity: INFO
+      section: 4. Components
+      section_hash: e65a4762a716a28d
+      fragment: "native budget fields render inline and always"
+      text: "Revision 5: two sections changed with the intent amendment of 2026-08-12 -- the src/settings.ts row in 4.5 and the settings bullet in 8. Desired Outcomes. Both now describe inline native budget fields with the resolved value as a placeholder instead of an Advanced heading group, with the Setting.setHeading() scoping defect as the recorded reason. F-014 was reopened by the 4. Components hash change and re-judged: still fixed, since the amendment touches only the settings row and not the runtime wiring it covered. The spec matches the amended intent."
+      fix: null
+      verdict: accepted
+      verdict_at: 2026-08-12
 chain:
   intent:
     path: docs/superpowers/intents/2026-08-11-prompt-budget-automation-intent.md
-    hash: 040e458f7faa2a18
+    hash: 0259b2c90a49d392
 ---
 
 # Design: prompt-budget-automation

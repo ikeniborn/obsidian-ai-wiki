@@ -1,8 +1,8 @@
 ---
 review:
-  intent_hash: 040e458f7faa2a18
-  last_run: 2026-08-11
-  revision: 3
+  intent_hash: 0259b2c90a49d392
+  last_run: 2026-08-12
+  revision: 4
   phases:
     structure: { status: passed }
     completeness: { status: passed }
@@ -14,27 +14,27 @@ review:
       phase: clarity
       severity: WARNING
       section: Desired Outcomes
-      section_hash: 56d8317900677602
+      section_hash: cd0a00e92dcf4b3a
       fragment: "uses substantially more than 4k input tokens"
       text: "Vague quantity with no criterion."
       fix: "State an explicit threshold for the effective input budget."
       verdict: fixed
-      verdict_at: 2026-08-11
+      verdict_at: 2026-08-12
     - id: F-002
       phase: clarity
       severity: WARNING
       section: Desired Outcomes
-      section_hash: 56d8317900677602
+      section_hash: cd0a00e92dcf4b3a
       fragment: "No separate observable outcome is required for the `claude-agent` backend"
       text: "Scope exclusion listed as a desired outcome; it is not observable."
       fix: "Move it to Strategic Context and to a hard constraint."
       verdict: fixed
-      verdict_at: 2026-08-11
+      verdict_at: 2026-08-12
     - id: F-003
       phase: clarity
       severity: WARNING
       section: Health Metrics
-      section_hash: 4ee2ddb83267090f
+      section_hash: 0b9734d229599e54
       fragment: "The number of LLM calls per Init/Ingest does not grow systematically."
       text: "Not measurable: no baseline and no fixture named."
       fix: "Name the fixtures and the baseline; exempt splits caused by an unreachable payload."
@@ -44,7 +44,7 @@ review:
       phase: clarity
       severity: WARNING
       section: Constraints
-      section_hash: ace48b06f71f1713
+      section_hash: 45ae2048209972fb
       fragment: "fall back to a conservative per-backend default"
       text: "\"Conservative\" carries no criterion and recurs in the Guarded autonomy zone."
       fix: "Define what conservative means for the fallback constant."
@@ -54,7 +54,7 @@ review:
       phase: consistency
       severity: INFO
       section: Health Metrics
-      section_hash: 4ee2ddb83267090f
+      section_hash: 0b9734d229599e54
       fragment: "Zero provider context-overflow errors."
       text: "Reads as contradicting the hard constraint that allows a provider rejection after the repack loop is exhausted."
       fix: "Scope the metric to unrecovered overflows surfaced to the user."
@@ -64,7 +64,7 @@ review:
       phase: alignment
       severity: INFO
       section: Objective
-      section_hash: d75cb02d2ed62cec
+      section_hash: 33fd68195933b103
       fragment: null
       text: "Objective and Desired Outcomes cover the task described in the conversation, including the output budget and markdown-chunks scope added by the user. No extra objectives. iwiki unavailable, so the wiki check was skipped."
       fix: null
@@ -74,7 +74,7 @@ review:
       phase: clarity
       severity: WARNING
       section: Constraints
-      section_hash: ace48b06f71f1713
+      section_hash: 45ae2048209972fb
       fragment: "keeps a proportionally larger one after the change"
       text: "Revision 2: \"proportionally larger\" carried no criterion, so the format operation's deliberate 32768 output allowance was unverifiable."
       fix: "State the multiple explicitly: format keeps at least 4x the derived base."
@@ -84,22 +84,32 @@ review:
       phase: consistency
       severity: INFO
       section: Desired Outcomes
-      section_hash: 56d8317900677602
+      section_hash: cd0a00e92dcf4b3a
       fragment: "the `data.json` history entry reports `done`, not `error`"
       text: "Revision 2: the previous wording expected `ok`, which RunHistoryEntry.status (types.ts:478) cannot produce; its values are done | error | cancelled."
       fix: "Expect `done`."
       verdict: fixed
-      verdict_at: 2026-08-11
+      verdict_at: 2026-08-12
     - id: F-009
       phase: consistency
       severity: CRITICAL
       section: Constraints
-      section_hash: 80b60213c3ce5b7d
+      section_hash: 45ae2048209972fb
       fragment: "The only acceptable size-related failure is a provider rejection after the repack loop is exhausted."
       text: "Revision 3: the constraint was not satisfiable. When a model's context window cannot hold the fixed Init prompt there is nothing to send, so no provider rejection can occur and no budgeting removes the case. The spec had already broken the rule to stay implementable."
       fix: "Allow exactly one further failure -- an unsupported model context -- reported by naming the model and its window. Source size still never ends an operation."
       verdict: fixed
       verdict_at: 2026-08-11
+    - id: F-010
+      phase: consistency
+      severity: INFO
+      section: Desired Outcomes
+      section_hash: cd0a00e92dcf4b3a
+      fragment: "Amended 2026-08-12, during implementation."
+      text: "Revision 4: three sections changed together -- Desired Outcomes (settings outcome), Autonomy Zones (proposal-first wording) and Stop Rules (the matching Done when criterion). The Advanced-heading requirement was replaced by inline native budget fields with an Automatic placeholder because Setting.setHeading() does not scope and captured the compression-profile control. F-001, F-002 and F-008 were reopened by the section change and re-judged: all three remain fixed. The amendment is internally consistent across the three sections and does not contradict any constraint."
+      fix: null
+      verdict: accepted
+      verdict_at: 2026-08-12
 ---
 
 # Intent: prompt-budget-automation

@@ -1,8 +1,8 @@
 ---
 review:
-  plan_hash: 59e037621a6ad2c6
-  last_run: 2026-08-11
-  revision: 4
+  plan_hash: 31b6b9663dffb91e
+  last_run: 2026-08-12
+  revision: 5
   phases:
     structure: { status: passed }
     coverage: { status: passed }
@@ -14,7 +14,7 @@ review:
       phase: dependencies
       severity: CRITICAL
       section: "Task 10: Init merges K bootstrap groups and stops failing on size"
-      section_hash: c1ec0ec6b3a79b95
+      section_hash: 64d1dde6b760b9fb
       text: "Revision 2 computed the group overhead from domainThemes and languageEvidence, which do not exist until the evidence preparation that the budget governs has already run. The plan admitted this in prose two paragraphs below the code that did it."
       fix: "Cap both lists with declared constants and compute a worst-case overhead before chunking."
       verdict: fixed
@@ -23,7 +23,7 @@ review:
       phase: consistency
       severity: CRITICAL
       section: "Task 9: Evidence-unit split and the bound chunk budget"
-      section_hash: c519011a63e7d28d
+      section_hash: 91fe0f28afdaa05c
       text: "The splitter divided an oversized candidate once and then threw EvidenceCoverageError, which is a size failure and is forbidden by the intent's hard constraint."
       fix: "Iterate until every part fits or is atomic, report the largest atomic group upward, and let Task 10 widen the budget."
       verdict: fixed
@@ -32,7 +32,7 @@ review:
       phase: consistency
       severity: CRITICAL
       section: "Task 3: Route the existing estimators through the new one"
-      section_hash: 393587a1c303137a
+      section_hash: 8265572812b4cf81
       text: "The chunker was left uncalibrated while the payload budget was calibrated, so the two sides of the fit proof were measured on different scales."
       fix: "Convert the budget into raw estimator units at the one call site that sets it."
       verdict: fixed
@@ -41,7 +41,7 @@ review:
       phase: consistency
       severity: CRITICAL
       section: "Task 5: Budget resolver"
-      section_hash: 020e1bd5977491d6
+      section_hash: d763577daee38e03
       text: "An input override was clamped to the whole context window rather than to what remains after the output reserve: window 8192 with override 8192 and output 4096 sums to 12288."
       fix: "Clamp both the derived value and the override to the same maxInput ceiling; add input-only, output-only and combined override tests."
       verdict: fixed
@@ -50,7 +50,7 @@ review:
       phase: dependencies
       severity: CRITICAL
       section: "Task 8: Runtime wiring"
-      section_hash: 467501e7cb7f2aa3
+      section_hash: 6708a4ac6de533ff
       text: "Three separate breaks: the probe used global.model and ignored the per-operation model that the policy actually selects; onEvent was called inside buildOptsFor, which has no such parameter; selectNativeFetch was called with a proxy config instead of its actual four inputs."
       fix: "Resolve the effective model first, return diagnostics as an events array, and pass the real transport inputs."
       verdict: fixed
@@ -59,25 +59,25 @@ review:
       phase: verifiability
       severity: CRITICAL
       section: "Task 13: The one-shot upgrade choice, README and changelog"
-      section_hash: 17e16691d6b8099e
+      section_hash: 29e17da11d8730e8
       text: "The upgrade flow called Modal.openAndWait(), which Obsidian does not expose; obsidian.d.ts has only open, close, onOpen and onClose."
       fix: "Write the promise wrapper explicitly, settle it once, and define dismissal as keeping the stored values."
       verdict: fixed
-      verdict_at: 2026-08-11
+      verdict_at: 2026-08-12
     - id: F-012
       phase: verifiability
       severity: CRITICAL
       section: "Task 12: Settings rendering and strings"
-      section_hash: cb23d617f92317cf
+      section_hash: b6fb7cf6525682d5
       text: "The placeholder read an undefined resolvedAutomaticValue, and the settings layer has no ModelContextRecord to compute one from."
       fix: "Read the cached record synchronously through a controller pass-through; show the word Automatic when nothing is cached. Never probe during render."
       verdict: fixed
-      verdict_at: 2026-08-11
+      verdict_at: 2026-08-12
     - id: F-013
       phase: verifiability
       severity: CRITICAL
       section: "Task 2: Token estimator"
-      section_hash: 0c9b98bd10972866
+      section_hash: 5ba2032f01cea06d
       text: "The acceptance test only forbade underestimation, while the intent requires an absolute 15% band. The runtime starts every new model at calibration 1, and the seed coefficients missed the band there; a test that fitted an offline factor first concealed exactly that case."
       fix: "Fit honest seeds against the recorded fixture, assert the absolute band at calibration 1, and keep a separate no-underestimate case."
       verdict: fixed
@@ -86,7 +86,7 @@ review:
       phase: consistency
       severity: CRITICAL
       section: "Task 8: Runtime wiring"
-      section_hash: 467501e7cb7f2aa3
+      section_hash: 6708a4ac6de533ff
       text: "Telemetry had no complete data flow: context_probe was declared but never emitted, calibration_sample hardcoded applied true and clamped false even for discarded samples, and the budget provenance Task 11 writes was unreachable from emitBudget."
       fix: "observeUsage returns a CalibrationOutcome, the probe takes an event sink, and the provenance travels as one budgetTelemetry object on LlmCallOptions."
       verdict: fixed
@@ -95,16 +95,16 @@ review:
       phase: verifiability
       severity: CRITICAL
       section: "Task 14: Live verification against the intent"
-      section_hash: d54537e0c6581817
+      section_hash: 5a8aeafb87fe4d5b
       text: "The overflow-recovery check provoked an overflow with an oversized override, which the corrected clamp makes impossible."
       fix: "Poison the cached context record instead, which is also the real-world case this path exists for."
       verdict: fixed
-      verdict_at: 2026-08-11
+      verdict_at: 2026-08-12
     - id: F-016
       phase: verifiability
       severity: WARNING
       section: "Task 7: Native call policy"
-      section_hash: 0b7892b3b840b5a2
+      section_hash: 9e4051a055a0b46d
       text: "The task demanded a clean typecheck while changing a signature that every caller uses, so it could not be verified on its own."
       fix: "Add resolveCallPolicy beside the untouched resolveModelCallPolicy; Task 8 switches the callers and deletes the old one."
       verdict: fixed
@@ -113,7 +113,7 @@ review:
       phase: verifiability
       severity: WARNING
       section: "Task 1: Capture the health-metric baseline"
-      section_hash: fea087e3a637c80a
+      section_hash: a980d4768a6e2fcf
       text: "git checkout -- was used to undo a scratch edit, which discards any other working-tree change to that file."
       fix: "Copy the file before editing and restore from the copy."
       verdict: fixed
@@ -122,16 +122,16 @@ review:
       phase: coverage
       severity: CRITICAL
       section: "Task 15: Update the project wiki"
-      section_hash: 5127e70f1badd69a
+      section_hash: d4cf0f1ca3e03791
       text: "The plan updated README and CHANGELOG but omitted the mandatory iwiki update. wiki_lint reports architecture/prompt-budget-governor (src/agent-runner.ts) and architecture/model-call-controls (src/model-call-policy.ts) as stale, and both are files this plan rewrites."
       fix: "Add a wiki task that rewrites both pages, adds one for the new modules, and ends on a clean wiki_lint."
       verdict: fixed
-      verdict_at: 2026-08-11
+      verdict_at: 2026-08-12
     - id: F-019
       phase: consistency
       severity: CRITICAL
       section: Global Constraints
-      section_hash: n/a
+      section_hash: 00d5206ff6541c0b
       text: "Revision 3 left revision 2 formulas in the Global Constraints while later tasks used the corrected arithmetic, so the implementer received two normative algorithms."
       fix: "Rewrite the block and declare that it wins over any task body."
       verdict: fixed
@@ -140,7 +140,7 @@ review:
       phase: consistency
       severity: CRITICAL
       section: "Task 4: Model context store"
-      section_hash: 7bd3276a5f38363b
+      section_hash: 1686ae6bbeadc2cd
       text: "The calibration loop averaged actual over an already-calibrated estimate, whose fixed point is the square root of the true factor: a real factor of 2 settles at 1.414, a 29% underestimate that never resolves."
       fix: "Multiply the factor and add a 20-step convergence test that a single-step test cannot distinguish."
       verdict: fixed
@@ -149,7 +149,7 @@ review:
       phase: consistency
       severity: CRITICAL
       section: "Task 5: Budget resolver"
-      section_hash: 153b0e45962cee66
+      section_hash: d763577daee38e03
       text: "The operation multiplier was applied after the override, so the stored format.maxTokens of 32768 in src/types.ts:856 became 131072 before clamping."
       fix: "Multiply DEFAULT_OUTPUT_BASE only; add a regression test pinning 32768."
       verdict: fixed
@@ -158,7 +158,7 @@ review:
       phase: coverage
       severity: CRITICAL
       section: "Task 11: Per-request output ceiling and usage feedback"
-      section_hash: 03693cf9e3fccc20
+      section_hash: d43ca182911c7a97
       text: "finish_reason=length was tested only through the pure outputRetryOptions. The truncation raises StructuredOutputTruncatedError and propagates past the branch that calls it, so the defect was untouched."
       fix: "Catch it in the retry loop and grow the limit; integration-test the streaming and non-streaming paths."
       verdict: fixed
@@ -167,40 +167,73 @@ review:
       phase: verifiability
       severity: CRITICAL
       section: "Task 14: Live verification against the intent"
-      section_hash: 5048b638879230f6
+      section_hash: 5a8aeafb87fe4d5b
       text: "The overflow scenario poisoned local.json while ModelContextStore holds an in-memory cache that outlives the edit, so the poisoned value would never be read."
       fix: "Poison one key, reload on both sides, wait for persistence, and guarantee the restore with a trap."
       verdict: fixed
-      verdict_at: 2026-08-11
+      verdict_at: 2026-08-12
     - id: F-024
       phase: verifiability
       severity: WARNING
       section: "Task 15: Update the project wiki"
-      section_hash: 88d9792fa37081b6
+      section_hash: d4cf0f1ca3e03791
       text: "A clean domain lint was set as the exit criterion although thirteen stale and two orphan pages predate this work and are outside its scope."
       fix: "Require the three touched pages to be clean and the pre-existing counts not to grow."
       verdict: fixed
-      verdict_at: 2026-08-11
+      verdict_at: 2026-08-12
     - id: F-025
       phase: verifiability
       severity: INFO
       section: "Task 8: Runtime wiring"
-      section_hash: 467501e7cb7f2aa3
+      section_hash: 6708a4ac6de533ff
       text: "Three further defects were reported in the inline code -- this.apiKey does not exist, an onEvent callback is absent, the probe sink is never passed -- along with a return-type disagreement in the split task and a missing EvidencePolicy.calibration field. These are compiler-detectable and are deliberately left to execution: the plan now declares its inline TypeScript a reference draft rather than a contract."
       fix: null
       verdict: accepted
       verdict_at: 2026-08-11
+    - id: F-026
+      phase: consistency
+      severity: WARNING
+      section: "Task 12: Settings rendering and strings"
+      section_hash: b6fb7cf6525682d5
+      fragment: "advancedBudgets_name: \"Advanced: manual budgets\""
+      text: "Revision 5: the 2026-08-12 supersession note scopes itself to Step 3 (\"ignore the heading below\"), but Step 4 is a separate step that still requires an advancedBudgets_name string in all three locales, and Step 5's commit message still calls the fields advanced. The residual instructions have no owner-visible effect and no DoD of their own once the heading is gone; the result stage must reconcile them against what was actually shipped."
+      fix: "Read Step 4's advancedBudgets_name key and Step 5's wording as superseded together with the heading in Step 3."
+      verdict: accepted
+      verdict_at: 2026-08-12
+    - id: F-027
+      phase: consistency
+      severity: INFO
+      section: "Task 14: Live verification against the intent"
+      section_hash: 5a8aeafb87fe4d5b
+      fragment: "Amended 2026-08-12 with the intent"
+      text: "Revision 5: four task sections changed with the amendment -- Task 12 (Step 3 marked SUPERSEDED with its reason), Task 13 (README wording), Task 14 (Step 7 override wording, Step 8 restated against the amended criterion) and Task 15 (wiki wording). F-011, F-012, F-015, F-018, F-023 and F-024 were reopened by those hash changes and re-judged: all six remain fixed, since the amendment changed only the settings-layout wording and left each fix intact. Step 8 remains a human confirmation and is not satisfied by code alone."
+      fix: null
+      verdict: accepted
+      verdict_at: 2026-08-12
 chain:
   intent:
     path: docs/superpowers/intents/2026-08-11-prompt-budget-automation-intent.md
-    hash: 040e458f7faa2a18
+    hash: 0259b2c90a49d392
   spec:
     path: docs/superpowers/specs/2026-08-11-prompt-budget-automation-design.md
-    hash: 1321076f9f29aa13
+    hash: 64df2444e33cd388
 result_check:
   verdict: OK
-  plan_hash: 59e037621a6ad2c6
+  plan_hash: 31b6b9663dffb91e
   last_run: 2026-08-12
+  diff_base: d88ea67d
+  steps: { total: 89, done: 85, partial: 3, superseded: 1, missing: 0 }
+  intent_coverage: 7/7
+  spec_coverage: 19/19
+  partial:
+    - "Task 14 Step 7: split confirmed live; overflow recovery not reproducible on this corpus, covered by tests/runtime-budget-wiring.test.ts and recorded as such."
+    - "Task 14 Step 8: the owner has not confirmed the settings UI visually. Presence, emptiness and the placeholder are proven by src/settings.ts and tests/settings-model-controls.test.ts; the visual check itself is outstanding."
+    - "Task 15 Step 5: the three touched wiki pages are clean and unstale, but domain stale count is 14 against a pre-branch 13, so the do-not-grow half of the criterion is not met."
+  excess:
+    - scripts/derive-recorded-prompts.py
+    - src/view.ts, tests/view-llm-lifecycle.test.ts
+    - src/phases/query-budget.ts, tests/query-budget.test.ts
+    - .iwiki.toml
 ---
 
 # Prompt Budget Automation Implementation Plan
