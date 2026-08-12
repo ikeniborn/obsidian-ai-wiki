@@ -165,9 +165,17 @@ budgeting.
 - No Init or Ingest run ends with `configuration error — ... domain was not created` because
   of input size. A long `exactSource[].text` is truncated with an explicit marker or split
   across calls, and the domain is created.
-- The main Settings section no longer shows `Input budget tokens`, `Repair input budget` or
-  `Output budget tokens` for the native backend. All three live under Advanced and are empty
-  by default, meaning automatic. Previously saved values keep working as an explicit override.
+- The native `Input budget tokens`, `Repair input budget` and `Max completion tokens` fields
+  are empty by default and read as automatic: each shows the resolved value as a placeholder
+  rather than storing it, and clearing a field returns it to automatic. Previously saved
+  values keep working as an explicit override.
+  *(Amended 2026-08-12, during implementation. This originally required all three to move
+  under an Advanced heading. Obsidian's `Setting.setHeading()` has no closing or scoping
+  mechanism, so the heading also captured the neighbouring compression-profile control,
+  which selects semantics rather than arithmetic; the field order is pinned by tests. The
+  owner accepted inline placement with the "Automatic" placeholder as the equivalent
+  outcome — the fields are optional overrides either way, and the placeholder is what
+  communicates it.)*
 - On first load after the upgrade, an installation that still holds budget values is offered
   a single explicit choice — switch to automatic, or keep the saved numbers. Nothing is
   rewritten without that answer, and the choice is asked once.
@@ -292,7 +300,7 @@ budgeting.
 - Proposal-first (needs approval):
   - The shape of discovery: which endpoints are queried (`/v1/models`, `/api/show`), when,
     with what timeout, and the behaviour when they are unavailable.
-  - The final Settings layout: what moves to Advanced, what stays, how "empty means
+  - The final Settings layout: which fields are shown, in what order, and how "empty means
     automatic" is presented.
   - The persisted-settings migration scheme.
   - Any change to chunk boundaries in `src/markdown-chunks.ts`, because it affects the index.
@@ -317,7 +325,9 @@ budgeting.
   cannot close the gap.
 - Done when: `init os-mac --force --sources ОС/Mac/` on the real vault finishes with
   `status: done`; `agent.jsonl` shows the input estimate within 15% of the provider's reported
-  value, correlated per request rather than by array position; the main Settings section
-  contains no native budget fields; a reproduced oversized-evidence scenario creates the
+  value, correlated per request rather than by array position; every native budget field is
+  empty and shows its resolved value as a placeholder (amended 2026-08-12 from "the main
+  Settings section contains no native budget fields" — see Desired Outcomes); a reproduced
+  oversized-evidence scenario creates the
   domain with the split recorded in the log and no content discarded; and a reproduced
   provider context-overflow is recovered by the repack loop without surfacing to the user.

@@ -534,7 +534,7 @@ work, which makes neither of them independently verifiable.
 | `src/phases/structured-output.ts` | ceiling from `outputCeiling(contextWindow, estimatedInput)` computed per request; report usage back for calibration. |
 | `src/phases/ingest-evidence.ts` | `boundBootstrapPayload` → `splitBootstrapPayload` at evidence-unit granularity; `chunkBudgetTokens` in `EvidencePolicy`. |
 | `src/phases/init.ts` | bind the chunk budget net of group overhead; merge K bootstrap entries; drop the size-based hard failure. |
-| `src/settings.ts`, `src/i18n.ts` | native budget fields move to Advanced, empty means automatic; the control is always rendered; strings in ru/en/es. `Compression profile` stays where it is: it selects semantics, not arithmetic. |
+| `src/settings.ts`, `src/i18n.ts` | native budget fields render inline and always, empty means automatic with the resolved value as a placeholder; strings in ru/en/es. `Compression profile` stays where it is: it selects semantics, not arithmetic — which is why the Advanced heading was dropped, since it would have captured that control. |
 | `src/main.ts` | the one-shot upgrade notice from §2.3. |
 
 The boundary below `LlmCallOptions` does not move. Phases keep receiving
@@ -794,9 +794,12 @@ and that no new lint error appears.
 - No Init or Ingest run ends with `configuration error — ... domain was not created` because
   of input size. A long `exactSource[].text` is truncated with an explicit marker or split
   across calls, and the domain is created.
-- The main Settings section no longer shows `Input budget tokens`, `Repair input budget` or
-  `Output budget tokens` for the native backend. All three live under Advanced and are empty
-  by default, meaning automatic. Previously saved values keep working as an explicit override.
+- The native `Input budget tokens`, `Repair input budget` and `Max completion tokens` fields
+  are empty by default and read as automatic: each shows the resolved value as a placeholder
+  rather than storing it, and clearing a field returns it to automatic. Previously saved
+  values keep working as an explicit override. *(Amended 2026-08-12 with the intent — an
+  Advanced heading was originally required; Obsidian's `Setting.setHeading()` does not scope,
+  so it captured the neighbouring compression-profile control.)*
 - On first load after the upgrade, an installation that still holds budget values is offered
   a single explicit choice — switch to automatic, or keep the saved numbers. Nothing is
   rewritten without that answer, and the choice is asked once.
