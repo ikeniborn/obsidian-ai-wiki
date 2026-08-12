@@ -239,6 +239,10 @@ function normalizeConfiguredContextWindows(settings: LlmWikiPluginSettings): voi
   // model it covered, then consumed, so the migration runs exactly once and an
   // explicit per-model entry always wins. Reached through a cast because this is the
   // one place allowed to read the retired key.
+  //
+  // The key was added and retired inside the same unreleased range, so no released
+  // version ever wrote it: this protects a settings file from a development build,
+  // not a user upgrade path, and is documented nowhere user-facing for that reason.
   const legacyHolder = na as { contextWindowTokens?: unknown };
   const legacy = optionalPositiveInt(legacyHolder.contextWindowTokens);
   if (legacy !== undefined && legacy >= MIN_CONTEXT_WINDOW) {
