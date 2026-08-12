@@ -5,6 +5,11 @@ on:
     branches: [master]
     paths:
       - src/manifest.json
+  # A validation failure leaves the version bumped but unreleased, and the push
+  # trigger only fires on src/manifest.json — so without this a retry needs an
+  # artificial commit to that file. The version is read from package.json at run
+  # time, so a manual run releases whatever master currently declares.
+  workflow_dispatch:
 
 jobs:
   release:
