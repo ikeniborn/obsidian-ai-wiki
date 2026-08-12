@@ -1765,3 +1765,74 @@ test("a bootstrap prompt that cannot host one evidence unit reports an unsupport
   assert.equal(events.some((event) =>
     event.kind === "domain_created" || event.kind === "domain_updated"), false);
 });
+
+test("an evidence type enrichment overflow reports an unsupported model context, not a bare wrapper message", async () => {
+  const rawAdapter = adapter();
+  rawAdapter.files.set("src/a.md", evidenceSourceLines(10));
+  // The bootstrap RESPONSE carries the taxonomy, so a large one costs the bootstrap
+  // request nothing and is paid for entirely by the enrichment request, which sends
+  // every allowed type name alongside one {entityKey, facts} unit. That is the one
+  // phase after a successful bootstrap that still runs on the configured budget with
+  // no split of its own, so it is where a single oversized unit surfaces.
+  const bigTaxonomy = JSON.stringify({
+    reasoning: "",
+    id: "demo",
+    name: "Demo",
+    wiki_folder: "demo",
+    entity_types: Array.from({ length: 3_000 }, (_, index) => ({
+      type: `derived-entity-type-number-${index}-with-a-long-descriptive-suffix`,
+      description: `Derived entity type ${index}.`,
+      extraction_cues: [`cue-${index}`],
+      wiki_subfolder: `folder-${index}`,
+    })),
+    language_notes: "",
+  });
+  let bootstrapRequests = 0;
+  const llm = {
+    chat: { completions: { create: async (params: unknown) => {
+      const serialized = JSON.stringify(params);
+      const chunkId = serialized.match(/CHUNK_ID ([^\s\\"]+)/)?.[1];
+      if (!chunkId) {
+        bootstrapRequests++;
+        return mockResponse(params, bigTaxonomy);
+      }
+      return mockResponse(params, JSON.stringify({
+        packets: [{
+          id: `${chunkId}-alpha`,
+          chunkId,
+          entityKey: "alpha",
+          facts: ["alpha is a small piece of evidence"],
+          exactSourceRanges: [{ startLine: 1, endLine: 1 }],
+          links: [],
+          sourceAnchor: "src/a.md:1",
+        }],
+        noEvidence: [],
+      }));
+    } } },
+  } as unknown as LlmClient;
+
+  const events: RunEvent[] = [];
+  for await (const event of runInitWithSources(
+    "demo", ["src"], false, new VaultTools(rawAdapter, "/vault"), llm, "m",
+    [], "Vault", new AbortController().signal, {
+      inputBudgetTokens: 16_384,
+      maxTokens: 2_000,
+      structuredRetries: 0,
+    }, undefined, false, undefined,
+  )) {
+    events.push(event);
+  }
+
+  // The bootstrap itself succeeded; only the enrichment that follows overflowed.
+  assert.ok(bootstrapRequests > 0);
+  const failure = events.find((event) => event.kind === "error");
+  assert.ok(failure && failure.kind === "error", JSON.stringify(events.slice(-3)));
+  assert.match(failure.message, /a bounded evidence request needs \d+ tokens against a \d+-token budget/);
+  assert.match(failure.message, /model m allows \d+ input token\(s\)/);
+  assert.match(failure.message, /Choose a model with a larger context window\./);
+  assert.doesNotMatch(failure.message, /evidence type enrichment failed/);
+  assert.doesNotMatch(failure.message, /configuration error/i);
+  assert.doesNotMatch(failure.message, /domain was not created/i);
+  assert.equal(events.some((event) =>
+    event.kind === "domain_created" || event.kind === "domain_updated"), false);
+});

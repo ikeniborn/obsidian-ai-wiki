@@ -814,7 +814,15 @@ async function* prepareDomainBootstrap(
     if ((error as Error).name === "AbortError" || signal.aborted) return null;
     yield {
       kind: "error",
-      message: `init: domain bootstrap failed — evidence type enrichment failed: ${(error as Error).message}. Fix model/prompt and re-run.`,
+      // Enrichment raises the same size-shaped failures as the bootstrap payload —
+      // partitionTypeUnits throws PromptBudgetExceededError for a single oversized
+      // {entityKey, facts} unit — so it reports through the same enumerated
+      // model-context error instead of a third message shape that names neither the
+      // model nor its window. Anything that is not size-shaped keeps its own text.
+      message: evidencePreparationFailure(
+        error as Error,
+        (needs) => unsupportedModelContext(needs, configuredBudget),
+      ),
     };
     yield { kind: "result", durationMs: Date.now() - startedAt, text: "" };
     return null;
