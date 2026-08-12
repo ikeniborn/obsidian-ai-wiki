@@ -1978,7 +1978,7 @@ async function wipeDomainFolderLocked(
     for (const folder of foldersDeepestFirst(snapshot.folders)) {
       await requireOriginalRootAbsent(vaultTools, root, signal);
       await requireEmptyDirectory(vaultTools, folder, signal, "quarantined folder");
-      await vaultTools.rmdir(folder, false);
+      await rmdirEmptyDirectory(vaultTools, folder, signal, "quarantined folder");
       throwIfWipeAborted(signal);
       if (await checkedExists(vaultTools, folder, signal)) {
         throw new Error(`force: non-recursive rmdir did not remove ${folder}`);
@@ -2122,7 +2122,9 @@ async function createWipeTransaction(
         if (mkdirSucceeded && await vaultTools.exists(candidate)) {
           const listed = await vaultTools.adapter.list(candidate);
           if (listed.files.length === 0 && listed.folders.length === 0) {
-            await vaultTools.rmdir(candidate, false);
+            // Cleanup runs without the abort signal: a cancelled setup must
+            // still be able to drop the transaction directory it created.
+            await rmdirEmptyDirectory(vaultTools, candidate, undefined, "new transaction");
           }
         }
       } catch (cleanupError) {
@@ -2232,6 +2234,37 @@ async function requireEmptyDirectory(
   await requireDirectEntries(vaultTools, path, [], [], signal, label);
 }
 
+/**
+ * Remove a directory the caller has just verified empty.
+ *
+ * Obsidian's desktop adapter implements `rmdir(path, recursive)` as
+ * `fs.rm(path, { maxRetries: 5, recursive })`, so with `recursive: false` it
+ * rejects every directory with EISDIR and can never remove one. Only when the
+ * non-recursive call fails and the directory is still there do we re-verify
+ * that it is empty and retry recursively, so the recursive call can remove
+ * nothing beyond the empty directory the caller asked for. A non-recursive
+ * failure that did remove the directory still propagates: an adapter that
+ * reports a failed removal is never trusted.
+ */
+async function rmdirEmptyDirectory(
+  vaultTools: VaultTools,
+  path: string,
+  signal: AbortSignal | undefined,
+  label: string,
+): Promise<void> {
+  try {
+    await vaultTools.rmdir(path, false);
+  } catch (error) {
+    if (!await vaultTools.exists(path)) throw error;
+    try {
+      await requireEmptyDirectory(vaultTools, path, signal, label);
+    } catch {
+      throw error;
+    }
+    await vaultTools.rmdir(path, true);
+  }
+}
+
 async function removeKnownEmptyDirectory(
   vaultTools: VaultTools,
   path: string,
@@ -2239,7 +2272,7 @@ async function removeKnownEmptyDirectory(
   label: string,
 ): Promise<void> {
   await requireEmptyDirectory(vaultTools, path, signal, label);
-  await vaultTools.rmdir(path, false);
+  await rmdirEmptyDirectory(vaultTools, path, signal, label);
   throwIfWipeAborted(signal);
   if (await checkedExists(vaultTools, path, signal)) {
     throw new Error(`force: non-recursive rmdir did not remove ${label} ${path}`);
@@ -2607,7 +2640,7 @@ async function rollbackWipeTransaction(
     if (await vaultTools.exists(transaction)) {
       const listed = await vaultTools.adapter.list(transaction);
       if (listed.files.length === 0 && listed.folders.length === 0) {
-        await vaultTools.rmdir(transaction, false);
+        await rmdirEmptyDirectory(vaultTools, transaction, undefined, "rollback transaction");
       }
     }
     return;
