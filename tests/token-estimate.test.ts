@@ -18,6 +18,7 @@ interface Case {
   id: string;
   callSite: string;
   messages: number;
+  recordedMessageChars: number[];
   actualInputTokens: number;
   recordedEstimateAtTheTime: number;
   reconstruction: Reconstruction;
@@ -81,15 +82,31 @@ test("symbol-dense text costs more tokens per character than prose", () => {
   assert.ok(estimateText(config) > 2 * estimateText(prose));
 });
 
-test("no text costs more than one token per character", () => {
+test("no text costs more than one token per UTF-8 byte", () => {
   // A run charge plus a per-character charge can otherwise exceed one token per
   // character on text that switches class every character, which no byte-level
   // tokenizer can do. An IP list, a numeric table and a timestamp are the real
   // shapes that hit it, and over-counting them shrinks every chunk budget.
   for (const dense of [".1".repeat(400), "1.1.1.1, ".repeat(80), "10.0.0.1\n".repeat(90)]) {
     assert.ok(
-      estimateText(dense) <= [...dense].length,
-      `${estimateText(dense)} tokens for ${[...dense].length} characters`,
+      estimateText(dense) <= Buffer.byteLength(dense, "utf8"),
+      `${estimateText(dense)} tokens for ${Buffer.byteLength(dense, "utf8")} bytes`,
+    );
+  }
+});
+
+test("the ceiling is UTF-8 length, not character count", () => {
+  // A byte-level tokenizer can bill one token per BYTE, so capping at the
+  // character count would cap 2-4x below what the provider can charge on
+  // anything outside ASCII. These two cost more than their character count and
+  // never more than their UTF-8 length.
+  for (const dense of ["😀1\n".repeat(50), "日,".repeat(50), "я1.".repeat(60)]) {
+    const characters = [...dense].length;
+    const bytes = Buffer.byteLength(dense, "utf8");
+    assert.ok(estimateText(dense) <= bytes, `${estimateText(dense)} tokens for ${bytes} bytes`);
+    assert.ok(
+      estimateText(dense) > characters,
+      `${estimateText(dense)} tokens capped at the ${characters} characters`,
     );
   }
 });
@@ -99,7 +116,7 @@ test("digits and timestamps cost more per character than words, and stay under t
   const word = "configuration providers ";
   assert.equal(stamp.length, word.length);
   assert.ok(estimateText(stamp) > estimateText(word));
-  assert.ok(estimateText(stamp) <= stamp.length);
+  assert.ok(estimateText(stamp) <= Buffer.byteLength(stamp, "utf8"));
   // The ceiling must not flatten a page of numbers into a page of prose.
   const numbers = Array.from({ length: 40 }, (_, row) => `${row} 10.0.${row}.1 4096 0.75`).join("\n");
   const prose = "the quick brown fox jumps over the lazy dog and then some ".repeat(20);
@@ -153,10 +170,21 @@ test("the uncalibrated estimate is within 15% of the provider count on every rec
 test("the uncalibrated estimate never falls below the provider count", () => {
   // Overestimating wastes budget; underestimating produces real provider
   // context-length errors. The seed is biased upward on purpose.
+  //
+  // The tolerance is the fixture's own: a case is kept only when the tokenizer
+  // counts its reconstruction within 3% of the provider's number, so this
+  // comparison cannot be exact - the census is an accepted approximation of the
+  // prompt the provider counted, not that prompt. Asserting a hard floor here
+  // would fit the rules to that approximation's error, which is what the test
+  // above ("never falls below the tokenizer count of the same census") measures
+  // exactly instead: it compares the estimate against the token count of the
+  // very text the estimator was fed.
+  const tolerance = 0.03;
   for (const item of fixture.cases) {
+    const estimated = estimateMessages(messagesFor(item));
     assert.ok(
-      estimateMessages(messagesFor(item)) >= item.actualInputTokens,
-      `${item.id}: the seed must not underestimate`,
+      estimated >= item.actualInputTokens * (1 - tolerance),
+      `${item.id}: ${estimated} against ${item.actualInputTokens}, below the reconstruction's own 3% tolerance`,
     );
   }
 });

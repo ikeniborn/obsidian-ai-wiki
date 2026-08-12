@@ -37,13 +37,24 @@ Procedure, per recorded request:
 5. Emit one case per size band (best tokenizer fidelity in the band), plus a
    second case from a different source note where the band has one.
 
-The character-class RATES in src/token-estimate.ts were fitted separately, by
-non-negative least squares of class counts against tokenizer counts over 973
-real texts — every note in the vault, this repository's prompts/, templates/,
-src/**/*.ts and docs/, real agent.jsonl JSON, and JSON-escaped notes — then
-scaled up until the recorded cases here stopped underestimating. Rerun that fit
-with --fit, which prints the rates and their residuals instead of writing a
-fixture.
+The character-class RATES in src/token-estimate.ts were fitted by non-negative
+least squares of class counts against tokenizer counts over every note in the
+vault, this repository's prompts/, templates/, src/**/*.ts and docs/, real
+agent.jsonl JSON, and JSON-escaped notes — 973 texts for the shipped numbers.
+Rerun that fit with --fit (numpy required); it prints the rates, their residuals
+and whether each shipped rate still charges at least what the fit asks, and
+writes nothing. It will not reproduce the shipped numbers digit for digit: the
+vault is live, so every note added to it moves the fit. The direction is what
+has to hold.
+
+The recorded runs were served by `ollama-deepseek-v4-pro-cloud`. The tokenizer
+used as its stand-in is DeepSeek-V3's published `tokenizer.json` (128000-entry
+BPE vocabulary, sha256
+621ac2e32d0dba658404412318818aaa8ce8cda492e59830109d8da6b517fb41, from
+huggingface.co/deepseek-ai/DeepSeek-V3). It is not vendored: it is a 7.8 MB file
+this repository has no runtime use for. Its standing as a stand-in is checked,
+not assumed — see step 4, and the 82 reconstructions it agreed with at a median
+of 1.02 of the provider's own count.
 """
 
 from __future__ import annotations
@@ -306,13 +317,95 @@ def build(args: argparse.Namespace) -> None:
         print(f"  {case['id']:22} {case['actualInputTokens']:>6} tokens  {case['sourceNote']}")
 
 
+def fit_corpus(vault: str, log_path: str, repo: str) -> List[str]:
+    """The real texts the rates are fitted over. No synthetic material."""
+    texts: List[str] = []
+    for path in glob.glob(os.path.join(vault, "**", "*.md"), recursive=True):
+        if ".obsidian" in path:
+            continue
+        try:
+            texts.append(open(path, encoding="utf-8").read())
+        except OSError:
+            continue
+    notes = len(texts)
+    for pattern in ("prompts/*.md", "templates/*.md", "src/**/*.ts", "docs/**/*.md"):
+        for path in glob.glob(os.path.join(repo, pattern), recursive=True):
+            texts.append(open(path, encoding="utf-8").read())
+    lines = open(log_path, encoding="utf-8").read().split("\n")
+    for start in range(0, max(len(lines) - 40, 1), 200):
+        texts.append("\n".join(lines[start:start + 40]))
+    # The payload carries note text JSON-escaped, so the escaped form is material too.
+    for text in texts[:min(notes, 40)]:
+        texts.append(json.dumps({"text": text}, ensure_ascii=False))
+    return [text for text in texts if len(text) >= 200]
+
+
+def fit(args: argparse.Namespace) -> None:
+    import numpy as np
+    from tokenizers import Tokenizer
+
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    tokenizer = Tokenizer.from_file(args.tokenizer)
+    groups = [["cyrillic"], ["word"], ["symbols", "symbolRuns", "newlines"]]
+    rows, truth = [], []
+    for text in fit_corpus(args.vault, args.log, repo):
+        counts = census(text)
+        if counts["cjk"]:
+            continue
+        rows.append([
+            counts["cyrillic"],
+            counts["word"],
+            counts["symbols"],
+            counts["symbolRuns"] + counts["newlines"],
+        ])
+        truth.append(len(tokenizer.encode(text, add_special_tokens=False).ids))
+    design, target = np.array(rows, float), np.array(truth, float)
+    # Relative error is what the 15% band is about, so weight each row by 1/sqrt(tokens).
+    weight = 1 / np.sqrt(target)
+    weighted, goal = design * weight[:, None], target * weight
+    rate = np.full(design.shape[1], 0.15)
+    step = 1.0 / (np.linalg.norm(weighted, 2) ** 2)
+    for _ in range(60_000):  # projected gradient: non-negativity is the whole constraint
+        rate = np.maximum(rate - step * (weighted.T @ (weighted @ rate - goal)), 0)
+    ratio = (design @ rate) / target
+    print(f"texts fitted: {len(rows)}  (groups: {groups})")
+    print(f"  CHARS_PER_TOKEN_CYRILLIC = {1 / rate[0]:.2f}")
+    print(f"  CHARS_PER_TOKEN_WORD     = {1 / rate[1]:.2f}   (letters + non-newline whitespace)")
+    print(f"  CHARS_PER_TOKEN_SYMBOL   = {1 / rate[2]:.2f}   (digits and symbols)")
+    print(f"  SYMBOL_RUN_TOKENS        = {rate[3]:.2f}   (per digit run, symbol run and newline)")
+    print(f"  residual ratio: min {ratio.min():.3f} p05 {np.percentile(ratio, 5):.3f} "
+          f"median {np.median(ratio):.3f} p95 {np.percentile(ratio, 95):.3f} max {ratio.max():.3f}")
+
+    # The shipped rates came from this procedure over the corpus as it stood,
+    # then scaled up until no recorded case underestimated. They will not
+    # reproduce digit for digit later: the vault is live and every note added to
+    # it moves the fit. What has to keep holding is the direction - each shipped
+    # rate charges at least what the current fit says - so that is checked here.
+    source = open(os.path.join(repo, "src", "token-estimate.ts"), encoding="utf-8").read()
+    shipped = {name: float(re.search(rf"{name} = ([0-9.]+);", source).group(1)) for name in (
+        "CHARS_PER_TOKEN_CYRILLIC", "CHARS_PER_TOKEN_WORD",
+        "CHARS_PER_TOKEN_SYMBOL", "SYMBOL_RUN_TOKENS")}
+    print("\nshipped versus this fit (shipped must charge at least as much):")
+    for index, (name, conservative) in enumerate((
+            ("CHARS_PER_TOKEN_CYRILLIC", lambda a, b: a <= b),
+            ("CHARS_PER_TOKEN_WORD", lambda a, b: a <= b),
+            ("CHARS_PER_TOKEN_SYMBOL", lambda a, b: a <= b),
+            ("SYMBOL_RUN_TOKENS", lambda a, b: a >= b))):
+        fitted = rate[index] if name == "SYMBOL_RUN_TOKENS" else 1 / rate[index]
+        verdict = "ok" if conservative(shipped[name], fitted) else "BELOW THE FIT"
+        print(f"  {name:24} shipped {shipped[name]:>6.2f}  fit {fitted:>6.2f}  {verdict}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--log", required=True, help="agent.jsonl from the recorded run")
     parser.add_argument("--vault", required=True, help="vault root the run indexed")
     parser.add_argument("--tokenizer", required=True, help="the provider family's tokenizer.json")
     parser.add_argument("--out", default="tests/fixtures/recorded-prompts.json")
-    build(parser.parse_args())
+    parser.add_argument("--fit", action="store_true",
+                        help="re-run the rate fit and print the rates instead of writing a fixture")
+    args = parser.parse_args()
+    fit(args) if args.fit else build(args)
 
 
 if __name__ == "__main__":

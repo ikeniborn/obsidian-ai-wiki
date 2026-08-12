@@ -514,11 +514,11 @@ test("packed maximality uses final ordinals at a request boundary", () => {
     (_, index) => `## Neutral heading ${index + 1} ${"x".repeat(24)}`,
   ).join("\n");
   // Rescaled twice for the token estimator: from a byte-era budget of 4_744,
-  // then to 1_195 once the character-class rules repriced the mapper envelope.
-  // 1_195 tokens reproduces the same paired split.
+  // then to 1_180 once the character-class rules repriced the mapper envelope.
+  // 1_180 tokens reproduces the same paired split.
   const chunks = chunkSourceForEvidence(source, "neutral", {
     ...packingPolicy(),
-    inputBudgetTokens: 1_195,
+    inputBudgetTokens: 1_180,
   });
 
   assert.deepEqual(chunks.slice(0, 10).map((chunk) => [chunk.startLine, chunk.endLine]), [

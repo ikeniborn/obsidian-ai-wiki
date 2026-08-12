@@ -152,9 +152,10 @@ export const MAX_DOMAIN_THEMES = 24;
 export const MAX_LANGUAGE_EVIDENCE = 12;
 /**
  * Per-item ceiling in estimator tokens on the JSON-encoded item, not in
- * characters: one Cyrillic character costs 2.2 estimator tokens per latin one
- * and one CJK character costs 4.2, so a character cap would understate the worst
- * case by the same factors. Measuring the encoded form also absorbs escaping.
+ * characters: under the character-class rates one Cyrillic character costs 2.3
+ * estimator tokens per word character and one CJK character costs 8, so a
+ * character cap would understate the worst case by the same factors. Measuring
+ * the encoded form also absorbs escaping.
  */
 export const MAX_OVERHEAD_ITEM_TOKENS = 48;
 
