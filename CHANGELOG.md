@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.2 — 2026-08-13
+
+### Fixes
+- fix(release): ship `versions.json` so the community-plugin review can resolve app compatibility. The automated review failed for both 0.3.0 and 0.3.1 with a message that names no rule, and 0.3.1 — a byte-identical rebuild — failed identically, so the failure is reproducible rather than transient. Release mechanics were audited and are sound: the published `main.js` is byte-identical by sha256 to a local build, the released manifest matches the repository root at the tag, and every CI step passes. Comparison against the registry isolates the one artifact this repository lacked: of 29 plugins that published a release after 2026-07-15, all 29 ship `versions.json`. It now records the two points where `minAppVersion` actually moved, plus the current release, and the production build keeps it in step with the manifest so a release cannot omit its own entry. No plugin behaviour changes — `main.js` is byte-for-byte the one published as 0.3.1.
+
+---
+
 ## 0.3.1 — 2026-08-12
 
 ### Other
