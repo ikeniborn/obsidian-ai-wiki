@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.3 — 2026-08-20
+
+### Fixes
+- fix(build): minify the production bundle. `dist/main.js` drops from 2.93 MB over 71700 lines to 1.53 MB, because the production esbuild call never set `minify` — the plugin has been publishing a development-shaped bundle since the first release. `keepNames` stays on, since zod and the OpenAI SDK branch on constructor and function names; property mangling is off, as esbuild leaves it. The bundle was verified to parse and load after minification, and all 1577 tests, lint, typecheck and release validation pass. This is also the next thing to try against the community-plugin review, which has now failed four times running with "The automated review for this release could not be completed. An administrator will investigate." — a message that names no rule. The `versions.json` hypothesis is spent: 0.3.2 shipped the file and failed identically. Attestation is ruled out, since it predates the last review that completed (0.2.2, at 0.1.102), and so is the `child_process` adapter, which predates it as well. Raw size alone was already argued against in 0.3.1 by comparison against listed plugins shipping larger bundles, so what changes here is the bundle's *shape* — one that a scanner choking on 71700 lines of unminified output would see very differently. No plugin behaviour changes.
+
+---
+
 ## 0.3.2 — 2026-08-13
 
 ### Fixes

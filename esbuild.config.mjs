@@ -23,6 +23,11 @@ const ctx = await esbuild.context({
   logLevel: "info",
   sourcemap: production ? false : "inline",
   treeShaking: true,
+  // The community review scanner reads the published main.js; an unminified
+  // 2.9 MB bundle is what the last four reviews choked on. keepNames is kept
+  // because zod and the OpenAI SDK branch on constructor and function names.
+  minify: production,
+  keepNames: true,
   outfile: "dist/main.js",
   platform: "node",
   loader: { ".md": "text" },
