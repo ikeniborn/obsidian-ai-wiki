@@ -35,20 +35,8 @@ import {
 } from "./model-call-policy";
 import { resolveBudget, type ResolvedBudget } from "./budget-resolver";
 import type { ModelContextRecord, ModelContextStore } from "./model-context";
-import { cancelRuntimeTimeout, scheduleRuntimeTimeout, type RuntimeTimer } from "./runtime-timers";
 
 const DISABLED_BOILERPLATE_DEMOTION: BoilerplateDemotionConfig = { enabled: false, factor: 0 };
-
-/**
- * Satisfies `resolveCallPolicy`'s signature on the claude-agent path, which never
- * reads the record: that backend keeps its stored budgets and never probes a window.
- */
-const CLAUDE_PLACEHOLDER_RECORD: ModelContextRecord = Object.freeze({
-  contextWindow: 0,
-  source: "default" as const,
-  calibration: 1,
-  samples: 0,
-});
 
 export function resolveFollowUpPolicyOperation(parent: WikiOperation): OpKey {
   return parent === "query" ? "query" : "lint";
@@ -60,9 +48,8 @@ export function resolveFollowUpPolicyOperation(parent: WikiOperation): OpKey {
  * smaller one — so sizing its requests from the format operation's budget packed PDF
  * batches against a window the vision model does not have.
  *
- * Returns no budget on the claude-agent path (which keeps its stored budgets and
- * never consults a record), when no vision model is configured for this run, or when
- * nothing is actually KNOWN about the vision model's window — see below. The record
+ * Returns no budget when no vision model is configured for this run, or when nothing
+ * is actually KNOWN about the vision model's window — see below. The record
  * still comes back in the last case, so a size failure can name what it was sized
  * against. Diagnostics come back as data so the caller can yield them in run order.
  */
@@ -73,7 +60,7 @@ export async function resolveVisionBudget(
   signal?: AbortSignal,
 ): Promise<{ budget?: ResolvedBudget; record?: ModelContextRecord; events: RunEvent[] }> {
   const events: RunEvent[] = [];
-  if (settings.backend !== "native-agent" || !model) return { events };
+  if (!model) return { events };
   const baseUrl = settings.nativeAgent.baseUrl;
   let record: ModelContextRecord;
   try {
@@ -155,37 +142,21 @@ export class AgentRunner {
     const events: RunEvent[] = [];
     const model = effectiveModel(s, op, policyOperation);
     const baseUrl = s.nativeAgent.baseUrl;
-    const record = s.backend === "claude-agent"
-      ? CLAUDE_PLACEHOLDER_RECORD
-      : await this.modelContextStore.resolve(
-          baseUrl,
-          model,
-          s.nativeAgent.apiKey ?? "",
-          Date.now(),
-          signal,
-          (event) => events.push(event),
-          // The window the user configured FOR THIS MODEL. The setting is keyed by
-          // model because the store is: one global number forced the same window
-          // onto every per-operation model, however differently sized they are.
-          configuredContextWindowFor(s.nativeAgent, model),
-        );
+    const record = await this.modelContextStore.resolve(
+      baseUrl,
+      model,
+      s.nativeAgent.apiKey ?? "",
+      Date.now(),
+      signal,
+      (event) => events.push(event),
+      // The window the user configured FOR THIS MODEL. The setting is keyed by
+      // model because the store is: one global number forced the same window
+      // onto every per-operation model, however differently sized they are.
+      configuredContextWindowFor(s.nativeAgent, model),
+    );
     const resolved = resolveCallPolicy(s, op, record, policyOperation);
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
     const mergeDeleteWarnThreshold = s.nativeAgent.mergeDeleteWarnThreshold;
-
-    if (s.backend === "claude-agent") {
-      return {
-        model: resolved.model,
-        events,
-        opts: {
-          ...resolved.opts,
-          systemPrompt: s.systemPrompt,
-          outputLanguage: s.outputLanguage,
-          structuredRetries,
-          mergeDeleteWarnThreshold,
-        },
-      };
-    }
 
     if (resolved.budget) {
       events.push({
@@ -262,7 +233,6 @@ export class AgentRunner {
   }
 
   private buildSimilarity(): PageSimilarityService | undefined {
-    if (this.settings.backend !== "native-agent") return undefined;
     const na = this.settings.nativeAgent;
     return new PageSimilarityService({
       mode:
@@ -363,7 +333,7 @@ export class AgentRunner {
         );
         break;
       case "format": {
-        const hasVision = this.settings.backend === "claude-agent";
+        const hasVision = false;
         const noVision = req.args.includes("--no-vision");
         const formatArgs = req.args.filter((a) => a !== "--no-vision");
         const explicitDomain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : undefined;
@@ -408,7 +378,7 @@ export class AgentRunner {
             : {}),
         };
         const progress = i18nFor(resolveLang(this.settings.outputLanguage)).formatProgress;
-        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionRuntime, visionTempStore, progress, formatDomain);
+        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, wikiVaultPath, this.settings.wikiLinkValidationRetries, visionRuntime, visionTempStore, progress, formatDomain);
         break;
       }
       case "delete":
@@ -454,10 +424,10 @@ export class AgentRunner {
       llmConnectionTimeoutMs: connectionTimeoutMs,
       llmIdleTimeoutMs: idleTimeoutMs,
     };
-    const baseUrlHint = this.settings.backend === "native-agent"
-      ? ` @ ${this.settings.nativeAgent.baseUrl}`
-      : "";
-    yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"}${baseUrlHint}` };
+    yield {
+      kind: "system",
+      message: `openai-compatible / ${model} / ${this.settings.nativeAgent.baseUrl}`,
+    };
     yield* drainDiagnostics();
 
     if (req.signal.aborted) return;
@@ -468,28 +438,6 @@ export class AgentRunner {
       : this.domains;
 
     const similarity = this.buildSimilarity();
-    const operationWatchdogEnabled = this.settings.backend === "claude-agent" && idleTimeoutMs > 0;
-    const maxRetries = this.settings.backend === "claude-agent"
-      ? this.settings.llmIdleRetries ?? 3
-      : 0;
-    const scheduleIdleAbort = (callback: () => void): RuntimeTimer =>
-      scheduleRuntimeTimeout(callback, idleTimeoutMs);
-    const clearIdleAbort = (timer: RuntimeTimer): void => {
-      cancelRuntimeTimeout(timer);
-    };
-    let attempt = 0;
-    let destructivePreludeSeen = false;
-    let visibleAssistantTextSeen = false;
-
-    const idleAfterDestructivePreludeAbort = () => new DOMException(
-      `LLM idle timeout (${Math.round(idleTimeoutMs / 1000)}s) after destructive prelude; refusing to replay operation`,
-      "AbortError",
-    );
-    const idleAfterVisibleOutputAbort = () => new DOMException(
-      `LLM idle timeout (${Math.round(idleTimeoutMs / 1000)}s) after visible output; refusing to replay operation`,
-      "AbortError",
-    );
-
     const llmErrors: LlmError[] = [];
     const ruleFirings: Record<string, number> = {};
     let evalMeta: EvalMetaFields = {};
@@ -501,110 +449,51 @@ export class AgentRunner {
     }
 
     try {
-    while (true) {
-      const idleCtrl = new AbortController();
-      const signalAny = (AbortSignal as unknown as { any(this: void, signals: AbortSignal[]): AbortSignal }).any;
-      const combined = operationWatchdogEnabled
-        ? signalAny([req.signal, idleCtrl.signal])
-        : req.signal;
-      let idleTimer: RuntimeTimer | null =
-        operationWatchdogEnabled ? scheduleIdleAbort(() => idleCtrl.abort()) : null;
-
-      const resetTimer = () => {
-        if (!idleTimer) return;
-        clearIdleAbort(idleTimer);
-        idleTimer = scheduleIdleAbort(() => idleCtrl.abort());
-      };
-
       let finalResultText = "";
-      try {
-        for await (const ev of this.runOperation(
-          { ...req, signal: combined },
-          model,
-          opts,
-          vaultRoot,
-          domains,
-          similarity,
-          visionTempStore,
-          initIngestRuntime,
-        )) {
-          if (
-            ev.kind === "llm_call_stats" || ev.kind === "assistant_text" ||
-            ev.kind === "tool_use" || ev.kind === "tool_result"
-          ) resetTimer();
-          if (ev.kind === "tool_use" && ev.name === "WipeDomain") destructivePreludeSeen = true;
-          if (ev.kind === "assistant_text" && !ev.isReasoning && ev.delta.length > 0) {
-            visibleAssistantTextSeen = true;
-          }
-          if (ev.kind === "result") finalResultText = ev.text;
-          if (ev.kind === "error") {
-            llmErrors.push({ kind: "error", message: ev.message });
-          } else if (ev.kind === "structural_error") {
-            llmErrors.push({ kind: "structural_error", callSite: ev.callSite, errorType: ev.errorType, retryAttempt: ev.retryAttempt, message: ev.message });
-          } else if (ev.kind === "rule_fired") {
-            ruleFirings[ev.ruleId] = (ruleFirings[ev.ruleId] ?? 0) + ev.count;
-          } else if (ev.kind === "eval_meta") {
-            evalMeta = { ...evalMeta, ...ev.fields };
-          } else if (ev.kind === "format_preview" && req.runId) {
-            ev.runId = req.runId; // so the view's 👍/👎 buttons know which record to update
-          }
-          yield ev;
-          yield* drainDiagnostics();
+      for await (const ev of this.runOperation(
+        req,
+        model,
+        opts,
+        vaultRoot,
+        domains,
+        similarity,
+        visionTempStore,
+        initIngestRuntime,
+      )) {
+        if (ev.kind === "result") finalResultText = ev.text;
+        if (ev.kind === "error") {
+          llmErrors.push({ kind: "error", message: ev.message });
+        } else if (ev.kind === "structural_error") {
+          llmErrors.push({ kind: "structural_error", callSite: ev.callSite, errorType: ev.errorType, retryAttempt: ev.retryAttempt, message: ev.message });
+        } else if (ev.kind === "rule_fired") {
+          ruleFirings[ev.ruleId] = (ruleFirings[ev.ruleId] ?? 0) + ev.count;
+        } else if (ev.kind === "eval_meta") {
+          evalMeta = { ...evalMeta, ...ev.fields };
+        } else if (ev.kind === "format_preview" && req.runId) {
+          ev.runId = req.runId; // so the view's 👍/👎 buttons know which record to update
         }
+        yield ev;
         yield* drainDiagnostics();
-        // Phases swallow AbortError silently (return instead of throw).
-        // Detect silent idle abort by checking if idleCtrl fired but user didn't cancel.
-        if (idleCtrl.signal.aborted && !req.signal.aborted) {
-          if (visibleAssistantTextSeen) throw idleAfterVisibleOutputAbort();
-          if (attempt < maxRetries) {
-            if (destructivePreludeSeen) throw idleAfterDestructivePreludeAbort();
-            attempt++;
-            const sec = Math.round(idleTimeoutMs / 1000);
-            yield { kind: "system", message: `LLM idle ${sec}s — retrying (${attempt}/${maxRetries})` };
-            continue;
-          }
-          throw new DOMException(
-            `LLM idle timeout (${Math.round(idleTimeoutMs / 1000)}s) exhausted after ${maxRetries} retries`,
-            "AbortError",
-          );
-        }
-        if (this.settings.devMode?.enabled && finalResultText && req.runId && this.visionTempBaseDir) {
-          const record: EvalRecord = {
-            runId: req.runId,
-            ts: new Date().toISOString(),
-            operation: req.operation,
-            model,
-            ...evalMeta,
-            answer: evalMeta.answer ?? (req.operation === "format" ? undefined : finalResultText),
-            llmErrors,
-            ruleFirings,
-            ratings: {},
-          };
-          // `visionTempBaseDir` IS the plugin base dir — the controller passes the
-          // resolved `manifest.dir` as the 6th ctor arg (Task 5). eval.jsonl lives at
-          // its root, not in the .vision-tmp subdir.
-          const pluginDir = this.visionTempBaseDir;
-          await writeEvalRecord(this.vaultTools.adapter, pluginDir, record);
-        }
-        return;
-      } catch (err) {
-        const isIdleAbort = !req.signal.aborted && (err as Error).name === "AbortError";
-        if (isIdleAbort && attempt < maxRetries) {
-          if (visibleAssistantTextSeen) throw err;
-          if (destructivePreludeSeen) throw idleAfterDestructivePreludeAbort();
-          attempt++;
-          const sec = Math.round(idleTimeoutMs / 1000);
-          yield { kind: "system", message: `LLM idle ${sec}s — retrying (${attempt}/${maxRetries})` };
-          continue;
-        }
-        throw err;
-      } finally {
-        if (idleTimer) {
-          clearIdleAbort(idleTimer);
-          idleTimer = null;
-        }
       }
-    }
+      yield* drainDiagnostics();
+      if (this.settings.devMode?.enabled && finalResultText && req.runId && this.visionTempBaseDir) {
+        const record: EvalRecord = {
+          runId: req.runId,
+          ts: new Date().toISOString(),
+          operation: req.operation,
+          model,
+          ...evalMeta,
+          answer: evalMeta.answer ?? (req.operation === "format" ? undefined : finalResultText),
+          llmErrors,
+          ruleFirings,
+          ratings: {},
+        };
+        // `visionTempBaseDir` IS the plugin base dir — the controller passes the
+        // resolved `manifest.dir` as the 6th ctor arg (Task 5). eval.jsonl lives at
+        // its root, not in the .vision-tmp subdir.
+        const pluginDir = this.visionTempBaseDir;
+        await writeEvalRecord(this.vaultTools.adapter, pluginDir, record);
+      }
     } finally {
       await visionTempStore?.cleanup();
     }

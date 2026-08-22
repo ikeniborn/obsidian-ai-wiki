@@ -7,7 +7,7 @@ import type { LlmWikiPluginSettings, OpKey } from "./types";
 const NATIVE_BUDGET_OPERATIONS: readonly OpKey[] = ["ingest", "query", "lint", "init", "format"];
 
 /**
- * True when the native backend carries a stored budget override — one of the top-level
+ * True when OpenAI settings carry a stored budget override — one of the top-level
  * `nativeAgent` fields that Task 12's automatic-budget derivation treats as an explicit
  * override when present, and as "derive from the model's context window" when absent.
  * A fresh install (nothing ever saved) returns false, so it has nothing to migrate.
@@ -23,8 +23,7 @@ export function hasStoredNativeBudget(settings: LlmWikiPluginSettings): boolean 
  * Clears every native-agent budget override — the global fields and every operation's
  * per-operation override — so automatic derivation takes over everywhere, including if
  * per-operation controls are switched on later. Only ever called after an explicit
- * "switch to automatic" answer. Does not touch `claudeAgent`: that backend's budgets are
- * unrelated to this migration and keep their fixed defaults.
+ * "switch to automatic" answer.
  */
 export function clearNativeBudgets(settings: LlmWikiPluginSettings): void {
   const native = settings.nativeAgent;

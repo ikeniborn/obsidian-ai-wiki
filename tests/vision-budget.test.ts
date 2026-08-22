@@ -183,7 +183,6 @@ function formatSettings(
   perOperation: boolean,
 ): LlmWikiPluginSettings {
   const settings = structuredClone(DEFAULT_SETTINGS);
-  settings.backend = "native-agent";
   settings.vision.enabled = true;
   settings.vision.model = "vision-model";
   settings.nativeAgent.model = "format-model";
@@ -1274,7 +1273,6 @@ test("Format propagates Vision budget telemetry and a visible warning on attachm
     [],
     new AbortController().signal,
     { inputBudgetTokens: 20_000, maxTokens: 777 },
-    "native-agent",
     undefined,
     3,
     {
@@ -1323,7 +1321,6 @@ test("Vision sizes its own call from the vision model's budget, not the text mod
     new AbortController().signal,
     // The text model's budget: what vision used to be sized from.
     { inputBudgetTokens: 88_473, maxTokens: 32_768 },
-    "native-agent",
     undefined,
     3,
     {
@@ -1357,7 +1354,6 @@ test("Vision sizes its own call from the vision model's budget, not the text mod
     [],
     new AbortController().signal,
     { inputBudgetTokens: 88_473, maxTokens: 32_768 },
-    "native-agent",
     undefined,
     3,
     {
@@ -1407,9 +1403,6 @@ test("Vision falls back to the caller's budget when no vision budget is supplied
     [],
     new AbortController().signal,
     { inputBudgetTokens: 20_000, maxTokens: 777 },
-    // claude-agent has no model-context record at all, so vision keeps taking the
-    // operation's own budget there.
-    "claude-agent",
     undefined,
     3,
     { enabled: true, model: "vision-model", language: "en" },
@@ -1455,7 +1448,6 @@ test("Vision keeps working on a backend that advertises no window for the vision
     [],
     new AbortController().signal,
     { inputBudgetTokens: 88_473, maxTokens: 32_768 },
-    "native-agent",
     undefined,
     3,
     {
@@ -1509,7 +1501,6 @@ test("a Vision size refusal names the model, its window and where to change it",
     [],
     new AbortController().signal,
     { inputBudgetTokens: 88_473, maxTokens: 32_768 },
-    "native-agent",
     undefined,
     3,
     {
@@ -1548,7 +1539,7 @@ test("visionSizeSkipReason explains only size failures, and only when a window i
     }),
     null,
   );
-  // claude-agent resolves no vision record, and has no such field to point at.
+  // Without a known vision record there is no context-window field to point at.
   assert.equal(visionSizeSkipReason(tooBig, { model: "vision-model" }), null);
 
   // A configured window is the user's own instruction, so the advice is to change it.
@@ -1758,7 +1749,6 @@ test("Format exposes bounded PDF context exhaustion in its failed Vision tool re
       [],
       new AbortController().signal,
       { inputBudgetTokens: 12_000, maxTokens: 777 },
-      "native-agent",
       undefined,
       3,
       {

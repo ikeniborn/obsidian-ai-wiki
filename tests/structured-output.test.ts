@@ -1673,7 +1673,7 @@ test("non-stream structured completion exposes reasoning before validation", asy
     && event.delta === "compat reasoning"));
 });
 
-test("native executor and Claude adapter emit one equivalent non-stream lifecycle", async () => {
+test("OpenAI executor emits one ordered non-stream lifecycle", async () => {
   const completion = {
     id: "parity",
     object: "chat.completion" as const,
@@ -1687,38 +1687,26 @@ test("native executor and Claude adapter emit one equivalent non-stream lifecycl
     }],
     usage: { prompt_tokens: 2, completion_tokens: 3, total_tokens: 5 },
   };
-  const claude = {
-    chat: { completions: { create: async () => completion } },
-  } as unknown as LlmClient;
-  const native = createNativeLlmClient((async () => completion) as NativeChatCompletionCreate);
-
-  const phasesByBackend: string[][] = [];
-  for (const [backend, llm] of [["claude", claude], ["native", native]] as const) {
-    const events: RunEvent[] = [];
-    await runStructuredWithRetry({
-      llm,
-      model: "m",
-      baseMessages: [{ role: "user", content: "x" }],
-      opts: backend === "native"
-        ? { nativeRequestRetries: 0, nativeRequestIdleTimeoutMs: 0 }
-        : {},
-      profile: { kind: "json-zod", schema: SmallSchema },
-      maxRetries: 0,
-      callSite: "query.seeds",
-      lifecycle: { id: `${backend}-parity`, action: "select_relevant_pages" },
-      signal: new AbortController().signal,
-      onEvent: (event) => events.push(event),
-      transport: "non-stream",
-    });
-    const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
-    assert.equal(new Set(lifecycle.map((event) => event.id)).size, 1);
-    phasesByBackend.push(lifecycle.map((event) => event.phase));
-  }
-
-  assert.deepEqual(phasesByBackend[0], [
+  const llm = createNativeLlmClient((async () => completion) as NativeChatCompletionCreate);
+  const events: RunEvent[] = [];
+  await runStructuredWithRetry({
+    llm,
+    model: "m",
+    baseMessages: [{ role: "user", content: "x" }],
+    opts: { nativeRequestRetries: 0, nativeRequestIdleTimeoutMs: 0 },
+    profile: { kind: "json-zod", schema: SmallSchema },
+    maxRetries: 0,
+    callSite: "query.seeds",
+    lifecycle: { id: "openai-lifecycle", action: "select_relevant_pages" },
+    signal: new AbortController().signal,
+    onEvent: (event) => events.push(event),
+    transport: "non-stream",
+  });
+  const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
+  assert.equal(new Set(lifecycle.map((event) => event.id)).size, 1);
+  assert.deepEqual(lifecycle.map((event) => event.phase), [
     "preparing", "sent", "waiting", "producing", "validating",
   ]);
-  assert.deepEqual(phasesByBackend[1], phasesByBackend[0]);
 });
 
 test("structured repair closes the old lifecycle before opening a new ID", async () => {
@@ -2114,7 +2102,7 @@ test("a truncation stops retrying once the packed prompt leaves no more room", a
   assert.equal(seen.length, 1, "an unreachable ceiling must not burn the retry budget");
 });
 
-test("a truncation without a known context window keeps the claude-agent behaviour", async () => {
+test("a truncation without a known context window does not invent an output ceiling", async () => {
   const seen: Record<string, unknown>[] = [];
 
   await assert.rejects(runStructuredWithRetry({
