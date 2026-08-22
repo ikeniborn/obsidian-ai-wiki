@@ -85,7 +85,7 @@ export class LocalConfigStore {
 
   async save(patch: Partial<LocalConfig>): Promise<void> {
     const cur = await this.load();
-    const next = { ...cur, ...patch };
+    const next = sanitizeLocalConfig({ ...cur, ...patch });
     await this.plugin.app.vault.adapter.write(this.path(), JSON.stringify(next, null, 2));
     this.cache = next;
   }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveEffective } from "../src/effective-settings";
-import { LocalConfigStore, sanitizeLocalConfig } from "../src/local-config";
+import { LocalConfigStore, sanitizeLocalConfig, type LocalConfig } from "../src/local-config";
 import { hydrateSettings } from "../src/settings-persistence";
 
 test("local legacy fields are ignored while supported state survives", () => {
@@ -44,7 +44,7 @@ test("local legacy fields are ignored while supported state survives", () => {
   });
 });
 
-test("local load is non-writing and the next ordinary save emits only supported fields", async () => {
+test("local save re-sanitizes mutable cache and unknown patches", async () => {
   const writes: string[] = [];
   const stored = {
     iclaudePath: "/usr/bin/claude",
@@ -90,10 +90,29 @@ test("local load is non-writing and the next ordinary save emits only supported 
   assert.equal("backend" in loaded, false);
   assert.equal("shellConsentGiven" in loaded, false);
 
-  await store.save({ lastDomain: "next" });
+  Object.assign(loaded as unknown as Record<string, unknown>, {
+    backend: "claude-agent",
+    unknownFromCache: "ignored",
+  });
+  Object.assign(loaded.nativeAgent as unknown as Record<string, unknown>, {
+    legacyModel: "sonnet",
+  });
+  Object.assign(loaded.proxy as unknown as Record<string, unknown>, {
+    legacyUrl: "https://proxy.example",
+  });
+  await store.save({
+    lastDomain: "next",
+    shellConsentGiven: true,
+    unknownFromPatch: "ignored",
+  } as unknown as Partial<LocalConfig>);
 
   assert.equal(writes.length, 1);
-  assert.deepEqual(JSON.parse(writes[0]), {
+  const saved = JSON.parse(writes[0]) as Record<string, unknown>;
+  assert.equal(saved.backend, undefined);
+  assert.equal(saved.shellConsentGiven, undefined);
+  assert.equal(saved.unknownFromCache, undefined);
+  assert.equal(saved.unknownFromPatch, undefined);
+  assert.deepEqual(saved, {
     agentLogEnabled: true,
     nativeAgent: { apiKey: "secret" },
     proxy: { password: "proxy-secret" },
