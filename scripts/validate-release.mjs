@@ -179,10 +179,12 @@ function validatePrebuild(root) {
   const readme = validateRequiredText(root, "README.md", errors);
   validateRequiredText(root, "LICENSE", errors);
 
-  if (packageJson !== undefined && (typeof packageVersion !== "string" || !SEMVER_PATTERN.test(packageVersion))) {
-    errors.push(`[package.json] version ${display(packageVersion)} is not valid SemVer`);
-  } else if (!RELEASE_VERSION_PATTERN.test(packageVersion)) {
-    errors.push(`[package.json] version ${display(packageVersion)} must use the x.y.z release format`);
+  if (packageJson !== undefined) {
+    if (typeof packageVersion !== "string" || !SEMVER_PATTERN.test(packageVersion)) {
+      errors.push(`[package.json] version ${display(packageVersion)} is not valid SemVer`);
+    } else if (!RELEASE_VERSION_PATTERN.test(packageVersion)) {
+      errors.push(`[package.json] version ${display(packageVersion)} must use the x.y.z release format`);
+    }
   }
   if (packageLock !== undefined) {
     validateVersion("package-lock.json", packageLock?.version, packageVersion, errors);
@@ -219,10 +221,10 @@ function validatePostbuild(root) {
     if (/sourceMappingURL\s*=\s*data:/.test(main)) {
       errors.push("[dist/main.js] inline source map is not allowed");
     }
-    if (/claude-agent|ClaudeCliClient|iclaudePath/.test(main)) {
+    if (/\b(?:claude-agent|ClaudeCliClient|iclaudePath)\b/.test(main)) {
       errors.push("[dist/main.js] forbidden Claude backend marker");
     }
-    if (/(?:node:)?child_process/.test(main)) {
+    if (/\b(?:node:)?child_process\b/.test(main)) {
       errors.push("[dist/main.js] forbidden Node subprocess transport");
     }
   } catch {

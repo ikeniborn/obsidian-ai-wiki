@@ -180,29 +180,46 @@ test("postbuild validation rejects an inline source map", async (t) => {
   assert.match(result.stderr, /\[dist\/main\.js\] inline source map is not allowed/);
 });
 
-test("postbuild validation rejects Claude backend markers", async (t) => {
-  const root = await createPostbuildFixture({
-    "dist/main.js": "const backend = 'claude-agent';\n",
+for (const marker of ["claude-agent", "ClaudeCliClient", "iclaudePath"]) {
+  test(`postbuild validation rejects Claude backend marker ${marker}`, async (t) => {
+    const root = await createPostbuildFixture({
+      "dist/main.js": `const marker = '${marker}';\n`,
+    });
+    t.after(() => rm(root, { recursive: true, force: true }));
+
+    const result = validate(root, "postbuild");
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /\[dist\/main\.js\] forbidden Claude backend marker/);
   });
-  t.after(() => rm(root, { recursive: true, force: true }));
+}
 
-  const result = validate(root, "postbuild");
+for (const marker of ["node:child_process", "child_process"]) {
+  test(`postbuild validation rejects Node subprocess marker ${marker}`, async (t) => {
+    const root = await createPostbuildFixture({
+      "dist/main.js": `const marker = '${marker}';\n`,
+    });
+    t.after(() => rm(root, { recursive: true, force: true }));
 
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /\[dist\/main\.js\] forbidden Claude backend marker/);
-});
+    const result = validate(root, "postbuild");
 
-test("postbuild validation rejects Node subprocess transport", async (t) => {
-  const root = await createPostbuildFixture({
-    "dist/main.js": "import('node:child_process');\n",
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /\[dist\/main\.js\] forbidden Node subprocess transport/);
   });
-  t.after(() => rm(root, { recursive: true, force: true }));
+}
 
-  const result = validate(root, "postbuild");
+for (const marker of ["claude-agentic", "ClaudeCliClientFactory", "iclaudePaths", "child_processes"]) {
+  test(`postbuild validation allows near-miss marker ${marker}`, async (t) => {
+    const root = await createPostbuildFixture({
+      "dist/main.js": `const marker = '${marker}';\n`,
+    });
+    t.after(() => rm(root, { recursive: true, force: true }));
 
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /\[dist\/main\.js\] forbidden Node subprocess transport/);
-});
+    const result = validate(root, "postbuild");
+
+    assert.equal(result.status, 0, result.stderr);
+  });
+}
 
 test("postbuild validation rejects dist manifest id and version mismatches", async (t) => {
   const root = await createPostbuildFixture({
@@ -271,6 +288,29 @@ test("prebuild validation rejects a non-SemVer package version", async (t) => {
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /\[package\.json\] version v0\.2\.2 is not valid SemVer/);
+});
+
+test("prebuild validation does not report an undefined release version when package.json is missing", async (t) => {
+  const root = await createFixture();
+  await rm(path.join(root, "package.json"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const result = validate(root, "prebuild");
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /\[package\.json\] cannot be read/);
+  assert.doesNotMatch(result.stderr, /\[package\.json\] version undefined/);
+});
+
+test("prebuild validation does not report an undefined release version when package.json is invalid", async (t) => {
+  const root = await createFixture({ "package.json": "{" });
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const result = validate(root, "prebuild");
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /\[package\.json\] invalid JSON/);
+  assert.doesNotMatch(result.stderr, /\[package\.json\] version undefined/);
 });
 
 test("prebuild validation requires exact release versions", async (t) => {

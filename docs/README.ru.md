@@ -76,14 +76,22 @@ ollama pull llama3.2
 
 ### 2. Установите плагин
 
-Скопируйте папку плагина в хранилище:
+Установите **AI Wiki** через Настройки → Сторонние плагины → Обзор.
+
+Для ручной установки скачайте `main.js`, `manifest.json` и `styles.css` одной версии со
+страницы GitHub Releases. Положите три файла непосредственно в
+`<vault>/.obsidian/plugins/ai-wiki/`, затем перезапустите Obsidian и включите плагин.
+
+Для локальной разработки соберите проект:
 
 ```bash
-# симлинк для разработки
-ln -s /path/to/obsidian-ai-wiki ~/.config/obsidian/Plugins/obsidian-ai-wiki
+npm install
+npm run build
 ```
 
-Или скопируйте папку вручную в `<vault>/.obsidian/plugins/obsidian-ai-wiki/`.
+Затем скопируйте или подключите символической ссылкой каталог `dist/` как
+`<vault>/.obsidian/plugins/ai-wiki/`. Подключайте `dist/`, не корень репозитория: каталог
+плагина должен содержать плоский набор `main.js`, `manifest.json` и `styles.css`.
 
 ### 3. Включите плагин
 
