@@ -3,8 +3,6 @@ import type { ContextWindowSource } from "./types";
 export type { ProxyConfig } from "./proxy";
 
 export interface LocalConfig {
-  iclaudePath: string;
-  backend?: "claude-agent" | "native-agent";
   agentLogEnabled?: boolean;
   nativeAgent?: { apiKey: string };
   proxy?: { password?: string };
@@ -12,7 +10,6 @@ export interface LocalConfig {
   migrated_v2?: boolean;
   migrated_drop_sections?: boolean;
   migrated_okf_frontmatter?: boolean;
-  shellConsentGiven?: boolean;
   lastDomain?: string;
   migrated_auto_budget?: boolean;
   /** Keyed by `${baseUrl}::${model}`. */
@@ -25,7 +22,37 @@ export interface LocalConfig {
   }>;
 }
 
-const DEFAULTS: LocalConfig = { iclaudePath: "" };
+const DEFAULTS: LocalConfig = {};
+
+export function sanitizeLocalConfig(value: unknown): LocalConfig {
+  const raw = value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  const result: LocalConfig = {};
+  if (typeof raw.agentLogEnabled === "boolean") result.agentLogEnabled = raw.agentLogEnabled;
+  if (raw.nativeAgent !== null && typeof raw.nativeAgent === "object" && !Array.isArray(raw.nativeAgent)) {
+    const apiKey = (raw.nativeAgent as { apiKey?: unknown }).apiKey;
+    if (typeof apiKey === "string") result.nativeAgent = { apiKey };
+  }
+  if (raw.proxy !== null && typeof raw.proxy === "object" && !Array.isArray(raw.proxy)) {
+    const password = (raw.proxy as { password?: unknown }).password;
+    if (typeof password === "string") result.proxy = { password };
+  }
+  for (const key of [
+    "migrated_v1",
+    "migrated_v2",
+    "migrated_drop_sections",
+    "migrated_okf_frontmatter",
+    "migrated_auto_budget",
+  ] as const) {
+    if (typeof raw[key] === "boolean") result[key] = raw[key];
+  }
+  if (typeof raw.lastDomain === "string") result.lastDomain = raw.lastDomain;
+  if (raw.modelContext !== null && typeof raw.modelContext === "object" && !Array.isArray(raw.modelContext)) {
+    result.modelContext = raw.modelContext as NonNullable<LocalConfig["modelContext"]>;
+  }
+  return result;
+}
 
 export class LocalConfigStore {
   private cache: LocalConfig | null = null;
@@ -48,13 +75,8 @@ export class LocalConfigStore {
     }
     try {
       const raw = await adapter.read(p);
-      const parsed = JSON.parse(raw) as Partial<LocalConfig> & { nativeAgent?: Record<string, unknown> };
-      if (parsed.nativeAgent && "numCtx" in parsed.nativeAgent) {
-        const na = { ...parsed.nativeAgent };
-        delete na.numCtx;
-        parsed.nativeAgent = na;
-      }
-      this.cache = { ...DEFAULTS, ...parsed };
+      const parsed: unknown = JSON.parse(raw);
+      this.cache = sanitizeLocalConfig(parsed);
     } catch {
       this.cache = { ...DEFAULTS };
     }

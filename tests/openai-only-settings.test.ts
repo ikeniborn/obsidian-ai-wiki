@@ -1,6 +1,145 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { resolveEffective } from "../src/effective-settings";
+import { LocalConfigStore, sanitizeLocalConfig } from "../src/local-config";
 import { hydrateSettings } from "../src/settings-persistence";
+
+test("local legacy fields are ignored while supported state survives", () => {
+  const modelContext = {
+    "https://llm.example/v1::model": {
+      contextWindow: 32_768,
+      source: "configured" as const,
+      calibration: 1,
+      samples: 0,
+    },
+  };
+  const loaded = sanitizeLocalConfig({
+    iclaudePath: "/usr/bin/claude",
+    backend: "claude-agent",
+    shellConsentGiven: true,
+    agentLogEnabled: true,
+    nativeAgent: { apiKey: "secret", legacyModel: "sonnet" },
+    proxy: { password: "proxy-secret", legacyUrl: "https://proxy.example" },
+    migrated_v1: true,
+    migrated_v2: false,
+    migrated_drop_sections: true,
+    migrated_okf_frontmatter: false,
+    migrated_auto_budget: true,
+    lastDomain: "work",
+    modelContext,
+    unknownFutureField: "ignored",
+  });
+
+  assert.deepEqual(loaded, {
+    agentLogEnabled: true,
+    nativeAgent: { apiKey: "secret" },
+    proxy: { password: "proxy-secret" },
+    migrated_v1: true,
+    migrated_v2: false,
+    migrated_drop_sections: true,
+    migrated_okf_frontmatter: false,
+    migrated_auto_budget: true,
+    lastDomain: "work",
+    modelContext,
+  });
+});
+
+test("local load is non-writing and the next ordinary save emits only supported fields", async () => {
+  const writes: string[] = [];
+  const stored = {
+    iclaudePath: "/usr/bin/claude",
+    backend: "claude-agent",
+    shellConsentGiven: true,
+    agentLogEnabled: true,
+    nativeAgent: { apiKey: "secret", legacyModel: "sonnet" },
+    proxy: { password: "proxy-secret", legacyUrl: "https://proxy.example" },
+    migrated_v1: true,
+    migrated_v2: false,
+    migrated_drop_sections: true,
+    migrated_okf_frontmatter: false,
+    migrated_auto_budget: true,
+    lastDomain: "work",
+    modelContext: {
+      "https://llm.example/v1::model": {
+        contextWindow: 32_768,
+        source: "configured",
+        calibration: 1,
+        samples: 0,
+      },
+    },
+    unknownFutureField: "ignored",
+  };
+  const plugin = {
+    manifest: { dir: ".obsidian/plugins/ai-wiki" },
+    app: {
+      vault: {
+        adapter: {
+          exists: async () => true,
+          read: async () => JSON.stringify(stored),
+          write: async (_path: string, value: string) => { writes.push(value); },
+        },
+      },
+    },
+  } as unknown as ConstructorParameters<typeof LocalConfigStore>[0];
+  const store = new LocalConfigStore(plugin);
+
+  const loaded = await store.load();
+
+  assert.equal(writes.length, 0);
+  assert.equal("iclaudePath" in loaded, false);
+  assert.equal("backend" in loaded, false);
+  assert.equal("shellConsentGiven" in loaded, false);
+
+  await store.save({ lastDomain: "next" });
+
+  assert.equal(writes.length, 1);
+  assert.deepEqual(JSON.parse(writes[0]), {
+    agentLogEnabled: true,
+    nativeAgent: { apiKey: "secret" },
+    proxy: { password: "proxy-secret" },
+    migrated_v1: true,
+    migrated_v2: false,
+    migrated_drop_sections: true,
+    migrated_okf_frontmatter: false,
+    migrated_auto_budget: true,
+    lastDomain: "next",
+    modelContext: stored.modelContext,
+  });
+});
+
+test("effective settings overlay only supported local values", () => {
+  const settings = hydrateSettings({
+    agentLogEnabled: false,
+    historyLimit: 47,
+    nativeAgent: { model: "settings-model" },
+    proxy: {
+      enabled: true,
+      url: "https://proxy.example",
+      username: "proxy-user",
+      noProxy: "localhost",
+    },
+  });
+  settings.nativeAgent.apiKey = "settings-key";
+
+  const effective = resolveEffective(settings, {
+    agentLogEnabled: true,
+    nativeAgent: { apiKey: "local-key" },
+    proxy: { password: "proxy-secret" },
+  });
+
+  assert.equal("backend" in effective, false);
+  assert.equal(effective.agentLogEnabled, true);
+  assert.equal(effective.historyLimit, 47);
+  assert.equal(effective.nativeAgent.model, "settings-model");
+  assert.equal(effective.nativeAgent.apiKey, "local-key");
+  assert.deepEqual(effective.proxy, {
+    enabled: true,
+    url: "https://proxy.example",
+    username: "proxy-user",
+    noProxy: "localhost",
+    password: "proxy-secret",
+  });
+});
 
 test("legacy Claude selection loads as OpenAI without retaining unknown fields", () => {
   const loaded = hydrateSettings({
