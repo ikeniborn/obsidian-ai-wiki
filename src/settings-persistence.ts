@@ -80,10 +80,13 @@ function hydrateHistory(value: unknown): RunHistoryEntry[] {
   if (!Array.isArray(value)) return [];
   return value.map((entry) => {
     const raw = record(entry);
+    const args = Array.isArray(raw.args)
+      ? raw.args.filter((arg): arg is string => typeof arg === "string")
+      : [];
     const steps = Array.isArray(raw.steps)
       ? raw.steps.map((step) => copyKnown(step, ["kind", "label"]))
       : [];
-    return { ...copyKnown(raw, HISTORY_KEYS), steps } as unknown as RunHistoryEntry;
+    return { ...copyKnown(raw, HISTORY_KEYS), args, steps } as unknown as RunHistoryEntry;
   });
 }
 

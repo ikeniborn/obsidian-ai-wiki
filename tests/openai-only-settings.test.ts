@@ -157,3 +157,24 @@ test("serializing hydrated settings emits only the current schema", () => {
     8_192,
   );
 });
+
+test("history arguments are copied and retain only string values", () => {
+  const args = ["first", 42, "second"];
+  const loaded = hydrateSettings({
+    history: [{
+      id: "run-1",
+      operation: "query",
+      args,
+      startedAt: 1,
+      finishedAt: 2,
+      status: "done",
+      finalText: "answer",
+      steps: [],
+    }],
+  });
+
+  assert.deepEqual(loaded.history[0].args, ["first", "second"]);
+  assert.notEqual(loaded.history[0].args, args);
+  loaded.history[0].args.push("third");
+  assert.deepEqual(args, ["first", 42, "second"]);
+});
