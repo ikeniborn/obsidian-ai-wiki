@@ -189,8 +189,12 @@ function parseArgs(args: string[]): Options {
 
 async function main(args: string[]): Promise<void> {
   const options = parseArgs(args);
-  const runtime = globalThis as typeof globalThis & { require?: NodeJS.Require };
+  const runtime = globalThis as typeof globalThis & {
+    require?: NodeJS.Require;
+    window?: typeof globalThis;
+  };
   runtime.require ??= createRequire(import.meta.url);
+  runtime.window ??= globalThis as Window & typeof globalThis;
   const { AgentRunner } = await import("../src/agent-runner");
 
   const adapter = new FsVaultAdapter(options.vault);
