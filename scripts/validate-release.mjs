@@ -70,6 +70,7 @@ function readJson(root, source, errors) {
 }
 
 function validateVersion(source, actual, expected, errors) {
+  if (expected === undefined) return;
   if (actual !== expected) {
     errors.push(`[${source}] version ${display(actual)} does not match package.json version ${display(expected)}`);
   }

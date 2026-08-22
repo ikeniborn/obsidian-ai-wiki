@@ -299,7 +299,7 @@ test("prebuild validation does not report an undefined release version when pack
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /\[package\.json\] cannot be read/);
-  assert.doesNotMatch(result.stderr, /\[package\.json\] version undefined/);
+  assert.doesNotMatch(result.stderr, /version undefined/);
 });
 
 test("prebuild validation does not report an undefined release version when package.json is invalid", async (t) => {
@@ -310,7 +310,7 @@ test("prebuild validation does not report an undefined release version when pack
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /\[package\.json\] invalid JSON/);
-  assert.doesNotMatch(result.stderr, /\[package\.json\] version undefined/);
+  assert.doesNotMatch(result.stderr, /version undefined/);
 });
 
 test("prebuild validation requires exact release versions", async (t) => {
