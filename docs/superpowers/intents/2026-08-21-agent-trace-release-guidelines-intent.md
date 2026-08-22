@@ -1,7 +1,7 @@
 ---
 review:
-  intent_hash: a13ced2e9c3f2cf7
-  last_run: 2026-08-21
+  intent_hash: 6a642b9c73d7124e
+  last_run: 2026-08-22
   phases:
     structure: { status: passed }
     completeness: { status: passed }
