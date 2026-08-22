@@ -10,7 +10,7 @@ import { WikiController } from "./controller";
 import { QueryModal, DomainModal, LintOptionsModal, ExportOkfModal, AutoBudgetNoticeModal } from "./modals";
 import { i18n } from "./i18n";
 import { DomainStore } from "./domain-store";
-import { LocalConfigStore } from "./local-config";
+import { LocalConfigStore, sanitizeLocalConfig } from "./local-config";
 import { structuralErrorCounter } from "./structural-error-counter";
 import { runStorageMigration, cleanupBundledSchemaCopies, migrateLogsToPluginDir, removeEmptyConfigDirs } from "./storage-migration";
 import { migrateIndexFormat } from "./migrate-index-format";
@@ -374,14 +374,11 @@ export async function migrateToLocalV2(
   await plugin.saveSettings();
 
   // Rewrite local.json keeping only local-specific fields.
-  const newLocal = {
-    ...(raw.agentLogEnabled !== undefined ? { agentLogEnabled: raw.agentLogEnabled } : {}),
-    ...(typeof ln.apiKey === "string" && ln.apiKey ? { nativeAgent: { apiKey: ln.apiKey } } : {}),
-    ...(typeof lp.password === "string" && lp.password ? { proxy: { password: lp.password } } : {}),
-    ...(raw.lastDomain !== undefined ? { lastDomain: raw.lastDomain } : {}),
+  const newLocal = sanitizeLocalConfig({
+    ...local,
     migrated_v1: true,
     migrated_v2: true,
-  };
+  });
   await adapter.write(localPath, JSON.stringify(newLocal, null, 2));
   localConfigStore["cache"] = null; // invalidate cache
 }

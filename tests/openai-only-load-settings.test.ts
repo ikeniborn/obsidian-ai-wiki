@@ -45,7 +45,12 @@ export async function resolve(specifier, context, nextResolve) {
 `;
 register(`data:text/javascript,${encodeURIComponent(obsidianLoader)}`);
 
-const { default: LlmWikiPlugin } = await import("../src/main");
+const [{ default: LlmWikiPlugin, migrateToLocalV2 }, { LocalConfigStore }, { hydrateSettings }] =
+  await Promise.all([
+    import("../src/main"),
+    import("../src/local-config"),
+    import("../src/settings-persistence"),
+  ]);
 
 test("legacy Claude fields do not cause a write during plugin load", async () => {
   let writes = 0;
@@ -78,4 +83,88 @@ test("legacy Claude fields do not cause a write during plugin load", async () =>
   assert.equal(plugin.settings.nativeAgent.operations.format.maxTokens, 4_096);
   assert.equal("backend" in plugin.settings, false);
   assert.equal("claudeAgent" in plugin.settings, false);
+});
+
+test("local v2 startup migration preserves all supported sanitized local state", async () => {
+  const pluginDir = ".obsidian/plugins/ai-wiki";
+  const localPath = `${pluginDir}/local.json`;
+  const modelContext = {
+    "https://llm.example/v1::model": {
+      contextWindow: 32_768,
+      source: "configured",
+      calibration: 1,
+      samples: 0,
+    },
+  };
+  let localJson = JSON.stringify({
+    iclaudePath: "/usr/bin/claude",
+    backend: "claude-agent",
+    claudeAgent: { model: "sonnet" },
+    shellConsentGiven: true,
+    agentLogEnabled: true,
+    nativeAgent: {
+      apiKey: "secret",
+      baseUrl: "https://llm.example/v1",
+      model: "gpt-compatible",
+      temperature: 0.4,
+    },
+    proxy: {
+      password: "proxy-secret",
+      enabled: true,
+      url: "https://proxy.example",
+      username: "proxy-user",
+      noProxy: "localhost",
+    },
+    migrated_v1: false,
+    migrated_v2: false,
+    migrated_drop_sections: true,
+    migrated_okf_frontmatter: true,
+    migrated_auto_budget: true,
+    lastDomain: "work",
+    modelContext,
+    unknownFutureField: "ignored",
+  });
+  const writes: string[] = [];
+  const adapter = {
+    exists: async (path: string) => path === localPath,
+    read: async () => localJson,
+    write: async (_path: string, value: string) => {
+      writes.push(value);
+      localJson = value;
+    },
+  };
+  let settingsWrites = 0;
+  const plugin = {
+    manifest: { dir: pluginDir },
+    app: { vault: { adapter } },
+    settings: hydrateSettings({}),
+    saveSettings: async () => { settingsWrites++; },
+  } as unknown as Parameters<typeof migrateToLocalV2>[0];
+  const store = new LocalConfigStore(plugin);
+
+  await migrateToLocalV2(plugin, store);
+
+  assert.equal(settingsWrites, 1);
+  assert.equal(writes.length, 1);
+  assert.deepEqual(JSON.parse(localJson), {
+    agentLogEnabled: true,
+    nativeAgent: { apiKey: "secret" },
+    proxy: { password: "proxy-secret" },
+    migrated_v1: true,
+    migrated_v2: true,
+    migrated_drop_sections: true,
+    migrated_okf_frontmatter: true,
+    migrated_auto_budget: true,
+    lastDomain: "work",
+    modelContext,
+  });
+  assert.equal(plugin.settings.nativeAgent.baseUrl, "https://llm.example/v1");
+  assert.equal(plugin.settings.nativeAgent.model, "gpt-compatible");
+  assert.equal(plugin.settings.nativeAgent.temperature, 0.4);
+  assert.deepEqual(plugin.settings.proxy, {
+    enabled: true,
+    url: "https://proxy.example",
+    username: "proxy-user",
+    noProxy: "localhost",
+  });
 });
