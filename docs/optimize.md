@@ -24,24 +24,12 @@ cp .env.example .env
 
 ## Конфиг `.env`
 
-### Вариант 1 — ollama (локальная модель)
+### Ollama (локальная модель)
 
 ```bash
 DSPY_BACKEND=ollama
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=llama3.2
-
-DEV_LOG_PATH=/tmp/llm-wiki-dev.jsonl
-PROMPTS_DIR=/абсолютный/путь/к/prompts
-OUTPUT_DIR=/абсолютный/путь/к/prompts/optimized
-```
-
-### Вариант 2 — claude-code (через CLI, API-ключ не нужен)
-
-```bash
-DSPY_BACKEND=claude-code
-CLAUDE_PATH=/usr/local/bin/claude
-CLAUDE_MODEL=claude-sonnet-4-6   # или алиас: sonnet | haiku | opus
 
 DEV_LOG_PATH=/tmp/llm-wiki-dev.jsonl
 PROMPTS_DIR=/абсолютный/путь/к/prompts
@@ -98,4 +86,3 @@ PROMPTS_DIR/
 pytest               # все тесты
 pytest tests/test_loader.py -v   # конкретный модуль
 ```
-

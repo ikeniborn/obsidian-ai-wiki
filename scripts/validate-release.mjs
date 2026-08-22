@@ -5,6 +5,9 @@ import path from "node:path";
 import process from "node:process";
 
 const SEMVER_PATTERN = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+const RELEASE_VERSION_PATTERN = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/;
+const PRINTABLE_ASCII_PATTERN = /^[\x20-\x7e]+$/;
+const README_DISCLOSURES = ["Network use", "Accounts and payment", "External file access", "License"];
 
 function fail(message) {
   process.stderr.write(`Release validation failed:\n- [arguments] ${message}\n`);
@@ -72,6 +75,53 @@ function validateVersion(source, actual, expected, errors) {
   }
 }
 
+function validateRequiredText(root, source, errors) {
+  try {
+    const contents = readFileSync(path.join(root, source), "utf8");
+    if (contents.trim() === "") errors.push(`[${source}] missing or empty`);
+    return contents;
+  } catch {
+    errors.push(`[${source}] missing or empty`);
+    return undefined;
+  }
+}
+
+function validateMatchingFiles(root, source, expectedSource, errors) {
+  try {
+    const actual = readFileSync(path.join(root, source));
+    const expected = readFileSync(path.join(root, expectedSource));
+    if (!actual.equals(expected)) errors.push(`[${source}] bytes do not match ${expectedSource}`);
+  } catch {
+    // Required-file and JSON checks report missing inputs.
+  }
+}
+
+function isHttpUrl(value) {
+  if (typeof value !== "string" || value.trim() === "") return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function validateManifestUrls(source, manifest, errors) {
+  if (manifest?.authorUrl !== undefined && !isHttpUrl(manifest.authorUrl)) {
+    errors.push(`[${source}] authorUrl must be an HTTP or HTTPS URL`);
+  }
+  if (manifest?.fundingUrl === undefined) return;
+  const validFundingUrl = isHttpUrl(manifest.fundingUrl)
+    || (manifest.fundingUrl !== null
+      && typeof manifest.fundingUrl === "object"
+      && !Array.isArray(manifest.fundingUrl)
+      && Object.keys(manifest.fundingUrl).length > 0
+      && Object.entries(manifest.fundingUrl).every(([label, url]) => label.trim() !== "" && isHttpUrl(url)));
+  if (!validFundingUrl) {
+    errors.push(`[${source}] fundingUrl must be an HTTP or HTTPS URL or an object of URLs`);
+  }
+}
+
 function validateManifest(source, manifest, packageVersion, errors) {
   if (manifest === undefined) return;
 
@@ -79,6 +129,44 @@ function validateManifest(source, manifest, packageVersion, errors) {
     errors.push(`[${source}] id ${display(manifest?.id)} must be ai-wiki`);
   }
   validateVersion(source, manifest?.version, packageVersion, errors);
+  if (typeof manifest?.version !== "string" || !RELEASE_VERSION_PATTERN.test(manifest.version)) {
+    errors.push(`[${source}] version ${display(manifest?.version)} must use the x.y.z format`);
+  }
+  if (typeof manifest?.name !== "string" || manifest.name.trim() === "") {
+    errors.push(`[${source}] name must be a non-empty string`);
+  } else {
+    if (!PRINTABLE_ASCII_PATTERN.test(manifest.name)) {
+      errors.push(`[${source}] name must use printable ASCII characters`);
+    }
+    if (!/^[A-Za-z0-9 +()-]+$/.test(manifest.name)) {
+      errors.push(`[${source}] name contains unsupported punctuation`);
+    }
+    if (/\b(?:obsidian|plugin)\b/i.test(manifest.name)) {
+      errors.push(`[${source}] name must not contain "Obsidian" or "Plugin"`);
+    }
+  }
+  if (typeof manifest?.description !== "string" || manifest.description.trim() === "") {
+    errors.push(`[${source}] description must be a non-empty string`);
+  } else {
+    if ([...manifest.description].length > 250) errors.push(`[${source}] description must be at most 250 characters`);
+    if (!manifest.description.endsWith(".")) errors.push(`[${source}] description must end with a period`);
+    if (!PRINTABLE_ASCII_PATTERN.test(manifest.description)) {
+      errors.push(`[${source}] description must use printable ASCII characters`);
+    }
+    if (/^This is a plugin\b/i.test(manifest.description)) {
+      errors.push(`[${source}] description must not start with "This is a plugin"`);
+    }
+  }
+  if (typeof manifest?.author !== "string" || manifest.author.trim() === "") {
+    errors.push(`[${source}] author must be a non-empty string`);
+  }
+  if (typeof manifest?.minAppVersion !== "string" || !RELEASE_VERSION_PATTERN.test(manifest.minAppVersion)) {
+    errors.push(`[${source}] minAppVersion ${display(manifest?.minAppVersion)} must use the x.y.z format`);
+  }
+  if (typeof manifest?.isDesktopOnly !== "boolean") {
+    errors.push(`[${source}] isDesktopOnly must be a boolean`);
+  }
+  validateManifestUrls(source, manifest, errors);
 }
 
 function validatePrebuild(root) {
@@ -88,9 +176,13 @@ function validatePrebuild(root) {
   const rootManifest = readJson(root, "manifest.json", errors);
   const sourceManifest = readJson(root, "src/manifest.json", errors);
   const packageVersion = packageJson?.version;
+  const readme = validateRequiredText(root, "README.md", errors);
+  validateRequiredText(root, "LICENSE", errors);
 
   if (packageJson !== undefined && (typeof packageVersion !== "string" || !SEMVER_PATTERN.test(packageVersion))) {
     errors.push(`[package.json] version ${display(packageVersion)} is not valid SemVer`);
+  } else if (!RELEASE_VERSION_PATTERN.test(packageVersion)) {
+    errors.push(`[package.json] version ${display(packageVersion)} must use the x.y.z release format`);
   }
   if (packageLock !== undefined) {
     validateVersion("package-lock.json", packageLock?.version, packageVersion, errors);
@@ -98,6 +190,13 @@ function validatePrebuild(root) {
   }
   validateManifest("manifest.json", rootManifest, packageVersion, errors);
   validateManifest("src/manifest.json", sourceManifest, packageVersion, errors);
+  validateMatchingFiles(root, "manifest.json", "src/manifest.json", errors);
+  if (readme !== undefined) {
+    for (const heading of README_DISCLOSURES) {
+      const pattern = new RegExp(`^#{2,3} ${heading}$`, "mi");
+      if (!pattern.test(readme)) errors.push(`[README.md] missing required disclosure: ${heading}`);
+    }
+  }
 
   return { errors, packageVersion };
 }
@@ -119,6 +218,12 @@ function validatePostbuild(root) {
     const main = readFileSync(path.join(root, "dist/main.js"), "utf8");
     if (/sourceMappingURL\s*=\s*data:/.test(main)) {
       errors.push("[dist/main.js] inline source map is not allowed");
+    }
+    if (/claude-agent|ClaudeCliClient|iclaudePath/.test(main)) {
+      errors.push("[dist/main.js] forbidden Claude backend marker");
+    }
+    if (/(?:node:)?child_process/.test(main)) {
+      errors.push("[dist/main.js] forbidden Node subprocess transport");
     }
   } catch {
     // Missing assets are reported by the required-file check above.
