@@ -1,11 +1,8 @@
 import { Plugin, WorkspaceLeaf, Platform, Notice } from "obsidian";
 import {
-  DEFAULT_SETTINGS,
-  normalizeLlmRuntimeControls,
   type LlmWikiPluginSettings,
-  type RunHistoryEntry,
 } from "./types";
-import { normalizeModelCallPolicySettings } from "./model-call-policy";
+import { hydrateSettings } from "./settings-persistence";
 import type { DomainEntry } from "./domain";
 import { LlmWikiSettingTab } from "./settings";
 import { AI_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
@@ -207,50 +204,12 @@ export default class LlmWikiPlugin extends Plugin {
 
   async loadSettings(): Promise<void> {
     const data = (await this.loadData()) as Record<string, unknown> | null;
-
-    const caData = (data?.claudeAgent as Record<string, unknown>) ?? {};
     const naData = (data?.nativeAgent as Record<string, unknown>) ?? {};
-    const caOps = (caData.operations as Record<string, unknown>) ?? {};
-    const naOps = (naData.operations as Record<string, unknown>) ?? {};
-
-    const defCA = DEFAULT_SETTINGS.claudeAgent;
-    const defNA = DEFAULT_SETTINGS.nativeAgent;
-
-    this.settings = {
-      ...DEFAULT_SETTINGS,
-      ...(data ?? {}),
-      timeouts: { ...DEFAULT_SETTINGS.timeouts, ...((data?.timeouts as object) ?? {}) },
-      claudeAgent: {
-        ...defCA,
-        ...caData,
-        operations: {
-          ingest: { ...defCA.operations.ingest, ...((caOps.ingest as object) ?? {}) },
-          query:  { ...defCA.operations.query,  ...((caOps.query  as object) ?? {}) },
-          lint:   { ...defCA.operations.lint,   ...((caOps.lint   as object) ?? {}) },
-          init:   { ...defCA.operations.init,   ...((caOps.init   as object) ?? {}) },
-          format: { ...defCA.operations.format, ...((caOps.format as object) ?? {}) },
-        },
-      },
-      nativeAgent: {
-        ...defNA,
-        ...naData,
-        operations: {
-          ingest: { ...defNA.operations.ingest, ...((naOps.ingest as object) ?? {}) },
-          query:  { ...defNA.operations.query,  ...((naOps.query  as object) ?? {}) },
-          lint:   { ...defNA.operations.lint,   ...((naOps.lint   as object) ?? {}) },
-          init:   { ...defNA.operations.init,   ...((naOps.init   as object) ?? {}) },
-          format: { ...defNA.operations.format, ...((naOps.format as object) ?? {}) },
-        },
-      },
-      proxy: { ...DEFAULT_SETTINGS.proxy, ...((data?.proxy as object) ?? {}) },
-      history: (data?.history as RunHistoryEntry[]) ?? [],
-    };
-    normalizeModelCallPolicySettings(this.settings);
-    normalizeLlmRuntimeControls(this.settings);
+    this.settings = hydrateSettings(data);
 
     // Schema v2: systemPrompt promoted to top-level
-    if (!data?.systemPrompt && (caData.systemPrompt || naData.systemPrompt))
-      this.settings.systemPrompt = (caData.systemPrompt ?? naData.systemPrompt) as string;
+    if (!data?.systemPrompt && typeof naData.systemPrompt === "string")
+      this.settings.systemPrompt = naData.systemPrompt;
 
     // Schema v4: vision.language promoted to top-level outputLanguage
     {
@@ -266,38 +225,16 @@ export default class LlmWikiPlugin extends Plugin {
     // Schema v3: maxTokens moves to nativeAgent.maxTokens; numCtx dropped
     let schemaV3Dirty = false;
     const legacyTop = typeof data?.maxTokens === "number" ? data.maxTokens : undefined;
-    const legacyCA = typeof caData.maxTokens === "number" ? caData.maxTokens : undefined;
     const legacyNA = typeof naData.maxTokens === "number" ? naData.maxTokens : undefined;
-    const naAlreadySet = legacyNA !== undefined;
-    if (!naAlreadySet) {
-      const legacy = legacyTop ?? legacyCA;
-      if (legacy !== undefined) {
-        this.settings.nativeAgent.maxTokens = legacy;
-        schemaV3Dirty = true;
-      }
-    }
-    // Strip top-level maxTokens if it was carried over by spread
-    if ("maxTokens" in this.settings) {
-      delete (this.settings as unknown as Record<string, unknown>).maxTokens;
+    if (legacyNA === undefined && legacyTop !== undefined) {
+      this.settings.nativeAgent.maxTokens = legacyTop;
       schemaV3Dirty = true;
     }
-    // Strip nativeAgent.numCtx if it was carried over by spread
-    if ("numCtx" in this.settings.nativeAgent) {
-      delete (this.settings.nativeAgent as unknown as Record<string, unknown>).numCtx;
+    if (data && "maxTokens" in data) {
       schemaV3Dirty = true;
     }
-
-    // Миграция с claude-code backend
-    if ((data?.backend as string) === "claude-code") {
-      this.settings.backend = "claude-agent";
-      if (data && data.model && !this.settings.claudeAgent.model)
-        this.settings.claudeAgent.model = data.model as string;
-    }
-
-    // Mobile: force native-agent backend (claude-agent unsupported on mobile).
-    if (Platform.isMobile && this.settings.backend === "claude-agent") {
-      this.settings.backend = "native-agent";
-      await this.saveData(this.settings);
+    if ("numCtx" in naData) {
+      schemaV3Dirty = true;
     }
 
     // Mobile: force per-op + dev mode off (irrelevant — only `query` runs on mobile).
@@ -326,21 +263,13 @@ export default class LlmWikiPlugin extends Plugin {
       nativeTransportDiagnosticMode: this.settings.devMode.nativeTransportDiagnosticMode,
     };
 
-    // Миграция v0.1.65: format.maxTokens 16384 (старый default) → 32768 для native.
-    // claude-agent.operations.*.maxTokens удалён в v0.1.66 (плумился из плагина впустую —
-    // claude CLI берёт CLAUDE_CODE_MAX_OUTPUT_TOKENS из env iclaude.sh).
+    // Миграция v0.1.65: format.maxTokens 16384 (старый default) → 32768.
     let formatMaxTokensMigrated = false;
     if (this.settings.nativeAgent.operations.format.maxTokens === 16384) {
       this.settings.nativeAgent.operations.format.maxTokens = 32768;
       formatMaxTokensMigrated = true;
     }
-    // Очистка старого поля у claude-операций (если присутствует в data.json).
-    const ca = this.settings.claudeAgent.operations as unknown as Record<string, Record<string, unknown>>;
-    let claudeCleanup = false;
-    for (const k of Object.keys(ca)) {
-      if ("maxTokens" in ca[k]) { delete ca[k].maxTokens; claudeCleanup = true; }
-    }
-    if (formatMaxTokensMigrated || claudeCleanup || schemaV3Dirty) await this.saveData(this.settings);
+    if (formatMaxTokensMigrated || schemaV3Dirty) await this.saveData(this.settings);
   }
 
   async saveSettings(): Promise<void> {
@@ -362,7 +291,7 @@ export function migrateDomainWikiFolder(domains: DomainEntry[]): boolean {
 export async function migrateLegacyData(
   plugin: LlmWikiPlugin,
   domainStore: DomainStore,
-  localConfigStore: LocalConfigStore,
+  _localConfigStore: LocalConfigStore,
 ): Promise<void> {
   const data = (await plugin.loadData()) as Record<string, unknown> | null;
   if (!data) return;
@@ -377,26 +306,6 @@ export async function migrateLegacyData(
       }
     }
     delete data.domains;
-    dirty = true;
-  }
-
-  const ca = data.claudeAgent as Record<string, unknown> | undefined;
-  if (ca && typeof ca.iclaudePath === "string") {
-    const cur = await localConfigStore.load();
-    if (ca.iclaudePath.length > 0 && !cur.iclaudePath) {
-      await localConfigStore.save({ iclaudePath: ca.iclaudePath });
-    }
-    delete ca.iclaudePath;
-    dirty = true;
-  }
-
-  // Migrate shellConsentGiven from data.json → local.json (one-shot)
-  if (data.shellConsentGiven === true) {
-    const localCur = await localConfigStore.load();
-    if (!localCur.shellConsentGiven) {
-      await localConfigStore.save({ shellConsentGiven: true });
-    }
-    delete data.shellConsentGiven;
     dirty = true;
   }
 
@@ -429,7 +338,7 @@ export async function migrateToLocalV2(
   if (local.migrated_v2) return;
 
   const s = plugin.settings;
-  // Read raw local.json to access old fields (claudeAgent, full nativeAgent, proxy).
+  // Read raw local.json to access old nativeAgent and proxy fields.
   const adapter = plugin.app.vault.adapter;
   const localPath = `${plugin.manifest.dir}/local.json`;
   let raw: Record<string, unknown> = {};
@@ -440,7 +349,6 @@ export async function migrateToLocalV2(
   } catch { /* ignore */ }
 
   const ln = (raw.nativeAgent as Record<string, unknown>) ?? {};
-  const lc = (raw.claudeAgent as Record<string, unknown>) ?? {};
   const lp = (raw.proxy as Record<string, unknown>) ?? {};
 
   // Move nativeAgent fields (except apiKey) to data.json settings.
@@ -453,11 +361,6 @@ export async function migrateToLocalV2(
   if (typeof ln.relevantPagesTopK === "number") s.nativeAgent.relevantPagesTopK = ln.relevantPagesTopK;
   if (typeof ln.mergeDeleteWarnThreshold === "number") s.nativeAgent.mergeDeleteWarnThreshold = ln.mergeDeleteWarnThreshold;
 
-  // Move claudeAgent fields to data.json settings.
-  if (typeof lc.model === "string" && lc.model) s.claudeAgent.model = lc.model;
-  if (typeof lc.allowedTools === "string") s.claudeAgent.allowedTools = lc.allowedTools;
-  if (typeof lc.effort === "string") s.claudeAgent.effort = lc.effort as typeof s.claudeAgent.effort;
-
   // Move proxy (except password) to data.json settings.
   if (typeof lp.enabled === "boolean" || typeof lp.url === "string") {
     s.proxy = {
@@ -468,19 +371,13 @@ export async function migrateToLocalV2(
     };
   }
 
-  // Move backend to local backend override (keep it local).
-  // agentLogEnabled stays local too (already in LocalConfig).
-
   await plugin.saveSettings();
 
   // Rewrite local.json keeping only local-specific fields.
   const newLocal = {
-    iclaudePath: raw.iclaudePath ?? "",
-    ...(raw.backend !== undefined ? { backend: raw.backend } : {}),
     ...(raw.agentLogEnabled !== undefined ? { agentLogEnabled: raw.agentLogEnabled } : {}),
     ...(typeof ln.apiKey === "string" && ln.apiKey ? { nativeAgent: { apiKey: ln.apiKey } } : {}),
     ...(typeof lp.password === "string" && lp.password ? { proxy: { password: lp.password } } : {}),
-    ...(raw.shellConsentGiven !== undefined ? { shellConsentGiven: raw.shellConsentGiven } : {}),
     ...(raw.lastDomain !== undefined ? { lastDomain: raw.lastDomain } : {}),
     migrated_v1: true,
     migrated_v2: true,
@@ -496,11 +393,8 @@ export async function migrateToLocalV2(
  * dismissing the modal any way (Escape, close, or clicking outside) keeps the stored
  * values, same as an explicit "keep".
  *
- * Automatic budgeting is native-agent only, so a claude-agent user never sees this
- * prompt — and the flag is deliberately left unset for them, so the check runs again
- * (silently, without a modal, until it finds stored native budgets) the first time they
- * switch to native-agent and restart. A native-agent user is asked, and the flag is
- * recorded, exactly once either way.
+ * Every user is on the OpenAI-compatible path. A user with stored overrides is asked,
+ * and the flag is recorded exactly once either way.
  */
 export async function offerAutoBudgetMigration(
   plugin: LlmWikiPlugin,
@@ -508,7 +402,6 @@ export async function offerAutoBudgetMigration(
 ): Promise<void> {
   const local = await localConfigStore.load();
   if (local.migrated_auto_budget) return;
-  if (plugin.settings.backend !== "native-agent") return;
 
   if (hasStoredNativeBudget(plugin.settings)) {
     const switchToAutomatic = await new AutoBudgetNoticeModal(plugin.app).ask();

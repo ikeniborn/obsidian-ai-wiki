@@ -14,6 +14,7 @@ import {
   resolveCallPolicy,
 } from "../src/model-call-policy";
 import { DEFAULT_SETTINGS, type LlmWikiPluginSettings } from "../src/types";
+import { hydrateSettings } from "../src/settings-persistence";
 import type { ModelContextRecord } from "../src/model-context";
 import { runNativeVisionModelCheck } from "../src/vision-probe";
 import { clearNativeBudgets, hasStoredNativeBudget, settleOnce } from "../src/auto-budget-notice";
@@ -72,27 +73,19 @@ test("old settings gain model controls without changing output budgets", () => {
   settings.nativeAgent.maxTokens = 7777;
   settings.nativeAgent.operations.query.maxTokens = 3333;
   delete (settings.nativeAgent as { inputBudgetTokens?: unknown }).inputBudgetTokens;
-  delete (settings.claudeAgent as { inputBudgetTokens?: unknown }).inputBudgetTokens;
   delete (settings.nativeAgent as { compressionProfile?: unknown }).compressionProfile;
-  delete (settings.claudeAgent as { compressionProfile?: unknown }).compressionProfile;
   delete (settings.nativeAgent.operations.query as { inputBudgetTokens?: unknown }).inputBudgetTokens;
-  delete (settings.claudeAgent.operations.query as { inputBudgetTokens?: unknown }).inputBudgetTokens;
 
   normalizePersistedModelControls(settings);
 
   assert.equal(settings.nativeAgent.maxTokens, 7777);
   assert.equal(settings.nativeAgent.operations.query.maxTokens, 3333);
   // Native input budgets are optional: normalization leaves an absent value absent
-  // (it is derived from the model context later) instead of inventing 16_384. Only
-  // the claude-agent path still falls back to that constant.
+  // (it is derived from the model context later) instead of inventing a constant.
   assert.equal(settings.nativeAgent.inputBudgetTokens, undefined);
-  assert.equal(settings.claudeAgent.inputBudgetTokens, 16_384);
   assert.equal(settings.nativeAgent.operations.query.inputBudgetTokens, undefined);
-  assert.equal(settings.claudeAgent.operations.query.inputBudgetTokens, 16_384);
   assert.equal(settings.nativeAgent.compressionProfile, "balanced");
-  assert.equal(settings.claudeAgent.compressionProfile, "balanced");
   assert.equal(settings.nativeAgent.operations.query.compressionProfile, undefined);
-  assert.equal(settings.claudeAgent.operations.query.compressionProfile, undefined);
 });
 
 test("normalization preserves valid overrides and removes invalid ones", () => {
@@ -171,7 +164,7 @@ test("persisted top-level runtime controls round-trip and saved idle 600 survive
   assert.equal(settings.llmIdleRetries, 7);
   assert.equal(settings.llmConnectionTimeoutSec, 45);
   assert.equal(settings.llmIdleTimeoutSec, 600);
-  assert.match(mainSource, /normalizeLlmRuntimeControls\(this\.settings\)/);
+  assert.match(mainSource, /this\.settings = hydrateSettings\(data\)/);
 });
 
 test("runtime control validation rejects fractions, unsafe idle timers, and invalid minima", () => {
@@ -608,7 +601,6 @@ test("Format compression fields are ignored and no compression policy is produce
   assert.equal(format.opts.semanticCompression, undefined);
 
   assert.equal(settings.nativeAgent.operations.format.compressionProfile, undefined);
-  assert.equal(settings.claudeAgent.operations.format.compressionProfile, undefined);
 });
 
 test("an automatic budget still renders a control", () => {
@@ -645,9 +637,6 @@ test("native budgets are optional by default, so the settings tab must not hide 
   assert.equal(DEFAULT_SETTINGS.nativeAgent.inputBudgetTokens, undefined);
   assert.equal(DEFAULT_SETTINGS.nativeAgent.maxTokens, undefined);
   assert.equal(DEFAULT_SETTINGS.nativeAgent.repairInputBudgetTokens, undefined);
-  // Task 7 already made claude-agent's field required with a fixed default; that must
-  // stay true so its settings control keeps the unchanged, non-automatic behaviour.
-  assert.equal(DEFAULT_SETTINGS.claudeAgent.inputBudgetTokens, 16_384);
 });
 
 test("addPolicyControls renders a native automatic field even when its value is undefined", () => {
@@ -971,11 +960,9 @@ test("accepting clears only the native budgets", () => {
   const settings = structuredClone(DEFAULT_SETTINGS);
   settings.nativeAgent.inputBudgetTokens = 24_000;
   settings.nativeAgent.operations.init.maxTokens = 8_192;
-  const claudeBefore = structuredClone(settings.claudeAgent);
   clearNativeBudgets(settings);
   assert.equal(settings.nativeAgent.inputBudgetTokens, undefined);
   assert.equal(settings.nativeAgent.operations.init.maxTokens, undefined);
-  assert.deepEqual(settings.claudeAgent, claudeBefore, "claude-agent must be untouched");
 });
 
 test("declining or dismissing keeps the stored native budgets: only clearNativeBudgets rewrites them", () => {
@@ -1006,35 +993,8 @@ test("clearing wipes every operation's budget override, not just one", () => {
   }
 });
 
-/**
- * Reproduces `LlmWikiPlugin.loadSettings`'s per-operation merge: defaults first, then
- * whatever `data.json` stored. The regex below pins this simulation to the real merge,
- * so it cannot drift silently.
- */
 function mergeLikeMain(persisted: unknown): LlmWikiPluginSettings {
-  assert.match(
-    mainSource,
-    /ingest:\s*\{\s*\.\.\.defNA\.operations\.ingest,\s*\.\.\.\(\(naOps\.ingest as object\) \?\? \{\}\)\s*\}/,
-    "loadSettings must still merge native per-operation defaults first, then stored data",
-  );
-  const data = persisted as Record<string, Record<string, Record<string, object>>>;
-  const defNA = structuredClone(DEFAULT_SETTINGS).nativeAgent;
-  const naData = data?.nativeAgent ?? {};
-  const naOps = (naData.operations ?? {}) as Record<string, object>;
-  const merged = structuredClone(DEFAULT_SETTINGS);
-  merged.nativeAgent = {
-    ...defNA,
-    ...(naData as object),
-    operations: {
-      ingest: { ...defNA.operations.ingest, ...((naOps.ingest as object) ?? {}) },
-      query:  { ...defNA.operations.query,  ...((naOps.query  as object) ?? {}) },
-      lint:   { ...defNA.operations.lint,   ...((naOps.lint   as object) ?? {}) },
-      init:   { ...defNA.operations.init,   ...((naOps.init   as object) ?? {}) },
-      format: { ...defNA.operations.format, ...((naOps.format as object) ?? {}) },
-    },
-  } as LlmWikiPluginSettings["nativeAgent"];
-  normalizePersistedModelControls(merged);
-  return merged;
+  return hydrateSettings(persisted);
 }
 
 test("clearing a per-operation native budget survives a settings round-trip", () => {
@@ -1110,14 +1070,12 @@ test("AutoBudgetNoticeModal: dismissal (onClose) resolves the same conservative 
   assert.doesNotMatch(block.body, /openAndWait/);
 });
 
-test("offerAutoBudgetMigration: a claude-agent user is never prompted, native-agent budgets aside", () => {
+test("offerAutoBudgetMigration has no obsolete backend guard", () => {
   const block = sourceBlock(mainSource, "export async function offerAutoBudgetMigration(");
-  const backendGateIndex = block.body.indexOf('if (plugin.settings.backend !== "native-agent") return;');
   const modalIndex = block.body.indexOf("new AutoBudgetNoticeModal(");
   const hasStoredIndex = block.body.indexOf("hasStoredNativeBudget(plugin.settings)");
-  assert.ok(backendGateIndex >= 0, "must gate on backend === native-agent before anything else");
-  assert.ok(backendGateIndex < hasStoredIndex, "backend gate must run before checking stored budgets");
-  assert.ok(backendGateIndex < modalIndex, "backend gate must run before the modal can be constructed");
+  assert.doesNotMatch(block.body, /plugin\.settings\.backend/);
+  assert.ok(hasStoredIndex >= 0 && hasStoredIndex < modalIndex);
 });
 
 test("offerAutoBudgetMigration: a user with nothing stored is never prompted, but the flag is still recorded", () => {

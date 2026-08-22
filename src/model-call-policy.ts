@@ -257,26 +257,16 @@ export function normalizePersistedModelControls(settings: LlmWikiPluginSettings)
   normalizeConfiguredContextWindows(settings);
   settings.nativeAgent.inputBudgetTokens = optionalPositiveInt(settings.nativeAgent.inputBudgetTokens);
   settings.nativeAgent.repairInputBudgetTokens = optionalPositiveInt(settings.nativeAgent.repairInputBudgetTokens);
-  settings.claudeAgent.inputBudgetTokens = positiveInt(
-    settings.claudeAgent.inputBudgetTokens,
-    DEFAULT_INPUT_BUDGET,
-  );
   settings.nativeAgent.compressionProfile =
     compressionProfile(settings.nativeAgent.compressionProfile) ?? "balanced";
-  settings.claudeAgent.compressionProfile =
-    compressionProfile(settings.claudeAgent.compressionProfile) ?? "balanced";
 
   for (const key of ["ingest", "query", "lint", "init", "format"] as const) {
     const native = settings.nativeAgent.operations[key];
-    const claude = settings.claudeAgent.operations[key];
     native.inputBudgetTokens = optionalPositiveInt(native.inputBudgetTokens);
-    claude.inputBudgetTokens = positiveInt(claude.inputBudgetTokens, DEFAULT_INPUT_BUDGET);
     if (key === "format") {
       delete native.compressionProfile;
-      delete claude.compressionProfile;
     } else {
       normalizeLocalCompression(native);
-      normalizeLocalCompression(claude);
     }
   }
   normalizeLocalCompression(settings.vision);

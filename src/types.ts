@@ -64,7 +64,7 @@ export type LlmLifecycleAction =
 
 export interface LlmLifecycleDiagnostics {
   callSite?: StructuredCallSite;
-  transport?: "stream" | "non-stream" | "claude";
+  transport?: "stream" | "non-stream";
   attempt?: number;
   configuredInputBudget?: number;
   effectiveInputBudget?: number;
@@ -617,7 +617,7 @@ export interface LlmCallOptions {
   compactRepairThresholdTokens?: number;
   /** Provider-derived correction applied to every token estimate for this call. */
   tokenCalibration?: number;
-  /** The model's context window, when known. Absent on the claude-agent path. */
+  /** The model's context window, when known. */
   contextWindowTokens?: number;
   /**
    * Reports the estimate against the provider's own count so the estimator can
@@ -711,7 +711,7 @@ export type NativeLlmExecutionInput =
 
 /** Минимальный интерфейс OpenAI-клиента, используемый фазами. */
 export type LlmClient = {
-  /** True only for the executor-backed native adapter; absent for Claude and test clients. */
+  /** True only for the executor-backed native adapter; absent for test clients. */
   nativeRequestExecutor?: true;
   /** Configured native DNS/TCP/TLS establishment timeout carried into retry diagnostics. */
   nativeConnectionTimeoutMs?: number;
@@ -752,13 +752,6 @@ export type OutputLanguage = "auto" | "ru" | "en" | "es";
 export type OpKey = "ingest" | "query" | "lint" | "init" | "format";
 export type OpMap<T> = Record<OpKey, T>;
 
-export interface ClaudeOperationConfig {
-  model: string;
-  effort?: "low" | "medium" | "high" | "xhigh" | "max";
-  inputBudgetTokens: number;
-  compressionProfile?: CompressionProfile;
-}
-
 export interface NativeOperationConfig {
   model: string;
   inputBudgetTokens?: number;
@@ -770,7 +763,6 @@ export interface NativeOperationConfig {
 }
 
 export interface LlmWikiPluginSettings {
-  backend: "claude-agent" | "native-agent";
   systemPrompt: string;
   outputLanguage: OutputLanguage;
   reasoningLanguage: OutputLanguage;
@@ -789,15 +781,6 @@ export interface LlmWikiPluginSettings {
     format: number;
   };
   history: RunHistoryEntry[];
-  claudeAgent: {
-    model: string;
-    inputBudgetTokens: number;
-    compressionProfile: CompressionProfile;
-    allowedTools: string;
-    perOperation: boolean;
-    effort?: "low" | "medium" | "high" | "xhigh" | "max";
-    operations: OpMap<ClaudeOperationConfig>;
-  };
   nativeAgent: {
     baseUrl: string;
     apiKey: string;
@@ -933,7 +916,6 @@ export function normalizeLlmRuntimeControls(settings: LlmWikiPluginSettings): vo
 }
 
 export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
-  backend: "native-agent",
   systemPrompt: "",
   outputLanguage: "auto",
   reasoningLanguage: "en",
@@ -946,20 +928,6 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   seedMinScore: 0.1,
   timeouts: { ingest: 300, query: 300, lint: 900, init: 3600, format: 600 },
   history: [],
-  claudeAgent: {
-    model: "sonnet",
-    inputBudgetTokens: 16384,
-    compressionProfile: "balanced",
-    allowedTools: "",
-    perOperation: false,
-    operations: {
-      ingest: { model: "haiku", inputBudgetTokens: 16384 },
-      query:  { model: "sonnet", inputBudgetTokens: 16384 },
-      lint:   { model: "sonnet", inputBudgetTokens: 16384 },
-      init:   { model: "sonnet", inputBudgetTokens: 16384 },
-      format: { model: "sonnet", inputBudgetTokens: 16384 },
-    },
-  },
   nativeAgent: {
     baseUrl: "http://localhost:11434/v1",
     apiKey: "ollama",
