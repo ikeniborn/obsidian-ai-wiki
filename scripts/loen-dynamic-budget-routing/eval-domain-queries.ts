@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { resolveEffective } from "../../src/effective-settings";
 import type { LocalConfig } from "../../src/local-config";
+import { ModelContextStore } from "../../src/model-context";
 import { createNativeOpenAiClient } from "../../src/native-openai-client";
 import type { RunEvent } from "../../src/types";
 import { VaultTools } from "../../src/vault-tools";
@@ -225,7 +226,21 @@ async function main(args: string[]): Promise<void> {
     proxyConfig: settings.proxy,
     mobileFetch: globalThis.fetch,
   });
-  const runner = new AgentRunner(llm, settings, vaultTools, path.basename(options.vault), domains, undefined, false);
+  const modelContextStore = new ModelContextStore({
+    read: async () => ({}),
+    write: async () => {},
+    fetchFn: globalThis.fetch,
+  });
+  const runner = new AgentRunner(
+    llm,
+    settings,
+    vaultTools,
+    path.basename(options.vault),
+    domains,
+    undefined,
+    false,
+    modelContextStore,
+  );
 
   await mkdir(path.dirname(options.out), { recursive: true });
   await mkdir(path.dirname(options.events), { recursive: true });

@@ -8,6 +8,7 @@ import { applyDomainEvent, type DomainEntry } from "../src/domain";
 import { parseDomainMetadata, stringifyDomainMetadata, domainEntryToMetadataRecords } from "../src/domain-metadata";
 import { resolveEffective } from "../src/effective-settings";
 import type { LocalConfig } from "../src/local-config";
+import { ModelContextStore } from "../src/model-context";
 import { createNativeOpenAiClient } from "../src/native-openai-client";
 import { hydrateSettings } from "../src/settings-persistence";
 import {
@@ -215,6 +216,11 @@ async function main(args: string[]): Promise<void> {
     proxyConfig: settings.proxy,
     mobileFetch: globalThis.fetch,
   });
+  const modelContextStore = new ModelContextStore({
+    read: async () => ({}),
+    write: async () => {},
+    fetchFn: globalThis.fetch,
+  });
   const runner = new AgentRunner(
     llm,
     settings,
@@ -223,6 +229,7 @@ async function main(args: string[]): Promise<void> {
     domains,
     undefined,
     false,
+    modelContextStore,
   );
 
   await mkdir(path.dirname(options.out), { recursive: true });
