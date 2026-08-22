@@ -273,7 +273,7 @@ const es = i18nFor("es").formatProgress;
 check("P10 en bundle analysing is English", en.analysing("x").startsWith("Analysing"));
 check("P11 ru bundle analysing is Russian", ru.analysing("x").startsWith("Анализ"));
 check("P12 es bundle analysing is Spanish", es.analysing("x").startsWith("Analizando"));
-check("P13 en truncationHintEnv is English", /raise the limit/.test(en.truncationHintEnv));
+check("P13 en truncationHintSettings is English", /raise the limit/.test(en.truncationHintSettings));
 check("P14 ru sentinelInvalidAfterRetry is Russian", /sentinel/i.test(ru.sentinelInvalidAfterRetry) && /невалидный/.test(ru.sentinelInvalidAfterRetry));
 
 // ---------- summary ----------
