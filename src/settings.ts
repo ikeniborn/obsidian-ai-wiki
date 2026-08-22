@@ -1,6 +1,5 @@
-import { AbstractInputSuggest, App, DropdownComponent, Notice, Platform, PluginSettingTab, requestUrl, Setting } from "obsidian";
-import { ConfirmModal, EditDomainModal, ExportOkfModal, ShellConsentModal } from "./modals";
-import { probeClaudeBinary } from "./claude-cli-client";
+import { AbstractInputSuggest, App, Notice, Platform, PluginSettingTab, requestUrl, Setting } from "obsidian";
+import { ConfirmModal, EditDomainModal, ExportOkfModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import {
   parseLlmConnectionTimeoutSec,
@@ -19,12 +18,10 @@ import type { LocalConfig } from "./local-config";
 import { probeRerankerModel, normalizeRerankerConfig } from "./reranker";
 import {
   applyBudgetInput,
-  backendModelControlDescriptor,
   configuredContextWindowFor,
   createLiveModelControl,
   effectiveModel,
   setConfiguredContextWindow,
-  parsePositiveBudgetInput,
   renderModelControlFields,
   renderNativeBudgetControls,
   type ModelControlField,
@@ -87,7 +84,7 @@ class ModelInputSuggest extends AbstractInputSuggest<string> {
 
 export class LlmWikiSettingTab extends PluginSettingTab {
   private cachedDomains: DomainEntry[] = [];
-  private localCache: LocalConfig = { iclaudePath: "" };
+  private localCache: LocalConfig = {};
   private _availableModels: string[] = [];
 
   constructor(app: App, private plugin: LlmWikiPlugin) {
@@ -312,22 +309,20 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     const s = this.plugin.settings;
     const eff = resolveEffective(s, this.localCache);
     const T = i18n();
-    const modelControls = backendModelControlDescriptor(eff.backend);
-    const addBudgetControl = (
-      setting: Setting,
-      value: number,
-      update: (next: number) => void,
-    ): void => {
-      let previous = value;
-      setting.addText((text) =>
-        text.setValue(String(value)).onChange(async (raw) => {
-          const next = parsePositiveBudgetInput(raw, previous);
-          if (next === previous) return;
-          update(next);
-          previous = next;
-          await this.plugin.saveSettings();
-        }),
-      );
+    const globalModelFields = [
+      "inputBudgetTokens",
+      "maxTokens",
+      "compressionProfile",
+    ] as const satisfies readonly ModelControlField[];
+    const modelControls = {
+      globalFields: globalModelFields,
+      operations: {
+        ingest: globalModelFields,
+        query: globalModelFields,
+        lint: globalModelFields,
+        init: globalModelFields,
+        format: ["inputBudgetTokens", "maxTokens"] as const,
+      },
     };
     // Every automatic budget field registers how to repaint itself here. A context
     // window edit changes what the OTHER fields show as their automatic number, and
@@ -354,7 +349,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       update: (next: number | undefined) => void,
       placeholder: () => string,
       // Entries below this are refused rather than stored: a field showing a number
-      // the engine will not use is exactly what this backend's automatic budgeting
+      // the engine will not use is exactly what automatic budgeting
       // is supposed to avoid. Budget fields keep the default floor of 1.
       min?: number,
     ): void => {
@@ -416,10 +411,9 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     // The context-window field that sits next to a model field. One per model role
     // that names a model — the global chat model, each per-operation model, and the
     // vision model — because those models can be genuinely different sizes and
-    // `ModelContextStore` already keys its record by model. Native-agent only:
-    // claude-agent keeps its stored budgets and consults no record.
+    // `ModelContextStore` already keys its record by model.
     const addContextWindowControl = (model: () => string): void => {
-      if (eff.backend !== "native-agent" || !model()) return;
+      if (!model()) return;
       addAutomaticBudgetControl(
         new Setting(containerEl)
           .setName(T.settings.contextWindowTokens_name)
@@ -456,18 +450,13 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         maxTokens?: number;
         compressionProfile?: CompressionProfile;
       },
-      updates: {
-        inputBudgetTokens?: (next: number) => void;
-        maxTokens?: (next: number) => void;
-        compressionProfile?: (next: CompressionProfile | undefined) => void;
-      },
+      updates: { compressionProfile?: (next: CompressionProfile | undefined) => void },
       useGlobalCompression: boolean,
-      // Native-only. When present, inputBudgetTokens/maxTokens render as automatic
-      // (undefined-capable) fields instead of the fixed, always-required claude-agent
-      // fields. `model`/`operation` locate the cached record used only to compute the
+      // Input/output budgets render as automatic undefined-capable fields.
+      // `model`/`operation` locate the cached record used only to compute the
       // placeholder text — never to probe. `model` and `current` are read lazily so a
       // repaint after a window or model change sees the settings as they are now.
-      automatic?: {
+      automatic: {
         model: () => string;
         operation: OpKey;
         current: () => { input?: number; output?: number };
@@ -479,54 +468,32 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     ): void => {
       // One thunk per call (not one per field): both renderers below read the same
       // {input, output} pair rather than each triggering its own resolveBudget.
-      const placeholders = automatic
-        ? () => automaticBudgetPlaceholders(
-            automatic.model(),
-            automatic.operation,
-            automatic.current(),
-          )
-        : undefined;
+      const placeholders = () => automaticBudgetPlaceholders(
+        automatic.model(),
+        automatic.operation,
+        automatic.current(),
+      );
       renderModelControlFields(fields, {
         inputBudgetTokens: () => {
-          if (automatic?.updates.inputBudgetTokens) {
-            addAutomaticBudgetControl(
-              new Setting(containerEl)
-                .setName(T.settings.inputBudgetTokens_name)
-                .setDesc(T.settings.inputBudgetTokens_descAutomatic),
-              () => automatic.current().input,
-              automatic.updates.inputBudgetTokens,
-              () => placeholders!().input,
-            );
-            return;
-          }
-          if (values.inputBudgetTokens === undefined || !updates.inputBudgetTokens) return;
-          addBudgetControl(
+          if (!automatic.updates.inputBudgetTokens) return;
+          addAutomaticBudgetControl(
             new Setting(containerEl)
               .setName(T.settings.inputBudgetTokens_name)
-              .setDesc(T.settings.inputBudgetTokens_desc),
-            values.inputBudgetTokens,
-            updates.inputBudgetTokens,
+              .setDesc(T.settings.inputBudgetTokens_descAutomatic),
+            () => automatic.current().input,
+            automatic.updates.inputBudgetTokens,
+            () => placeholders().input,
           );
         },
         maxTokens: () => {
-          if (automatic?.updates.maxTokens) {
-            addAutomaticBudgetControl(
-              new Setting(containerEl)
-                .setName(T.settings.outputBudgetTokens_name)
-                .setDesc(T.settings.outputBudgetTokens_descAutomatic),
-              () => automatic.current().output,
-              automatic.updates.maxTokens,
-              () => placeholders!().output,
-            );
-            return;
-          }
-          if (values.maxTokens === undefined || !updates.maxTokens) return;
-          addBudgetControl(
+          if (!automatic.updates.maxTokens) return;
+          addAutomaticBudgetControl(
             new Setting(containerEl)
               .setName(T.settings.outputBudgetTokens_name)
-              .setDesc(T.settings.outputBudgetTokens_desc),
-            values.maxTokens,
-            updates.maxTokens,
+              .setDesc(T.settings.outputBudgetTokens_descAutomatic),
+            () => automatic.current().output,
+            automatic.updates.maxTokens,
+            () => placeholders().output,
           );
         },
         compressionProfile: () => {
@@ -596,26 +563,24 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           }),
       );
 
-    if (eff.backend === "native-agent") {
-      new Setting(containerEl)
-        .setName(T.settings.llmConnectionTimeout_name)
-        .setDesc(T.settings.llmConnectionTimeout_desc)
-        .addText((t) =>
-          t.setPlaceholder("15")
-            .setValue(String(s.llmConnectionTimeoutSec))
-            .onChange(async (v) => {
-              const next = parseLlmConnectionTimeoutSec(v, 0);
-              if (next >= 1) {
-                s.llmConnectionTimeoutSec = next;
-                await this.plugin.saveSettings();
-              }
-            }),
-        );
-    }
+    new Setting(containerEl)
+      .setName(T.settings.llmConnectionTimeout_name)
+      .setDesc(T.settings.llmConnectionTimeout_desc)
+      .addText((t) =>
+        t.setPlaceholder("15")
+          .setValue(String(s.llmConnectionTimeoutSec))
+          .onChange(async (v) => {
+            const next = parseLlmConnectionTimeoutSec(v, 0);
+            if (next >= 1) {
+              s.llmConnectionTimeoutSec = next;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
 
     new Setting(containerEl)
-      .setName(eff.backend === "native-agent" ? T.settings.llmRequestIdleTimeout_name : T.settings.llmIdleTimeout_name)
-      .setDesc(eff.backend === "native-agent" ? T.settings.llmRequestIdleTimeout_desc : T.settings.llmIdleTimeout_desc)
+      .setName(T.settings.llmRequestIdleTimeout_name)
+      .setDesc(T.settings.llmRequestIdleTimeout_desc)
       .addText((t) =>
         t.setPlaceholder("300")
           .setValue(String(s.llmIdleTimeoutSec))
@@ -629,8 +594,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName(eff.backend === "native-agent" ? T.settings.llmRequestRetries_name : T.settings.llmIdleRetries_name)
-      .setDesc(eff.backend === "native-agent" ? T.settings.llmRequestRetries_desc : T.settings.llmIdleRetries_desc)
+      .setName(T.settings.llmRequestRetries_name)
+      .setDesc(T.settings.llmRequestRetries_desc)
       .addText((t) =>
         t.setPlaceholder("3")
           .setValue(String(s.llmIdleRetries))
@@ -719,174 +684,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       }
     }
 
-    // ── Backend settings ───────────────────────────────────────────────────
-    new Setting(containerEl).setName(T.settings.h3_backend).setHeading();
-
-    if (!Platform.isMobile) {
-      new Setting(containerEl)
-        .setName(T.settings.backend_name)
-        .setDesc(T.settings.backend_desc)
-        .addDropdown((d) => {
-          let backendDd: DropdownComponent;
-          backendDd = d
-            .addOption("claude-agent", T.settings.claudeCodeAgent)
-            .addOption("native-agent", T.settings.nativeAgent)
-            .setValue(eff.backend)
-            .onChange(async (v) => {
-              if (v === "claude-agent") {
-                backendDd.setValue(eff.backend);
-                new ShellConsentModal(this.plugin.app, this.localCache.iclaudePath, async () => {
-                  await this.patchLocal({ shellConsentGiven: true, backend: "claude-agent" });
-                  this.display();
-                }).open();
-                return;
-              }
-              await this.patchLocal({ backend: v as LlmWikiPluginSettings["backend"] });
-              this.display();
-            });
-          return d;
-        });
-    } else {
-      const p = containerEl.createEl("p", {
-        text: "Mobile: cloud LLM (native-agent) only. setup guide: ",
-        cls: "setting-item-description",
-      });
-      p.createEl("a", {
-        text: "ikeniborn/obsidian-llm-wiki — mobile-cloud-ollama.md",
-        href: "https://github.com/ikeniborn/obsidian-llm-wiki/blob/master/docs/mobile-cloud-ollama.md",
-      });
-    }
-
-    if (eff.backend === "claude-agent" && !Platform.isMobile) {
-      new Setting(containerEl)
-        .setName(T.settings.iclaudePath_name)
-        .setDesc(T.settings.iclaudePath_desc)
-        .addText((t) =>
-          t.setPlaceholder("/home/user/Documents/Project/iclaude/iclaude.sh")
-            .setValue(this.localCache.iclaudePath)
-            .onChange(async (v) => {
-              await this.patchLocal({ iclaudePath: v.trim() });
-            }),
-        )
-        .addButton(b => {
-          b.setButtonText(T.settings.testConnection_btn).onClick(async () => {
-            b.setButtonText(T.settings.testConnection_btnBusy).setDisabled(true);
-            try {
-              await probeClaudeBinary(this.localCache.iclaudePath);
-              new Notice(T.settings.claudeAvailable_ok);
-            } catch (e) {
-              new Notice(`❌ ${(e as Error).message}`);
-            } finally {
-              b.setButtonText(T.settings.testConnection_btn).setDisabled(false);
-            }
-          });
-          return b;
-        });
-
-      new Setting(containerEl)
-        .setName(T.settings.allowedTools_name)
-        .setDesc(T.settings.allowedTools_desc)
-        .addText((t) =>
-          t.setPlaceholder("Bash,read,write")
-            .setValue(eff.claudeAgent.allowedTools)
-            .onChange(async (v) => { s.claudeAgent.allowedTools = v.trim(); await this.plugin.saveSettings(); }),
-        );
-
-      new Setting(containerEl)
-        .setName(T.settings.h3_defaultChatModel)
-        .setHeading();
-
-      if (!s.claudeAgent.perOperation) {
-        new Setting(containerEl)
-          .setName(T.settings.model_name)
-          .setDesc(T.settings.model_desc_claude)
-          .addText((t) =>
-            t.setPlaceholder("")
-              .setValue(eff.claudeAgent.model)
-              .onChange(async (v) => { s.claudeAgent.model = v.trim(); await this.plugin.saveSettings(); }),
-          );
-      }
-
-      addPolicyControls(
-        modelControls.globalFields,
-        {
-          inputBudgetTokens: s.claudeAgent.inputBudgetTokens,
-          compressionProfile: s.claudeAgent.compressionProfile,
-        },
-        {
-          inputBudgetTokens: (next) => { s.claudeAgent.inputBudgetTokens = next; },
-          compressionProfile: (next) => { s.claudeAgent.compressionProfile = next ?? "balanced"; },
-        },
-        false,
-      );
-
-      new Setting(containerEl)
-        .setName("Effort level")
-        .setDesc(T.settings.effort_desc)
-        .addDropdown(d => {
-          d.addOption("", T.settings.effort_off);
-          for (const lv of ["low", "medium", "high", "xhigh", "max"] as const) d.addOption(lv, lv);
-          d.setValue(eff.claudeAgent.effort ?? "");
-          d.onChange(async v => {
-            s.claudeAgent.effort = (v || undefined) as typeof s.claudeAgent.effort; await this.plugin.saveSettings();
-          });
-          return d;
-        });
-
-      new Setting(containerEl)
-        .setName(T.settings.perOperation_name)
-        .setDesc(T.settings.perOperation_desc)
-        .addToggle((t) =>
-          t.setValue(s.claudeAgent.perOperation)
-            .onChange(async (v) => { s.claudeAgent.perOperation = v; await this.plugin.saveSettings(); this.display(); }),
-        );
-
-      if (s.claudeAgent.perOperation) {
-        const ops: Array<{ key: OpKey; label: string }> = [
-          { key: "ingest", label: T.settings.op_ingest },
-          { key: "query",  label: T.settings.op_query },
-          { key: "lint",   label: T.settings.op_lint },
-          { key: "init",   label: T.settings.op_init },
-          { key: "format", label: T.settings.op_format },
-        ];
-        for (const { key, label } of ops) {
-          new Setting(containerEl).setName(label).setHeading();
-          new Setting(containerEl)
-            .setName(T.settings.opModel_name)
-            .setDesc(T.settings.opModel_desc)
-            .addText((t) =>
-              t.setValue(s.claudeAgent.operations[key].model)
-                .onChange(async (v) => { s.claudeAgent.operations[key].model = v.trim(); await this.plugin.saveSettings(); }),
-            );
-          addPolicyControls(
-            modelControls.operations[key],
-            {
-              inputBudgetTokens: s.claudeAgent.operations[key].inputBudgetTokens,
-              compressionProfile: s.claudeAgent.operations[key].compressionProfile,
-            },
-            {
-              inputBudgetTokens: (next) => { s.claudeAgent.operations[key].inputBudgetTokens = next; },
-              compressionProfile: (next) => { s.claudeAgent.operations[key].compressionProfile = next; },
-            },
-            true,
-          );
-          new Setting(containerEl)
-            .setName("Effort level")
-            .addDropdown(d => {
-              d.addOption("", T.settings.effort_inherit);
-              for (const lv of ["low", "medium", "high", "xhigh", "max"] as const) d.addOption(lv, lv);
-              d.setValue(s.claudeAgent.operations[key].effort ?? "");
-              d.onChange(async v => {
-                type OpEffort = (typeof s.claudeAgent.operations)[OpKey]["effort"];
-                s.claudeAgent.operations[key].effort = (v || undefined) as OpEffort;
-                await this.plugin.saveSettings();
-              });
-              return d;
-            });
-        }
-      }
-    } else {
-      new Setting(containerEl).setName(T.settings.h3_backendConnection).setHeading();
+    // ── OpenAI-compatible settings ─────────────────────────────────────────
+    new Setting(containerEl).setName(T.settings.h3_backendConnection).setHeading();
 
       new Setting(containerEl)
         .setName(T.settings.baseUrl_name)
@@ -1377,8 +1176,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         }
       }
 
-    }
-
     // ── Vision settings ─────────────────────────────────────────────────────
     new Setting(containerEl).setName(T.settings.h3_vision).setHeading();
 
@@ -1406,9 +1203,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           this.display();
         },
         false,
-        modelControls.vision.check
-          ? { tooltip: T.settings.visionCheck_tooltip, run: (model) => this.checkVisionModel(model) }
-          : undefined,
+        { tooltip: T.settings.visionCheck_tooltip, run: (model) => this.checkVisionModel(model) },
       );
 
       // Vision runs a model of its own, usually a far smaller one than the chat
@@ -1482,8 +1277,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           }),
       );
 
-    // ── Proxy (native-agent only) ─────────────────────────────────────────────
-    if (eff.backend !== "claude-agent" && !Platform.isMobile) {
+    // ── Proxy ─────────────────────────────────────────────────────────────────
+    if (!Platform.isMobile) {
       const proxy = eff.proxy;
       new Setting(containerEl).setName(T.settings.proxy_h3).setHeading();
 

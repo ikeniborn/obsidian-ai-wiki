@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import test from "node:test";
 import type { RunEvent, RunHistoryEntry, WikiOperation } from "../src/types";
@@ -51,6 +52,12 @@ const [{ WikiController }, { graphCache }] = await Promise.all([
   import("../src/controller"),
   import("../src/wiki-graph-cache"),
 ]);
+const controllerSource = readFileSync(new URL("../src/controller.ts", import.meta.url), "utf8");
+
+test("controller has only OpenAI preflight", () => {
+  assert.doesNotMatch(controllerSource, /ClaudeCliClient|requireClaudeAgent|ShellConsentModal/);
+  assert.match(controllerSource, /requireNativeAgent/);
+});
 
 type FakeView = {
   events: RunEvent[];

@@ -739,39 +739,6 @@ export class ReinitModeModal extends Modal {
   onClose(): void { this.contentEl.empty(); }
 }
 
-export class ShellConsentModal extends Modal {
-  constructor(
-    app: App,
-    private iclaudePath: string,
-    private onEnable: () => Promise<void>,
-  ) {
-    super(app);
-  }
-
-  onOpen(): void {
-    const T = i18n().modal;
-    const { contentEl } = this;
-    contentEl.createEl("h3", { text: T.shellConsentTitle });
-    contentEl.createEl("p", { text: T.shellConsentBody(this.iclaudePath), cls: "ai-wiki-consent-body" });
-    new Setting(contentEl)
-      .addButton((b) => b.setButtonText(T.cancel).onClick(() => this.cancel()))
-      .addButton((b) =>
-        b.setButtonText(T.shellConsentEnable).setCta().onClick(() => void this.enable()),
-      );
-  }
-
-  cancel(): void {
-    this.close();
-  }
-
-  async enable(): Promise<void> {
-    await this.onEnable();
-    this.close();
-  }
-
-  onClose(): void { this.contentEl.empty(); }
-}
-
 export class DeleteSourceModal extends Modal {
   constructor(
     app: App,

@@ -453,7 +453,7 @@ export class LlmWikiView extends ItemView {
         const domainId = this.domainSelect!.value || undefined;
         new ConfirmModal(this.plugin.app, "Ingest — confirm", [
           `File: ${file.name}`,
-          "Claude will read the file, extract entities and update domain wiki pages.",
+          "AI Wiki will read the file, extract entities and update domain wiki pages.",
         ], () => void this.plugin.controller.ingestActive(domainId)).open();
       });
       this.lintBtn.addEventListener("click", () => {
