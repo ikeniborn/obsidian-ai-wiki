@@ -158,6 +158,7 @@ const enFormatProgressFallback: FormatProgress = {
   sentinelInvalidRetry: "\n[Sentinel invalid — retrying]\n",
   sentinelInvalidAfterRetry: "Format: LLM returned an invalid sentinel (after retry)",
   writeFailed: (err: string) => `Format: writing the formatted file failed — ${err}`,
+  truncationHintEnv: "raise the limit: Settings → per-operation → format → maxTokens",
   truncationHintSettings: "raise the limit: Settings → per-operation → format → maxTokens",
 };
 
