@@ -207,13 +207,9 @@ async function main(args: string[]): Promise<void> {
   const adapter = new FsVaultAdapter(options.vault);
   const vaultTools = new VaultTools(adapter, options.vault);
   const data = await readJson(safeJoin(options.vault, `${options.pluginDir}/data.json`));
-  const local = {
-    iclaudePath: "",
-    ...((await readJson(safeJoin(options.vault, `${options.pluginDir}/local.json`)) ?? {}) as Partial<LocalConfig>),
-  };
+  const local = ((await readJson(safeJoin(options.vault, `${options.pluginDir}/local.json`)) ?? {}) as Partial<LocalConfig>);
   const settings = resolveEffective(mergeSettings(data), local);
   if (options.apiKeyFile) settings.nativeAgent.apiKey = (await readFile(options.apiKeyFile, "utf8")).trim();
-  if (settings.backend !== "native-agent") throw new Error(`Expected native-agent, got ${settings.backend}`);
   if (!settings.nativeAgent.apiKey) throw new Error("Native API key is empty");
 
   const domains = await loadDomains(adapter);
