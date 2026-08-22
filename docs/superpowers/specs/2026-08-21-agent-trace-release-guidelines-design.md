@@ -1,6 +1,6 @@
 ---
 review:
-  spec_hash: 66c94b3cb7b269a0
+  spec_hash: 68a19be7aa1decf8
   last_run: 2026-08-22
   phases:
     structure: { status: passed }
@@ -26,7 +26,7 @@ AI Wiki will expose and execute one OpenAI-compatible runtime. The Claude Code b
 
 ## Scope
 
-The change covers persisted settings loading, effective settings, runtime routing, model-call policy, controller preflight, settings UI, translations, current user documentation, Claude-specific source and tests, release validation, and iwiki architecture documentation.
+The change covers persisted settings loading, effective settings, runtime routing, model-call policy, controller preflight, settings UI, translations, current user documentation, Claude-specific production and developer-tool source/tests, release validation, and iwiki architecture documentation.
 
 Historical chain artifacts remain as audit records. They are not current product documentation and are not shipped in the plugin bundle. LM Studio support, a replacement backend, a new backend abstraction, publication, and Community directory submission are outside this change.
 
@@ -60,6 +60,8 @@ Local configuration loading follows the same rule. Runtime code no longer reads 
 
 `src/claude-cli-client.ts` and its Claude-specific tests are deleted. No production source imports `node:child_process` for an LLM backend after the change.
 
+The out-of-vault Claude binary probe is deleted. The DSPy optimizer keeps its existing Ollama/OpenAI-compatible modes but removes `ClaudeCodeLM`, its subprocess call, environment controls, tests, and current backend documentation. Executable audit/eval fixtures accept only the remaining OpenAI-compatible settings and transport values.
+
 ### Settings UI and language resources
 
 `src/settings.ts` renders OpenAI connection and model controls directly. It contains no backend dropdown or Claude section. `src/i18n.ts` removes labels and descriptions that exist only for Claude Code, the CLI path, shell consent, or backend comparison.
@@ -74,9 +76,9 @@ Local configuration loading follows the same rule. Runtime code no longer reads 
 
 ### R1 — Single runtime contract
 
-Production types, effective settings, controller flow, and `AgentRunner` must expose only the OpenAI-compatible runtime. No executable Claude Code route or replacement backend abstraction may remain.
+Production types, effective settings, controller flow, `AgentRunner`, and active developer utilities must expose only OpenAI-compatible execution. No executable Claude Code route or replacement backend abstraction may remain.
 
-Acceptance: TypeScript compiles without a backend union; focused runtime tests observe one OpenAI transport; production source contains no import of the deleted Claude CLI client.
+Acceptance: TypeScript compiles without a backend union; focused runtime tests observe one OpenAI transport; production source contains no import of the deleted Claude CLI client; the out-of-vault Claude probe is absent; DSPy backend tests expose only Ollama/OpenAI-compatible modes.
 
 ### R2 — Safe legacy loading
 
@@ -92,7 +94,7 @@ Acceptance: persistence tests verify obsolete Claude fields are absent and curre
 
 ### R4 — No Claude UI or current documentation
 
-Settings UI, current translations, README files, and current guides must contain no Claude backend option, CLI path control, consent prompt, or claim of dual-backend support.
+Settings UI, current translations, README files, current guides, and active developer-tool documentation must contain no Claude backend option, CLI path control, consent prompt, or claim of dual-backend support.
 
 Acceptance: settings source assertions and a scoped repository scan pass; historical chain artifacts are the only allowed documentation exception.
 
@@ -122,7 +124,7 @@ Any implementation that requires an automatic destructive migration, loses suppo
 
 ## Test Strategy
 
-Focused tests cover settings shape, whitelist loading, absence of automatic persistence, ordinary-save cleanup, effective settings, controller preflight, runner transport selection, model-call policy, UI source, translations, current documentation, and release-bundle rejection.
+Focused tests cover settings shape, whitelist loading, absence of automatic persistence, ordinary-save cleanup, effective settings, controller preflight, runner transport selection, model-call policy, UI source, translations, current documentation, DSPy backend selection, and release-bundle rejection.
 
 Claude-only tests are deleted when their production subject is deleted. Tests that cover shared behavior are converted to OpenAI-only fixtures instead of removed. Broad verification runs the full suite and every existing static/build/release gate.
 
@@ -134,6 +136,7 @@ Repository documentation and the bound iwiki domain must state that OpenAI-compa
 
 - Legacy values could leak into live settings through a broad object spread. The loader uses explicit supported-field construction and a regression fixture with unknown keys.
 - Removing backend branches could accidentally remove shared behavior. Shared tests are converted before Claude-only code is deleted, and OpenAI-focused regressions cover budgets, retries, context, vision, format, and diagnostics.
+- A hidden executable adapter could survive outside the plugin runtime. Scoped scans include active `src/`, `eval/`, and developer-tool paths while excluding historical audit artifacts and repository agent instructions.
 - Ordinary local-config save could drop supported opaque records. Persistence tests cover API key, proxy password, migration flags, last domain, and model-context records.
 - A textual cleanup could remove historical evidence or unrelated developer instructions. Scans distinguish current product/runtime surfaces from historical chain artifacts and repository agent instructions.
 - Release work already present in the branch could be overwritten. Result reconciliation treats those paths as preserved upstream work and reruns their focused and full gates.
