@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.3.4 — 2026-08-23
+
+### Fixes
+- fix(settings): preserve local migration state
+- fix(settings): sanitize legacy local configuration and configuration saves
+- fix(settings): clone persisted history arguments
+- fix(release): align manifest descriptions
+- fix(release): suppress undefined version cascades
+- fix(release): harden bundle and metadata validation
+- fix(release): reject Claude backend bundle markers
+- fix(format): satisfy progress fallback contract
+- fix(eval): initialize node timer shim
+- fix(eval): supply model context store
+- fix(eval): update format truncation hint assertion
+
+### Other
+- refactor(runtime): use one OpenAI-compatible path
+- refactor(ui): remove Claude backend controls
+- refactor(settings): hydrate OpenAI-only configuration
+- refactor(tooling): remove Claude CLI adapters
+
+---
+
 ## 0.3.3 — 2026-08-20
 
 ### Fixes
