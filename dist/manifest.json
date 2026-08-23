@@ -1,7 +1,7 @@
 {
   "id": "ai-wiki",
   "name": "AI Wiki",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "minAppVersion": "1.7.2",
   "description": "Build and maintain a structured wiki from raw notes with AI-assisted extraction and synthesis.",
   "author": "ikeniborn",

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.5
+
+### Fixes
+
+- fix: guard OKF desktop exports for mobile review
+
 ## 0.3.4 — 2026-08-23
 
 ### Fixes
