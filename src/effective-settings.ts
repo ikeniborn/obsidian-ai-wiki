@@ -4,15 +4,17 @@ import type { LocalConfig, ProxyConfig } from "./local-config";
 export type EffectiveSettings = LlmWikiPluginSettings & { proxy: ProxyConfig };
 
 export function resolveEffective(
-  s: LlmWikiPluginSettings,
-  l: LocalConfig,
+  settings: LlmWikiPluginSettings,
+  local: LocalConfig,
 ): EffectiveSettings {
-  const proxyBase = s.proxy ?? { enabled: false, url: "" };
+  const proxyBase = settings.proxy ?? { enabled: false, url: "" };
   return {
-    ...s,
-    backend: l.backend ?? s.backend,
-    agentLogEnabled: l.agentLogEnabled ?? s.agentLogEnabled,
-    nativeAgent: { ...s.nativeAgent, apiKey: l.nativeAgent?.apiKey ?? s.nativeAgent.apiKey },
-    proxy: { ...proxyBase, password: l.proxy?.password },
+    ...settings,
+    agentLogEnabled: local.agentLogEnabled ?? settings.agentLogEnabled,
+    nativeAgent: {
+      ...settings.nativeAgent,
+      apiKey: local.nativeAgent?.apiKey ?? settings.nativeAgent.apiKey,
+    },
+    proxy: { ...proxyBase, password: local.proxy?.password },
   };
 }

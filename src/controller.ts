@@ -1,5 +1,4 @@
 import { App, Notice, Platform, TFile } from "obsidian";
-import { join } from "path-browserify";
 import { AI_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
 import { validateDomainId, type DomainEntry, type AddDomainInput } from "./domain";
 import type LlmWikiPlugin from "./main";
@@ -14,7 +13,6 @@ import { AgentRunner, resolveFollowUpPolicyOperation } from "./agent-runner";
 import type { ChatMessage } from "./types";
 import { VaultTools, type VaultAdapter } from "./vault-tools";
 import { arrayBufferToBase64, stripImageDataUriPrefix } from "./phases/attachment-analyzer";
-import { ClaudeCliClient } from "./claude-cli-client";
 import { maskProxyUrl } from "./proxy";
 import { mobileFetch } from "./mobile-fetch";
 import { ModelContextStore, type ModelContextRecord } from "./model-context";
@@ -24,9 +22,9 @@ import { resolveEffective } from "./effective-settings";
 import { applyDomainEvent } from "./domain";
 import type { DomainStore } from "./domain-store";
 import { DomainCorruptError } from "./domain-store";
-import type { LocalConfig, LocalConfigStore } from "./local-config";
+import type { LocalConfigStore } from "./local-config";
 import type { LlmWikiPluginSettings } from "./types";
-import { DeleteSourceModal, FileErrorModal, FormatVisionModal, InfoModal, ShellConsentModal } from "./modals";
+import { DeleteSourceModal, FileErrorModal, FormatVisionModal, InfoModal } from "./modals";
 import { computeDeletionPlan, sourceStem } from "./source-deletion";
 import { domainWikiFolder, domainIndexPath, domainLogPath } from "./wiki-path";
 import { collectPageDescriptions, parseWikiIndexJsonl } from "./wiki-index-jsonl";
@@ -107,8 +105,6 @@ interface ExcalidrawHostPlugin {
 export class WikiController {
   private current: AbortController | null = null;
   currentOp: { op: WikiOperation; args: string[] } | null = null;
-  private _chatSessionId: string | undefined;
-  private _currentClaudeClient: ClaudeCliClient | null = null;
   private _pendingFormat: { originalPath: string; tempPath: string; chat: ChatMessage[] } | null = null;
   private _currentLogMeta: { backend: string; model: string; agentLogEnabled: boolean } | null = null;
   private _currentNativeTransportDiagnostic: NativeTransportDiagnostic | undefined;
@@ -342,14 +338,15 @@ export class WikiController {
     {
       const local = await this.localConfigStore.load();
       const eff = resolveEffective(this.plugin.settings, local);
-      if (eff.backend === "native-agent" && !this.requireNativeAgent(eff)) return;
-      if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local)) return;
-      if (eff.backend === "claude-agent" && !local.shellConsentGiven) {
-        new ShellConsentModal(this.app, local.iclaudePath ?? "", async () => {
-          await this.localConfigStore.save({ shellConsentGiven: true });
-        }).open();
-        return;
-      }
+      if (!this.requireNativeAgent(eff)) return;
+      const opKey = resolveFollowUpPolicyOperation(operation);
+      this._currentLogMeta = {
+        backend: "openai-compatible",
+        model: eff.nativeAgent.perOperation
+          ? eff.nativeAgent.operations[opKey].model
+          : eff.nativeAgent.model,
+        agentLogEnabled: eff.agentLogEnabled,
+      };
     }
 
     await this.ensureView();
@@ -361,12 +358,7 @@ export class WikiController {
 
     let agentRunner: AgentRunner;
     try {
-      agentRunner = await this.buildAgentRunner(
-        vaultRoot,
-        undefined,
-        policyOperation,
-        this.plugin.settings.timeouts.lint,
-      );
+      agentRunner = await this.buildAgentRunner(vaultRoot);
     } catch (e) {
       new Notice(i18n().ctrl.errorPrefix((e as Error).message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
@@ -413,18 +405,11 @@ export class WikiController {
       for await (const ev of runGen) {
         await this.logEvent(vaultRoot, sessionId, "chat", domainId, ev);
         this.activeView()?.appendChatEvent(ev);
-        // Обновляем session_id при каждом init-событии (первый тур — получаем ID,
-        // последующие — подтверждаем что сессия жива или получаем новый ID при форке).
-        if (ev.kind === "system" && ev.sessionId) {
-          this._chatSessionId = ev.sessionId;
-        }
         if (ev.kind === "result") finalText = ev.text;
-        if (ev.kind === "error") { status = "error"; this._chatSessionId = undefined; }
+        if (ev.kind === "error") status = "error";
       }
     } catch (err) {
       status = "error";
-      // Сессия может быть невалидна (expired, --resume failed) — сбросить для следующего тура.
-      this._chatSessionId = undefined;
       finalText = i18n().ctrl.errorPrefix((err as Error).message);
       await this.logEvent(vaultRoot, sessionId, "chat", domainId, { kind: "error", message: finalText });
     } finally {
@@ -433,19 +418,11 @@ export class WikiController {
       this.currentOp = null;
     }
 
-    // Capture session_id from claude-cli client after turn completes.
-    // _generate populates lastSessionId when it reads the system init line.
-    if (status === "done") {
-      const capturedId = this._currentClaudeClient?.lastSessionId;
-      if (capturedId) this._chatSessionId = capturedId;
-    }
-    // Aborted turn: session may be in indeterminate state — reset for safety.
-    if (ctrl.signal.aborted) this._chatSessionId = undefined;
-
     await this.logEvent(vaultRoot, sessionId, "chat", domainId, {
       kind: "system",
       message: `finish status=${status} durationMs=${Date.now() - startedAt}`,
     });
+    this._currentLogMeta = null;
 
     this.activeView()?.finishChat({ role: "assistant", content: finalText }, status !== "done");
   }
@@ -661,15 +638,6 @@ export class WikiController {
     }).open();
   }
 
-  private requireClaudeAgent(local: LocalConfig): string | null {
-    const { iclaudePath } = local;
-    if (!iclaudePath) {
-      new Notice(i18n().ctrl.setClaudeCodePath);
-      return null;
-    }
-    return iclaudePath;
-  }
-
   private requireNativeAgent(eff: LlmWikiPluginSettings): boolean {
     const na = eff.nativeAgent;
     if (!na?.baseUrl?.trim() || !na?.apiKey?.trim()) {
@@ -679,7 +647,7 @@ export class WikiController {
     return true;
   }
 
-  private async buildAgentRunner(vaultRoot: string, resumeSessionId?: string, opKey?: string, timeoutSec = 0): Promise<AgentRunner> {
+  private async buildAgentRunner(vaultRoot: string): Promise<AgentRunner> {
     const rawAdapter = this.app.vault.adapter as unknown as VaultAdapter;
     const vault = this.app.vault;
     const adapter = Object.create(rawAdapter) as VaultAdapter;
@@ -718,85 +686,28 @@ export class WikiController {
     const local = await this.localConfigStore.load();
     const s = resolveEffective(this.plugin.settings, local);
 
-    let llm: import("./types").LlmClient;
-    if (s.backend === "claude-agent") {
-      const manifestDir = this.plugin.manifest.dir
-        ?? join(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
-      const pluginDir = (this.app.vault.adapter as unknown as { getFullPath: (p: string) => string })
-        .getFullPath(manifestDir);
-      const tmpDir = join(pluginDir, "tmp");
-
-      // Ensure tmpDir exists using vault adapter
-      const tmpDirRelative = tmpDir.startsWith(base)
-        ? tmpDir.slice(base.length).replace(/^\//, "")
-        : tmpDir;
-      if (base) {
-        try {
-          if (!(await adapter.exists(tmpDirRelative))) {
-            await adapter.mkdir(tmpDirRelative);
-          }
-        } catch { /* ignore mkdir failures; will fail on actual write if needed */ }
-      }
-
-      interface InternalAdapter { remove(p: string): Promise<void>; }
-      const fullAdapter = this.app.vault.adapter as unknown as InternalAdapter;
-      const claudeEff = s.claudeAgent;
-      const normalizedOpKey = opKey === "chat" || opKey === "lint-chat" ? "lint"
-        : opKey;
-      const effort = claudeEff.perOperation && normalizedOpKey
-        ? (claudeEff.operations[normalizedOpKey as import("./types").OpKey]?.effort ?? claudeEff.effort)
-        : claudeEff.effort;
-      const client = new ClaudeCliClient({
-        iclaudePath: local.iclaudePath,
-        model: claudeEff.model,
-        allowedTools: claudeEff.allowedTools,
-        effort,
-        requestTimeoutSec: timeoutSec,
-        cwd: vaultRoot,
-        tmpDir,
-        resumeSessionId,
-        tmpWrite: async (absPath: string, content: string) => {
-          if (base && !absPath.startsWith(base)) {
-            throw new Error(`tmpDir path outside vault: ${absPath}`);
-          }
-          const vaultPath = base ? absPath.slice(base.length).replace(/^\//, "") : absPath;
-          await adapter.write(vaultPath, content);
-        },
-        tmpRemove: (absPath: string) => {
-          if (base && absPath.startsWith(base)) {
-            const vaultPath = absPath.slice(base.length).replace(/^\//, "");
-            fullAdapter.remove(vaultPath).catch(() => { /* ignore if already gone */ });
-          }
-        },
-      });
-      this._currentClaudeClient = client;
-      llm = client;
-    } else {
-      this._currentClaudeClient = null;
-
-      if (s.proxy.enabled && Platform.isMobile) {
-        new Notice(i18n().settings.proxy_mobile_warning);
-      }
-
-      llm = createNativeOpenAiClient({
-        baseURL: s.nativeAgent.baseUrl,
-        apiKey: s.nativeAgent.apiKey,
-        connectionTimeoutMs: s.llmConnectionTimeoutSec * 1000,
-        idleTimeoutMs: s.llmIdleTimeoutSec * 1000,
-        nativeTransportDiagnosticMode: s.devMode.enabled
-          ? s.devMode.nativeTransportDiagnosticMode
-          : "off",
-        isMobile: Platform.isMobile,
-        proxyConfig: s.proxy,
-        mobileFetch,
-        onProxySelected: (config) => {
-          console.debug(`[ai-wiki] using proxy ${maskProxyUrl(config.url)}`);
-        },
-        onProxyError: (error) => {
-          new Notice(i18n().settings.proxy_invalid((error as Error).message));
-        },
-      });
+    if (s.proxy.enabled && Platform.isMobile) {
+      new Notice(i18n().settings.proxy_mobile_warning);
     }
+
+    const llm = createNativeOpenAiClient({
+      baseURL: s.nativeAgent.baseUrl,
+      apiKey: s.nativeAgent.apiKey,
+      connectionTimeoutMs: s.llmConnectionTimeoutSec * 1000,
+      idleTimeoutMs: s.llmIdleTimeoutSec * 1000,
+      nativeTransportDiagnosticMode: s.devMode.enabled
+        ? s.devMode.nativeTransportDiagnosticMode
+        : "off",
+      isMobile: Platform.isMobile,
+      proxyConfig: s.proxy,
+      mobileFetch,
+      onProxySelected: (config) => {
+        console.debug(`[ai-wiki] using proxy ${maskProxyUrl(config.url)}`);
+      },
+      onProxyError: (error) => {
+        new Notice(i18n().settings.proxy_invalid((error as Error).message));
+      },
+    });
 
     this._currentNativeTransportDiagnostic = llm.nativeTransportDiagnostic;
     return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`, Platform.isMobile, this.modelContextStore);
@@ -924,9 +835,6 @@ export class WikiController {
       return;
     }
 
-    // Новая операция делает предыдущий чат-контекст нерелевантным.
-    this._chatSessionId = undefined;
-
     if (Platform.isMobile && op !== "query" && op !== "format" && op !== "delete") {
       new Notice(i18n().ctrl.mobileNotAvailable);
       return;
@@ -934,20 +842,13 @@ export class WikiController {
     {
       const local = await this.localConfigStore.load();
       const eff = resolveEffective(this.plugin.settings, local);
-      if (eff.backend === "native-agent" && !this.requireNativeAgent(eff)) return;
-      if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local)) return;
-      if (eff.backend === "claude-agent" && !local.shellConsentGiven) {
-        new ShellConsentModal(this.app, local.iclaudePath ?? "", async () => {
-          await this.localConfigStore.save({ shellConsentGiven: true });
-        }).open();
-        return;
-      }
+      if (!this.requireNativeAgent(eff)) return;
       const opKey = (op === "lint-chat" ? "lint" : op) as import("./types").OpKey;
       this._currentLogMeta = {
-        backend: eff.backend,
-        model: eff.backend === "claude-agent"
-          ? (eff.claudeAgent.perOperation ? eff.claudeAgent.operations[opKey].model : eff.claudeAgent.model)
-          : (eff.nativeAgent.perOperation ? eff.nativeAgent.operations[opKey].model : eff.nativeAgent.model),
+        backend: "openai-compatible",
+        model: eff.nativeAgent.perOperation
+          ? eff.nativeAgent.operations[opKey].model
+          : eff.nativeAgent.model,
         agentLogEnabled: eff.agentLogEnabled,
       };
     }
@@ -962,7 +863,7 @@ export class WikiController {
 
     let agentRunner: AgentRunner;
     try {
-      agentRunner = await this.buildAgentRunner(vaultRoot, undefined, opKey, opTimeoutSec);
+      agentRunner = await this.buildAgentRunner(vaultRoot);
     } catch (e) {
       new Notice(i18n().ctrl.errorPrefix((e as Error).message));
       console.error("[ai-wiki] buildAgentRunner failed", e);

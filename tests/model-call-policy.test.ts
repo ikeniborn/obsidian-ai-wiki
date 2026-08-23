@@ -15,7 +15,7 @@ function rec(over: Partial<ModelContextRecord> = {}): ModelContextRecord {
   return { contextWindow: 131_072, source: "discovered", calibration: 1, samples: 0, ...over };
 }
 
-test("native global policy keeps maxTokens as output and adds input budget", () => {
+test("OpenAI global policy keeps maxTokens as output and adds input budget", () => {
   const s = settings();
   s.nativeAgent.inputBudgetTokens = 20_000;
   s.nativeAgent.maxTokens = 3210;
@@ -26,7 +26,7 @@ test("native global policy keeps maxTokens as output and adds input budget", () 
   assert.equal(resolved.policy.compression, "balanced");
 });
 
-test("invalid and sub-token native budgets derive from the window without producing zero", () => {
+test("invalid and sub-token OpenAI budgets derive from the window without producing zero", () => {
   for (const value of [0.5, 0, Number.NaN, Number.POSITIVE_INFINITY]) {
     const s = settings();
     s.nativeAgent.inputBudgetTokens = value;
@@ -41,7 +41,7 @@ test("invalid and sub-token native budgets derive from the window without produc
   }
 });
 
-test("native per-operation values and global compression fallback resolve", () => {
+test("OpenAI per-operation values and global compression fallback resolve", () => {
   const s = settings();
   s.nativeAgent.perOperation = true;
   s.nativeAgent.operations.ingest.inputBudgetTokens = 9000;
@@ -68,7 +68,7 @@ test("legacy numeric thinking settings never enter the OpenAI runtime policy", (
   assert.equal("thinkingBudgetTokens" in resolved.opts, false);
 });
 
-test("native repair input ceiling applies only to ingest and init policies", () => {
+test("OpenAI repair input ceiling applies only to ingest and init policies", () => {
   const s = settings();
   s.nativeAgent.repairInputBudgetTokens = 65_536;
   s.nativeAgent.inputBudgetTokens = 32_768;
@@ -86,47 +86,35 @@ test("native repair input ceiling applies only to ingest and init policies", () 
 });
 
 test("invalid global compression profiles fall back to balanced", () => {
-  for (const backend of ["native-agent", "claude-agent"] as const) {
-    const s = settings();
-    s.backend = backend;
-    const global = backend === "native-agent" ? s.nativeAgent : s.claudeAgent;
-    (global as { compressionProfile: unknown }).compressionProfile = "bogus";
-    const resolved = resolveCallPolicy(s, "query", rec());
-    assert.equal(resolved.policy.compression, "balanced");
-    assert.deepEqual(resolved.opts.semanticCompression, {
-      profile: "balanced",
-      operation: "query",
-    });
-  }
+  const s = settings();
+  (s.nativeAgent as { compressionProfile: unknown }).compressionProfile = "bogus";
+  const resolved = resolveCallPolicy(s, "query", rec());
+  assert.equal(resolved.policy.compression, "balanced");
+  assert.deepEqual(resolved.opts.semanticCompression, {
+    profile: "balanced",
+    operation: "query",
+  });
 });
 
 test("invalid per-operation compression profiles use the valid global profile", () => {
-  for (const backend of ["native-agent", "claude-agent"] as const) {
-    const s = settings();
-    s.backend = backend;
-    const global = backend === "native-agent" ? s.nativeAgent : s.claudeAgent;
-    global.perOperation = true;
-    global.compressionProfile = "minimum";
-    (global.operations.query as { compressionProfile?: unknown }).compressionProfile = "bogus";
-    const resolved = resolveCallPolicy(s, "query", rec());
-    assert.equal(resolved.policy.compression, "minimum");
-    assert.deepEqual(resolved.opts.semanticCompression, {
-      profile: "minimum",
-      operation: "query",
-    });
-  }
+  const s = settings();
+  s.nativeAgent.perOperation = true;
+  s.nativeAgent.compressionProfile = "minimum";
+  (s.nativeAgent.operations.query as { compressionProfile?: unknown }).compressionProfile = "bogus";
+  const resolved = resolveCallPolicy(s, "query", rec());
+  assert.equal(resolved.policy.compression, "minimum");
+  assert.deepEqual(resolved.opts.semanticCompression, {
+    profile: "minimum",
+    operation: "query",
+  });
 });
 
 test("format resolves no compression policy and no semantic compression options", () => {
-  for (const backend of ["native-agent", "claude-agent"] as const) {
-    const s = settings();
-    s.backend = backend;
-    const global = backend === "native-agent" ? s.nativeAgent : s.claudeAgent;
-    global.compressionProfile = "maximum";
-    const resolved = resolveCallPolicy(s, "format", rec());
-    assert.equal(resolved.policy.compression, undefined);
-    assert.equal(resolved.opts.semanticCompression, undefined);
-  }
+  const s = settings();
+  s.nativeAgent.compressionProfile = "maximum";
+  const resolved = resolveCallPolicy(s, "format", rec());
+  assert.equal(resolved.policy.compression, undefined);
+  assert.equal(resolved.opts.semanticCompression, undefined);
 });
 
 test("loaded policy fields normalize without changing persisted output budgets", () => {
@@ -139,48 +127,29 @@ test("loaded policy fields normalize without changing persisted output budgets",
   for (const [index, key] of keys.entries()) {
     (s.nativeAgent.operations[key] as { inputBudgetTokens?: unknown }).inputBudgetTokens =
       invalidInputs[index];
-    (s.claudeAgent.operations[key] as { inputBudgetTokens?: unknown }).inputBudgetTokens =
-      invalidInputs[index];
   }
 
   delete (s.nativeAgent as { inputBudgetTokens?: unknown }).inputBudgetTokens;
   (s.nativeAgent as { repairInputBudgetTokens?: unknown }).repairInputBudgetTokens = 0;
-  (s.claudeAgent as { inputBudgetTokens: unknown }).inputBudgetTokens = 0.5;
   (s.nativeAgent as { compressionProfile: unknown }).compressionProfile = "bogus";
-  (s.claudeAgent as { compressionProfile: unknown }).compressionProfile = "bogus";
   s.nativeAgent.operations.ingest.compressionProfile = "maximum";
   (s.nativeAgent.operations.query as { compressionProfile?: unknown }).compressionProfile = "bogus";
-  (s.claudeAgent.operations.lint as { compressionProfile?: unknown }).compressionProfile = "bogus";
 
   normalizeModelCallPolicySettings(s);
 
-  // Native input budgets are now optional: an absent or invalid stored value stays
+  // OpenAI input budgets are optional: an absent or invalid stored value stays
   // absent (yielding a context-derived budget later) instead of being replaced by a
-  // fixed constant. Only the claude-agent path still invents 16_384.
+  // fixed constant.
   assert.equal(s.nativeAgent.inputBudgetTokens, undefined);
   assert.equal(s.nativeAgent.repairInputBudgetTokens, undefined);
-  assert.equal(s.claudeAgent.inputBudgetTokens, 16_384);
   for (const key of keys) {
     assert.equal(s.nativeAgent.operations[key].inputBudgetTokens, undefined);
-    assert.equal(s.claudeAgent.operations[key].inputBudgetTokens, 16_384);
   }
   assert.equal(s.nativeAgent.compressionProfile, "balanced");
-  assert.equal(s.claudeAgent.compressionProfile, "balanced");
   assert.equal(s.nativeAgent.operations.ingest.compressionProfile, "maximum");
   assert.equal(s.nativeAgent.operations.query.compressionProfile, undefined);
-  assert.equal(s.claudeAgent.operations.lint.compressionProfile, undefined);
   assert.equal(s.nativeAgent.maxTokens, 3210);
   assert.equal(s.nativeAgent.operations.query.maxTokens, 2222);
-});
-
-test("claude resolves no plugin-owned output cap", () => {
-  const s = settings();
-  s.backend = "claude-agent";
-  s.claudeAgent.inputBudgetTokens = 12_000;
-  const resolved = resolveCallPolicy(s, "lint", rec());
-  assert.equal(resolved.policy.inputBudgetTokens, 12_000);
-  assert.equal(resolved.policy.outputBudgetTokens, undefined);
-  assert.equal(resolved.opts.maxTokens, undefined);
 });
 
 test("delete borrows ingest and a query follow-up borrows query", () => {
@@ -211,15 +180,6 @@ test("the calibration factor reaches the call options", () => {
   assert.equal(opts.tokenCalibration, 1.25);
 });
 
-test("the claude-agent path is unaffected by the record", () => {
-  const s = settings();
-  s.backend = "claude-agent";
-  const a = resolveCallPolicy(s, "init", rec());
-  const b = resolveCallPolicy(s, "init", rec({ contextWindow: 8_192 }));
-  assert.deepEqual(a.policy, b.policy);
-  assert.equal(a.policy.inputBudgetTokens, 16_384);
-});
-
 test("a stored repair budget larger than the window clamps to the derived input budget, not 65536", () => {
   const s = settings();
   s.nativeAgent.repairInputBudgetTokens = 65_536;
@@ -229,7 +189,7 @@ test("a stored repair budget larger than the window clamps to the derived input 
   assert.equal(opts.repairInputBudgetTokens, 3_686);
 });
 
-test("budgetTelemetry carries the resolved budget's provenance on the native path only", () => {
+test("budgetTelemetry carries the resolved OpenAI budget's provenance", () => {
   const s = settings();
   const { opts, budget } = resolveCallPolicy(s, "init", rec({ calibration: 1.25 }));
   assert.deepEqual(opts.budgetTelemetry, {
@@ -238,10 +198,4 @@ test("budgetTelemetry carries the resolved budget's provenance on the native pat
     outputSource: budget!.outputSource,
     calibration: budget!.calibration,
   });
-
-  const c = settings();
-  c.backend = "claude-agent";
-  const claudeResolved = resolveCallPolicy(c, "init", rec());
-  assert.equal(claudeResolved.opts.budgetTelemetry, undefined);
-  assert.equal(claudeResolved.budget, undefined);
 });

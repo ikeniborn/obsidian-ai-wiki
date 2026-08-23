@@ -3,7 +3,7 @@
   "name": "AI Wiki",
   "version": "0.3.3",
   "minAppVersion": "1.7.2",
-  "description": "AI-powered compoundable knowledge base — extracts, synthesizes and maintains a wiki from raw sources.",
+  "description": "Build and maintain a structured wiki from raw notes with AI-assisted extraction and synthesis.",
   "author": "ikeniborn",
   "authorUrl": "https://github.com/ikeniborn",
   "isDesktopOnly": false

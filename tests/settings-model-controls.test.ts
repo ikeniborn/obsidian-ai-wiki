@@ -5,15 +5,14 @@ import test from "node:test";
 
 import {
   applyBudgetInput,
-  backendModelControlDescriptor,
   createLiveModelControl,
   normalizePersistedModelControls,
   parsePositiveBudgetInput,
-  renderModelControlFields,
   renderNativeBudgetControls,
   resolveCallPolicy,
 } from "../src/model-call-policy";
 import { DEFAULT_SETTINGS, type LlmWikiPluginSettings } from "../src/types";
+import { hydrateSettings } from "../src/settings-persistence";
 import type { ModelContextRecord } from "../src/model-context";
 import { runNativeVisionModelCheck } from "../src/vision-probe";
 import { clearNativeBudgets, hasStoredNativeBudget, settleOnce } from "../src/auto-budget-notice";
@@ -28,6 +27,17 @@ const runtimeControls = await import("../src/types") as unknown as Record<string
 const settingsSource = readFileSync(new URL("../src/settings.ts", import.meta.url), "utf8");
 const mainSource = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
 const modalsSource = readFileSync(new URL("../src/modals.ts", import.meta.url), "utf8");
+
+test("current product surfaces expose no Claude backend controls", () => {
+  for (const [name, source] of [
+    ["settings", settingsSource],
+    ["main", mainSource],
+    ["modals", modalsSource],
+  ] as const) {
+    assert.doesNotMatch(source, /claude-agent|Claude Code|iclaudePath|shellConsentGiven|probeClaudeBinary/, name);
+  }
+  assert.doesNotMatch(settingsSource, /backendModelControlDescriptor/);
+});
 
 function assertSourceOrder(source: string, markers: readonly string[]): void {
   let previous = -1;
@@ -72,27 +82,19 @@ test("old settings gain model controls without changing output budgets", () => {
   settings.nativeAgent.maxTokens = 7777;
   settings.nativeAgent.operations.query.maxTokens = 3333;
   delete (settings.nativeAgent as { inputBudgetTokens?: unknown }).inputBudgetTokens;
-  delete (settings.claudeAgent as { inputBudgetTokens?: unknown }).inputBudgetTokens;
   delete (settings.nativeAgent as { compressionProfile?: unknown }).compressionProfile;
-  delete (settings.claudeAgent as { compressionProfile?: unknown }).compressionProfile;
   delete (settings.nativeAgent.operations.query as { inputBudgetTokens?: unknown }).inputBudgetTokens;
-  delete (settings.claudeAgent.operations.query as { inputBudgetTokens?: unknown }).inputBudgetTokens;
 
   normalizePersistedModelControls(settings);
 
   assert.equal(settings.nativeAgent.maxTokens, 7777);
   assert.equal(settings.nativeAgent.operations.query.maxTokens, 3333);
   // Native input budgets are optional: normalization leaves an absent value absent
-  // (it is derived from the model context later) instead of inventing 16_384. Only
-  // the claude-agent path still falls back to that constant.
+  // (it is derived from the model context later) instead of inventing a constant.
   assert.equal(settings.nativeAgent.inputBudgetTokens, undefined);
-  assert.equal(settings.claudeAgent.inputBudgetTokens, 16_384);
   assert.equal(settings.nativeAgent.operations.query.inputBudgetTokens, undefined);
-  assert.equal(settings.claudeAgent.operations.query.inputBudgetTokens, 16_384);
   assert.equal(settings.nativeAgent.compressionProfile, "balanced");
-  assert.equal(settings.claudeAgent.compressionProfile, "balanced");
   assert.equal(settings.nativeAgent.operations.query.compressionProfile, undefined);
-  assert.equal(settings.claudeAgent.operations.query.compressionProfile, undefined);
 });
 
 test("normalization preserves valid overrides and removes invalid ones", () => {
@@ -171,7 +173,7 @@ test("persisted top-level runtime controls round-trip and saved idle 600 survive
   assert.equal(settings.llmIdleRetries, 7);
   assert.equal(settings.llmConnectionTimeoutSec, 45);
   assert.equal(settings.llmIdleTimeoutSec, 600);
-  assert.match(mainSource, /normalizeLlmRuntimeControls\(this\.settings\)/);
+  assert.match(mainSource, /this\.settings = hydrateSettings\(data\)/);
 });
 
 test("runtime control validation rejects fractions, unsafe idle timers, and invalid minima", () => {
@@ -201,35 +203,15 @@ test("runtime control validation rejects fractions, unsafe idle timers, and inva
   }
 });
 
-test("native-only connection control and backend-specific idle/retry labels", () => {
+test("OpenAI connection and request controls render directly", () => {
   const runtimeControlsStart = settingsSource.indexOf(".setName(T.settings.timeouts_name)");
-  const nativeConnectionBlock = sourceBlock(
-    settingsSource,
-    'if (eff.backend === "native-agent")',
-    runtimeControlsStart,
-  );
-  assert.match(nativeConnectionBlock.body, /T\.settings\.llmConnectionTimeout_name/);
-  assert.match(nativeConnectionBlock.body, /T\.settings\.llmConnectionTimeout_desc/);
-  assert.ok(
-    nativeConnectionBlock.end < settingsSource.indexOf("T.settings.llmRequestIdleTimeout_name"),
-    "shared idle control must remain outside the native-only connection block",
-  );
-  assert.match(
-    settingsSource,
-    /eff\.backend === "native-agent"\s*\? T\.settings\.llmRequestIdleTimeout_name\s*:\s*T\.settings\.llmIdleTimeout_name/,
-  );
-  assert.match(
-    settingsSource,
-    /eff\.backend === "native-agent"\s*\? T\.settings\.llmRequestIdleTimeout_desc\s*:\s*T\.settings\.llmIdleTimeout_desc/,
-  );
-  assert.match(
-    settingsSource,
-    /eff\.backend === "native-agent"\s*\? T\.settings\.llmRequestRetries_name\s*:\s*T\.settings\.llmIdleRetries_name/,
-  );
-  assert.match(
-    settingsSource,
-    /eff\.backend === "native-agent"\s*\? T\.settings\.llmRequestRetries_desc\s*:\s*T\.settings\.llmIdleRetries_desc/,
-  );
+  assert.ok(runtimeControlsStart >= 0);
+  assertSourceOrder(settingsSource.slice(runtimeControlsStart), [
+    "T.settings.llmConnectionTimeout_name",
+    "T.settings.llmRequestIdleTimeout_name",
+    "T.settings.llmRequestRetries_name",
+  ]);
+  assert.doesNotMatch(settingsSource, /eff\.backend/);
   for (const lang of ["en", "ru", "es"] as const) {
     const labels = i18nFor(lang).settings;
     assert.ok(labels.llmConnectionTimeout_name.length > 0, lang);
@@ -246,58 +228,7 @@ test("EN, RU, and ES settings bundles have identical keys", () => {
   assert.deepEqual(keys("es"), keys("en"));
 });
 
-test("backend descriptors expose exact Task15 fields and Format exclusions", () => {
-  const native = backendModelControlDescriptor("native-agent");
-  assert.deepEqual(native.globalFields, [
-    "inputBudgetTokens",
-    "maxTokens",
-    "compressionProfile",
-  ]);
-  assert.deepEqual(native.operations.ingest, native.globalFields);
-  assert.deepEqual(native.operations.query, native.globalFields);
-  assert.deepEqual(native.operations.lint, native.globalFields);
-  assert.deepEqual(native.operations.init, native.globalFields);
-  assert.deepEqual(native.operations.format, ["inputBudgetTokens", "maxTokens"]);
-  assert.deepEqual(native.vision, {
-    fields: [],
-    check: true,
-  });
-
-  const claude = backendModelControlDescriptor("claude-agent");
-  assert.deepEqual(claude.globalFields, ["inputBudgetTokens", "compressionProfile"]);
-  assert.deepEqual(claude.operations.ingest, claude.globalFields);
-  assert.deepEqual(claude.operations.query, claude.globalFields);
-  assert.deepEqual(claude.operations.lint, claude.globalFields);
-  assert.deepEqual(claude.operations.init, claude.globalFields);
-  assert.deepEqual(claude.operations.format, ["inputBudgetTokens"]);
-  assert.deepEqual(claude.vision, {
-    fields: [],
-    check: false,
-  });
-});
-
-test("render-plan executor consumes every descriptor branch exactly", () => {
-  for (const backend of ["native-agent", "claude-agent"] as const) {
-    const plan = backendModelControlDescriptor(backend);
-    const rendered = (fields: typeof plan.globalFields): string[] => {
-      const seen: string[] = [];
-      renderModelControlFields(fields, {
-        inputBudgetTokens: () => { seen.push("inputBudgetTokens"); },
-        maxTokens: () => { seen.push("maxTokens"); },
-        compressionProfile: () => { seen.push("compressionProfile"); },
-      });
-      return seen;
-    };
-
-    assert.deepEqual(rendered(plan.globalFields), plan.globalFields);
-    for (const key of ["ingest", "query", "lint", "init", "format"] as const) {
-      assert.deepEqual(rendered(plan.operations[key]), plan.operations[key], `${backend}:${key}`);
-    }
-    assert.deepEqual(rendered(plan.vision.fields), plan.vision.fields);
-  }
-});
-
-test("native chat-model block stays localized and structurally valid in both modes", () => {
+test("OpenAI chat-model block stays localized and structurally valid in both model modes", () => {
   const start = settingsSource.indexOf(
     "new Setting(containerEl).setName(T.settings.h3_backendConnection).setHeading();",
   );
@@ -339,43 +270,6 @@ test("native chat-model block stays localized and structurally valid in both mod
     ".setName(T.settings.temperature_name)",
     ".setName(T.settings.perOperation_name).setHeading()",
     "if (s.nativeAgent.perOperation) {",
-  ]);
-});
-
-test("Claude chat-model block stays localized and structurally valid in both modes", () => {
-  const start = settingsSource.indexOf(
-    'if (eff.backend === "claude-agent" && !Platform.isMobile) {',
-  );
-  const end = settingsSource.indexOf(
-    "new Setting(containerEl).setName(T.settings.h3_backendConnection).setHeading();",
-    start,
-  );
-  assert.ok(start >= 0 && end > start);
-  const claude = settingsSource.slice(start, end);
-  const heading = claude.indexOf(".setName(T.settings.h3_defaultChatModel)");
-  const perOperation = claude.indexOf("if (s.claudeAgent.perOperation) {");
-  assert.ok(heading >= 0 && perOperation > heading);
-  assertSingleHeading(claude.slice(heading, perOperation));
-
-  const falseOnly = sourceBlock(claude, "if (!s.claudeAgent.perOperation) {");
-  assert.ok(heading < falseOnly.start, "heading must render when perOperation is true");
-  assert.match(falseOnly.body, /\.setName\(T\.settings\.model_name\)/);
-  assert.doesNotMatch(falseOnly.body, /modelControls\.globalFields|Effort level/);
-
-  const policy = claude.indexOf("modelControls.globalFields,", falseOnly.end);
-  const effort = claude.indexOf('.setName("Effort level")', policy);
-  assert.ok(policy > falseOnly.end, "fallback policy must render when perOperation is true");
-  assert.ok(effort > policy && effort < perOperation, "fallback effort must stay in the chat-model block");
-
-  assertSourceOrder(claude, [
-    ".setName(T.settings.iclaudePath_name)",
-    ".setName(T.settings.allowedTools_name)",
-    ".setName(T.settings.h3_defaultChatModel)",
-    ".setName(T.settings.model_name)",
-    "modelControls.globalFields,",
-    '.setName("Effort level")',
-    ".setName(T.settings.perOperation_name)",
-    "if (s.claudeAgent.perOperation) {",
   ]);
 });
 
@@ -608,7 +502,6 @@ test("Format compression fields are ignored and no compression policy is produce
   assert.equal(format.opts.semanticCompression, undefined);
 
   assert.equal(settings.nativeAgent.operations.format.compressionProfile, undefined);
-  assert.equal(settings.claudeAgent.operations.format.compressionProfile, undefined);
 });
 
 test("an automatic budget still renders a control", () => {
@@ -645,26 +538,18 @@ test("native budgets are optional by default, so the settings tab must not hide 
   assert.equal(DEFAULT_SETTINGS.nativeAgent.inputBudgetTokens, undefined);
   assert.equal(DEFAULT_SETTINGS.nativeAgent.maxTokens, undefined);
   assert.equal(DEFAULT_SETTINGS.nativeAgent.repairInputBudgetTokens, undefined);
-  // Task 7 already made claude-agent's field required with a fixed default; that must
-  // stay true so its settings control keeps the unchanged, non-automatic behaviour.
-  assert.equal(DEFAULT_SETTINGS.claudeAgent.inputBudgetTokens, 16_384);
 });
 
-test("addPolicyControls renders a native automatic field even when its value is undefined", () => {
-  // The shared render() helpers (used by both backends) sit before either branch.
-  // Task 7 left a guard in addPolicyControls that returned early on `undefined`,
-  // hiding the control entirely; it must now only guard the non-automatic (claude) path.
+test("addPolicyControls renders an automatic field even when its value is undefined", () => {
   const start = settingsSource.indexOf("const addAutomaticBudgetControl = (");
   const end = settingsSource.indexOf("const busy = this.plugin.controller.running;", start);
   assert.ok(start >= 0 && end > start);
   const body = settingsSource.slice(start, end);
   assert.match(body, /T\.settings\.budgetAutomatic/);
   assert.match(body, /addAutomaticBudgetControl/);
-  assert.match(body, /automatic\?\.updates\.inputBudgetTokens/);
-  assert.match(body, /automatic\?\.updates\.maxTokens/);
-  // The carried-forward guard must be reachable only after the automatic branch
-  // returns — i.e. it still exists, but no longer fires for an automatic field.
-  assert.match(body, /values\.inputBudgetTokens === undefined \|\| !updates\.inputBudgetTokens\) return;/);
+  assert.match(body, /automatic\.updates\.inputBudgetTokens/);
+  assert.match(body, /automatic\.updates\.maxTokens/);
+  assert.doesNotMatch(body, /addBudgetControl/);
   // F1: no heading, and no "Advanced" grouping string anywhere — the automatic
   // fields render inline, exactly where the fixed fields used to render, so
   // compressionProfile is never visually grouped under a budgets-only heading.
@@ -677,14 +562,14 @@ test("addPolicyControls renders a native automatic field even when its value is 
   const policyStart = settingsSource.indexOf("const addPolicyControls = (");
   const policyBody = settingsSource.slice(policyStart, end);
   assert.ok(policyStart > start);
-  assert.match(policyBody, /const placeholders = automatic\s*\n\s*\? \(\) => automaticBudgetPlaceholders\(/);
+  assert.match(policyBody, /const placeholders = \(\) => automaticBudgetPlaceholders\(/);
   assert.equal(
     (policyBody.match(/automaticBudgetPlaceholders\(/g) ?? []).length,
     1,
     "automaticBudgetPlaceholders must be named once per addPolicyControls invocation",
   );
-  assert.match(body, /placeholders!\(\)\.input/);
-  assert.match(body, /placeholders!\(\)\.output/);
+  assert.match(body, /placeholders\(\)\.input/);
+  assert.match(body, /placeholders\(\)\.output/);
 });
 
 test("a changed context window repaints the dependent placeholders without re-rendering the tab", () => {
@@ -713,26 +598,22 @@ test("a changed context window repaints the dependent placeholders without re-re
   assert.match(body, /placeholder: \(\) => string/);
 });
 
-test("the context window renders next to every model field, and never on the claude path", () => {
-  const claudeStart = settingsSource.indexOf(
-    'if (eff.backend === "claude-agent" && !Platform.isMobile) {',
-  );
-  const claudeEnd = settingsSource.indexOf(
+test("the context window renders next to every OpenAI model field", () => {
+  const connectionStart = settingsSource.indexOf(
     "new Setting(containerEl).setName(T.settings.h3_backendConnection).setHeading();",
-    claudeStart,
   );
-  const nativeEnd = settingsSource.indexOf(
+  const visionStart = settingsSource.indexOf(
     "new Setting(containerEl).setName(T.settings.h3_vision).setHeading();",
-    claudeEnd,
+    connectionStart,
   );
-  assert.ok(claudeStart >= 0 && claudeEnd > claudeStart && nativeEnd > claudeEnd);
-  const claudeBlock = settingsSource.slice(claudeStart, claudeEnd);
-  const nativeBlock = settingsSource.slice(claudeEnd, nativeEnd);
-  const visionBlock = settingsSource.slice(nativeEnd);
+  const graphStart = settingsSource.indexOf(
+    "new Setting(containerEl).setName(T.settings.h3_graph).setHeading();",
+    visionStart,
+  );
+  assert.ok(connectionStart >= 0 && visionStart > connectionStart && graphStart > visionStart);
+  const connectionBlock = settingsSource.slice(connectionStart, visionStart);
+  const visionBlock = settingsSource.slice(visionStart, graphStart);
 
-  // One helper, rendered through the same automatic-field control as every other
-  // budget, keyed by the model the field sits next to, and cleared back to automatic
-  // by assigning `undefined` (what applyBudgetInput does on an empty entry).
   const helperStart = settingsSource.indexOf("const addContextWindowControl = (");
   const helperEnd = settingsSource.indexOf("const addCompressionControl = (", helperStart);
   assert.ok(helperStart >= 0 && helperEnd > helperStart);
@@ -745,22 +626,14 @@ test("the context window renders next to every model field, and never on the cla
   assert.match(helper, /setConfiguredContextWindow\(s\.nativeAgent, model\(\), next\)/);
   assert.match(helper, /\)\.contextWindow,/);
   assert.match(helper, /MIN_CONTEXT_WINDOW/);
-  // Automatic budgeting — and this field with it — is native-agent only, and the
-  // field only exists for a role that names a model of its own.
-  assert.match(helper, /if \(eff\.backend !== "native-agent" \|\| !model\(\)\) return;/);
+  assert.match(helper, /if \(!model\(\)\) return;/);
 
-  // Next to the global chat model, next to each per-operation model, next to vision.
-  assert.match(nativeBlock, /addContextWindowControl\(\(\) => s\.nativeAgent\.model\)/);
-  assert.match(nativeBlock, /addContextWindowControl\(\(\) => effectiveModel\(s, key\)\)/);
+  assert.match(connectionBlock, /addContextWindowControl\(\(\) => s\.nativeAgent\.model\)/);
+  assert.match(connectionBlock, /addContextWindowControl\(\(\) => effectiveModel\(s, key\)\)/);
   assert.match(visionBlock, /addContextWindowControl\(\(\) => s\.vision\.model\)/);
-
-  assert.doesNotMatch(claudeBlock, /contextWindowTokens/);
-  assert.doesNotMatch(claudeBlock, /addContextWindowControl/);
-  // The placeholder is still read from the cached record, never probed at render time.
-  assert.doesNotMatch(nativeBlock, /probeContextWindow/);
+  assert.doesNotMatch(connectionBlock, /probeContextWindow/);
   assert.doesNotMatch(helper, /probeContextWindow/);
 });
-
 test("a configured window is honoured by the settings placeholders before any run", async () => {
   const { configuredContextRecord, plausibleContextWindow } = await import("../src/model-context");
   const { resolveBudget } = await import("../src/budget-resolver");
@@ -888,34 +761,20 @@ test("a persisted context window is normalized like every other optional budget"
   assert.deepEqual(settings.nativeAgent.contextWindowTokensByModel, { [model]: 131_072 });
 });
 
-test("only the native-agent call sites opt into automatic budgets; claude-agent call sites do not", () => {
-  const claudeStart = settingsSource.indexOf(
-    'if (eff.backend === "claude-agent" && !Platform.isMobile) {',
-  );
-  const claudeEnd = settingsSource.indexOf(
+test("all model-policy call sites opt into automatic OpenAI budgets", () => {
+  const connectionStart = settingsSource.indexOf(
     "new Setting(containerEl).setName(T.settings.h3_backendConnection).setHeading();",
-    claudeStart,
   );
-  assert.ok(claudeStart >= 0 && claudeEnd > claudeStart);
-  const claudeBlock = settingsSource.slice(claudeStart, claudeEnd);
-  // Both claude-agent addPolicyControls calls end right after the boolean flag —
-  // no 5th "automatic" argument — so the plain, always-required budget path runs.
-  const claudeCalls = claudeBlock.match(/addPolicyControls\(\s*modelControls\.[\s\S]*?(?:false|true),\s*\);/g) ?? [];
-  assert.equal(claudeCalls.length, 2, "expected exactly the global and per-operation claude calls");
-
-  const nativeEnd = settingsSource.indexOf(
+  const connectionEnd = settingsSource.indexOf(
     "new Setting(containerEl).setName(T.settings.h3_vision).setHeading();",
-    claudeEnd,
+    connectionStart,
   );
-  assert.ok(nativeEnd > claudeEnd);
-  const nativeBlock = settingsSource.slice(claudeEnd, nativeEnd);
-  // Global native fallback: representative operation "init", the raw configured model.
-  assert.match(nativeBlock, /model: \(\) => s\.nativeAgent\.model,\s*\n\s*operation: "init",/);
-  // Per-operation native: the model and operation actually used for that operation.
-  assert.match(nativeBlock, /model: \(\) => effectiveModel\(s, key\),\s*\n\s*operation: key,/);
-  assert.match(nativeBlock, /addAutomaticBudgetControl\(/);
+  assert.ok(connectionStart >= 0 && connectionEnd > connectionStart);
+  const connectionBlock = settingsSource.slice(connectionStart, connectionEnd);
+  assert.match(connectionBlock, /model: \(\) => s\.nativeAgent\.model,\s*\n\s*operation: "init",/);
+  assert.match(connectionBlock, /model: \(\) => effectiveModel\(s, key\),\s*\n\s*operation: key,/);
+  assert.match(connectionBlock, /addAutomaticBudgetControl\(/);
 });
-
 test("the settings tab reads the cached model context synchronously, without probing", () => {
   const controllerSource = readFileSync(new URL("../src/controller.ts", import.meta.url), "utf8");
   const start = controllerSource.indexOf("cachedModelContext(baseUrl: string, model: string)");
@@ -950,7 +809,7 @@ test("Embedding Check uses localized success and failure notices", () => {
 
 // --- Task 13: the one-shot auto-budget upgrade choice ---------------------------------
 
-test("a stored native budget is detected, a claude one is not", () => {
+test("a stored OpenAI budget is detected", () => {
   const settings = structuredClone(DEFAULT_SETTINGS);
   assert.equal(hasStoredNativeBudget(settings), false);
   settings.nativeAgent.inputBudgetTokens = 16_384;
@@ -967,15 +826,13 @@ test("a stored repair or output budget override is also detected", () => {
   assert.equal(hasStoredNativeBudget(withRepair), true);
 });
 
-test("accepting clears only the native budgets", () => {
+test("accepting clears OpenAI budget overrides", () => {
   const settings = structuredClone(DEFAULT_SETTINGS);
   settings.nativeAgent.inputBudgetTokens = 24_000;
   settings.nativeAgent.operations.init.maxTokens = 8_192;
-  const claudeBefore = structuredClone(settings.claudeAgent);
   clearNativeBudgets(settings);
   assert.equal(settings.nativeAgent.inputBudgetTokens, undefined);
   assert.equal(settings.nativeAgent.operations.init.maxTokens, undefined);
-  assert.deepEqual(settings.claudeAgent, claudeBefore, "claude-agent must be untouched");
 });
 
 test("declining or dismissing keeps the stored native budgets: only clearNativeBudgets rewrites them", () => {
@@ -1006,35 +863,8 @@ test("clearing wipes every operation's budget override, not just one", () => {
   }
 });
 
-/**
- * Reproduces `LlmWikiPlugin.loadSettings`'s per-operation merge: defaults first, then
- * whatever `data.json` stored. The regex below pins this simulation to the real merge,
- * so it cannot drift silently.
- */
 function mergeLikeMain(persisted: unknown): LlmWikiPluginSettings {
-  assert.match(
-    mainSource,
-    /ingest:\s*\{\s*\.\.\.defNA\.operations\.ingest,\s*\.\.\.\(\(naOps\.ingest as object\) \?\? \{\}\)\s*\}/,
-    "loadSettings must still merge native per-operation defaults first, then stored data",
-  );
-  const data = persisted as Record<string, Record<string, Record<string, object>>>;
-  const defNA = structuredClone(DEFAULT_SETTINGS).nativeAgent;
-  const naData = data?.nativeAgent ?? {};
-  const naOps = (naData.operations ?? {}) as Record<string, object>;
-  const merged = structuredClone(DEFAULT_SETTINGS);
-  merged.nativeAgent = {
-    ...defNA,
-    ...(naData as object),
-    operations: {
-      ingest: { ...defNA.operations.ingest, ...((naOps.ingest as object) ?? {}) },
-      query:  { ...defNA.operations.query,  ...((naOps.query  as object) ?? {}) },
-      lint:   { ...defNA.operations.lint,   ...((naOps.lint   as object) ?? {}) },
-      init:   { ...defNA.operations.init,   ...((naOps.init   as object) ?? {}) },
-      format: { ...defNA.operations.format, ...((naOps.format as object) ?? {}) },
-    },
-  } as LlmWikiPluginSettings["nativeAgent"];
-  normalizePersistedModelControls(merged);
-  return merged;
+  return hydrateSettings(persisted);
 }
 
 test("clearing a per-operation native budget survives a settings round-trip", () => {
@@ -1110,14 +940,12 @@ test("AutoBudgetNoticeModal: dismissal (onClose) resolves the same conservative 
   assert.doesNotMatch(block.body, /openAndWait/);
 });
 
-test("offerAutoBudgetMigration: a claude-agent user is never prompted, native-agent budgets aside", () => {
+test("offerAutoBudgetMigration has no obsolete backend guard", () => {
   const block = sourceBlock(mainSource, "export async function offerAutoBudgetMigration(");
-  const backendGateIndex = block.body.indexOf('if (plugin.settings.backend !== "native-agent") return;');
   const modalIndex = block.body.indexOf("new AutoBudgetNoticeModal(");
   const hasStoredIndex = block.body.indexOf("hasStoredNativeBudget(plugin.settings)");
-  assert.ok(backendGateIndex >= 0, "must gate on backend === native-agent before anything else");
-  assert.ok(backendGateIndex < hasStoredIndex, "backend gate must run before checking stored budgets");
-  assert.ok(backendGateIndex < modalIndex, "backend gate must run before the modal can be constructed");
+  assert.doesNotMatch(block.body, /plugin\.settings\.backend/);
+  assert.ok(hasStoredIndex >= 0 && hasStoredIndex < modalIndex);
 });
 
 test("offerAutoBudgetMigration: a user with nothing stored is never prompted, but the flag is still recorded", () => {

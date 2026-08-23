@@ -1,6 +1,6 @@
 # Повышение качества поиска — obsidian-ai-wiki + векторный слой
 
-Контекст: плагин использует graph BFS (Query) + агентный Grep/Glob (Claude Agent). Поверх добавлен similarity-слой. Граф вики = индекс и для BFS, и для seed-выбора. Рекомендации — состыковать два сигнала и держать граф здоровым.
+Контекст: плагин использует vector seed selection, graph BFS и optional reranking через единый OpenAI-совместимый runtime. Граф вики служит индексом для BFS и seed-выбора. Рекомендации состыковывают эти сигналы и поддерживают граф здоровым.
 
 Текущий storage: каждый домен хранит `metadata.jsonl`, `index.jsonl` и `log.jsonl` прямо в `!Wiki/<domain>/`. `index.jsonl` содержит `page` records для description-seed stage и `chunk` records для clean section vectors; отдельный `_embeddings.json` не используется как runtime source of truth. Это граница структурированного storage: сериализованный `index.jsonl`, массивы векторов и сырые records никогда не входят в LLM-промты. Prompt builders проецируют только выбранные evidence, Markdown-секции и разрешённые метаданные.
 

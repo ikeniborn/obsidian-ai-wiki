@@ -10,61 +10,10 @@ import type {
 import { MIN_CONTEXT_WINDOW, type ModelContextRecord } from "./model-context";
 import { resolveBudget, type ResolvedBudget } from "./budget-resolver";
 
-// The claude-agent input-budget default. That backend keeps its stored defaults and
-// still falls back to a fixed literal when a stored value is invalid or absent; the
-// native path does not, because an absent native budget derives from the model
-// context instead of inventing a constant.
-const DEFAULT_INPUT_BUDGET = 16_384;
-
 export type ModelControlField =
   | "inputBudgetTokens"
   | "maxTokens"
   | "compressionProfile";
-
-export interface BackendModelControlDescriptor {
-  globalFields: readonly ModelControlField[];
-  operations: Record<OpKey, readonly ModelControlField[]>;
-  vision: {
-    fields: readonly ModelControlField[];
-    check: boolean;
-  };
-}
-
-export function backendModelControlDescriptor(
-  backend: LlmWikiPluginSettings["backend"],
-): BackendModelControlDescriptor {
-  if (backend === "claude-agent") {
-    const fields = ["inputBudgetTokens", "compressionProfile"] as const;
-    return {
-      globalFields: fields,
-      operations: {
-        ingest: fields,
-        query: fields,
-        lint: fields,
-        init: fields,
-        format: ["inputBudgetTokens"],
-      },
-      vision: { fields: [], check: false },
-    };
-  }
-
-  const fields = [
-    "inputBudgetTokens",
-    "maxTokens",
-    "compressionProfile",
-  ] as const;
-  return {
-    globalFields: fields,
-    operations: {
-      ingest: fields,
-      query: fields,
-      lint: fields,
-      init: fields,
-      format: ["inputBudgetTokens", "maxTokens"],
-    },
-    vision: { fields: [], check: true },
-  };
-}
 
 export function renderModelControlFields(
   fields: readonly ModelControlField[],
@@ -98,17 +47,8 @@ export function createLiveModelControl(
   };
 }
 
-function positiveInt(value: unknown, fallback: number): number {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    const floored = Math.floor(value);
-    if (floored >= 1) return floored;
-  }
-  return fallback;
-}
-
-/** Like `positiveInt`, but an absent or invalid value stays absent instead of
- * inventing a fallback constant. Used for native budgets, which are now
- * derived from the model context when unset. */
+/** An absent or invalid value stays absent instead of inventing a fallback
+ * constant. Used for OpenAI budgets derived from model context when unset. */
 function optionalPositiveInt(value: unknown): number | undefined {
   if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
   const floored = Math.floor(value);
@@ -257,26 +197,16 @@ export function normalizePersistedModelControls(settings: LlmWikiPluginSettings)
   normalizeConfiguredContextWindows(settings);
   settings.nativeAgent.inputBudgetTokens = optionalPositiveInt(settings.nativeAgent.inputBudgetTokens);
   settings.nativeAgent.repairInputBudgetTokens = optionalPositiveInt(settings.nativeAgent.repairInputBudgetTokens);
-  settings.claudeAgent.inputBudgetTokens = positiveInt(
-    settings.claudeAgent.inputBudgetTokens,
-    DEFAULT_INPUT_BUDGET,
-  );
   settings.nativeAgent.compressionProfile =
     compressionProfile(settings.nativeAgent.compressionProfile) ?? "balanced";
-  settings.claudeAgent.compressionProfile =
-    compressionProfile(settings.claudeAgent.compressionProfile) ?? "balanced";
 
   for (const key of ["ingest", "query", "lint", "init", "format"] as const) {
     const native = settings.nativeAgent.operations[key];
-    const claude = settings.claudeAgent.operations[key];
     native.inputBudgetTokens = optionalPositiveInt(native.inputBudgetTokens);
-    claude.inputBudgetTokens = positiveInt(claude.inputBudgetTokens, DEFAULT_INPUT_BUDGET);
     if (key === "format") {
       delete native.compressionProfile;
-      delete claude.compressionProfile;
     } else {
       normalizeLocalCompression(native);
-      normalizeLocalCompression(claude);
     }
   }
   normalizeLocalCompression(settings.vision);
@@ -303,7 +233,6 @@ export interface ResolvedModelCall {
   model: string;
   policy: ModelCallPolicy;
   opts: LlmCallOptions;
-  /** Undefined on the claude-agent path, which does not consult the record. */
   budget?: ResolvedBudget;
 }
 
@@ -318,7 +247,7 @@ export function effectiveModel(
   parent?: OpKey,
 ): string {
   const key = policyKey(operation, parent);
-  const global = settings.backend === "claude-agent" ? settings.claudeAgent : settings.nativeAgent;
+  const global = settings.nativeAgent;
   const local = global.perOperation ? global.operations[key] : undefined;
   return local?.model ?? global.model;
 }
@@ -345,11 +274,10 @@ export function nativeBudgetOverrides(
 }
 
 /**
- * The record-aware model-call resolver. On the native-agent path,
- * input and output budgets are derived from the model's context window
+ * The record-aware model-call resolver. Input and output budgets are derived
+ * from the model's context window
  * (`resolveBudget`) instead of falling back to fixed constants; a stored budget still
- * acts as an explicit override. The claude-agent path does not read `record` and keeps
- * its fixed 16_384 input-budget default.
+ * acts as an explicit override.
  */
 export function resolveCallPolicy(
   settings: LlmWikiPluginSettings,
@@ -360,32 +288,6 @@ export function resolveCallPolicy(
   const key = policyKey(operation, parent);
   const compressionOp = compressionOperation(key);
   const model = effectiveModel(settings, operation, parent);
-
-  if (settings.backend === "claude-agent") {
-    // The claude-agent-era resolution, unchanged and returned without a `budget`
-    // field. `record` is not read on this path.
-    const global = settings.claudeAgent;
-    const local = global.perOperation ? global.operations[key] : undefined;
-    const compression = key === "format"
-      ? undefined
-      : compressionProfile(local?.compressionProfile)
-        ?? compressionProfile(global.compressionProfile)
-        ?? "balanced";
-    const policy: ModelCallPolicy = {
-      inputBudgetTokens: positiveInt(local?.inputBudgetTokens ?? global.inputBudgetTokens, DEFAULT_INPUT_BUDGET),
-      ...(compression ? { compression } : {}),
-    };
-    return {
-      model,
-      policy,
-      opts: {
-        inputBudgetTokens: policy.inputBudgetTokens,
-        semanticCompression: compression && compressionOp
-          ? { profile: compression, operation: compressionOp }
-          : undefined,
-      },
-    };
-  }
 
   const global = settings.nativeAgent;
   const local = global.perOperation ? global.operations[key] : undefined;

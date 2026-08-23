@@ -49,7 +49,6 @@ function adapter(): VaultAdapter {
 
 function nativeSettings(): LlmWikiPluginSettings {
   const settings = structuredClone(DEFAULT_SETTINGS);
-  settings.backend = "native-agent";
   settings.nativeAgent.baseUrl = "http://host/v1";
   settings.nativeAgent.model = "global-model";
   return settings;
@@ -375,28 +374,6 @@ test("the probe takes the route a non-streaming completion takes", async () => {
   // host fetch; a probe that took the direct route instead could fail where the
   // completion succeeds and cache the 8_192 default off the back of it.
   assert.deepEqual(hostCalls, ["http://host/v1/models", "http://host/api/show"]);
-});
-
-test("the claude-agent path never consults the model context store", async () => {
-  const settings = structuredClone(DEFAULT_SETTINGS);
-  settings.backend = "claude-agent";
-  const store = {
-    get: () => { throw new Error("claude-agent must not read the store"); },
-    resolve: async () => { throw new Error("claude-agent must not probe"); },
-    observeUsage: () => { throw new Error("claude-agent must not calibrate"); },
-    observeContextError: () => { throw new Error("claude-agent must not learn a window"); },
-  } as unknown as ModelContextStore;
-  const instance = runner(settings, store);
-  const captured = captureOperation(instance);
-
-  const events = await drain(instance.run(runRequest()));
-
-  assert.equal(events.some((event) => event.kind === "budget_resolved"), false);
-  assert.equal(events.some((event) => event.kind === "context_probe"), false);
-  assert.equal(captured.opts?.inputBudgetTokens, 16_384);
-  assert.equal(captured.opts?.contextWindowTokens, undefined);
-  assert.equal(captured.opts?.onUsageObserved, undefined);
-  assert.equal(captured.opts?.onContextError, undefined);
 });
 
 test("a run cancelled during the probe ends quietly and stores nothing", async () => {

@@ -8,10 +8,10 @@ import { applyDomainEvent, type DomainEntry } from "../src/domain";
 import { parseDomainMetadata, stringifyDomainMetadata, domainEntryToMetadataRecords } from "../src/domain-metadata";
 import { resolveEffective } from "../src/effective-settings";
 import type { LocalConfig } from "../src/local-config";
+import { ModelContextStore } from "../src/model-context";
 import { createNativeOpenAiClient } from "../src/native-openai-client";
+import { hydrateSettings } from "../src/settings-persistence";
 import {
-  DEFAULT_SETTINGS,
-  normalizeLlmRuntimeControls,
   type LlmWikiPluginSettings,
   type RunEvent,
 } from "../src/types";
@@ -29,48 +29,8 @@ interface Options {
   stopBeforeWipe: boolean;
 }
 
-function cloneSettings(settings: LlmWikiPluginSettings): LlmWikiPluginSettings {
-  return JSON.parse(JSON.stringify(settings)) as LlmWikiPluginSettings;
-}
-
 export function mergeSettings(data: Record<string, unknown> | null): LlmWikiPluginSettings {
-  const base = cloneSettings(DEFAULT_SETTINGS);
-  const caData = (data?.claudeAgent as Record<string, unknown>) ?? {};
-  const naData = (data?.nativeAgent as Record<string, unknown>) ?? {};
-  const caOps = (caData.operations as Record<string, unknown>) ?? {};
-  const naOps = (naData.operations as Record<string, unknown>) ?? {};
-
-  const merged: LlmWikiPluginSettings = {
-    ...base,
-    ...(data ?? {}),
-    timeouts: { ...base.timeouts, ...((data?.timeouts as object) ?? {}) },
-    claudeAgent: {
-      ...base.claudeAgent,
-      ...caData,
-      operations: {
-        ingest: { ...base.claudeAgent.operations.ingest, ...((caOps.ingest as object) ?? {}) },
-        query: { ...base.claudeAgent.operations.query, ...((caOps.query as object) ?? {}) },
-        lint: { ...base.claudeAgent.operations.lint, ...((caOps.lint as object) ?? {}) },
-        init: { ...base.claudeAgent.operations.init, ...((caOps.init as object) ?? {}) },
-        format: { ...base.claudeAgent.operations.format, ...((caOps.format as object) ?? {}) },
-      },
-    },
-    nativeAgent: {
-      ...base.nativeAgent,
-      ...naData,
-      operations: {
-        ingest: { ...base.nativeAgent.operations.ingest, ...((naOps.ingest as object) ?? {}) },
-        query: { ...base.nativeAgent.operations.query, ...((naOps.query as object) ?? {}) },
-        lint: { ...base.nativeAgent.operations.lint, ...((naOps.lint as object) ?? {}) },
-        init: { ...base.nativeAgent.operations.init, ...((naOps.init as object) ?? {}) },
-        format: { ...base.nativeAgent.operations.format, ...((naOps.format as object) ?? {}) },
-      },
-    },
-    proxy: { ...base.proxy, ...((data?.proxy as object) ?? {}) },
-    history: (data?.history as LlmWikiPluginSettings["history"]) ?? [],
-  };
-  normalizeLlmRuntimeControls(merged);
-  return merged;
+  return hydrateSettings(data);
 }
 
 export async function readJson(pathname: string): Promise<Record<string, unknown> | null> {
@@ -229,23 +189,21 @@ function parseArgs(args: string[]): Options {
 
 async function main(args: string[]): Promise<void> {
   const options = parseArgs(args);
-  const runtime = globalThis as typeof globalThis & { require?: NodeJS.Require };
+  const runtime = globalThis as typeof globalThis & {
+    require?: NodeJS.Require;
+    window?: typeof globalThis;
+  };
   runtime.require ??= createRequire(import.meta.url);
+  runtime.window ??= globalThis as Window & typeof globalThis;
   const { AgentRunner } = await import("../src/agent-runner");
 
   const adapter = new FsVaultAdapter(options.vault);
   const vaultTools = new VaultTools(adapter, options.vault);
   const data = await readJson(safeJoin(options.vault, `${options.pluginDir}/data.json`));
-  const local = {
-    iclaudePath: "",
-    ...((await readJson(safeJoin(options.vault, `${options.pluginDir}/local.json`)) ?? {}) as Partial<LocalConfig>),
-  };
+  const local = ((await readJson(safeJoin(options.vault, `${options.pluginDir}/local.json`)) ?? {}) as Partial<LocalConfig>);
   const settings = resolveEffective(mergeSettings(data), local);
   if (options.apiKeyFile) {
     settings.nativeAgent.apiKey = (await readFile(options.apiKeyFile, "utf8")).trim();
-  }
-  if (settings.backend !== "native-agent") {
-    throw new Error(`Only native-agent is supported by this eval; got ${settings.backend}`);
   }
   if (!settings.nativeAgent.apiKey) throw new Error("Native API key is empty");
 
@@ -262,6 +220,11 @@ async function main(args: string[]): Promise<void> {
     proxyConfig: settings.proxy,
     mobileFetch: globalThis.fetch,
   });
+  const modelContextStore = new ModelContextStore({
+    read: async () => ({}),
+    write: async () => {},
+    fetchFn: globalThis.fetch,
+  });
   const runner = new AgentRunner(
     llm,
     settings,
@@ -270,6 +233,7 @@ async function main(args: string[]): Promise<void> {
     domains,
     undefined,
     false,
+    modelContextStore,
   );
 
   await mkdir(path.dirname(options.out), { recursive: true });

@@ -8,9 +8,9 @@ Automatically builds and maintains a knowledge-base wiki from your notes using a
 - **Offline by default** — works with Ollama or any local AI server; your notes never leave your machine
 - **Grows with your notes** — every Ingest adds new topics and updates existing ones automatically
 - **Transparent** — watch every AI step in real time in the sidebar panel
-- **Two AI backends** — local (Ollama / OpenAI-compatible) or Claude AI; switch any time in settings
+- **One OpenAI-compatible runtime** — use Ollama locally or connect to a remote compatible service
 
-> Supported backends: **Ollama / OpenAI-compatible** (fully local) · **Claude Agent** (Anthropic cloud)
+> Supported transport: **OpenAI-compatible**, with local Ollama and remote services supported.
 
 ---
 
@@ -38,20 +38,27 @@ Fix, Format, and Chat are launched from sidebar buttons, not the Command Palette
 
 ---
 
-## Security
+## Community directory disclosures
 
-### Shell execution
+### Network use
 
-The Claude Agent backend starts an external process to run the Claude CLI:
+AI Wiki sends selected note content and prompts only to the OpenAI-compatible service configured by the user. The endpoint may be local, such as Ollama, or remote. Network access is used only for AI operations and optional model probes the user starts.
 
-- **What is executed:** the absolute path you configure in Settings → "Path to Claude Code" (e.g. `/home/user/iclaude.sh`). The path is validated to be absolute and free of traversal sequences before each spawn.
-- **Why it's required:** the Claude Agent backend calls `claude` / `iclaude.sh` as a subprocess. There is no alternative to `child_process.spawn` for this architecture.
-- **Your permissions:** the subprocess inherits your OS user's permissions — the same as running Claude CLI manually in a terminal.
-- **First-run consent:** on first launch with Claude Agent selected, a confirmation dialog appears before anything runs. You can revoke consent by removing `shellConsentGiven` from the plugin's `local.json`.
+### Accounts and payment
+
+AI Wiki itself is free and requires no account. Local Ollama use requires neither an account nor payment. Optional remote OpenAI-compatible services may require their own account or payment.
+
+### External file access
+
+AI Wiki does not execute a user-configured AI CLI or another external AI process.
 
 ### Vault access
 
 The plugin reads only the folders you set as sources for each domain. It does not scan your entire vault.
+
+### License
+
+AI Wiki is licensed under the [Apache License 2.0](LICENSE).
 
 ---
 
@@ -101,7 +108,6 @@ Settings → AI Wiki:
 
 | Setting | Value |
 |---|---|
-| Backend | Native Agent (OpenAI-compatible) |
 | Base URL | `http://localhost:11434/v1` |
 | API Key | `ollama` |
 | Model | `llama3.2` |
@@ -129,35 +135,6 @@ Open the AI Wiki sidebar panel (ribbon icon or Command Palette → "Open panel")
 2. In the sidebar, select your domain from the dropdown
 3. Click the **Ingest** button
 4. Watch progress in the sidebar — new wiki pages appear in the domain folder
-
----
-
-## Quick start: Claude Agent
-
-For users with [Claude Code CLI](https://claude.ai/code) installed.
-
-### 1. Requirements
-
-- Installed `iclaude.sh` / `iclaude` / `claude` (Claude Code CLI)
-
-### 2. Install and enable the plugin
-
-Same as steps 2–3 of the Ollama section above.
-
-### 3. Configure
-
-Settings → AI Wiki:
-
-| Setting | Value |
-|---|---|
-| Backend | Claude Agent |
-| Path to Claude Code | `/home/user/Documents/Project/iclaude/iclaude.sh` |
-| Model | `sonnet` |
-| Timeouts (seconds) | `300/300/900/3600/600` |
-
-### 4. First Ingest
-
-Same as step 6 of the Ollama section above.
 
 ---
 
@@ -193,7 +170,7 @@ timer shows UI elapsed time; it is not a provider heartbeat and does not extend 
 deadline. Agent-log reasoning is retained in ordered bounded records up to 4 MiB per
 operation; excess text is replaced by a metadata-only truncation marker.
 
-For Native Agent, a replacement transport attempt starts a fresh human lifecycle at
+For the OpenAI-compatible runtime, a replacement transport attempt starts a fresh human lifecycle at
 **Preparing request**. The sidebar does not show retry counters or HTTP details.
 `agent.jsonl` records metadata-only `transport_retry_scheduled`,
 `transport_retry_recovered`, and `transport_retry_exhausted` events with the logical
@@ -230,14 +207,14 @@ recreated domain tree.
 
 ## Settings reference
 
-### General (both backends)
+### General
 
 | Setting | Description | Default |
 |---|---|---|
 | User prompt | Added to the system prompt of every operation | empty |
 | Timeouts (seconds) | `ingest/query/lint/init/format`, slash-separated | `300/300/900/3600/600` |
 | LLM idle timeout | Maximum silence between meaningful native model events; `0` disables the executor idle deadline | `300` s |
-| Retry count | Backend-specific: native additional attempts per request; Claude guarded idle retries per operation | `3` |
+| Retry count | Additional attempts for the current OpenAI-compatible request | `3` |
 | History limit | Max operations in sidebar history | `20` |
 | Agent log (JSONL) | Log agent events to plugin-local `agent.jsonl` (desktop only) | off |
 
@@ -245,30 +222,7 @@ recreated domain tree.
 
 List of created domains with **Edit** / **Delete** buttons. Domain map is stored in `!Wiki/_config/_domain.json`.
 
-### Backend selector
-
-| Setting | Description | Default |
-|---|---|---|
-| Backend | `claude-agent` or `native-agent` (desktop). Mobile is forced to native-agent | `native-agent` |
-
-### Claude Agent
-
-| Setting | Description | Default |
-|---|---|---|
-| Path to Claude Code | Full absolute path to `iclaude.sh` / `iclaude` / `claude` | — |
-| Model | Preset (`opus`/`sonnet`/`haiku`) or explicit ID (`claude-sonnet-4-6`). Shown when per-operation is off | claude default |
-| Input budget tokens | Maximum estimated size of the packed prompt. This is configured explicitly; the plugin does not discover the model's context window | `16384` |
-| Semantic compression | Prompt-density profile (`Maximum`/`Balanced`/`Minimum`) with operation-specific preservation rules | `Balanced` |
-| Allowed tools | Comma-separated list passed to `--tools`. Empty = no restriction | `Read,Edit,Write,Glob,Grep` |
-| Per-operation models | When on, configure model, input budget, compression, and effort per operation (ingest/query/lint/init/format). Format has an input budget but no semantic-compression control | off |
-| Per-operation: Model | Model for the specific operation | — |
-
-Claude output limits are owned by the external Claude CLI configuration. AI Wiki bounds
-and packs Claude input, but does not send or expose a plugin-owned Claude output budget.
-Claude keeps its existing guarded operation-level idle retry behavior; it does not use
-Native Agent's request executor, HTTP status matrix, or connection-timeout transport.
-
-### Native Agent
+### OpenAI-compatible runtime
 
 | Setting | Description | Default |
 |---|---|---|
@@ -285,9 +239,9 @@ Native Agent's request executor, HTTP status matrix, or connection-timeout trans
 | Per-operation models | When on, configure model, input/output budgets, compression, thinking budget, and temperature per operation. Format keeps numeric budgets but has no semantic-compression control | off |
 | Output repair retries | Retries for invalid JSON or invalid framed output after Zod validation (0–3). Higher = more reliable on weaker models | `1` |
 
-### Native transient request recovery
+### Transient request recovery
 
-Native Agent retries only the current identical OpenAI-compatible request, up to the
+AI Wiki retries only the current identical OpenAI-compatible request, up to the
 configured number of additional attempts. It never replays Init, Re-init, Ingest, a source
 read, `WipeDomain`, completed evidence, or page/index application. Eligible failures are
 connection errors/timeouts and HTTP `408`, `409`, `429`, and `5xx`. Provider
@@ -306,7 +260,7 @@ Retry stops after nonblank reasoning or content, or when the additional-attempt 
 exhausted. Connection timeout (`15` seconds), model idle timeout (`300` seconds), and
 retry count (`3`) are independent top-level settings; existing persisted values are
 preserved. A healthy response may take longer than 15 seconds because that value applies
-only to desktop connection establishment. On Mobile, Native Agent keeps the host-provided
+only to desktop connection establishment. On Mobile, AI Wiki keeps the host-provided
 transport, so an exact DNS/TCP/TLS-only timeout cannot be guaranteed; request retry and
 model-idle handling remain separate from that limitation.
 
@@ -317,28 +271,26 @@ model-idle handling remain separate from that limitation.
 | Enable image analysis | Analyze supported images and PDF pages during Format | off |
 | Semantic compression | Vision-specific override; preserves OCR, objects, relationships, layout, page identity, and uncertainty | Use global |
 | Vision model | Multimodal model used for image analysis | — |
-| Model context window | Native Agent only. The **vision** model's window, used to size its own requests — including how many PDF pages go into one call. Empty (shown as "Automatic") means the window is read from the backend. Set it whenever your vision model is smaller than your chat model and the backend does not advertise its window: that is what makes a small-window vision model work, not a measure to reach for after seeing "Vision skipped". Minimum `1024` tokens | *(empty = Automatic)* |
-| Vision Check | Native Agent only: sends one real, tiny 1×1 inline PNG request with a short prompt and a 16-token output cap. Reports success/failure without changing settings or vault files. Claude Agent exposes no Check | — |
+| Model context window | The **vision** model's window, used to size its own requests — including how many PDF pages go into one call. Empty (shown as "Automatic") means the window is read from the backend. Set it whenever your vision model is smaller than your chat model and the backend does not advertise its window: that is what makes a small-window vision model work, not a measure to reach for after seeing "Vision skipped". Minimum `1024` tokens | *(empty = Automatic)* |
+| Vision Check | Sends one real, tiny 1×1 inline PNG request with a short prompt and a 16-token output cap. Reports success/failure without changing settings or vault files | — |
 
 ### Bounded processing and storage
 
 These controls cover different parts of a call: **Input budget tokens** bound the prepared
 request, **Output budget tokens** cap the generated response, and **Thinking budget
-tokens** separately allow native-model reasoning when the provider supports it. Native
-Agent owns all three controls; Claude input is governed by AI Wiki while Claude output
-remains CLI-owned.
+tokens** separately allow model reasoning when the provider supports it. AI Wiki owns all
+three controls.
 
 The input budget governs the complete prepared request, including system/schema
 instructions—not just note text. When content does not fit, AI Wiki packs complete context
 units and uses operation-specific batching or splitting instead of silently truncating
 required content. Provider context errors can trigger a smaller repack.
 
-For Native Agent, an empty input or output budget is automatic: AI Wiki discovers the
+An empty input or output budget is automatic: AI Wiki discovers the
 model's context window once per model, caches it, and self-corrects the estimate against
 the provider's reported token usage. A number you type in Input budget tokens or Output
 budget tokens still acts as an explicit override — automatic budgeting never overrides a
-value you set. Claude Agent is unchanged: its input budget stays a fixed, explicitly
-configured value.
+value you set.
 
 When the provider does not report a context window for the model, AI Wiki falls back to a
 conservative **8192-token** window and budgets from that. The fallback is cached for
@@ -423,7 +375,7 @@ complete processing within the configured input budget. Vision Check is also a r
 provider request and may incur a small charge.
 
 Image and PDF analysis is budgeted from the **vision** model's own context window, not
-from the window of the chat model that runs Format. On Native Agent the vision model gets
+from the window of the chat model that runs Format. The vision model gets
 its own context record — discovered from the backend or taken from its own **Model context
 window** field — and the number of PDF pages packed into one vision request follows from
 it. A vision model with a small window therefore splits a PDF into more, smaller calls
@@ -467,11 +419,11 @@ validation/application/completion. Page mutations count only after the matching 
 `tool_result`; metadata-only index checkpoints correlate both index reconciliation stages
 to the active source and selected domain.
 
-### Proxy (native-agent only)
+### Proxy
 
 | Setting | Description | Default |
 |---|---|---|
-| Use proxy | Route native-agent traffic through HTTP/HTTPS proxy. Not supported on mobile | off |
+| Use proxy | Route OpenAI-compatible traffic through HTTP/HTTPS proxy. Not supported on mobile | off |
 | Proxy URL | `http://proxy.example.com:8080` or `https://…` | — |
 | Username | Optional, for basic-auth proxies | — |
 | Password | Optional, stored locally in `local.json` | — |
@@ -495,7 +447,7 @@ to the active source and selected domain.
 
 ## Sync
 
-`local.json` (inside the plugin folder) stores machine-specific settings: the path to Claude CLI, API key, and selected backend. **Exclude `local.json` from sync** when using Obsidian Sync / git / Syncthing — otherwise settings will be overwritten on other machines.
+`local.json` (inside the plugin folder) stores the OpenAI API key, proxy password, model-context records, and other machine-local state. **Exclude `local.json` from sync** when using Obsidian Sync / git / Syncthing — otherwise settings will be overwritten on other machines.
 
 The domain map (`!Wiki/_config/_domain.json`) lives inside the vault and syncs normally with your notes.
 
@@ -503,7 +455,7 @@ The domain map (`!Wiki/_config/_domain.json`) lives inside the vault and syncs n
 
 ## Performance reference
 
-Real-world measurements from a homelab inference server running **`deepseek-v4-flash:cloud`** via Native Agent (OpenAI-compatible endpoint). Numbers show what to expect at roughly 100–130 output tokens/second — a mid-range local or self-hosted GPU.
+Real-world measurements from a homelab inference server running **`deepseek-v4-flash:cloud`** through an OpenAI-compatible endpoint. Numbers show what to expect at roughly 100–130 output tokens/second — a mid-range local or self-hosted GPU.
 
 | Operation | Typical duration | LLM calls | Input tokens (avg/call) | Output tokens (avg/call) | Speed (tok/s) |
 |---|---|---|---|---|---|

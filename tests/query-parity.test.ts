@@ -30,48 +30,10 @@ export async function resolve(specifier, context, nextResolve) {
 register(`data:text/javascript,${encodeURIComponent(pathBrowserifyLoader)}`);
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 
-const controllerObsidianModule = `
-export class App {}
-export class Component {}
-export class ItemView {}
-export class Modal {}
-export class WorkspaceLeaf {}
-export class TFile {}
-export class TFolder {}
-export class AbstractInputSuggest {}
-export class DropdownComponent {}
-export class PluginSettingTab {}
-export class Setting {}
-export class ToggleComponent {}
-export class Plugin {}
-export class Notice {}
-export const MarkdownRenderer = { render: async () => {} };
-export const Platform = { isDesktopApp: true, isMobile: false };
-export const moment = { locale: () => "en" };
-export const requestUrl = async (options) => {
-  if (typeof globalThis.__obsidianRequestUrlForTest === "function") {
-    return globalThis.__obsidianRequestUrlForTest(options);
-  }
-  throw new Error("requestUrl unavailable in test");
-};
-export const setIcon = () => {};
-`;
-const controllerObsidianUrl =
-  `data:text/javascript,${encodeURIComponent(controllerObsidianModule)}`;
-const controllerObsidianLoader = `
-const moduleUrl = ${JSON.stringify(controllerObsidianUrl)};
-export async function resolve(specifier, context, nextResolve) {
-  if (specifier === "obsidian") return { url: moduleUrl, shortCircuit: true };
-  return nextResolve(specifier, context);
-}
-`;
-register(`data:text/javascript,${encodeURIComponent(controllerObsidianLoader)}`);
-
 const {
   AgentRunner,
   resolveFollowUpPolicyOperation,
 } = await import("../src/agent-runner");
-const { WikiController } = await import("../src/controller");
 const { policyKey } = await import("../src/model-call-policy");
 const { estimatePreparedMessages } = await import("../src/prompt-budget");
 const { PageSimilarityService } = await import("../src/page-similarity");
@@ -959,10 +921,11 @@ test("single- and cross-domain Query metadata stays final while retrieval teleme
   assert.match(crossResult.text, /\[\[wiki_b_drop\]\] \*\(not in wiki\)\*/);
 });
 
-function runnerSettings(backend: "native-agent" | "claude-agent"): LlmWikiPluginSettings {
+function runnerSettings(): LlmWikiPluginSettings {
   const settings = structuredClone(DEFAULT_SETTINGS);
-  settings.backend = backend;
-  settings.llmIdleTimeoutSec = 0;
+  settings.nativeAgent.baseUrl = "https://llm.example/v1";
+  settings.nativeAgent.apiKey = "test-key";
+  settings.nativeAgent.model = "chat-model";
   settings.nativeAgent.perOperation = true;
   settings.nativeAgent.operations.query = {
     ...settings.nativeAgent.operations.query,
@@ -984,21 +947,6 @@ function runnerSettings(backend: "native-agent" | "claude-agent"): LlmWikiPlugin
     inputBudgetTokens: 2_468,
     maxTokens: 321,
     compressionProfile: "minimum",
-  };
-  settings.claudeAgent.perOperation = true;
-  settings.claudeAgent.operations.query = {
-    ...settings.claudeAgent.operations.query,
-    model: "claude-query-model",
-    effort: "low",
-    inputBudgetTokens: 5_432,
-    compressionProfile: "minimum",
-  };
-  settings.claudeAgent.operations.lint = {
-    ...settings.claudeAgent.operations.lint,
-    model: "claude-lint-model",
-    effort: "high",
-    inputBudgetTokens: 8_765,
-    compressionProfile: "maximum",
   };
   return settings;
 }
@@ -1052,7 +1000,7 @@ async function captureRunnerPolicy(
   return captured;
 }
 
-test("follow-up Chat policy propagation governs native and Claude without changing its visible label", async () => {
+test("follow-up Chat policy propagation governs OpenAI without changing its visible label", async () => {
   assert.equal(resolveFollowUpPolicyOperation("query"), "query");
   assert.equal(resolveFollowUpPolicyOperation("lint"), "lint");
   assert.equal(resolveFollowUpPolicyOperation("ingest"), "lint");
@@ -1060,29 +1008,19 @@ test("follow-up Chat policy propagation governs native and Claude without changi
   assert.equal(policyKey("chat", "lint"), "lint");
   assert.equal(policyKey("chat", "ingest"), "lint");
 
-  const native = await captureRunnerPolicy(runnerSettings("native-agent"));
-  assert.equal(native.req.operationHeader, "VISIBLE OPERATION LABEL");
-  assert.equal(native.model, "native-query-model");
-  assert.equal(native.opts.inputBudgetTokens, 4_321);
-  assert.equal(native.opts.maxTokens, 987);
-  assert.deepEqual(native.opts.semanticCompression, {
-    profile: "minimum",
-    operation: "query",
-  });
-
-  const claude = await captureRunnerPolicy(runnerSettings("claude-agent"));
-  assert.equal(claude.req.operationHeader, "VISIBLE OPERATION LABEL");
-  assert.equal(claude.model, "claude-query-model");
-  assert.equal(claude.opts.inputBudgetTokens, 5_432);
-  assert.equal(claude.opts.maxTokens, undefined);
-  assert.deepEqual(claude.opts.semanticCompression, {
+  const openai = await captureRunnerPolicy(runnerSettings());
+  assert.equal(openai.req.operationHeader, "VISIBLE OPERATION LABEL");
+  assert.equal(openai.model, "native-query-model");
+  assert.equal(openai.opts.inputBudgetTokens, 4_321);
+  assert.equal(openai.opts.maxTokens, 987);
+  assert.deepEqual(openai.opts.semanticCompression, {
     profile: "minimum",
     operation: "query",
   });
 });
 
 test("AgentRunner treats policyOperation as a Chat parent and never as a non-Chat override", async () => {
-  const settings = runnerSettings("native-agent");
+  const settings = runnerSettings();
   const format = await captureRunnerPolicy(settings, "format", "query");
   assert.equal(format.model, "native-format-model");
   assert.equal(format.opts.inputBudgetTokens, 2_468);
@@ -1111,169 +1049,4 @@ test("AgentRunner treats policyOperation as a Chat parent and never as a non-Cha
     profile: "maximum",
     operation: "lint",
   });
-});
-
-interface ControllerPolicyCapture {
-  buildPolicyOperation: string | undefined;
-  buildResumeSessionId: string | undefined;
-  req: RunRequest;
-  model: string;
-  opts: LlmCallOptions;
-  effort: string | undefined;
-}
-
-async function captureControllerPolicy(
-  parent: WikiOperation,
-): Promise<ControllerPolicyCapture> {
-  const settings = runnerSettings("claude-agent");
-  settings.agentLogEnabled = false;
-  settings.claudeAgent.model = "claude-global-model";
-  settings.claudeAgent.effort = "medium";
-
-  const adapter = memoryAdapter() as VaultAdapter & {
-    getBasePath(): string;
-    getFullPath(path: string): string;
-  };
-  adapter.getBasePath = () => "/vault";
-  adapter.getFullPath = (path) => path.startsWith("/") ? path : `/vault/${path}`;
-  const vault = {
-    adapter,
-    configDir: ".obsidian",
-    getName: () => "Vault",
-    createFolder: (path: string) => adapter.mkdir(path),
-  };
-  const app = {
-    vault,
-    metadataCache: { getFirstLinkpathDest: () => null },
-    workspace: {},
-  };
-  const plugin = {
-    settings,
-    manifest: {
-      id: "obsidian-ai-wiki",
-      dir: ".obsidian/plugins/obsidian-ai-wiki",
-    },
-  };
-  const domainStore = { load: async () => [] };
-  const localConfigStore = {
-    load: async () => ({
-      iclaudePath: "/usr/bin/claude",
-      backend: "claude-agent" as const,
-      shellConsentGiven: true,
-    }),
-    save: async () => {},
-  };
-  const view = {
-    setChatRunning: () => {},
-    appendChatEvent: (_event: RunEvent) => {},
-    finishChat: () => {},
-  };
-  const controller = new WikiController(
-    app as never,
-    plugin as never,
-    domainStore as never,
-    localConfigStore as never,
-  );
-  const internal = controller as unknown as {
-    ensureView(): Promise<void>;
-    activeView(): typeof view;
-    buildAgentRunner(
-      vaultRoot: string,
-      resumeSessionId?: string,
-      opKey?: string,
-      timeoutSec?: number,
-    ): Promise<InstanceType<typeof AgentRunner>>;
-    _chatSessionId?: string;
-  };
-  internal.ensureView = async () => {};
-  internal.activeView = () => view;
-  internal._chatSessionId = "opaque-existing-claude-session";
-
-  const actualBuildAgentRunner = internal.buildAgentRunner.bind(controller);
-  let captured: ControllerPolicyCapture | undefined;
-  let buildResumeSessionId: string | undefined;
-  internal.buildAgentRunner = async (vaultRoot, resumeSessionId, opKey, timeoutSec) => {
-    buildResumeSessionId = resumeSessionId;
-    const runner = await actualBuildAgentRunner(vaultRoot, resumeSessionId, opKey, timeoutSec);
-    const runnerInternal = runner as unknown as {
-      llm: { cfg: { effort?: string } };
-      runOperation(
-        req: RunRequest,
-        model: string,
-        opts: LlmCallOptions,
-      ): AsyncGenerator<RunEvent>;
-    };
-    const effort = runnerInternal.llm.cfg.effort;
-    runnerInternal.runOperation = async function* (req, model, opts) {
-      captured = {
-        buildPolicyOperation: opKey,
-        buildResumeSessionId,
-        req,
-        model,
-        opts,
-        effort,
-      };
-      yield { kind: "result", durationMs: 1, text: "captured controller dispatch" };
-    };
-    return runner;
-  };
-
-  await controller.chat(
-    parent,
-    undefined,
-    "prior operation context",
-    [],
-    "current follow-up instruction",
-  );
-  assert.ok(captured);
-  return captured;
-}
-
-test("controller dispatch applies parent Chat policy to AgentRunner and Claude effort without changing labels", async () => {
-  const cases = [
-    {
-      parent: "query" as const,
-      policy: "query",
-      operationHeader: "Query answer (query)",
-      model: "claude-query-model",
-      effort: "low",
-      inputBudgetTokens: 5_432,
-      compressionProfile: "minimum",
-    },
-    {
-      parent: "lint" as const,
-      policy: "lint",
-      operationHeader: "Wiki lint check",
-      model: "claude-lint-model",
-      effort: "high",
-      inputBudgetTokens: 8_765,
-      compressionProfile: "maximum",
-    },
-    {
-      parent: "ingest" as const,
-      policy: "lint",
-      operationHeader: "Knowledge extraction (ingest)",
-      model: "claude-lint-model",
-      effort: "high",
-      inputBudgetTokens: 8_765,
-      compressionProfile: "maximum",
-    },
-  ];
-
-  for (const expected of cases) {
-    const actual = await captureControllerPolicy(expected.parent);
-    assert.equal(actual.buildPolicyOperation, expected.policy);
-    assert.equal(actual.buildResumeSessionId, undefined);
-    assert.equal(actual.req.operation, "chat");
-    assert.equal(actual.req.policyOperation, expected.policy);
-    assert.equal(actual.req.operationHeader, expected.operationHeader);
-    assert.equal(actual.model, expected.model);
-    assert.equal(actual.effort, expected.effort);
-    assert.equal(actual.opts.inputBudgetTokens, expected.inputBudgetTokens);
-    assert.equal(actual.opts.maxTokens, undefined);
-    assert.deepEqual(actual.opts.semanticCompression, {
-      profile: expected.compressionProfile,
-      operation: expected.policy,
-    });
-  }
 });

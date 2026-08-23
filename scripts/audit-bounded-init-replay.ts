@@ -146,7 +146,7 @@ const HUMAN_LABEL_FIELDS = new Set([
   "stateLabel",
 ]);
 const TECHNICAL_LABEL_MARKER =
-  /\b(?:call[\s_-]*site|transport|attempt|(?:configured|effective|input|output|thinking)[\s_-]*budget|provider|stream|non-stream|claude)\b/i;
+  /\b(?:call[\s_-]*site|transport|attempt|(?:configured|effective|input|output|thinking)[\s_-]*budget|provider|stream|non-stream)\b/i;
 const ATTEMPT_LABEL_MARKER = /\b(?:attempt|retry)\s*(?:#|no\.?|number|:|=)?\s*\d+\b/i;
 const PROVIDER_LABEL_MARKER =
   /\b(?:anthropic|azure\s+openai|gemini|groq|litellm|ollama|openai|openrouter|xai)\b/i;
@@ -719,7 +719,7 @@ function auditLifecycles(
       failures.push(`lifecycle ${id} missing diagnostics.transport`);
     } else if (
       typeof diagnostics.transport !== "string"
-      || !["stream", "non-stream", "claude"].includes(diagnostics.transport)
+      || !["stream", "non-stream"].includes(diagnostics.transport)
     ) {
       failures.push(`lifecycle ${id} has invalid diagnostics.transport`);
     } else {

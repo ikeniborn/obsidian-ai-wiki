@@ -143,10 +143,6 @@ function restoreSegmentedBasenameEmbeds(original: string, formatted: string): st
   return result;
 }
 
-function truncationHint(backend: "claude-agent" | "native-agent", p: FormatProgress): string {
-  return backend === "claude-agent" ? p.truncationHintEnv : p.truncationHintSettings;
-}
-
 // English fallback so runFormat is usable without an explicit bundle.
 // Mirrors `en.formatProgress` in i18n.ts — keep the two in sync (format.ts must not
 // import the runtime i18n bundle, only the FormatProgress type, to keep phases/ obsidian-free).
@@ -162,7 +158,6 @@ const enFormatProgressFallback: FormatProgress = {
   sentinelInvalidRetry: "\n[Sentinel invalid — retrying]\n",
   sentinelInvalidAfterRetry: "Format: LLM returned an invalid sentinel (after retry)",
   writeFailed: (err: string) => `Format: writing the formatted file failed — ${err}`,
-  truncationHintEnv: "raise the limit: env CLAUDE_CODE_MAX_OUTPUT_TOKENS in iclaude.sh",
   truncationHintSettings: "raise the limit: Settings → per-operation → format → maxTokens",
 };
 
@@ -188,8 +183,8 @@ function isVisionSizeError(error: unknown): boolean {
  * provider's answer explains nothing, and the budget telemetry that would
  * (`budget_resolved`, `context_probe`) is agent-log-only and off by default. Names the
  * vision model, the window it was measured against, where that number came from, and
- * the field that changes it. Returns null for a non-size failure, and for a backend
- * with no vision context record at all (claude-agent), which has no such field.
+ * the field that changes it. Returns null for a non-size failure or when no vision
+ * context record is available.
  */
 export function visionSizeSkipReason(
   error: unknown,
@@ -222,7 +217,6 @@ export async function* runFormat(
   chatHistory: ChatMessage[],
   signal: AbortSignal,
   opts: LlmCallOptions = {},
-  backend: "claude-agent" | "native-agent" = "native-agent",
   wikiVaultPath?: string,
   wikiLinkValidationRetries: number = 3,
   visionSettings: {
@@ -232,9 +226,8 @@ export async function* runFormat(
     imageOnly?: boolean;
     /**
      * Derived from the VISION model's own context record, not from this operation's.
-     * Absent on the claude-agent path, which keeps no record, and on a backend that
-     * advertises no window for the vision model — vision then falls back to the
-     * operation's own budget, exactly as before.
+     * Absent when the backend advertises no window for the vision model — vision then
+     * falls back to the operation's own budget, exactly as before.
      */
     inputBudgetTokens?: number;
     maxTokens?: number;
@@ -248,6 +241,7 @@ export async function* runFormat(
   formatDomain?: DomainEntry,
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
+  const hint = progress.truncationHintSettings;
   const filePath = args[0];
 
   if (!filePath) {
@@ -1009,7 +1003,7 @@ export async function* runFormat(
         const failedEvent = closeActiveFormatLifecycle("failed");
         if (failedEvent) yield failedEvent;
         yield { kind: "tool_result", ok: false, preview: "response truncated" };
-        yield { kind: "error", message: progress.outputTruncated(truncationHint(backend, progress)) };
+        yield { kind: "error", message: progress.outputTruncated(hint) };
         yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
         return;
       }
@@ -1048,7 +1042,7 @@ export async function* runFormat(
       if (!parsed) {
         const retryTruncated = lastFinishReason === "length";
         const msg = retryTruncated
-          ? progress.outputTruncatedAfterRetry(truncationHint(backend, progress))
+          ? progress.outputTruncatedAfterRetry(hint)
           : progress.sentinelInvalidAfterRetry;
         const failedEvent = closeActiveFormatLifecycle("failed");
         if (failedEvent) yield failedEvent;

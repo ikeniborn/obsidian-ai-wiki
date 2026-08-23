@@ -97,7 +97,6 @@ async function capturedFormatParams(profile: CompressionProfile): Promise<Record
     "<<<END>>>",
   ].join("\n");
   const settings = structuredClone(DEFAULT_SETTINGS);
-  settings.backend = "native-agent";
   settings.nativeAgent.compressionProfile = profile;
   const { opts } = resolveCallPolicy(settings, "format", {
     contextWindow: 131_072,

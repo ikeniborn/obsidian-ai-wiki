@@ -59,7 +59,6 @@ function adapter(): VaultAdapter {
 
 function nativeSettings(): LlmWikiPluginSettings {
   const settings = structuredClone(DEFAULT_SETTINGS);
-  settings.backend = "native-agent";
   settings.nativeAgent.baseUrl = "http://host/v1";
   settings.nativeAgent.model = "global-model";
   return settings;
@@ -309,21 +308,6 @@ test("PDF batches follow the vision model's window instead of the text model's",
   assert.equal(fromTextModel.length, 1, "the text budget packs all eight pages into one call");
   assert.equal(fromVisionModel.length, 2, "the vision window splits them");
   assert.equal(fromVisionModel[0].length, 7);
-});
-
-test("vision gets no record of its own on the claude-agent path", async () => {
-  const settings = structuredClone(DEFAULT_SETTINGS);
-  settings.backend = "claude-agent";
-  settings.vision = { enabled: true, model: "vision-model" };
-  const store = {
-    get: () => { throw new Error("claude-agent must not read the store"); },
-    resolve: async () => { throw new Error("claude-agent must not probe"); },
-  } as unknown as ModelContextStore;
-
-  const resolved = await resolveVisionBudget(store, settings, "vision-model");
-
-  assert.equal(resolved.budget, undefined);
-  assert.deepEqual(resolved.events, []);
 });
 
 test("a backend that advertises no vision window leaves the caller's budget alone", async () => {

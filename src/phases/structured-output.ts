@@ -419,8 +419,7 @@ export function outputRetryOptions(opts: LlmCallOptions, outputTokens: number): 
  *
  * `prepareChatMessages` is the same preparation `buildChatParams` runs one layer
  * down, so this estimate is the one the request is actually sent with. Without a
- * known context window (the `claude-agent` path) the options pass through
- * untouched and the retry behaves exactly as before.
+ * known context window the options pass through untouched.
  */
 function withOutputCeiling(
   opts: LlmCallOptions,

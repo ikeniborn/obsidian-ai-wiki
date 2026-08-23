@@ -39,7 +39,7 @@ uv run optimize.py \
 
 | Переменная       | Обязательная | Описание |
 |------------------|:---:|---|
-| `DSPY_BACKEND`   | да | `ollama` или `claude-code` |
+| `DSPY_BACKEND`   | да | `ollama` или `ollama-openai` |
 | `DEV_LOG_PATH`   | да | Путь к JSONL-логу dev-режима |
 | `PROMPTS_DIR`    | да | Папка с шаблонами промтов (`{op}.md` + `evaluator.md`) |
 | `OUTPUT_DIR`     | да | Куда писать оптимизированные промты |
@@ -47,8 +47,6 @@ uv run optimize.py \
 | `MIN_EXAMPLES`   | нет | Минимум примеров на операцию (default: `5`) |
 | `OLLAMA_MODEL`   | ollama | Имя модели в Ollama (`llama3.2`, `qwen2.5`, ...) |
 | `OLLAMA_BASE_URL`| нет | Base URL Ollama (default: `http://localhost:11434`) |
-| `CLAUDE_PATH`    | claude-code | Путь к бинарнику `claude` CLI |
-| `CLAUDE_MODEL`   | claude-code | Модель Claude (`claude-sonnet-4-6`, `haiku`, ...) |
 
 ## Бэкенды
 
@@ -61,17 +59,14 @@ DSPY_BACKEND=ollama
 OLLAMA_MODEL=llama3.2
 ```
 
-### claude-code
+### ollama-openai
 
-Использует установленный `claude` CLI — никаких API-ключей, запускает существующую сессию Claude Code.
+Использует OpenAI-совместимый API Ollama, включая облачные модели.
 
 ```env
-DSPY_BACKEND=claude-code
-CLAUDE_PATH=/usr/local/bin/claude
-CLAUDE_MODEL=claude-sonnet-4-6
+DSPY_BACKEND=ollama-openai
+OLLAMA_MODEL=deepseek-v4-pro:cloud
 ```
-
-`ClaudeCodeLM` (`lib/backend.py`) — DSPy-совместимый адаптер: вызывает `claude --print --output-format json`, парсит последнюю JSON-строку из stdout.
 
 ## Формат dev-лога (JSONL)
 
@@ -103,7 +98,7 @@ CLAUDE_MODEL=claude-sonnet-4-6
 |---|---|
 | `optimize.py` | Точка входа — CLI, оркестрация pipeline |
 | `lib/loader.py` | Чтение и фильтрация JSONL-лога |
-| `lib/backend.py` | `make_lm()` + `ClaudeCodeLM` адаптер |
+| `lib/backend.py` | `make_lm()` factory для `ollama` и `ollama-openai` |
 | `lib/signature.py` | DSPy Signature с полями `user_message → result` |
 | `lib/optimizer.py` | `run_mipro()`, `call_evaluator()`, `restore_placeholders()` |
 | `lib/writer.py` | Запись результата в файл |

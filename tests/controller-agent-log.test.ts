@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import test from "node:test";
 import type { RunEvent, WikiOperation } from "../src/types";
@@ -48,6 +49,7 @@ export async function resolve(specifier, context, nextResolve) {
 register(`data:text/javascript,${encodeURIComponent(obsidianLoader)}`);
 
 const { WikiController } = await import("../src/controller");
+const controllerSource = readFileSync(new URL("../src/controller.ts", import.meta.url), "utf8");
 
 const AGENT_PATH = ".obsidian/plugins/obsidian-ai-wiki/agent.jsonl";
 const LINE_CAP = 1_048_576;
@@ -147,6 +149,14 @@ function records(adapter: AgentLogAdapter): Array<Record<string, unknown>> {
 function eventOf(record: Record<string, unknown>): Record<string, unknown> {
   return record.event as Record<string, unknown>;
 }
+
+test("agent log metadata uses the stable OpenAI-compatible envelope", () => {
+  assert.match(controllerSource, /backend: "openai-compatible"/);
+  assert.match(
+    controllerSource,
+    /model: eff\.nativeAgent\.perOperation\s*\? eff\.nativeAgent\.operations\[opKey\]\.model\s*:\s*eff\.nativeAgent\.model/,
+  );
+});
 
 test("reasoning over one MiB is chunked before later critical telemetry", async () => {
   const fixture = loggerFixture();
