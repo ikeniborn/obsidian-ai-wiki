@@ -7,12 +7,15 @@ import type { OkfBundle } from "./okf-export";
  * never load on mobile, where filesystem access is unavailable.
  */
 export async function writeOkfBundle(destAbs: string, bundle: OkfBundle): Promise<void> {
-  if (!Platform.isDesktopApp) throw new Error("OKF export is desktop-only");
-  const fs = await import("node:fs/promises");
-  const path = await import("node:path");
-  for (const file of bundle.files) {
-    const abs = path.join(destAbs, file.relpath);
-    await fs.mkdir(path.dirname(abs), { recursive: true });
-    await fs.writeFile(abs, file.content, "utf8");
+  if (Platform.isDesktop && Platform.isDesktopApp) {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    for (const file of bundle.files) {
+      const abs = path.join(destAbs, file.relpath);
+      await fs.mkdir(path.dirname(abs), { recursive: true });
+      await fs.writeFile(abs, file.content, "utf8");
+    }
+    return;
   }
+  throw new Error("OKF export is desktop-only");
 }
