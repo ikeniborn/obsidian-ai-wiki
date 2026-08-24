@@ -1,6 +1,6 @@
 ---
 review:
-  plan_hash: 88828d0a1d1f7914
+  plan_hash: 86b1f0eb01435eae
   last_run: 2026-08-24
   phases:
     structure: { status: passed }
@@ -32,7 +32,7 @@ chain:
 - R2: Tasks 2, 3, 5, and 6 resolve every current source finding without suppressions.
 - R3: Task 8 adds active-surface marker validation and fixtures.
 - R4: Task 9 removes the orphan Claude probe and reproducibly rebuilds the mobile eval.
-- R5: Tasks 3, 4, and 6 preserve OpenAI-only loading, legacy settings, mobile support, and declare `minAppVersion` as `1.13.0` before any strict lint gate.
+- R5: Tasks 3, 4, and 5 preserve OpenAI-only loading, legacy settings, mobile support, and declare `minAppVersion` as `1.13.0` before any strict lint gate.
 - R6: Tasks 7, 8, and 11 integrate and exercise all release gates.
 - R7: Tasks 10 and 11 update current docs and iwiki, then reconcile every changed path. No version bump, release, publication, Community submission, or new backend is part of this plan.
 
@@ -266,7 +266,7 @@ Expected: zero exit; dependency, controls, and order assertions pass; legacy Cla
 npm run lint
 ```
 
-Expected: non-zero exit, with no `prefer-setting-definitions` or deprecated `display` finding. The only compatibility findings are exactly 13 `obsidianmd/no-unsupported-api` errors plus one `obsidianmd/settings-tab/require-display` warning, all assigned to immediate Task 4; remaining sentence-case or deprecated-control findings are listed and assigned to Task 5. Any other rule or path blocks this commit. This step is a diagnostic inventory, not a strict lint gate.
+Expected: non-zero exit, with no `prefer-setting-definitions` or deprecated `display` finding. The compatibility findings are exactly 13 `obsidianmd/no-unsupported-api` errors plus one `obsidianmd/settings-tab/require-display` warning, all assigned to immediate Task 4. The two environment findings are `no-undef` warnings at `src/native-openai-transport.ts:13` for `NodeJS` and `src/view.ts:1640` for `require`, both assigned to Task 5. Remaining sentence-case or deprecated-control findings are listed and assigned to Task 6. Any other rule or path blocks this commit. This step is a diagnostic inventory, not a strict lint gate.
 
 - [ ] Step 8: Commit the API migration and exact API pin.
 
@@ -324,7 +324,7 @@ node --import tsx --test tests/release-validation.test.ts tests/openai-only-sett
 npm run lint
 ```
 
-Expected: focused tests exit zero. Lint remains non-zero only for the sentence-case and deprecated-control findings assigned to Task 5; all 13 `no-unsupported-api` errors and the `require-display` warning from Task 3 are absent. Any compatibility or unrelated finding blocks this commit.
+Expected: focused tests exit zero. All 13 `no-unsupported-api` errors and the `require-display` warning from Task 3 are absent. Lint remains non-zero only for the two `no-undef` warnings at `src/native-openai-transport.ts:13` and `src/view.ts:1640`, assigned to Task 5, plus the sentence-case and deprecated-control findings assigned to Task 6. Any compatibility or unrelated finding blocks this commit.
 
 - [ ] Step 5: Commit compatibility metadata before any passing strict lint gate.
 
@@ -333,7 +333,58 @@ git add src/manifest.json manifest.json dist/main.js dist/manifest.json versions
 git commit -m "build(compat): require Obsidian 1.13"
 ```
 
-### Task 5: Replace deprecated controls and fix reviewer-facing sentence case
+### Task 5: Resolve environment-global findings without weakening mobile guards
+
+**Closes:** R2 environment-global findings and R5 guarded desktop/mobile behavior.
+
+**Files:**
+
+- Modify: `src/native-openai-transport.ts`
+- Modify: `src/view.ts`
+- Modify: `tests/okf-export-desktop-guard.test.ts`
+- Modify: relevant transport test under `tests/`
+
+- [ ] Step 1: Add regression assertions for browser-safe timer typing and guarded Electron access.
+
+Assert the transport timer uses `ReturnType<typeof setTimeout>` rather than `NodeJS.Timeout`. Extend `tests/okf-export-desktop-guard.test.ts` to require the existing `Platform.isDesktop && Platform.isDesktopApp` guard before Electron loading and to reject a free `require(...)` identifier.
+
+- [ ] Step 2: Run focused tests and confirm failure.
+
+```bash
+node --import tsx --test tests/okf-export-desktop-guard.test.ts tests/native-openai-transport.test.ts
+```
+
+Expected: non-zero exit for at least the `NodeJS.Timeout` or free `require` assertion.
+
+- [ ] Step 3: Replace `NodeJS.Timeout` with `ReturnType<typeof setTimeout>`. Render the system-editor button only inside `if (Platform.isDesktop && Platform.isDesktopApp)`. Inside its click callback, replace the free identifier with a typed desktop host lookup:
+
+```ts
+const electron = (window as Window & {
+  require(id: "electron"): { shell: { openPath(path: string): Promise<string> } };
+}).require("electron");
+void electron.shell.openPath(absPath);
+```
+
+If the official `obsidianmd/no-nodejs-modules` rule rejects the guarded replacement, stop at the spec's human checkpoint; do not add a suppression and do not set `isDesktopOnly: true`.
+
+- [ ] Step 4: Run focused tests, strict transport lint, and the post-fix view inventory.
+
+```bash
+node --import tsx --test tests/okf-export-desktop-guard.test.ts tests/native-openai-transport.test.ts
+npx eslint src/native-openai-transport.ts --max-warnings 0
+npx eslint src/view.ts --max-warnings 0
+```
+
+Expected: tests and transport lint exit zero; guard assertions pass. The `view.ts` inventory exits non-zero only for sentence-case or deprecated-control findings assigned to Task 6; its `no-undef` warning for `require` and any Node-module finding are absent. Any other rule or path blocks this commit. The final command is diagnostic inventory, not a strict lint gate.
+
+- [ ] Step 5: Commit environment corrections.
+
+```bash
+git add src/native-openai-transport.ts src/view.ts tests/okf-export-desktop-guard.test.ts tests/native-openai-transport.test.ts
+git commit -m "fix(runtime): keep desktop APIs behind mobile guards"
+```
+
+### Task 6: Replace deprecated controls and fix reviewer-facing sentence case
 
 **Closes:** R2 deprecated UI and sentence-case findings.
 
@@ -370,7 +421,7 @@ node --import tsx --test tests/ui-review-compliance.test.ts tests/settings-model
 npx eslint src/settings.ts src/modals.ts src/main.ts src/view.ts --max-warnings 0
 ```
 
-Expected: both commands exit zero; no deprecated UI API or sentence-case finding remains.
+Expected: both commands exit zero; Task 5 has already removed the `view.ts` environment-global finding, and no deprecated UI API or sentence-case finding remains.
 
 - [ ] Step 5: Commit the UI corrections.
 
@@ -380,56 +431,6 @@ git commit -m "fix(ui): replace deprecated Obsidian controls"
 ```
 
 Before committing, inspect `git diff --cached --name-only`; unstage any test file not directly changed by this task.
-
-### Task 6: Resolve environment-global findings without weakening mobile guards
-
-**Closes:** R2 environment-global findings and R5 guarded desktop/mobile behavior.
-
-**Files:**
-
-- Modify: `src/native-openai-transport.ts`
-- Modify: `src/view.ts`
-- Modify: `tests/okf-export-desktop-guard.test.ts`
-- Modify: relevant transport test under `tests/`
-
-- [ ] Step 1: Add regression assertions for browser-safe timer typing and guarded Electron access.
-
-Assert the transport timer uses `ReturnType<typeof setTimeout>` rather than `NodeJS.Timeout`. Extend `tests/okf-export-desktop-guard.test.ts` to require the existing `Platform.isDesktop && Platform.isDesktopApp` guard before Electron loading and to reject a free `require(...)` identifier.
-
-- [ ] Step 2: Run focused tests and confirm failure.
-
-```bash
-node --import tsx --test tests/okf-export-desktop-guard.test.ts tests/native-openai-transport.test.ts
-```
-
-Expected: non-zero exit for at least the `NodeJS.Timeout` or free `require` assertion.
-
-- [ ] Step 3: Replace `NodeJS.Timeout` with `ReturnType<typeof setTimeout>`. Render the system-editor button only inside `if (Platform.isDesktop && Platform.isDesktopApp)`. Inside its click callback, replace the free identifier with a typed desktop host lookup:
-
-```ts
-const electron = (window as Window & {
-  require(id: "electron"): { shell: { openPath(path: string): Promise<string> } };
-}).require("electron");
-void electron.shell.openPath(absPath);
-```
-
-If the official `obsidianmd/no-nodejs-modules` rule rejects the guarded replacement, stop at the spec's human checkpoint; do not add a suppression and do not set `isDesktopOnly: true`.
-
-- [ ] Step 4: Run focused tests and strict lint.
-
-```bash
-node --import tsx --test tests/okf-export-desktop-guard.test.ts tests/native-openai-transport.test.ts
-npx eslint src/native-openai-transport.ts src/view.ts --max-warnings 0
-```
-
-Expected: zero exit; no `no-undef` or Node-module finding; guard assertions pass.
-
-- [ ] Step 5: Commit environment corrections.
-
-```bash
-git add src/native-openai-transport.ts src/view.ts tests/okf-export-desktop-guard.test.ts tests/native-openai-transport.test.ts
-git commit -m "fix(runtime): keep desktop APIs behind mobile guards"
-```
 
 ### Task 7: Close the complete official source lint gate
 
