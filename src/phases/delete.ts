@@ -38,6 +38,7 @@ import ingestTemplate from "../../prompts/ingest.md";
 import { promptVersionOf } from "../prompt-version";
 import { appendWikiLog, type IngestLogEntry } from "../wiki-log";
 import { contentHash } from "../content-hash";
+import { describeUnknown } from "../utils/describe-unknown";
 
 type EntityTypeMutation = DeleteEntityTypeDelta;
 
@@ -1106,7 +1107,7 @@ export async function* runDelete(
         ?? (committedConflict
           ? new Error("delete: committed pre-publication conflict; rollback journal retained")
           : new Error("delete: rollback manifest is incomplete"));
-      const failureError = failure instanceof Error ? failure : new Error(String(failure));
+      const failureError = failure instanceof Error ? failure : new Error(describeUnknown(failure));
       yield {
         kind: "error",
         message: `delete: rollback failed — ${failureError.message}`,
@@ -1119,7 +1120,7 @@ export async function* runDelete(
     if (caughtFailure !== undefined) {
       throw caughtFailure instanceof Error
         ? caughtFailure
-        : new Error(String(caughtFailure));
+        : new Error(describeUnknown(caughtFailure));
     }
     const reason = signal.aborted ? "cancelled" : "retry";
     yield {

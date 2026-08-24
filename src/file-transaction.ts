@@ -1,4 +1,5 @@
 import { contentHash } from "./content-hash";
+import { describeUnknown } from "./utils/describe-unknown";
 import { VaultTools } from "./vault-tools";
 
 export type FileImage =
@@ -135,7 +136,7 @@ export class TransactionVaultTools extends VaultTools {
         this.trustworthy = false;
       }
       if (mutationError !== undefined) {
-        throw mutationError instanceof Error ? mutationError : new Error(String(mutationError));
+        throw mutationError instanceof Error ? mutationError : new Error(describeUnknown(mutationError));
       }
       throw new Error(`transaction verification failed at ${path}: mutation had no effect`);
     }
@@ -155,7 +156,7 @@ export class TransactionVaultTools extends VaultTools {
     }
     this.recorded.push({ path, before: operationBefore, after: actual });
     if (mutationError !== undefined) {
-      throw mutationError instanceof Error ? mutationError : new Error(String(mutationError));
+      throw mutationError instanceof Error ? mutationError : new Error(describeUnknown(mutationError));
     }
   }
 
@@ -203,6 +204,6 @@ export async function rollbackFileMutations(
     }
   }
   if (firstError !== undefined) {
-    throw firstError instanceof Error ? firstError : new Error(String(firstError));
+    throw firstError instanceof Error ? firstError : new Error(describeUnknown(firstError));
   }
 }

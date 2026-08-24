@@ -1,4 +1,5 @@
 import { parse as yamlParse, stringify as yamlStringify } from "yaml";
+import { describeUnknown } from "./describe-unknown";
 import { GENERIC_WIKI_STEM_REGEX } from "../wiki-stem";
 
 const FM_RE = /^---\n([\s\S]*?)\n---\n?/;
@@ -346,7 +347,7 @@ export function validateAndRepairFrontmatter(
             : (v: string) => URL_RE.test(v);
         const filtered = (val as unknown[]).filter((v) => {
           if (typeof v !== "string" || !predicate(v)) {
-            warnings.push(`${rule.field}: invalid entry "${v}" — removed`);
+            warnings.push(`${rule.field}: invalid entry "${describeUnknown(v)}" — removed`);
             return false;
           }
           return true;
@@ -372,7 +373,7 @@ export function validateAndRepairFrontmatter(
         let changed = false;
         for (const v of val as unknown[]) {
           if (typeof v !== "string") {
-            warnings.push(`${rule.field}: invalid entry "${v}" — removed`);
+            warnings.push(`${rule.field}: invalid entry "${describeUnknown(v)}" — removed`);
             changed = true;
             continue;
           }
@@ -411,7 +412,7 @@ export function validateAndRepairFrontmatter(
         }
         const filtered = (val as unknown[]).filter((v) => {
           if (typeof v !== "string") {
-            warnings.push(`${rule.field}: invalid entry "${v}" — removed`);
+            warnings.push(`${rule.field}: invalid entry "${describeUnknown(v)}" — removed`);
             return false;
           }
           return true;
@@ -435,7 +436,7 @@ export function validateAndRepairFrontmatter(
         }
         const filtered = (val as unknown[]).filter((v) => {
           if (typeof v !== "string" || !WIKILINK_RE.test(v) || v.includes("/") || v.endsWith(".md]]")) {
-            warnings.push(`${rule.field}: invalid entry "${v}" — removed`);
+            warnings.push(`${rule.field}: invalid entry "${describeUnknown(v)}" — removed`);
             return false;
           }
           return true;
@@ -452,7 +453,7 @@ export function validateAndRepairFrontmatter(
       }
       case "date-scalar": {
         if (typeof val !== "string" || !DATE_RE.test(val)) {
-          warnings.push(`${rule.field}: invalid date "${val}" — removed`);
+          warnings.push(`${rule.field}: invalid date "${describeUnknown(val)}" — removed`);
           delete parsed[rule.field];
           modified = true;
         }
@@ -469,7 +470,7 @@ export function validateAndRepairFrontmatter(
       case "warn-enum": {
         if (typeof val !== "string" || !(rule.values as string[]).includes(val)) {
           warnings.push(
-            `${rule.field}: unexpected value "${val}" (expected: ${rule.values.join("|")})`,
+            `${rule.field}: unexpected value "${describeUnknown(val)}" (expected: ${rule.values.join("|")})`,
           );
         }
         break;

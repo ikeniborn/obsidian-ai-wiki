@@ -1,3 +1,5 @@
+import { describeUnknown } from "./utils/describe-unknown";
+
 export interface VaultStat {
   type: "file" | "folder";
   ctime: number;
@@ -48,7 +50,7 @@ function codePointsHex(name: string): string {
 function isNotFound(e: unknown): boolean {
   const err = e as { code?: unknown; message?: unknown };
   if (err?.code === "ENOENT") return true;
-  return /ENOENT|no such file|not exist/i.test(String(err?.message ?? ""));
+  return /ENOENT|no such file|not exist/i.test(describeUnknown(err?.message ?? ""));
 }
 
 export class VaultTools {
