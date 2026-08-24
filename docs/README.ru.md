@@ -62,6 +62,31 @@ AI Wiki распространяется по [лицензии Apache 2.0](../L
 
 ---
 
+## Локальная разработка и релизы
+
+Версия `0.3.6` поддерживает Obsidian `1.13.0` и новее, включая мобильные устройства (`isDesktopOnly: false`). UI настроек использует поддерживаемый Obsidian API **Settings Definitions**: индексируемые группы и элементы управления возвращаются как definitions, а нестандартные поддерживаемые контролы отрисовываются через callback `render` соответствующего definition. Устаревший lifecycle `display()` не используется.
+
+Официальная команда lint для исходников — `npm run lint`. Она применяет полную рекомендованную конфигурацию `eslint-plugin-obsidianmd` к `src/**/*.ts` и допускает **ноль ошибок и ноль предупреждений** (`--max-warnings 0`).
+
+Мобильную оценку запускают после пересборки её bundle:
+
+```bash
+npm run eval:mobile-fixes:build
+node eval/mobile-fixes/run.cjs
+```
+
+Проверка релиза состоит из двух фаз. До production build она сканирует только отслеживаемые текстовые файлы в `src/`, `eval/` и `scripts/`; `scripts/dspy/CLAUDE.md` и `scripts/validate-release.mjs` — явные исключения. Совпавшая диагностика имеет точный вид `[<path>] forbidden <category> marker: <match>` и использует категории: Claude backend, Claude CLI probe, subprocess, Claude configuration и Claude UI. После build валидатор напрямую сканирует `dist/main.js` (даже если файл не отслеживается), отклоняет inline source map и требует непустые `dist/main.js`, `dist/manifest.json` и `dist/styles.css`, причём source и distribution manifest должны совпадать побайтно.
+
+Остальные release gates запускаются в таком порядке: `npm run release:validate:pre`, `npm run lint`, `npm run typecheck`, `npm test`, указанная выше мобильная оценка, `npm run build`, затем `npm run release:validate:post`. Репозиторий отслеживает точные сгенерированные release-файлы, а workflow требует, чтобы build не оставил diff в этих отслеживаемых файлах.
+
+История релизов неизменяема: `versions.json["0.3.5"]` остаётся `"1.7.2"`. Метаданные текущей `0.3.6` в package, lockfile, source/root/distribution manifest синхронизированы; `0.3.6` сопоставлена с `1.13.0`, и каждый текущий manifest указывает ту же минимальную версию приложения.
+
+Release workflow срабатывает на push в `master`, изменяющий `src/manifest.json`; обычная поставка достигает его через merge pull request, но YAML не проверяет происхождение merge. Его одна постоянная concurrency-группа ставит ожидающие публикации в очередь (`queue: max`) и не отменяет активный run. После всех gates, вычисления asset digest и provenance attestation workflow делает только non-force lightweight tag claim для проверенного commit `GITHUB_SHA` и один create-only `gh release create`; draft, partial, conflicting или ambiguous состояние релиза останавливает публикацию. Уже завершённый совпадающий релиз — terminal success без мутации.
+
+Отправка в Community plugin directory, действия с аккаунтом или review и изменение directory metadata остаются вне поставки и не авторизованы этим процессом релиза.
+
+---
+
 ## Быстрый старт: Ollama (полностью локально)
 
 Не нужны аккаунты и облачные сервисы — ИИ работает на вашем компьютере.
