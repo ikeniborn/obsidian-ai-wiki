@@ -9,6 +9,13 @@ review:
     verifiability: { status: passed }
     consistency: { status: passed }
   findings: []
+result_check:
+  verdict: OK
+  source: plan
+  plan_hash: 6473b7dba94bf604
+  last_run: 2026-08-25
+  reviewed: true
+  docs_checked: true
 chain:
   intent: docs/superpowers/intents/2026-08-24-reviewer-parity-remediation-intent.md
   spec: docs/superpowers/specs/2026-08-24-reviewer-parity-remediation-design.md
