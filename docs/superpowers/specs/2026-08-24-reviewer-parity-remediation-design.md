@@ -1,6 +1,6 @@
 ---
 review:
-  spec_hash: c461dfef6bb5f93c
+  spec_hash: 9af440ff918abbcc
   last_run: 2026-08-24
   phases:
     structure: { status: passed }
@@ -18,7 +18,7 @@ chain:
 
 The repository will use the current official Obsidian ESLint configuration as a zero-warning source gate and a separate allowlist-aware scan for active executable and release artifacts. The change removes two stale Claude-bearing evaluation bundles, adopts the Obsidian 1.13 Settings Definitions API, and keeps the OpenAI-only runtime, legacy vault startup, and desktop and mobile support.
 
-Delivery creates a new release record rather than rewriting history. Published and tagged `0.3.5` remains immutable, and its historical `versions.json` mapping remains `1.7.2`. Package, source-manifest, root-manifest, and built distribution versions advance together to `0.3.6`; the `0.3.6` manifests and `versions.json["0.3.6"]` declare Obsidian `1.13.0`. After every required zero-warning verification passes and the remediation pull request is merged, the existing release workflow publishes `0.3.6` automatically with the validated flat assets.
+Delivery creates a new release record rather than rewriting history. Published and tagged `0.3.5` remains immutable, and its historical `versions.json` mapping remains `1.7.2`. Package, source-manifest, root-manifest, and built distribution versions advance together to `0.3.6`; the `0.3.6` manifests and `versions.json["0.3.6"]` declare Obsidian `1.13.0`. After every required zero-warning verification passes and the remediation pull request is merged, the existing release workflow publishes `0.3.6` automatically through a serialized, create-only tag-and-release protocol with the validated flat assets.
 
 ## Acceptance (from intent)
 
@@ -28,7 +28,7 @@ Delivery creates a new release record rather than rewriting history. Published a
 - Published and tagged `0.3.5` remains unchanged, including its historical `versions.json` value of `1.7.2`.
 - Package, lockfile, source, root, and distribution metadata agree on version `0.3.6`; every `0.3.6` manifest and `versions.json["0.3.6"]` declare `1.13.0`.
 - Lint, typecheck, focused tests, the full test suite, production build, prebuild release validation, postbuild release validation, active-surface scan, mobile evaluation, and diff checks pass before merge and release.
-- The merged `0.3.6` revision is published by the existing release workflow with flat `main.js`, `manifest.json`, and `styles.css` assets.
+- The merged `0.3.6` revision is published by the existing release workflow through a non-force lightweight tag claim and one create-only `gh release create` call; the final published release has an exact-commit tag and exactly the locally verified `main.js`, `manifest.json`, and `styles.css` assets.
 - Release `0.3.6` is ready for a repeat Community scan. Community plugin-directory submission and metadata changes are not required or authorized.
 
 ## Scope
@@ -47,7 +47,7 @@ The settings UI implements the declarative Settings Definitions API introduced i
 
 The active-surface gate extends the existing release validator instead of forcing generated CommonJS, tests, and scripts through one TypeScript parser project. It scans executable and shipped surfaces for removed Claude backend, CLI probe, process, configuration, and UI markers. Its scope and exceptions are explicit, deterministic, and covered by fixtures.
 
-Version history and release delivery form a third fail-closed boundary. Validation requires immutable `0.3.5` history, synchronized `0.3.6` metadata, the new `0.3.6` compatibility mapping, and exactly the flat release asset set. The existing release workflow remains the only publication path: a merge to `master` supplies the release revision, the workflow reruns its verification gates, and only the verified merged revision may create tag and GitHub release `0.3.6`.
+Version history and release delivery form a third fail-closed boundary. Validation requires immutable `0.3.5` history, synchronized `0.3.6` metadata, the new `0.3.6` compatibility mapping, and exactly the flat release asset set. The existing release workflow remains the only publication path: a merge to `master` supplies the release revision, and a constant release concurrency group with `queue: max` and `cancel-in-progress: false` serializes runs, retains waiting runs up to the platform queue limit, and does not cancel an in-flight publisher. The workflow completes every verification gate and build-provenance attestation before the first tag or release mutation. It then performs authenticated, fail-closed reconciliation of every draft or published release for version `0.3.6`, atomically claims a lightweight tag at exactly `github.sha` without force, and invokes one create-only GitHub CLI release command. It never edits, uploads into, clobbers, or automatically repairs an existing or partial release.
 
 ## Components
 
@@ -87,7 +87,17 @@ Published `0.3.5` tag, GitHub release, release assets, and manifest metadata are
 
 `package.json`, the package-lock root records, `src/manifest.json`, `manifest.json`, and the built `dist/manifest.json` use version `0.3.6`. The three `0.3.6` manifests declare `minAppVersion: 1.13.0`, remain `isDesktopOnly: false`, and `versions.json` appends `"0.3.6": "1.13.0"` without changing older mappings.
 
-`.github/workflows/release.yml` remains the publication mechanism. Its automatic `master` push path is reached by merging the remediation pull request containing the `src/manifest.json` bump. Any retained retry dispatch must operate on the same merged `master` revision; it must not publish an unmerged branch. The workflow validates metadata and active surfaces, runs zero-warning lint, typecheck, tests, production build, and postbuild asset checks before provenance attestation and GitHub release creation. It publishes tag and release `0.3.6` with only `dist/main.js`, `dist/manifest.json`, and `dist/styles.css`.
+`.github/workflows/release.yml` remains the publication mechanism. Its automatic `master` push path is reached by merging the remediation pull request containing the `src/manifest.json` bump. Workflow concurrency uses one constant group, `queue: max`, and `cancel-in-progress: false`. The workflow validates metadata and active surfaces, runs zero-warning lint, typecheck, tests, production build, postbuild asset checks, and build-provenance attestation before any tag or release mutation.
+
+After those gates, an authenticated paginated GitHub API search lists all releases, including drafts, and selects every record whose `tag_name` exactly equals the version. It fails closed unless it can determine the complete exact-version state. Multiple version matches, a draft, a partial release, an API error, or an ambiguous response stops publication. One already completed exact release is terminal success without mutation only when its lightweight tag resolves exactly to `GITHUB_SHA`, it is published, non-draft, and non-prerelease, and its exact three assets match the local files by name, SHA-256 digest, and bytes.
+
+With no release residue, the workflow claims `refs/tags/0.3.6` by a single atomic non-force push of exactly `GITHUB_SHA`, producing a lightweight tag. A failed claim stops unless this is a rerun of the same original workflow run, the existing ref is a lightweight tag at the same original `GITHUB_SHA`, and a fresh fail-closed release search still finds no residue. Any conflicting commit, annotated tag, first-attempt race, or unprovable state stops. After a successful or permitted same-run claim, the only publication command is:
+
+```bash
+gh release create "$version" dist/main.js dist/manifest.json dist/styles.css --verify-tag --target "$GITHUB_SHA" --title "$version" --generate-notes
+```
+
+There is no edit, upload, or clobber fallback. A create error or post-create mismatch is possible residue and stops for separate cleanup authorization. Final postconditions require the lightweight tag at exactly `GITHUB_SHA`; one published, non-draft, non-prerelease release; and exactly `main.js`, `manifest.json`, and `styles.css`, each matching the locally attested file by SHA-256 digest and bytes.
 
 ## Data and Validation Flow
 
@@ -95,8 +105,10 @@ Published `0.3.5` tag, GitHub release, release assets, and manifest metadata are
 2. Release validation scans active repository surfaces. The orphan Claude probe is absent, the regenerated mobile evaluation bundle contains no removed markers, and the production bundle remains OpenAI-only.
 3. Version preparation updates package, lockfile, source, and root records to `0.3.6`, preserves `versions.json["0.3.5"] = "1.7.2"`, and appends `versions.json["0.3.6"] = "1.13.0"`. The build generates a matching distribution manifest and flat assets.
 4. Typecheck, focused tests, the full test suite, mobile evaluation, production build, prebuild and postbuild release validation, final active-surface scan, and diff checks run against the release candidate. Any error or warning stops delivery.
-5. The verified pull request merges. The resulting `master` push triggers the existing release workflow, which repeats its enforced gates against the merged commit.
-6. Only after those gates pass does the workflow attest the three flat assets and create tag and GitHub release `0.3.6`. Published `0.3.5` remains untouched. Release `0.3.6` becomes input for a later Community scan, not an authorization to submit or edit directory metadata.
+5. The verified pull request merges. The resulting `master` push triggers the existing release workflow, which enters the constant serialized release queue and repeats its enforced gates against the merged `GITHUB_SHA`.
+6. The workflow computes the local asset names, bytes, and SHA-256 digests and attests all three assets before release mutation. It then performs an authenticated, fail-closed search for every draft or published release whose version is `0.3.6`. A completed exact release is terminal success without mutation; ambiguous, multiple, draft, partial, or conflicting state stops.
+7. With no release residue, one non-force push atomically claims a lightweight `0.3.6` tag at exactly `GITHUB_SHA`. Claim failure is accepted only for a rerun of the same original workflow and SHA when the existing lightweight tag is exact and a fresh search confirms no release residue; every other failure stops.
+8. The workflow runs the single create-only `gh release create` command and verifies the exact tag commit, published/non-draft/non-prerelease flags, exact three asset names, SHA-256 digests, and remote bytes against local files. Any create or postcondition ambiguity stops for separately authorized cleanup. Published `0.3.5` remains untouched. Release `0.3.6` becomes input for a later Community scan, not an authorization to submit or edit directory metadata.
 
 A failing local, CI, or release-workflow command leaves `0.3.6` unpublished. No workflow path may turn unmerged code, inconsistent metadata, a warning-bearing lint result, or incomplete assets into a release.
 
@@ -138,11 +150,11 @@ Published and tagged `0.3.5` must remain unchanged, and `versions.json["0.3.5"]`
 
 Acceptance: remote `0.3.5` tag, release assets, and published manifest are unchanged; `versions.json["0.3.5"]` equals `1.7.2`; `package.json`, both package-lock root version fields, `src/manifest.json`, `manifest.json`, and built `dist/manifest.json` equal `0.3.6`; all `0.3.6` manifests and `versions.json["0.3.6"]` equal `1.13.0` for minimum-app compatibility; release validation rejects any mismatch.
 
-### R7 — Verified post-merge release
+### R7 — Verified create-only post-merge release
 
-The existing release workflow must be the only publication path and must publish `0.3.6` automatically only from the merged remediation revision after every required gate passes. No release may be created from an unmerged pull request, warning-bearing lint result, failing test or evaluation, failed validator, or inconsistent metadata.
+The existing release workflow must remain the only publication path and publish `0.3.6` automatically only from the merged remediation revision after every required gate and provenance attestation passes. Its constant concurrency group, `queue: max`, and non-cancelling policy must serialize publishers, retain waiting runs up to the platform queue limit, and leave the active run in progress. Release reconciliation must use authenticated paginated API results and fail closed across every draft and published record whose `tag_name` exactly equals the version. Mutation is limited to one atomic non-force lightweight tag claim at exactly `GITHUB_SHA` and one `gh release create` command with `--verify-tag` and `--target "$GITHUB_SHA"`; no edit, upload, clobber, or partial-state recovery path is permitted.
 
-Acceptance: lint, typecheck, focused tests, the full test suite, mobile evaluation, production build, prebuild release validation, postbuild release validation, active-surface scan, and diff checks all pass before merge and release; the release workflow runs on the merged `master` commit; tag and GitHub release `0.3.6` contain flat `main.js`, `manifest.json`, and `styles.css`; a negative reviewer fixture or metadata mismatch prevents publication.
+Acceptance: lint, typecheck, focused tests, the full test suite, mobile evaluation, production build, prebuild release validation, postbuild release validation, active-surface scan, diff checks, local asset digesting, and provenance attestation all pass before tag or release mutation; the workflow runs on the merged `master` commit; authenticated lookup rejects ambiguous, multiple, draft, partial, or conflicting version state; tag claim is non-force, lightweight, and exact-commit; claim failure proceeds only on a rerun of the same original workflow and SHA with the exact existing tag and no release residue. The release is published, non-draft, non-prerelease, and contains exactly `main.js`, `manifest.json`, and `styles.css`, whose SHA-256 digests and downloaded bytes match the local attested files. A completed exact release is terminal success with no mutation. Any negative reviewer fixture, metadata mismatch, release residue, API ambiguity, asset mismatch, or unauthorized rerun prevents publication.
 
 ### R8 — Documentation and Community boundary
 
@@ -156,15 +168,17 @@ Lint and active-surface findings are fail-closed and report exact paths and rule
 
 If an official rule requires a change that conflicts with mobile support on Obsidian 1.13+, OpenAI-only execution, safe legacy loading, or guarded desktop behavior, implementation halts for user review. If preparing `0.3.6` would rewrite published `0.3.5`, change its historical mapping away from `1.7.2`, or require publication before merge, delivery halts. The implementation must not add a suppression, set `isDesktopOnly: true`, add a backend, weaken a release gate, or edit Community directory metadata to obtain a passing result.
 
+Release discovery treats authentication, transport, pagination, malformed response, duplicate version record, draft or partial release, and uncertain tag or asset state as stop conditions. A tag-claim failure stops unless same-original-run rerun evidence, exact lightweight tag SHA, and an empty fresh release search all agree. `gh release create` failure and any postcondition mismatch are treated as possible residue; the workflow does not edit or resume the release. Cleanup or deletion requires separate authorization, after which only a rerun of the same original workflow may proceed when the full fail-closed preflight allows it. An already completed exact release returns success without mutation.
+
 ## Test Strategy
 
 Focused lint tests inspect the resolved plugin version, effective configuration, warning threshold, Settings Definitions behavior, and guarded Node-import behavior. Release-validator tests cover forbidden marker categories, path reporting, allowed historical evidence, and intentional negative fixtures.
 
 Evaluation checks rebuild and execute the mobile-fixes bundle and confirm the Claude probe bundle is absent. Compatibility checks cover OpenAI settings, legacy vault loading without writes, mobile manifests, and guarded desktop export behavior.
 
-Version checks compare package, package-lock, source, root, and built distribution metadata; assert `versions.json["0.3.5"] === "1.7.2"` and `versions.json["0.3.6"] === "1.13.0"`; and verify published `0.3.5` has not changed. Workflow checks prove publication uses the merged `master` revision and that a warning, failure, reviewer marker, metadata mismatch, or asset mismatch blocks release creation.
+Version checks compare package, package-lock, source, root, and built distribution metadata; assert `versions.json["0.3.5"] === "1.7.2"` and `versions.json["0.3.6"] === "1.13.0"`; and verify published `0.3.5` has not changed. Workflow checks prove publication uses the merged `master` revision, serializes runs with the required concurrency policy, and performs every gate and attestation before mutation. They cover authenticated paginated release discovery; API and authentication failure; duplicate, draft, partial, and completed releases; conflicting, annotated, and exact lightweight tags; first-run claim races; permitted same-original-run reruns; create failure; and the absence of edit, upload, or clobber fallback.
 
-Broad verification runs lint with zero warnings, typecheck, focused tests, all tests, mobile evaluation, production build, prebuild validation, postbuild validation, a final active-surface scan, and `git diff --check`. After merge, release evidence confirms tag and GitHub release `0.3.6` plus the three validated flat assets.
+Broad verification runs lint with zero warnings, typecheck, focused tests, all tests, mobile evaluation, production build, prebuild validation, postbuild validation, a final active-surface scan, and `git diff --check`. After merge, release evidence confirms a lightweight `0.3.6` tag at exactly the merged SHA; one published, non-draft, non-prerelease release; and exactly three flat assets whose names, SHA-256 digests, and downloaded bytes match the local attested files. A completed exact-release fixture proves terminal success performs no mutation; every partial or ambiguous fixture proves fail-closed stop without automatic recovery.
 
 ## Documentation Strategy
 
@@ -180,19 +194,21 @@ Current developer documentation records the exact source lint scope, zero-warnin
 - The `0.3.6` version can drift across package, lockfile, manifests, build output, or `versions.json`. Prebuild and postbuild checks fail on any mismatch.
 - Raising the minimum version excludes older Obsidian installations from `0.3.6`. The new manifests and compatibility mapping state `1.13.0` consistently, current docs disclose the boundary, and `0.3.5` history remains available unchanged.
 - Node APIs can break mobile loading. The existing runtime guard and official guard-aware rule remain mandatory.
-- Release automation could publish too early or from the wrong revision. Publication remains on the existing merge-triggered workflow, requires the merged `master` revision, and follows every zero-warning verification gate.
-- A release workflow failure after merge can leave `0.3.6` unpublished. Retry is allowed only against the same verified merged revision; it must not create an artificial history rewrite or bypass a failed gate.
+- Concurrent release runs could race on a version. A constant concurrency group, `queue: max`, and `cancel-in-progress: false` serialize publishers, retain waiting runs up to the platform queue limit, and preserve the active run; the atomic non-force tag claim remains the final ownership boundary.
+- Release automation could publish too early or from the wrong revision. Publication remains on the existing merge-triggered workflow, requires the merged `master` `GITHUB_SHA`, and completes every zero-warning verification gate plus provenance attestation before mutation.
+- A network or CLI failure can leave a tag, draft, partial release, or uncertain API state. The workflow never edits or resumes residue. It stops for separate cleanup authorization, then permits only a fail-closed rerun of the same original workflow and SHA.
+- A successful create can still contain wrong assets or flags. Exact tag type/SHA, release flags, asset names, SHA-256 digests, and downloaded-byte checks are mandatory postconditions; mismatch stops without automated repair.
 
 ## Autonomy Boundaries
 
 - Full autonomy: remove stale executable evaluation artifacts and make mechanical, rule-driven lint corrections with focused tests.
 - Guarded autonomy: update ESLint configuration, settings tests, `0.3.6` package and manifest metadata, `versions.json` (`0.3.5` retained at `1.7.2`, `0.3.6` added at `1.13.0`), release validation, and the existing release workflow, with recorded rationale and passing checks.
-- Authorized automatic action: after full verification and pull-request merge, the existing workflow may publish `0.3.6` without another approval. A retry is authorized only for the same merged revision after all gates pass.
+- Authorized automatic action: after full verification and pull-request merge, the existing workflow may publish `0.3.6` without another approval through the create-only protocol. It may rerun only the same original workflow and SHA when authenticated fail-closed state inspection permits; a completed exact release is terminal success without mutation.
 - Proposal-first: change public behavior, the approved `0.3.6` compatibility target, the publication mechanism, or any required verification gate.
-- Human-only: modify published or tagged `0.3.5`, change its historical mapping away from `1.7.2`, submit or edit the Community plugin-directory entry, change the OpenAI contract, or add Claude, LM Studio, or another backend.
+- Human-only: clean up or delete release residue; modify published or tagged `0.3.5`; change its historical mapping away from `1.7.2`; submit or edit the Community plugin-directory entry; change the OpenAI contract; or add Claude, LM Studio, or another backend.
 
 ## Human Checkpoints
 
 Changing OpenAI behavior, adding Claude, LM Studio, or another backend, setting `isDesktopOnly: true`, weakening an official rule or release gate, deleting historical evidence, changing the approved compatibility target or release mechanism, modifying published `0.3.5`, or submitting or editing the Community directory requires separate user approval.
 
-The `0.3.6` version bump, `minAppVersion: 1.13.0`, retention of `versions.json["0.3.5"] = "1.7.2"`, settings migration, merge-triggered automatic `0.3.6` publication, and gated retry of the same merged revision are already authorized. Publication does not require a new checkpoint once all verification passes and the pull request is merged. Community plugin-directory submission remains excluded from completion.
+The `0.3.6` version bump, `minAppVersion: 1.13.0`, retention of `versions.json["0.3.5"] = "1.7.2"`, settings migration, merge-triggered automatic `0.3.6` publication, and fail-closed rerun of the same original workflow and SHA are already authorized. Publication does not require a new checkpoint once all verification passes, the pull request is merged, and release state permits the create-only operation. Draft, partial, conflicting, or ambiguous residue requires a separate cleanup decision. Community plugin-directory submission remains excluded from completion.
