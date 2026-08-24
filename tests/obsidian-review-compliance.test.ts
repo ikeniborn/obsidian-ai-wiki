@@ -4,9 +4,14 @@ import { resolve } from "node:path";
 import test from "node:test";
 
 const SRC_ROOT = resolve(new URL("../src", import.meta.url).pathname);
+const PROJECT_ROOT = resolve(new URL("..", import.meta.url).pathname);
 
 function readSource(path: string): string {
   return readFileSync(resolve(SRC_ROOT, path), "utf8");
+}
+
+function readProjectFile(path: string): string {
+  return readFileSync(resolve(PROJECT_ROOT, path), "utf8");
 }
 
 test("production source does not suppress Obsidian window timer review rules", () => {
@@ -48,4 +53,19 @@ test("settings UI source uses Obsidian element helpers", () => {
       `${file} must use createDiv/createSpan shorthands`,
     );
   }
+});
+
+test("lint configuration matches the official Obsidian reviewer contract", () => {
+  const packageJson = JSON.parse(readProjectFile("package.json"));
+  const packageLock = JSON.parse(readProjectFile("package-lock.json"));
+  const eslintConfig = readProjectFile("eslint.config.mjs");
+
+  assert.equal(packageJson.devDependencies["eslint-plugin-obsidianmd"], "0.4.1");
+  assert.equal(
+    packageLock.packages["node_modules/eslint-plugin-obsidianmd"].version,
+    "0.4.1",
+  );
+  assert.equal(packageJson.scripts.lint, 'eslint "src/**/*.ts" --max-warnings 0');
+  assert.match(eslintConfig, /\.\.\.obsidianmd\.configs\.recommended/);
+  assert.doesNotMatch(eslintConfig, /rules\s*:/);
 });

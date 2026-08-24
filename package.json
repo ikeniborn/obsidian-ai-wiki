@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node esbuild.config.mjs production",
     "dev": "node esbuild.config.mjs",
-    "lint": "eslint \"src/**/*.ts\"",
+    "lint": "eslint \"src/**/*.ts\" --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
     "release:validate:pre": "node scripts/validate-release.mjs --phase prebuild",
@@ -19,7 +19,7 @@
     "@types/path-browserify": "^1.0.3",
     "esbuild": "^0.28.0",
     "eslint": "^9.39.4",
-    "eslint-plugin-obsidianmd": "^0.3.0",
+    "eslint-plugin-obsidianmd": "0.4.1",
     "obsidian": "^1.5.0",
     "tsx": "^4.19.0",
     "typescript": "^5.4.0",
