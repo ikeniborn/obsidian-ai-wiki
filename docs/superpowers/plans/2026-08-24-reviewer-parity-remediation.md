@@ -1,6 +1,6 @@
 ---
 review:
-  plan_hash: f3a0c83465faab1d
+  plan_hash: 88828d0a1d1f7914
   last_run: 2026-08-24
   phases:
     structure: { status: passed }
@@ -28,13 +28,13 @@ chain:
 
 ## Constraints and requirement map
 
-- R1: Tasks 1 and 6 establish exact official lint dependency, config, scope, and zero-warning threshold.
-- R2: Tasks 2–5 resolve every current source finding without suppressions.
-- R3: Task 7 adds active-surface marker validation and fixtures.
-- R4: Task 8 removes the orphan Claude probe and reproducibly rebuilds the mobile eval.
-- R5: Tasks 3, 4, and 9 preserve OpenAI-only loading, legacy settings, mobile support, and set `minAppVersion` to `1.13.0`.
-- R6: Tasks 6, 7, and 10 integrate and exercise all release gates.
-- R7: Tasks 9 and 10 update current docs and iwiki, then reconcile every changed path. No version bump, release, publication, Community submission, or new backend is part of this plan.
+- R1: Tasks 1 and 7 establish exact official lint dependency, config, scope, and zero-warning threshold.
+- R2: Tasks 2, 3, 5, and 6 resolve every current source finding without suppressions.
+- R3: Task 8 adds active-surface marker validation and fixtures.
+- R4: Task 9 removes the orphan Claude probe and reproducibly rebuilds the mobile eval.
+- R5: Tasks 3, 4, and 6 preserve OpenAI-only loading, legacy settings, mobile support, and declare `minAppVersion` as `1.13.0` before any strict lint gate.
+- R6: Tasks 7, 8, and 11 integrate and exercise all release gates.
+- R7: Tasks 10 and 11 update current docs and iwiki, then reconcile every changed path. No version bump, release, publication, Community submission, or new backend is part of this plan.
 
 Every numbered step inherits its task's `Closes` mapping. Every edit step's DoD is the immediately following verification step. Every commit step must exit zero and `git show --stat --oneline HEAD` must list only that task's declared files.
 
@@ -99,14 +99,14 @@ export default defineConfig([
 
 Change the npm command to `eslint "src/**/*.ts" --max-warnings 0`.
 
-- [ ] Step 5: Run the contract test and capture the official baseline.
+- [ ] Step 5: Run the contract test and capture the intentionally failing official baseline.
 
 ```bash
 node --import tsx --test tests/obsidian-review-compliance.test.ts
 npm run lint
 ```
 
-Expected: contract test passes; lint fails with the known remediation inventory rather than a config error.
+Expected: contract test passes; lint fails with the known remediation inventory rather than a config error. This is diagnostic inventory, not a passing strict lint gate.
 
 - [ ] Step 6: Commit the gate contract only.
 
@@ -200,12 +200,19 @@ git commit -m "fix(lint): make unknown value formatting explicit"
 
 - Modify: `src/settings.ts`
 - Modify: `src/main.ts`
+- Modify: `package.json`
+- Modify: `package-lock.json`
 - Create: `tests/settings-definitions.test.ts`
 - Modify: `tests/settings-model-controls.test.ts`
 
 - [ ] Step 1: Add source-contract tests for the supported API and preserved settings surface.
 
-Assert in `tests/settings-definitions.test.ts` that `LlmWikiSettingTab` implements `getSettingDefinitions(): SettingDefinitionItem[]`, imports `SettingDefinitionItem`, and contains no `display(): void` or `this.display()`. Assert `src/main.ts` refreshes with `this.settingTab?.update()`.
+Assert in `tests/settings-definitions.test.ts` that `LlmWikiSettingTab` implements `getSettingDefinitions(): SettingDefinitionItem[]`, imports `SettingDefinitionItem`, and contains no `display(): void` or `this.display()`. Assert `src/main.ts` refreshes with `this.settingTab?.update()`. Read `package.json` and `package-lock.json`, then assert:
+
+```ts
+assert.equal(packageJson.devDependencies.obsidian, "1.13.1");
+assert.equal(packageLock.packages["node_modules/obsidian"].version, "1.13.1");
+```
 
 Keep the existing settings layout assertions in `tests/settings-model-controls.test.ts`; replace its assertion that forbids rerender during typing so it now forbids `this.update()` in the live per-character budget callback.
 
@@ -215,9 +222,17 @@ Keep the existing settings layout assertions in `tests/settings-model-controls.t
 node --import tsx --test tests/settings-definitions.test.ts tests/settings-model-controls.test.ts
 ```
 
-Expected: non-zero exit because the tab still implements and calls `display()`.
+Expected: non-zero exit because the tab still implements and calls `display()`; the dependency assertions also fail if the Obsidian API is not already pinned exactly.
 
-- [ ] Step 3: Convert existing setting rows into Setting Definition items without changing callback bodies.
+- [ ] Step 3: Pin the exact Obsidian API used by the migration.
+
+```bash
+npm install --save-dev --save-exact obsidian@1.13.1
+```
+
+Expected: `package.json` records `"obsidian": "1.13.1"`; the lockfile resolves `node_modules/obsidian` to `1.13.1`.
+
+- [ ] Step 4: Convert existing setting rows into Setting Definition items without changing callback bodies.
 
 Import `SettingDefinitionItem`. Replace imperative top-level `render()` ownership with synchronous `getSettingDefinitions()` returning groups and definition items. For custom controls, use supported render definitions:
 
@@ -233,34 +248,92 @@ Import `SettingDefinitionItem`. Replace imperative top-level `render()` ownershi
 
 Represent existing headings as `type: "group"` definitions. Preserve current conditional structure by building arrays from current settings state; callbacks that change structure call `this.update()`. Live per-character callbacks continue repainting their registered controls in place and do not call `update()`.
 
-- [ ] Step 4: Load cached domain/local state asynchronously, then invoke the supported refresh.
+- [ ] Step 5: Load cached domain/local state asynchronously, then invoke the supported refresh.
 
 Keep `refresh()` responsible only for loading `cachedDomains` and `localCache`; end it with `this.update()`. Start it when the tab is created or first indexed, without persisting settings. Replace all structural `this.display()` calls with `this.update()` and `src/main.ts` busy refresh with `this.settingTab?.update()`.
 
-- [ ] Step 5: Run focused settings and legacy-loading tests.
+- [ ] Step 6: Run focused settings and legacy-loading tests.
 
 ```bash
 node --import tsx --test tests/settings-definitions.test.ts tests/settings-model-controls.test.ts tests/openai-only-settings.test.ts tests/openai-only-load-settings.test.ts
 ```
 
-Expected: zero exit; controls/order assertions pass; legacy Claude-shaped fields remain ignored and loading causes no migration write.
+Expected: zero exit; dependency, controls, and order assertions pass; legacy Claude-shaped fields remain ignored and loading causes no migration write.
 
-- [ ] Step 6: Run lint for the migrated settings paths.
+- [ ] Step 7: Capture the intentionally failing post-migration lint inventory.
 
 ```bash
-npx eslint src/settings.ts src/main.ts --max-warnings 0
+npm run lint
 ```
 
-Expected: no `prefer-setting-definitions` or deprecated `display` findings. Any remaining sentence-case or deprecated-control findings belong to Task 4 and must be listed before proceeding.
+Expected: non-zero exit, with no `prefer-setting-definitions` or deprecated `display` finding. The only compatibility findings are exactly 13 `obsidianmd/no-unsupported-api` errors plus one `obsidianmd/settings-tab/require-display` warning, all assigned to immediate Task 4; remaining sentence-case or deprecated-control findings are listed and assigned to Task 5. Any other rule or path blocks this commit. This step is a diagnostic inventory, not a strict lint gate.
 
-- [ ] Step 7: Commit the API migration.
+- [ ] Step 8: Commit the API migration and exact API pin.
 
 ```bash
-git add src/settings.ts src/main.ts tests/settings-definitions.test.ts tests/settings-model-controls.test.ts
+git add package.json package-lock.json src/settings.ts src/main.ts tests/settings-definitions.test.ts tests/settings-model-controls.test.ts
 git commit -m "refactor(settings): adopt Obsidian setting definitions"
 ```
 
-### Task 4: Replace deprecated controls and fix reviewer-facing sentence case
+### Task 4: Declare Obsidian 1.13 compatibility before strict lint
+
+**Closes:** R5 compatibility metadata required by the supported settings API.
+
+**Files:**
+
+- Modify: `src/manifest.json`
+- Generated by build: `manifest.json`
+- Generated by build: `dist/main.js`
+- Generated by build: `dist/manifest.json`
+- Modify: `versions.json`
+- Modify: `tests/release-validation.test.ts`
+
+- [ ] Step 1: Update manifest fixtures and add a failing synchronization contract.
+
+Change the release-test manifest fixture to `minAppVersion: "1.13.0"`. Add a repository contract that reads `src/manifest.json`, `manifest.json`, `dist/manifest.json`, and `versions.json`, then asserts all three manifests agree and:
+
+```ts
+assert.equal(sourceManifest.version, "0.3.5");
+assert.equal(sourceManifest.minAppVersion, "1.13.0");
+assert.equal(sourceManifest.isDesktopOnly, false);
+assert.equal(versionsJson["0.3.5"], "1.13.0");
+```
+
+- [ ] Step 2: Run the focused manifest tests and confirm the old compatibility metadata fails.
+
+```bash
+node --import tsx --test tests/release-validation.test.ts
+```
+
+Expected: non-zero exit on `minAppVersion` while source, root, dist, and `versions.json` still declare `1.7.2`.
+
+- [ ] Step 3: Change only the source manifest compatibility floor, then use the production build to synchronize generated metadata.
+
+Set `src/manifest.json` to `"minAppVersion": "1.13.0"` without changing `version` or `isDesktopOnly`, then run:
+
+```bash
+npm run build
+```
+
+Expected: build exits zero; root and dist manifests are copied from `src/manifest.json`; `versions.json["0.3.5"]` becomes `"1.13.0"`; plugin version remains `0.3.5`; `isDesktopOnly` remains `false`.
+
+- [ ] Step 4: Run focused compatibility tests and recapture lint inventory.
+
+```bash
+node --import tsx --test tests/release-validation.test.ts tests/openai-only-settings.test.ts tests/openai-only-load-settings.test.ts
+npm run lint
+```
+
+Expected: focused tests exit zero. Lint remains non-zero only for the sentence-case and deprecated-control findings assigned to Task 5; all 13 `no-unsupported-api` errors and the `require-display` warning from Task 3 are absent. Any compatibility or unrelated finding blocks this commit.
+
+- [ ] Step 5: Commit compatibility metadata before any passing strict lint gate.
+
+```bash
+git add src/manifest.json manifest.json dist/main.js dist/manifest.json versions.json tests/release-validation.test.ts
+git commit -m "build(compat): require Obsidian 1.13"
+```
+
+### Task 5: Replace deprecated controls and fix reviewer-facing sentence case
 
 **Closes:** R2 deprecated UI and sentence-case findings.
 
@@ -308,7 +381,7 @@ git commit -m "fix(ui): replace deprecated Obsidian controls"
 
 Before committing, inspect `git diff --cached --name-only`; unstage any test file not directly changed by this task.
 
-### Task 5: Resolve environment-global findings without weakening mobile guards
+### Task 6: Resolve environment-global findings without weakening mobile guards
 
 **Closes:** R2 environment-global findings and R5 guarded desktop/mobile behavior.
 
@@ -358,7 +431,7 @@ git add src/native-openai-transport.ts src/view.ts tests/okf-export-desktop-guar
 git commit -m "fix(runtime): keep desktop APIs behind mobile guards"
 ```
 
-### Task 6: Close the complete official source lint gate
+### Task 7: Close the complete official source lint gate
 
 **Closes:** R1 zero-warning proof and R6 lint-gate integration.
 
@@ -392,7 +465,7 @@ git status --short
 
 Expected: no whitespace errors; dirty paths are only the mapped residual corrections. Commit with `fix(lint): close official reviewer findings` only when needed.
 
-### Task 7: Add a path-scoped active reviewer-surface scan
+### Task 8: Add a path-scoped active reviewer-surface scan
 
 **Closes:** R3 active-surface detection and the R6 negative reviewer fixture.
 
@@ -434,7 +507,7 @@ node --import tsx --test tests/release-validation.test.ts
 npm run release:validate:pre
 ```
 
-Expected: tests pass; current prebuild fails only on the known stale eval artifacts until Task 8.
+Expected: tests pass; current prebuild fails only on the known stale eval artifacts until Task 9.
 
 - [ ] Step 5: Commit the scanner and fixtures.
 
@@ -443,7 +516,7 @@ git add scripts/validate-release.mjs tests/release-validation.test.ts
 git commit -m "test(release): scan active reviewer surfaces"
 ```
 
-### Task 8: Remove stale Claude eval output and rebuild the retained mobile eval
+### Task 9: Remove stale Claude eval output and rebuild the retained mobile eval
 
 **Closes:** R4 eval consistency and R3 clean active eval surfaces.
 
@@ -502,60 +575,40 @@ git add package.json package-lock.json eval/mobile-fixes/run.cjs
 git commit -m "chore(eval): remove stale Claude artifacts"
 ```
 
-### Task 9: Declare Obsidian 1.13 compatibility and document current gates
+### Task 10: Document current reviewer and release gates
 
-**Closes:** R5 compatibility metadata and repository portion of R7 documentation.
+**Closes:** Repository portion of R7 documentation.
 
 **Files:**
 
-- Modify: `src/manifest.json`
-- Generated by build: `manifest.json`
-- Generated by build: `dist/manifest.json`
-- Modify: `versions.json`
 - Modify: `README.md`
-- Modify: current developer documentation selected from existing `docs/` layout
-- Modify: `tests/release-validation.test.ts`
+- Modify: `docs/README.ru.md`
 
-- [ ] Step 1: Update manifest fixtures to expect `minAppVersion: "1.13.0"` and retain `isDesktopOnly: false`; add a regression assertion that root/source/dist manifests agree after build.
+- [ ] Step 1: Inspect the implemented gate commands, scanner scope/exceptions, and retained eval workflow from Tasks 1–9. Map the English and Russian README development sections to the same current contracts; do not edit historical intent, spec, plan, or result artifacts.
 
-- [ ] Step 2: Run focused manifest tests and confirm they fail against `1.7.2`.
+- [ ] Step 2: Update current docs with exact contracts: Obsidian 1.13+, Setting Definitions, lint scope and zero-warning threshold, active-surface paths/exceptions, and mobile eval rebuild command. Document the implemented scanner and eval behavior; do not mutate or resynchronize compatibility metadata in this task.
 
-```bash
-node --import tsx --test tests/release-validation.test.ts
-```
-
-Expected: non-zero exit on the new minimum-version assertion.
-
-- [ ] Step 3: Change only `src/manifest.json` to `"minAppVersion": "1.13.0"`, then run production build to synchronize root/dist manifests and `versions.json`.
-
-```bash
-npm run build
-```
-
-Expected: build exits zero; `manifest.json`, `src/manifest.json`, and `dist/manifest.json` match; `versions.json["0.3.5"]` becomes `"1.13.0"`; version remains `0.3.5`; `isDesktopOnly` remains `false`.
-
-- [ ] Step 4: Update current docs with exact contracts: Obsidian 1.13+, Setting Definitions, lint scope and zero-warning threshold, active-surface paths/exceptions, and mobile eval rebuild command. Do not rewrite historical chain documents.
-
-- [ ] Step 5: Run focused release and legacy compatibility checks.
+- [ ] Step 3: Run current release, legacy-load, mobile-guard, and eval checks after the documentation edit.
 
 ```bash
 node --import tsx --test tests/release-validation.test.ts tests/openai-only-settings.test.ts tests/openai-only-load-settings.test.ts tests/okf-export-desktop-guard.test.ts
 npm run release:validate:pre
 npm run release:validate:post
+node eval/mobile-fixes/run.cjs
 ```
 
-Expected: all commands exit zero; no settings write occurs during legacy load; manifests remain mobile-capable.
+Expected: all commands exit zero; documented gates match executable commands; no settings write occurs during legacy load; manifests remain mobile-capable; retained eval passes.
 
-- [ ] Step 6: Commit compatibility metadata and current documentation.
+- [ ] Step 4: Commit only current documentation.
 
 ```bash
-git add src/manifest.json manifest.json dist/manifest.json versions.json README.md docs tests/release-validation.test.ts
-git commit -m "docs(release): require Obsidian 1.13 reviewer gates"
+git add README.md docs/README.ru.md
+git commit -m "docs(release): describe reviewer parity gates"
 ```
 
 Before committing, inspect staged paths and remove any historical or unrelated document.
 
-### Task 10: Full verification, iwiki update, and result reconciliation
+### Task 11: Full verification, iwiki update, and result reconciliation
 
 **Closes:** R6 full release verification and R7 durable documentation/delivery boundary.
 
@@ -584,10 +637,10 @@ Expected: every command exits zero; lint has zero warnings; test output has zero
 
 ```bash
 rg -n -i 'claude code|claude-agent|ClaudeCliClient|iclaudePath|claudePath|child_process|spawn\(' src eval scripts dist/main.js
-git diff origin/master...HEAD -- package.json src/manifest.json manifest.json versions.json
+git diff origin/master...HEAD -- package.json package-lock.json src/manifest.json manifest.json dist/manifest.json versions.json
 ```
 
-Expected: first command returns only the excluded validator's pattern declarations or explicitly allowed repository instruction content, and no runtime/eval/release violation; second confirms package version remains `0.3.5`, only minimum compatibility changes, and no new backend.
+Expected: first command returns only the excluded validator's pattern declarations or explicitly allowed repository instruction content, and no runtime/eval/release violation; second confirms package version remains `0.3.5`, Obsidian API is pinned exactly to `1.13.1`, compatibility metadata is `1.13.0`, and no new backend was added.
 
 - [ ] Step 3: Update the bound iwiki domain through MCP.
 
