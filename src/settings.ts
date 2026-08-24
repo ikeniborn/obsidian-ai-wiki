@@ -1,4 +1,5 @@
 import { AbstractInputSuggest, App, Notice, Platform, PluginSettingTab, requestUrl, Setting } from "obsidian";
+import type { SettingDefinition, SettingDefinitionItem, SettingGroup } from "obsidian";
 import { ConfirmModal, EditDomainModal, ExportOkfModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import {
@@ -86,29 +87,65 @@ export class LlmWikiSettingTab extends PluginSettingTab {
   private cachedDomains: DomainEntry[] = [];
   private localCache: LocalConfig = {};
   private _availableModels: string[] = [];
+  private refreshPromise: Promise<void> | null = null;
+  private refreshingDefinitions = false;
+  private cacheLoaded = false;
+  private localMutationGeneration = 0;
+  private localWritesInFlight = 0;
 
   constructor(app: App, private plugin: LlmWikiPlugin) {
     super(app, plugin);
+    this.requestRefresh();
   }
 
-  display(): void {
-    void this.refresh();
+  private requestRefresh(): void {
+    if (this.refreshingDefinitions || this.refreshPromise !== null) return;
+    const refreshPromise = this.refresh();
+    this.refreshPromise = refreshPromise;
+    const finish = (): void => {
+      if (this.refreshPromise === refreshPromise) this.refreshPromise = null;
+    };
+    void refreshPromise.then(finish, finish);
   }
 
   private async refresh(): Promise<void> {
+    const localMutationGeneration = this.localMutationGeneration;
+    const localWritePending = this.localWritesInFlight > 0;
+    let domains: DomainEntry[];
     try {
-      this.cachedDomains = await this.plugin.domainStore.load();
+      domains = await this.plugin.domainStore.load();
     } catch (e) {
-      this.cachedDomains = [];
+      domains = [];
       new Notice(`Domain map load failed: ${(e as Error).message}`);
     }
-    this.localCache = await this.plugin.localConfigStore.load();
-    this.render();
+    const loadedLocalCache = await this.plugin.localConfigStore.load();
+    const localCache = localWritePending || localMutationGeneration !== this.localMutationGeneration
+      ? this.localCache
+      : loadedLocalCache;
+    const changed = !this.cacheLoaded
+      || JSON.stringify(domains) !== JSON.stringify(this.cachedDomains)
+      || JSON.stringify(localCache) !== JSON.stringify(this.localCache);
+    this.cachedDomains = domains;
+    this.localCache = localCache;
+    this.cacheLoaded = true;
+    if (!changed) return;
+    this.refreshingDefinitions = true;
+    try {
+      this.update();
+    } finally {
+      this.refreshingDefinitions = false;
+    }
   }
 
   private async patchLocal(patch: Partial<LocalConfig>): Promise<void> {
+    this.localMutationGeneration++;
+    this.localWritesInFlight++;
     this.localCache = { ...this.localCache, ...patch };
-    await this.plugin.localConfigStore.save(patch);
+    try {
+      await this.plugin.localConfigStore.save(patch);
+    } finally {
+      this.localWritesInFlight--;
+    }
   }
 
   private async patchLocalNativeApiKey(apiKey: string): Promise<void> {
@@ -138,7 +175,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       if (resp.status >= 400) throw new Error(`${resp.status}`);
       const json = JSON.parse(resp.text) as { data: { id: string }[] };
       this._availableModels = json.data.map((m) => m.id).sort();
-      this.display();
     } catch (e) {
       new Notice(`Failed to fetch models: ${(e as Error).message}`);
     }
@@ -260,7 +296,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     na.embeddingDimensions = probe.actual;
     await this.plugin.saveSettings();
     if (!silent) new Notice(`Default dimensions for model: ${probe.actual}`);
-    this.display();
+    this.update();
   }
 
   private addModelControl(
@@ -269,8 +305,9 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     onChange: (v: string) => Promise<void>,
     saveOnTyping = false,
     check?: { tooltip: string; run: (currentValue: string) => void | Promise<void> },
-  ): void {
+  ): () => void {
     const live = createLiveModelControl(currentValue, onChange, saveOnTyping);
+    let suggest: ModelInputSuggest | null = null;
     if (check) {
       s.addButton((b) =>
         b.setButtonText("Check").setTooltip(check.tooltip)
@@ -287,25 +324,33 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         if (this._availableModels.length === 0) void this.fetchModels();
       });
       t.onChange((v) => { void live.type(v); });
-      new ModelInputSuggest(
+      suggest = new ModelInputSuggest(
         this.app,
         t.inputEl,
         () => this._availableModels,
         (v) => { void live.select(v); },
       );
     });
+    return () => { suggest?.close(); };
   }
 
-  private render(): void {
-    const { containerEl } = this;
-    const scrollEl = (
-      containerEl.closest(".vertical-tab-content") ??
-      containerEl.closest(".modal-content") ??
-      containerEl.parentElement ??
-      containerEl
-    );
-    const savedScroll = scrollEl.scrollTop;
-    containerEl.empty();
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    this.requestRefresh();
+    const definitions: SettingDefinitionItem[] = [];
+    let items: SettingDefinition[] = [];
+    const addGroup = (heading: string): void => {
+      items = [];
+      definitions.push({ type: "group", heading, items });
+    };
+    const addSetting = (
+      name: string,
+      desc?: string,
+      render?: (setting: Setting, group: SettingGroup) => void | (() => void),
+    ): void => {
+      items.push(render
+        ? { name, desc, render: (setting, group) => render(setting, group) }
+        : { name, desc });
+    };
     const s = this.plugin.settings;
     const eff = resolveEffective(s, this.localCache);
     const T = i18n();
@@ -414,14 +459,18 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     // `ModelContextStore` already keys its record by model.
     const addContextWindowControl = (model: () => string): void => {
       if (!model()) return;
-      addAutomaticBudgetControl(
-        new Setting(containerEl)
-          .setName(T.settings.contextWindowTokens_name)
-          .setDesc(T.settings.contextWindowTokens_desc),
-        () => configuredContextWindowFor(s.nativeAgent, model()),
-        (next) => { setConfiguredContextWindow(s.nativeAgent, model(), next); },
-        () => automaticBudgetPlaceholders(model(), "init", {}).contextWindow,
-        MIN_CONTEXT_WINDOW,
+      addSetting(
+        T.settings.contextWindowTokens_name,
+        T.settings.contextWindowTokens_desc,
+        (setting) => {
+          addAutomaticBudgetControl(
+            setting,
+            () => configuredContextWindowFor(s.nativeAgent, model()),
+            (next) => { setConfiguredContextWindow(s.nativeAgent, model(), next); },
+            () => automaticBudgetPlaceholders(model(), "init", {}).contextWindow,
+            MIN_CONTEXT_WINDOW,
+          );
+        },
       );
     };
     const addCompressionControl = (
@@ -475,36 +524,51 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       );
       renderModelControlFields(fields, {
         inputBudgetTokens: () => {
-          if (!automatic.updates.inputBudgetTokens) return;
-          addAutomaticBudgetControl(
-            new Setting(containerEl)
-              .setName(T.settings.inputBudgetTokens_name)
-              .setDesc(T.settings.inputBudgetTokens_descAutomatic),
-            () => automatic.current().input,
-            automatic.updates.inputBudgetTokens,
-            () => placeholders().input,
+          const updateInputBudget = automatic.updates.inputBudgetTokens;
+          if (!updateInputBudget) return;
+          addSetting(
+            T.settings.inputBudgetTokens_name,
+            T.settings.inputBudgetTokens_descAutomatic,
+            (setting) => {
+              addAutomaticBudgetControl(
+                setting,
+                () => automatic.current().input,
+                updateInputBudget,
+                () => placeholders().input,
+              );
+            },
           );
         },
         maxTokens: () => {
-          if (!automatic.updates.maxTokens) return;
-          addAutomaticBudgetControl(
-            new Setting(containerEl)
-              .setName(T.settings.outputBudgetTokens_name)
-              .setDesc(T.settings.outputBudgetTokens_descAutomatic),
-            () => automatic.current().output,
-            automatic.updates.maxTokens,
-            () => placeholders().output,
+          const updateMaxTokens = automatic.updates.maxTokens;
+          if (!updateMaxTokens) return;
+          addSetting(
+            T.settings.outputBudgetTokens_name,
+            T.settings.outputBudgetTokens_descAutomatic,
+            (setting) => {
+              addAutomaticBudgetControl(
+                setting,
+                () => automatic.current().output,
+                updateMaxTokens,
+                () => placeholders().output,
+              );
+            },
           );
         },
         compressionProfile: () => {
-          if (!updates.compressionProfile) return;
-          addCompressionControl(
-            new Setting(containerEl)
-              .setName(T.settings.compressionProfile_name)
-              .setDesc(T.settings.compressionProfile_desc),
-            values.compressionProfile,
-            useGlobalCompression,
-            updates.compressionProfile,
+          const updateCompression = updates.compressionProfile;
+          if (!updateCompression) return;
+          addSetting(
+            T.settings.compressionProfile_name,
+            T.settings.compressionProfile_desc,
+            (setting) => {
+              addCompressionControl(
+                setting,
+                values.compressionProfile,
+                useGlobalCompression,
+                updateCompression,
+              );
+            },
           );
         },
       });
@@ -513,22 +577,19 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     const busy = this.plugin.controller.running;
 
     // ── General settings ───────────────────────────────────────────────────
-    new Setting(containerEl).setName(T.settings.h3_general).setHeading();
+    addGroup(T.settings.h3_general);
 
-    new Setting(containerEl)
-      .setName(T.settings.systemPrompt_name)
-      .setDesc(T.settings.systemPrompt_desc)
-      .addTextArea((t) => {
+    addSetting(T.settings.systemPrompt_name, T.settings.systemPrompt_desc, (setting) => {
+      setting.addTextArea((t) => {
         t.inputEl.addClass("ai-wiki-settings-textarea");
         t.setValue(s.systemPrompt)
           .onChange(async (v) => { s.systemPrompt = v; await this.plugin.saveSettings(); });
         return t;
       });
+    });
 
-    new Setting(containerEl)
-      .setName(T.settings.outputLanguage_name)
-      .setDesc(T.settings.outputLanguage_desc)
-      .addDropdown((d) =>
+    addSetting(T.settings.outputLanguage_name, T.settings.outputLanguage_desc, (setting) => {
+      setting.addDropdown((d) =>
         d.addOptions({ auto: "Auto (match UI language)", ru: "Russian", en: "English", es: "Spanish" })
           .setValue(s.outputLanguage ?? "auto")
           .onChange(async (v) => {
@@ -536,11 +597,10 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
+    });
 
-    new Setting(containerEl)
-      .setName(T.settings.reasoningLanguage_name)
-      .setDesc(T.settings.reasoningLanguage_desc)
-      .addDropdown((d) =>
+    addSetting(T.settings.reasoningLanguage_name, T.settings.reasoningLanguage_desc, (setting) => {
+      setting.addDropdown((d) =>
         d.addOptions({ auto: "Auto (match response)", en: "English", ru: "Russian", es: "Spanish" })
           .setValue(s.reasoningLanguage ?? "en")
           .onChange(async (v) => {
@@ -548,11 +608,10 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
+    });
 
-    new Setting(containerEl)
-      .setName(T.settings.timeouts_name)
-      .setDesc(T.settings.timeouts_desc)
-      .addText((t) =>
+    addSetting(T.settings.timeouts_name, T.settings.timeouts_desc, (setting) => {
+      setting.addText((t) =>
         t.setValue(`${s.timeouts.ingest}/${s.timeouts.query}/${s.timeouts.lint}/${s.timeouts.init}/${s.timeouts.format}`)
           .onChange(async (v) => {
             const parsed = parseTimeoutString(v);
@@ -562,11 +621,10 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             }
           }),
       );
+    });
 
-    new Setting(containerEl)
-      .setName(T.settings.llmConnectionTimeout_name)
-      .setDesc(T.settings.llmConnectionTimeout_desc)
-      .addText((t) =>
+    addSetting(T.settings.llmConnectionTimeout_name, T.settings.llmConnectionTimeout_desc, (setting) => {
+      setting.addText((t) =>
         t.setPlaceholder("15")
           .setValue(String(s.llmConnectionTimeoutSec))
           .onChange(async (v) => {
@@ -577,11 +635,10 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             }
           }),
       );
+    });
 
-    new Setting(containerEl)
-      .setName(T.settings.llmRequestIdleTimeout_name)
-      .setDesc(T.settings.llmRequestIdleTimeout_desc)
-      .addText((t) =>
+    addSetting(T.settings.llmRequestIdleTimeout_name, T.settings.llmRequestIdleTimeout_desc, (setting) => {
+      setting.addText((t) =>
         t.setPlaceholder("300")
           .setValue(String(s.llmIdleTimeoutSec))
           .onChange(async (v) => {
@@ -592,11 +649,10 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             }
           }),
       );
+    });
 
-    new Setting(containerEl)
-      .setName(T.settings.llmRequestRetries_name)
-      .setDesc(T.settings.llmRequestRetries_desc)
-      .addText((t) =>
+    addSetting(T.settings.llmRequestRetries_name, T.settings.llmRequestRetries_desc, (setting) => {
+      setting.addText((t) =>
         t.setPlaceholder("3")
           .setValue(String(s.llmIdleRetries))
           .onChange(async (v) => {
@@ -607,48 +663,42 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             }
           }),
       );
+    });
 
-    new Setting(containerEl)
-      .setName(T.settings.historyLimit_name)
-      .setDesc(T.settings.historyLimit_desc)
-      .addText((t) =>
+    addSetting(T.settings.historyLimit_name, T.settings.historyLimit_desc, (setting) => {
+      setting.addText((t) =>
         t.setValue(String(s.historyLimit))
           .onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n > 0) { s.historyLimit = Math.floor(n); await this.plugin.saveSettings(); }
           }),
       );
+    });
 
-    new Setting(containerEl)
-      .setName(T.settings.agentLog_name)
-      .setDesc(T.settings.agentLog_desc)
-      .addToggle((t) =>
+    addSetting(T.settings.agentLog_name, T.settings.agentLog_desc, (setting) => {
+      setting.addToggle((t) =>
         t.setValue(eff.agentLogEnabled)
           .onChange(async (v) => { await this.patchLocal({ agentLogEnabled: v }); }),
       );
+    });
 
     // ── Domains ───────────────────────────────────────────────────────────────
-    new Setting(containerEl).setName(T.settings.domains_heading).setHeading();
+    addGroup(T.settings.domains_heading);
 
     if (busy) {
-      containerEl.createDiv({
-        cls: "ai-wiki-settings-busy-banner",
-      }).createSpan({ text: `⚠ ${T.settings.busyBanner}` });
+      addSetting(`⚠ ${T.settings.busyBanner}`, undefined, (setting) => {
+        setting.settingEl.addClass("ai-wiki-settings-busy-banner");
+      });
     }
 
     const domains = this.cachedDomains;
     if (domains.length === 0) {
-      containerEl.createEl("p", {
-        text: T.settings.domains_empty,
-        cls: "setting-item-description",
-      });
+      addSetting("", T.settings.domains_empty);
     } else {
       for (let i = 0; i < domains.length; i++) {
         const d = domains[i];
-        new Setting(containerEl)
-          .setName(d.name || d.id)
-          .setDesc(d.id)
-          .addButton((b) => {
+        addSetting(d.name || d.id, d.id, (setting) => {
+          setting.addButton((b) => {
             b.setButtonText(T.view.exportOkf).setDisabled(busy).onClick(() => {
               this.openExportOkfModal(d);
             });
@@ -681,33 +731,30 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               }).open();
             });
           });
+        });
       }
     }
 
     // ── OpenAI-compatible settings ─────────────────────────────────────────
-    new Setting(containerEl).setName(T.settings.h3_backendConnection).setHeading();
+    addGroup(T.settings.h3_backendConnection);
 
-      new Setting(containerEl)
-        .setName(T.settings.baseUrl_name)
-        .setDesc(T.settings.baseUrl_desc)
-        .addText((t) =>
+      addSetting(T.settings.baseUrl_name, T.settings.baseUrl_desc, (setting) => {
+        setting.addText((t) =>
           t.setPlaceholder("")
             .setValue(eff.nativeAgent.baseUrl)
             .onChange(async (v) => { s.nativeAgent.baseUrl = v.trim(); await this.plugin.saveSettings(); }),
         );
+      });
 
-      new Setting(containerEl)
-        .setName(T.settings.apiKey_name)
-        .setDesc(T.settings.apiKey_desc)
-        .addText((t) =>
+      addSetting(T.settings.apiKey_name, T.settings.apiKey_desc, (setting) => {
+        setting.addText((t) =>
           t.setPlaceholder("Ollama")
             .setValue(eff.nativeAgent.apiKey)
             .onChange(async (v) => { await this.patchLocalNativeApiKey(v.trim()); }),
         );
+      });
 
-      new Setting(containerEl)
-        .setName(T.settings.h3_defaultChatModel)
-        .setHeading();
+      addGroup(T.settings.h3_defaultChatModel);
 
       const globalBudgetOverrides = (): { input?: number; output?: number } => ({
         input: s.nativeAgent.inputBudgetTokens,
@@ -715,19 +762,21 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       });
 
       if (!s.nativeAgent.perOperation) {
-        this.addModelControl(
-          new Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native),
-          eff.nativeAgent.model,
-          async (v) => {
-            s.nativeAgent.model = v;
-            await this.plugin.saveSettings();
-            // The window field below belongs to whichever model this names, so it
-            // has to re-read its stored value — not just its placeholder.
-            refreshAutomaticControls(true);
-          },
-          false,
-          { tooltip: "Verify the chat model is reachable", run: () => this.checkChatModel() },
-        );
+        addSetting(T.settings.model_name, T.settings.model_desc_native, (setting) => {
+          return this.addModelControl(
+            setting,
+            eff.nativeAgent.model,
+            async (v) => {
+              s.nativeAgent.model = v;
+              await this.plugin.saveSettings();
+              // The window field below belongs to whichever model this names, so it
+              // has to re-read its stored value — not just its placeholder.
+              refreshAutomaticControls(true);
+            },
+            false,
+            { tooltip: "Verify the chat model is reachable", run: () => this.checkChatModel() },
+          );
+        });
 
         // Native-only, next to the model field it belongs to. Empty means "ask the
         // backend"; a number replaces the discovered window FOR THIS MODEL, and every
@@ -762,22 +811,24 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         },
       );
 
-      addAutomaticBudgetControl(
-        new Setting(containerEl)
-          .setName(T.settings.repairInputBudgetTokens_name)
-          .setDesc(T.settings.repairInputBudgetTokens_descAutomatic),
-        () => s.nativeAgent.repairInputBudgetTokens,
-        (next) => { s.nativeAgent.repairInputBudgetTokens = next; },
-        () => automaticBudgetPlaceholders(
-          s.nativeAgent.model, "init", globalBudgetOverrides(),
-        ).input,
+      addSetting(
+        T.settings.repairInputBudgetTokens_name,
+        T.settings.repairInputBudgetTokens_descAutomatic,
+        (setting) => {
+          addAutomaticBudgetControl(
+            setting,
+            () => s.nativeAgent.repairInputBudgetTokens,
+            (next) => { s.nativeAgent.repairInputBudgetTokens = next; },
+            () => automaticBudgetPlaceholders(
+              s.nativeAgent.model, "init", globalBudgetOverrides(),
+            ).input,
+          );
+        },
       );
 
       if (!s.nativeAgent.perOperation) {
-        new Setting(containerEl)
-          .setName(T.settings.temperature_name)
-          .setDesc(T.settings.temperature_desc)
-          .addText((t) =>
+        addSetting(T.settings.temperature_name, T.settings.temperature_desc, (setting) => {
+          setting.addText((t) =>
             t.setPlaceholder("0.2")
               .setValue(String(eff.nativeAgent.temperature))
               .onChange(async (v) => {
@@ -785,12 +836,11 @@ export class LlmWikiSettingTab extends PluginSettingTab {
                 if (Number.isFinite(n) && n >= 0 && n <= 2) { s.nativeAgent.temperature = n; await this.plugin.saveSettings(); }
               }),
           );
+        });
       }
 
-      new Setting(containerEl)
-        .setName(T.settings.structuredRetries_name)
-        .setDesc(T.settings.structuredRetries_desc)
-        .addText((t) =>
+      addSetting(T.settings.structuredRetries_name, T.settings.structuredRetries_desc, (setting) => {
+        setting.addText((t) =>
           t.setPlaceholder("1")
             .setValue(String(s.nativeAgent.structuredRetries))
             .onChange(async (v) => {
@@ -800,11 +850,10 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               await this.plugin.saveSettings();
             }),
         );
+      });
 
-      new Setting(containerEl)
-        .setName(T.settings.synthesisMaxEntityBatchSize_name)
-        .setDesc(T.settings.synthesisMaxEntityBatchSize_desc)
-        .addText((t) =>
+      addSetting(T.settings.synthesisMaxEntityBatchSize_name, T.settings.synthesisMaxEntityBatchSize_desc, (setting) => {
+        setting.addText((t) =>
           t.setPlaceholder("1")
             .setValue(String(s.nativeAgent.synthesisMaxEntityBatchSize ?? 1))
             .onChange(async (v) => {
@@ -814,11 +863,10 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               await this.plugin.saveSettings();
             }),
         );
+      });
 
-      new Setting(containerEl)
-        .setName(T.settings.synthesisMaxEntitiesPerSource_name)
-        .setDesc(T.settings.synthesisMaxEntitiesPerSource_desc)
-        .addText((t) =>
+      addSetting(T.settings.synthesisMaxEntitiesPerSource_name, T.settings.synthesisMaxEntitiesPerSource_desc, (setting) => {
+        setting.addText((t) =>
           t.setPlaceholder("6")
             .setValue(String(s.nativeAgent.synthesisMaxEntitiesPerSource ?? 6))
             .onChange(async (v) => {
@@ -828,11 +876,10 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               await this.plugin.saveSettings();
             }),
         );
+      });
 
-      new Setting(containerEl)
-        .setName(T.settings.wikiLinkValidationRetries_name)
-        .setDesc(T.settings.wikiLinkValidationRetries_desc)
-        .addText((t) =>
+      addSetting(T.settings.wikiLinkValidationRetries_name, T.settings.wikiLinkValidationRetries_desc, (setting) => {
+        setting.addText((t) =>
           t.setPlaceholder("3")
             .setValue(String(s.wikiLinkValidationRetries))
             .onChange(async (v) => {
@@ -843,16 +890,16 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               }
             }),
         );
+      });
 
       if (!Platform.isMobile) {
-        new Setting(containerEl).setName(T.settings.perOperation_name).setHeading();
-        new Setting(containerEl)
-          .setName(T.settings.perOperation_name)
-          .setDesc(T.settings.perOperation_desc)
-          .addToggle((t) =>
+        addGroup(T.settings.perOperation_name);
+        addSetting(T.settings.perOperation_name, T.settings.perOperation_desc, (setting) => {
+          setting.addToggle((t) =>
             t.setValue(s.nativeAgent.perOperation)
-              .onChange(async (v) => { s.nativeAgent.perOperation = v; await this.plugin.saveSettings(); this.display(); }),
+              .onChange(async (v) => { s.nativeAgent.perOperation = v; await this.plugin.saveSettings(); this.update(); }),
           );
+        });
       }
 
       if (s.nativeAgent.perOperation) {
@@ -864,16 +911,18 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           { key: "format", label: T.settings.op_format },
         ];
         for (const { key, label } of ops) {
-          new Setting(containerEl).setName(label).setHeading();
-          this.addModelControl(
-            new Setting(containerEl).setName(T.settings.opModel_name).setDesc(T.settings.opModel_desc),
-            s.nativeAgent.operations[key].model,
-            async (v) => {
-              s.nativeAgent.operations[key].model = v;
-              await this.plugin.saveSettings();
-              refreshAutomaticControls(true);
-            },
-          );
+          addGroup(label);
+          addSetting(T.settings.opModel_name, T.settings.opModel_desc, (setting) => {
+            return this.addModelControl(
+              setting,
+              s.nativeAgent.operations[key].model,
+              async (v) => {
+                s.nativeAgent.operations[key].model = v;
+                await this.plugin.saveSettings();
+                refreshAutomaticControls(true);
+              },
+            );
+          });
           addContextWindowControl(() => effectiveModel(s, key));
           addPolicyControls(
             modelControls.operations[key],
@@ -899,42 +948,38 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               },
             },
           );
-          new Setting(containerEl)
-            .setName(T.settings.opTemperature_name)
-            .setDesc(T.settings.opTemperature_desc)
-            .addText((t) =>
+          addSetting(T.settings.opTemperature_name, T.settings.opTemperature_desc, (setting) => {
+            setting.addText((t) =>
               t.setValue(String(s.nativeAgent.operations[key].temperature))
                 .onChange(async (v) => {
                   const n = Number(v);
                   if (Number.isFinite(n) && n >= 0 && n <= 2) { s.nativeAgent.operations[key].temperature = n; await this.plugin.saveSettings(); }
                 }),
             );
+          });
         }
       }
 
-      new Setting(containerEl).setName(T.settings.h3_semanticSearch).setHeading();
+      addGroup(T.settings.h3_semanticSearch);
 
-      new Setting(containerEl)
-        .setName("Enable semantic similarity (embeddings)")
-        .setDesc(T.settings.semanticEnable_desc)
-        .addToggle((t) =>
+      addSetting("Enable semantic similarity (embeddings)", T.settings.semanticEnable_desc, (setting) => {
+        setting.addToggle((t) =>
           t.setValue(s.nativeAgent.embeddingModel !== undefined)
             .onChange(async (v) => {
               if (!v) {
                 s.nativeAgent.embeddingModel = undefined; s.nativeAgent.embeddingDimensions = undefined; await this.plugin.saveSettings();
-                this.display();
+                this.update();
               } else {
                 s.nativeAgent.embeddingModel = ""; await this.plugin.saveSettings();
-                this.display();
+                this.update();
               }
             }),
         );
+      });
 
       if (s.nativeAgent.embeddingModel !== undefined) {
-        new Setting(containerEl)
-          .setName("Relevant pages (top-K)")
-          .setDesc(T.settings.relevantTopK_desc)
-          .addText((t) =>
+        addSetting("Relevant pages (top-K)", T.settings.relevantTopK_desc, (setting) => {
+          setting.addText((t) =>
             t.setPlaceholder("15")
               .setValue(String(s.nativeAgent.relevantPagesTopK ?? 15))
               .onChange(async (v) => {
@@ -944,22 +989,23 @@ export class LlmWikiSettingTab extends PluginSettingTab {
                 }
               }),
           );
+        });
 
-        this.addModelControl(
-          new Setting(containerEl).setName("Embedding model").setDesc(T.settings.embeddingModel_desc),
-          s.nativeAgent.embeddingModel ?? "",
-          async (v) => {
-            s.nativeAgent.embeddingModel = v || undefined;
-            await this.plugin.saveSettings();
-          },
-          false,
-          { tooltip: "Verify the embedding model is reachable", run: () => this.checkEmbeddingModel() },
-        );
+        addSetting("Embedding model", T.settings.embeddingModel_desc, (setting) => {
+          return this.addModelControl(
+            setting,
+            s.nativeAgent.embeddingModel ?? "",
+            async (v) => {
+              s.nativeAgent.embeddingModel = v || undefined;
+              await this.plugin.saveSettings();
+            },
+            false,
+            { tooltip: "Verify the embedding model is reachable", run: () => this.checkEmbeddingModel() },
+          );
+        });
 
-        new Setting(containerEl)
-          .setName("Embedding dimensions")
-          .setDesc(T.settings.embeddingDimensions_desc)
-          .addButton((b) =>
+        addSetting("Embedding dimensions", T.settings.embeddingDimensions_desc, (setting) => {
+          setting.addButton((b) =>
             b.setButtonText("Check").setTooltip("Verify the entered dimension is supported by the model")
               .onClick(() => { void this.checkDimensions(); }),
           )
@@ -978,19 +1024,23 @@ export class LlmWikiSettingTab extends PluginSettingTab {
                 await this.plugin.saveSettings();
               }),
           );
+        });
 
         const chunkField = (
           name: string, desc: string, placeholder: string,
           get: () => number, set: (n: number) => void,
-        ) =>
-          new Setting(containerEl).setName(name).setDesc(desc).addText((t) =>
+        ): void => {
+          addSetting(name, desc, (setting) => {
+            setting.addText((t) =>
             t.setPlaceholder(placeholder)
               .setValue(String(get()))
               .onChange(async (v) => {
                 const n = Number(v);
                 if (Number.isFinite(n) && n > 0) { set(Math.floor(n)); await this.plugin.saveSettings(); }
               }),
-          );
+            );
+          });
+        };
 
         if (!Platform.isMobile) {
           chunkField("Chunk size (chars)",
@@ -1016,27 +1066,26 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         }
       }
 
-      new Setting(containerEl).setName("Retrieval").setHeading();
-      new Setting(containerEl).setName(T.settings.reranker_heading).setHeading();
-      new Setting(containerEl).setDesc(T.settings.rerankerFlow_desc);
-      new Setting(containerEl)
-        .setName(T.settings.rerankerEnabled_name)
-        .setDesc(T.settings.rerankerEnabled_desc)
-        .addToggle((t) =>
+      addGroup("Retrieval");
+      addGroup(T.settings.reranker_heading);
+      addSetting("", T.settings.rerankerFlow_desc);
+      addSetting(T.settings.rerankerEnabled_name, T.settings.rerankerEnabled_desc, (setting) => {
+        setting.addToggle((t) =>
           t.setValue(s.nativeAgent.rerankerEnabled ?? false)
             .onChange(async (v) => { s.nativeAgent.rerankerEnabled = v; await this.plugin.saveSettings(); }),
         );
-      this.addModelControl(
-        new Setting(containerEl).setName(T.settings.rerankerModel_name).setDesc(T.settings.rerankerModel_desc),
-        s.nativeAgent.rerankerModel ?? "",
-        async (v) => { s.nativeAgent.rerankerModel = v.trim(); await this.plugin.saveSettings(); },
-        true,
-        { tooltip: "Verify the reranker model is reachable", run: () => this.checkReranker() },
-      );
-      new Setting(containerEl)
-        .setName(T.settings.rerankerTopN_name)
-        .setDesc(T.settings.rerankerTopN_desc)
-        .addText((t) =>
+      });
+      addSetting(T.settings.rerankerModel_name, T.settings.rerankerModel_desc, (setting) => {
+        return this.addModelControl(
+          setting,
+          s.nativeAgent.rerankerModel ?? "",
+          async (v) => { s.nativeAgent.rerankerModel = v.trim(); await this.plugin.saveSettings(); },
+          true,
+          { tooltip: "Verify the reranker model is reachable", run: () => this.checkReranker() },
+        );
+      });
+      addSetting(T.settings.rerankerTopN_name, T.settings.rerankerTopN_desc, (setting) => {
+        setting.addText((t) =>
           t.setPlaceholder("30")
             .setValue(String(s.nativeAgent.rerankerTopN ?? 30))
             .onChange(async (v) => {
@@ -1049,13 +1098,12 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               if (next !== bounded) new Notice(T.settings.rerankerInvalidTopN);
               s.nativeAgent.rerankerTopN = next;
               await this.plugin.saveSettings();
-              if (next !== requested) this.display();
+              if (next !== requested) this.update();
             }),
         );
-      new Setting(containerEl)
-        .setName(T.settings.contextTopN_name)
-        .setDesc(T.settings.contextTopN_desc)
-        .addText((t) =>
+      });
+      addSetting(T.settings.contextTopN_name, T.settings.contextTopN_desc, (setting) => {
+        setting.addText((t) =>
           t.setPlaceholder("8")
             .setValue(String(s.nativeAgent.contextTopN ?? 8))
             .onChange(async (v) => {
@@ -1068,17 +1116,16 @@ export class LlmWikiSettingTab extends PluginSettingTab {
                 s.nativeAgent.rerankerTopN = next;
                 new Notice(T.settings.rerankerInvalidTopN);
                 await this.plugin.saveSettings();
-                this.display();
+                this.update();
                 return;
               }
               await this.plugin.saveSettings();
-              if (next !== requested) this.display();
+              if (next !== requested) this.update();
             }),
         );
-      new Setting(containerEl)
-        .setName(T.settings.rerankerTimeoutMs_name)
-        .setDesc(T.settings.rerankerTimeoutMs_desc)
-        .addText((t) =>
+      });
+      addSetting(T.settings.rerankerTimeoutMs_name, T.settings.rerankerTimeoutMs_desc, (setting) => {
+        setting.addText((t) =>
           t.setPlaceholder("800")
             .setValue(String(s.nativeAgent.rerankerTimeoutMs ?? 800))
             .onChange(async (v) => {
@@ -1088,84 +1135,74 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               const next = Math.max(100, Math.min(5000, requested));
               s.nativeAgent.rerankerTimeoutMs = next;
               await this.plugin.saveSettings();
-              if (next !== requested) this.display();
+              if (next !== requested) this.update();
             }),
         );
+      });
 
       if (s.nativeAgent.embeddingModel !== undefined) {
-        new Setting(containerEl)
-          .setName("Hybrid retrieval (dense ⊕ sparse)")
-          .setDesc(T.settings.hybridRetrieval_desc)
-          .addToggle((t) =>
+        addSetting("Hybrid retrieval (dense ⊕ sparse)", T.settings.hybridRetrieval_desc, (setting) => {
+          setting.addToggle((t) =>
             t.setValue(s.nativeAgent.hybridRetrieval ?? false)
               .onChange(async (v) => { s.nativeAgent.hybridRetrieval = v; await this.plugin.saveSettings(); }),
           );
-        new Setting(containerEl)
-          .setName("RRF k")
-          .setDesc(T.settings.rrfK_desc)
-          .addText((t) =>
+        });
+        addSetting("RRF k", T.settings.rrfK_desc, (setting) => {
+          setting.addText((t) =>
             t.setValue(String(s.nativeAgent.rrfK ?? 60))
               .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n > 0) { s.nativeAgent.rrfK = Math.floor(n); await this.plugin.saveSettings(); } }),
           );
-        new Setting(containerEl)
-          .setName("BFS fusion (vector ⊕ graph)")
-          .setDesc(T.settings.bfsFusion_desc)
-          .addToggle((t) =>
+        });
+        addSetting("BFS fusion (vector ⊕ graph)", T.settings.bfsFusion_desc, (setting) => {
+          setting.addToggle((t) =>
             t.setValue(s.nativeAgent.bfsFusion ?? false)
               .onChange(async (v) => { s.nativeAgent.bfsFusion = v; await this.plugin.saveSettings(); }),
           );
-        new Setting(containerEl)
-          .setName("Graph relevance floor (ratio)")
-          .setDesc(T.settings.bfsMinScoreRatio_desc)
-          .addSlider((sl) =>
+        });
+        addSetting("Graph relevance floor (ratio)", T.settings.bfsMinScoreRatio_desc, (setting) => {
+          setting.addSlider((sl) =>
             sl.setLimits(0, 1, 0.05)
               .setDynamicTooltip()
               .setValue(s.nativeAgent.bfsMinScoreRatio ?? 0.6)
               .onChange(async (v) => { s.nativeAgent.bfsMinScoreRatio = v; await this.plugin.saveSettings(); }),
           );
-        new Setting(containerEl)
-          .setName("Seed similarity threshold")
-          .setDesc(T.settings.seedSimilarityThreshold_desc)
-          .addText((t) =>
+        });
+        addSetting("Seed similarity threshold", T.settings.seedSimilarityThreshold_desc, (setting) => {
+          setting.addText((t) =>
             t.setValue(String(s.nativeAgent.seedSimilarityThreshold ?? 0))
               .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n >= 0) { s.nativeAgent.seedSimilarityThreshold = n; await this.plugin.saveSettings(); } }),
           );
+        });
 
         if (!Platform.isMobile) {
-          new Setting(containerEl).setName("Graph health").setHeading();
-          new Setting(containerEl)
-            .setName("Dedup on ingest")
-            .setDesc(T.settings.dedupOnIngest_desc)
-            .addToggle((t) =>
+          addGroup("Graph health");
+          addSetting("Dedup on ingest", T.settings.dedupOnIngest_desc, (setting) => {
+            setting.addToggle((t) =>
               t.setValue(s.nativeAgent.dedupOnIngest ?? false)
                 .onChange(async (v) => { s.nativeAgent.dedupOnIngest = v; await this.plugin.saveSettings(); }),
             );
-          new Setting(containerEl)
-            .setName("Dedup threshold")
-            .setDesc(T.settings.dedupThreshold_desc)
-            .addText((t) =>
+          });
+          addSetting("Dedup threshold", T.settings.dedupThreshold_desc, (setting) => {
+            setting.addText((t) =>
               t.setValue(String(s.nativeAgent.dedupThreshold ?? 0.85))
                 .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n > 0 && n <= 1) { s.nativeAgent.dedupThreshold = n; await this.plugin.saveSettings(); } }),
             );
-          new Setting(containerEl)
-            .setName("Lint near-duplicate report")
-            .setDesc(T.settings.lintNearDuplicate_desc)
-            .addToggle((t) =>
+          });
+          addSetting("Lint near-duplicate report", T.settings.lintNearDuplicate_desc, (setting) => {
+            setting.addToggle((t) =>
               t.setValue(s.nativeAgent.lintNearDuplicate ?? false)
                 .onChange(async (v) => { s.nativeAgent.lintNearDuplicate = v; await this.plugin.saveSettings(); }),
             );
-          new Setting(containerEl)
-            .setName("Near-duplicate threshold")
-            .setDesc(T.settings.nearDupThreshold_desc)
-            .addText((t) =>
+          });
+          addSetting("Near-duplicate threshold", T.settings.nearDupThreshold_desc, (setting) => {
+            setting.addText((t) =>
               t.setValue(String(s.nativeAgent.nearDupThreshold ?? 0.80))
                 .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n > 0 && n <= 1) { s.nativeAgent.nearDupThreshold = n; await this.plugin.saveSettings(); } }),
             );
+          });
 
-          new Setting(containerEl)
-            .setName(T.settings.mergeDeleteWarnThreshold_name)
-            .setDesc(T.settings.mergeDeleteWarnThreshold_desc)
-            .addSlider((sl) =>
+          addSetting(T.settings.mergeDeleteWarnThreshold_name, T.settings.mergeDeleteWarnThreshold_desc, (setting) => {
+            setting.addSlider((sl) =>
               sl.setLimits(1, 20, 1)
                 .setDynamicTooltip()
                 .setValue(s.nativeAgent.mergeDeleteWarnThreshold ?? 5)
@@ -1173,38 +1210,38 @@ export class LlmWikiSettingTab extends PluginSettingTab {
                   s.nativeAgent.mergeDeleteWarnThreshold = v; await this.plugin.saveSettings();
                 }),
             );
+          });
         }
       }
 
     // ── Vision settings ─────────────────────────────────────────────────────
-    new Setting(containerEl).setName(T.settings.h3_vision).setHeading();
+    addGroup(T.settings.h3_vision);
 
-    new Setting(containerEl)
-      .setName(T.settings.visionEnable_name)
-      .setDesc(T.settings.visionEnable_desc)
-      .addToggle((t) =>
+    addSetting(T.settings.visionEnable_name, T.settings.visionEnable_desc, (setting) => {
+      setting.addToggle((t) =>
         t.setValue(s.vision.enabled)
           .onChange(async (v) => {
             s.vision.enabled = v;
             await this.plugin.saveSettings();
-            this.display();
+            this.update();
           }),
       );
+    });
 
     if (s.vision.enabled) {
-      this.addModelControl(
-        new Setting(containerEl)
-          .setName(T.settings.visionModel_name)
-          .setDesc(T.settings.visionModel_desc),
-        s.vision.model,
-        async (v) => {
-          s.vision.model = v;
-          await this.plugin.saveSettings();
-          this.display();
-        },
-        false,
-        { tooltip: T.settings.visionCheck_tooltip, run: (model) => this.checkVisionModel(model) },
-      );
+      addSetting(T.settings.visionModel_name, T.settings.visionModel_desc, (setting) => {
+        return this.addModelControl(
+          setting,
+          s.vision.model,
+          async (v) => {
+            s.vision.model = v;
+            await this.plugin.saveSettings();
+            this.update();
+          },
+          false,
+          { tooltip: T.settings.visionCheck_tooltip, run: (model) => this.checkVisionModel(model) },
+        );
+      });
 
       // Vision runs a model of its own, usually a far smaller one than the chat
       // model, and it now resolves a context record of its own too.
@@ -1212,12 +1249,10 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     }
 
     // ── Graph settings ────────────────────────────────────────────────────────
-    new Setting(containerEl).setName(T.settings.h3_graph).setHeading();
+    addGroup(T.settings.h3_graph);
 
-    new Setting(containerEl)
-      .setName(T.settings.graphDepth_name)
-      .setDesc(T.settings.graphDepth_desc)
-      .addText((t) =>
+    addSetting(T.settings.graphDepth_name, T.settings.graphDepth_desc, (setting) => {
+      setting.addText((t) =>
         t.setPlaceholder("1")
           .setValue(String(s.graphDepth))
           .onChange(async (v) => {
@@ -1228,11 +1263,10 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             }
           }),
       );
+    });
 
-    new Setting(containerEl)
-      .setName(T.settings.bfsTopK_name)
-      .setDesc(T.settings.bfsTopK_desc)
-      .addText((t) =>
+    addSetting(T.settings.bfsTopK_name, T.settings.bfsTopK_desc, (setting) => {
+      setting.addText((t) =>
         t.setPlaceholder("10")
           .setValue(String(s.bfsTopK))
           .onChange(async (v) => {
@@ -1243,14 +1277,13 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             }
           }),
       );
+    });
 
     // ── Jaccard (keyword scoring) ─────────────────────────────────────────────
-    new Setting(containerEl).setName(T.settings.h3_jaccard).setHeading();
+    addGroup(T.settings.h3_jaccard);
 
-    new Setting(containerEl)
-      .setName(T.settings.seedTopK_name)
-      .setDesc(T.settings.seedTopK_desc)
-      .addText((t) =>
+    addSetting(T.settings.seedTopK_name, T.settings.seedTopK_desc, (setting) => {
+      setting.addText((t) =>
         t.setPlaceholder("5")
           .setValue(String(s.seedTopK))
           .onChange(async (v) => {
@@ -1261,11 +1294,10 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             }
           }),
       );
+    });
 
-    new Setting(containerEl)
-      .setName(T.settings.seedMinScore_name)
-      .setDesc(T.settings.seedMinScore_desc)
-      .addText((t) =>
+    addSetting(T.settings.seedMinScore_name, T.settings.seedMinScore_desc, (setting) => {
+      setting.addText((t) =>
         t.setPlaceholder("0.1")
           .setValue(String(s.seedMinScore))
           .onChange(async (v) => {
@@ -1276,72 +1308,67 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             }
           }),
       );
+    });
 
     // ── Proxy ─────────────────────────────────────────────────────────────────
     if (!Platform.isMobile) {
       const proxy = eff.proxy;
-      new Setting(containerEl).setName(T.settings.proxy_h3).setHeading();
+      addGroup(T.settings.proxy_h3);
 
-      new Setting(containerEl)
-        .setName(T.settings.proxy_enabled_name)
-        .setDesc(T.settings.proxy_enabled_desc)
-        .addToggle((t) =>
+      addSetting(T.settings.proxy_enabled_name, T.settings.proxy_enabled_desc, (setting) => {
+        setting.addToggle((t) =>
           t.setValue(proxy.enabled)
-            .onChange(async (v) => { await this.patchProxy({ enabled: v }); this.display(); }),
+            .onChange(async (v) => { await this.patchProxy({ enabled: v }); this.update(); }),
         );
+      });
 
       if (proxy.enabled) {
-        new Setting(containerEl)
-          .setName(T.settings.proxy_url_name)
-          .setDesc(T.settings.proxy_url_desc)
-          .addText((t) =>
+        addSetting(T.settings.proxy_url_name, T.settings.proxy_url_desc, (setting) => {
+          setting.addText((t) =>
             t.setPlaceholder("http://proxy.example.com:8080")
               .setValue(proxy.url)
               .onChange(async (v) => { await this.patchProxy({ url: v.trim() }); }),
           );
+        });
 
-        new Setting(containerEl)
-          .setName(T.settings.proxy_username_name)
-          .setDesc(T.settings.proxy_username_desc)
-          .addText((t) =>
+        addSetting(T.settings.proxy_username_name, T.settings.proxy_username_desc, (setting) => {
+          setting.addText((t) =>
             t.setValue(proxy.username ?? "")
               .onChange(async (v) => { await this.patchProxy({ username: v }); }),
           );
+        });
 
-        new Setting(containerEl)
-          .setName(T.settings.proxy_password_name)
-          .setDesc(T.settings.proxy_password_desc)
-          .addText((t) => {
+        addSetting(T.settings.proxy_password_name, T.settings.proxy_password_desc, (setting) => {
+          setting.addText((t) => {
             t.setValue(proxy.password ?? "")
               .onChange(async (v) => { await this.patchLocalProxyPassword(v); });
             t.inputEl.type = "password";
           });
+        });
 
-        new Setting(containerEl)
-          .setName(T.settings.proxy_noProxy_name)
-          .setDesc(T.settings.proxy_noProxy_desc)
-          .addText((t) =>
+        addSetting(T.settings.proxy_noProxy_name, T.settings.proxy_noProxy_desc, (setting) => {
+          setting.addText((t) =>
             t.setPlaceholder("localhost,127.0.0.1")
               .setValue(proxy.noProxy ?? "")
               .onChange(async (v) => { await this.patchProxy({ noProxy: v.trim() }); }),
           );
+        });
 
-        containerEl.createEl("p", { text: T.settings.proxy_hint, cls: "setting-item-description" });
+        addSetting("", T.settings.proxy_hint);
       }
     }
 
     // ── Dev mode ──────────────────────────────────────────────────────────────
     if (!Platform.isMobile) {
-      new Setting(containerEl).setName(T.settings.h3_devmode).setHeading();
+      addGroup(T.settings.h3_devmode);
 
-      new Setting(containerEl)
-        .setName(T.settings.devMode_enabled_name)
-        .setDesc(T.settings.devMode_enabled_desc)
-        .addToggle((t) =>
+      addSetting(T.settings.devMode_enabled_name, T.settings.devMode_enabled_desc, (setting) => {
+        setting.addToggle((t) =>
           t.setValue(s.devMode.enabled)
             .onChange(async (v) => { s.devMode.enabled = v; await this.plugin.saveSettings(); }),
         );
+      });
     }
-    window.requestAnimationFrame(() => { scrollEl.scrollTop = savedScroll; });
+    return definitions;
   }
 }

@@ -21,7 +21,7 @@ import { GLOBAL_DOMAIN_PATH, domainWikiFolder, effectiveSubfolder } from "./wiki
 import { clearNativeBudgets, hasStoredNativeBudget } from "./auto-budget-notice";
 
 export default class LlmWikiPlugin extends Plugin {
-  settings!: LlmWikiPluginSettings;
+  declare settings: LlmWikiPluginSettings;
   controller!: WikiController;
   settingTab?: LlmWikiSettingTab;
   domainStore!: DomainStore;
@@ -75,7 +75,7 @@ export default class LlmWikiPlugin extends Plugin {
       console.error("[AI Wiki] OKF frontmatter migration error:", e);
     }
     this.controller = new WikiController(this.app, this, this.domainStore, this.localConfigStore);
-    this.controller.onBusyChange = () => this.settingTab?.display();
+    this.controller.onBusyChange = () => this.settingTab?.update();
 
     this.registerView(AI_WIKI_VIEW_TYPE, (leaf: WorkspaceLeaf) => new LlmWikiView(leaf, this));
 

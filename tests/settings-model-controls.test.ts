@@ -69,9 +69,9 @@ function sourceBlock(
   assert.fail(`missing closing brace after: ${marker}`);
 }
 
-function assertSingleHeading(source: string): void {
+function assertSingleGroup(source: string): void {
   assert.equal(
-    source.match(/\.setHeading\(\)/g)?.length ?? 0,
+    source.match(/addGroup\(/g)?.length ?? 0,
     1,
     "chat-model controls must not be split by an intervening heading",
   );
@@ -204,7 +204,7 @@ test("runtime control validation rejects fractions, unsafe idle timers, and inva
 });
 
 test("OpenAI connection and request controls render directly", () => {
-  const runtimeControlsStart = settingsSource.indexOf(".setName(T.settings.timeouts_name)");
+  const runtimeControlsStart = settingsSource.indexOf("addSetting(T.settings.timeouts_name,");
   assert.ok(runtimeControlsStart >= 0);
   assertSourceOrder(settingsSource.slice(runtimeControlsStart), [
     "T.settings.llmConnectionTimeout_name",
@@ -230,25 +230,25 @@ test("EN, RU, and ES settings bundles have identical keys", () => {
 
 test("OpenAI chat-model block stays localized and structurally valid in both model modes", () => {
   const start = settingsSource.indexOf(
-    "new Setting(containerEl).setName(T.settings.h3_backendConnection).setHeading();",
+    "addGroup(T.settings.h3_backendConnection);",
   );
   const end = settingsSource.indexOf(
-    "new Setting(containerEl).setName(T.settings.h3_semanticSearch).setHeading();",
+    "addGroup(T.settings.h3_semanticSearch);",
     start,
   );
   assert.ok(start >= 0 && end > start);
   const native = settingsSource.slice(start, end);
-  const heading = native.indexOf(".setName(T.settings.h3_defaultChatModel)");
+  const heading = native.indexOf("addGroup(T.settings.h3_defaultChatModel)");
   const perOperation = native.indexOf(
-    ".setName(T.settings.perOperation_name).setHeading()",
+    "addGroup(T.settings.perOperation_name)",
   );
   assert.ok(heading >= 0 && perOperation > heading);
-  assertSingleHeading(native.slice(heading, perOperation));
+  assertSingleGroup(native.slice(heading, perOperation));
 
   const falseOnly = sourceBlock(native, "if (!s.nativeAgent.perOperation) {");
   assert.ok(heading < falseOnly.start, "heading must render when perOperation is true");
-  assert.match(falseOnly.body, /\.setName\(T\.settings\.model_name\)/);
-  assert.doesNotMatch(native, /\.setName\("Thinking budget tokens"\)/);
+  assert.match(falseOnly.body, /addSetting\(T\.settings\.model_name,/);
+  assert.doesNotMatch(native, /addSetting\("Thinking budget tokens"/);
   assert.doesNotMatch(falseOnly.body, /modelControls\.globalFields/);
 
   const policy = native.indexOf("modelControls.globalFields,", falseOnly.end);
@@ -259,16 +259,16 @@ test("OpenAI chat-model block stays localized and structurally valid in both mod
     falseOnly.end,
   );
   assert.ok(temperatureOnly.start > policy);
-  assert.match(temperatureOnly.body, /\.setName\(T\.settings\.temperature_name\)/);
+  assert.match(temperatureOnly.body, /addSetting\(T\.settings\.temperature_name,/);
 
   assertSourceOrder(native, [
-    ".setName(T.settings.baseUrl_name)",
-    ".setName(T.settings.apiKey_name)",
-    ".setName(T.settings.h3_defaultChatModel)",
-    ".setName(T.settings.model_name)",
+    "addSetting(T.settings.baseUrl_name,",
+    "addSetting(T.settings.apiKey_name,",
+    "addGroup(T.settings.h3_defaultChatModel)",
+    "addSetting(T.settings.model_name,",
     "modelControls.globalFields,",
-    ".setName(T.settings.temperature_name)",
-    ".setName(T.settings.perOperation_name).setHeading()",
+    "addSetting(T.settings.temperature_name,",
+    "addGroup(T.settings.perOperation_name)",
     "if (s.nativeAgent.perOperation) {",
   ]);
 });
@@ -572,11 +572,11 @@ test("addPolicyControls renders an automatic field even when its value is undefi
   assert.match(body, /placeholders\(\)\.output/);
 });
 
-test("a changed context window repaints the dependent placeholders without re-rendering the tab", () => {
+test("a changed context window repaints the dependent placeholders without structurally updating the tab", () => {
   // The defect: placeholders were computed at render time and the window field's
   // onChange never refreshed them, so the derived budget numbers went on showing
   // the old window until the tab was reopened. The fix must not be a re-render:
-  // onChange fires once per typed character and this.display() would rebuild the
+  // onChange fires once per typed character and this.update() would rebuild the
   // input the user is typing into.
   const start = settingsSource.indexOf("const automaticControls: Array<");
   const end = settingsSource.indexOf("const automaticBudgetPlaceholders = (", start);
@@ -591,7 +591,7 @@ test("a changed context window repaints the dependent placeholders without re-re
   // never on the placeholder-only path a keystroke takes: rewriting the value while
   // the user types would clobber a half-entered number.
   assert.match(body, /if \(resetValue\) text\.setValue\(rendered\.value\);/);
-  assert.doesNotMatch(body, /this\.display\(\)/, "no re-render inside the automatic control");
+  assert.doesNotMatch(body, /this\.update\(\)/, "no structural update inside the automatic control");
 
   // …and the value/placeholder sources are lazy, so a repaint sees current settings.
   assert.match(body, /value: \(\) => number \| undefined/);
@@ -600,14 +600,14 @@ test("a changed context window repaints the dependent placeholders without re-re
 
 test("the context window renders next to every OpenAI model field", () => {
   const connectionStart = settingsSource.indexOf(
-    "new Setting(containerEl).setName(T.settings.h3_backendConnection).setHeading();",
+    "addGroup(T.settings.h3_backendConnection);",
   );
   const visionStart = settingsSource.indexOf(
-    "new Setting(containerEl).setName(T.settings.h3_vision).setHeading();",
+    "addGroup(T.settings.h3_vision);",
     connectionStart,
   );
   const graphStart = settingsSource.indexOf(
-    "new Setting(containerEl).setName(T.settings.h3_graph).setHeading();",
+    "addGroup(T.settings.h3_graph);",
     visionStart,
   );
   assert.ok(connectionStart >= 0 && visionStart > connectionStart && graphStart > visionStart);
@@ -620,7 +620,7 @@ test("the context window renders next to every OpenAI model field", () => {
   const helper = settingsSource.slice(helperStart, helperEnd);
   assert.match(
     helper,
-    /addAutomaticBudgetControl\(\s*\n\s*new Setting\(containerEl\)\s*\n\s*\.setName\(T\.settings\.contextWindowTokens_name\)/,
+    /addSetting\(\s*\n\s*T\.settings\.contextWindowTokens_name,\s*\n\s*T\.settings\.contextWindowTokens_desc,\s*\n\s*\(setting\) => \{\s*\n\s*addAutomaticBudgetControl\(\s*\n\s*setting,/,
   );
   assert.match(helper, /configuredContextWindowFor\(s\.nativeAgent, model\(\)\)/);
   assert.match(helper, /setConfiguredContextWindow\(s\.nativeAgent, model\(\), next\)/);
@@ -763,10 +763,10 @@ test("a persisted context window is normalized like every other optional budget"
 
 test("all model-policy call sites opt into automatic OpenAI budgets", () => {
   const connectionStart = settingsSource.indexOf(
-    "new Setting(containerEl).setName(T.settings.h3_backendConnection).setHeading();",
+    "addGroup(T.settings.h3_backendConnection);",
   );
   const connectionEnd = settingsSource.indexOf(
-    "new Setting(containerEl).setName(T.settings.h3_vision).setHeading();",
+    "addGroup(T.settings.h3_vision);",
     connectionStart,
   );
   assert.ok(connectionStart >= 0 && connectionEnd > connectionStart);
