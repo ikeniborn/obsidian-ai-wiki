@@ -1,6 +1,6 @@
 ---
 review:
-  plan_hash: 0c0180bf8581b5a8
+  plan_hash: cd6b086026774281
   last_run: 2026-08-24
   phases:
     structure: { status: passed }
@@ -34,7 +34,7 @@ chain:
 - R4: Task 9 removes the orphan Claude probe and reproducibly rebuilds and executes the retained mobile eval.
 - R5: Tasks 3, 4, 5, and 11 preserve OpenAI-only loading, safe legacy settings, guarded desktop behavior, `isDesktopOnly: false`, and the Obsidian `1.13.0` minimum for `0.3.6`.
 - R6: Tasks 4 and 11 preserve published `0.3.5`/`1.7.2` history and synchronize package, lockfile, source, root, distribution, and compatibility metadata at `0.3.6`.
-- R7: Tasks 4, 7, 8, 9, and 11 prove every gate, merge only the verified pull request, and monitor the existing workflow through tag/release `0.3.6` with the exact flat assets.
+- R7: Task 4 implements and fixture-tests the serialized create-only publisher; Tasks 7, 8, and 9 close its source, active-surface, and mobile-eval gates; Task 11 verifies the clean merged build, permits only a fail-closed same-run/SHA retry, and proves the exact published tag/assets/bytes.
 - R8: Tasks 10 and 11 update current repository/iwiki guidance, reconcile every changed path, and keep Community directory submission and metadata outside delivery.
 
 Every numbered step inherits its task's `Closes` mapping. Every edit step's DoD is the immediately following verification step. Every commit step must exit zero and `git show --stat --oneline HEAD` must list only that task's declared files.
@@ -276,9 +276,9 @@ git add package.json package-lock.json src/settings.ts src/main.ts tests/setting
 git commit -m "refactor(settings): adopt Obsidian setting definitions"
 ```
 
-### Task 4: Create immutable `0.3.5` history and synchronized `0.3.6` metadata
+### Task 4: Create immutable `0.3.5` history and a create-only `0.3.6` publisher
 
-**Closes:** R5 minimum/mobile metadata, R6 version-history synchronization, and the metadata boundary required by R7.
+**Closes:** R5 minimum/mobile metadata, R6 version-history synchronization, and R7 serialized create-only publication.
 
 **Files:**
 
@@ -293,9 +293,9 @@ git commit -m "refactor(settings): adopt Obsidian setting definitions"
 - Modify: `.github/workflows/release.yml`
 - Modify: `tests/release-validation.test.ts`
 
-- [ ] Step 1: Add failing fixture, repository, monotonic-version, and workflow contracts.
+- [ ] Step 1: Add failing metadata and create-only publisher contracts.
 
-Set generic fixture `VERSION` to `0.4.0`: above protected `0.3.5`, but independent from repository target `0.3.6`. Add `versions.json` to each valid fixture with historical `0.3.5` fixed at `1.7.2` and `0.4.0` mapped to the fixture manifest minimum. Add negative fixtures proving prebuild validation rejects: changed historical mapping; current version `0.3.4` below protected `0.3.5`; current version equal to protected `0.3.5`; current mapping missing/mismatched; a current `0.3.6` package/manifest when `versions.json` also contains a higher `0.3.7` SemVer key; malformed key `999.0`; and prerelease key `999.0.0-beta`. Keep every negative fixture internally synchronized except for the single invariant named by its test, so each expected diagnostic is isolated. The two malformed-key fixtures must assert these exact diagnostics and assert no highest-key mismatch is reported afterward:
+Keep generic validator fixture `VERSION = "0.4.0"`: it is above protected `0.3.5` but independent from repository target `0.3.6`. Add `versions.json` to each valid fixture with `0.3.5` fixed at `1.7.2` and `0.4.0` mapped to the fixture manifest minimum. Add isolated negative fixtures for: changed historical mapping; current version below or equal to protected `0.3.5`; missing/mismatched current mapping; current `0.3.6` below a `0.3.7` key; malformed `999.0`; and prerelease `999.0.0-beta`. The malformed-key fixtures must assert these exact diagnostics and no subsequent highest-key diagnostic:
 
 ```text
 [versions.json] version key 999.0 must use exact x.y.z format
@@ -319,21 +319,35 @@ assert.equal(versionsJson["0.3.5"], "1.7.2");
 assert.equal(versionsJson["0.3.6"], "1.13.0");
 ```
 
-Extend the existing release-workflow test so it asserts:
+Replace action-specific workflow assertions with an exact option-B contract. Parse `.github/workflows/release.yml` and assert:
 
 ```ts
 assert.deepEqual(workflow.on, {
   push: { branches: ["master"], paths: ["src/manifest.json"] },
 });
-assert.equal(workflow.on.workflow_dispatch, undefined);
-assert.ok(tagGuardIndex > readVersionIndex);
-assert.ok(tagGuardIndex < releaseIndex);
-assert.match(String(steps[tagGuardIndex].run), /refs\/tags\/\$version/);
-assert.equal(release?.with?.target_commitish, "${{ github.sha }}");
-assert.equal(release?.with?.overwrite_files, false);
+assert.deepEqual(workflow.concurrency, {
+  group: "obsidian-ai-wiki-release",
+  queue: "max",
+  "cancel-in-progress": false,
+});
+assert.deepEqual(job.permissions, {
+  contents: "write",
+  attestations: "write",
+  "id-token": "write",
+});
 ```
 
-The test must identify a named `Reject existing release tag` shell step. Execute its extracted command in a temporary `PATH` with a fake `git`: status `0` means an existing tag and must produce guard status `1` plus `refusing overwrite`; status `2` means no matching tag and must produce guard status `0`. Parameterize unexpected statuses `[99, 128]`; for each status, assert guard status remains non-zero and stderr contains its exact diagnostic: `Release tag lookup failed with status 99.` or `Release tag lookup failed with status 128.` Replace the GitHub version expression with fixture version `0.4.0` only in this shell-contract harness. With the workflow's only trigger fixed to the filtered `master` push, the release action has no pull-request, manual-dispatch, or non-master entry point.
+Assert step order is `npm ci` → prebuild validation → zero-warning lint → typecheck → full tests → retained mobile eval → build → postbuild validation → tracked-generated diff → version read → local size/SHA-256 capture → provenance attestation → `Reconcile and publish create-only release`. The tracked diff command must be exactly fail closed over `dist/main.js`, `dist/manifest.json`, `dist/styles.css`, `manifest.json`, and `versions.json`. The digest step must record basename, byte count, and lowercase SHA-256 for the same three flat `dist` assets before attestation. The publication shell must receive `GH_TOKEN: ${{ github.token }}` and contain exactly one release mutation command:
+
+```bash
+gh release create "$version" dist/main.js dist/manifest.json dist/styles.css --verify-tag --target "$GITHUB_SHA" --title "$version" --generate-notes
+```
+
+Reject any `workflow_dispatch`, second job, variable concurrency group, cancellation, release edit/upload/delete, API write method, force push, clobber/recovery branch, or second `gh release create`. Assert the only tag mutation is `git push --porcelain origin "$GITHUB_SHA:refs/tags/$version"` and its output is accepted as a newly created claim only when the porcelain result contains the `*` new-ref status.
+
+Add a deterministic harness that extracts the complete `Reconcile and publish create-only release` shell, substitutes only GitHub expression values that a runner resolves before execution, and runs it with fixture `dist` assets plus fake `gh` and `git` executables that append every call to an operation log. Set `GITHUB_REPOSITORY=owner/repo`, a fixed `GITHUB_SHA`, `GITHUB_RUN_ID`, `GITHUB_RUN_ATTEMPT`, `GH_TOKEN`, and `RUNNER_TEMP`. The fake `gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100"` must model all pages, including drafts; exact matching is only `tag_name === version`. The fake tag-ref response must expose `.object.type` and `.object.sha`; fake asset downloads must return fixture bytes.
+
+Table-drive these states: absent release/tag; completed exact published release; draft; partial asset set; duplicate exact-tag releases; release-list API failure or malformed response; first-attempt existing exact tag; same-original-run rerun with the exact lightweight tag/SHA and a fresh empty release search; wrong tag SHA; annotated tag; lost tag-push acknowledgement; create failure; and post-create wrong, missing, extra, digest-mismatched, or byte-mismatched assets. Assert completed exact state exits zero without `git push` or `gh release create`; every preflight stop state performs no mutation; same-run exact-tag rerun reaches the one create command only after the fresh empty search; lost acknowledgement on the first attempt stops; create/postcondition failures perform no edit, upload, delete, second create, or cleanup. For the successful absent state, assert call order: initial paginated release list → one tag claim → create → fresh paginated release list → tag type/SHA query → three authenticated downloads. For every successful terminal state, assert exact three names, local/API SHA-256 digests, sizes, and downloaded bytes.
 
 - [ ] Step 2: Run the focused tests and confirm both missing validator behavior and stale repository metadata fail.
 
@@ -341,9 +355,9 @@ The test must identify a named `Reject existing release tag` shell step. Execute
 node --import tsx --test tests/release-validation.test.ts
 ```
 
-Expected: non-zero exit. The old validator accepts regressed/equal-protected/highest-key and malformed-key fixtures; repository assertions report package/manifests at `0.3.5`, changed `versions.json["0.3.5"]`, and missing `versions.json["0.3.6"]`; workflow assertions report obsolete `workflow_dispatch`, missing explicit existing/absent handling, missing parameterized `99`/`128` lookup-failure blocking, missing tag guard, missing exact `target_commitish: ${{ github.sha }}`, and missing `overwrite_files: false`.
+Expected: non-zero exit. Validator/history assertions expose stale metadata. Workflow/harness assertions expose missing constant queue policy, gates, generated diff, local digest capture, authenticated paginated reconciliation, exact-state terminal success, atomic create-only tag ownership, single CLI create, and exact postconditions.
 
-- [ ] Step 3: Make release validation and workflow publication fail closed.
+- [ ] Step 3: Make release metadata validation fail closed.
 
 Read `versions.json` during prebuild. Before numeric comparison, reject every key that does not match the existing exact release pattern `x.y.z`; if any key is invalid, report each exact malformed key and do not compute a highest key from that object. Only after all keys pass, parse them as numeric `major.minor.patch` tuples. Require `versionsJson["0.3.5"] === "1.7.2"`; require package version to be strictly greater than `0.3.5`; require it to equal the highest SemVer key in `versions.json`; require its mapping to equal `src/manifest.json.minAppVersion`; retain existing package/lockfile/manifest equality checks. Report offending path and values, for example:
 
@@ -356,43 +370,48 @@ Read `versions.json` during prebuild. Before numeric comparison, reject every ke
 [versions.json] 0.3.6 must map to src/manifest.json minAppVersion 1.13.0
 ```
 
-In `.github/workflows/release.yml`, delete `workflow_dispatch` and its manual-retry commentary so the filtered `master` push is the only trigger. Move `Read version` before attestation/publication, then add this guard immediately after it:
-
-```yaml
-- name: Reject existing release tag
-  run: |
-    version="${{ steps.version.outputs.version }}"
-    if git ls-remote --exit-code --tags origin "refs/tags/$version"; then
-      echo "Release tag $version already exists; refusing overwrite."
-      exit 1
-    else
-      status=$?
-      if [ "$status" -eq 2 ]; then
-        exit 0
-      fi
-      echo "Release tag lookup failed with status $status." >&2
-      exit "$status"
-    fi
-```
-
-Keep the guard after every lint/typecheck/test/build/validator gate and before attestation/release. On `softprops/action-gh-release@v2`, set both:
-
-```yaml
-target_commitish: ${{ github.sha }}
-overwrite_files: false
-```
-
-The exact `github.sha` binding makes the created tag target the verified workflow commit even if `master` advances before the release action. Do not add another trigger, job, or publication action.
-
-Run the extracted guard harness with fake Git statuses `0`, `2`, `99`, and `128`. The implementation must pass through only status `2`; status `0` must become guard exit `1`; status `99` must remain non-zero with `Release tag lookup failed with status 99.`; and status `128` must remain non-zero with `Release tag lookup failed with status 128.`.
-
-Run the focused tests again. Expected: all historical, regressed, equal-protected, highest-mismatch, malformed-key, and prerelease-key fixtures pass by observing validator exit `1` with their isolated diagnostics; guard harness proves fake Git statuses `0 → 1/refusal`, `2 → 0`, `99 → non-zero/exact lookup-failure diagnostic`, and `128 → non-zero/exact lookup-failure diagnostic`; workflow contracts prove exact `target_commitish: ${{ github.sha }}` and `overwrite_files: false`; repository synchronization is the only failure because release files have not been bumped yet.
+Run the focused tests again. Expected: historical, regressed, equal-protected, highest-mismatch, malformed-key, and prerelease-key fixtures observe validator exit `1` with isolated diagnostics. Repository synchronization and every not-yet-implemented workflow/harness assertion still fail.
 
 ```bash
 node --import tsx --test tests/release-validation.test.ts
 ```
 
-- [ ] Step 4: Bump package and source metadata, restore historical mapping, and build every generated release file.
+- [ ] Step 4: Implement the serialized create-only workflow and make the shell harness pass.
+
+Keep only the filtered `master`/`src/manifest.json` push trigger and one `release` job. Add constant top-level concurrency:
+
+```yaml
+concurrency:
+  group: obsidian-ai-wiki-release
+  queue: max
+  cancel-in-progress: false
+```
+
+Run every gate and build before mutation: `npm ci`, prebuild validation, lint, typecheck, full tests, `node eval/mobile-fixes/run.cjs`, production build, postbuild validation, and `git diff --exit-code -- dist/main.js dist/manifest.json dist/styles.css manifest.json versions.json`. Read the version; write the exact three local asset names, byte sizes, and SHA-256 digests to `$RUNNER_TEMP/release-assets.tsv`; then attest the same three paths with `actions/attest-build-provenance@v2`.
+
+After attestation, implement one `Reconcile and publish create-only release` Bash step with `set -euo pipefail` and `GH_TOKEN: ${{ github.token }}`. Its read-only helpers must:
+
+1. Call `gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100"`, validate the response is an array of page arrays, flatten every draft and published record, and select only exact `tag_name == version` matches.
+2. Treat zero matches as claimable state; treat more than one, any draft, any partial/wrong/extra asset state, malformed output, or API/authentication error as a stop.
+3. Treat one published, non-draft, non-prerelease match as terminal success without mutation only after `gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$version"` proves `.object.type == "commit"` and `.object.sha == GITHUB_SHA`, and exact asset validation proves the three names, `sha256:<local digest>` fields, sizes, and authenticated downloaded bytes against `$RUNNER_TEMP/release-assets.tsv`.
+
+With zero release matches, run exactly one non-force claim:
+
+```bash
+git push --porcelain origin "$GITHUB_SHA:refs/tags/$version"
+```
+
+Accept direct claim success only when porcelain reports a newly created ref (`*`), never an up-to-date (`=`) ref. On any failed/non-new claim, continue only when `GITHUB_RUN_ATTEMPT > 1`, the exact tag API reports lightweight type `commit` at `GITHUB_SHA`, and a new authenticated paginated release list still has zero exact matches. This is the only same-original-run rerun path; first-attempt existing tags, wrong SHA/type, ambiguity, and lost first-attempt acknowledgement stop.
+
+After a new or permitted rerun claim, invoke the single exact `gh release create` command from Step 1. A create error stops as possible residue. Re-run release listing and exact tag/asset verification after create. Any postcondition mismatch stops without mutation, cleanup, retry, or repair. Do not add edit, upload, clobber, delete, force, or recovery commands.
+
+```bash
+node --import tsx --test tests/release-validation.test.ts
+```
+
+Expected: workflow static contracts and every fake-CLI state pass. Mutation logs prove no command crosses a failed preflight or completed-exact terminal state; successful create order and final exact tag/asset/digest/byte postconditions pass.
+
+- [ ] Step 5: Bump package and source metadata, restore historical mapping, and build every generated release file.
 
 Set `package.json.version`, `package-lock.json.version`, and `package-lock.json.packages[""].version` to `0.3.6` without changing dependencies or creating a Git tag. Set `src/manifest.json` to version `0.3.6`, `minAppVersion: "1.13.0"`, and `isDesktopOnly: false`. Restore `versions.json["0.3.5"]` to `"1.7.2"`; do not delete or rewrite any older key. Then generate root/distribution metadata and bundle from source:
 
@@ -403,7 +422,7 @@ npm run build
 
 Expected: build exits zero; `manifest.json` and `dist/manifest.json` are generated from `src/manifest.json`; `dist/main.js` is rebuilt; package, both lockfile root records, and all manifests declare `0.3.6`; all manifests declare `minAppVersion: 1.13.0` and `isDesktopOnly: false`; `versions.json["0.3.5"]` remains `1.7.2` and build appends `versions.json["0.3.6"] = "1.13.0"`.
 
-- [ ] Step 5: Prove historical immutability, synchronization, mobile availability, and the expected remaining lint inventory.
+- [ ] Step 6: Prove historical immutability, publisher fail-closure, mobile availability, and the expected remaining lint inventory.
 
 ```bash
 node --import tsx --test tests/release-validation.test.ts tests/openai-only-settings.test.ts tests/openai-only-load-settings.test.ts
@@ -412,9 +431,9 @@ npm run release:validate:post
 npm run lint
 ```
 
-Expected: focused tests and both release validators exit zero; fixtures prove `0.3.5` cannot change, every history key is exact `x.y.z`, current version is strictly newer and highest, metadata cannot drift, manual dispatch is absent, existing tags block publication, absent tags continue, unexpected lookup statuses `99` and `128` both block with their exact diagnostics, the guard precedes release, release target is exactly the verified `github.sha`, and asset overwrite is disabled. All 13 `no-unsupported-api` errors and the `require-display` warning from Task 3 are absent. Lint remains non-zero only for the two `no-undef` warnings assigned to Task 5 plus sentence-case/deprecated-control findings assigned to Task 6. Any version, workflow, compatibility, mobile, legacy-load, or unrelated finding blocks this commit.
+Expected: focused tests and both release validators exit zero. Fixtures prove immutable history, exact metadata, constant serialized queueing, all gates/diff/digests/attestation before mutation, authenticated paginated exact-tag discovery, strict tag ownership, single create-only publication, exact terminal/post-create state, and fail-closed stop behavior. All 13 `no-unsupported-api` errors and the `require-display` warning from Task 3 are absent. Lint remains non-zero only for the two `no-undef` warnings assigned to Task 5 plus sentence-case/deprecated-control findings assigned to Task 6. Any version, workflow, compatibility, mobile, legacy-load, publisher-state, or unrelated finding blocks this commit.
 
-- [ ] Step 6: Stage exactly the Task 4 source, test, and generated paths; reject cross-task staging.
+- [ ] Step 7: Stage exactly the Task 4 source, test, and generated paths; reject cross-task staging, then commit.
 
 ```bash
 git add package.json package-lock.json src/manifest.json manifest.json dist/main.js dist/manifest.json versions.json scripts/validate-release.mjs .github/workflows/release.yml tests/release-validation.test.ts
@@ -424,13 +443,11 @@ git diff --cached --name-only
 
 Expected: check exits zero. Staged names are exactly `package.json`, `package-lock.json`, `src/manifest.json`, `manifest.json`, `dist/main.js`, `dist/manifest.json`, `versions.json`, `scripts/validate-release.mjs`, `.github/workflows/release.yml`, and `tests/release-validation.test.ts`; no Task 5+ path or unrelated pre-existing change is staged.
 
-- [ ] Step 7: Commit the new release record before any passing strict lint gate.
-
 ```bash
 git commit -m "build(release): prepare version 0.3.6"
 ```
 
-Expected: commit succeeds and contains only Step 6's exact staged paths. It creates no tag and publishes nothing.
+Expected: commit succeeds and contains only Step 7's exact staged paths. It creates no tag and publishes nothing.
 
 ### Task 5: Resolve environment-global findings without weakening mobile guards
 
@@ -708,9 +725,9 @@ git commit -m "docs(release): describe reviewer parity gates"
 
 Before committing, inspect staged paths and remove any historical or unrelated document.
 
-### Task 11: Reconcile the verified result and deliver release `0.3.6` from the merged pull request
+### Task 11: Reconcile the verified result and deliver create-only release `0.3.6`
 
-**Closes:** Final evidence for R1–R8, including immutable `0.3.5`, merge-only publication, automatic release `0.3.6`, and the Community boundary.
+**Closes:** Final R1–R8 evidence: clean full-checkout build, immutable `0.3.5`, verified PR merge, option-B publisher state, exact `0.3.6` tag/assets/digests/bytes, and Community exclusion.
 
 **Files:**
 
@@ -719,7 +736,7 @@ Before committing, inspect staged paths and remove any historical or unrelated d
 - Update through iwiki MCP: `reference/tasks/reviewer-parity-remediation` and active history segment
 - External delivery through existing mechanisms only: remediation pull request and `.github/workflows/release.yml` run
 
-- [ ] Step 1: Start from a clean branch and run complete release-candidate verification in enforced order.
+- [ ] Step 1: Start from a clean branch and run the complete release-candidate verification in enforced order.
 
 ```bash
 git fetch origin master
@@ -729,57 +746,86 @@ npm run lint
 npm run typecheck
 npm test
 npm run release:validate:pre
+node eval/mobile-fixes/run.cjs
 npm run build
 npm run release:validate:post
-node eval/mobile-fixes/run.cjs
 git diff --check origin/master...HEAD
+git diff --exit-code -- dist/main.js dist/manifest.json dist/styles.css manifest.json versions.json
 git diff --exit-code
 git status --short
 ```
 
-Expected: both status commands print nothing; every command exits zero; lint has zero warnings; tests have zero failures; prebuild/postbuild validators pass; production build leaves tracked generated files unchanged; retained mobile eval passes; branch diff has no whitespace error.
+Expected: both status commands print nothing; every command exits zero; lint has zero warnings; tests have zero failures; validators and retained mobile eval pass; build leaves every tracked generated path unchanged; branch diff has no whitespace error.
 
-- [ ] Step 2: Prove active-surface cleanliness, exact `0.3.6` synchronization, and local `0.3.5` history preservation.
+- [ ] Step 2: Audit reproducible generated assets from a complete tracked checkout.
+
+Create a detached temporary worktree at the committed candidate. Do not copy a partial source subset: the audit must include the repository's tracked `package-lock.json`, `tsconfig.json`, source tree, build config, validator, manifests, styles, and eval inputs.
 
 ```bash
-rg -n -i 'claude code|claude-agent|ClaudeCliClient|iclaudePath|claudePath|child_process|spawn\(' src eval scripts dist/main.js
+set -e
+audit_parent="$(mktemp -d)"
+audit_root="$audit_parent/checkout"
+cleanup_audit() { git worktree remove --force "$audit_root" >/dev/null 2>&1 || true; rmdir "$audit_parent" >/dev/null 2>&1 || true; }
+trap cleanup_audit EXIT
+git worktree add --detach "$audit_root" HEAD
+(
+set -e
+cd "$audit_root"
+test -f tsconfig.json
+npm ci
+npm run typecheck
+npm run build
+npm run release:validate:post
+git diff --exit-code -- dist/main.js dist/manifest.json dist/styles.css manifest.json versions.json
+)
+trap - EXIT
+cleanup_audit
+```
+
+Expected: clean full checkout uses the real TypeScript project and produces byte-identical tracked generated assets. Any build, validator, typecheck, or diff failure stops delivery; a partial copied fixture is not acceptable evidence.
+
+- [ ] Step 3: Prove active-surface cleanliness and exact local metadata.
+
+```bash
+if rg -n -i 'claude code|claude-agent|ClaudeCliClient|iclaudePath|claudePath|child_process|spawn\(' src eval scripts dist/main.js --glob '!scripts/validate-release.mjs' --glob '!scripts/dspy/CLAUDE.md'; then echo 'forbidden active reviewer marker found' >&2; exit 1; fi
 git diff origin/master...HEAD -- package.json package-lock.json src/manifest.json manifest.json dist/manifest.json versions.json
-node -e 'const fs=require("node:fs"); const pkg=require("./package.json"); const lock=require("./package-lock.json"); const source=require("./src/manifest.json"); const root=require("./manifest.json"); const dist=require("./dist/manifest.json"); const versions=require("./versions.json"); if (![pkg.version,lock.version,lock.packages[""].version,source.version,root.version,dist.version].every(v=>v==="0.3.6")) throw new Error("0.3.6 version drift"); if (![source,root,dist].every(m=>m.minAppVersion==="1.13.0"&&m.isDesktopOnly===false)) throw new Error("manifest compatibility drift"); if (versions["0.3.5"]!=="1.7.2"||versions["0.3.6"]!=="1.13.0") throw new Error("versions.json history drift");'
+node -e 'const pkg=require("./package.json"); const lock=require("./package-lock.json"); const source=require("./src/manifest.json"); const root=require("./manifest.json"); const dist=require("./dist/manifest.json"); const versions=require("./versions.json"); if (![pkg.version,lock.version,lock.packages[""].version,source.version,root.version,dist.version].every(v=>v==="0.3.6")) throw new Error("0.3.6 version drift"); if (![source,root,dist].every(m=>m.minAppVersion==="1.13.0"&&m.isDesktopOnly===false)) throw new Error("manifest compatibility drift"); if (versions["0.3.5"]!=="1.7.2"||versions["0.3.6"]!=="1.13.0") throw new Error("versions.json history drift");'
 ```
 
-Expected: scan output is limited to the validator's tested pattern declarations and explicit excluded instruction evidence; no active source, eval, script, or distribution violation appears. Diff and assertion show package, both lockfile root fields, source/root/dist manifests at `0.3.6`; every manifest has `minAppVersion: 1.13.0` and `isDesktopOnly: false`; `versions.json["0.3.5"]` remains `1.7.2`; `versions.json["0.3.6"]` is `1.13.0`; no backend is added.
+Expected: marker command exits zero through its no-match branch; diff/assertion prove package, both lockfile root fields, source/root/dist manifests at `0.3.6`; every manifest has `minAppVersion: 1.13.0` and `isDesktopOnly: false`; historical/current mappings are exact; no backend was added.
 
-- [ ] Step 3: Capture the existing published `0.3.5` boundary before delivery.
+- [ ] Step 4: Capture stable published `0.3.5` evidence before delivery without mutating it.
 
 ```bash
-history_dir="$(mktemp -d)"
-gh release view 0.3.5 --json tagName,isDraft,isPrerelease,assets,url
-gh release download 0.3.5 --dir "$history_dir" --pattern manifest.json
-node -e 'const fs=require("node:fs"); const p=process.argv[1]; const m=JSON.parse(fs.readFileSync(p,"utf8")); if(m.version!=="0.3.5"||m.minAppVersion!=="1.7.2") throw new Error("published 0.3.5 manifest drift");' "$history_dir/manifest.json"
-git ls-remote --tags origin refs/tags/0.3.5
+evidence_dir=".git/reviewer-parity-release-evidence"
+mkdir -p "$evidence_dir/0.3.5-before"
+gh release view 0.3.5 --json tagName,isDraft,isPrerelease,assets,url --jq '{tagName,isDraft,isPrerelease,url,assets:([.assets[]|{name,size,url}]|sort_by(.name))}' > "$evidence_dir/0.3.5-release-before.json"
+gh api 'repos/{owner}/{repo}/git/ref/tags/0.3.5' --jq '.object|{sha,type}' > "$evidence_dir/0.3.5-tag-before.json"
+jq -e '.tagName=="0.3.5" and .isDraft==false and .isPrerelease==false' "$evidence_dir/0.3.5-release-before.json"
+gh release download 0.3.5 --dir "$evidence_dir/0.3.5-before" --pattern manifest.json
+node -e 'const fs=require("node:fs"); const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(m.version!=="0.3.5"||m.minAppVersion!=="1.7.2") throw new Error("published 0.3.5 manifest drift");' "$evidence_dir/0.3.5-before/manifest.json"
+sha256sum "$evidence_dir/0.3.5-before/manifest.json" > "$evidence_dir/0.3.5-manifest-before.sha256"
 ```
 
-Expected: release/tag `0.3.5` exists, is neither draft nor prerelease, its published manifest still declares version `0.3.5` and minimum `1.7.2`, and no command mutates that release or tag. Record release URL, tag object ID, and asset metadata for post-release comparison.
+Expected: authenticated release and tag reads succeed; `0.3.5` is published, its manifest remains `0.3.5`/`1.7.2`, and stable release asset metadata, tag object type/SHA, and manifest digest are retained for the after comparison. No command changes the tag or release.
 
-- [ ] Step 4: Update current reviewer/release guidance in the bound iwiki domain before result reconciliation.
+- [ ] Step 5: Update current reviewer/release guidance in the bound iwiki domain before result reconciliation.
 
-Read the target page immediately before mutation, pass its current PostgreSQL revision and protected section hash, update or insert the reviewer-gate section, then run `wiki_lint`. Record official lint version/scope, zero-warning rule, Obsidian `1.13.0` minimum for `0.3.6`, immutable `0.3.5`/`1.7.2` history, Setting Definitions, active surfaces/exceptions, eval policy, synchronized metadata checks, merge-only publication, and Community exclusion.
+Read the target page immediately before mutation, pass its current PostgreSQL revision and protected section hash, update or insert the reviewer-gate section, then run `wiki_lint`. Record official lint version/scope, zero-warning rule, Obsidian `1.13.0` minimum for `0.3.6`, immutable `0.3.5`/`1.7.2` history, Setting Definitions, active surfaces/exceptions, eval policy, synchronized metadata checks, constant queue policy, authenticated fail-closed reconciliation, create-only mutation boundary, and Community exclusion.
 
 Expected: mutation succeeds, reindex is automatic, and task-page lint has no broken/stale/missing-source finding. Do not call Git-only `wiki_sync`.
 
-- [ ] Step 5: Write and reconcile the verified pre-delivery result over the complete branch diff.
+- [ ] Step 6: Write and reconcile the verified pre-delivery result over the complete branch diff.
 
-Create `docs/superpowers/results/2026-08-24-reviewer-parity-remediation-result.md` with a changed-path-to-R1–R8 table and exact Steps 1–3 command outcomes. State that implementation and release candidate are verified; package/manifests are `0.3.6`; published `0.3.5` and its `1.7.2` mapping remain unchanged; PR merge and automatic release are the remaining authorized delivery steps; no Community submission/directory metadata action occurred; and no Claude, LM Studio, or alternate backend was added.
-
-Invoke the bounded result gate against the full committed branch plus uncommitted result artifact:
+Create `docs/superpowers/results/2026-08-24-reviewer-parity-remediation-result.md` with a changed-path-to-R1–R8 table and exact Steps 1–4 outcomes. State: implementation and clean candidate are verified; metadata is `0.3.6`; published `0.3.5` remains unchanged; PR merge and automatic option-B release remain; no Community directory action occurred; no alternate backend was added.
 
 ```text
 $check-chain result docs/superpowers/plans/2026-08-24-reviewer-parity-remediation.md --since=origin/master
 ```
 
-Expected: reconciliation maps every changed path and completed implementation outcome to R1–R8, reviews the full branch diff, writes current `result_check` frontmatter, and returns `OK` for PR delivery. It must not claim merge or release already occurred. If `needs_work`, fix the named evidence gap with a changed strategy, rerun affected verification, and do not push.
+Expected: reconciliation reviews the full branch diff, maps every path/outcome to R1–R8, updates current `result_check` frontmatter, and returns `OK` for PR delivery without claiming merge/release. On `needs_work`, change strategy, close the named gap, rerun affected checks, and do not push.
 
-After `OK`, stage exactly the result artifact and plan frontmatter written by the gate:
+After `OK`, stage exactly the gate-updated plan and result:
 
 ```bash
 git add docs/superpowers/plans/2026-08-24-reviewer-parity-remediation.md docs/superpowers/results/2026-08-24-reviewer-parity-remediation-result.md
@@ -789,19 +835,19 @@ git commit -m "docs(result): reconcile reviewer parity remediation"
 git status --short
 ```
 
-Expected: staged paths are exactly the plan and result artifact; commit succeeds; final status is clean. Task lifecycle remains `completion-pending` until PR/release delivery evidence is durable.
+Expected: staged names are exactly those two paths; commit succeeds; final status is clean. Lifecycle remains `completion-pending` until durable PR/release evidence exists.
 
-- [ ] Step 6: Use `superpowers:finishing-a-development-branch` and `git-workflow` to push the task branch and open the remediation pull request against `master`.
+- [ ] Step 7: Push only the task branch and open the remediation pull request against `master` through `superpowers:finishing-a-development-branch` and `git-workflow`.
 
 ```bash
 git push -u origin dev-reviewer-parity-remediation
-pr_url="$(gh pr create --base master --head dev-reviewer-parity-remediation --title 'fix: remediate Obsidian reviewer parity' --body $'## Summary\n- adopt official zero-warning Obsidian lint contract\n- remove stale Claude reviewer surfaces\n- prepare immutable-history release 0.3.6\n\n## Verification\n- npm run lint\n- npm run typecheck\n- npm test\n- npm run release:validate:pre\n- npm run build\n- npm run release:validate:post\n- node eval/mobile-fixes/run.cjs')"
+pr_url="$(gh pr create --base master --head dev-reviewer-parity-remediation --title 'fix: remediate Obsidian reviewer parity' --body $'## Summary\n- adopt official zero-warning Obsidian lint contract\n- remove stale Claude reviewer surfaces\n- prepare serialized create-only release 0.3.6\n\n## Verification\n- npm run lint\n- npm run typecheck\n- npm test\n- npm run release:validate:pre\n- node eval/mobile-fixes/run.cjs\n- npm run build\n- npm run release:validate:post\n- clean full-checkout generated-asset diff')"
 printf '%s\n' "$pr_url"
 ```
 
-Expected: push targets only `dev-reviewer-parity-remediation`; PR URL is returned with base `master` and head `dev-reviewer-parity-remediation`. Do not push or merge directly to `master`.
+Expected: push targets only `dev-reviewer-parity-remediation`; PR URL has base `master` and exact task head. Never push or merge directly to `master`.
 
-- [ ] Step 7: Wait for every required PR check and merge only the verified pull request.
+- [ ] Step 8: Wait for every required PR check, then merge only that verified pull request.
 
 ```bash
 gh pr checks "$pr_url" --watch --fail-fast
@@ -810,30 +856,38 @@ gh pr merge "$pr_url" --merge --delete-branch
 gh pr view "$pr_url" --json state,mergedAt,mergeCommit,url
 ```
 
-Expected: check watch exits zero; every required check is successful; merge state is clean and any required review is approved. Only then does PR merge succeed. Final view reports `state: MERGED` and a merge-commit OID. A failed/pending required check, blocked merge state, or missing required approval stops delivery; no direct `master` push is allowed.
+Expected: checks are successful, merge state is clean, required review is approved, and final view reports `MERGED` plus merge commit OID. Any failed/pending check, blocked state, or missing approval stops delivery.
 
-- [ ] Step 8: Locate and monitor the existing automatic release workflow for the exact merge revision.
+- [ ] Step 9: Locate and monitor the automatic release run for the exact merge revision.
 
 ```bash
 merge_sha="$(gh pr view "$pr_url" --json mergeCommit --jq '.mergeCommit.oid')"
 run_id="$(gh run list --workflow Release --branch master --event push --limit 20 --json databaseId,headSha --jq ".[] | select(.headSha == \"$merge_sha\") | .databaseId" | head -n1)"
 test -n "$run_id"
+test "$(gh run view "$run_id" --json headSha --jq '.headSha')" = "$merge_sha"
 gh run view "$run_id" --json headSha,event,status,conclusion,url
 gh run watch "$run_id" --exit-status
 ```
 
-Expected: lookup identifies the `Release` workflow triggered by the merged `master` push, its `headSha` equals `merge_sha`, and watch exits zero only after all existing lint/typecheck/test/build/validator/attestation/publication steps pass. If the run is not visible yet, repeat only the read-only `gh run list` lookup; never dispatch a different revision.
+Expected: selected `Release` run is the merged `master` push at `merge_sha`. Successful watch means every gate, clean generated diff, digest capture, attestation, reconciliation, tag/release mutation if needed, and postcondition passed. If run lookup is initially empty, repeat only read-only list; never dispatch another revision.
 
-- [ ] Step 9: Retry only a transient post-gate failure on the same merged revision.
-
-On failure, inspect the failed run and its step conclusions:
+- [ ] Step 10: On failure, permit only a same-run/SHA rerun whose read-only preflight is safe.
 
 ```bash
+evidence_dir=".git/reviewer-parity-release-evidence"
+test -d "$evidence_dir"
 gh run view "$run_id" --json headSha,jobs,url
 gh run view "$run_id" --log-failed
+test "$(gh run view "$run_id" --json headSha --jq '.headSha')" = "$merge_sha"
+gh api --paginate --slurp 'repos/{owner}/{repo}/releases?per_page=100' > "$evidence_dir/0.3.6-release-preflight-pages.json"
+jq -e 'type=="array" and all(.[]; type=="array")' "$evidence_dir/0.3.6-release-preflight-pages.json"
+jq --arg version '0.3.6' '[.[][]|select(.tag_name==$version)]' "$evidence_dir/0.3.6-release-preflight-pages.json" > "$evidence_dir/0.3.6-release-preflight-exact.json"
+gh api 'repos/{owner}/{repo}/git/matching-refs/tags/0.3.6' > "$evidence_dir/0.3.6-tag-preflight.json"
 ```
 
-Expected: `headSha` still equals `merge_sha`. If any lint, typecheck, test, build, prebuild/postbuild validator, active-surface, or asset gate failed, stop with `0.3.6` unpublished; do not retry publication. Only when every required gate passed and failure is transient in later attestation/publication may the same run be rerun:
+Interpret with the same exact-state rules tested in Task 4. One complete exact release is success: do not rerun; continue to Step 11. Multiple matches, draft/prerelease, partial/wrong/extra assets, wrong/annotated tag, malformed/API-ambiguous state, or any run that attempted `gh release create` and returned an error stops for separate cleanup authorization. Do not delete, edit, upload, clobber, or repair residue.
+
+Rerun is allowed only when all earlier lint/typecheck/test/eval/build/validator/diff/digest gates passed, `run_id` still has `headSha == merge_sha`, logs prove release creation was not attempted, exact release matches are empty, and exact tag state is either absent or one lightweight `commit` ref at `merge_sha`. This covers transient attestation failure, safe pre-create failure, or lost tag-push acknowledgement. Rerun only the same original run:
 
 ```bash
 test "$(gh run view "$run_id" --json headSha --jq '.headSha')" = "$merge_sha"
@@ -841,36 +895,54 @@ gh run rerun "$run_id"
 gh run watch "$run_id" --exit-status
 ```
 
-Expected: rerun targets the original merge-SHA run, retains `headSha == merge_sha`, re-executes all workflow gates, and exits zero. Do not dispatch another run, create an artificial version commit, or retry any different revision.
+Expected: rerun keeps original `run_id`/`merge_sha`, re-executes every gate, and relies on workflow preflight to allow only empty state or the exact same-run lightweight tag with a fresh empty release search. Any partial residue or create uncertainty remains stopped; cleanup requires separate authorization.
 
-- [ ] Step 10: Verify tag/release `0.3.6`, exact revision, and flat assets; recheck `0.3.5` immutability.
+- [ ] Step 11: Rebuild the merged SHA from a full tracked checkout and verify exact published postconditions.
 
 ```bash
-git fetch origin refs/tags/0.3.6:refs/tags/0.3.6
-test "$(git rev-list -n1 0.3.6)" = "$merge_sha"
-gh release view 0.3.6 --json tagName,targetCommitish,isDraft,isPrerelease,assets,url
-test "$(gh release view 0.3.6 --json assets --jq '[.assets[].name] | sort | join(",")')" = "main.js,manifest.json,styles.css"
-release_dir="$(mktemp -d)"
+set -e
+evidence_dir=".git/reviewer-parity-release-evidence"
+test -d "$evidence_dir"
+release_audit_parent="$(mktemp -d)"
+release_audit_root="$release_audit_parent/checkout"
+release_dir="$release_audit_parent/download"
+mkdir -p "$release_dir"
+cleanup_release_audit() { git worktree remove --force "$release_audit_root" >/dev/null 2>&1 || true; find "$release_dir" -mindepth 1 -delete >/dev/null 2>&1 || true; rmdir "$release_dir" >/dev/null 2>&1 || true; rmdir "$release_audit_parent" >/dev/null 2>&1 || true; }
+trap cleanup_release_audit EXIT
+git worktree add --detach "$release_audit_root" "$merge_sha"
+(
+set -e
+cd "$release_audit_root"
+test -f tsconfig.json
+npm ci
+npm run build
+npm run release:validate:post
+git diff --exit-code -- dist/main.js dist/manifest.json dist/styles.css manifest.json versions.json
+)
+gh api 'repos/{owner}/{repo}/git/ref/tags/0.3.6' > "$evidence_dir/0.3.6-tag-final.json"
+jq --arg sha "$merge_sha" -e '.object.type=="commit" and .object.sha==$sha' "$evidence_dir/0.3.6-tag-final.json"
+gh api --paginate --slurp 'repos/{owner}/{repo}/releases?per_page=100' > "$evidence_dir/0.3.6-release-final-pages.json"
+jq --arg version '0.3.6' '[.[][]|select(.tag_name==$version)]' "$evidence_dir/0.3.6-release-final-pages.json" > "$evidence_dir/0.3.6-release-final.json"
+jq -e 'length==1 and .[0].draft==false and .[0].prerelease==false and ([.[0].assets[].name]|sort)==["main.js","manifest.json","styles.css"]' "$evidence_dir/0.3.6-release-final.json"
+for asset in main.js manifest.json styles.css; do local_path="$release_audit_root/dist/$asset"; local_size="$(stat -c %s "$local_path")"; local_digest="$(sha256sum "$local_path" | cut -d' ' -f1)"; jq --arg name "$asset" --arg digest "sha256:$local_digest" --argjson size "$local_size" -e '.[0].assets|map(select(.name==$name and .digest==$digest and .size==$size))|length==1' "$evidence_dir/0.3.6-release-final.json"; done
 gh release download 0.3.6 --dir "$release_dir" --pattern main.js --pattern manifest.json --pattern styles.css
-find "$release_dir" -maxdepth 1 -type f -printf '%f\n' | sort
-cmp "$release_dir/main.js" dist/main.js
-cmp "$release_dir/manifest.json" dist/manifest.json
-cmp "$release_dir/styles.css" dist/styles.css
+test "$(find "$release_dir" -maxdepth 1 -type f -printf '%f\n' | sort | paste -sd, -)" = "main.js,manifest.json,styles.css"
+cmp "$release_dir/main.js" "$release_audit_root/dist/main.js"
+cmp "$release_dir/manifest.json" "$release_audit_root/dist/manifest.json"
+cmp "$release_dir/styles.css" "$release_audit_root/dist/styles.css"
 node -e 'const fs=require("node:fs"); const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(m.version!=="0.3.6"||m.minAppVersion!=="1.13.0"||m.isDesktopOnly!==false) throw new Error("published 0.3.6 manifest drift");' "$release_dir/manifest.json"
-gh release view 0.3.5 --json tagName,isDraft,isPrerelease,assets,url
-git ls-remote --tags origin refs/tags/0.3.5
+gh release view 0.3.5 --json tagName,isDraft,isPrerelease,assets,url --jq '{tagName,isDraft,isPrerelease,url,assets:([.assets[]|{name,size,url}]|sort_by(.name))}' > "$evidence_dir/0.3.5-release-after.json"
+gh api 'repos/{owner}/{repo}/git/ref/tags/0.3.5' --jq '.object|{sha,type}' > "$evidence_dir/0.3.5-tag-after.json"
+cmp "$evidence_dir/0.3.5-release-before.json" "$evidence_dir/0.3.5-release-after.json"
+cmp "$evidence_dir/0.3.5-tag-before.json" "$evidence_dir/0.3.5-tag-after.json"
+trap - EXIT
+cleanup_release_audit
 ```
 
-Expected: tag `0.3.6` resolves to `merge_sha`; release is neither draft nor prerelease; asset list and download directory contain exactly flat `main.js`, `manifest.json`, and `styles.css`; downloaded bytes match the verified merged build; published manifest declares `0.3.6`, `1.13.0`, and mobile support. Recorded `0.3.5` release URL, tag object ID, and asset metadata match Step 3. No Community directory action occurs.
+Expected: clean merged checkout uses full tracked project/tsconfig and reproduces assets; tag is lightweight at `merge_sha`; exactly one published non-draft/non-prerelease release exists; its exact three API digests/sizes and downloaded bytes match the clean local files; manifest is `0.3.6`/`1.13.0`/mobile; stable `0.3.5` release/tag evidence is byte-identical to Step 4. No Community action occurs.
 
-- [ ] Step 11: Record post-merge release evidence in current iwiki reviewer guidance and authoritative task history.
+- [ ] Step 12: Record durable delivery evidence and close only when every boundary is proven.
 
-Read the reviewer guidance page, `reference/tasks/reviewer-parity-remediation`, and its active history segment immediately before compare-and-swap updates. Record PR URL, merge SHA, required-check outcome, release workflow URL, release/tag URL, exact flat asset names, verified `0.3.6` manifest, `0.3.5` before/after comparison, and Community exclusion. Rerun `wiki_lint`.
+Read reviewer guidance, `reference/tasks/reviewer-parity-remediation`, and active history immediately before compare-and-swap writes. Record PR URL, merge SHA, required checks, release run URL, whether publication was first-run, same-run rerun, or completed-exact terminal success, release/tag URL, tag type/SHA, exact assets/digests/bytes, clean full-checkout audit, unchanged `0.3.5`, result `OK`, and Community exclusion. Run `wiki_lint`; confirm spool empty. Transition task to `done` only after re-reading current task/history revisions and verifying every item.
 
-Expected: hosted writes succeed with current revisions/section hashes; lint has no broken/stale/missing-source finding; spool is empty. Any missing evidence keeps lifecycle `completion-pending`.
-
-- [ ] Step 12: Close delivery only after every durable release condition is present.
-
-Re-read the task page and active history segment. Transition `reference/tasks/reviewer-parity-remediation` to `done` only when the implementation PR is merged, required checks passed, workflow ran on `merge_sha`, release/tag `0.3.6` and exact assets are verified, `0.3.5` evidence is unchanged, result reconciliation is `OK`, spool is empty, and task-page `wiki_lint` is clean.
-
-Expected: task ledger contains durable R1–R8 implementation and delivery evidence; lifecycle is `done`; no Community submission/metadata event exists. Any PR, workflow, release, asset, historical comparison, result, spool, or lint failure retains `completion-pending` and stops completion claims.
+Expected: task ledger contains durable R1–R8 implementation/delivery evidence and lifecycle `done`. Any PR, workflow, preflight, release, tag, asset, digest, byte, clean-build, historical comparison, result, spool, or lint gap retains `completion-pending`. Partial residue has no automatic cleanup; separate authorization is required.
