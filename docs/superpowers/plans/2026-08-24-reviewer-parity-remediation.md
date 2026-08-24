@@ -1,6 +1,6 @@
 ---
 review:
-  plan_hash: 9090e503b885e7d2
+  plan_hash: 15281fbeac93e733
   last_run: 2026-08-24
   phases:
     structure: { status: passed }
@@ -295,7 +295,14 @@ git commit -m "refactor(settings): adopt Obsidian setting definitions"
 
 - [ ] Step 1: Add failing fixture, repository, monotonic-version, and workflow contracts.
 
-Set generic fixture `VERSION` to `0.4.0`: above protected `0.3.5`, but independent from repository target `0.3.6`. Add `versions.json` to each valid fixture with historical `0.3.5` fixed at `1.7.2` and `0.4.0` mapped to the fixture manifest minimum. Add negative fixtures proving prebuild validation rejects: changed historical mapping; current version `0.3.4` below protected `0.3.5`; current version equal to protected `0.3.5`; current mapping missing/mismatched; and a current `0.3.6` package/manifest when `versions.json` also contains a higher `0.3.7` SemVer key. Keep every negative fixture internally synchronized except for the single invariant named by its test, so each expected diagnostic is isolated. Replace the current repository compatibility assertions with exact package, lockfile, manifest, and history assertions:
+Set generic fixture `VERSION` to `0.4.0`: above protected `0.3.5`, but independent from repository target `0.3.6`. Add `versions.json` to each valid fixture with historical `0.3.5` fixed at `1.7.2` and `0.4.0` mapped to the fixture manifest minimum. Add negative fixtures proving prebuild validation rejects: changed historical mapping; current version `0.3.4` below protected `0.3.5`; current version equal to protected `0.3.5`; current mapping missing/mismatched; a current `0.3.6` package/manifest when `versions.json` also contains a higher `0.3.7` SemVer key; malformed key `999.0`; and prerelease key `999.0.0-beta`. Keep every negative fixture internally synchronized except for the single invariant named by its test, so each expected diagnostic is isolated. The two malformed-key fixtures must assert these exact diagnostics and assert no highest-key mismatch is reported afterward:
+
+```text
+[versions.json] version key 999.0 must use exact x.y.z format
+[versions.json] version key 999.0.0-beta must use exact x.y.z format
+```
+
+Replace the current repository compatibility assertions with exact package, lockfile, manifest, and history assertions:
 
 ```ts
 assert.equal(packageJson.version, "0.3.6");
@@ -325,7 +332,7 @@ assert.match(String(steps[tagGuardIndex].run), /refs\/tags\/\$version/);
 assert.equal(release?.with?.overwrite_files, false);
 ```
 
-The test must identify a named `Reject existing release tag` shell step. Execute its extracted command in a temporary `PATH` with a fake `git`: when fake `git ls-remote` exits `0` for an existing tag, assert guard status `1` and stderr/stdout contains `refusing overwrite`; when fake Git exits `2` for no matching tag, assert guard status `0`. Replace the GitHub version expression with fixture version `0.4.0` only in this shell-contract harness. With the workflow's only trigger fixed to the filtered `master` push, the release action has no pull-request, manual-dispatch, or non-master entry point.
+The test must identify a named `Reject existing release tag` shell step. Execute its extracted command in a temporary `PATH` with a fake `git`: status `0` means an existing tag and must produce guard status `1` plus `refusing overwrite`; status `2` means no matching tag and must produce guard status `0`. Parameterize unexpected statuses `[99, 128]`; for each status, assert guard status remains non-zero and stderr contains its exact diagnostic: `Release tag lookup failed with status 99.` or `Release tag lookup failed with status 128.` Replace the GitHub version expression with fixture version `0.4.0` only in this shell-contract harness. With the workflow's only trigger fixed to the filtered `master` push, the release action has no pull-request, manual-dispatch, or non-master entry point.
 
 - [ ] Step 2: Run the focused tests and confirm both missing validator behavior and stale repository metadata fail.
 
@@ -333,14 +340,16 @@ The test must identify a named `Reject existing release tag` shell step. Execute
 node --import tsx --test tests/release-validation.test.ts
 ```
 
-Expected: non-zero exit. The old validator accepts regressed/equal-protected/highest-key mismatches; repository assertions report package/manifests at `0.3.5`, changed `versions.json["0.3.5"]`, and missing `versions.json["0.3.6"]`; workflow assertions report the obsolete `workflow_dispatch`, missing tag guard, and missing `overwrite_files: false`.
+Expected: non-zero exit. The old validator accepts regressed/equal-protected/highest-key and malformed-key fixtures; repository assertions report package/manifests at `0.3.5`, changed `versions.json["0.3.5"]`, and missing `versions.json["0.3.6"]`; workflow assertions report obsolete `workflow_dispatch`, missing explicit existing/absent handling, missing parameterized `99`/`128` lookup-failure blocking, missing tag guard, and missing `overwrite_files: false`.
 
 - [ ] Step 3: Make release validation and workflow publication fail closed.
 
-Read `versions.json` during prebuild. Parse release keys as numeric `major.minor.patch` tuples. Require `versionsJson["0.3.5"] === "1.7.2"`; require package version to be strictly greater than `0.3.5`; require it to equal the highest SemVer key in `versions.json`; require its mapping to equal `src/manifest.json.minAppVersion`; retain existing package/lockfile/manifest equality checks. Report offending path and values, for example:
+Read `versions.json` during prebuild. Before numeric comparison, reject every key that does not match the existing exact release pattern `x.y.z`; if any key is invalid, report each exact malformed key and do not compute a highest key from that object. Only after all keys pass, parse them as numeric `major.minor.patch` tuples. Require `versionsJson["0.3.5"] === "1.7.2"`; require package version to be strictly greater than `0.3.5`; require it to equal the highest SemVer key in `versions.json`; require its mapping to equal `src/manifest.json.minAppVersion`; retain existing package/lockfile/manifest equality checks. Report offending path and values, for example:
 
 ```text
 [versions.json] 0.3.5 must remain mapped to 1.7.2
+[versions.json] version key 999.0 must use exact x.y.z format
+[versions.json] version key 999.0.0-beta must use exact x.y.z format
 [package.json] release version 0.3.5 must be greater than protected version 0.3.5
 [versions.json] highest release key 0.3.7 must equal package.json version 0.3.6
 [versions.json] 0.3.6 must map to src/manifest.json minAppVersion 1.13.0
@@ -355,12 +364,21 @@ In `.github/workflows/release.yml`, delete `workflow_dispatch` and its manual-re
     if git ls-remote --exit-code --tags origin "refs/tags/$version"; then
       echo "Release tag $version already exists; refusing overwrite."
       exit 1
+    else
+      status=$?
+      if [ "$status" -eq 2 ]; then
+        exit 0
+      fi
+      echo "Release tag lookup failed with status $status." >&2
+      exit "$status"
     fi
 ```
 
 Keep the guard after every lint/typecheck/test/build/validator gate and before attestation/release. Set `overwrite_files: false` on `softprops/action-gh-release@v2`. Do not add another trigger, job, or publication action.
 
-Run the focused tests again. Expected: all negative version fixtures pass by observing validator exit `1`; workflow contracts pass; repository synchronization remains the only failure because release files have not been bumped yet.
+Run the extracted guard harness with fake Git statuses `0`, `2`, `99`, and `128`. The implementation must pass through only status `2`; status `0` must become guard exit `1`; status `99` must remain non-zero with `Release tag lookup failed with status 99.`; and status `128` must remain non-zero with `Release tag lookup failed with status 128.`.
+
+Run the focused tests again. Expected: all historical, regressed, equal-protected, highest-mismatch, malformed-key, and prerelease-key fixtures pass by observing validator exit `1` with their isolated diagnostics; guard harness proves fake Git statuses `0 → 1/refusal`, `2 → 0`, `99 → non-zero/exact lookup-failure diagnostic`, and `128 → non-zero/exact lookup-failure diagnostic`; remaining workflow contracts pass; repository synchronization is the only failure because release files have not been bumped yet.
 
 ```bash
 node --import tsx --test tests/release-validation.test.ts
@@ -386,7 +404,7 @@ npm run release:validate:post
 npm run lint
 ```
 
-Expected: focused tests and both release validators exit zero; fixtures prove `0.3.5` cannot change, current version is strictly newer and highest, metadata cannot drift, manual dispatch is absent, existing tags block publication, the guard precedes release, and asset overwrite is disabled. All 13 `no-unsupported-api` errors and the `require-display` warning from Task 3 are absent. Lint remains non-zero only for the two `no-undef` warnings assigned to Task 5 plus sentence-case/deprecated-control findings assigned to Task 6. Any version, workflow, compatibility, mobile, legacy-load, or unrelated finding blocks this commit.
+Expected: focused tests and both release validators exit zero; fixtures prove `0.3.5` cannot change, every history key is exact `x.y.z`, current version is strictly newer and highest, metadata cannot drift, manual dispatch is absent, existing tags block publication, absent tags continue, unexpected lookup statuses `99` and `128` both block with their exact diagnostics, the guard precedes release, and asset overwrite is disabled. All 13 `no-unsupported-api` errors and the `require-display` warning from Task 3 are absent. Lint remains non-zero only for the two `no-undef` warnings assigned to Task 5 plus sentence-case/deprecated-control findings assigned to Task 6. Any version, workflow, compatibility, mobile, legacy-load, or unrelated finding blocks this commit.
 
 - [ ] Step 6: Stage exactly the Task 4 source, test, and generated paths; reject cross-task staging.
 
