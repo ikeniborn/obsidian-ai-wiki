@@ -1,6 +1,6 @@
 ---
 review:
-  plan_hash: 15281fbeac93e733
+  plan_hash: 0c0180bf8581b5a8
   last_run: 2026-08-24
   phases:
     structure: { status: passed }
@@ -329,6 +329,7 @@ assert.equal(workflow.on.workflow_dispatch, undefined);
 assert.ok(tagGuardIndex > readVersionIndex);
 assert.ok(tagGuardIndex < releaseIndex);
 assert.match(String(steps[tagGuardIndex].run), /refs\/tags\/\$version/);
+assert.equal(release?.with?.target_commitish, "${{ github.sha }}");
 assert.equal(release?.with?.overwrite_files, false);
 ```
 
@@ -340,7 +341,7 @@ The test must identify a named `Reject existing release tag` shell step. Execute
 node --import tsx --test tests/release-validation.test.ts
 ```
 
-Expected: non-zero exit. The old validator accepts regressed/equal-protected/highest-key and malformed-key fixtures; repository assertions report package/manifests at `0.3.5`, changed `versions.json["0.3.5"]`, and missing `versions.json["0.3.6"]`; workflow assertions report obsolete `workflow_dispatch`, missing explicit existing/absent handling, missing parameterized `99`/`128` lookup-failure blocking, missing tag guard, and missing `overwrite_files: false`.
+Expected: non-zero exit. The old validator accepts regressed/equal-protected/highest-key and malformed-key fixtures; repository assertions report package/manifests at `0.3.5`, changed `versions.json["0.3.5"]`, and missing `versions.json["0.3.6"]`; workflow assertions report obsolete `workflow_dispatch`, missing explicit existing/absent handling, missing parameterized `99`/`128` lookup-failure blocking, missing tag guard, missing exact `target_commitish: ${{ github.sha }}`, and missing `overwrite_files: false`.
 
 - [ ] Step 3: Make release validation and workflow publication fail closed.
 
@@ -374,11 +375,18 @@ In `.github/workflows/release.yml`, delete `workflow_dispatch` and its manual-re
     fi
 ```
 
-Keep the guard after every lint/typecheck/test/build/validator gate and before attestation/release. Set `overwrite_files: false` on `softprops/action-gh-release@v2`. Do not add another trigger, job, or publication action.
+Keep the guard after every lint/typecheck/test/build/validator gate and before attestation/release. On `softprops/action-gh-release@v2`, set both:
+
+```yaml
+target_commitish: ${{ github.sha }}
+overwrite_files: false
+```
+
+The exact `github.sha` binding makes the created tag target the verified workflow commit even if `master` advances before the release action. Do not add another trigger, job, or publication action.
 
 Run the extracted guard harness with fake Git statuses `0`, `2`, `99`, and `128`. The implementation must pass through only status `2`; status `0` must become guard exit `1`; status `99` must remain non-zero with `Release tag lookup failed with status 99.`; and status `128` must remain non-zero with `Release tag lookup failed with status 128.`.
 
-Run the focused tests again. Expected: all historical, regressed, equal-protected, highest-mismatch, malformed-key, and prerelease-key fixtures pass by observing validator exit `1` with their isolated diagnostics; guard harness proves fake Git statuses `0 → 1/refusal`, `2 → 0`, `99 → non-zero/exact lookup-failure diagnostic`, and `128 → non-zero/exact lookup-failure diagnostic`; remaining workflow contracts pass; repository synchronization is the only failure because release files have not been bumped yet.
+Run the focused tests again. Expected: all historical, regressed, equal-protected, highest-mismatch, malformed-key, and prerelease-key fixtures pass by observing validator exit `1` with their isolated diagnostics; guard harness proves fake Git statuses `0 → 1/refusal`, `2 → 0`, `99 → non-zero/exact lookup-failure diagnostic`, and `128 → non-zero/exact lookup-failure diagnostic`; workflow contracts prove exact `target_commitish: ${{ github.sha }}` and `overwrite_files: false`; repository synchronization is the only failure because release files have not been bumped yet.
 
 ```bash
 node --import tsx --test tests/release-validation.test.ts
@@ -404,7 +412,7 @@ npm run release:validate:post
 npm run lint
 ```
 
-Expected: focused tests and both release validators exit zero; fixtures prove `0.3.5` cannot change, every history key is exact `x.y.z`, current version is strictly newer and highest, metadata cannot drift, manual dispatch is absent, existing tags block publication, absent tags continue, unexpected lookup statuses `99` and `128` both block with their exact diagnostics, the guard precedes release, and asset overwrite is disabled. All 13 `no-unsupported-api` errors and the `require-display` warning from Task 3 are absent. Lint remains non-zero only for the two `no-undef` warnings assigned to Task 5 plus sentence-case/deprecated-control findings assigned to Task 6. Any version, workflow, compatibility, mobile, legacy-load, or unrelated finding blocks this commit.
+Expected: focused tests and both release validators exit zero; fixtures prove `0.3.5` cannot change, every history key is exact `x.y.z`, current version is strictly newer and highest, metadata cannot drift, manual dispatch is absent, existing tags block publication, absent tags continue, unexpected lookup statuses `99` and `128` both block with their exact diagnostics, the guard precedes release, release target is exactly the verified `github.sha`, and asset overwrite is disabled. All 13 `no-unsupported-api` errors and the `require-display` warning from Task 3 are absent. Lint remains non-zero only for the two `no-undef` warnings assigned to Task 5 plus sentence-case/deprecated-control findings assigned to Task 6. Any version, workflow, compatibility, mobile, legacy-load, or unrelated finding blocks this commit.
 
 - [ ] Step 6: Stage exactly the Task 4 source, test, and generated paths; reject cross-task staging.
 
