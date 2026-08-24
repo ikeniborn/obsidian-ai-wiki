@@ -78,7 +78,28 @@ Do not mix files from different releases. A repository checkout is source code, 
 
 Run `npm install` and `npm run build`, then copy or link the contents of `dist/` into `<vault>/.obsidian/plugins/ai-wiki/`. The plugin directory must contain the flat `main.js`, `manifest.json`, and `styles.css` asset set; link `dist/`, not the repository root.
 
-GitHub Release publication is gated by synchronized metadata, lint, typecheck, the complete test suite, a production build, and postbuild validation of all three assets.
+### Development and release contract
+
+Version `0.3.6` supports Obsidian `1.13.0` and later, including mobile (`isDesktopOnly: false`). The settings UI uses Obsidian's supported **Settings Definitions** API: indexed groups and controls are returned as definitions, and custom supported controls render through each definition's `render` callback. It does not use the legacy `display()` lifecycle.
+
+The official source-lint command is `npm run lint`. It applies the complete recommended `eslint-plugin-obsidianmd` configuration to `src/**/*.ts` and accepts **zero errors and zero warnings** (`--max-warnings 0`).
+
+Run the mobile evaluation by rebuilding its bundle and then executing it:
+
+```bash
+npm run eval:mobile-fixes:build
+node eval/mobile-fixes/run.cjs
+```
+
+Release validation has two phases. Before the production build, it scans only tracked text files in `src/`, `eval/`, and `scripts/`; `scripts/dspy/CLAUDE.md` and `scripts/validate-release.mjs` are explicit exclusions. A matching diagnostic is reported exactly as `[<path>] forbidden <category> marker: <match>` for these categories: Claude backend, Claude CLI probe, subprocess, Claude configuration, and Claude UI. After the build, the validator scans `dist/main.js` directly (even when it is untracked), rejects an inline source map, and requires non-empty `dist/main.js`, `dist/manifest.json`, and `dist/styles.css` with a byte-identical source/distribution manifest.
+
+Run the remaining release gates in this order: `npm run release:validate:pre`, `npm run lint`, `npm run typecheck`, `npm test`, the mobile evaluation above, `npm run build`, and `npm run release:validate:post`. The repository tracks the exact generated release files, and the workflow requires the build to leave those tracked files with no diff.
+
+Release history is immutable: `versions.json["0.3.5"]` stays `"1.7.2"`. Current `0.3.6` package, lockfile, source/root/distribution manifest, and compatibility metadata are synchronized; `0.3.6` maps to `1.13.0` and every current manifest declares the same minimum app version.
+
+The release workflow triggers on a push to `master` that changes `src/manifest.json`; normal delivery reaches it by merging a pull request, but the YAML does not enforce merge provenance. Its one constant concurrency group queues waiting publishers (`queue: max`) without cancelling the active run. After all gates, asset digests, and provenance attestation pass, it performs only a non-force lightweight tag claim for the verified `GITHUB_SHA` commit and one create-only `gh release create`; draft, partial, conflicting, or ambiguous release state stops publication. A completed matching release is terminal success without mutation.
+
+Community plugin-directory submission, account/review actions, and directory metadata changes remain excluded and are not authorized by this release process.
 
 ---
 

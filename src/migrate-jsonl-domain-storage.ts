@@ -108,13 +108,14 @@ function pageRecordFromPage(
 ): PageIndexRecord {
   const articleId = page.path.split("/").pop()!.replace(/\.md$/, "");
   const fm = parseFrontmatter(page.content);
-  const description = parseDescriptionFromFm(page.content) || descriptions.get(articleId) || deriveFallbackDescription(page.content, String(fm.type ?? "concept"));
+  const type = typeof fm.type === "string" ? fm.type : "concept";
+  const description = parseDescriptionFromFm(page.content) || descriptions.get(articleId) || deriveFallbackDescription(page.content, type);
   return {
     kind: "page",
     schemaVersion: 1,
     articleId,
     path: page.path,
-    type: typeof fm.type === "string" ? fm.type : "concept",
+    type,
     description,
     resource: asStringArray(fm.resource),
     timestamp: typeof fm.timestamp === "string" ? fm.timestamp : undefined,

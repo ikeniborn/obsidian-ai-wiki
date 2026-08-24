@@ -5,7 +5,7 @@ import {
 import { hydrateSettings } from "./settings-persistence";
 import type { DomainEntry } from "./domain";
 import { LlmWikiSettingTab } from "./settings";
-import { AI_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
+import { AI_WIKI_DISPLAY_NAME, AI_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
 import { WikiController } from "./controller";
 import { QueryModal, DomainModal, LintOptionsModal, ExportOkfModal, AutoBudgetNoticeModal } from "./modals";
 import { i18n } from "./i18n";
@@ -21,7 +21,7 @@ import { GLOBAL_DOMAIN_PATH, domainWikiFolder, effectiveSubfolder } from "./wiki
 import { clearNativeBudgets, hasStoredNativeBudget } from "./auto-budget-notice";
 
 export default class LlmWikiPlugin extends Plugin {
-  settings!: LlmWikiPluginSettings;
+  declare settings: LlmWikiPluginSettings;
   controller!: WikiController;
   settingTab?: LlmWikiSettingTab;
   domainStore!: DomainStore;
@@ -75,11 +75,11 @@ export default class LlmWikiPlugin extends Plugin {
       console.error("[AI Wiki] OKF frontmatter migration error:", e);
     }
     this.controller = new WikiController(this.app, this, this.domainStore, this.localConfigStore);
-    this.controller.onBusyChange = () => this.settingTab?.display();
+    this.controller.onBusyChange = () => this.settingTab?.update();
 
     this.registerView(AI_WIKI_VIEW_TYPE, (leaf: WorkspaceLeaf) => new LlmWikiView(leaf, this));
 
-    this.addRibbonIcon("brain-circuit", "AIWiki", () => {
+    this.addRibbonIcon("brain-circuit", AI_WIKI_DISPLAY_NAME, () => {
       const leaves = this.app.workspace.getLeavesOfType(AI_WIKI_VIEW_TYPE);
       if (leaves.length > 0) {
         void this.app.workspace.revealLeaf(leaves[0]);
@@ -91,14 +91,14 @@ export default class LlmWikiPlugin extends Plugin {
 
     if (!Platform.isMobile) {
       const statusBar = this.addStatusBarItem();
-      statusBar.setText("schema: 0/0");
-      statusBar.setAttribute("aria-label", "validation: 0 ok, 0 retried, 0 failed");
+      statusBar.setText("Schema: 0/0");
+      statusBar.setAttribute("aria-label", "Validation: 0 ok, 0 retried, 0 failed");
       const unsub = structuralErrorCounter.subscribe((s) => {
         const total = s.failed + s.retried + s.ok;
-        statusBar.setText(`schema: ${s.failed}/${total}`);
+        statusBar.setText(`Schema: ${s.failed}/${total}`);
         statusBar.setAttribute(
           "aria-label",
-          `validation: ${s.ok} ok, ${s.retried} retried, ${s.failed} failed`,
+          `Validation: ${s.ok} ok, ${s.retried} retried, ${s.failed} failed`,
         );
       });
       this.register(() => unsub());

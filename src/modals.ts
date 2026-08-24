@@ -15,7 +15,7 @@ export class BusyCloseModal extends Modal {
     contentEl.createEl("p", { text: T.busyCloseBody });
     new Setting(contentEl)
       .addButton((b) => b.setButtonText(T.busyCloseLeave).onClick(() => this.close()))
-      .addButton((b) => b.setButtonText(T.busyCloseAbort).setWarning().onClick(() => {
+      .addButton((b) => b.setButtonText(T.busyCloseAbort).setDestructive().onClick(() => {
         this.close();
         this.onAbort();
       }));
@@ -363,7 +363,7 @@ export class FileErrorModal extends Modal {
       );
     }
     setting.addButton((b) =>
-      b.setButtonText(T.fileErrorStop).setWarning().onClick(() => this.pick("stop")),
+      b.setButtonText(T.fileErrorStop).setDestructive().onClick(() => this.pick("stop")),
     );
   }
 
@@ -723,7 +723,7 @@ export class ReinitModeModal extends Modal {
     const setting = new Setting(contentEl);
     setting.addButton((b) => b.setButtonText(T.cancel).onClick(() => this.close()));
     setting.addButton((b) =>
-      b.setButtonText(T.reinitModeFull).setWarning().onClick(() => this.pick("full")),
+      b.setButtonText(T.reinitModeFull).setDestructive().onClick(() => this.pick("full")),
     );
     setting.addButton((b) => {
       b.setButtonText(T.reinitModeIncremental(n)).setCta().onClick(() => this.pick("incremental"));
@@ -772,7 +772,7 @@ export class DeleteSourceModal extends Modal {
     new Setting(contentEl)
       .addButton((b) => b.setButtonText(T.cancel).onClick(() => this.close()))
       .addButton((b) =>
-        b.setButtonText(T.deleteSourceConfirm).setWarning().onClick(() => {
+        b.setButtonText(T.deleteSourceConfirm).setDestructive().onClick(() => {
           this.onConfirm();
           this.close();
         }),

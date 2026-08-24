@@ -31,3 +31,17 @@ test("mobile manifest keeps optional Node imports behind the official desktop gu
 
   assert.equal(result.errorCount, 0, findings);
 });
+
+test("system-editor access loads Electron only through the official desktop guard", async () => {
+  const viewSource = await readFile(new URL("../src/view.ts", import.meta.url), "utf8");
+  const desktopGuard = "if (Platform.isDesktop && Platform.isDesktopApp) {";
+  const electronLoad = ".require(\"electron\")";
+
+  assert.ok(viewSource.includes(desktopGuard), "system-editor button must retain the official desktop guard");
+  assert.ok(viewSource.includes(electronLoad), "system-editor click must load Electron from window.require");
+  assert.ok(
+    viewSource.indexOf(desktopGuard) < viewSource.indexOf(electronLoad),
+    "Electron loading must follow the official desktop guard",
+  );
+  assert.doesNotMatch(viewSource, /(?<!\.)\brequire\(\"electron\"\)/);
+});

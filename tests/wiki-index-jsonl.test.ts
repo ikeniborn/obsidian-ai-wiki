@@ -212,3 +212,18 @@ test("page metadata builder prefers a valid frontmatter type over the path fallb
   const record = pageIndexRecordFromMarkdown("!Wiki/d", "!Wiki/d/concept/service.md", content);
   assert.equal(record.type, "service");
 });
+
+test("page metadata builder ignores a non-string frontmatter type for fallback descriptions", () => {
+  const content = [
+    "---",
+    "type: 7",
+    "---",
+    "# Concept page",
+    "Body sentence.",
+  ].join("\n");
+
+  const record = pageIndexRecordFromMarkdown("!Wiki/d", "!Wiki/d/concept/concept-page.md", content);
+
+  assert.equal(record.type, "concept");
+  assert.equal(record.description, "Concept page — Body sentence. Type: concept");
+});

@@ -5,11 +5,11 @@ on:
     branches: [master]
     paths:
       - src/manifest.json
-  # A validation failure leaves the version bumped but unreleased, and the push
-  # trigger only fires on src/manifest.json — so without this a retry needs an
-  # artificial commit to that file. The version is read from package.json at run
-  # time, so a manual run releases whatever master currently declares.
-  workflow_dispatch:
+
+concurrency:
+  group: obsidian-ai-wiki-release
+  queue: max
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -36,10 +36,29 @@ jobs:
 
       - run: npm test
 
+      - run: node eval/mobile-fixes/run.cjs
+
       - name: Build
         run: npm run build
 
       - run: npm run release:validate:post
+
+      - name: Verify tracked generated release files
+        run: git diff --exit-code -- dist/main.js dist/manifest.json dist/styles.css manifest.json versions.json
+
+      - name: Read version
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Capture release asset metadata
+        run: |
+          : > "$RUNNER_TEMP/release-assets.tsv"
+          for asset in dist/main.js dist/manifest.json dist/styles.css; do
+            name="${asset##*/}"
+            size="$(stat -c %s "$asset")"
+            digest="$(sha256sum "$asset" | cut -d ' ' -f1)"
+            printf '%s\t%s\t%s\n' "$name" "$size" "$digest" >> "$RUNNER_TEMP/release-assets.tsv"
+          done
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
@@ -49,17 +68,128 @@ jobs:
             dist/manifest.json
             dist/styles.css
 
-      - name: Read version
-        id: version
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+      - name: Reconcile and publish create-only release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
 
-      - name: Create release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: ${{ steps.version.outputs.version }}
-          generate_release_notes: true
-          files: |
-            dist/main.js
-            dist/manifest.json
-            dist/styles.css
+          version="${{ steps.version.outputs.version }}"
+          metadata="$RUNNER_TEMP/release-assets.tsv"
+          expected_names='["main.js","manifest.json","styles.css"]'
+
+          fail() {
+            echo "Release publication stopped: $*" >&2
+            exit 1
+          }
+
+          load_exact_releases() {
+            local raw parsed
+            if ! raw="$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100")"; then
+              fail "release list API request failed"
+            fi
+            if ! parsed="$(jq -ce --arg version "$version" '
+              if (type != "array") or any(.[]; type != "array") then
+                error("release list must be an array of page arrays")
+              elif any(.[][]; (type != "object") or ((.tag_name? | type) != "string")) then
+                error("release list contains a malformed record")
+              else
+                [.[][] | select(.tag_name == $version)]
+              end
+            ' <<< "$raw")"; then
+              fail "release list API response is malformed"
+            fi
+            exact_releases="$parsed"
+          }
+
+          verify_exact_tag() {
+            local raw tag_type tag_sha
+            if ! raw="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$version")"; then
+              fail "tag lookup failed"
+            fi
+            if ! tag_type="$(jq -er '.object.type | select(type == "string")' <<< "$raw")" \
+              || ! tag_sha="$(jq -er '.object.sha | select(type == "string")' <<< "$raw")"; then
+              fail "tag response is malformed"
+            fi
+            [ "$tag_type" = "commit" ] || fail "tag is not lightweight"
+            [ "$tag_sha" = "$GITHUB_SHA" ] || fail "tag does not target the verified commit"
+          }
+
+          verify_exact_release() {
+            local release_json="$1" name local_size local_digest asset_json api_size api_digest url download
+            if ! jq -e --arg version "$version" --argjson names "$expected_names" '
+              type == "object"
+              and .tag_name == $version
+              and .draft == false
+              and .prerelease == false
+              and ((.published_at | type) == "string")
+              and (.published_at | length > 0)
+              and ((.assets | type) == "array")
+              and (.assets | length == 3)
+              and all(.assets[];
+                type == "object"
+                and ((.name | type) == "string")
+                and ((.size | type) == "number")
+                and ((.digest | type) == "string")
+                and ((.url | type) == "string"))
+              and (([.assets[].name] | sort) == $names)
+            ' <<< "$release_json" >/dev/null; then
+              fail "release record is draft, partial, ambiguous, or malformed"
+            fi
+
+            verify_exact_tag
+            [ "$(wc -l < "$metadata")" -eq 3 ] || fail "local asset metadata is incomplete"
+            while IFS=$'\t' read -r name local_size local_digest; do
+              [[ "$name" =~ ^(main\.js|manifest\.json|styles\.css)$ ]] || fail "unexpected local asset name"
+              [[ "$local_size" =~ ^[0-9]+$ ]] || fail "invalid local asset size"
+              [[ "$local_digest" =~ ^[0-9a-f]{64}$ ]] || fail "invalid local asset digest"
+              if ! asset_json="$(jq -ce --arg name "$name" '
+                [.assets[] | select(.name == $name)]
+                | if length == 1 then .[0] else error("asset name is not unique") end
+              ' <<< "$release_json")"; then
+                fail "release asset set is ambiguous"
+              fi
+              api_size="$(jq -er '.size' <<< "$asset_json")" || fail "release asset size is missing"
+              api_digest="$(jq -er '.digest' <<< "$asset_json")" || fail "release asset digest is missing"
+              url="$(jq -er '.url' <<< "$asset_json")" || fail "release asset URL is missing"
+              [ "$api_size" = "$local_size" ] || fail "release asset size mismatch for $name"
+              [ "$api_digest" = "sha256:$local_digest" ] || fail "release asset digest mismatch for $name"
+              download="$RUNNER_TEMP/verified-$name"
+              if ! gh api -H "Accept: application/octet-stream" "$url" > "$download"; then
+                fail "release asset download failed for $name"
+              fi
+              [ "$(stat -c %s "$download")" = "$local_size" ] || fail "downloaded byte count mismatch for $name"
+              [ "$(sha256sum "$download" | cut -d ' ' -f1)" = "$local_digest" ] \
+                || fail "downloaded digest mismatch for $name"
+              cmp -s "dist/$name" "$download" || fail "downloaded bytes mismatch for $name"
+            done < "$metadata"
+          }
+
+          load_exact_releases
+          match_count="$(jq 'length' <<< "$exact_releases")"
+          [ "$match_count" -le 1 ] || fail "multiple releases have the exact version tag"
+          if [ "$match_count" -eq 1 ]; then
+            verify_exact_release "$(jq -c '.[0]' <<< "$exact_releases")"
+            echo "Exact release already exists; no publication mutation required."
+            exit 0
+          fi
+
+          set +e
+          claim_output="$(git push --porcelain origin "$GITHUB_SHA:refs/tags/$version" 2>&1)"
+          claim_status=$?
+          set -e
+          if [ "$claim_status" -eq 0 ] && grep -q '^\*' <<< "$claim_output"; then
+            :
+          else
+            [ "$GITHUB_RUN_ATTEMPT" -gt 1 ] || fail "tag claim was not acknowledged as a new ref"
+            verify_exact_tag
+            load_exact_releases
+            [ "$(jq 'length' <<< "$exact_releases")" -eq 0 ] \
+              || fail "release residue appeared after the tag claim"
+          fi
+
+          gh release create "$version" dist/main.js dist/manifest.json dist/styles.css --verify-tag --target "$GITHUB_SHA" --title "$version" --generate-notes
+
+          load_exact_releases
+          [ "$(jq 'length' <<< "$exact_releases")" -eq 1 ] || fail "created release is missing or ambiguous"
+          verify_exact_release "$(jq -c '.[0]' <<< "$exact_releases")"

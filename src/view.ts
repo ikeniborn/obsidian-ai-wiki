@@ -30,6 +30,7 @@ import { collectMdInPaths, walkFolder } from "./utils/vault-walk";
 export { collectMdInPaths, walkFolder };
 
 export const AI_WIKI_VIEW_TYPE = "ai-wiki-view";
+export const AI_WIKI_DISPLAY_NAME = "AI Wiki";
 
 export function isTelemetryOnlyRunEvent(event: RunEvent): boolean {
   return event.kind === "run_config"
@@ -206,7 +207,7 @@ export class LlmWikiView extends ItemView {
   }
 
   getViewType(): string { return AI_WIKI_VIEW_TYPE; }
-  getDisplayText(): string { return "AIWiki"; }
+  getDisplayText(): string { return AI_WIKI_DISPLAY_NAME; }
   getIcon(): string { return "brain-circuit"; }
 
   async onOpen(): Promise<void> {
@@ -1632,13 +1633,17 @@ class FileContentModal extends Modal {
   onOpen(): void {
     this.titleEl.setText(this.filePath.split("/").pop() ?? this.filePath);
     const btnRow = this.modalEl.createDiv({ cls: "modal-button-container" });
-    const openBtn = btnRow.createEl("button", { text: "Open in system editor" });
-    openBtn.addEventListener("click", () => {
-      const basePath = (this.app.vault.adapter as unknown as Record<string, unknown>)["basePath"] as string ?? "";
-      const absPath = basePath ? `${basePath}/${this.filePath}` : this.filePath;
-      // eslint-disable-next-line @typescript-eslint/no-require-imports -- electron shell API only available via require() in Obsidian desktop
-      (require("electron") as { shell: { openPath(p: string): void } }).shell.openPath(absPath);
-    });
+    if (Platform.isDesktop && Platform.isDesktopApp) {
+      const openBtn = btnRow.createEl("button", { text: "Open in system editor" });
+      openBtn.addEventListener("click", () => {
+        const basePath = (this.app.vault.adapter as unknown as Record<string, unknown>)["basePath"] as string ?? "";
+        const absPath = basePath ? `${basePath}/${this.filePath}` : this.filePath;
+        const electron = (window as Window & {
+          require(id: "electron"): { shell: { openPath(path: string): Promise<string> } };
+        }).require("electron");
+        void electron.shell.openPath(absPath);
+      });
+    }
     this.contentEl.addClass("ai-wiki-busy-modal-content");
     const comp = new Component();
     comp.load();

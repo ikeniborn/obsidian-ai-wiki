@@ -1731,6 +1731,12 @@ test("native OpenAI client disables SDK request retries", () => {
   assert.match(constructorOptions, /maxRetries:\s*0/);
 });
 
+test("native OpenAI transport does not depend on NodeJS-only global types", () => {
+  const transportSource = readFileSync(new URL("../src/native-openai-transport.ts", import.meta.url), "utf8");
+
+  assert.doesNotMatch(transportSource, /\bNodeJS\./);
+});
+
 test("native OpenAI client keeps SDK timeout above executor idle and disables SDK retries", () => {
   const controllerSource = readFileSync(new URL("../src/controller.ts", import.meta.url), "utf8");
   const factorySource = readFileSync(new URL("../src/native-openai-client.ts", import.meta.url), "utf8");

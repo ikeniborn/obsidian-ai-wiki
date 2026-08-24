@@ -14,6 +14,7 @@ import baseContract from "../../prompts/base.md";
 import { jsonrepair } from "jsonrepair";
 import { resolveLang, resolveReasoningLang } from "../i18n";
 import { RunEventBridge } from "../run-event-bridge";
+import { describeUnknown } from "../utils/describe-unknown";
 
 /** Maps a concrete output language to a reply directive for the system prompt. */
 export function langInstruction(lang: "ru" | "en" | "es"): string {
@@ -265,7 +266,7 @@ export function isJsonModeError(e: unknown): boolean {
   if (!e || typeof e !== "object") return false;
   const status = (e as { status?: unknown }).status;
   if (status !== 400 && status !== 422) return false;
-  const msg = String((e as { message?: unknown }).message ?? "").toLowerCase();
+  const msg = describeUnknown((e as { message?: unknown }).message ?? "").toLowerCase();
   return JSON_MODE_KEYWORDS.some((kw) => msg.includes(kw));
 }
 
@@ -291,7 +292,7 @@ export function isStreamOptionsUnsupportedError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const status = (error as { status?: unknown }).status;
   if (status !== 400 && status !== 422) return false;
-  const message = String((error as { message?: unknown }).message ?? "").toLowerCase();
+  const message = describeUnknown((error as { message?: unknown }).message ?? "").toLowerCase();
   return message.includes("stream_options") && message.includes("unsupported");
 }
 

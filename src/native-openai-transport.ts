@@ -10,7 +10,7 @@ import {
   type NativeTransportTraceRecord,
 } from "./types";
 
-declare const require: NodeJS.Require;
+declare const require: (id: "undici") => typeof import("undici");
 
 const directDispatchers = new Map<number, import("undici").Dispatcher>();
 const MAX_TRACE_BODY_CHUNK_EVENTS = 48;
@@ -32,7 +32,7 @@ export function createProxyDispatcher(
   connectionTimeoutMs = 15_000,
 ): import("undici").Dispatcher | null {
   if (!cfg.enabled) return null;
-  const undici = require("undici") as typeof import("undici");
+  const undici = require("undici");
   const normalizedTimeout = normalizeConnectionTimeout(connectionTimeoutMs);
   return new undici.ProxyAgent({
     uri: buildProxyUrl(cfg),
@@ -47,7 +47,7 @@ export function createProxyDispatcher(
 export function createProxyFetch(cfg: ProxyConfig, connectionTimeoutMs = 15_000): typeof fetch | null {
   const dispatcher = createProxyDispatcher(cfg, connectionTimeoutMs);
   if (!dispatcher) return null;
-  const undici = require("undici") as typeof import("undici");
+  const undici = require("undici");
   const wrapped: typeof fetch = (input, init) => {
     return undici.fetch(
       input as Parameters<typeof undici.fetch>[0],
@@ -58,7 +58,7 @@ export function createProxyFetch(cfg: ProxyConfig, connectionTimeoutMs = 15_000)
 }
 
 export function createDirectDesktopFetch(connectionTimeoutMs = 15_000): typeof fetch {
-  const undici = require("undici") as typeof import("undici");
+  const undici = require("undici");
   const normalizedTimeout = normalizeConnectionTimeout(connectionTimeoutMs);
   let dispatcher = directDispatchers.get(normalizedTimeout);
   if (!dispatcher) {
@@ -82,7 +82,7 @@ function createIsolatedDirectDesktopFetch(
   connectionTimeoutMs: number,
   finalizers: WeakMap<Response, () => Promise<void>>,
 ): typeof fetch {
-  const undici = require("undici") as typeof import("undici");
+  const undici = require("undici");
   const normalizedTimeout = normalizeConnectionTimeout(connectionTimeoutMs);
   const wrapped: typeof fetch = async (input, init) => {
     const dispatcher = new undici.Agent({
@@ -115,7 +115,7 @@ function createUndiciRequestAdapterFetch(
   connectionTimeoutMs: number,
   finalizers: WeakMap<Response, () => Promise<void>>,
 ): typeof fetch {
-  const undici = require("undici") as typeof import("undici");
+  const undici = require("undici");
   const normalizedTimeout = normalizeConnectionTimeout(connectionTimeoutMs);
   const wrapped: typeof fetch = async (input, init) => {
     const dispatcher = new undici.Agent({

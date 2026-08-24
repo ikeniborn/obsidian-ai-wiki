@@ -1,3 +1,5 @@
+import { describeUnknown } from "./utils/describe-unknown";
+
 export interface GoldLabel {
   path: string;
   sourceRelPath: string;
@@ -23,7 +25,7 @@ export function validateGoldSet(
   knownPaths: Set<string>,
   knownSourceRelPaths?: Set<string>,
 ): void {
-  if (gold.version !== 1) throw new Error(`unsupported gold set version: ${gold.version}`);
+  if (gold.version !== 1) throw new Error(`unsupported gold set version: ${describeUnknown(gold.version)}`);
   const expected = new Set(queryIds);
   for (const queryId of Object.keys(gold.queries)) {
     if (!expected.has(queryId)) throw new Error(`unknown query in gold set: ${queryId}`);

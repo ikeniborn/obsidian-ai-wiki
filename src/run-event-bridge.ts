@@ -1,4 +1,5 @@
 import type { RunEvent } from "./types";
+import { describeUnknown } from "./utils/describe-unknown";
 
 export class RunEventBridge {
   private readonly queue: RunEvent[] = [];
@@ -59,7 +60,7 @@ export class RunEventBridge {
         }
         throw settlement.error instanceof Error
           ? settlement.error
-          : new Error(String(settlement.error));
+          : new Error(describeUnknown(settlement.error));
       }
       return settlement.value;
     } finally {
