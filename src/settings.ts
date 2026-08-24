@@ -164,7 +164,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
 
   private async fetchModels(): Promise<void> {
     const na = this.plugin.settings.nativeAgent;
-    if (!na.baseUrl) { new Notice("Set Base URL first"); return; }
+    if (!na.baseUrl) { new Notice("Set base URL first"); return; }
     const url = `${na.baseUrl.replace(/\/$/, "")}/models`;
     try {
       const resp = await requestUrl({
@@ -189,8 +189,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
   private async checkDimensions(): Promise<void> {
     const T = i18n();
     const na = this.plugin.settings.nativeAgent;
-    if (!na.baseUrl || !na.embeddingModel) { new Notice("Set Base URL and embedding model first"); return; }
-    if (!na.embeddingDimensions) { new Notice("Enter a dimension value to check, or use Default"); return; }
+    if (!na.baseUrl || !na.embeddingModel) { new Notice("Set base URL and embedding model first"); return; }
+    if (!na.embeddingDimensions) { new Notice("Enter a dimension value to check, or use default"); return; }
     const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
     const requested = na.embeddingDimensions;
     const result = await probeEmbeddingDimensionsResult(this.plugin.settings.nativeAgent.baseUrl, apiKey, na.embeddingModel, requested);
@@ -216,7 +216,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
   private async checkReranker(): Promise<void> {
     const T = i18n();
     const na = this.plugin.settings.nativeAgent;
-    if (!na.baseUrl || !na.rerankerModel) { new Notice("Set Base URL and reranker model first"); return; }
+    if (!na.baseUrl || !na.rerankerModel) { new Notice("Set base URL and reranker model first"); return; }
     const model = na.rerankerModel;
     const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
     const config = normalizeRerankerConfig({ enabled: true, model });
@@ -228,7 +228,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
   private async checkChatModel(): Promise<void> {
     const T = i18n();
     const na = this.plugin.settings.nativeAgent;
-    if (!na.baseUrl || !na.model) { new Notice("Set Base URL and model first"); return; }
+    if (!na.baseUrl || !na.model) { new Notice("Set base URL and model first"); return; }
     const model = na.model;
     const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
     try {
@@ -267,7 +267,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
   private async checkEmbeddingModel(): Promise<void> {
     const T = i18n();
     const na = this.plugin.settings.nativeAgent;
-    if (!na.baseUrl || !na.embeddingModel) { new Notice("Set Base URL and embedding model first"); return; }
+    if (!na.baseUrl || !na.embeddingModel) { new Notice("Set base URL and embedding model first"); return; }
     const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
     const result = await probeEmbeddingDimensionsResult(na.baseUrl, apiKey, na.embeddingModel);
     new Notice(result.probe
@@ -288,7 +288,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
   // silent=true skips notices when auto-triggered on model change.
   private async setDefaultDimensions(silent = false): Promise<void> {
     const na = this.plugin.settings.nativeAgent;
-    if (!na.baseUrl || !na.embeddingModel) { if (!silent) new Notice("Set Base URL and embedding model first"); return; }
+    if (!na.baseUrl || !na.embeddingModel) { if (!silent) new Notice("Set base URL and embedding model first"); return; }
     const probe = await probeEmbeddingDimensions(
       na.baseUrl, this.localCache.nativeAgent?.apiKey ?? "", na.embeddingModel,
     );
@@ -717,7 +717,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             });
           })
           .addButton((b) => {
-            b.setButtonText(T.settings.deleteDomain).setWarning().setDisabled(busy).onClick(() => {
+            b.setButtonText(T.settings.deleteDomain).setDestructive().setDisabled(busy).onClick(() => {
               new ConfirmModal(this.plugin.app, T.settings.confirmDeleteDomain(d.id), [], () => {
                 void (async () => {
                   new Notice(T.settings.domainDeleted(d.id));
@@ -1162,7 +1162,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         addSetting("Graph relevance floor (ratio)", T.settings.bfsMinScoreRatio_desc, (setting) => {
           setting.addSlider((sl) =>
             sl.setLimits(0, 1, 0.05)
-              .setDynamicTooltip()
               .setValue(s.nativeAgent.bfsMinScoreRatio ?? 0.6)
               .onChange(async (v) => { s.nativeAgent.bfsMinScoreRatio = v; await this.plugin.saveSettings(); }),
           );
@@ -1204,7 +1203,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           addSetting(T.settings.mergeDeleteWarnThreshold_name, T.settings.mergeDeleteWarnThreshold_desc, (setting) => {
             setting.addSlider((sl) =>
               sl.setLimits(1, 20, 1)
-                .setDynamicTooltip()
                 .setValue(s.nativeAgent.mergeDeleteWarnThreshold ?? 5)
                 .onChange(async (v) => {
                   s.nativeAgent.mergeDeleteWarnThreshold = v; await this.plugin.saveSettings();
@@ -1325,7 +1323,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       if (proxy.enabled) {
         addSetting(T.settings.proxy_url_name, T.settings.proxy_url_desc, (setting) => {
           setting.addText((t) =>
-            t.setPlaceholder("http://proxy.example.com:8080")
+            t.setPlaceholder("HTTP://proxy.example.com:8080")
               .setValue(proxy.url)
               .onChange(async (v) => { await this.patchProxy({ url: v.trim() }); }),
           );

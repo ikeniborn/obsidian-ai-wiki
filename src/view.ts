@@ -30,6 +30,7 @@ import { collectMdInPaths, walkFolder } from "./utils/vault-walk";
 export { collectMdInPaths, walkFolder };
 
 export const AI_WIKI_VIEW_TYPE = "ai-wiki-view";
+export const AI_WIKI_DISPLAY_NAME = "AI Wiki";
 
 export function isTelemetryOnlyRunEvent(event: RunEvent): boolean {
   return event.kind === "run_config"
@@ -206,7 +207,7 @@ export class LlmWikiView extends ItemView {
   }
 
   getViewType(): string { return AI_WIKI_VIEW_TYPE; }
-  getDisplayText(): string { return "AIWiki"; }
+  getDisplayText(): string { return AI_WIKI_DISPLAY_NAME; }
   getIcon(): string { return "brain-circuit"; }
 
   async onOpen(): Promise<void> {
