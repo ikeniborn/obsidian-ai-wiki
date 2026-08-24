@@ -11,6 +11,7 @@
     "test": "node --import tsx --test tests/*.test.ts",
     "release:validate:pre": "node scripts/validate-release.mjs --phase prebuild",
     "release:validate:post": "node scripts/validate-release.mjs --phase postbuild",
+    "eval:mobile-fixes:build": "esbuild eval/mobile-fixes/run.ts --bundle --platform=node --alias:obsidian=./eval/mobile-fixes/obsidian-stub.ts --loader:.md=text --outfile=eval/mobile-fixes/run.cjs",
     "migrate:wiki-prefix": "tsx scripts/migrate-wiki-prefix.ts",
     "eval": "tsx scripts/eval.ts"
   },
