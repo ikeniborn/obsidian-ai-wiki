@@ -1,6 +1,6 @@
 ---
 review:
-  plan_hash: 86b1f0eb01435eae
+  plan_hash: c85b643dfbcb9ae3
   last_run: 2026-08-24
   phases:
     structure: { status: passed }
@@ -18,29 +18,30 @@ chain:
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make the current official Obsidian source lint and active reviewer-surface scan fail closed with zero warnings while preserving the OpenAI-only runtime, safe legacy-vault startup, and desktop/mobile availability on Obsidian 1.13+.
+**Goal:** Make the current official Obsidian source lint and active reviewer-surface scan fail closed with zero warnings, then deliver the verified remediation as release `0.3.6` without changing published `0.3.5` history.
 
-**Architecture:** Keep two gates: official typed ESLint for `src/**/*.ts`, plus path-scoped release validation for active executable and shipped artifacts. Migrate the settings tab to Obsidian 1.13 Setting Definitions, fix each current lint finding in source, remove stale Claude eval output, and regenerate the retained mobile eval from its TypeScript source.
+**Architecture:** Keep two reviewer gates: official typed ESLint for `src/**/*.ts`, plus path-scoped release validation for active executable and shipped artifacts. Add a fail-closed release-history boundary that preserves `versions.json["0.3.5"] = "1.7.2"`, synchronizes package and manifest metadata at `0.3.6`/Obsidian `1.13.0`, and permits the existing workflow to publish only the verified pull-request merge revision.
 
-**Tech Stack:** TypeScript, Obsidian API 1.13, ESLint 9, `eslint-plugin-obsidianmd@0.4.1`, Node test runner, esbuild, npm, iwiki MCP.
+**Tech Stack:** TypeScript, Obsidian API 1.13, ESLint 9, `eslint-plugin-obsidianmd@0.4.1`, Node test runner, esbuild, npm, GitHub Actions, GitHub CLI, iwiki MCP.
 
 ---
 
 ## Constraints and requirement map
 
-- R1: Tasks 1 and 7 establish exact official lint dependency, config, scope, and zero-warning threshold.
-- R2: Tasks 2, 3, 5, and 6 resolve every current source finding without suppressions.
-- R3: Task 8 adds active-surface marker validation and fixtures.
-- R4: Task 9 removes the orphan Claude probe and reproducibly rebuilds the mobile eval.
-- R5: Tasks 3, 4, and 5 preserve OpenAI-only loading, legacy settings, mobile support, and declare `minAppVersion` as `1.13.0` before any strict lint gate.
-- R6: Tasks 7, 8, and 11 integrate and exercise all release gates.
-- R7: Tasks 10 and 11 update current docs and iwiki, then reconcile every changed path. No version bump, release, publication, Community submission, or new backend is part of this plan.
+- R1: Tasks 1 and 7 establish the exact official lint dependency, config, scope, and zero-warning threshold.
+- R2: Tasks 2, 3, 5, 6, and 7 resolve every current source finding without suppressions or contract drift.
+- R3: Tasks 8, 9, and 11 add and prove active-surface marker validation with explicit exceptions.
+- R4: Task 9 removes the orphan Claude probe and reproducibly rebuilds and executes the retained mobile eval.
+- R5: Tasks 3, 4, 5, and 11 preserve OpenAI-only loading, safe legacy settings, guarded desktop behavior, `isDesktopOnly: false`, and the Obsidian `1.13.0` minimum for `0.3.6`.
+- R6: Tasks 4 and 11 preserve published `0.3.5`/`1.7.2` history and synchronize package, lockfile, source, root, distribution, and compatibility metadata at `0.3.6`.
+- R7: Tasks 4, 7, 8, 9, and 11 prove every gate, merge only the verified pull request, and monitor the existing workflow through tag/release `0.3.6` with the exact flat assets.
+- R8: Tasks 10 and 11 update current repository/iwiki guidance, reconcile every changed path, and keep Community directory submission and metadata outside delivery.
 
 Every numbered step inherits its task's `Closes` mapping. Every edit step's DoD is the immediately following verification step. Every commit step must exit zero and `git show --stat --oneline HEAD` must list only that task's declared files.
 
 ### Task 1: Pin official lint dependency and expose the zero-warning contract
 
-**Closes:** R1 and the R6 lint-entry requirement.
+**Closes:** R1 official lint dependency, config, scope, and warning threshold.
 
 **Files:**
 
@@ -275,63 +276,103 @@ git add package.json package-lock.json src/settings.ts src/main.ts tests/setting
 git commit -m "refactor(settings): adopt Obsidian setting definitions"
 ```
 
-### Task 4: Declare Obsidian 1.13 compatibility before strict lint
+### Task 4: Create immutable `0.3.5` history and synchronized `0.3.6` metadata
 
-**Closes:** R5 compatibility metadata required by the supported settings API.
+**Closes:** R5 minimum/mobile metadata, R6 version-history synchronization, and the metadata boundary required by R7.
 
 **Files:**
 
+- Modify: `package.json`
+- Modify: `package-lock.json`
 - Modify: `src/manifest.json`
 - Generated by build: `manifest.json`
 - Generated by build: `dist/main.js`
 - Generated by build: `dist/manifest.json`
 - Modify: `versions.json`
+- Modify: `scripts/validate-release.mjs`
 - Modify: `tests/release-validation.test.ts`
 
-- [ ] Step 1: Update manifest fixtures and add a failing synchronization contract.
+- [ ] Step 1: Add failing fixture and repository contracts for historical immutability and current-version synchronization.
 
-Change the release-test manifest fixture to `minAppVersion: "1.13.0"`. Add a repository contract that reads `src/manifest.json`, `manifest.json`, `dist/manifest.json`, and `versions.json`, then asserts all three manifests agree and:
+Keep generic fixture `VERSION` independent from repository version. Add `versions.json` to each valid fixture with historical `0.3.5` fixed at `1.7.2` and the fixture's current version mapped to its manifest minimum. Add negative fixtures proving prebuild validation rejects a changed historical mapping and a missing or mismatched current mapping. Replace the current repository compatibility assertions with exact package, lockfile, manifest, and history assertions:
 
 ```ts
-assert.equal(sourceManifest.version, "0.3.5");
+assert.equal(packageJson.version, "0.3.6");
+assert.equal(packageLock.version, "0.3.6");
+assert.equal(packageLock.packages[""].version, "0.3.6");
+assert.equal(sourceManifest.version, "0.3.6");
+assert.equal(rootManifest.version, "0.3.6");
+assert.equal(distManifest.version, "0.3.6");
 assert.equal(sourceManifest.minAppVersion, "1.13.0");
 assert.equal(sourceManifest.isDesktopOnly, false);
-assert.equal(versionsJson["0.3.5"], "1.13.0");
+assert.deepEqual(rootManifest, sourceManifest);
+assert.deepEqual(distManifest, sourceManifest);
+assert.equal(versionsJson["0.3.5"], "1.7.2");
+assert.equal(versionsJson["0.3.6"], "1.13.0");
 ```
 
-- [ ] Step 2: Run the focused manifest tests and confirm the old compatibility metadata fails.
+- [ ] Step 2: Run the focused tests and confirm both missing validator behavior and stale repository metadata fail.
 
 ```bash
 node --import tsx --test tests/release-validation.test.ts
 ```
 
-Expected: non-zero exit on `minAppVersion` while source, root, dist, and `versions.json` still declare `1.7.2`.
+Expected: non-zero exit. Negative `versions.json` fixtures are incorrectly accepted by the old validator; repository assertions report package/manifests at `0.3.5`, changed `versions.json["0.3.5"]`, and missing `versions.json["0.3.6"]`.
 
-- [ ] Step 3: Change only the source manifest compatibility floor, then use the production build to synchronize generated metadata.
+- [ ] Step 3: Make release validation fail closed on historical and current compatibility records.
 
-Set `src/manifest.json` to `"minAppVersion": "1.13.0"` without changing `version` or `isDesktopOnly`, then run:
+Read `versions.json` during prebuild. Require `versionsJson["0.3.5"] === "1.7.2"`; require the current package-version key to equal `src/manifest.json.minAppVersion`; retain the existing package/lockfile/manifest equality checks. Report the offending path and values, for example:
+
+```text
+[versions.json] 0.3.5 must remain mapped to 1.7.2
+[versions.json] 0.3.6 must map to src/manifest.json minAppVersion 1.13.0
+```
+
+Run the focused tests again. Expected: the two negative fixtures pass by observing validator exit `1`; the repository synchronization contract remains the only failure because the release files have not been bumped yet.
+
+```bash
+node --import tsx --test tests/release-validation.test.ts
+```
+
+- [ ] Step 4: Bump package and source metadata, restore historical mapping, and build every generated release file.
+
+Set `package.json.version`, `package-lock.json.version`, and `package-lock.json.packages[""].version` to `0.3.6` without changing dependencies or creating a Git tag. Set `src/manifest.json` to version `0.3.6`, `minAppVersion: "1.13.0"`, and `isDesktopOnly: false`. Restore `versions.json["0.3.5"]` to `"1.7.2"`; do not delete or rewrite any older key. Then generate root/distribution metadata and bundle from source:
+
 
 ```bash
 npm run build
 ```
 
-Expected: build exits zero; root and dist manifests are copied from `src/manifest.json`; `versions.json["0.3.5"]` becomes `"1.13.0"`; plugin version remains `0.3.5`; `isDesktopOnly` remains `false`.
+Expected: build exits zero; `manifest.json` and `dist/manifest.json` are generated from `src/manifest.json`; `dist/main.js` is rebuilt; package, both lockfile root records, and all manifests declare `0.3.6`; all manifests declare `minAppVersion: 1.13.0` and `isDesktopOnly: false`; `versions.json["0.3.5"]` remains `1.7.2` and build appends `versions.json["0.3.6"] = "1.13.0"`.
 
-- [ ] Step 4: Run focused compatibility tests and recapture lint inventory.
+- [ ] Step 5: Prove historical immutability, synchronization, mobile availability, and the expected remaining lint inventory.
 
 ```bash
 node --import tsx --test tests/release-validation.test.ts tests/openai-only-settings.test.ts tests/openai-only-load-settings.test.ts
+npm run release:validate:pre
+npm run release:validate:post
 npm run lint
 ```
 
-Expected: focused tests exit zero. All 13 `no-unsupported-api` errors and the `require-display` warning from Task 3 are absent. Lint remains non-zero only for the two `no-undef` warnings at `src/native-openai-transport.ts:13` and `src/view.ts:1640`, assigned to Task 5, plus the sentence-case and deprecated-control findings assigned to Task 6. Any compatibility or unrelated finding blocks this commit.
+Expected: focused tests and both release validators exit zero; mismatch fixtures prove `0.3.5` cannot change and current metadata cannot drift. All 13 `no-unsupported-api` errors and the `require-display` warning from Task 3 are absent. Lint remains non-zero only for the two `no-undef` warnings assigned to Task 5 plus sentence-case/deprecated-control findings assigned to Task 6. Any version, compatibility, mobile, legacy-load, or unrelated finding blocks this commit.
 
-- [ ] Step 5: Commit compatibility metadata before any passing strict lint gate.
+- [ ] Step 6: Stage exactly the Task 4 source, test, and generated paths; reject cross-task staging.
 
 ```bash
-git add src/manifest.json manifest.json dist/main.js dist/manifest.json versions.json tests/release-validation.test.ts
-git commit -m "build(compat): require Obsidian 1.13"
+git add package.json package-lock.json src/manifest.json manifest.json dist/main.js dist/manifest.json versions.json scripts/validate-release.mjs tests/release-validation.test.ts
+git diff --cached --check
+git diff --cached --name-only
 ```
+
+Expected: check exits zero. Staged names are exactly `package.json`, `package-lock.json`, `src/manifest.json`, `manifest.json`, `dist/main.js`, `dist/manifest.json`, `versions.json`, `scripts/validate-release.mjs`, and `tests/release-validation.test.ts`; no Task 5+ path or unrelated pre-existing change is staged.
+
+- [ ] Step 7: Commit the new release record before any passing strict lint gate.
+
+```bash
+git commit -m "build(release): prepare version 0.3.6"
+```
+
+Expected: commit succeeds and contains only Step 6's exact staged paths. It creates no tag and publishes nothing.
 
 ### Task 5: Resolve environment-global findings without weakening mobile guards
 
@@ -434,7 +475,7 @@ Before committing, inspect `git diff --cached --name-only`; unstage any test fil
 
 ### Task 7: Close the complete official source lint gate
 
-**Closes:** R1 zero-warning proof and R6 lint-gate integration.
+**Closes:** R1 zero-warning proof and final R2 rule-driven source closure.
 
 **Files:**
 
@@ -468,7 +509,7 @@ Expected: no whitespace errors; dirty paths are only the mapped residual correct
 
 ### Task 8: Add a path-scoped active reviewer-surface scan
 
-**Closes:** R3 active-surface detection and the R6 negative reviewer fixture.
+**Closes:** R3 active-surface detection and the R7 negative reviewer fixture.
 
 **Files:**
 
@@ -578,7 +619,7 @@ git commit -m "chore(eval): remove stale Claude artifacts"
 
 ### Task 10: Document current reviewer and release gates
 
-**Closes:** Repository portion of R7 documentation.
+**Closes:** Repository portion of R8 documentation and Community boundary.
 
 **Files:**
 
@@ -587,7 +628,7 @@ git commit -m "chore(eval): remove stale Claude artifacts"
 
 - [ ] Step 1: Inspect the implemented gate commands, scanner scope/exceptions, and retained eval workflow from Tasks 1–9. Map the English and Russian README development sections to the same current contracts; do not edit historical intent, spec, plan, or result artifacts.
 
-- [ ] Step 2: Update current docs with exact contracts: Obsidian 1.13+, Setting Definitions, lint scope and zero-warning threshold, active-surface paths/exceptions, and mobile eval rebuild command. Document the implemented scanner and eval behavior; do not mutate or resynchronize compatibility metadata in this task.
+- [ ] Step 2: Update current docs with exact contracts: Obsidian 1.13+, Setting Definitions, lint scope and zero-warning threshold, active-surface paths/exceptions, mobile eval rebuild command, immutable `0.3.5`/`1.7.2` history, synchronized `0.3.6` metadata, and merge-triggered automatic release. State that Community plugin-directory submission and metadata remain excluded. Document implemented behavior only; do not mutate or resynchronize compatibility metadata in this task.
 
 - [ ] Step 3: Run current release, legacy-load, mobile-guard, and eval checks after the documentation edit.
 
@@ -609,19 +650,23 @@ git commit -m "docs(release): describe reviewer parity gates"
 
 Before committing, inspect staged paths and remove any historical or unrelated document.
 
-### Task 11: Full verification, iwiki update, and result reconciliation
+### Task 11: Reconcile the verified result and deliver release `0.3.6` from the merged pull request
 
-**Closes:** R6 full release verification and R7 durable documentation/delivery boundary.
+**Closes:** Final evidence for R1–R8, including immutable `0.3.5`, merge-only publication, automatic release `0.3.6`, and the Community boundary.
 
 **Files:**
 
 - Modify through iwiki MCP: `obsidian-ai-wiki` reviewer/release guidance page selected after `wiki_search`
 - Create after execution: `docs/superpowers/results/2026-08-24-reviewer-parity-remediation-result.md`
 - Update through iwiki MCP: `reference/tasks/reviewer-parity-remediation` and active history segment
+- External delivery through existing mechanisms only: remediation pull request and `.github/workflows/release.yml` run
 
-- [ ] Step 1: Run complete local verification in release order.
+- [ ] Step 1: Start from a clean branch and run complete release-candidate verification in enforced order.
 
 ```bash
+git fetch origin master
+git status --short
+npm ci
 npm run lint
 npm run typecheck
 npm test
@@ -629,41 +674,144 @@ npm run release:validate:pre
 npm run build
 npm run release:validate:post
 node eval/mobile-fixes/run.cjs
-git diff --check
+git diff --check origin/master...HEAD
+git diff --exit-code
+git status --short
 ```
 
-Expected: every command exits zero; lint has zero warnings; test output has zero failures; production bundle and manifests pass postbuild validation; mobile eval passes.
+Expected: both status commands print nothing; every command exits zero; lint has zero warnings; tests have zero failures; prebuild/postbuild validators pass; production build leaves tracked generated files unchanged; retained mobile eval passes; branch diff has no whitespace error.
 
-- [ ] Step 2: Run final active-surface and delivery-boundary checks.
+- [ ] Step 2: Prove active-surface cleanliness, exact `0.3.6` synchronization, and local `0.3.5` history preservation.
 
 ```bash
 rg -n -i 'claude code|claude-agent|ClaudeCliClient|iclaudePath|claudePath|child_process|spawn\(' src eval scripts dist/main.js
 git diff origin/master...HEAD -- package.json package-lock.json src/manifest.json manifest.json dist/manifest.json versions.json
+node -e 'const fs=require("node:fs"); const pkg=require("./package.json"); const lock=require("./package-lock.json"); const source=require("./src/manifest.json"); const root=require("./manifest.json"); const dist=require("./dist/manifest.json"); const versions=require("./versions.json"); if (![pkg.version,lock.version,lock.packages[""].version,source.version,root.version,dist.version].every(v=>v==="0.3.6")) throw new Error("0.3.6 version drift"); if (![source,root,dist].every(m=>m.minAppVersion==="1.13.0"&&m.isDesktopOnly===false)) throw new Error("manifest compatibility drift"); if (versions["0.3.5"]!=="1.7.2"||versions["0.3.6"]!=="1.13.0") throw new Error("versions.json history drift");'
 ```
 
-Expected: first command returns only the excluded validator's pattern declarations or explicitly allowed repository instruction content, and no runtime/eval/release violation; second confirms package version remains `0.3.5`, Obsidian API is pinned exactly to `1.13.1`, compatibility metadata is `1.13.0`, and no new backend was added.
+Expected: scan output is limited to the validator's tested pattern declarations and explicit excluded instruction evidence; no active source, eval, script, or distribution violation appears. Diff and assertion show package, both lockfile root fields, source/root/dist manifests at `0.3.6`; every manifest has `minAppVersion: 1.13.0` and `isDesktopOnly: false`; `versions.json["0.3.5"]` remains `1.7.2`; `versions.json["0.3.6"]` is `1.13.0`; no backend is added.
 
-- [ ] Step 3: Update the bound iwiki domain through MCP.
-
-Read the target page immediately before mutation, use its PostgreSQL revision and section hash, update or insert the reviewer-gate section, then run `wiki_lint`. Record official lint version/scope, zero-warning rule, Obsidian 1.13 minimum, Setting Definitions, active surfaces/exceptions, eval policy, and verification evidence.
-
-Expected: mutation succeeds, reindex is automatic, task-page lint has no broken/stale/missing-source finding. Do not call Git-only `wiki_sync`.
-
-- [ ] Step 4: Write the result artifact with a changed-path-to-R1–R7 table and exact command outcomes. State explicitly: no plugin version bump, release, publication, Community submission, LM Studio, Claude backend, or alternate backend was added.
-
-- [ ] Step 5: Run the bounded result gate.
+- [ ] Step 3: Capture the existing published `0.3.5` boundary before delivery.
 
 ```bash
-$check-chain result docs/superpowers/plans/2026-08-24-reviewer-parity-remediation.md
+history_dir="$(mktemp -d)"
+gh release view 0.3.5 --json tagName,isDraft,isPrerelease,assets,url
+gh release download 0.3.5 --dir "$history_dir" --pattern manifest.json
+node -e 'const fs=require("node:fs"); const p=process.argv[1]; const m=JSON.parse(fs.readFileSync(p,"utf8")); if(m.version!=="0.3.5"||m.minAppVersion!=="1.7.2") throw new Error("published 0.3.5 manifest drift");' "$history_dir/manifest.json"
+git ls-remote --tags origin refs/tags/0.3.5
 ```
 
-Expected: `OK` for the approved plan/result pair. If `needs_work`, remain in result reconciliation, fix the reported evidence gap, and rerun with a changed strategy.
+Expected: release/tag `0.3.5` exists, is neither draft nor prerelease, its published manifest still declares version `0.3.5` and minimum `1.7.2`, and no command mutates that release or tag. Record release URL, tag object ID, and asset metadata for post-release comparison.
 
-- [ ] Step 6: Commit result evidence only after the result gate passes.
+- [ ] Step 4: Update current reviewer/release guidance in the bound iwiki domain before result reconciliation.
+
+Read the target page immediately before mutation, pass its current PostgreSQL revision and protected section hash, update or insert the reviewer-gate section, then run `wiki_lint`. Record official lint version/scope, zero-warning rule, Obsidian `1.13.0` minimum for `0.3.6`, immutable `0.3.5`/`1.7.2` history, Setting Definitions, active surfaces/exceptions, eval policy, synchronized metadata checks, merge-only publication, and Community exclusion.
+
+Expected: mutation succeeds, reindex is automatic, and task-page lint has no broken/stale/missing-source finding. Do not call Git-only `wiki_sync`.
+
+- [ ] Step 5: Write and reconcile the verified pre-delivery result over the complete branch diff.
+
+Create `docs/superpowers/results/2026-08-24-reviewer-parity-remediation-result.md` with a changed-path-to-R1–R8 table and exact Steps 1–3 command outcomes. State that implementation and release candidate are verified; package/manifests are `0.3.6`; published `0.3.5` and its `1.7.2` mapping remain unchanged; PR merge and automatic release are the remaining authorized delivery steps; no Community submission/directory metadata action occurred; and no Claude, LM Studio, or alternate backend was added.
+
+Invoke the bounded result gate against the full committed branch plus uncommitted result artifact:
+
+```text
+$check-chain result docs/superpowers/plans/2026-08-24-reviewer-parity-remediation.md --since=origin/master
+```
+
+Expected: reconciliation maps every changed path and completed implementation outcome to R1–R8, reviews the full branch diff, writes current `result_check` frontmatter, and returns `OK` for PR delivery. It must not claim merge or release already occurred. If `needs_work`, fix the named evidence gap with a changed strategy, rerun affected verification, and do not push.
+
+After `OK`, stage exactly the result artifact and plan frontmatter written by the gate:
 
 ```bash
-git add docs/superpowers/results/2026-08-24-reviewer-parity-remediation-result.md
+git add docs/superpowers/plans/2026-08-24-reviewer-parity-remediation.md docs/superpowers/results/2026-08-24-reviewer-parity-remediation-result.md
+git diff --cached --check
+git diff --cached --name-only
 git commit -m "docs(result): reconcile reviewer parity remediation"
+git status --short
 ```
 
-- [ ] Step 7: Use `superpowers:finishing-a-development-branch` and `git-workflow` for final branch checks, push, and PR. Do not merge or publish a release without a separate user instruction.
+Expected: staged paths are exactly the plan and result artifact; commit succeeds; final status is clean. Task lifecycle remains `completion-pending` until PR/release delivery evidence is durable.
+
+- [ ] Step 6: Use `superpowers:finishing-a-development-branch` and `git-workflow` to push the task branch and open the remediation pull request against `master`.
+
+```bash
+git push -u origin dev-reviewer-parity-remediation
+pr_url="$(gh pr create --base master --head dev-reviewer-parity-remediation --title 'fix: remediate Obsidian reviewer parity' --body $'## Summary\n- adopt official zero-warning Obsidian lint contract\n- remove stale Claude reviewer surfaces\n- prepare immutable-history release 0.3.6\n\n## Verification\n- npm run lint\n- npm run typecheck\n- npm test\n- npm run release:validate:pre\n- npm run build\n- npm run release:validate:post\n- node eval/mobile-fixes/run.cjs')"
+printf '%s\n' "$pr_url"
+```
+
+Expected: push targets only `dev-reviewer-parity-remediation`; PR URL is returned with base `master` and head `dev-reviewer-parity-remediation`. Do not push or merge directly to `master`.
+
+- [ ] Step 7: Wait for every required PR check and merge only the verified pull request.
+
+```bash
+gh pr checks "$pr_url" --watch --fail-fast
+gh pr view "$pr_url" --json mergeStateStatus,reviewDecision,statusCheckRollup
+gh pr merge "$pr_url" --merge --delete-branch
+gh pr view "$pr_url" --json state,mergedAt,mergeCommit,url
+```
+
+Expected: check watch exits zero; every required check is successful; merge state is clean and any required review is approved. Only then does PR merge succeed. Final view reports `state: MERGED` and a merge-commit OID. A failed/pending required check, blocked merge state, or missing required approval stops delivery; no direct `master` push is allowed.
+
+- [ ] Step 8: Locate and monitor the existing automatic release workflow for the exact merge revision.
+
+```bash
+merge_sha="$(gh pr view "$pr_url" --json mergeCommit --jq '.mergeCommit.oid')"
+run_id="$(gh run list --workflow Release --branch master --event push --limit 20 --json databaseId,headSha --jq ".[] | select(.headSha == \"$merge_sha\") | .databaseId" | head -n1)"
+test -n "$run_id"
+gh run view "$run_id" --json headSha,event,status,conclusion,url
+gh run watch "$run_id" --exit-status
+```
+
+Expected: lookup identifies the `Release` workflow triggered by the merged `master` push, its `headSha` equals `merge_sha`, and watch exits zero only after all existing lint/typecheck/test/build/validator/attestation/publication steps pass. If the run is not visible yet, repeat only the read-only `gh run list` lookup; never dispatch a different revision.
+
+- [ ] Step 9: Retry only a transient post-gate failure on the same merged revision.
+
+On failure, inspect the failed run and its step conclusions:
+
+```bash
+gh run view "$run_id" --json headSha,jobs,url
+gh run view "$run_id" --log-failed
+```
+
+Expected: `headSha` still equals `merge_sha`. If any lint, typecheck, test, build, prebuild/postbuild validator, active-surface, or asset gate failed, stop with `0.3.6` unpublished; do not retry publication. Only when every required gate passed and failure is transient in later attestation/publication may the same run be rerun:
+
+```bash
+gh run rerun "$run_id"
+gh run watch "$run_id" --exit-status
+```
+
+Expected: rerun retains the original merged `headSha`, re-executes all workflow gates, and exits zero. Do not use `workflow_dispatch` if `master` has moved or create an artificial version commit.
+
+- [ ] Step 10: Verify tag/release `0.3.6`, exact revision, and flat assets; recheck `0.3.5` immutability.
+
+```bash
+git fetch origin refs/tags/0.3.6:refs/tags/0.3.6
+test "$(git rev-list -n1 0.3.6)" = "$merge_sha"
+gh release view 0.3.6 --json tagName,targetCommitish,isDraft,isPrerelease,assets,url
+test "$(gh release view 0.3.6 --json assets --jq '[.assets[].name] | sort | join(",")')" = "main.js,manifest.json,styles.css"
+release_dir="$(mktemp -d)"
+gh release download 0.3.6 --dir "$release_dir" --pattern main.js --pattern manifest.json --pattern styles.css
+find "$release_dir" -maxdepth 1 -type f -printf '%f\n' | sort
+cmp "$release_dir/main.js" dist/main.js
+cmp "$release_dir/manifest.json" dist/manifest.json
+cmp "$release_dir/styles.css" dist/styles.css
+node -e 'const fs=require("node:fs"); const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(m.version!=="0.3.6"||m.minAppVersion!=="1.13.0"||m.isDesktopOnly!==false) throw new Error("published 0.3.6 manifest drift");' "$release_dir/manifest.json"
+gh release view 0.3.5 --json tagName,isDraft,isPrerelease,assets,url
+git ls-remote --tags origin refs/tags/0.3.5
+```
+
+Expected: tag `0.3.6` resolves to `merge_sha`; release is neither draft nor prerelease; asset list and download directory contain exactly flat `main.js`, `manifest.json`, and `styles.css`; downloaded bytes match the verified merged build; published manifest declares `0.3.6`, `1.13.0`, and mobile support. Recorded `0.3.5` release URL, tag object ID, and asset metadata match Step 3. No Community directory action occurs.
+
+- [ ] Step 11: Record post-merge release evidence in current iwiki reviewer guidance and authoritative task history.
+
+Read the reviewer guidance page, `reference/tasks/reviewer-parity-remediation`, and its active history segment immediately before compare-and-swap updates. Record PR URL, merge SHA, required-check outcome, release workflow URL, release/tag URL, exact flat asset names, verified `0.3.6` manifest, `0.3.5` before/after comparison, and Community exclusion. Rerun `wiki_lint`.
+
+Expected: hosted writes succeed with current revisions/section hashes; lint has no broken/stale/missing-source finding; spool is empty. Any missing evidence keeps lifecycle `completion-pending`.
+
+- [ ] Step 12: Close delivery only after every durable release condition is present.
+
+Re-read the task page and active history segment. Transition `reference/tasks/reviewer-parity-remediation` to `done` only when the implementation PR is merged, required checks passed, workflow ran on `merge_sha`, release/tag `0.3.6` and exact assets are verified, `0.3.5` evidence is unchanged, result reconciliation is `OK`, spool is empty, and task-page `wiki_lint` is clean.
+
+Expected: task ledger contains durable R1–R8 implementation and delivery evidence; lifecycle is `done`; no Community submission/metadata event exists. Any PR, workflow, release, asset, historical comparison, result, spool, or lint failure retains `completion-pending` and stops completion claims.
