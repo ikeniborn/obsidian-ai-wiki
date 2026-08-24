@@ -1,7 +1,7 @@
 ---
 review:
-  plan_hash: cd6b086026774281
-  last_run: 2026-08-24
+  plan_hash: 6473b7dba94bf604
+  last_run: 2026-08-25
   phases:
     structure: { status: passed }
     coverage: { status: passed }
@@ -30,11 +30,11 @@ chain:
 
 - R1: Tasks 1 and 7 establish the exact official lint dependency, config, scope, and zero-warning threshold.
 - R2: Tasks 2, 3, 5, 6, and 7 resolve every current source finding without suppressions or contract drift.
-- R3: Tasks 8, 9, and 11 add and prove active-surface marker validation with explicit exceptions.
+- R3: Tasks 8 and 9 add and close active-surface marker validation with explicit exceptions; Task 10a synchronizes the freshly scanned production bundle, and Task 11 proves the merged active surfaces remain clean.
 - R4: Task 9 removes the orphan Claude probe and reproducibly rebuilds and executes the retained mobile eval.
 - R5: Tasks 3, 4, 5, and 11 preserve OpenAI-only loading, safe legacy settings, guarded desktop behavior, `isDesktopOnly: false`, and the Obsidian `1.13.0` minimum for `0.3.6`.
-- R6: Tasks 4 and 11 preserve published `0.3.5`/`1.7.2` history and synchronize package, lockfile, source, root, distribution, and compatibility metadata at `0.3.6`.
-- R7: Task 4 implements and fixture-tests the serialized create-only publisher; Tasks 7, 8, and 9 close its source, active-surface, and mobile-eval gates; Task 11 verifies the clean merged build, permits only a fail-closed same-run/SHA retry, and proves the exact published tag/assets/bytes.
+- R6: Task 4 preserves published `0.3.5`/`1.7.2` history and synchronizes package, lockfile, source, root, distribution, and compatibility metadata at `0.3.6`; Task 10a synchronizes the production bundle after the later source changes; Task 11 proves all release metadata and artifacts remain exact.
+- R7: Task 4 implements and fixture-tests the serialized create-only publisher; Tasks 7, 8, and 9 close its source, active-surface, and mobile-eval gates; Task 10a owns the fresh production bundle generated after those source remediations; Task 11 verifies the clean merged build, permits only a fail-closed same-run/SHA retry, and proves the exact published tag/assets/bytes.
 - R8: Tasks 10 and 11 update current repository/iwiki guidance, reconcile every changed path, and keep Community directory submission and metadata outside delivery.
 
 Every numbered step inherits its task's `Closes` mapping. Every edit step's DoD is the immediately following verification step. Every commit step must exit zero and `git show --stat --oneline HEAD` must list only that task's declared files.
@@ -725,9 +725,72 @@ git commit -m "docs(release): describe reviewer parity gates"
 
 Before committing, inspect staged paths and remove any historical or unrelated document.
 
+### Task 10a: Synchronize generated production bundle
+
+**Closes:** R3 fresh active-surface bundle, R6 synchronized production artifact, and R7 release-asset ownership.
+
+Tasks 5 and 6 change production source after Task 4 builds `dist/main.js`. This task gives that later generated delta one explicit owner before Task 11 requires a clean release-candidate checkout.
+
+**Files:**
+
+- Modify generated: `dist/main.js`
+
+- [ ] Step 1: Rebuild from the fully remediated source and postvalidate the generated release state.
+
+```bash
+npm run build
+npm run release:validate:post
+git diff --check
+```
+
+Expected: every command exits zero; the build incorporates the committed Tasks 5 and 6 source changes, and postbuild validation accepts the regenerated production bundle.
+
+- [ ] Step 2: Prove the only generated delta is `dist/main.js`.
+
+```bash
+test "$(git status --short)" = " M dist/main.js"
+test "$(git diff --name-only)" = "dist/main.js"
+git diff --stat -- dist/main.js
+```
+
+Expected: both assertions exit zero; status and unstaged diff contain exactly `dist/main.js`, with no metadata, source, documentation, or unrelated generated path.
+
+- [ ] Step 3: Stage exactly the regenerated production bundle and reject any other path.
+
+```bash
+git add dist/main.js
+git diff --cached --check
+test "$(git diff --cached --name-only)" = "dist/main.js"
+test -z "$(git diff --name-only)"
+```
+
+Expected: staged diff is whitespace-clean and contains exactly `dist/main.js`; no unstaged path remains.
+
+- [ ] Step 4: Commit the generated-artifact synchronization.
+
+```bash
+git commit -m "build(release): sync reviewer remediation bundle"
+```
+
+Expected: commit succeeds and contains only `dist/main.js`.
+
+- [ ] Step 5: Rebuild once more and require byte-stable generated output and a clean checkout.
+
+```bash
+npm run build
+npm run release:validate:post
+git diff --exit-code -- dist/main.js dist/manifest.json dist/styles.css manifest.json versions.json
+git diff --exit-code
+git status --short
+```
+
+Expected: every command exits zero; both diffs are empty and final status prints nothing, proving the committed bundle is reproducible from the complete post-remediation source.
+
 ### Task 11: Reconcile the verified result and deliver create-only release `0.3.6`
 
 **Closes:** Final R1–R8 evidence: clean full-checkout build, immutable `0.3.5`, verified PR merge, option-B publisher state, exact `0.3.6` tag/assets/digests/bytes, and Community exclusion.
+
+**Depends on:** Tasks 1–10a complete, including Task 10a's committed, byte-stable `dist/main.js`; do not start release-candidate reconciliation from the pre-Tasks-5/6 Task 4 bundle.
 
 **Files:**
 
