@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -9,6 +10,37 @@ const RELEASE_VERSION_PATTERN = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)
 const PRINTABLE_ASCII_PATTERN = /^[\x20-\x7e]+$/;
 const README_DISCLOSURES = ["Network use", "Accounts and payment", "External file access", "License"];
 const PROTECTED_RELEASE_VERSION = "0.3.5";
+const PREBUILD_ACTIVE_SURFACES = ["src", "eval", "scripts"];
+const ACTIVE_SURFACE_EXCLUSIONS = new Set(["scripts/dspy/CLAUDE.md", "scripts/validate-release.mjs"]);
+const ACTIVE_TEXT_EXTENSIONS = new Set([
+  ".cjs",
+  ".css",
+  ".env",
+  ".example",
+  ".html",
+  ".js",
+  ".json",
+  ".jsx",
+  ".lock",
+  ".md",
+  ".mjs",
+  ".py",
+  ".sh",
+  ".toml",
+  ".ts",
+  ".tsx",
+  ".txt",
+  ".yaml",
+  ".yml",
+]);
+const ACTIVE_TEXT_NAMES = new Set([".gitignore", ".python-version", "Makefile"]);
+const FORBIDDEN_ACTIVE_MARKERS = [
+  { category: "Claude backend", pattern: /\b(?:claude-agent|ClaudeCliClient)\b/ },
+  { category: "Claude CLI probe", pattern: /\bclaude-probe\b/ },
+  { category: "subprocess", pattern: /\b(?:node:)?child_process\b|\bspawn\s*\(/ },
+  { category: "Claude configuration", pattern: /\b(?:iclaudePath|claudePath)\b/ },
+  { category: "Claude UI", pattern: /\bClaude Code\b/ },
+];
 
 function fail(message) {
   process.stderr.write(`Release validation failed:\n- [arguments] ${message}\n`);
@@ -111,6 +143,51 @@ function validateMatchingFiles(root, source, expectedSource, errors) {
   }
 }
 
+function listTrackedActiveSurfaceFiles(root, surfaces, errors) {
+  let output;
+  try {
+    output = execFileSync("git", ["-C", root, "ls-files", "-z", "--", ...surfaces], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch {
+    errors.push("[active surfaces] cannot list tracked files");
+    return [];
+  }
+
+  return [...new Set(output.split("\0").filter(Boolean))]
+    .filter((source) => !ACTIVE_SURFACE_EXCLUSIONS.has(source))
+    .filter((source) => {
+      const name = path.posix.basename(source);
+      return ACTIVE_TEXT_NAMES.has(name) || ACTIVE_TEXT_EXTENSIONS.has(path.posix.extname(name));
+    })
+    .sort((left, right) => (left > right) - (left < right));
+}
+
+function validateActiveSurfaceContents(source, contents, errors) {
+  for (const { category, pattern } of FORBIDDEN_ACTIVE_MARKERS) {
+    const match = pattern.exec(source) ?? pattern.exec(contents);
+    if (match !== null) {
+      errors.push(`[${source}] forbidden ${category} marker: ${match[0]}`);
+    }
+  }
+}
+
+function validateActiveSurfaces(root, surfaces, errors) {
+  const sources = listTrackedActiveSurfaceFiles(root, surfaces, errors);
+
+  for (const source of sources) {
+    let contents;
+    try {
+      contents = readFileSync(path.join(root, source), "utf8");
+    } catch {
+      errors.push(`[${source}] cannot be read`);
+      continue;
+    }
+    validateActiveSurfaceContents(source, contents, errors);
+  }
+}
+
 function isHttpUrl(value) {
   if (typeof value !== "string" || value.trim() === "") return false;
   try {
@@ -194,6 +271,7 @@ function validatePrebuild(root) {
   const packageVersion = packageJson?.version;
   const readme = validateRequiredText(root, "README.md", errors);
   validateRequiredText(root, "LICENSE", errors);
+  validateActiveSurfaces(root, PREBUILD_ACTIVE_SURFACES, errors);
 
   if (packageJson !== undefined) {
     if (typeof packageVersion !== "string" || !SEMVER_PATTERN.test(packageVersion)) {
@@ -280,14 +358,9 @@ function validatePostbuild(root) {
 
   try {
     const main = readFileSync(path.join(root, "dist/main.js"), "utf8");
+    validateActiveSurfaceContents("dist/main.js", main, errors);
     if (/sourceMappingURL\s*=\s*data:/.test(main)) {
       errors.push("[dist/main.js] inline source map is not allowed");
-    }
-    if (/\b(?:claude-agent|ClaudeCliClient|iclaudePath)\b/.test(main)) {
-      errors.push("[dist/main.js] forbidden Claude backend marker");
-    }
-    if (/\b(?:node:)?child_process\b/.test(main)) {
-      errors.push("[dist/main.js] forbidden Node subprocess transport");
     }
   } catch {
     // Missing assets are reported by the required-file check above.

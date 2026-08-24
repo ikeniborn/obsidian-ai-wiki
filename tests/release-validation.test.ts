@@ -48,7 +48,7 @@ The plugin does not execute a user-configured AI CLI or another external AI proc
 Licensed under Apache License 2.0.
 `;
 
-type FixtureFiles = Record<string, string>;
+type FixtureFiles = Record<string, string | Uint8Array>;
 
 function releaseMetadata(
   version: string,
@@ -94,6 +94,11 @@ async function createFixture(overrides: FixtureFiles = {}): Promise<string> {
     await writeFile(target, contents);
   }
 
+  const init = spawnSync("git", ["init", "--quiet", root], { encoding: "utf8" });
+  assert.equal(init.status, 0, init.stderr);
+  const add = spawnSync("git", ["-C", root, "add", "--all"], { encoding: "utf8" });
+  assert.equal(add.status, 0, add.stderr);
+
   return root;
 }
 
@@ -130,6 +135,151 @@ test("prebuild validation passes for matching release metadata", async (t) => {
 
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stderr, "");
+});
+
+test("prebuild validation scans only tracked active text surfaces", async (t) => {
+  const root = await createFixture({
+    ".gitignore": "eval/ignored/\n",
+    "docs/superpowers/legacy.md": "Claude Code claude-agent child_process spawn( iclaudePath claudePath claude-probe\n",
+    "scripts/dspy/CLAUDE.md": "Claude Code claude-agent child_process spawn( iclaudePath claudePath claude-probe\n",
+    "eval/ignored/run.cjs": "Claude Code claude-agent child_process spawn( iclaudePath claudePath claude-probe\n",
+    "eval/bundle.bin": Buffer.from("\0Claude Code claude-agent child_process"),
+    "tests/negative-markers.ts": "Claude Code claude-agent child_process spawn( iclaudePath claudePath claude-probe\n",
+    "src/openai.ts": "const provider = 'OpenAI';\n",
+  });
+  await mkdir(path.join(root, "eval/untracked"), { recursive: true });
+  await writeFile(
+    path.join(root, "eval/untracked/run.cjs"),
+    "Claude Code claude-agent child_process spawn( iclaudePath claudePath claude-probe\n",
+  );
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const result = validate(root, "prebuild");
+
+  assert.equal(result.status, 0, result.stderr);
+});
+
+const ACTIVE_MARKER_CASES = [
+  {
+    path: "src/claude-agent.ts",
+    contents: "export const client = 'ClaudeCliClient';\n",
+    category: "Claude backend",
+    marker: "claude-agent",
+  },
+  {
+    path: "src/backend.ts",
+    contents: "export const client = 'ClaudeCliClient';\n",
+    category: "Claude backend",
+    marker: "ClaudeCliClient",
+  },
+  {
+    path: "eval/claude-probe/run.ts",
+    contents: "export const probe = 'enabled';\n",
+    category: "Claude CLI probe",
+    marker: "claude-probe",
+  },
+  {
+    path: "scripts/process.mjs",
+    contents: "import 'node:child_process';\n",
+    category: "subprocess",
+    marker: "node:child_process",
+  },
+  {
+    path: "scripts/spawn.ts",
+    contents: "spawn('tool');\n",
+    category: "subprocess",
+    marker: "spawn(",
+  },
+  {
+    path: "src/config.ts",
+    contents: "export const path = 'iclaudePath';\n",
+    category: "Claude configuration",
+    marker: "iclaudePath",
+  },
+  {
+    path: "src/legacy-config.ts",
+    contents: "export const path = 'claudePath';\n",
+    category: "Claude configuration",
+    marker: "claudePath",
+  },
+  {
+    path: "src/ui.ts",
+    contents: "export const label = 'Claude Code';\n",
+    category: "Claude UI",
+    marker: "Claude Code",
+  },
+  {
+    path: "scripts/Makefile",
+    contents: "audit:\n\t@echo 'Claude Code'\n",
+    category: "Claude UI",
+    marker: "Claude Code",
+  },
+] as const;
+
+for (const fixture of ACTIVE_MARKER_CASES) {
+  test(`prebuild reports exact ${fixture.category} marker from ${fixture.path}`, async (t) => {
+    const root = await createFixture({ [fixture.path]: fixture.contents });
+    t.after(() => rm(root, { recursive: true, force: true }));
+
+    const result = validate(root, "prebuild");
+
+    assert.equal(result.status, 1);
+    assert.equal(
+      result.stderr,
+      `Release validation failed:\n- [${fixture.path}] forbidden ${fixture.category} marker: ${fixture.marker}\n`,
+    );
+  });
+}
+
+test("prebuild fails closed when a tracked active text candidate cannot be read", async (t) => {
+  const source = "src/unreadable.ts";
+  const root = await createFixture({ [source]: "export const value = true;\n" });
+  await rm(path.join(root, source));
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const result = validate(root, "prebuild");
+
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr, `Release validation failed:\n- [${source}] cannot be read\n`);
+});
+
+test("dist marker passes prebuild and fails postbuild with exact evidence", async (t) => {
+  const root = await createPostbuildFixture({
+    "dist/main.js": "const client = 'ClaudeCliClient';\n",
+  });
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const prebuild = validate(root, "prebuild");
+  const postbuild = validate(root, "postbuild");
+
+  assert.equal(prebuild.status, 0, prebuild.stderr);
+  assert.equal(prebuild.stderr, "");
+  assert.equal(postbuild.status, 1);
+  assert.equal(
+    postbuild.stderr,
+    "Release validation failed:\n- [dist/main.js] forbidden Claude backend marker: ClaudeCliClient\n",
+  );
+});
+
+test("postbuild scans an untracked generated dist main directly", async (t) => {
+  const root = await createPostbuildFixture({
+    "dist/main.js": "const client = 'ClaudeCliClient';\n",
+  });
+  const untrack = spawnSync(
+    "git",
+    ["-C", root, "rm", "--cached", "--quiet", "--", "dist/main.js"],
+    { encoding: "utf8" },
+  );
+  assert.equal(untrack.status, 0, untrack.stderr);
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const result = validate(root, "postbuild");
+
+  assert.equal(result.status, 1);
+  assert.equal(
+    result.stderr,
+    "Release validation failed:\n- [dist/main.js] forbidden Claude backend marker: ClaudeCliClient\n",
+  );
 });
 
 test("repository release metadata preserves 0.3.5 and synchronizes 0.3.6", () => {
@@ -338,7 +488,7 @@ test("postbuild validation rejects an inline source map", async (t) => {
   assert.match(result.stderr, /\[dist\/main\.js\] inline source map is not allowed/);
 });
 
-for (const marker of ["claude-agent", "ClaudeCliClient", "iclaudePath"]) {
+for (const marker of ["claude-agent", "ClaudeCliClient", "iclaudePath", "claudePath"]) {
   test(`postbuild validation rejects Claude backend marker ${marker}`, async (t) => {
     const root = await createPostbuildFixture({
       "dist/main.js": `const marker = '${marker}';\n`,
@@ -348,7 +498,13 @@ for (const marker of ["claude-agent", "ClaudeCliClient", "iclaudePath"]) {
     const result = validate(root, "postbuild");
 
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /\[dist\/main\.js\] forbidden Claude backend marker/);
+    const category = marker === "iclaudePath" || marker === "claudePath"
+      ? "Claude configuration"
+      : "Claude backend";
+    assert.equal(
+      result.stderr,
+      `Release validation failed:\n- [dist/main.js] forbidden ${category} marker: ${marker}\n`,
+    );
   });
 }
 
@@ -362,7 +518,10 @@ for (const marker of ["node:child_process", "child_process"]) {
     const result = validate(root, "postbuild");
 
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /\[dist\/main\.js\] forbidden Node subprocess transport/);
+    assert.equal(
+      result.stderr,
+      `Release validation failed:\n- [dist/main.js] forbidden subprocess marker: ${marker}\n`,
+    );
   });
 }
 
