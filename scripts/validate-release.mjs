@@ -8,6 +8,7 @@ const SEMVER_PATTERN = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|
 const RELEASE_VERSION_PATTERN = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/;
 const PRINTABLE_ASCII_PATTERN = /^[\x20-\x7e]+$/;
 const README_DISCLOSURES = ["Network use", "Accounts and payment", "External file access", "License"];
+const PROTECTED_RELEASE_VERSION = "0.3.5";
 
 function fail(message) {
   process.stderr.write(`Release validation failed:\n- [arguments] ${message}\n`);
@@ -50,6 +51,19 @@ function parseArgs(args) {
 
 function display(value) {
   return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+function parseReleaseVersion(value) {
+  if (typeof value !== "string" || !RELEASE_VERSION_PATTERN.test(value)) return undefined;
+  return value.split(".").map((part) => BigInt(part));
+}
+
+function compareReleaseVersions(left, right) {
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] < right[index]) return -1;
+    if (left[index] > right[index]) return 1;
+  }
+  return 0;
 }
 
 function readJson(root, source, errors) {
@@ -176,6 +190,7 @@ function validatePrebuild(root) {
   const packageLock = readJson(root, "package-lock.json", errors);
   const rootManifest = readJson(root, "manifest.json", errors);
   const sourceManifest = readJson(root, "src/manifest.json", errors);
+  const versionsJson = readJson(root, "versions.json", errors);
   const packageVersion = packageJson?.version;
   const readme = validateRequiredText(root, "README.md", errors);
   validateRequiredText(root, "LICENSE", errors);
@@ -194,6 +209,52 @@ function validatePrebuild(root) {
   validateManifest("manifest.json", rootManifest, packageVersion, errors);
   validateManifest("src/manifest.json", sourceManifest, packageVersion, errors);
   validateMatchingFiles(root, "manifest.json", "src/manifest.json", errors);
+  if (versionsJson !== undefined) {
+    if (versionsJson?.[PROTECTED_RELEASE_VERSION] !== "1.7.2") {
+      errors.push("[versions.json] 0.3.5 must remain mapped to 1.7.2");
+    }
+    const versionKeys = versionsJson !== null && typeof versionsJson === "object"
+      ? Object.keys(versionsJson)
+      : [];
+    const invalidVersionKeys = versionKeys.filter((key) => parseReleaseVersion(key) === undefined);
+    for (const key of invalidVersionKeys) {
+      errors.push(`[versions.json] version key ${key} must use exact x.y.z format`);
+    }
+    const currentRelease = parseReleaseVersion(packageVersion);
+    const protectedRelease = parseReleaseVersion(PROTECTED_RELEASE_VERSION);
+    if (currentRelease !== undefined && protectedRelease !== undefined) {
+      if (compareReleaseVersions(currentRelease, protectedRelease) <= 0) {
+        errors.push(
+          `[package.json] release version ${packageVersion} must be greater than protected version ${PROTECTED_RELEASE_VERSION}`,
+        );
+      } else if (invalidVersionKeys.length === 0) {
+        const highestReleaseKey = versionKeys.reduce((highest, key) => {
+          if (highest === undefined) return key;
+          const keyVersion = parseReleaseVersion(key);
+          const highestVersion = parseReleaseVersion(highest);
+          return keyVersion !== undefined
+            && highestVersion !== undefined
+            && compareReleaseVersions(keyVersion, highestVersion) > 0
+            ? key
+            : highest;
+        }, undefined);
+        if (highestReleaseKey !== packageVersion) {
+          errors.push(
+            `[versions.json] highest release key ${display(highestReleaseKey)} must equal package.json version ${packageVersion}`,
+          );
+        }
+      }
+    }
+    if (
+      typeof packageVersion === "string"
+      && typeof sourceManifest?.minAppVersion === "string"
+      && versionsJson?.[packageVersion] !== sourceManifest.minAppVersion
+    ) {
+      errors.push(
+        `[versions.json] ${packageVersion} must map to src/manifest.json minAppVersion ${sourceManifest.minAppVersion}`,
+      );
+    }
+  }
   if (readme !== undefined) {
     for (const heading of README_DISCLOSURES) {
       const pattern = new RegExp(`^#{2,3} ${heading}$`, "mi");
