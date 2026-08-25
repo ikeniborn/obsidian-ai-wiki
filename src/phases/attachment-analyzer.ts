@@ -130,6 +130,12 @@ interface ResolvedVisionAnalysisOptions {
   tokenCalibration?: number;
 }
 
+const VISION_STRUCTURED_REPAIR = [
+  "STRUCTURED_RETRY: Return the full schema-valid JSON again.",
+  "In every record, ocr, objects, relationships, layout, and uncertainty must be arrays of strings, never objects.",
+  "Preserve meaningful labels, types, endpoints, and relation details in concise strings. Include every required field and exact pageId. No commentary.",
+].join(" ");
+
 function resolveVisionOptions(
   options: VisionAnalysisOptions | undefined,
 ): ResolvedVisionAnalysisOptions {
@@ -168,6 +174,7 @@ function visionContextRecoveryError(
 function visionMessages(
   systemPrompt: string,
   pages: readonly VisionMediaPage[],
+  repairInstruction?: string,
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const pageIds = pages.map((page) => page.pageId);
   const content: OpenAI.Chat.ChatCompletionContentPart[] = [
@@ -179,6 +186,9 @@ function visionMessages(
       type: "image_url" as const,
       image_url: { url: page.dataUrl },
     })),
+    ...(repairInstruction
+      ? [{ type: "text" as const, text: repairInstruction }]
+      : []),
   ];
   return [
     { role: "system", content: systemPrompt },
@@ -219,6 +229,7 @@ async function callVisionLlm(
   options: ResolvedVisionAnalysisOptions,
   effectiveInputBudget: number = options.inputBudgetTokens,
   attempt = 0,
+  structuredRepairAttempt = 0,
 ): Promise<VisionRecognitionRecord[]> {
   if (signal.aborted) {
     signal.throwIfAborted();
@@ -229,7 +240,15 @@ async function callVisionLlm(
     reasoningLanguage,
     effectiveInputBudget,
   );
-  const params = buildChatParams(model, visionMessages(systemPrompt, pages), callOptions);
+  const params = buildChatParams(
+    model,
+    visionMessages(
+      systemPrompt,
+      pages,
+      structuredRepairAttempt > 0 ? VISION_STRUCTURED_REPAIR : undefined,
+    ),
+    callOptions,
+  );
 
   let lifecycle = createLlmLifecycle("analyze_attachments");
   const onEvent = options.onEvent ?? (() => {});
@@ -336,6 +355,22 @@ async function callVisionLlm(
     const parsed = VisionRecognitionBatchSchema.parse(parseStructured(content));
     records = validateRecognitionCoverage(parsed.records, pages.map((page) => page.pageId));
   } catch (error) {
+    if (structuredRepairAttempt === 0 && !signal.aborted) {
+      options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "retrying"));
+      return callVisionLlm(
+        llm,
+        model,
+        systemPrompt,
+        pages,
+        signal,
+        language,
+        reasoningLanguage,
+        options,
+        effectiveInputBudget,
+        attempt + 1,
+        structuredRepairAttempt + 1,
+      );
+    }
     options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "failed"));
     throw error;
   }

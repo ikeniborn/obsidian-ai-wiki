@@ -308,6 +308,7 @@ const en = {
     sentinelInvalidAfterRetry: "Format: LLM returned an invalid sentinel (after retry)",
     writeFailed: (err: string) => `Format: writing the formatted file failed — ${err}`,
     truncationHintSettings: "raise the limit: Settings → per-operation → format → maxTokens",
+    truncationHintSettingsGlobal: "raise the limit: Settings → Default chat model → Max completion tokens",
   },
   ingestProgress: {
     synthesizing: (domainId: string) => `Synthesizing wiki pages for domain "${domainId}"...\n`,
@@ -438,7 +439,14 @@ export type FormatProgress = {
   sentinelInvalidAfterRetry: string;
   writeFailed: (err: string) => string;
   truncationHintSettings: string;
+  truncationHintSettingsGlobal?: string;
 };
+
+/** Selects the settings path named by format truncation diagnostics. */
+export function formatProgressForMode(progress: FormatProgress, perOperation: boolean): FormatProgress {
+  if (perOperation || !progress.truncationHintSettingsGlobal) return progress;
+  return { ...progress, truncationHintSettings: progress.truncationHintSettingsGlobal };
+}
 
 // Pin the live `en` bundle to the FormatProgress contract: if en.formatProgress drops or
 // renames a key, this is a compile error (tsc) instead of a silent ship. format.ts holds a
@@ -752,6 +760,7 @@ const ru: I18n = {
     sentinelInvalidAfterRetry: "Format: LLM вернул невалидный sentinel (после retry)",
     writeFailed: (err: string) => `Format: запись формата не удалась — ${err}`,
     truncationHintSettings: "увеличьте лимит: Settings → per-operation → format → maxTokens",
+    truncationHintSettingsGlobal: "увеличьте лимит: Settings → Default chat model → Max completion tokens",
   },
   ingestProgress: {
     synthesizing: (domainId: string) => `Синтез вики-страниц для домена «${domainId}»...\n`,
@@ -1175,6 +1184,7 @@ const es: I18n = {
     sentinelInvalidAfterRetry: "Format: el LLM devolvió un sentinel inválido (tras reintento)",
     writeFailed: (err: string) => `Format: falló la escritura del archivo formateado — ${err}`,
     truncationHintSettings: "aumenta el límite: Settings → per-operation → format → maxTokens",
+    truncationHintSettingsGlobal: "aumenta el límite: Settings → Default chat model → Max completion tokens",
   },
   ingestProgress: {
     synthesizing: (domainId: string) => `Sintetizando páginas wiki para el dominio "${domainId}"...\n`,

@@ -8,6 +8,7 @@ import type {
 } from "../types";
 import type { FormatProgress } from "../i18n";
 import type { VaultTools } from "../vault-tools";
+import { outputCeiling } from "../budget-resolver";
 import {
   buildChatParams,
   buildLlmCallStatsEvent,
@@ -19,7 +20,7 @@ import {
   wrapStreamWithStats,
 } from "./llm-utils";
 import { classifyContextError, createPromptBudgetEvent, estimatePreparedMessages, PromptBudgetExceededError } from "../prompt-budget";
-import { createLlmLifecycle } from "./structured-output";
+import { createLlmLifecycle, outputRetryOptions } from "./structured-output";
 import { lifecycleEvent } from "../llm-lifecycle";
 import formatTemplate from "../../prompts/format.md";
 import formatSegmentTemplate from "../../prompts/format-segment.md";
@@ -410,6 +411,7 @@ export async function* runFormat(
 
   let lastFinishReason: string | null = null;
   let outputTokens = 0;
+  let lastCompletionTokens = 0;
   let lastInputTokens: number | undefined;
   let activeFormatLifecycle: ReturnType<typeof createLlmLifecycle> | null = null;
   let formatRequestAttempt = 0;
@@ -435,7 +437,9 @@ export async function* runFormat(
       opts.tokenCalibration,
     ),
     actualInputTokens,
-    outputBudget: opts.maxTokens,
+    outputBudget: typeof params.max_completion_tokens === "number"
+      ? params.max_completion_tokens
+      : opts.maxTokens,
     contextUnits: context.contextUnits,
     sourceChunks: context.sourceChunks,
     reductionDepth: context.reductionDepth,
@@ -516,6 +520,7 @@ export async function* runFormat(
     });
     let acc = "";
     lastFinishReason = null;
+    lastCompletionTokens = 0;
     lastInputTokens = undefined;
     const requestStartMs = Date.now();
     let streamChunkConsumed = false;
@@ -556,7 +561,10 @@ export async function* runFormat(
               acc += deltas.content;
               emit({ kind: "assistant_text", delta: deltas.content });
             }
-            if (deltas.outputTokens !== undefined) outputTokens += deltas.outputTokens;
+            if (deltas.outputTokens !== undefined) {
+              outputTokens += deltas.outputTokens;
+              lastCompletionTokens = deltas.outputTokens;
+            }
             if (deltas.inputTokens !== undefined) lastInputTokens = deltas.inputTokens;
             const finishReason = chunk.choices[0]?.finish_reason;
             if (finishReason) lastFinishReason = finishReason;
@@ -584,7 +592,10 @@ export async function* runFormat(
           }
           if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
           if (content) { acc += content; yield { kind: "assistant_text", delta: content }; }
-          if (tok !== undefined) outputTokens += tok;
+          if (tok !== undefined) {
+            outputTokens += tok;
+            lastCompletionTokens = tok;
+          }
           if (inTok !== undefined) lastInputTokens = inTok;
           const fr = chunk.choices[0]?.finish_reason;
           if (fr) lastFinishReason = fr;
@@ -724,7 +735,10 @@ export async function* runFormat(
       }
       const completionTokens = extractUsage(resp);
       const promptTokens = resp.usage?.prompt_tokens;
-      if (completionTokens !== undefined) outputTokens += completionTokens;
+      if (completionTokens !== undefined) {
+        outputTokens += completionTokens;
+        lastCompletionTokens = completionTokens;
+      }
       if (promptTokens !== undefined) lastInputTokens = promptTokens;
       yield formatBudgetEvent(
         activeFormatLifecycle.id,
@@ -948,8 +962,9 @@ export async function* runFormat(
   }
 
   let baseParams: Record<string, unknown> | null = null;
+  let wholeFormatOpts = formatOpts;
   try {
-    baseParams = buildChatParams(model, messages, formatOpts, true);
+    baseParams = buildChatParams(model, messages, wholeFormatOpts, true);
   } catch (e) {
     if (!(e instanceof PromptBudgetExceededError)) throw e;
     if (directImagePaths.length > 0) {
@@ -999,13 +1014,64 @@ export async function* runFormat(
       }
 
       const truncated = !parsed && lastFinishReason === "length";
-      if (!parsed && truncated) {
-        const failedEvent = closeActiveFormatLifecycle("failed");
-        if (failedEvent) yield failedEvent;
-        yield { kind: "tool_result", ok: false, preview: "response truncated" };
-        yield { kind: "error", message: progress.outputTruncated(hint) };
-        yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
-        return;
+      if (truncated) {
+        // Output-limit recovery is mandatory and independent of the user's
+        // JSON/framed-output repair retry setting.
+        const retryLimit = 1;
+        for (let attempt = 0; attempt < retryLimit && !parsed && lastFinishReason === "length"; attempt++) {
+          const paramsMessages = Array.isArray(baseParams.messages)
+            ? baseParams.messages as OpenAI.Chat.ChatCompletionMessageParam[]
+            : messages;
+          const retryCeiling = wholeFormatOpts.contextWindowTokens === undefined
+            ? wholeFormatOpts.maxTokens
+            : outputCeiling(
+                wholeFormatOpts.contextWindowTokens,
+                estimatePreparedMessages(paramsMessages, wholeFormatOpts.tokenCalibration),
+              );
+          const nextOpts = outputRetryOptions(
+            { ...wholeFormatOpts, outputRetryBudgetTokens: retryCeiling },
+            lastCompletionTokens || wholeFormatOpts.maxTokens || 0,
+          );
+          if (nextOpts.maxTokens === wholeFormatOpts.maxTokens) break;
+
+          const retryEvent = closeActiveFormatLifecycle("retrying");
+          if (retryEvent) yield retryEvent;
+          yield { kind: "tool_result", ok: false, preview: "response truncated — retrying" };
+          yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath, retry: attempt + 1 } };
+          wholeFormatOpts = nextOpts;
+          baseParams = buildChatParams(model, messages, wholeFormatOpts, true);
+          fullText = yield* callOnce(baseParams, { allowContextFallback: false });
+          if (signal.aborted) {
+            const cancelledEvent = closeActiveFormatLifecycle("cancelled");
+            if (cancelledEvent) yield cancelledEvent;
+            return;
+          }
+          parsedResult = parseFormatOutput(fullText, visionDescriptions.size > 0);
+          parsed = parsedResult.data;
+          if (parsedResult.truncated) {
+            yield {
+              kind: "info_text", icon: "⚠️",
+              summary: progress.truncatedSalvageRetrySummary,
+              details: [progress.truncatedSalvageDetail],
+            };
+            yield { kind: "rule_fired", ruleId: "formatSalvage", count: 1 };
+          }
+        }
+
+        if (!parsed && lastFinishReason === "length" && directImagePaths.length === 0) {
+          const retryEvent = closeActiveFormatLifecycle("retrying");
+          if (retryEvent) yield retryEvent;
+          segmented = true;
+          parsed = yield* runSegmentedFormatting();
+          if (!parsed) return;
+        } else if (!parsed && lastFinishReason === "length") {
+          const failedEvent = closeActiveFormatLifecycle("failed");
+          if (failedEvent) yield failedEvent;
+          yield { kind: "tool_result", ok: false, preview: "response truncated" };
+          yield { kind: "error", message: progress.outputTruncated(hint) };
+          yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
+          return;
+        }
       }
 
       if (!parsed) {
