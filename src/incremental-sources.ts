@@ -1,7 +1,7 @@
 /**
  * Pure changed-source detection by FNV-1a content hash.
  *
- * No Obsidian / IO imports — testable out-of-vault (eval/incremental-sources/).
+ * No Obsidian / IO imports — testable out-of-vault (tests/eval/incremental-sources/).
  * Replaces mtime-based detection with body-content hash: a source is "changed" when
  * it has no stored hash (new), when its body differs from the stored hash, or when
  * the stored hash is "" (silent baseline on migration). Frontmatter-only changes

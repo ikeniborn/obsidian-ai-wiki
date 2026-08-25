@@ -36,7 +36,7 @@ jobs:
 
       - run: npm test
 
-      - run: node eval/mobile-fixes/run.cjs
+      - run: node tests/eval/mobile-fixes/run.cjs
 
       - name: Build
         run: npm run build
