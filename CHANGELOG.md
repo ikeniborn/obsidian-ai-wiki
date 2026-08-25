@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.7 — 2026-08-25
+
+### Fixes
+
+- fix(review): align scanner source scope
+
+---
+
 ## 0.3.5
 
 ### Fixes
