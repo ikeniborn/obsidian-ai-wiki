@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.9 — 2026-08-25
+
+### Fixes
+
+- fix(release): audit dependency graph before publishing
+
+---
+
 ## 0.3.8 — 2026-08-25
 
 ### Fixes
