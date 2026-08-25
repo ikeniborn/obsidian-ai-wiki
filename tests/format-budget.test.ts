@@ -26,14 +26,14 @@ function chunk(content: string, finishReason: OpenAI.Chat.Completions.ChatComple
   };
 }
 
-function usageChunk(): OpenAI.Chat.ChatCompletionChunk {
+function usageChunk(completionTokens = 7): OpenAI.Chat.ChatCompletionChunk {
   return {
     id: "usage",
     object: "chat.completion.chunk",
     created: 0,
     model: "m",
     choices: [],
-    usage: { prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 },
+    usage: { prompt_tokens: 11, completion_tokens: completionTokens, total_tokens: 11 + completionTokens },
   } as OpenAI.Chat.ChatCompletionChunk;
 }
 
@@ -272,6 +272,109 @@ test("native Format yields transport lifecycle while create is pending", async (
 
   assert.deepEqual(phasesBeforeResolve, ["preparing", "sent", "waiting"]);
   assertFormatLifecycleIntegrity(events);
+});
+
+test("Format retries finish_reason length with a larger safe output budget", async () => {
+  const seenParams: Record<string, unknown>[] = [];
+  const original = "---\ntags: [retry]\n---\n# Retry truncated format\n\nKeep this line.";
+  const { events, adapter } = await collectFormatEvents(
+    original,
+    llmWithCreate((_params, callIndex) => (async function* () {
+      if (callIndex === 0) {
+        yield chunk("", "length");
+        yield usageChunk(100);
+        return;
+      }
+      yield chunk(frame("- formatted after retry", original), "stop");
+      yield usageChunk(20);
+    })(), seenParams),
+    20_000,
+    undefined,
+    { maxTokens: 100, contextWindowTokens: 4_000, structuredRetries: 1 },
+  );
+
+  const wholeCalls = seenParams.filter((params) =>
+    textFromUserMessage(params).startsWith("Source file: notes/source.md"));
+  assert.equal(wholeCalls.length, 2);
+  assert.equal(wholeCalls[0].max_completion_tokens, 100);
+  assert.ok(Number(wholeCalls[1].max_completion_tokens) > 100);
+  assert.equal(adapter.writes.length, 1);
+  assert.match(adapter.writes[0].data, /Retry truncated format/);
+  const outputBudgets = events
+    .filter((event) => event.kind === "prompt_budget" && event.callSite === "format.output")
+    .map((event) => event.outputBudget);
+  assert.deepEqual(outputBudgets.slice(0, 2), [100, 150]);
+});
+
+test("Format length retry remains mandatory when structured repair retries are disabled", async () => {
+  const seenParams: Record<string, unknown>[] = [];
+  const original = "---\ntags: [retry-zero]\n---\n# Mandatory length retry\n\nKeep this line.";
+  const { adapter } = await collectFormatEvents(
+    original,
+    llmWithCreate((params, callIndex) => (async function* () {
+      assert.doesNotMatch(textFromUserMessage(params), /Segment ID:/);
+      if (callIndex === 0) {
+        yield chunk("", "length");
+        yield usageChunk(100);
+        return;
+      }
+      yield chunk(frame("- formatted after mandatory retry", original), "stop");
+      yield usageChunk(20);
+    })(), seenParams),
+    20_000,
+    undefined,
+    { maxTokens: 100, contextWindowTokens: 4_000, structuredRetries: 0 },
+  );
+
+  assert.equal(seenParams.length, 2);
+  assert.equal(seenParams[0].max_completion_tokens, 100);
+  assert.equal(seenParams[1].max_completion_tokens, 150);
+  assert.equal(adapter.writes.length, 1);
+});
+
+test("Format segments the note after length retry is exhausted", async () => {
+  const seenParams: Record<string, unknown>[] = [];
+  const original = [
+    "# Segment after truncation",
+    "",
+    "## One",
+    "AlphaUniqueToken",
+    "",
+    "## Two",
+    Array.from({ length: 70 }, (_, index) => `BetaUniqueToken${index} ${"b".repeat(40)}`).join("\n"),
+  ].join("\n");
+
+  const { events, adapter } = await collectFormatEvents(
+    original,
+    llmWithCreate((params, callIndex) => {
+      const userText = textFromUserMessage(params);
+      if (callIndex < 2) {
+        assert.doesNotMatch(userText, /Segment ID:/);
+        return (async function* () {
+          yield chunk("", "length");
+          yield usageChunk(callIndex === 0 ? 100 : 150);
+        })();
+      }
+      const id = userText.match(/Segment ID:\s*(segment[-\d]+)/)?.[1] ?? "";
+      const segment = userText.match(/<<<SOURCE_SEGMENT>>>\n([\s\S]*?)\n<<<END_SOURCE_SEGMENT>>>/)?.[1] ?? "";
+      assert.ok(id);
+      return (async function* () {
+        yield chunk(segmentFrame(id, `- formatted ${id}`, segment), "stop");
+        yield usageChunk();
+      })();
+    }, seenParams),
+    20_000,
+    undefined,
+    { maxTokens: 100, contextWindowTokens: 4_000, structuredRetries: 1 },
+  );
+
+  const wholeCalls = seenParams.filter((params) => !/Segment ID:/.test(textFromUserMessage(params)));
+  assert.equal(wholeCalls.length, 2);
+  assert.ok(seenParams.some((params) => /Segment ID:/.test(textFromUserMessage(params))));
+  assert.equal(adapter.writes.length, 1);
+  assert.match(adapter.writes[0].data, /BetaUniqueToken69/);
+  assert.equal(events.some((event) =>
+    event.kind === "error" && /response truncated/i.test(event.message)), false);
 });
 
 test("Format generic pre-chunk incompatibility falls back once with AbortSignal", async () => {

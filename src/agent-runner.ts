@@ -23,7 +23,7 @@ import type { VaultTools } from "./vault-tools";
 import { domainWikiFolder } from "./wiki-path";
 import { writeEvalRecord, type EvalRecord, type EvalMetaFields, type LlmError } from "./eval-log";
 import { PageSimilarityService, DEFAULT_CHUNKING } from "./page-similarity";
-import { resolveLang, i18nFor } from "./i18n";
+import { formatProgressForMode, resolveLang, i18nFor } from "./i18n";
 import type { BoilerplateDemotionConfig } from "./boilerplate-demotion";
 import { normalizeRerankerConfig } from "./reranker";
 import {
@@ -377,7 +377,10 @@ export class AgentRunner {
               }
             : {}),
         };
-        const progress = i18nFor(resolveLang(this.settings.outputLanguage)).formatProgress;
+        const progress = formatProgressForMode(
+          i18nFor(resolveLang(this.settings.outputLanguage)).formatProgress,
+          this.settings.nativeAgent.perOperation,
+        );
         yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, wikiVaultPath, this.settings.wikiLinkValidationRetries, visionRuntime, visionTempStore, progress, formatDomain);
         break;
       }

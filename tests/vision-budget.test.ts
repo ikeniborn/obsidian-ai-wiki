@@ -462,7 +462,7 @@ test("native raster Vision uses bounded prepared structured messages and rejects
     /uncertainty/i,
   );
 
-  assert.equal(seen.length, 1);
+  assert.equal(seen.length, 2);
   assert.equal(seen[0].stream, false);
   assert.equal(seen[0].max_completion_tokens, 321);
   assert.ok(seen[0].response_format);
@@ -481,6 +481,54 @@ test("native raster Vision uses bounded prepared structured messages and rejects
     assert.equal(budgetEvent.actualInputTokens, 123);
   }
   assert.doesNotMatch(JSON.stringify(events), /AQID|visible text|box contains text/);
+});
+
+test("Vision retries object-valued recognition fields without lossy string coercion", async () => {
+  const seen: Record<string, unknown>[] = [];
+  const llm = {
+    chat: {
+      completions: {
+        create: async (params: Record<string, unknown>) => {
+          seen.push(params);
+          if (seen.length === 1) {
+            return response([{
+              pageId: "image",
+              ocr: ["Gateway"],
+              objects: [{ type: "diagram node", label: "Gateway" }],
+              relationships: [{ source: "Gateway", target: "API", kind: "routes to" }],
+              layout: ["Gateway is left of API"],
+              uncertainty: [],
+            } as unknown as VisionRecognitionRecord]);
+          }
+          return response([{
+            pageId: "image",
+            ocr: ["Gateway"],
+            objects: ["diagram node labeled Gateway"],
+            relationships: ["Gateway routes to API"],
+            layout: ["Gateway is left of API"],
+            uncertainty: [],
+          }]);
+        },
+      },
+    },
+  } as unknown as LlmClient;
+
+  const description = await analyzeImage(
+    new Uint8Array([1, 2, 3]).buffer,
+    "image/png",
+    llm,
+    "vision-model",
+    new AbortController().signal,
+    "en",
+    "en",
+  );
+
+  assert.equal(seen.length, 2);
+  const retryMessages = seen[1].messages as OpenAI.Chat.ChatCompletionMessageParam[];
+  assert.match(JSON.stringify(retryMessages), /objects.*relationships.*strings.*never objects/i);
+  assert.match(description, /diagram node labeled Gateway/);
+  assert.match(description, /Gateway routes to API/);
+  assert.doesNotMatch(description, /\[object Object\]/);
 });
 
 test("seven PDF pages stay bounded, retain every record, and resize only the failing page once", async () => {
