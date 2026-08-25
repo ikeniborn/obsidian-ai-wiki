@@ -80,7 +80,7 @@ Run `npm install` and `npm run build`, then copy or link the contents of `dist/`
 
 ### Development and release contract
 
-Version `0.3.8` supports Obsidian `1.13.0` and later, including mobile (`isDesktopOnly: false`). The settings UI uses Obsidian's supported **Settings Definitions** API: indexed groups and controls are returned as definitions, and custom supported controls render through each definition's `render` callback. It does not use the legacy `display()` lifecycle.
+Version `0.3.9` supports Obsidian `1.13.0` and later, including mobile (`isDesktopOnly: false`). The settings UI uses Obsidian's supported **Settings Definitions** API: indexed groups and controls are returned as definitions, and custom supported controls render through each definition's `render` callback. It does not use the legacy `display()` lifecycle.
 
 The official source-lint command is `npm run lint`. It applies the complete recommended `eslint-plugin-obsidianmd` configuration to repository source outside the community scanner's fixed exclusions and accepts **zero errors and zero warnings** (`--max-warnings 0`).
 
@@ -95,7 +95,7 @@ Release validation has two phases. Before the production build, it scans only tr
 
 Run the remaining release gates in this order: `npm run audit:all`, `npm run release:validate:pre`, `npm run lint`, `npm run typecheck`, `npm test`, the mobile evaluation above, `npm run build`, and `npm run release:validate:post`. The full audit rejects known vulnerabilities across runtime and development dependencies; `npm run audit:prod` remains available for a runtime-only check. The repository tracks the exact generated release files, and the workflow requires the build to leave those tracked files with no diff.
 
-Release history is immutable: `versions.json["0.3.5"]` stays `"1.7.2"`. Current `0.3.8` package, lockfile, source/root/distribution manifest, and compatibility metadata are synchronized; `0.3.8` maps to `1.13.0` and every current manifest declares the same minimum app version.
+Release history is immutable: `versions.json["0.3.5"]` stays `"1.7.2"`. Current `0.3.9` package, lockfile, source/root/distribution manifest, and compatibility metadata are synchronized; `0.3.9` maps to `1.13.0` and every current manifest declares the same minimum app version.
 
 The release workflow triggers on a push to `master` that changes `src/manifest.json`; normal delivery reaches it by merging a pull request, but the YAML does not enforce merge provenance. Its one constant concurrency group queues waiting publishers (`queue: max`) without cancelling the active run. After all gates, asset digests, and provenance attestation pass, it performs only a non-force lightweight tag claim for the verified `GITHUB_SHA` commit and one create-only `gh release create`; draft, partial, conflicting, or ambiguous release state stops publication. A completed matching release is terminal success without mutation.
 
