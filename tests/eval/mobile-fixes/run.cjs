@@ -5,11 +5,20 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __esm = (fn, res) => function __init() {
-  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+var __esm = (fn, res, err) => function __init() {
+  if (err) throw err[0];
+  try {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+  } catch (e) {
+    throw err = [e], e;
+  }
 };
 var __commonJS = (cb, mod) => function __require() {
-  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  try {
+    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  } catch (e) {
+    throw mod = 0, e;
+  }
 };
 var __export = (target, all) => {
   for (var name in all)
@@ -15288,7 +15297,8 @@ var en = {
     sentinelInvalidRetry: "\n[Sentinel invalid \u2014 retrying]\n",
     sentinelInvalidAfterRetry: "Format: LLM returned an invalid sentinel (after retry)",
     writeFailed: (err) => `Format: writing the formatted file failed \u2014 ${err}`,
-    truncationHintSettings: "raise the limit: Settings \u2192 per-operation \u2192 format \u2192 maxTokens"
+    truncationHintSettings: "raise the limit: Settings \u2192 per-operation \u2192 format \u2192 maxTokens",
+    truncationHintSettingsGlobal: "raise the limit: Settings \u2192 Default chat model \u2192 Max completion tokens"
   },
   ingestProgress: {
     synthesizing: (domainId) => `Synthesizing wiki pages for domain "${domainId}"...
@@ -19995,6 +20005,11 @@ function getMimeType(path4) {
 function isVisionSupportedOnMobile(path4) {
   return getMimeType(path4) !== null;
 }
+var VISION_STRUCTURED_REPAIR = [
+  "STRUCTURED_RETRY: Return the full schema-valid JSON again.",
+  "In every record, ocr, objects, relationships, layout, and uncertainty must be arrays of strings, never objects.",
+  "Preserve meaningful labels, types, endpoints, and relation details in concise strings. Include every required field and exact pageId. No commentary."
+].join(" ");
 
 // src/source-paths.ts
 var import_path_browserify2 = __toESM(require_path_browserify(), 1);

@@ -316,6 +316,45 @@ test("repository release metadata preserves prior compatibility mappings and syn
   assert.equal(versionsJson["0.3.8"], "1.13.0");
 });
 
+test("repository uses the patched undici 6.28 production dependency", () => {
+  const packageJson = JSON.parse(
+    readFileSync(path.join(REPO_ROOT, "package.json"), "utf8"),
+  ) as { dependencies: Record<string, string> };
+  const packageLock = JSON.parse(
+    readFileSync(path.join(REPO_ROOT, "package-lock.json"), "utf8"),
+  ) as { packages: Record<string, { version?: string }> };
+
+  assert.equal(packageJson.dependencies.undici, "^6.28.0");
+  assert.equal(packageLock.packages["node_modules/undici"].version, "6.28.0");
+});
+
+test("release audit checks the complete dependency graph", () => {
+  const packageJson = JSON.parse(
+    readFileSync(path.join(REPO_ROOT, "package.json"), "utf8"),
+  ) as { scripts: Record<string, string> };
+
+  assert.equal(packageJson.scripts["audit:all"], "npm audit");
+  assert.equal(packageJson.scripts["audit:prod"], "npm audit --omit=dev");
+});
+
+test("public release docs track the current version and full dependency audit gate", () => {
+  const packageJson = JSON.parse(
+    readFileSync(path.join(REPO_ROOT, "package.json"), "utf8"),
+  ) as { version: string };
+  const readme = readFileSync(path.join(REPO_ROOT, "README.md"), "utf8");
+  const readmeRu = readFileSync(path.join(REPO_ROOT, "docs/README.ru.md"), "utf8");
+  const version = packageJson.version.replaceAll(".", "\\.");
+
+  assert.match(readme, new RegExp("Version `" + version + "` supports"));
+  assert.match(readme, new RegExp("Current `" + version + "` package"));
+  assert.match(readme, /npm run audit:all/);
+  assert.match(readme, /npm run audit:prod/);
+  assert.match(readmeRu, new RegExp("Версия `" + version + "` поддерживает"));
+  assert.match(readmeRu, new RegExp("текущей `" + version + "`"));
+  assert.match(readmeRu, /npm run audit:all/);
+  assert.match(readmeRu, /npm run audit:prod/);
+});
+
 test("prebuild validation rejects a changed 0.3.5 compatibility mapping", async (t) => {
   const root = await createFixture({
     "versions.json": JSON.stringify({ ...VERSIONS, "0.3.5": "1.13.0" }),
@@ -770,6 +809,7 @@ test("release workflow has one serialized master publisher with every gate befor
     "actions/checkout",
     "actions/setup-node",
     "npm ci",
+    "npm run audit:all",
     "npm run release:validate:pre",
     "npm run lint",
     "npm run typecheck",

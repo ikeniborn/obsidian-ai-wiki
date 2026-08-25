@@ -28,6 +28,8 @@ jobs:
 
       - run: npm ci
 
+      - run: npm run audit:all
+
       - run: npm run release:validate:pre
 
       - run: npm run lint

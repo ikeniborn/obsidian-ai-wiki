@@ -6,6 +6,8 @@
   "scripts": {
     "build": "node esbuild.config.mjs production",
     "dev": "node esbuild.config.mjs",
+    "audit:all": "npm audit",
+    "audit:prod": "npm audit --omit=dev",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
@@ -31,7 +33,7 @@
     "jsonrepair": "^3.14.0",
     "openai": "^6.34.0",
     "path-browserify": "^1.0.1",
-    "undici": "^6.27.0",
+    "undici": "^6.28.0",
     "yaml": "^2.9.0",
     "zod": "^3.25.76"
   }
