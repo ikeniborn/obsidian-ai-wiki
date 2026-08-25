@@ -10,7 +10,7 @@ const RELEASE_VERSION_PATTERN = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)
 const PRINTABLE_ASCII_PATTERN = /^[\x20-\x7e]+$/;
 const README_DISCLOSURES = ["Network use", "Accounts and payment", "External file access", "License"];
 const PROTECTED_RELEASE_VERSION = "0.3.5";
-const PREBUILD_ACTIVE_SURFACES = ["src", "eval", "scripts"];
+const PREBUILD_ACTIVE_SURFACES = ["src", "tests/eval", "scripts"];
 const ACTIVE_SURFACE_EXCLUSIONS = new Set(["scripts/dspy/CLAUDE.md", "scripts/validate-release.mjs"]);
 const ACTIVE_TEXT_EXTENSIONS = new Set([
   ".cjs",

@@ -9,7 +9,7 @@
 // seeds are never passed in (always kept by the caller).
 
 /** Low percentile of domain cosines used as the bar's lower anchor. Calibrated in
- *  eval/graph-floor (Task 6); p5 by default. */
+ *  tests/eval/graph-floor (Task 6); p5 by default. */
 export const FLOOR_LO_PCT = 0.05;
 
 /** Dynamic range below which the bar cannot be normalized → floor skips (keep-all). */

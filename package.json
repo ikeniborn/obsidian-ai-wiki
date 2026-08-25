@@ -6,12 +6,12 @@
   "scripts": {
     "build": "node esbuild.config.mjs production",
     "dev": "node esbuild.config.mjs",
-    "lint": "eslint \"src/**/*.ts\" --max-warnings 0",
+    "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
     "release:validate:pre": "node scripts/validate-release.mjs --phase prebuild",
     "release:validate:post": "node scripts/validate-release.mjs --phase postbuild",
-    "eval:mobile-fixes:build": "esbuild eval/mobile-fixes/run.ts --bundle --platform=node --alias:obsidian=./eval/mobile-fixes/obsidian-stub.ts --loader:.md=text --outfile=eval/mobile-fixes/run.cjs",
+    "eval:mobile-fixes:build": "esbuild tests/eval/mobile-fixes/run.ts --bundle --platform=node --alias:obsidian=./tests/eval/mobile-fixes/obsidian-stub.ts --loader:.md=text --outfile=tests/eval/mobile-fixes/run.cjs",
     "migrate:wiki-prefix": "tsx scripts/migrate-wiki-prefix.ts",
     "eval": "tsx scripts/eval.ts"
   },

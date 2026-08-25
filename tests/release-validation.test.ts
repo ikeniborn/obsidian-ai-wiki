@@ -139,17 +139,17 @@ test("prebuild validation passes for matching release metadata", async (t) => {
 
 test("prebuild validation scans only tracked active text surfaces", async (t) => {
   const root = await createFixture({
-    ".gitignore": "eval/ignored/\n",
+    ".gitignore": "tests/eval/ignored/\n",
     "docs/superpowers/legacy.md": "Claude Code claude-agent child_process spawn( iclaudePath claudePath claude-probe\n",
     "scripts/dspy/CLAUDE.md": "Claude Code claude-agent child_process spawn( iclaudePath claudePath claude-probe\n",
-    "eval/ignored/run.cjs": "Claude Code claude-agent child_process spawn( iclaudePath claudePath claude-probe\n",
-    "eval/bundle.bin": Buffer.from("\0Claude Code claude-agent child_process"),
+    "tests/eval/ignored/run.cjs": "Claude Code claude-agent child_process spawn( iclaudePath claudePath claude-probe\n",
+    "tests/eval/bundle.bin": Buffer.from("\0Claude Code claude-agent child_process"),
     "tests/negative-markers.ts": "Claude Code claude-agent child_process spawn( iclaudePath claudePath claude-probe\n",
     "src/openai.ts": "const provider = 'OpenAI';\n",
   });
-  await mkdir(path.join(root, "eval/untracked"), { recursive: true });
+  await mkdir(path.join(root, "tests/eval/untracked"), { recursive: true });
   await writeFile(
-    path.join(root, "eval/untracked/run.cjs"),
+    path.join(root, "tests/eval/untracked/run.cjs"),
     "Claude Code claude-agent child_process spawn( iclaudePath claudePath claude-probe\n",
   );
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -173,7 +173,7 @@ const ACTIVE_MARKER_CASES = [
     marker: "ClaudeCliClient",
   },
   {
-    path: "eval/claude-probe/run.ts",
+    path: "tests/eval/claude-probe/run.ts",
     contents: "export const probe = 'enabled';\n",
     category: "Claude CLI probe",
     marker: "claude-probe",
@@ -773,7 +773,7 @@ test("release workflow has one serialized master publisher with every gate befor
     "npm run lint",
     "npm run typecheck",
     "npm test",
-    "node eval/mobile-fixes/run.cjs",
+    "node tests/eval/mobile-fixes/run.cjs",
     "Build",
     "npm run release:validate:post",
     "Verify tracked generated release files",
