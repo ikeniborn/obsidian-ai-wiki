@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.8 — 2026-08-25
+
+### Fixes
+
+- recover truncated formatting output
+
+---
+
 ## 0.3.7 — 2026-08-25
 
 ### Fixes
