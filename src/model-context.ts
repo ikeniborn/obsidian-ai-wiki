@@ -175,9 +175,13 @@ export async function probeContextWindow(
   // model at all, and whether that entry advertised a window. Conflating them (the
   // pre-fix behavior) made an aggregating gateway that lists the model without any
   // context-length field look identical to one that has never heard of it.
+  //
+  // A listing that could not be read at all is a third case and carries no verdict:
+  // reporting `false` there would claim the backend has never heard of the model
+  // when the request simply failed. Omit the field, the way `/api/show` does.
   const matched = models === null ? null : modelEntry(models, model);
   const fromModels = matched === null ? null : findContextLength(matched.entry);
-  report(modelsUrl, models !== null, modelsStartedAt, matched !== null, fromModels);
+  report(modelsUrl, models !== null, modelsStartedAt, models === null ? undefined : matched !== null, fromModels);
   if (fromModels !== null) return fromModels;
 
   const ollamaRoot = root.replace(/\/v1$/, "");

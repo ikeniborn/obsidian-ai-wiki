@@ -364,8 +364,10 @@ export type RunEvent =
        * whether that entry advertised a window. `matchedById: true` with no
        * `contextLength` is the aggregating-gateway case ("model found, no window
        * advertised"); `matchedById: false` is "no such model in this listing".
-       * Absent on endpoints that are queried FOR one model and therefore never
-       * match by id (`/api/show`).
+       *
+       * Absent for two different reasons, both meaning "no verdict": the endpoint is
+       * queried FOR one model and can never match by id (`/api/show`), or the listing
+       * could not be read at all, in which case `ok` is `false`.
        */
       matchedById?: boolean;
       contextLength?: number;
