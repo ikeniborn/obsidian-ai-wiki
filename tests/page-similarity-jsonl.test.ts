@@ -8,6 +8,7 @@ import { upsertPageIndex } from "../src/wiki-index-store";
 import {
   chunkRecordToEmbeddingChunk,
   embeddingChunkToChunkRecord,
+  isChunkIndexRecord,
   parseWikiIndexJsonl,
   type ChunkIndexRecord,
   type PageIndexRecord,
@@ -237,7 +238,7 @@ test("chunk refresh retries transient embedding batch failures", async () => {
   const adapter = new MemoryAdapter(new Map([
     [indexPath, `${JSON.stringify(page)}\n`],
   ]));
-  const globalWithRequest = globalThis as typeof globalThis & {
+  const globalWithRequest = globalThis as unknown as {
     __obsidianRequestUrlForTest?: (options: { body: string }) => Promise<{
       status: number;
       text: string;
@@ -287,7 +288,7 @@ test("chunk refresh retries transient embedding batch failures", async () => {
 
   assert.equal(requests, 2);
   const records = parseWikiIndexJsonl(adapter.files.get(indexPath)!, indexPath);
-  const chunks = records.filter((record) => record.kind === "chunk" && record.articleId === "a");
+  const chunks = records.filter(isChunkIndexRecord).filter((record) => record.articleId === "a");
   assert.equal(chunks.length > 0, true);
   assert.equal(chunks.every((record) => Math.abs(record.vector[0] - 0.4) < 0.0001), true);
 });
@@ -330,7 +331,7 @@ test("model change incremental refresh preserves old-model chunks for pages with
     oldChunksB,
   );
   assert.equal(
-    records.filter((record) => record.kind === "chunk" && record.articleId === pageA.articleId)
+    records.filter(isChunkIndexRecord).filter((record) => record.articleId === pageA.articleId)
       .every((record) => record.vectorModel === "new-model"),
     true,
   );
@@ -467,11 +468,11 @@ test("concurrent refreshes through different VaultTools wrappers merge changed a
   assert.deepEqual(records.filter((record) => record.kind === "page"), [pageA, pageB]);
   assert.deepEqual(records.find((record) => record.kind === "future"), future);
   assert.deepEqual(
-    records.filter((record) => record.kind === "chunk" && record.articleId === "a").map((record) => record.ordinal),
+    records.filter(isChunkIndexRecord).filter((record) => record.articleId === "a").map((record) => record.ordinal),
     desiredA.map((record) => record.ordinal),
   );
   assert.deepEqual(
-    records.filter((record) => record.kind === "chunk" && record.articleId === "b").map((record) => record.ordinal),
+    records.filter(isChunkIndexRecord).filter((record) => record.articleId === "b").map((record) => record.ordinal),
     desiredB.map((record) => record.ordinal),
   );
 });
@@ -543,7 +544,7 @@ test("older same-page embedding refresh cannot overwrite newer page chunks", asy
   const records = parseWikiIndexJsonl(adapter.files.get(indexPath)!, indexPath);
   const latestPage = records.find((record) => record.kind === "page" && record.articleId === "a");
   assert.equal(latestPage?.kind === "page" ? latestPage.bodyHash : undefined, contentHash(newBody));
-  const chunks = records.filter((record) => record.kind === "chunk" && record.articleId === "a");
+  const chunks = records.filter(isChunkIndexRecord).filter((record) => record.articleId === "a");
   assert.equal(chunks.length > 0, true);
   assert.equal(chunks.every((record) => Math.abs(record.vector[0] - 0.8) < 0.0001), true);
 });

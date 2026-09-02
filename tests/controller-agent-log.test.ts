@@ -165,6 +165,7 @@ test("reasoning over one MiB is chunked before later critical telemetry", async 
   await fixture.log({
     kind: "llm_lifecycle",
     id: "request-1",
+    action: "answer_question",
     phase: "completed",
     atMs: 10,
   });

@@ -858,14 +858,12 @@ test("Query repair completes its request before primary lifecycle applies final 
   assert.equal(calls, 2);
   const replaceIndex = events.findIndex((event) => event.kind === "assistant_replace");
   assert.ok(replaceIndex > 0);
-  assert.equal(events[replaceIndex - 1]?.kind, "llm_lifecycle");
-  assert.equal(events[replaceIndex - 1]?.kind === "llm_lifecycle"
-    ? events[replaceIndex - 1].phase
-    : "", "applying");
-  assert.equal(events[replaceIndex + 1]?.kind, "llm_lifecycle");
-  assert.equal(events[replaceIndex + 1]?.kind === "llm_lifecycle"
-    ? events[replaceIndex + 1].phase
-    : "", "completed");
+  const before = events[replaceIndex - 1];
+  const after = events[replaceIndex + 1];
+  assert.equal(before?.kind, "llm_lifecycle");
+  assert.equal(before?.kind === "llm_lifecycle" ? before.phase : "", "applying");
+  assert.equal(after?.kind, "llm_lifecycle");
+  assert.equal(after?.kind === "llm_lifecycle" ? after.phase : "", "completed");
   const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
   const ids = [...new Set(lifecycle.map((event) => event.id))];
   assert.equal(ids.length, 2);

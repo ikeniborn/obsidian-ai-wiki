@@ -11,6 +11,7 @@ import type {
 } from "../src/types";
 import { createNativeLlmClient } from "../src/native-llm-executor";
 import { VaultTools, type VaultAdapter } from "../src/vault-tools";
+import { eventsOfKind } from "./run-event-filters";
 
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 
@@ -243,7 +244,7 @@ test("native Format yields transport lifecycle while create is pending", async (
       yield chunk(frame("- formatted", "# Formatted pending native note\n\nKeep this line."));
       yield usageChunk();
     })();
-  }) as NativeChatCompletionCreate;
+  }) as unknown as NativeChatCompletionCreate;
   const events: RunEvent[] = [];
   const draining = (async () => {
     for await (const event of runFormat(
@@ -300,8 +301,8 @@ test("Format retries finish_reason length with a larger safe output budget", asy
   assert.ok(Number(wholeCalls[1].max_completion_tokens) > 100);
   assert.equal(adapter.writes.length, 1);
   assert.match(adapter.writes[0].data, /Retry truncated format/);
-  const outputBudgets = events
-    .filter((event) => event.kind === "prompt_budget" && event.callSite === "format.output")
+  const outputBudgets = eventsOfKind(events, "prompt_budget")
+    .filter((event) => event.callSite === "format.output")
     .map((event) => event.outputBudget);
   assert.deepEqual(outputBudgets.slice(0, 2), [100, 150]);
 });
@@ -1301,14 +1302,12 @@ test("segmented format emits format.segment prompt-budget telemetry and aggregat
   assert.ok(lifecycle.every((event) => event.action === "format_note"));
   const previewIndex = events.findIndex((event) => event.kind === "format_preview");
   assert.ok(previewIndex > 0);
-  assert.equal(events[previewIndex - 1]?.kind, "llm_lifecycle");
-  assert.equal(events[previewIndex - 1]?.kind === "llm_lifecycle"
-    ? events[previewIndex - 1].phase
-    : "", "applying");
-  assert.equal(events[previewIndex + 1]?.kind, "llm_lifecycle");
-  assert.equal(events[previewIndex + 1]?.kind === "llm_lifecycle"
-    ? events[previewIndex + 1].phase
-    : "", "completed");
+  const before = events[previewIndex - 1];
+  const after = events[previewIndex + 1];
+  assert.equal(before?.kind, "llm_lifecycle");
+  assert.equal(before?.kind === "llm_lifecycle" ? before.phase : "", "applying");
+  assert.equal(after?.kind, "llm_lifecycle");
+  assert.equal(after?.kind === "llm_lifecycle" ? after.phase : "", "completed");
   for (const id of new Set(lifecycle.map((event) => event.id))) {
     const phases = lifecycle.filter((event) => event.id === id).map((event) => event.phase);
     assert.deepEqual(phases, [

@@ -9,7 +9,7 @@
     "audit:all": "npm audit",
     "audit:prod": "npm audit --omit=dev",
     "lint": "eslint . --max-warnings 0",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "test": "node --import tsx --test tests/*.test.ts",
     "release:validate:pre": "node scripts/validate-release.mjs --phase prebuild",
     "release:validate:post": "node scripts/validate-release.mjs --phase postbuild",

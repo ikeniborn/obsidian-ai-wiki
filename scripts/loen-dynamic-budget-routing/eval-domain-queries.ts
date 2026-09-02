@@ -143,7 +143,8 @@ function finalResult(
     ? fields.found_pages.filter((value): value is string => typeof value === "string")
     : [];
   const foundChunks = Array.isArray(fields.found_chunks)
-    ? fields.found_chunks.filter((value): value is QueryResult["foundChunks"][number] => !!value && typeof value === "object")
+    ? (fields.found_chunks as unknown[]).filter(
+      (value): value is QueryResult["foundChunks"][number] => !!value && typeof value === "object")
     : [];
   const answer = typeof fields.answer === "string"
     ? fields.answer
@@ -179,8 +180,10 @@ function finalResult(
     invalidWikiLinks,
     wikiLinkPrecision: ratio(wikiLinks.length - invalidWikiLinks.length, wikiLinks.length),
     llmCalls: stats.length,
-    inputTokens: stats.reduce((sum, event) => sum + (event.kind === "llm_call_stats" ? event.inputTokens : 0), 0),
-    outputTokens: stats.reduce((sum, event) => sum + (event.kind === "llm_call_stats" ? event.outputTokens : 0), 0),
+    inputTokens: stats.reduce((sum, event) =>
+      sum + (event.kind === "llm_call_stats" ? event.inputTokens ?? 0 : 0), 0),
+    outputTokens: stats.reduce((sum, event) =>
+      sum + (event.kind === "llm_call_stats" ? event.outputTokens ?? 0 : 0), 0),
     transportRetries: events.filter((event) => event.kind === "transport_retry_scheduled").length,
     structuralRetries: events.filter((event) => event.kind === "structural_error").length,
     validationRetries: events.filter((event) =>
@@ -201,7 +204,7 @@ async function main(args: string[]): Promise<void> {
     __obsidianRequestUrlForTest?: typeof headlessRequestUrl;
   };
   runtime.require ??= createRequire(import.meta.url);
-  runtime.window ??= globalThis;
+  runtime.window ??= globalThis as unknown as Window & typeof globalThis;
   runtime.__obsidianRequestUrlForTest ??= headlessRequestUrl;
   const { AgentRunner } = await import("../../src/agent-runner");
 

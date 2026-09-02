@@ -1484,7 +1484,7 @@ test("runStructuredStreaming aborts background work when the consumer returns", 
   const first = await generator.next();
   assert.equal(first.done, false);
   assert.equal(first.value.kind, "llm_lifecycle");
-  await generator.return();
+  await (generator as AsyncGenerator<RunEvent, unknown, unknown>).return(undefined);
   await Promise.race([
     providerAborted.promise,
     new Promise<never>((_, reject) =>
@@ -1521,6 +1521,7 @@ test("runWithLiveEvents aborts abandoned work and rejects late queue reuse", asy
         id: "live-abandonment",
         action: "select_relevant_pages",
         phase: "preparing",
+        atMs: 0,
       });
       return await new Promise<never>((_resolve, reject) => {
         operationSignal.addEventListener("abort", () => {
@@ -1530,6 +1531,7 @@ test("runWithLiveEvents aborts abandoned work and rejects late queue reuse", asy
               id: `late-${i}`,
               action: "select_relevant_pages",
               phase: "waiting",
+              atMs: 0,
             });
           }
           providerAborted.resolve();
@@ -1543,7 +1545,7 @@ test("runWithLiveEvents aborts abandoned work and rejects late queue reuse", asy
   const first = await generator.next();
   assert.equal(first.done, false);
   assert.equal(first.value.kind, "llm_lifecycle");
-  await generator.return();
+  await (generator as AsyncGenerator<RunEvent, unknown, unknown>).return(undefined);
   await Promise.race([
     providerAborted.promise,
     new Promise<never>((_, reject) =>
@@ -1564,6 +1566,7 @@ test("runWithLiveEvents aborts abandoned work and rejects late queue reuse", asy
     id: "bridge-abandonment",
     action: "select_relevant_pages",
     phase: "preparing",
+    atMs: 0,
   });
   assert.equal((await forwarding.next()).done, false);
   await forwarding.return();
@@ -1573,6 +1576,7 @@ test("runWithLiveEvents aborts abandoned work and rejects late queue reuse", asy
       id: `bridge-late-${i}`,
       action: "select_relevant_pages",
       phase: "waiting",
+      atMs: 0,
     });
   }
   await assert.rejects(
@@ -1687,7 +1691,7 @@ test("OpenAI executor emits one ordered non-stream lifecycle", async () => {
     }],
     usage: { prompt_tokens: 2, completion_tokens: 3, total_tokens: 5 },
   };
-  const llm = createNativeLlmClient((async () => completion) as NativeChatCompletionCreate);
+  const llm = createNativeLlmClient((async () => completion) as unknown as NativeChatCompletionCreate);
   const events: RunEvent[] = [];
   await runStructuredWithRetry({
     llm,

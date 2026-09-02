@@ -152,7 +152,7 @@ test("production native factory owns Node-safe transport construction", () => {
 test("production native factory runs idle timing and retry delay without window", async () => {
   let attempts = 0;
   const events: RunEvent[] = [];
-  const runtime = globalThis as typeof globalThis & { window?: typeof globalThis };
+  const runtime = globalThis as unknown as { window?: typeof globalThis };
   const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
 
   await withServer(async (response) => {
@@ -1767,7 +1767,10 @@ test("executor idle deadline wins before a later request deadline", async () => 
     callSite: "ingest.synthesize",
     onEvent: () => undefined,
   });
-  const client = createNativeLlmClient((async (_params, options) => {
+  const client = createNativeLlmClient((async (
+    _params: unknown,
+    options?: { signal?: AbortSignal },
+  ) => {
     return await new Promise((_resolve, reject) => {
       const laterDeadline = nodeSetTimeout(() => reject(new Error("request deadline")), 100);
       options?.signal?.addEventListener("abort", () => {
@@ -2568,7 +2571,7 @@ test("OpenAI client omits disabled reasoning controls from stream and non-stream
         );
         const response = await client.chat.completions.create({ ...params, stream } as never);
         if (stream) {
-          for await (const _chunk of response as AsyncIterable<unknown>) {
+          for await (const _chunk of response as unknown as AsyncIterable<unknown>) {
             // Drain the stream so the serialized request completes.
           }
         }

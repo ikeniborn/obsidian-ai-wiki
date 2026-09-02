@@ -1446,7 +1446,7 @@ test("native force re-init retries synthesis without replaying real effects", as
   assert.equal(events.filter((event) =>
     event.kind === "tool_use"
     && event.name === "Read"
-    && event.input.path === "src/a.md").length, 1);
+    && (event.input as { path?: string }).path === "src/a.md").length, 1);
   assert.equal(calls.bootstrap, 1);
   assert.equal(calls.bootstrapMap, 1);
   assert.equal(calls.typeMap, 1);
@@ -1533,7 +1533,7 @@ test("force init preserves the old snapshot in recovery after a final teardown c
     events.some((event) =>
       event.kind === "tool_result"
       && !event.ok
-      && event.preview.includes(recovery)),
+      && (event.preview ?? "").includes(recovery)),
     true,
   );
   assert.equal(events.some((event) => event.kind === "file_start"), false);

@@ -8,6 +8,7 @@ import type { LlmClient, RunEvent } from "../src/types";
 import type { VaultAdapter } from "../src/vault-tools";
 import type { ChunkIndexRecord, PageIndexRecord } from "../src/wiki-index-jsonl";
 import { mockChatResponse } from "./openai-mock-response";
+import type { ExactDomainMetadataSnapshot } from "../src/domain-store";
 
 const pathBrowserifyLoader = `
 export async function resolve(specifier, context, nextResolve) {
@@ -184,20 +185,23 @@ function runDelete(
     while (true) {
       const next = await generator.next();
       if (next.done) return;
-      if (next.value.kind === "delete_state_commit") {
+      // Bind the narrowed event once: reading `next.value` again inside the
+      // block re-widens it to the whole RunEvent union.
+      const commit = next.value.kind === "delete_state_commit" ? next.value : undefined;
+      if (commit) {
         const adapter = args[1].adapter as MemoryAdapter;
-        const domain = args[4].find((entry) => entry.id === next.value.domainId);
+        const domain = args[4].find((entry) => entry.id === commit.domainId);
         assert.ok(domain);
-        if (!adapter.files.has(next.value.metadataPath)) {
-          adapter.files.set(next.value.metadataPath, metadataRaw(domain));
+        if (!adapter.files.has(commit.metadataPath)) {
+          adapter.files.set(commit.metadataPath, metadataRaw(domain));
         }
         const receipt = await persistDeleteStateCommitEvent(
           domainStore(adapter),
           args[1],
-          next.value,
+          commit,
           args[5],
         );
-        next.value.receiptHash = receipt.journalHash;
+        commit.receiptHash = receipt.journalHash;
       }
       yield next.value;
     }
@@ -1257,12 +1261,8 @@ test("controller publication precondition rejects recreation before one atomic d
   }];
   const saves: DomainEntry[][] = [];
   const store = {
-    async readExactMetadata(path: string): Promise<{
-      path: string;
-      raw: string;
-      entry: DomainEntry;
-    }> {
-      return { path, raw: metadataRaw(current[0]), entry: current[0] };
+    async readExactMetadata(path: string): Promise<ExactDomainMetadataSnapshot> {
+      return { path, raw: metadataRaw(current[0]), entry: current[0], records: [], rawRecordLines: [] };
     },
     async writeExactMetadata(
       _snapshot: unknown,
@@ -1356,8 +1356,8 @@ test("source recreation during publication receipt retains journal and fails clo
 
   await assert.rejects(
     persistDeleteStateCommitEvent({
-      async readExactMetadata(path) {
-        return { path, raw: metadataRaw(current[0]), entry: current[0] };
+      async readExactMetadata(path: string): Promise<ExactDomainMetadataSnapshot> {
+        return { path, raw: metadataRaw(current[0]), entry: current[0], records: [], rawRecordLines: [] };
       },
       async writeExactMetadata(_snapshot, entry) {
         return metadataRaw(entry);
@@ -1407,7 +1407,7 @@ test("crash after metadata save but before receipt leaves publishing journal amb
 
   await assert.rejects(
     persistDeleteStateCommitEvent({
-      async readExactMetadata(path) {
+      async readExactMetadata(path: string): Promise<ExactDomainMetadataSnapshot> {
         const entry: DomainEntry = {
           id: "d",
           name: "D",
@@ -1415,7 +1415,7 @@ test("crash after metadata save but before receipt leaves publishing journal amb
           source_paths: [source],
           analyzed_sources: { [source]: "old-hash" },
         };
-        return { path, raw: metadataRaw(entry), entry };
+        return { path, raw: metadataRaw(entry), entry, records: [], rawRecordLines: [] };
       },
       async writeExactMetadata(_snapshot, entry) {
         saves++;

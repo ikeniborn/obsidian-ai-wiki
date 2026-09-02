@@ -31,10 +31,10 @@ test("prepared range factory is equivalent and scans source only once", () => {
   ].join("\n");
   const originalEncode = TextEncoder.prototype.encode;
   let encodedCharacters = 0;
-  TextEncoder.prototype.encode = function(input = ""): Uint8Array {
+  TextEncoder.prototype.encode = function(this: TextEncoder, input = "") {
     encodedCharacters += input.length;
     return originalEncode.call(this, input);
-  };
+  } as typeof TextEncoder.prototype.encode;
 
   let prepared: RangeFactory;
   try {
@@ -373,10 +373,10 @@ test("line-window sizing performs bounded byte-encoding work", () => {
   const source = Array.from({ length: 1_000 }, (_, i) => `line-${i.toString().padStart(4, "0")}`).join("\n");
   const originalEncode = TextEncoder.prototype.encode;
   let encodedCharacters = 0;
-  TextEncoder.prototype.encode = function(input = ""): Uint8Array {
+  TextEncoder.prototype.encode = function(this: TextEncoder, input = "") {
     encodedCharacters += input.length;
     return originalEncode.call(this, input);
-  };
+  } as typeof TextEncoder.prototype.encode;
 
   let chunks: ReturnType<typeof chunkMarkdownSource>;
   try {

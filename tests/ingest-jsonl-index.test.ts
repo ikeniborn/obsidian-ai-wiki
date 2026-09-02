@@ -17,7 +17,7 @@ const { VaultTools } = await import("../src/vault-tools");
 const { PageSimilarityService } = await import("../src/page-similarity");
 const { runIngest } = await import("../src/phases/ingest");
 const { inspectPatchablePage } = await import("../src/section-patches");
-const { parseWikiIndexJsonl } = await import("../src/wiki-index-jsonl");
+const { parseWikiIndexJsonl, isPageIndexRecord } = await import("../src/wiki-index-jsonl");
 
 function contentChunk(content: string) {
   return { id: "c", object: "chat.completion.chunk", created: 0, model: "m", choices: [{ index: 0, delta: { content }, finish_reason: null }] };
@@ -296,8 +296,8 @@ test("stale valid page description is reconciled before alias-aware canonical re
   assert.equal(adapter.files.has(duplicatePath), false);
   assert.equal(JSON.stringify(prompts.at(-1)).includes("Existing renamed alias facts."), true);
   const records = parseWikiIndexJsonl(adapter.files.get(indexPath)!, indexPath);
-  const pageRecord = records.find((record) =>
-    record.kind === "page" && record.articleId === "wiki_d_legacy_alias");
+  const pageRecord = records.filter(isPageIndexRecord)
+    .find((record) => record.articleId === "wiki_d_legacy_alias");
   assert.equal(pageRecord?.description, "Renamed Alpha canonical concept.");
   assert.equal(records.some((record) =>
     record.kind === "chunk" && record.articleId === "wiki_d_legacy_alias"), true);

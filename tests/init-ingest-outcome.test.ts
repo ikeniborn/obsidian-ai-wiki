@@ -1097,8 +1097,11 @@ async function runAttemptEventCase(
   return collect(generator);
 }
 
-function fileEvents(events: RunEvent[]): RunEvent[] {
-  return events.filter((event) => event.kind === "file_attempt" || event.kind === "file_outcome");
+type FileEvent = Extract<RunEvent, { kind: "file_attempt" | "file_outcome" }>;
+
+function fileEvents(events: RunEvent[]): FileEvent[] {
+  return events.filter((event): event is FileEvent =>
+    event.kind === "file_attempt" || event.kind === "file_outcome");
 }
 
 for (const operation of ["full", "incremental"] as const) {

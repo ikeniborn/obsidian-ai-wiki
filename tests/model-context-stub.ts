@@ -19,7 +19,7 @@ export function stubModelContextStore(
     get: () => record,
     resolve: async () => record,
     observeUsage: () => ({ ratio: 1, applied: true, clamped: false }),
-    observeContextError: () => {},
+    observeContextError: () => ({ applied: false, reason: "not-smaller" }),
   };
   return store as ModelContextStore;
 }

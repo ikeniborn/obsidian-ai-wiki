@@ -316,13 +316,19 @@ test("large text repair profiles wire parser, schema, and repair instructions", 
   assert.equal(lintProfile.kind, "framed-zod");
   assert.equal(lintProfile.schema, LintOutputSchema);
   assert.match(lintProfile.repairInstruction, /<<<REPORT>>>/);
-  assert.equal(lintProfile.parse(pageFramesFixture()).fixes[0].path, "!Wiki/demo/entities/wiki_demo_a.md");
+  assert.equal(
+    LintOutputSchema.parse(lintProfile.parse(pageFramesFixture())).fixes[0].path,
+    "!Wiki/demo/entities/wiki_demo_a.md",
+  );
 
   const chatProfile = lintChatProfile();
   assert.equal(chatProfile.kind, "framed-zod");
   assert.equal(chatProfile.schema, LintChatSchema);
   assert.match(chatProfile.repairInstruction, /<<<PAGE>>>/);
-  assert.equal(chatProfile.parse(pageFramesFixture()).pages[0].annotation, "A page");
+  assert.equal(
+    LintChatSchema.parse(chatProfile.parse(pageFramesFixture())).pages[0].annotation,
+    "A page",
+  );
 
   const answerSchema = makeQueryAnswerSchema(new Set(["wiki_demo_a"]));
   const answerProfile = queryAnswerProfile(answerSchema);
@@ -330,7 +336,9 @@ test("large text repair profiles wire parser, schema, and repair instructions", 
   assert.equal(answerProfile.schema, answerSchema);
   assert.match(answerProfile.repairInstruction, /<<<ANSWER>>>/);
   assert.equal(
-    answerProfile.parse("<<<ANSWER>>>\nSee [[wiki_demo_a]].\n<<<CITATIONS>>>\n- wiki_demo_a\n<<<END>>>").answer_markdown,
+    answerSchema.parse(
+      answerProfile.parse("<<<ANSWER>>>\nSee [[wiki_demo_a]].\n<<<CITATIONS>>>\n- wiki_demo_a\n<<<END>>>"),
+    ).answer_markdown,
     "See [[wiki_demo_a]].",
   );
 });

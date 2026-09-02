@@ -794,7 +794,7 @@ test("release workflow has one serialized master publisher with every gate befor
   assert.deepEqual(workflow.on, {
     push: { branches: ["master"], paths: ["src/manifest.json"] },
   });
-  assert.equal(workflow.on.workflow_dispatch, undefined);
+  assert.equal((workflow.on as Record<string, unknown>).workflow_dispatch, undefined);
   assert.deepEqual(workflow.concurrency, {
     group: "obsidian-ai-wiki-release",
     queue: "max",

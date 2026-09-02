@@ -40,7 +40,7 @@ function assertMetadataOnlyPromptBudgetDiagnostics(): void {
     apiKey: "sk-API_KEY_MARKER_8ae4",
     authorization: "Bearer AUTHORIZATION_MARKER_48c1",
   };
-  const metadata: PromptBudgetMetadata & typeof markers = {
+  const metadata: PromptBudgetMetadata & typeof markers & { kind: string } = {
     requestId: "request-1",
     kind: "not-an-event-field",
     callSite: "ingest.synthesize",

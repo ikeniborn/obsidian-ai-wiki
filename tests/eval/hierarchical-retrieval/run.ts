@@ -747,10 +747,10 @@ async function main(): Promise<void> {
           ordinal: 0,
         }];
       },
-    } as InstanceType<typeof PageSimilarityService>;
+    } as unknown as InstanceType<typeof PageSimilarityService>;
     const abortEvents = await drive(runQuery(
       ["neural retrieval"], false, vault, abortLlm.llm, "fake-model", [dom("work")], "", abortController.signal,
-      1, {}, 5, 0, 10, abortingChunkSimilarity, 3, 0, false, 60,
+      1, {}, 5, 0, 10, abortingChunkSimilarity as never, 3, 0, false, 60,
     ) as AsyncGenerator<RunEvent, void>);
     check("single-domain chunk abort emits no post-abort events", !abortEvents.some((event) =>
       event.kind === "error" || event.kind === "query_stats" || event.kind === "eval_meta" || event.kind === "result"

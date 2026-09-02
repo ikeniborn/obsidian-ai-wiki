@@ -20,7 +20,7 @@ function listTypeScriptFiles(path: string): string[] {
   if (!existsSync(root)) return [];
 
   return readdirSync(root, { recursive: true })
-    .filter((entry) => typeof entry === "string" && /\.tsx?$/.test(entry))
+    .filter((entry): entry is string => typeof entry === "string" && /\.tsx?$/.test(entry))
     .sort();
 }
 

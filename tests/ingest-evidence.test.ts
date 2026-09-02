@@ -29,6 +29,7 @@ import {
   oversizedParagraphEvidenceSource,
   smallEvidenceSource,
 } from "./fixtures/evidence-source-corpus";
+import { eventsOfKind } from "./run-event-filters";
 
 register(new URL("./md-obsidian-loader.mjs", import.meta.url));
 const {
@@ -375,7 +376,8 @@ function reducerInput(messages: OpenAI.Chat.ChatCompletionMessageParam[]): Array
   const content = messages.find((message) => typeof message.content === "string"
     && message.content.startsWith("REDUCE_INPUT "))?.content;
   assert.equal(typeof content, "string");
-  return JSON.parse(content.slice("REDUCE_INPUT ".length)) as Array<Record<string, unknown>>;
+  const text = content as string;
+  return JSON.parse(text.slice("REDUCE_INPUT ".length)) as Array<Record<string, unknown>>;
 }
 
 function mapperMeta(messages: OpenAI.Chat.ChatCompletionMessageParam[]): {
@@ -544,10 +546,13 @@ test("mapper planning splits a large source only a bounded number of times", () 
   ).join("\n");
   const originalSplit = String.prototype.split;
   let fullSourceSplits = 0;
-  String.prototype.split = function(separator, limit): string[] {
+  // String.prototype.split is an overload set; the spy only counts calls and
+  // forwards whichever overload the caller used.
+  String.prototype.split = function(this: string, separator: unknown, limit?: number): string[] {
     if (this.toString() === source && separator === "\n") fullSourceSplits += 1;
-    return originalSplit.call(this, separator, limit);
-  };
+    return (originalSplit as (this: string, sep: unknown, limit?: number) => string[])
+      .call(this, separator, limit);
+  } as typeof String.prototype.split;
 
   let chunks: SourceChunk[];
   try {
@@ -670,6 +675,7 @@ test("evidence telemetry wrapper preserves native transport diagnostics", async 
       connectionTimeoutMs: options.retry.connectionTimeoutMs,
       idleTimeoutMs: options.retry.idleTimeoutMs,
       clientRequestId: "aiwiki-test-correlation",
+      traceparent: "00-00000000000000000000000000000001-0000000000000001-01",
     });
     options?.retry?.onEvent({
       kind: "native_transport_trace",
@@ -1123,7 +1129,7 @@ test("single-chunk mapper rejects foreign packet ownership", async () => {
   const runtime = mockRuntime((messages) => {
     const mapped = validMapperPacket(messages);
     return {
-      packets: [{ ...mapped, chunkId: mapped.chunkId.slice(0, -1) }],
+      packets: [{ ...mapped, chunkId: (mapped.chunkId as string).slice(0, -1) }],
       noEvidence: [],
     };
   }, [], requests);
@@ -1222,8 +1228,8 @@ test("reducer missing packet IDs exhausts repair and fails typed", async () => {
     },
   );
   const reducerRequests = fixture.requests.filter(isReducerRequest);
-  const reducerEvents = fixture.events.filter((event) => event.kind === "prompt_budget"
-    && event.callSite === "ingest.evidence-reduce");
+  const reducerEvents = eventsOfKind(fixture.events, "prompt_budget")
+    .filter((event) => event.callSite === "ingest.evidence-reduce");
   assert.equal(reducerEvents.length, reducerRequests.length);
   assert.ok(reducerRequests.length >= 2);
   const reducerInputs = reducerRequests.map((request) => JSON.stringify(reducerInput(request)));
@@ -2007,7 +2013,7 @@ test("mapper context recovery rechunks into smaller complete child requests", as
   assert.ok(estimatePreparedMessages(mapperRequests[1]) < estimatePreparedMessages(mapperRequests[0]));
   assert.equal(result.flatMap((entity) => entity.exactSource).map((range) => range.text).join("\n"), source);
   assert.equal(new Set(result.flatMap((entity) => entity.packetIds)).size, result.flatMap((entity) => entity.packetIds).length);
-  const mapperEvents = events.filter((event) => event.kind === "prompt_budget" && event.callSite === "ingest.evidence-map");
+  const mapperEvents = eventsOfKind(events, "prompt_budget").filter((event) => event.callSite === "ingest.evidence-map");
   assert.equal(mapperEvents.length, mapperRequests.length);
   assert.ok(mapperEvents.filter((event) => event.retryReason === "provider_context_error").length <= 3);
   assert.ok(mapperEvents.some((event) => event.retryReason === "provider_context_error"));
@@ -2421,7 +2427,7 @@ test("reducer context recovery repartitions whole units into smaller requests", 
   assert.ok(estimatePreparedMessages(reducerRequests[1]) < estimatePreparedMessages(reducerRequests[0]));
   assert.ok(reducerInput(reducerRequests[1]).length < reducerInput(reducerRequests[0]).length);
   assert.ok(result[0].packetIds.length > 1);
-  const reducerEvents = events.filter((event) => event.kind === "prompt_budget" && event.callSite === "ingest.evidence-reduce");
+  const reducerEvents = eventsOfKind(events, "prompt_budget").filter((event) => event.callSite === "ingest.evidence-reduce");
   assert.equal(reducerEvents.length, reducerRequests.length);
   assert.ok(reducerEvents.filter((event) => event.retryReason === "provider_context_error").length <= 3);
   assert.ok(reducerEvents.some((event) => event.retryReason === "provider_context_error"));

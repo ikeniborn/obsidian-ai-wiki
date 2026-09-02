@@ -1116,7 +1116,7 @@ function auditTransportRetries(
             || descriptor.callSite !== recoveredDescriptor?.callSite
             || descriptor.action !== recoveredDescriptor?.action
             || descriptor.attempt === undefined
-            || event.attempt === undefined
+            || typeof event.attempt !== "number"
             || descriptor.attempt < event.attempt
           ) continue;
           const continuation = ["validating", "applying", "completed"].map((phase) =>
@@ -1394,7 +1394,7 @@ function eventContainsContextError(value: unknown, seen = new Set<object>()): bo
   return Object.values(value).some((item) => eventContainsContextError(item, seen));
 }
 
-function finiteNonnegative(value: unknown): boolean {
+function finiteNonnegative(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 

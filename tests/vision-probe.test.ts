@@ -26,7 +26,7 @@ test("probe sends selected model, auth, inline PNG, and small output cap", async
     apiKey: "secret",
     model: "vision-model",
     request: async (request) => {
-      seen.push(request);
+      seen.push({ ...request } as unknown as Record<string, unknown>);
       return {
         status: 200,
         text: JSON.stringify({ choices: [{ message: { content: "pixel" } }] }),
@@ -212,7 +212,7 @@ test("localized check helper selects missing, success, and failure notices", asy
 test("requestUrl adapter sends compatible options and checks abort around the host await", async () => {
   const calls: Array<Record<string, unknown>> = [];
   const transport = createRequestUrlVisionTransport(async (options) => {
-    calls.push(options);
+    calls.push({ ...options } as unknown as Record<string, unknown>);
     return { status: 200, text: "ok" };
   });
   const controller = new AbortController();
