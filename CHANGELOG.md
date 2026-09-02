@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.13 — 2026-09-02
+
+### Fixes
+
+- fix(format): keep the formatted note when token restoration exceeds budget
+- fix(settings): repaint sibling model-window fields after a committed edit
+- fix(ingest): sample bootstrap themes and language evidence across the source
+
+---
+
 ## 0.3.12 — 2026-09-02
 
 ### Fixes
