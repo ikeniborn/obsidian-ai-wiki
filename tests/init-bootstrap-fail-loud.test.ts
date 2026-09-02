@@ -1631,6 +1631,51 @@ test("the wiki conventions block is dropped only when the evidence does not fit 
   assert.equal(events.some((event) => event.kind === "error"), false);
 });
 
+test("a failing bootstrap group closes the lifecycles of the groups before it", async () => {
+  const rawAdapter = adapter();
+  rawAdapter.files.set("src/a.md", evidenceSourceLines(200));
+  const mock = splittingBootstrapLlm({
+    packetsPerChunk: 2,
+    factChars: 6300,
+    assignedType: "type-0",
+    bootstrapBody: (call) => {
+      // Group 0 answers, every later group throws: the shape TD-5 describes,
+      // where the run dies with earlier groups still holding an open row.
+      if (call > 0) throw new Error("synthetic bootstrap group failure");
+      return bootstrapDomainBody("type-0", "");
+    },
+  });
+  const events: RunEvent[] = [];
+
+  for await (const event of runInitWithSources(
+    "demo", ["src"], true, new VaultTools(rawAdapter, "/vault"), mock.llm, "m",
+    [], "Vault", new AbortController().signal, {
+      inputBudgetTokens: 8192,
+      maxTokens: 2_000,
+      structuredRetries: 0,
+    }, undefined, false, undefined,
+  )) {
+    events.push(event);
+  }
+
+  const split = events.find((event) => event.kind === "evidence_split");
+  assert.ok(split && split.kind === "evidence_split", JSON.stringify(events.slice(-3)));
+  assert.ok(split.groups > 1, `expected more than one group, got ${split.groups}`);
+  assert.ok(mock.bootstrapPayloads.length > 1, `expected a later group to be dispatched, got ${mock.bootstrapPayloads.length}`);
+
+  const terminal = new Set(["completed", "failed", "cancelled"]);
+  const opened = new Set<string>();
+  const closed = new Set<string>();
+  for (const event of events) {
+    if (event.kind !== "llm_lifecycle" || event.action !== "bootstrap_domain") continue;
+    opened.add(event.id);
+    if (terminal.has(event.phase)) closed.add(event.id);
+  }
+  assert.ok(opened.size > 0, "expected bootstrap lifecycles to be opened");
+  const dangling = [...opened].filter((id) => !closed.has(id));
+  assert.deepEqual(dangling, [], `bootstrap lifecycles left spinning: ${dangling.join(", ")}`);
+});
+
 test("a taxonomy repair across K groups stays inside the input budget", async () => {
   const rawAdapter = adapter();
   rawAdapter.files.set("src/a.md", evidenceSourceLines(200));
