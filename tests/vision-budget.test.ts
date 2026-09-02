@@ -381,6 +381,80 @@ test("AgentRunner sizes the vision call from the vision window while an explicit
   assert.equal(budget.inputSource, "override");
 });
 
+test("a vision call reports its usage to the observer it was given", async () => {
+  // The vision model only ever learns from its own calls. Before this observer was
+  // threaded through, `onUsageObserved` existed solely on the operation's chat
+  // model, so a vision model's calibration stayed 1 for the life of the vault.
+  const samples: Array<{ estimated: number; actual?: number; calibration: number }> = [];
+  const llm = {
+    chat: {
+      completions: {
+        create: async () => response([{
+          pageId: "image",
+          ocr: ["Gateway"],
+          objects: ["diagram node labeled Gateway"],
+          relationships: ["Gateway routes to API"],
+          layout: ["Gateway is left of API"],
+          uncertainty: [],
+        }]),
+      },
+    },
+  } as unknown as LlmClient;
+
+  await analyzeImage(
+    new Uint8Array([1, 2, 3]).buffer,
+    "image/png",
+    llm,
+    "vision-model",
+    new AbortController().signal,
+    "en",
+    "en",
+    {
+      inputBudgetTokens: 20_000,
+      maxTokens: 321,
+      tokenCalibration: 1.25,
+      onUsageObserved: (sample) => samples.push(sample),
+    },
+  );
+
+  assert.equal(samples.length, 1, "the vision call must report exactly one usage sample");
+  // The provider's own prompt_tokens from `response`, not an estimate of it.
+  assert.equal(samples[0].actual, 123);
+  assert.ok(samples[0].estimated > 0);
+  // The factor that sized THIS request, so the correction is valid against it.
+  assert.equal(samples[0].calibration, 1.25);
+});
+
+test("a vision context rejection is reported, not only recovered in the run", async () => {
+  // A single image has no smaller shape to fall back to, so the rejection is
+  // terminal here. What matters is that it is still recorded on the way out: before
+  // this, the window the provider refused was known only inside the failed call.
+  const rejections: Array<{ maxContextTokens?: number }> = [];
+  const llm = {
+    chat: {
+      completions: { create: async () => { throw contextError(); } },
+    },
+  } as unknown as LlmClient;
+
+  await assert.rejects(() => analyzeImage(
+    new Uint8Array([1, 2, 3]).buffer,
+    "image/png",
+    llm,
+    "vision-model",
+    new AbortController().signal,
+    "en",
+    "en",
+    {
+      inputBudgetTokens: 20_000,
+      maxTokens: 321,
+      onContextError: (details) => rejections.push(details),
+    },
+  ));
+
+  assert.equal(rejections.length, 1, "the rejection must reach the store, not only the caller");
+  assert.equal(rejections[0].maxContextTokens, 10_000, "with the window the provider named");
+});
+
 test("AgentRunner leaves vision on the Format budget when only the 8192 fallback is known", async () => {
   const settings = formatSettings("balanced", false);
 

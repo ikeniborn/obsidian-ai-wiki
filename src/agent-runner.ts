@@ -33,7 +33,7 @@ import {
   policyKey,
   resolveCallPolicy,
 } from "./model-call-policy";
-import { resolveBudget, type ResolvedBudget } from "./budget-resolver";
+import { resolveBudget, VISION_OUTPUT_MAX_SHARE, type ResolvedBudget } from "./budget-resolver";
 import type { ModelContextRecord, ModelContextStore } from "./model-context";
 
 const DISABLED_BOILERPLATE_DEMOTION: BoilerplateDemotionConfig = { enabled: false, factor: 0 };
@@ -53,6 +53,53 @@ export function resolveFollowUpPolicyOperation(parent: WikiOperation): OpKey {
  * still comes back in the last case, so a size failure can name what it was sized
  * against. Diagnostics come back as data so the caller can yield them in run order.
  */
+/**
+ * The two observers that let a model learn its own window and calibration. Built
+ * per model rather than per operation, because vision runs against a different
+ * model than the operation that dispatches it and must learn from its own calls.
+ */
+function contextObservers(
+  store: ModelContextStore,
+  baseUrl: string,
+  model: string,
+  events: RunEvent[],
+): Pick<LlmCallOptions, "onUsageObserved" | "onContextError"> {
+  return {
+    onUsageObserved: ({ estimated, actual, calibration }) => {
+      if (actual === undefined) return;
+      // `calibration` comes from the call, not from the record: the record has
+      // already moved by the time later samples of the same run arrive, and the
+      // correction is only valid against the factor that sized the request.
+      const outcome = store.observeUsage(baseUrl, model, estimated, actual, calibration);
+      events.push({
+        kind: "calibration_sample",
+        model,
+        estimated,
+        actual,
+        // Recorded with the sample so the log line stands alone: the implied
+        // factor this sample argues for is `appliedCalibration * ratio`, and
+        // reconstructing it used to need a join to `budget_resolved`.
+        appliedCalibration: calibration,
+        ...outcome,
+      });
+    },
+    onContextError: (details) => {
+      const outcome = store.observeContextError(baseUrl, model, details.maxContextTokens);
+      // A user-supplied window is never shrunk behind the user's back, so this
+      // event is the only trace that the provider disagreed with it.
+      if (!outcome.applied && outcome.reason === "configured") {
+        events.push({
+          kind: "context_window_conflict",
+          model,
+          contextWindow: outcome.contextWindow,
+          reportedWindow: outcome.reportedWindow,
+          ...(details.promptTokens === undefined ? {} : { promptTokens: details.promptTokens }),
+        });
+      }
+    },
+  };
+}
+
 export async function resolveVisionBudget(
   store: ModelContextStore,
   settings: LlmWikiPluginSettings,
@@ -94,7 +141,12 @@ export async function resolveVisionBudget(
   // are taken from changes. Dropping the overrides here would silently raise a cap
   // the user set to bound cost: before vision had a window of its own it inherited
   // `opts.inputBudgetTokens` / `opts.maxTokens`, which carry exactly these numbers.
-  const budget = resolveBudget(record, "format", nativeBudgetOverrides(settings, "format"));
+  const budget = resolveBudget(record, "format", nativeBudgetOverrides(settings, "format"), {
+    // Vision keeps format's overrides, for the reason above, but not its output
+    // ceiling share: half of a small window leaves less input than one image
+    // costs, which refuses every image before dispatch.
+    outputMaxShare: VISION_OUTPUT_MAX_SHARE,
+  });
   events.push({
     kind: "budget_resolved",
     operation: "format",
@@ -192,42 +244,7 @@ export class AgentRunner {
         nearDupThreshold: na.nearDupThreshold,
         nativeRequestRetries: s.llmIdleRetries ?? 3,
         nativeRequestIdleTimeoutMs: (s.llmIdleTimeoutSec ?? 300) * 1000,
-        onUsageObserved: ({ estimated, actual, calibration }) => {
-          if (actual === undefined) return;
-          // `calibration` comes from the call, not from the record: the record has
-          // already moved by the time later samples of the same run arrive, and the
-          // correction is only valid against the factor that sized the request.
-          const outcome = this.modelContextStore.observeUsage(
-            baseUrl, resolved.model, estimated, actual, calibration,
-          );
-          events.push({
-            kind: "calibration_sample",
-            model: resolved.model,
-            estimated,
-            actual,
-            // Recorded with the sample so the log line stands alone: the implied
-            // factor this sample argues for is `appliedCalibration * ratio`, and
-            // reconstructing it used to need a join to `budget_resolved`.
-            appliedCalibration: calibration,
-            ...outcome,
-          });
-        },
-        onContextError: (details) => {
-          const outcome = this.modelContextStore.observeContextError(
-            baseUrl, resolved.model, details.maxContextTokens,
-          );
-          // A user-supplied window is never shrunk behind the user's back, so this
-          // event is the only trace that the provider disagreed with it.
-          if (!outcome.applied && outcome.reason === "configured") {
-            events.push({
-              kind: "context_window_conflict",
-              model: resolved.model,
-              contextWindow: outcome.contextWindow,
-              reportedWindow: outcome.reportedWindow,
-              ...(details.promptTokens === undefined ? {} : { promptTokens: details.promptTokens }),
-            });
-          }
-        },
+        ...contextObservers(this.modelContextStore, baseUrl, resolved.model, events),
       },
     };
   }
@@ -263,6 +280,9 @@ export class AgentRunner {
     similarity: PageSimilarityService | undefined,
     visionTempStore?: VisionTempStore,
     initIngestRuntime?: InitIngestRuntime,
+    // Drained by `run` alongside the operation's own diagnostics. Optional so a
+    // caller that does not drain them simply gets no vision samples.
+    visionDiagnostics: RunEvent[] = [],
   ): AsyncGenerator<RunEvent, void, void> {
     const boilerplateDemotion = DISABLED_BOILERPLATE_DEMOTION;
     const reranker = normalizeRerankerConfig({
@@ -376,6 +396,18 @@ export class AgentRunner {
                 tokenCalibration: vision.budget.calibration,
               }
             : {}),
+          // Against the vision model, not the operation's: without these a vision
+          // model's calibration stays 1 forever and a provider context rejection is
+          // recovered inside the run and then forgotten, so the next run repeats the
+          // same oversized first attempt.
+          ...(visionSettings.enabled && visionSettings.model
+            ? contextObservers(
+                this.modelContextStore,
+                this.settings.nativeAgent.baseUrl,
+                visionSettings.model,
+                visionDiagnostics,
+              )
+            : {}),
         };
         const progress = formatProgressForMode(
           i18nFor(resolveLang(this.settings.outputLanguage)).formatProgress,
@@ -412,9 +444,12 @@ export class AgentRunner {
     const { model, opts } = built;
     // The diagnostic queues stay live for the whole run: `onUsageObserved` pushes a
     // calibration_sample onto them while the operation is streaming.
+    // Vision calls a different model than the operation that dispatches them, so
+    // their samples belong to that model and need a queue of their own.
+    const visionDiagnostics: RunEvent[] = [];
     const diagnosticQueues = initIngestRuntime
-      ? [built.events, initIngestRuntime.events]
-      : [built.events];
+      ? [built.events, initIngestRuntime.events, visionDiagnostics]
+      : [built.events, visionDiagnostics];
     function* drainDiagnostics(): Generator<RunEvent, void, void> {
       for (const queue of diagnosticQueues) {
         while (queue.length > 0) yield queue.shift()!;
@@ -462,6 +497,7 @@ export class AgentRunner {
         similarity,
         visionTempStore,
         initIngestRuntime,
+        visionDiagnostics,
       )) {
         if (ev.kind === "result") finalResultText = ev.text;
         if (ev.kind === "error") {

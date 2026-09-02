@@ -618,10 +618,15 @@ test("the context window renders next to every OpenAI model field", () => {
   const helperEnd = settingsSource.indexOf("const addCompressionControl = (", helperStart);
   assert.ok(helperStart >= 0 && helperEnd > helperStart);
   const helper = settingsSource.slice(helperStart, helperEnd);
+  // The description is conditional now: the vision role appends a warning when the
+  // configured window cannot fit a single image. The name, the control, and the
+  // ordering are what this pin is for, so the description is matched by key.
   assert.match(
     helper,
-    /addSetting\(\s*\n\s*T\.settings\.contextWindowTokens_name,\s*\n\s*T\.settings\.contextWindowTokens_desc,\s*\n\s*\(setting\) => \{\s*\n\s*addAutomaticBudgetControl\(\s*\n\s*setting,/,
+    /addSetting\(\s*\n\s*T\.settings\.contextWindowTokens_name,[\s\S]*?\(setting\) => \{\s*\n\s*addAutomaticBudgetControl\(\s*\n\s*setting,/,
   );
+  assert.match(helper, /T\.settings\.contextWindowTokens_desc/);
+  assert.match(helper, /T\.settings\.contextWindowTokens_visionTooSmall/);
   assert.match(helper, /configuredContextWindowFor\(s\.nativeAgent, model\(\)\)/);
   assert.match(helper, /setConfiguredContextWindow\(s\.nativeAgent, model\(\), next\)/);
   assert.match(helper, /\)\.contextWindow,/);
@@ -630,7 +635,9 @@ test("the context window renders next to every OpenAI model field", () => {
 
   assert.match(connectionBlock, /addContextWindowControl\(\(\) => s\.nativeAgent\.model\)/);
   assert.match(connectionBlock, /addContextWindowControl\(\(\) => effectiveModel\(s, key\)\)/);
-  assert.match(visionBlock, /addContextWindowControl\(\(\) => s\.vision\.model\)/);
+  // `true` marks the vision role: it is the only one whose window can refuse every
+  // attachment client-side, so it is the only one that carries the warning.
+  assert.match(visionBlock, /addContextWindowControl\(\(\) => s\.vision\.model, true\)/);
   assert.doesNotMatch(connectionBlock, /probeContextWindow/);
   assert.doesNotMatch(helper, /probeContextWindow/);
 });

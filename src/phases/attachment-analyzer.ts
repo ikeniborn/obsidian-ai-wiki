@@ -1,5 +1,6 @@
 import type { VaultTools } from "../vault-tools";
 import type {
+  LlmCallOptions,
   LlmClient,
   OutputLanguage,
   RunEvent,
@@ -88,6 +89,13 @@ export interface VisionAnalysisOptions {
   nativeRequestIdleTimeoutMs?: number;
   /** Provider-derived correction applied to every token estimate for this call. */
   tokenCalibration?: number;
+  /**
+   * Reported against the VISION model, not the operation's. Without them a vision
+   * model never records a calibration sample and never learns a window the provider
+   * rejected, so every run repeats the same oversized first attempt.
+   */
+  onUsageObserved?: LlmCallOptions["onUsageObserved"];
+  onContextError?: LlmCallOptions["onContextError"];
 }
 
 interface ResolvedVisionAnalysisOptions {
@@ -97,6 +105,8 @@ interface ResolvedVisionAnalysisOptions {
   nativeRequestRetries?: number;
   nativeRequestIdleTimeoutMs?: number;
   tokenCalibration?: number;
+  onUsageObserved?: LlmCallOptions["onUsageObserved"];
+  onContextError?: LlmCallOptions["onContextError"];
 }
 
 const VISION_STRUCTURED_REPAIR = [
@@ -115,6 +125,8 @@ function resolveVisionOptions(
     nativeRequestRetries: options?.nativeRequestRetries,
     nativeRequestIdleTimeoutMs: options?.nativeRequestIdleTimeoutMs,
     tokenCalibration: options?.tokenCalibration,
+    onUsageObserved: options?.onUsageObserved,
+    onContextError: options?.onContextError,
   };
 }
 
@@ -278,6 +290,11 @@ async function callVisionLlm(
             : "failed",
       ));
     }
+    // The provider disagreed with the window this call was sized against. Recovering
+    // inside the run and saying nothing is what made the next run repeat the same
+    // oversized first attempt, so the rejection is recorded against the vision model.
+    const rejected = classifyContextError(error);
+    if (rejected !== null) options.onContextError?.(rejected);
     if (providerDispatched) {
       options.onEvent?.(createPromptBudgetEvent({
         requestId: lifecycle.id,
@@ -305,6 +322,15 @@ async function callVisionLlm(
     outputBudget: options.maxTokens,
     contextUnits: pages.length,
   }));
+  // Vision dispatches its own request, so nothing else reports this sample. Without
+  // it a vision model's calibration stays 1 for the life of the vault: the operation
+  // observers are wired against the chat model, never against this one. The factor
+  // is the one that sized THIS request, so the correction is valid against it.
+  options.onUsageObserved?.({
+    estimated: estimatedInputTokens,
+    actual: response.usage?.prompt_tokens,
+    calibration: options.tokenCalibration ?? 1,
+  });
   if (signal.aborted) {
     options.onEvent?.(lifecycleEvent(lifecycle.id, lifecycle.action, "cancelled"));
     signal.throwIfAborted();
