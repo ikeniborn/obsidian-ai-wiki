@@ -783,23 +783,32 @@ test("Format synchronous streaming invocation failure emits waiting before faile
   );
 });
 
-test("Format closes validated lifecycle when restore parameter construction exceeds budget", async () => {
+test("Format restores tokens deterministically when the restore turn exceeds budget", async () => {
+  // The restore turn re-sends the whole prompt plus the whole response, so on a
+  // large note it cannot fit the single-turn input budget. Losing the run over
+  // an optional correction call would throw away a document that is already valid.
   const original = "---\ntags: [restore]\n---\n# Source\n\nUniqueRestoreToken";
-  const { events } = await collectFormatEvents(
+  const seenParams: Record<string, unknown>[] = [];
+  const { events, adapter } = await collectFormatEvents(
     original,
     llmWithResponder(() => frame(
       "- report",
       `---\ntags: [restore]\n---\n# Formatted\n\n${"x".repeat(100_000)}`,
-    ), []),
+    ), seenParams),
     2_000,
   );
 
+  assert.equal(seenParams.length, 1, "the refused restore turn must not be sent");
   const lifecycle = events.filter((event) => event.kind === "llm_lifecycle");
-  assert.equal(lifecycle.at(-1)?.phase, "failed");
+  assert.equal(lifecycle.at(-1)?.phase, "completed");
   assertFormatLifecycleIntegrity(events);
-  assert.equal(events.some((event) =>
-    event.kind === "error" && /budget/i.test(event.message)), true);
-  assert.equal(events.some((event) => event.kind === "format_preview"), false);
+  assert.equal(events.some((event) => event.kind === "error"), false);
+  assert.equal(events.some((event) => event.kind === "format_preview"), true);
+  assert.equal(adapter.writes.length, 1);
+  assert.match(adapter.writes[0].data, /restored-lines: token loss after retry/);
+  assert.match(adapter.writes[0].data, /UniqueRestoreToken/);
+  assert.ok(events.some((event) =>
+    event.kind === "info_text" && /restor/i.test(event.summary)));
 });
 
 test("Format abort during token restoration stops before preview", async () => {

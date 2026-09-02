@@ -159,6 +159,8 @@ const enFormatProgressFallback: FormatProgress = {
   sentinelInvalidRetry: "\n[Sentinel invalid — retrying]\n",
   sentinelInvalidAfterRetry: "Format: LLM returned an invalid sentinel (after retry)",
   writeFailed: (err: string) => `Format: writing the formatted file failed — ${err}`,
+  restoreBudgetSkippedSummary: "Format: token restoration skipped — it does not fit the input budget",
+  restoreBudgetSkippedDetail: "The correction request repeats the whole prompt and the whole answer. Missing lines were appended to the formatted note instead.",
   truncationHintSettings: "raise the limit: Settings → per-operation → format → maxTokens",
   visionWindowField: "Settings → Vision → Model context window",
   visionSkipped: "Vision skipped",
@@ -1170,34 +1172,51 @@ export async function* runFormat(
         content: render(restoreTokensTemplate, { tokens: tokenList }),
       },
     ];
-    let restoreParams: Record<string, unknown>;
+    // The restore turn re-sends the whole prompt plus the whole answer, so its
+    // cost is roughly twice the first request while the budget stays sized for
+    // one turn. A refusal here is expected on a large note and must not cost the
+    // formatted document: fall back to the deterministic restoration the
+    // segmented path already uses. Every other failure stays terminal.
+    let restoreParams: Record<string, unknown> | null = null;
     try {
       signal.throwIfAborted();
       restoreParams = buildChatParams(model, restoreMessages, formatOpts, true);
     } catch (e) {
       const aborted = signal.aborted || (e as Error).name === "AbortError";
-      const terminal = closeActiveFormatLifecycle(aborted ? "cancelled" : "failed");
-      if (terminal) yield terminal;
-      if (!aborted) {
-        const message = `Format: token restoration request failed — ${(e as Error).message}`;
-        yield { kind: "error", message };
-        yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
+      if (aborted || !(e instanceof PromptBudgetExceededError)) {
+        const terminal = closeActiveFormatLifecycle(aborted ? "cancelled" : "failed");
+        if (terminal) yield terminal;
+        if (!aborted) {
+          const message = `Format: token restoration request failed — ${(e as Error).message}`;
+          yield { kind: "error", message };
+          yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
+        }
+        return;
       }
-      return;
+      finalFormatted = appendMissingLines(finalFormatted, missing1);
+      yield {
+        kind: "info_text",
+        icon: "⚠️",
+        summary: progress.restoreBudgetSkippedSummary,
+        details: [progress.restoreBudgetSkippedDetail],
+      };
+      yield { kind: "rule_fired", ruleId: "restoreBudgetSkipped", count: 1 };
     }
-    yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
-    const fullText2 = yield* callOnce(restoreParams);
-    if (signal.aborted) return;
-    const parsed2Result = parseFormatOutput(fullText2, visionDescriptions.size > 0);
-    const parsed2 = parsed2Result.data;
-    if (parsed2) {
-      finalFormatted = parsed2.formatted;
-      finalReport = parsed2.report;
-    }
-    yield { kind: "tool_result", ok: true, preview: "tokens restored" };
-    const missing2 = missingTokensWithContext(original, finalFormatted);
-    if (missing2.length > 0) {
-      finalFormatted = appendMissingLines(finalFormatted, missing2);
+    if (restoreParams) {
+      yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
+      const fullText2 = yield* callOnce(restoreParams);
+      if (signal.aborted) return;
+      const parsed2Result = parseFormatOutput(fullText2, visionDescriptions.size > 0);
+      const parsed2 = parsed2Result.data;
+      if (parsed2) {
+        finalFormatted = parsed2.formatted;
+        finalReport = parsed2.report;
+      }
+      yield { kind: "tool_result", ok: true, preview: "tokens restored" };
+      const missing2 = missingTokensWithContext(original, finalFormatted);
+      if (missing2.length > 0) {
+        finalFormatted = appendMissingLines(finalFormatted, missing2);
+      }
     }
   }
 

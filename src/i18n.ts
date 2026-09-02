@@ -318,6 +318,8 @@ const en = {
     sentinelInvalidRetry: "\n[Sentinel invalid — retrying]\n",
     sentinelInvalidAfterRetry: "Format: LLM returned an invalid sentinel (after retry)",
     writeFailed: (err: string) => `Format: writing the formatted file failed — ${err}`,
+    restoreBudgetSkippedSummary: "Format: token restoration skipped — it does not fit the input budget",
+    restoreBudgetSkippedDetail: "The correction request repeats the whole prompt and the whole answer. Missing lines were appended to the formatted note instead.",
     truncationHintSettings: "raise the limit: Settings → per-operation → format → maxTokens",
     truncationHintSettingsGlobal: "raise the limit: Settings → Default chat model → Max completion tokens",
     visionWindowField: "Settings → Vision → Model context window",
@@ -465,6 +467,9 @@ export type FormatProgress = {
   sentinelInvalidRetry: string;
   sentinelInvalidAfterRetry: string;
   writeFailed: (err: string) => string;
+  /** Why the optional multi-turn token restoration was skipped, and what replaced it. */
+  restoreBudgetSkippedSummary: string;
+  restoreBudgetSkippedDetail: string;
   truncationHintSettings: string;
   truncationHintSettingsGlobal?: string;
   /** Settings path a user must open to change the vision window, in their own UI language. */
@@ -807,6 +812,8 @@ const ru: I18n = {
     sentinelInvalidRetry: "\n[Sentinel невалиден — повторяю запрос]\n",
     sentinelInvalidAfterRetry: "Format: LLM вернул невалидный sentinel (после retry)",
     writeFailed: (err: string) => `Format: запись формата не удалась — ${err}`,
+    restoreBudgetSkippedSummary: "Format: восстановление токенов пропущено — не помещается во входной бюджет",
+    restoreBudgetSkippedDetail: "Запрос-исправление повторяет весь промпт и весь ответ. Пропавшие строки добавлены в отформатированную заметку.",
     truncationHintSettings: "увеличьте лимит: Settings → per-operation → format → maxTokens",
     truncationHintSettingsGlobal: "увеличьте лимит: Settings → Default chat model → Max completion tokens",
     visionWindowField: "Настройки → Зрение → Контекстное окно модели",
@@ -1258,6 +1265,8 @@ const es: I18n = {
     sentinelInvalidRetry: "\n[Sentinel inválido — reintentando]\n",
     sentinelInvalidAfterRetry: "Format: el LLM devolvió un sentinel inválido (tras reintento)",
     writeFailed: (err: string) => `Format: falló la escritura del archivo formateado — ${err}`,
+    restoreBudgetSkippedSummary: "Format: restauración de tokens omitida — no cabe en el presupuesto de entrada",
+    restoreBudgetSkippedDetail: "La petición de corrección repite todo el prompt y toda la respuesta. Las líneas ausentes se añadieron a la nota formateada.",
     truncationHintSettings: "aumenta el límite: Settings → per-operation → format → maxTokens",
     truncationHintSettingsGlobal: "aumenta el límite: Settings → Default chat model → Max completion tokens",
     visionWindowField: "Ajustes → Visión → Ventana de contexto del modelo",
