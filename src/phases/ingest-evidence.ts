@@ -159,6 +159,21 @@ const MAX_LANGUAGE_EVIDENCE = 12;
  */
 const MAX_OVERHEAD_ITEM_TOKENS = 48;
 
+/**
+ * At most `limit` items spread evenly across `items`, in their original order.
+ * A prefix would describe the opening of the document and nothing else: both
+ * lists this bounds are naming and language signals about the WHOLE corpus, and
+ * a note that switches language halfway would be bootstrapped as monolingual.
+ * The first and last items are always kept, so the span of the source is visible
+ * whatever the limit.
+ */
+function sampleEvenly<T>(items: readonly T[], limit: number): T[] {
+  if (items.length <= limit) return [...items];
+  if (limit <= 1) return limit === 1 ? [items[0]] : [];
+  const step = (items.length - 1) / (limit - 1);
+  return Array.from({ length: limit }, (_, index) => items[Math.round(index * step)]);
+}
+
 /** Longest prefix of `value` whose JSON encoding fits `MAX_OVERHEAD_ITEM_TOKENS`. */
 function boundOverheadItem(value: string): string {
   if (estimateText(JSON.stringify(value)) <= MAX_OVERHEAD_ITEM_TOKENS) return value;
@@ -2057,13 +2072,17 @@ export async function prepareBootstrapEvidenceBundle(
     facts: [...facts],
     exactSource: exactSource.map((range) => ({ ...range })),
   }));
-  const domainThemes = unique(evidence.flatMap((item) => item.facts), (fact) => fact)
-    .slice(0, MAX_DOMAIN_THEMES)
-    .map(boundOverheadItem);
-  const languageEvidence = unique(
-    evidence.flatMap((item) => item.exactSource.map((range) => range.text)),
-    (text) => text,
-  ).slice(0, MAX_LANGUAGE_EVIDENCE).map(boundOverheadItem);
+  const domainThemes = sampleEvenly(
+    unique(evidence.flatMap((item) => item.facts), (fact) => fact),
+    MAX_DOMAIN_THEMES,
+  ).map(boundOverheadItem);
+  const languageEvidence = sampleEvenly(
+    unique(
+      evidence.flatMap((item) => item.exactSource.map((range) => range.text)),
+      (text) => text,
+    ),
+    MAX_LANGUAGE_EVIDENCE,
+  ).map(boundOverheadItem);
   const payloadBudget = Math.min(
     policy.inputBudgetTokens,
     policy.bootstrapPayloadBudgetTokens ?? policy.inputBudgetTokens,
