@@ -282,7 +282,7 @@ test("postbuild scans an untracked generated dist main directly", async (t) => {
   );
 });
 
-test("repository release metadata preserves prior compatibility mappings and synchronizes 0.3.10", () => {
+test("repository release metadata preserves prior compatibility mappings and synchronizes 0.3.11", () => {
   const packageJson = JSON.parse(
     readFileSync(path.join(REPO_ROOT, "package.json"), "utf8"),
   ) as { version: string };
@@ -299,12 +299,12 @@ test("repository release metadata preserves prior compatibility mappings and syn
     readFileSync(path.join(REPO_ROOT, "versions.json"), "utf8"),
   ) as Record<string, string>;
 
-  assert.equal(packageJson.version, "0.3.10");
-  assert.equal(packageLock.version, "0.3.10");
-  assert.equal(packageLock.packages[""].version, "0.3.10");
-  assert.equal(sourceManifest.version, "0.3.10");
-  assert.equal(rootManifest.version, "0.3.10");
-  assert.equal(distManifest.version, "0.3.10");
+  assert.equal(packageJson.version, "0.3.11");
+  assert.equal(packageLock.version, "0.3.11");
+  assert.equal(packageLock.packages[""].version, "0.3.11");
+  assert.equal(sourceManifest.version, "0.3.11");
+  assert.equal(rootManifest.version, "0.3.11");
+  assert.equal(distManifest.version, "0.3.11");
   assert.deepEqual(rootManifest, sourceManifest);
   assert.deepEqual(distManifest, sourceManifest);
   assert.equal(rootManifestText, sourceManifestText);
@@ -315,7 +315,11 @@ test("repository release metadata preserves prior compatibility mappings and syn
   assert.equal(versionsJson["0.3.7"], "1.13.0");
   assert.equal(versionsJson["0.3.8"], "1.13.0");
   assert.equal(versionsJson["0.3.9"], "1.13.0");
-  assert.equal(versionsJson["0.3.10"], "1.13.0");
+  // 0.3.10 was bumped but never published: its release run failed before the tag
+  // claim, and the trigger cannot be re-entered once master already carries the
+  // bumped manifest. The number stays burned rather than mapped.
+  assert.equal(versionsJson["0.3.10"], undefined);
+  assert.equal(versionsJson["0.3.11"], "1.13.0");
 });
 
 test("repository uses the patched undici 6.28 production dependency", () => {
