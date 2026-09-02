@@ -277,17 +277,6 @@ export default class LlmWikiPlugin extends Plugin {
   }
 }
 
-export function migrateDomainWikiFolder(domains: DomainEntry[]): boolean {
-  let changed = false;
-  for (const d of domains) {
-    if (d.wiki_folder?.startsWith("!Wiki/")) {
-      d.wiki_folder = d.wiki_folder.slice("!Wiki/".length);
-      changed = true;
-    }
-  }
-  return changed;
-}
-
 export async function migrateLegacyData(
   plugin: LlmWikiPlugin,
   domainStore: DomainStore,

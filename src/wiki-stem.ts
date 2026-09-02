@@ -46,9 +46,3 @@ export function stemRegex(domainId: string): RegExp {
   return new RegExp(`^${WIKI_STEM_PREFIX}_${escapeForRegex(domainId)}_[${ENTITY_SLUG_CHARS}]+$`);
 }
 
-export function isWikiStem(stem: string, domainId?: string): boolean {
-  if (domainId !== undefined) {
-    return stemRegex(domainId).test(stem);
-  }
-  return GENERIC_WIKI_STEM_REGEX.test(stem);
-}

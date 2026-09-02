@@ -554,16 +554,6 @@ async function llmSelectSeeds(
   }
 }
 
-export function buildContextBlock(
-  pages: Map<string, string>,
-  seeds: Set<string>,
-  selectedIds: Set<string>,
-  maxPages: number,
-  order?: string[],
-): string {
-  return renderContextPages(selectContextPages(pages, seeds, selectedIds, maxPages, order));
-}
-
 export function selectContextPages(
   pages: Map<string, string>,
   seeds: Set<string>,
@@ -599,14 +589,6 @@ export function selectContextPages(
   }
   const bfsCap = Math.max(0, maxPages - seedPages.length);
   return [...seedPages, ...bfsPages.slice(0, bfsCap)];
-}
-
-function renderContextPages(pages: [string, string][]): string {
-  let block = "";
-  for (const [p, c] of pages) {
-    block += `--- ${p} ---\n${c}\n\n`;
-  }
-  return block;
 }
 
 function buildEntityTypesBlock(domain: DomainEntry): string {

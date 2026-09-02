@@ -51,37 +51,6 @@ export function extractObsidianEmbedPaths(md: string): string[] {
   return paths;
 }
 
-export function insertDescriptions(md: string, descriptions: Map<string, string>): string {
-  const lines = md.split("\n");
-  const out: string[] = [];
-  for (let i = 0; i < lines.length; i++) {
-    out.push(lines[i]);
-    const embedMatch = lines[i].match(/^!\[\[([^\]]+)\]\]/);
-    if (!embedMatch) continue;
-    const path = embedMatch[1].trim();
-    if (!descriptions.has(path)) continue;
-    // Check if next non-empty line already has [Vision] marker (matches both the
-    // single-line `> *[Vision] ...*` and the multi-line `> *[Vision]*` shapes).
-    let nextNonEmpty = "";
-    for (let j = i + 1; j < lines.length; j++) {
-      if (lines[j].trim() !== "") { nextNonEmpty = lines[j]; break; }
-    }
-    if (nextNonEmpty.startsWith("> *[Vision]")) continue;
-    const desc = descriptions.get(path)!;
-    if (desc.includes("\n")) {
-      // Multi-line (verbatim diagram description + mermaid/table, or fenced code):
-      // a marker line, a blank line, then the description verbatim at top level so
-      // any fence/table/list renders.
-      out.push("> *[Vision]*");
-      out.push("");
-      out.push(desc);
-    } else {
-      out.push(`> *[Vision] ${desc}*`);
-    }
-  }
-  return out.join("\n");
-}
-
 // Internal helpers — exported for testing
 export function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);

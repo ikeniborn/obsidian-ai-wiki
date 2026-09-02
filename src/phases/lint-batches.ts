@@ -1,6 +1,5 @@
 import type OpenAI from "openai";
 import { contentHash } from "../content-hash";
-import { estimatePreparedMessages } from "../prompt-budget";
 import { estimateText } from "../token-estimate";
 import {
   applyPagePatch,
@@ -406,7 +405,3 @@ export function buildLintBatchMessages(args: BuildLintBatchMessagesArgs): OpenAI
   ];
 }
 
-export function assertLintBatchFits(messages: OpenAI.Chat.ChatCompletionMessageParam[], budget: number): void {
-  const estimated = estimatePreparedMessages(messages);
-  if (estimated > budget) throw new Error(`lint batch prompt overflow: ${estimated} > ${budget}`);
-}

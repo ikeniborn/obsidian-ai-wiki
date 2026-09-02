@@ -45,10 +45,6 @@ function addSectionPatchIssues(
   }
 }
 
-export const SectionPatchSchema = SectionPatchBaseSchema.superRefine((section, ctx) => {
-  addSectionPatchIssues([section], ctx, false);
-});
-
 const SectionPatchesSchema = z.array(SectionPatchBaseSchema).superRefine((sections, ctx) => {
   addSectionPatchIssues(sections, ctx, true);
 });

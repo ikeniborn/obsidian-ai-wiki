@@ -76,7 +76,7 @@ import {
   fileImage,
   TransactionVaultTools,
 } from "../file-transaction";
-import { GENERIC_WIKI_STEM_REGEX, buildWikiStem, stemRegex } from "../wiki-stem";
+import { buildWikiStem, stemRegex } from "../wiki-stem";
 import { ensureDomainConfig } from "../domain-config";
 import { i18nFor, resolveLang } from "../i18n";
 import { promptVersionOf } from "../prompt-version";
@@ -2067,8 +2067,3 @@ export function buildEntityTypesBlock(domain: DomainEntry, wikiVaultPath: string
   }).join("\n\n");
 }
 
-export function isLegacyUnprefixedPage(path: string): boolean {
-  if (!isWikiPagePath(path)) return false;
-  const name = path.split("/").pop()!.replace(/\.md$/, "");
-  return !name.startsWith("_") && !GENERIC_WIKI_STEM_REGEX.test(name);
-}
