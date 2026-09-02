@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.3.10 — 2026-09-02
+## 0.3.11 — 2026-09-02
+
+Supersedes the unpublished `0.3.10` bump, whose release run failed before the tag was claimed.
 
 ### New
 
@@ -14,6 +16,7 @@
 - fix(retrieval): bound corpus embedding inputs and report query failures
 - fix(probe): omit matchedById when the model listing cannot be read
 - fix(format): localize the vision skip and size-refusal messages
+- fix(release): track the released version in the release metadata contract and public docs
 
 ### Other
 
