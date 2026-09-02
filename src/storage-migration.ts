@@ -138,7 +138,7 @@ async function cleanDir(
   try {
     const listing = await adapter.list(dir);
     if (listing.files.length === 0 && listing.folders.length === 0) {
-      await adapter.rmdir(dir, false).catch(() => { /* ignore rmdir failure */ });
+      await rmdirEmptyDirectory(adapter, dir);
     }
   } catch { /* ignore */ }
 }
@@ -165,7 +165,31 @@ async function rmdirIfEmpty(adapter: Vault["adapter"], dir: string): Promise<voi
     if (!(await adapter.exists(dir))) return;
     const listing = await adapter.list(dir);
     if (listing.files.length === 0 && listing.folders.length === 0) {
-      await adapter.rmdir(dir, false).catch(() => { /* ignore */ });
+      await rmdirEmptyDirectory(adapter, dir);
     }
+  } catch { /* best-effort */ }
+}
+
+/**
+ * Remove a directory the caller has just listed as empty.
+ *
+ * Obsidian's desktop adapter implements `rmdir(path, recursive)` as
+ * `fs.rm(path, { recursive })`, so the non-recursive form rejects every
+ * directory and can never remove one. Only when that call fails and the
+ * directory is still present do we re-list it and retry recursively, so the
+ * recursive call can remove nothing beyond the empty directory the caller
+ * asked for. Best-effort throughout: a directory that refuses to go is left
+ * alone rather than reported.
+ */
+async function rmdirEmptyDirectory(adapter: Vault["adapter"], dir: string): Promise<void> {
+  try {
+    await adapter.rmdir(dir, false);
+    return;
+  } catch { /* desktop adapter rejects the non-recursive form; fall through */ }
+  try {
+    if (!(await adapter.exists(dir))) return;
+    const listing = await adapter.list(dir);
+    if (listing.files.length > 0 || listing.folders.length > 0) return;
+    await adapter.rmdir(dir, true);
   } catch { /* best-effort */ }
 }
