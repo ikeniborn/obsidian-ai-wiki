@@ -160,15 +160,24 @@ const enFormatProgressFallback: FormatProgress = {
   sentinelInvalidAfterRetry: "Format: LLM returned an invalid sentinel (after retry)",
   writeFailed: (err: string) => `Format: writing the formatted file failed — ${err}`,
   truncationHintSettings: "raise the limit: Settings → per-operation → format → maxTokens",
-};
-
-const VISION_WINDOW_FIELD = "Settings → Vision → Model context window";
-
-const VISION_WINDOW_SOURCE_LABEL: Record<ContextWindowSource, string> = {
-  configured: "you set this window",
-  discovered: "reported by the backend",
-  learned: "learned from a provider rejection",
-  default: "fallback",
+  visionWindowField: "Settings → Vision → Model context window",
+  visionSkipped: "Vision skipped",
+  visionUnsupportedOnMobile: "unsupported on mobile",
+  visionUnknownExtension: "unknown extension",
+  visionWindowSourceLabel: {
+    configured: "you set this window",
+    discovered: "reported by the backend",
+    learned: "learned from a provider rejection",
+    default: "fallback",
+  },
+  visionNoAdvertisedWindow: (model: string, field: string) =>
+    `${model}: the backend advertises no context window for this vision model, `
+    + "so the request was sized from the Format operation's own budget. "
+    + `Set ${field} to this model's real window.`,
+  visionWindowTooSmall: (model: string, window: number, source: string, advice: string) =>
+    `${model}: the request does not fit its ${window}-token context window (${source}). ${advice}`,
+  visionAdviceRaiseOrClear: (field: string) => `Raise or clear ${field}.`,
+  visionAdviceSetIfLarger: (field: string) => `Set ${field} if this model's real window is larger.`,
 };
 
 /** Size refusals are decided before the request leaves: the budget, not the provider. */
@@ -194,19 +203,23 @@ export function visionSizeSkipReason(
     contextWindow?: number;
     contextWindowSource?: ContextWindowSource;
   },
+  progress: FormatProgress = enFormatProgressFallback,
 ): string | null {
   if (!isVisionSizeError(error)) return null;
   if (vision.contextWindow === undefined || vision.contextWindowSource === undefined) return null;
+  const field = progress.visionWindowField;
   if (vision.contextWindowSource === "default") {
-    return `${vision.model}: the backend advertises no context window for this vision model, `
-      + "so the request was sized from the Format operation's own budget. "
-      + `Set ${VISION_WINDOW_FIELD} to this model's real window.`;
+    return progress.visionNoAdvertisedWindow(vision.model, field);
   }
   const advice = vision.contextWindowSource === "configured"
-    ? `Raise or clear ${VISION_WINDOW_FIELD}.`
-    : `Set ${VISION_WINDOW_FIELD} if this model's real window is larger.`;
-  return `${vision.model}: the request does not fit its ${vision.contextWindow}-token context `
-    + `window (${VISION_WINDOW_SOURCE_LABEL[vision.contextWindowSource]}). ${advice}`;
+    ? progress.visionAdviceRaiseOrClear(field)
+    : progress.visionAdviceSetIfLarger(field);
+  return progress.visionWindowTooSmall(
+    vision.model,
+    vision.contextWindow,
+    progress.visionWindowSourceLabel[vision.contextWindowSource],
+    advice,
+  );
 }
 
 export async function* runFormat(
@@ -314,20 +327,22 @@ export async function* runFormat(
             await visionTempStore?.putDescription(path, description);
             yield { kind: "tool_result", ok: true, preview: description };
           } else {
-            const why = (visionSettings.imageOnly ?? false) ? "unsupported on mobile" : "unknown extension";
+            const why = (visionSettings.imageOnly ?? false)
+              ? progress.visionUnsupportedOnMobile
+              : progress.visionUnknownExtension;
             yield { kind: "tool_result", ok: false, preview: why };
-            yield { kind: "info_text", icon: "⚠️", summary: "Vision skipped", details: [`${path} — ${why}`] };
+            yield { kind: "info_text", icon: "⚠️", summary: progress.visionSkipped, details: [`${path} — ${why}`] };
           }
         } catch (e) {
           if (!visionEventsEmitted) {
             for (const event of visionEvents) yield event;
           }
           yield { kind: "tool_result", ok: false, preview: (e as Error)?.message ?? "failed" };
-          const sizeReason = visionSizeSkipReason(e, visionSettings);
+          const sizeReason = visionSizeSkipReason(e, visionSettings, progress);
           yield {
             kind: "info_text",
             icon: "⚠️",
-            summary: "Vision skipped",
+            summary: progress.visionSkipped,
             details: sizeReason === null ? [path] : [path, sizeReason],
           };
         }
