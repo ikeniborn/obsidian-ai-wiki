@@ -73,7 +73,7 @@ export function wikiSections(lang: "ru" | "en" | "es"): string {
 }
 
 /** Remove <think>...</think> blocks leaked into content by thinking models. */
-export function stripThinking(text: string): string {
+function stripThinking(text: string): string {
   return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 }
 

@@ -60,7 +60,7 @@ export class InvalidWikiContextPathError extends Error {
   }
 }
 
-export function validateGovernedCandidatePath(path: string): void {
+function validateGovernedCandidatePath(path: string): void {
   if (path.includes("\\") || path.includes("\0") || !path.startsWith(`${WIKI_ROOT}/`)) {
     throw new InvalidWikiContextPathError(path);
   }

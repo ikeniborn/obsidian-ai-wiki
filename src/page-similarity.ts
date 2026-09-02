@@ -71,7 +71,7 @@ export function encodeVector(v: Float32Array): string {
   return btoa(binary);
 }
 
-export function decodeVector(b64: string): Float32Array {
+function decodeVector(b64: string): Float32Array {
   const binary = atob(b64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);

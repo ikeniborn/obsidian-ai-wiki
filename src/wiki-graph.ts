@@ -30,7 +30,7 @@ export function buildWikiGraph(pages: Map<string, string>): WikiGraph {
  * by a seed should also be considered context, regardless of which direction the
  * `[[link]]` was authored. Seeds not present in the graph are silently skipped.
  */
-export function bfsExpand(seeds: string[], graph: WikiGraph, depth: number): Set<string> {
+function bfsExpand(seeds: string[], graph: WikiGraph, depth: number): Set<string> {
   if (seeds.length === 0) return new Set();
 
   // Pre-compute reverse index

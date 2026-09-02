@@ -554,43 +554,6 @@ async function llmSelectSeeds(
   }
 }
 
-export function selectContextPages(
-  pages: Map<string, string>,
-  seeds: Set<string>,
-  selectedIds: Set<string>,
-  maxPages: number,
-  order?: string[],
-): [string, string][] {
-  // Fused ordering (Tier 2): emit pages in `order`, capped at maxPages.
-  if (order && order.length > 0) {
-    const pidToPath = new Map<string, string>();
-    for (const path of pages.keys()) pidToPath.set(pageId(path), path);
-    const ordered: [string, string][] = [];
-    let count = 0;
-    for (const id of order) {
-      if (count >= maxPages) break;
-      if (!selectedIds.has(id)) continue;
-      const path = pidToPath.get(id);
-      if (path === undefined) continue;
-      ordered.push([path, pages.get(path) ?? ""]);
-      count++;
-    }
-    return ordered;
-  }
-
-  // Default: seeds first, then BFS-expanded pages (unchanged behavior).
-  const seedPages: [string, string][] = [];
-  const bfsPages: [string, string][] = [];
-  for (const [path, content] of pages) {
-    const id = pageId(path);
-    if (!selectedIds.has(id)) continue;
-    if (seeds.has(id)) seedPages.push([path, content]);
-    else bfsPages.push([path, content]);
-  }
-  const bfsCap = Math.max(0, maxPages - seedPages.length);
-  return [...seedPages, ...bfsPages.slice(0, bfsCap)];
-}
-
 function buildEntityTypesBlock(domain: DomainEntry): string {
   if (!domain.entity_types?.length) return "";
   const types = domain.entity_types

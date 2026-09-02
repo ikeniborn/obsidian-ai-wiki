@@ -49,14 +49,14 @@ const SectionPatchesSchema = z.array(SectionPatchBaseSchema).superRefine((sectio
   addSectionPatchIssues(sections, ctx, true);
 });
 
-export const CreatePageSchema = z.object({
+const CreatePageSchema = z.object({
   kind: z.literal("create"),
   path: NonBlankStringSchema,
   annotation: z.string(),
   content: NonBlankStringSchema,
 });
 
-export const PatchPageSchema = z.object({
+const PatchPageSchema = z.object({
   kind: z.literal("patch"),
   path: NonBlankStringSchema,
   expectedPageHash: NonBlankStringSchema,
@@ -100,12 +100,12 @@ const SynthesisSectionPatchesSchema = z.array(SynthesisSectionPatchSchema).super
   addSectionPatchIssues(sections, ctx, true);
 });
 
-export const SynthesisCreatePageSchema = CreatePageSchema.extend({
+const SynthesisCreatePageSchema = CreatePageSchema.extend({
   entityKey: NonBlankStringSchema,
   content: SynthesisMarkdownSchema,
 }).strict();
 
-export const SynthesisPatchPageSchema = PatchPageSchema.extend({
+const SynthesisPatchPageSchema = PatchPageSchema.extend({
   entityKey: NonBlankStringSchema,
   sections: SynthesisSectionPatchesSchema,
 }).strict();
@@ -115,7 +115,7 @@ export const SynthesisActionSchema = z.discriminatedUnion("kind", [
   SynthesisPatchPageSchema,
 ]);
 
-export const SynthesisSkipSchema = z.object({
+const SynthesisSkipSchema = z.object({
   entityKey: NonBlankStringSchema,
   reason: NonBlankStringSchema,
 }).strict();
@@ -229,7 +229,7 @@ export const LintChatSchema = z.object({
   })).default([]),
 });
 
-export const WikiPageSchema = z.object({
+const WikiPageSchema = z.object({
   path: z.string(),
   content: z.string(),
   annotation: z.string().optional(),
@@ -270,6 +270,8 @@ export const MergedPageOutputSchema = z.object({
 });
 export type MergedPageOutput = z.infer<typeof MergedPageOutputSchema>;
 
+// Kept exported: its runtime value is only consumed by z.infer below, and
+// un-exporting it makes the schema read as unused rather than as a type source.
 export const EntitiesOutputSchema = z.object({
   reasoning: z.string(),
   entities: z.array(z.object({
@@ -292,6 +294,8 @@ export const VisionRecognitionBatchSchema = z.object({
   records: z.array(VisionRecognitionRecordSchema),
 }).strict();
 
+// Kept exported: its runtime value is only consumed by z.infer below, and
+// un-exporting it makes the schema read as unused rather than as a type source.
 export const TypeAssignmentsSchema = z.object({
   reasoning: z.string().optional(),
   assignments: z.array(z.object({
@@ -307,12 +311,12 @@ export const WikiPagesOutputSchema = z.object({
   entity_types_delta: z.array(EntityTypeSchema).optional(),
 });
 
-export const LintDeleteSchema = z.object({
+const LintDeleteSchema = z.object({
   path: z.string(),
   redirect_to: z.string().optional(),
 });
 
-export const LintFindingSchema = z.object({
+const LintFindingSchema = z.object({
   path: NonBlankStringSchema,
   heading: NonBlankStringSchema,
   rule: NonBlankStringSchema,
@@ -352,7 +356,7 @@ export const LintOutputSchema = z.object({
   deletes: z.array(LintDeleteSchema).optional(),
 });
 
-export const FormatBaseSchema = z.object({
+const FormatBaseSchema = z.object({
   report: z.string().min(1, "report не должен быть пустым"),
   formatted: z.string().min(10, "formatted слишком короткий"),
 });

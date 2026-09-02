@@ -8,13 +8,13 @@ export const DEFAULT_RERANKER_SETTINGS = {
   timeoutMs: 800,
 } as const;
 
-export const DEFAULT_RERANKER_BLEND_ALPHA = 0.60;
-export const DEFAULT_RERANKER_MAX_PROMOTION = 1;
-export const DEFAULT_RERANKER_PROMOTION_SCOPE = "page";
-export const DEFAULT_RERANKER_MIN_PROMOTION_SCORE_GAP = 0.20;
-export const DEFAULT_RERANKER_MIN_PROMOTION_BASELINE_RATIO = 0.95;
-export const DEFAULT_RERANKER_MAX_PROMOTION_TARGET_INDEX = 2;
-export const DEFAULT_RERANKER_CANDIDATE_TEXT_CHARS = 120;
+const DEFAULT_RERANKER_BLEND_ALPHA = 0.60;
+const DEFAULT_RERANKER_MAX_PROMOTION = 1;
+const DEFAULT_RERANKER_PROMOTION_SCOPE = "page";
+const DEFAULT_RERANKER_MIN_PROMOTION_SCORE_GAP = 0.20;
+const DEFAULT_RERANKER_MIN_PROMOTION_BASELINE_RATIO = 0.95;
+const DEFAULT_RERANKER_MAX_PROMOTION_TARGET_INDEX = 2;
+const DEFAULT_RERANKER_CANDIDATE_TEXT_CHARS = 120;
 export const MAX_RERANKER_CANDIDATE_TEXT_CHARS = DEFAULT_RERANKER_CANDIDATE_TEXT_CHARS;
 
 export interface RerankerConfigInput {
@@ -121,7 +121,7 @@ export function normalizeRerankerConfig(input?: RerankerConfigInput): RerankerCo
   };
 }
 
-export function rerankerChunkId(chunk: SelectedChunk): string {
+function rerankerChunkId(chunk: SelectedChunk): string {
   return `${chunk.articleId}::${chunk.ordinal}`;
 }
 
@@ -527,7 +527,7 @@ export async function raceRerankerRequest<T>(
   }
 }
 
-export const fetchRerankerScores: RerankerTransport = async (input) => {
+const fetchRerankerScores: RerankerTransport = async (input) => {
   const { requestUrl } = await import("./request-url");
 
   // requestUrl itself is not cancellable; this race only bounds adapter wait time.

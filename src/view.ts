@@ -52,7 +52,7 @@ export function isTelemetryOnlyRunEvent(event: RunEvent): boolean {
     || event.kind === "evidence_split";
 }
 
-export function formatGraphStatsLines(
+function formatGraphStatsLines(
   ev: Extract<RunEvent, { kind: "graph_stats" }>,
   agentLogEnabled: boolean,
 ): string[] {

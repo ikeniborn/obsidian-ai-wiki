@@ -13,7 +13,7 @@
 export const FLOOR_LO_PCT = 0.05;
 
 /** Dynamic range below which the bar cannot be normalized → floor skips (keep-all). */
-export const FLOOR_EPS = 1e-6;
+const FLOOR_EPS = 1e-6;
 
 /** Linear-interpolated percentile of `values` at fraction `pct` (0..1). Empty → 0. */
 export function robustLow(values: number[], pct: number): number {

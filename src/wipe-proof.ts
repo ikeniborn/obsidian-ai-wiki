@@ -1,8 +1,8 @@
 export const WIPE_HASH_ALGORITHM = "sha256-v2" as const;
 export const WIPE_EVENT_MAX_BYTES = 256 * 1024;
 export const WIPE_LOG_LINE_MAX_BYTES = 1_048_576;
-export const WIPE_IDENTIFIER_MAX_UTF8_BYTES = 255;
-export const WIPE_IDENTIFIER_MAX_CODEPOINTS = 255;
+const WIPE_IDENTIFIER_MAX_UTF8_BYTES = 255;
+const WIPE_IDENTIFIER_MAX_CODEPOINTS = 255;
 
 export interface WipeManifestEntry {
   path: string;

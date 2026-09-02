@@ -2,7 +2,7 @@ import type { EntityType } from "./domain";
 
 export const WIKI_ROOT = "!Wiki";
 
-export const LEGACY_GLOBAL_CONFIG_DIR = `${WIKI_ROOT}/_config`;
+const LEGACY_GLOBAL_CONFIG_DIR = `${WIKI_ROOT}/_config`;
 export const LEGACY_GLOBAL_DOMAIN_PATH = `${LEGACY_GLOBAL_CONFIG_DIR}/_domain.json`;
 export const GLOBAL_CONFIG_DIR = LEGACY_GLOBAL_CONFIG_DIR;
 export const GLOBAL_DOMAIN_PATH = LEGACY_GLOBAL_DOMAIN_PATH;

@@ -1,8 +1,8 @@
 import type { ContextWindowSource, RunEvent } from "./types";
 
 export const BACKEND_DEFAULT_CONTEXT = 8_192;
-export const PROBE_DEADLINE_MS = 2_000;
-export const DEFAULT_TTL_MS = 86_400_000;
+const PROBE_DEADLINE_MS = 2_000;
+const DEFAULT_TTL_MS = 86_400_000;
 
 /**
  * The smallest window this plugin will budget from — exported so the settings field

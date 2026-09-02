@@ -3,7 +3,7 @@ const STOP_WORDS = new Set([
   "The", "This", "That", "These", "Those", "And", "Or", "But", "If", "When",
 ]);
 
-export function significantTokens(text: string): Set<string> {
+function significantTokens(text: string): Set<string> {
   const out = new Set<string>();
 
   let residual = text;

@@ -6,7 +6,7 @@
 const _cache = new Map<string, string>();
 
 /** FNV-1a 32-bit hash of `s`, rendered as 8 lowercase hex chars. */
-export function hash8(s: string): string {
+function hash8(s: string): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);

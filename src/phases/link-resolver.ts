@@ -18,7 +18,7 @@ interface IdParts {
 }
 
 /** Extract the first id-like token: optional letter prefix + a run of >=2 digits. */
-export function extractId(stem: string): IdParts | null {
+function extractId(stem: string): IdParts | null {
   const m = stem.match(/([a-z]{1,8})?[-_ ]?(\d{2,})/i);
   if (!m) return null;
   return { prefix: (m[1] ?? "").toLowerCase(), digits: m[2] };

@@ -1,10 +1,10 @@
 import type { ModelContextRecord } from "./model-context";
 import type { BudgetInputSource, OpKey } from "./types";
 
-export const SAFETY = 0.9;
+const SAFETY = 0.9;
 export const DEFAULT_OUTPUT_BASE = 8_192;
 /** A reply may never claim more than this share of the window. */
-export const OUTPUT_MAX_SHARE = 0.5;
+const OUTPUT_MAX_SHARE = 0.5;
 
 const OUTPUT_MULTIPLIER: Partial<Record<OpKey, number>> = { format: 4 };
 

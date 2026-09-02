@@ -866,7 +866,7 @@ export interface LlmWikiPluginSettings {
 }
 
 export const MAX_SAFE_TIMER_MS = 2_147_000_000;
-export const MAX_LLM_IDLE_TIMEOUT_SEC = 2_146_999;
+const MAX_LLM_IDLE_TIMEOUT_SEC = 2_146_999;
 
 function integerInput(value: unknown): number | undefined {
   if (typeof value === "number") {

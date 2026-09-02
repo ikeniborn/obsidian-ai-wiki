@@ -1697,8 +1697,8 @@ export interface WipeDomainManifest {
 }
 
 const WIPE_MANIFEST_CHUNK_PATHS = 100;
-export const WIPE_MANIFEST_LINE_MAX_BYTES = WIPE_LOG_LINE_MAX_BYTES;
-export const WIPE_MANIFEST_EVENT_MAX_BYTES = WIPE_EVENT_MAX_BYTES;
+const WIPE_MANIFEST_LINE_MAX_BYTES = WIPE_LOG_LINE_MAX_BYTES;
+const WIPE_MANIFEST_EVENT_MAX_BYTES = WIPE_EVENT_MAX_BYTES;
 
 function encodedBytes(value: unknown): number {
   return new TextEncoder().encode(JSON.stringify(value)).length;

@@ -64,7 +64,7 @@ export interface AnswerFrameOutput {
 
 const END = "<<<END>>>";
 
-export const sentinelJsonFrameInstruction = [
+const sentinelJsonFrameInstruction = [
   "Return sentinel-framed JSON only.",
   "Put <<<JSON>>> on its own first line.",
   "Put exactly one JSON object after it.",
@@ -268,7 +268,7 @@ export const mergeContentFrameInstruction = [
   "Finish with <<<END>>>.",
 ].join("\n");
 
-export const lintOutputFrameInstruction = [
+const lintOutputFrameInstruction = [
   "Return framed lint output only.",
   "Start with <<<REPORT>>> followed by the markdown lint report.",
   "For each changed page use <<<PAGE>>> followed by path:, optional annotation:, <<<CONTENT>>>, full markdown body, and <<<END_PAGE>>>.",
@@ -276,14 +276,14 @@ export const lintOutputFrameInstruction = [
   "Finish with <<<END>>>.",
 ].join("\n");
 
-export const lintChatFrameInstruction = [
+const lintChatFrameInstruction = [
   "Return framed lint-chat output only.",
   "Start with <<<REPORT>>> followed by the markdown summary.",
   "For each changed page use <<<PAGE>>> followed by path:, optional annotation:, <<<CONTENT>>>, full markdown body, and <<<END_PAGE>>>.",
   "Finish with <<<END>>>.",
 ].join("\n");
 
-export const queryAnswerFrameInstruction = [
+const queryAnswerFrameInstruction = [
   "Return framed answer repair output only.",
   "Put the full repaired markdown answer in <<<ANSWER>>>.",
   "Put citations in <<<CITATIONS>>> as one stem per bullet line.",

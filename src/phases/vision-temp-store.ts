@@ -1,7 +1,7 @@
 import type { VaultTools } from "../vault-tools";
 
 /** Convert raw base64 (no `data:` prefix) to an ArrayBuffer for binary writes. */
-export function base64ToArrayBuffer(b64: string): ArrayBuffer {
+function base64ToArrayBuffer(b64: string): ArrayBuffer {
   const binary = atob(b64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);

@@ -11,7 +11,7 @@ export const TAG_RE = /^[a-z][a-z0-9-]*(?:[/_][a-z0-9-]+)*$/;
 
 const FM_KEY_LINE = /^(wiki_[\w]+|tags|aliases|created|updated|external_links|related):/;
 
-export const WIKI_FIELD_ALIASES: Record<string, string> = {
+const WIKI_FIELD_ALIASES: Record<string, string> = {
   wiki_sources: "resource",
   wiki_updated: "timestamp",
   wiki_status:  "status",
@@ -270,7 +270,7 @@ export type FieldRule =
   | { field: string; kind: "warn-enum"; values: readonly string[] }
   | { field: string; kind: "remove" };
 
-export function validateAndRepairFrontmatter(
+function validateAndRepairFrontmatter(
   content: string,
   rules: FieldRule[],
 ): { content: string; warnings: string[] } {
@@ -759,7 +759,7 @@ export function ensureDescription(content: string, annotation: string): string {
   return `---\n${yamlStringify(parsed, { lineWidth: 0 })}---\n${body}`;
 }
 
-export function hasFrontmatterField(content: string, field: string): boolean {
+function hasFrontmatterField(content: string, field: string): boolean {
   const fmMatch = FM_RE.exec(content);
   if (!fmMatch) return false;
   return new RegExp(`^${field}:`, "m").test(fmMatch[1]);

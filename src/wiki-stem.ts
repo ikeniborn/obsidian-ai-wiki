@@ -1,4 +1,4 @@
-export const WIKI_STEM_PREFIX = "wiki";
+const WIKI_STEM_PREFIX = "wiki";
 
 // Domain ids allow lowercase letters, digits, `_`, and `-` (matches validateDomainId).
 const DOMAIN_ID_CHARS = "a-z0-9_\\-";
@@ -12,7 +12,7 @@ export const GENERIC_WIKI_STEM_REGEX = new RegExp(
 
 const DOMAIN_ID_RE = new RegExp(`^[${DOMAIN_ID_CHARS}]+$`);
 
-export function slugifyEntity(name: string): string {
+function slugifyEntity(name: string): string {
   const stripped = name
     .normalize("NFD")
     .replace(/\p{M}+/gu, "");
