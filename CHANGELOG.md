@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.3.10 — 2026-09-02
+
+### New
+
+- feat(view): show reranker fallback and retrieval degrade in query stats
+
+### Fixes
+
+- fix(deps): classify zod-to-json-schema as a runtime dependency
+- fix(migration): remove empty _config directories left by storage migration
+- fix(retrieval): keep computed vectors when an embedding batch fails
+- fix(retrieval): bound corpus embedding inputs and report query failures
+- fix(probe): omit matchedById when the model listing cannot be read
+- fix(format): localize the vision skip and size-refusal messages
+
+### Other
+
+- refactor: delete unreachable exports and the helpers they kept alive
+- refactor: stop exporting symbols only their own module uses
+- perf(retrieval): score a single section vector without a pooling allocation
+
+---
+
 ## 0.3.9 — 2026-08-25
 
 ### Fixes
