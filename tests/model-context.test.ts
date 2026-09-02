@@ -265,6 +265,38 @@ test("the probe separates 'no such model' from 'model found, no window advertise
   assert.equal(missing.find((event) => event.endpoint.endsWith("/models"))!.matchedById, false);
 });
 
+test("an unreadable listing omits matchedById instead of reporting a non-match", async () => {
+  const unreachable: Array<{ endpoint: string; ok: boolean; matchedById?: boolean }> = [];
+  const fetchFn = (async (input: string | URL | Request) =>
+    String(input).endsWith("/models")
+      ? new Response("gateway is down", { status: 502 })
+      : json({})) as typeof fetch;
+
+  await probeContextWindow(fetchFn, "http://x/v1", "", "m1", 2000, undefined, (event) => unreachable.push(event));
+
+  const models = unreachable.find((event) => event.endpoint.endsWith("/models"))!;
+  assert.equal(models.ok, false, "the listing request failed");
+  assert.equal(
+    "matchedById" in models,
+    false,
+    "a listing that could not be read says nothing about whether the model exists",
+  );
+});
+
+test("a listing that throws also omits matchedById", async () => {
+  const thrown: Array<{ endpoint: string; ok: boolean; matchedById?: boolean }> = [];
+  const fetchFn = (async (input: string | URL | Request) => {
+    if (String(input).endsWith("/models")) throw new Error("connection refused");
+    return json({});
+  }) as typeof fetch;
+
+  await probeContextWindow(fetchFn, "http://x/v1", "", "m1", 2000, undefined, (event) => thrown.push(event));
+
+  const models = thrown.find((event) => event.endpoint.endsWith("/models"))!;
+  assert.equal(models.ok, false);
+  assert.equal("matchedById" in models, false);
+});
+
 test("a cache write failure while resolving does not fail the caller", async () => {
   const store = new ModelContextStore({
     read: async () => ({}),
