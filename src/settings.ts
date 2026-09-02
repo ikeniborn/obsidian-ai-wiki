@@ -27,7 +27,12 @@ import {
   renderNativeBudgetControls,
   type ModelControlField,
 } from "./model-call-policy";
-import { resolveBudget } from "./budget-resolver";
+import {
+  resolveBudget,
+  visionWindowFitsOneImage,
+  VISION_PROMPT_TOKENS,
+} from "./budget-resolver";
+import { MEDIA_TOKENS } from "./token-estimate";
 import {
   configuredContextRecord,
   MIN_CONTEXT_WINDOW,
@@ -457,11 +462,20 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     // that names a model — the global chat model, each per-operation model, and the
     // vision model — because those models can be genuinely different sizes and
     // `ModelContextStore` already keys its record by model.
-    const addContextWindowControl = (model: () => string): void => {
+    const addContextWindowControl = (model: () => string, isVision = false): void => {
       if (!model()) return;
+      // Only the vision role can be sized out of existence by a window the field
+      // otherwise accepts: a chat model with a small window truncates, vision
+      // refuses every attachment before dispatch and says nothing here.
+      const configured = configuredContextWindowFor(s.nativeAgent, model());
+      const tooSmallForVision = isVision
+        && typeof configured === "number"
+        && !visionWindowFitsOneImage(configured, MEDIA_TOKENS + VISION_PROMPT_TOKENS);
       addSetting(
         T.settings.contextWindowTokens_name,
-        T.settings.contextWindowTokens_desc,
+        tooSmallForVision
+          ? `${T.settings.contextWindowTokens_desc} ${T.settings.contextWindowTokens_visionTooSmall}`
+          : T.settings.contextWindowTokens_desc,
         (setting) => {
           addAutomaticBudgetControl(
             setting,
@@ -1243,7 +1257,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
 
       // Vision runs a model of its own, usually a far smaller one than the chat
       // model, and it now resolves a context record of its own too.
-      addContextWindowControl(() => s.vision.model);
+      addContextWindowControl(() => s.vision.model, true);
     }
 
     // ── Graph settings ────────────────────────────────────────────────────────

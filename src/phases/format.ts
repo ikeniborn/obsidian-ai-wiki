@@ -249,6 +249,9 @@ export async function* runFormat(
     /** The vision model's own window, reported when a size refusal has to explain itself. */
     contextWindow?: number;
     contextWindowSource?: ContextWindowSource;
+    /** Built against the vision model, so it learns from its own calls. */
+    onUsageObserved?: LlmCallOptions["onUsageObserved"];
+    onContextError?: LlmCallOptions["onContextError"];
   } = { enabled: false, model: "" },
   visionTempStore?: VisionTempStore,
   progress: FormatProgress = enFormatProgressFallback,
@@ -318,6 +321,10 @@ export async function* runFormat(
               maxTokens: visionSettings.maxTokens ?? opts.maxTokens,
               tokenCalibration: visionSettings.tokenCalibration,
               onEvent: (event) => visionEvents.push(event),
+              // Against the vision model. Without them the vision model never
+              // learns its own window or calibration from its own calls.
+              onUsageObserved: visionSettings.onUsageObserved,
+              onContextError: visionSettings.onContextError,
             },
           );
           for (const event of visionEvents) yield event;

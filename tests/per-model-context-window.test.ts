@@ -259,8 +259,12 @@ test("vision resolves a record for its own model and budgets from that window", 
 
   assert.ok(resolved.budget, "vision must get a budget of its own");
   assert.equal(resolved.budget.contextWindow, 65_536, "the vision model's window, not the text model's");
-  assert.equal(resolved.budget.outputBudgetTokens, 32_768);
-  assert.equal(resolved.budget.inputBudgetTokens, 29_491);
+  // Vision's own output ceiling share, a quarter of the window, not format's half:
+  // min(8192 * 4, 65_536 / 4) for the reply and floor((65_536 - 16_384) * 0.9) for
+  // the prompt. A vision reply is one image description, and claiming half the
+  // window for it is what left a small window unable to fit a single image.
+  assert.equal(resolved.budget.outputBudgetTokens, 16_384);
+  assert.equal(resolved.budget.inputBudgetTokens, 44_236);
   assert.equal(
     store.get("http://host/v1", "vision-model")?.contextWindow, 65_536,
     "the record is keyed by the vision model",
@@ -349,7 +353,8 @@ test("a learned vision window is still a real fact about the model and is used",
 
   const resolved = await resolveVisionBudget(store, settings, "vision-model");
   assert.equal(resolved.budget?.contextWindow, 32_768);
-  assert.equal(resolved.budget?.inputBudgetTokens, 14_745);
+  // floor((32_768 - 8_192) * 0.9), where 8_192 is the quarter-window vision share.
+  assert.equal(resolved.budget?.inputBudgetTokens, 22_118);
 });
 
 test("vision without a model of its own resolves nothing", async () => {

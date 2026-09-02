@@ -413,11 +413,16 @@ advertises nothing, **Vision → Model context window** is the field that makes 
 small-window vision model work: set it to the model's real window and PDF batches, the
 output cap and the client-side size check all follow from it.
 
-Vision calls do not feed the context store. A provider rejection of a vision request is
-recovered inside the run and then forgotten, so a vision-only model never learns a window
-from one and its token calibration stays at 1; a rejection is remembered only when the
-same model also serves a chat operation, which shares one context record with it. Setting
-the field is what makes the window stick.
+Vision calls feed the context store like any other. A vision call reports its own usage,
+so a vision-only model corrects its token calibration from its own requests instead of
+staying at 1, and a provider rejection of a vision request is recorded against that model
+rather than only recovered inside the run — the next run no longer repeats the same
+oversized first attempt.
+
+A vision reply is one image description, so it claims a quarter of the window rather than
+the half a Format rewrite takes. That is what makes a small window usable: below roughly
+7100 tokens no window can carry a single image, and the **Vision → Model context window**
+field says so under the field when the number you set is below that floor.
 
 When an attachment is skipped because it does not fit, the `⚠️ Vision skipped` warning
 explains why: it names the vision model and the setting to change, and — when a window is
