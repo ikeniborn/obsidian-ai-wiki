@@ -725,6 +725,9 @@ async function* prepareDomainBootstrap(
       for (const attemptSink of attemptSinks) {
         yield lifecycleEvent(attemptSink.lifecycle!.id, attemptSink.lifecycle!.action, "failed");
       }
+      // These lifecycles are terminal now. Drop them so the catch below, which
+      // closes whatever this attempt left open, cannot close them a second time.
+      attemptSinks = [];
       if (semanticAttempt >= (opts.structuredRetries ?? 1)) {
         throw new Error(taxonomyIssue);
       }
@@ -758,6 +761,18 @@ async function* prepareDomainBootstrap(
     // exists for, so a window set larger than the model's real one must still leave
     // a trace where the user looks for it (a `context_window_conflict` line in
     // agent.jsonl), and a probed window can still be learned down for the next run.
+    // Groups already answered before this one threw still hold an open lifecycle
+    // row. Nothing else closes them, so without this the sidebar keeps them
+    // spinning for the rest of the session. An abort closes them as cancelled,
+    // because they did not fail — the user stopped the run.
+    const groupTerminalPhase = (error as Error).name === "AbortError" || signal.aborted
+      ? "cancelled"
+      : "failed";
+    for (const attemptSink of attemptSinks) {
+      if (attemptSink.lifecycle) {
+        yield lifecycleEvent(attemptSink.lifecycle.id, attemptSink.lifecycle.action, groupTerminalPhase);
+      }
+    }
     const contextError = classifyContextError(error);
     if (contextError !== null) requestOpts.onContextError?.(contextError);
     yield { kind: "tool_result", ok: false, preview: (error as Error).message };

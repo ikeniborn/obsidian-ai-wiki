@@ -89,7 +89,7 @@ import {
   persistDeleteStateCommitEvent,
 } from "./phases/delete";
 import { processDeleteStateCommitForDispatch } from "./delete-state-dispatch";
-import { finalizeRunStatus, reduceRunStatus } from "./run-status";
+import { finalizeRunStatus, hardRunError, INITIAL_RUN_STATUS, reduceRunStatus } from "./run-status";
 
 /** Minimal surface of the host obsidian-excalidraw-plugin's ExcalidrawAutomate. */
 interface ExcalidrawAutomateLike {
@@ -885,7 +885,7 @@ export class WikiController {
     const sessionId = String(startedAt);
     const steps: RunHistoryEntry["steps"] = [];
     let finalText = "";
-    let status: RunHistoryEntry["status"] = "done";
+    let statusState = INITIAL_RUN_STATUS;
     let observedSuccessfulMutation = false;
 
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `start op=${op} args=${JSON.stringify(args)} domainId=${domainId ?? ""}` });
@@ -926,7 +926,7 @@ export class WikiController {
           });
           if (!publication.ok) {
             finalText = publication.error.message;
-            status = "error";
+            statusState = hardRunError(statusState);
             this.collectStep(publication.error, steps);
             ctrl.abort();
             break;
@@ -948,7 +948,7 @@ export class WikiController {
             if (e instanceof DomainCorruptError) {
               new Notice(`Domain map corrupt: ${e.message}`);
             }
-            status = "error";
+            statusState = hardRunError(statusState);
             ctrl.abort();
             break;
           }
@@ -962,10 +962,10 @@ export class WikiController {
         if (ev.kind === "file_outcome" && ev.status === "done") {
           observedSuccessfulMutation = true;
         }
-        status = reduceRunStatus(status, ev);
+        statusState = reduceRunStatus(statusState, ev);
       }
     } catch (err) {
-      status = "error";
+      statusState = hardRunError(statusState);
       if (!timedOut) {
         console.error("[ai-wiki] dispatch failed", err);
         finalText = i18n().ctrl.errorPrefix((err as Error).message);
@@ -978,7 +978,7 @@ export class WikiController {
       this.currentOp = null;
       this._currentLogMeta = null;
     }
-    status = finalizeRunStatus(status, {
+    const status: RunHistoryEntry["status"] = finalizeRunStatus(statusState, {
       aborted: ctrl.signal.aborted,
       timedOut,
     });
