@@ -9,6 +9,7 @@ import {
   normalizePersistedModelControls,
   parsePositiveBudgetInput,
   renderNativeBudgetControls,
+  repaintAutomaticControls,
   resolveCallPolicy,
 } from "../src/model-call-policy";
 import { DEFAULT_SETTINGS, type LlmWikiPluginSettings } from "../src/types";
@@ -540,6 +541,36 @@ test("native budgets are optional by default, so the settings tab must not hide 
   assert.equal(DEFAULT_SETTINGS.nativeAgent.repairInputBudgetTokens, undefined);
 });
 
+test("a committed edit re-reads every control except the one it was typed into", () => {
+  // Several controls can address one stored entry: a per-operation context window
+  // falls back to the global model's, so one model key can back three fields. A
+  // placeholder-only repaint left the siblings showing the number that was just
+  // overwritten. The field being typed into must still keep its own text.
+  const seen: Array<{ id: string; resetValue: boolean }> = [];
+  const typed = (resetValue: boolean) => seen.push({ id: "typed", resetValue });
+  const sibling = (resetValue: boolean) => seen.push({ id: "sibling", resetValue });
+
+  repaintAutomaticControls([typed, sibling], false, typed);
+  assert.deepEqual(seen, [
+    { id: "typed", resetValue: false },
+    { id: "sibling", resetValue: true },
+  ]);
+
+  seen.length = 0;
+  repaintAutomaticControls([typed, sibling], true, typed);
+  assert.deepEqual(seen, [
+    { id: "typed", resetValue: true },
+    { id: "sibling", resetValue: true },
+  ]);
+
+  seen.length = 0;
+  repaintAutomaticControls([typed, sibling], false);
+  assert.deepEqual(seen, [
+    { id: "typed", resetValue: true },
+    { id: "sibling", resetValue: true },
+  ]);
+});
+
 test("addPolicyControls renders an automatic field even when its value is undefined", () => {
   const start = settingsSource.indexOf("const addAutomaticBudgetControl = (");
   const end = settingsSource.indexOf("const busy = this.plugin.controller.running;", start);
@@ -586,10 +617,11 @@ test("a changed context window repaints the dependent placeholders without struc
   // Every automatic control registers a repaint, and a committed edit runs them.
   assert.match(body, /automaticControls\.push\(repaint\)/);
   assert.match(body, /text\.setPlaceholder\(rendered\.placeholder\)/);
-  assert.match(body, /refreshAutomaticControls\(\);/);
-  // A repaint rewrites the value only when explicitly asked to (a model change),
-  // never on the placeholder-only path a keystroke takes: rewriting the value while
-  // the user types would clobber a half-entered number.
+  // The keystroke path names the control it came from, so `repaintAutomaticControls`
+  // can spare that one control and re-read every other.
+  assert.match(body, /refreshAutomaticControls\(false, repaint\);/);
+  // A repaint rewrites the value only when asked to, never in the control the user
+  // is typing into: rewriting it mid-entry would clobber a half-entered number.
   assert.match(body, /if \(resetValue\) text\.setValue\(rendered\.value\);/);
   assert.doesNotMatch(body, /this\.update\(\)/, "no structural update inside the automatic control");
 
