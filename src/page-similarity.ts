@@ -457,6 +457,21 @@ export function maxCosine(query: Float32Array, vecs: Float32Array[]): number {
   return best;
 }
 
+/**
+ * Character bound applied to every embedding input, query and corpus alike.
+ *
+ * Query texts have always been cut to this length; corpus texts were passed
+ * whole, so a section longer than the model's own input limit was rejected at
+ * the provider and the run degraded. The bound is in characters because the
+ * chunking knobs it has to agree with (`ChunkingConfig`) are — sizing both in
+ * estimator tokens is a separate, eval-gated change.
+ */
+export const EMBED_INPUT_MAX_CHARS = 2000;
+
+function capEmbedInput(text: string): string {
+  return text.length <= EMBED_INPUT_MAX_CHARS ? text : text.slice(0, EMBED_INPUT_MAX_CHARS);
+}
+
 const EMBEDDING_BATCH_SIZE = 100;
 const EMBEDDING_FETCH_MAX_ATTEMPTS = 3;
 const EMBEDDING_FETCH_RETRY_BASE_MS = 250;
@@ -654,10 +669,14 @@ export class PageSimilarityService {
 
     let queryVec: Float32Array;
     try {
-      const vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [query.slice(0, 2000)], this.config.dimensions);
-      if (!isUsableVector(vecs[0], this.config.dimensions)) return rankChunksJaccard(queryTokens, sections, limit, this.config.boilerplateDemotion);
+      const vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [capEmbedInput(query)], this.config.dimensions);
+      if (!isUsableVector(vecs[0], this.config.dimensions)) {
+        this.lastChunkDegrade = "query embedding returned an unusable vector";
+        return rankChunksJaccard(queryTokens, sections, limit, this.config.boilerplateDemotion);
+      }
       queryVec = vecs[0];
-    } catch {
+    } catch (error) {
+      this.lastChunkDegrade = (error as Error).message || "query embedding failed";
       return rankChunksJaccard(queryTokens, sections, limit, this.config.boilerplateDemotion);
     }
 
@@ -686,7 +705,7 @@ export class PageSimilarityService {
     for (let i = 0; i < missing.length; i += EMBEDDING_BATCH_SIZE) {
       const batch = missing.slice(i, i + EMBEDDING_BATCH_SIZE);
       try {
-        const vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, batch.map((section) => section.embedText), this.config.dimensions);
+        const vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, batch.map((section) => capEmbedInput(section.embedText)), this.config.dimensions);
         if (vecs.length !== batch.length || vecs.some((vec) => !isUsableVector(vec, this.config.dimensions))) {
           this.lastChunkDegrade = `embedding batch returned ${vecs.length} unusable or mismatched vectors for ${batch.length} sections`;
           break;
@@ -775,7 +794,7 @@ export class PageSimilarityService {
     if (!this.cache || !baseUrl || !model) return { pid: "", score: 0 };
     let candVec: Float32Array;
     try {
-      [candVec] = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [candidateText.slice(0, 2000)], this.config.dimensions);
+      [candVec] = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [capEmbedInput(candidateText)], this.config.dimensions);
     } catch {
       return { pid: "", score: 0 }; // never fire the gate on a failed signal
     }
@@ -908,7 +927,7 @@ export class PageSimilarityService {
       if (!annotations[i]) continue;
       if (pageVecs.has(pids[i])) continue;
       cur.pids.push(pids[i]);
-      cur.texts.push(annotations[i]);
+      cur.texts.push(capEmbedInput(annotations[i]));
       if (cur.pids.length >= EMBEDDING_BATCH_SIZE) {
         batches.push(cur);
         cur = { pids: [], texts: [] };
@@ -980,7 +999,7 @@ export class PageSimilarityService {
     // Query vector
     let queryVec: Float32Array;
     try {
-      const truncated = sourceContent.slice(0, 2000);
+      const truncated = capEmbedInput(sourceContent);
       [queryVec] = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [truncated], this.config.dimensions);
     } catch {
       return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
@@ -1005,7 +1024,7 @@ export class PageSimilarityService {
       if (!annotations[i]) continue;
       if (pageVecs.has(pids[i])) continue;  // already have from cache
       cur.pids.push(pids[i]);
-      cur.texts.push(annotations[i]);
+      cur.texts.push(capEmbedInput(annotations[i]));
       if (cur.pids.length >= EMBEDDING_BATCH_SIZE) {
         batches.push(cur);
         cur = { pids: [], texts: [] };
@@ -1083,7 +1102,7 @@ export class PageSimilarityService {
 
     let queryVec: Float32Array;
     try {
-      const truncated = sourceContent.slice(0, 2000);
+      const truncated = capEmbedInput(sourceContent);
       [queryVec] = await fetchEmbeddings(baseUrl, apiKey!, model, [truncated], this.config.dimensions);
     } catch {
       return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit, applyDemotion), denseMax: 0, embedFailed: true, denseByPid: {} };
@@ -1105,7 +1124,7 @@ export class PageSimilarityService {
     for (let i = 0; i < pids.length; i++) {
       if (!annotations[i] || pageVecs.has(pids[i])) continue;
       cur.pids.push(pids[i]);
-      cur.texts.push(annotations[i]);
+      cur.texts.push(capEmbedInput(annotations[i]));
       if (cur.pids.length >= EMBEDDING_BATCH_SIZE) { batches.push(cur); cur = { pids: [], texts: [] }; }
     }
     if (cur.pids.length > 0) batches.push(cur);
@@ -1311,7 +1330,7 @@ export class PageSimilarityService {
       const batch = pending.slice(i, i + EMBEDDING_BATCH_SIZE);
       let vecs: Float32Array[];
       try {
-        vecs = await fetchEmbeddingsWithRetry(baseUrl, apiKey ?? "", model, batch.map((p) => p.embedText), dimensions);
+        vecs = await fetchEmbeddingsWithRetry(baseUrl, apiKey ?? "", model, batch.map((p) => capEmbedInput(p.embedText)), dimensions);
       } catch (error) {
         throw new EmbeddingUnavailableError(`Embedding refresh failed: ${(error as Error).message}`);
       }
