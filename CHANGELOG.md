@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.12 — 2026-09-02
+
+### Fixes
+
+- fix(init): report the terminal state the run actually reached
+- fix(vision): make a configured window usable and let vision learn from its own calls
+
+---
+
 ## 0.3.11 — 2026-09-02
 
 Supersedes the unpublished `0.3.10` bump, whose release run failed before the tag was claimed.
