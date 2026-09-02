@@ -608,6 +608,14 @@ interface Pending { pid: string; idx: number; embedText: string; }
 export class PageSimilarityService {
   private cache: EmbeddingCacheFile | null = null;
 
+  /**
+   * Why the last `selectRelevantChunks` call scored fewer sections than it
+   * collected, or `null` when it embedded them all. Set per call so a caller
+   * can report the degrade; the ranking itself still uses every vector that
+   * was computed or read from cache.
+   */
+  lastChunkDegrade: string | null = null;
+
   constructor(readonly config: SimilarityConfig) {}
 
   // Corpus for jaccard-mode dedup scoring (pid -> annotation). Set by the caller
@@ -633,6 +641,7 @@ export class PageSimilarityService {
     articleScores: Record<string, number>,
     limit: number,
   ): Promise<SelectedChunk[]> {
+    this.lastChunkDegrade = null;
     const queryTokens = tokenize(query);
     if (queryTokens.size === 0 || candidateIds.size === 0 || limit <= 0) return [];
     const chunking = this.config.chunking ?? DEFAULT_CHUNKING;
@@ -667,20 +676,31 @@ export class PageSimilarityService {
       }
     }
 
+    // A batch that fails stops the remaining ones but never discards the vectors
+    // already computed or read from cache: those sections stay cosine-scored and
+    // the rest simply drop out of the ranking, the same way a cache-only section
+    // without a vector already does. Only when no vector at all survives does the
+    // whole call fall back to lexical scoring, because cosine and Jaccard scores
+    // are not comparable and must never share one ranking.
     const missing = sections.filter((section) => !vectors.has(section.hash));
     for (let i = 0; i < missing.length; i += EMBEDDING_BATCH_SIZE) {
       const batch = missing.slice(i, i + EMBEDDING_BATCH_SIZE);
       try {
         const vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, batch.map((section) => section.embedText), this.config.dimensions);
         if (vecs.length !== batch.length || vecs.some((vec) => !isUsableVector(vec, this.config.dimensions))) {
-          return rankChunksJaccard(queryTokens, sections, limit, this.config.boilerplateDemotion);
+          this.lastChunkDegrade = `embedding batch returned ${vecs.length} unusable or mismatched vectors for ${batch.length} sections`;
+          break;
         }
         for (let j = 0; j < batch.length; j++) {
           vectors.set(batch[j].hash, vecs[j]);
         }
-      } catch {
-        return rankChunksJaccard(queryTokens, sections, limit, this.config.boilerplateDemotion);
+      } catch (error) {
+        this.lastChunkDegrade = (error as Error).message || "embedding batch failed";
+        break;
       }
+    }
+    if (vectors.size === 0) {
+      return rankChunksJaccard(queryTokens, sections, limit, this.config.boilerplateDemotion);
     }
 
     const scored: SelectedChunk[] = [];
