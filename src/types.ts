@@ -2,6 +2,7 @@ import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "./domain";
 import type { EvalMetaFields } from "./eval-log";
 import type { FileMutation } from "./file-transaction";
+import type { PromptCensus } from "./token-estimate";
 import type { IngestLogEntry } from "./wiki-log";
 
 export type WikiOperation =
@@ -459,6 +460,19 @@ export type RunEvent =
       stream: boolean;
       messageCount: number;
       messageCharLengths: number[];
+      /**
+       * The prepared request as character-class counts, from the same walk
+       * `estimatedInputTokens` is weighed over. The log records prompt lengths and
+       * never prompt text, so these counts are what makes a recorded request
+       * re-measurable — `scripts/derive-recorded-prompts.py` turns one into a
+       * fixture case without reading the vault the prompt came from, which is what
+       * lets every call site and every prompt size reach the fixture.
+       *
+       * These are estimator counts, not `messageCharLengths` summed: content given
+       * as an array is charged part by part here and serialized whole there, and an
+       * image contributes to `imageParts` rather than to any character class.
+       */
+      census?: PromptCensus;
       estimatedInputTokens: number;
       outputBudget?: number;
       responseFormatType?: string;

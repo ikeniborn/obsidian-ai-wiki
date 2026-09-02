@@ -60,13 +60,46 @@ export interface TextMeasure {
   bytes: number;
 }
 
-export function measureText(text: string): TextMeasure {
+/**
+ * The character counts `measureText` weighs, kept as counts. This is the whole
+ * input the rates read, so a prompt recorded as a census can be re-measured
+ * without its text ever being stored — which is what makes a recorded-prompt
+ * fixture derivable from a run log. Newlines are counted apart from symbol runs
+ * even though both are charged `SYMBOL_RUN_TOKENS`, because a reconstruction has
+ * to place them to reproduce the run count.
+ */
+export interface TextCensus {
+  cyrillic: number;
+  cjk: number;
+  word: number;
+  symbols: number;
+  symbolRuns: number;
+  newlines: number;
+}
+
+/**
+ * A prepared request's census: every message's characters summed, plus the image
+ * parts, which are priced flat and carry no characters.
+ */
+export interface PromptCensus extends TextCensus {
+  imageParts: number;
+  /** Message count, because each message is charged a flat overhead on top of its text. */
+  messages: number;
+}
+
+/**
+ * The single character walk both `measureText` and `censusText` are projections
+ * of. They share it so a census can never drift from the measure it describes:
+ * the rates are applied to the counts this returns, never to a second walk.
+ */
+function walkText(text: string): { census: TextCensus; bytes: number } {
   let bytes = 0;
   let cyrillic = 0;
   let cjk = 0;
   let word = 0;
-  let symbol = 0;
-  let runs = 0;
+  let symbols = 0;
+  let symbolRuns = 0;
+  let newlines = 0;
   let previous: CharClass | undefined;
   for (const char of text) {
     const code = char.codePointAt(0) ?? 0;
@@ -76,22 +109,33 @@ export function measureText(text: string): TextMeasure {
       case "cyrillic": cyrillic++; break;
       case "cjk": cjk++; break;
       case "word": word++; break;
-      case "newline": runs++; break;
+      case "newline": newlines++; break;
       default:
-        symbol++;
-        if (cls !== previous) runs++;
+        symbols++;
+        if (cls !== previous) symbolRuns++;
         break;
     }
     previous = cls;
   }
-  return {
-    raw: cyrillic / CHARS_PER_TOKEN_CYRILLIC
-      + cjk
-      + word / CHARS_PER_TOKEN_WORD
-      + symbol / CHARS_PER_TOKEN_SYMBOL
-      + runs * SYMBOL_RUN_TOKENS,
-    bytes,
-  };
+  return { census: { cyrillic, cjk, word, symbols, symbolRuns, newlines }, bytes };
+}
+
+/** The weighted class sum, from counts alone. */
+export function rawFromCensus(census: TextCensus): number {
+  return census.cyrillic / CHARS_PER_TOKEN_CYRILLIC
+    + census.cjk
+    + census.word / CHARS_PER_TOKEN_WORD
+    + census.symbols / CHARS_PER_TOKEN_SYMBOL
+    + (census.symbolRuns + census.newlines) * SYMBOL_RUN_TOKENS;
+}
+
+export function measureText(text: string): TextMeasure {
+  const walked = walkText(text);
+  return { raw: rawFromCensus(walked.census), bytes: walked.bytes };
+}
+
+export function censusText(text: string): TextCensus {
+  return walkText(text).census;
 }
 
 /**
@@ -138,4 +182,51 @@ export function estimateMessages(
   let total = 0;
   for (const message of messages) total += MESSAGE_OVERHEAD_TOKENS + rawValueTokens(message);
   return Math.ceil(total * calibration);
+}
+
+/** Accumulates counts over the same values `rawValueTokens` charges. */
+function censusValue(value: unknown, into: PromptCensus): void {
+  if (typeof value === "string") {
+    const census = censusText(value);
+    into.cyrillic += census.cyrillic;
+    into.cjk += census.cjk;
+    into.word += census.word;
+    into.symbols += census.symbols;
+    into.symbolRuns += census.symbolRuns;
+    into.newlines += census.newlines;
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) censusValue(item, into);
+    return;
+  }
+  if (!isRecord(value)) return;
+  if (value.type === "image_url") {
+    into.imageParts += 1;
+    return;
+  }
+  for (const item of Object.values(value)) censusValue(item, into);
+}
+
+/**
+ * The whole prepared request as counts, walking exactly the values
+ * `estimateMessages` charges. Text is read and discarded, so a run log can carry
+ * this where it cannot carry prompts — which is what makes a recorded request
+ * re-measurable offline.
+ *
+ * Summing across messages loses the per-message boundary, and `estimateText`
+ * rounds once per message, so re-measuring the census as one string can land up
+ * to `messages - 1` tokens below the estimate that was logged beside it. The
+ * boundary is not recorded because nothing reads it: the fixture this feeds
+ * measures a whole prompt.
+ */
+export function censusMessages(
+  messages: readonly OpenAI.Chat.ChatCompletionMessageParam[],
+): PromptCensus {
+  const census: PromptCensus = {
+    cyrillic: 0, cjk: 0, word: 0, symbols: 0, symbolRuns: 0, newlines: 0,
+    imageParts: 0, messages: messages.length,
+  };
+  for (const message of messages) censusValue(message, census);
+  return census;
 }

@@ -1,60 +1,52 @@
 #!/usr/bin/env python3
 """Derive tests/fixtures/recorded-prompts.json from a live agent.jsonl run.
 
-The plugin's run log records prompt LENGTHS and the provider's own input token
-count, never prompt text, so a fixture case cannot be lifted verbatim. This
-script reconstructs each case's character census from the real material the call
-carried and emits counts only — no note text ever reaches the fixture.
+The run log records a prompt's character-class census and the provider's own
+input token count for it, never the prompt text. Those two numbers are the whole
+ground truth the token estimator needs, so a fixture case is a direct read of the
+log — no vault, no tokenizer, no reconstruction.
 
     python3 scripts/derive-recorded-prompts.py \
-        --log   <vault>/.obsidian/plugins/ai-wiki/agent.jsonl \
-        --vault <vault> \
-        --tokenizer /path/to/deepseek-tokenizer.json \
-        --out   tests/fixtures/recorded-prompts.json
-
-`--tokenizer` takes the provider family's published `tokenizer.json` (for the
-recorded runs: DeepSeek-V3) and needs the `tokenizers` package. It is what makes
-each reconstruction falsifiable: a census that does not tokenize to the token
-count the provider billed is not the composition the provider saw, and this
-script drops it.
+        --log <vault>/.obsidian/plugins/ai-wiki/agent.jsonl \
+        --out tests/fixtures/recorded-prompts.json
 
 Procedure, per recorded request:
 
-1. Join `llm_request_fingerprint` (message char lengths, the estimate at the
-   time) to the `calibration_sample` that follows it (the provider's `actual`),
-   and to the `prompt_breakdown` and the `file_start` note in scope.
-2. Recover the Cyrillic character count exactly. With no CJK and no image part
-   the pre-fix rules are invertible:
-       cyrillic = (estimate - 4*messages - roleChars - chars/4.2) / (1/1.9 - 1/4.2)
-   This is algebra over recorded numbers, not an assumption.
-3. Rebuild the material: the plugin's own prompts/ and templates/ for the
-   instruction part, sized by the recorded section subtotals, then the
-   JSON-escaped fenced code and prose of the source note, mixed so the result
-   reproduces the recorded total character count and that Cyrillic count.
-4. Keep the case only if it round-trips: census sum equals the recorded chars,
-   the pre-fix rules reproduce the recorded estimate within 3%, and the
-   tokenizer counts the reconstruction within 3% of the provider's count.
-5. Emit one case per size band (best tokenizer fidelity in the band), plus a
-   second case from a different source note where the band has one.
+1. Join `llm_request_fingerprint` (the census, the message lengths, the estimate
+   the shipped rules produced) to the `calibration_sample` that follows it (the
+   provider's `actual`).
+2. Score the case by how far that estimate landed from the provider's count.
+3. Keep the worst case per (callSite, size band). A fixture is a regression test,
+   so it should pin where the rules are weakest, not where they are comfortable.
+
+Every structured call site emits the census, so every call site and every prompt
+size can reach the fixture. Requests logged before the census field existed are
+counted and skipped; a run that yields only those came from an older build.
+
+The nine `reconstructed` cases in the fixture predate the census field, when the
+log carried lengths only. They were rebuilt from this repository's prompts/ and
+templates/ sized by the recorded `prompt_breakdown` subtotals plus the source
+note's own text, and validated against the DeepSeek-V3 tokenizer — a procedure
+that reached `ingest.synthesize` alone, because nothing else emits
+`prompt_breakdown`, and only prompts above ~3.4k tokens, because the log keeps no
+breakdown below that. They cannot be re-derived, so this script preserves them on
+every rebuild and replaces only the `recorded` cases.
 
 The character-class RATES in src/token-estimate.ts were fitted by non-negative
 least squares of class counts against tokenizer counts over every note in the
 vault, this repository's prompts/, templates/, src/**/*.ts and docs/, real
 agent.jsonl JSON, and JSON-escaped notes — 973 texts for the shipped numbers.
-Rerun that fit with --fit (numpy required); it prints the rates, their residuals
-and whether each shipped rate still charges at least what the fit asks, and
-writes nothing. It will not reproduce the shipped numbers digit for digit: the
-vault is live, so every note added to it moves the fit. The direction is what
-has to hold.
+Rerun that fit with --fit (numpy, tokenizers, --vault and --tokenizer required);
+it prints the rates, their residuals and whether each shipped rate still charges
+at least what the fit asks, and writes nothing. It will not reproduce the shipped
+numbers digit for digit: the vault is live, so every note added to it moves the
+fit. The direction is what has to hold.
 
-The recorded runs were served by `ollama-deepseek-v4-pro-cloud`. The tokenizer
-used as its stand-in is DeepSeek-V3's published `tokenizer.json` (128000-entry
-BPE vocabulary, sha256
+The tokenizer the fit depends on is DeepSeek-V3's published `tokenizer.json`
+(128000-entry BPE vocabulary, sha256
 621ac2e32d0dba658404412318818aaa8ce8cda492e59830109d8da6b517fb41, from
 huggingface.co/deepseek-ai/DeepSeek-V3). It is not vendored: it is a 7.8 MB file
-this repository has no runtime use for. Its standing as a stand-in is checked,
-not assumed — see step 4, and the 82 reconstructions it agreed with at a median
-of 1.02 of the provider's own count.
+this repository has no runtime use for.
 """
 
 from __future__ import annotations
@@ -62,18 +54,12 @@ from __future__ import annotations
 import argparse
 import glob
 import json
-import math
 import os
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List
 
-CHARS_PER_TOKEN_CYRILLIC_OLD = 1.9
-CHARS_PER_TOKEN_DEFAULT_OLD = 4.2
-MESSAGE_OVERHEAD_TOKENS = 4
-ROLES = ["system", "user", "assistant", "user"]
-FENCE = re.compile(r"```.*?```", re.S)
-BANDS = [(3400, 3600), (3600, 4000), (4000, 4600), (4600, 6000), (6000, 8000), (8000, 30000)]
-CENSUS_TOLERANCE = 0.03
+BANDS = [(0, 1200), (1200, 2400), (2400, 3400), (3400, 4600), (4600, 8000), (8000, 30000)]
+CENSUS_FIELDS = ("cyrillic", "cjk", "word", "symbols", "symbolRuns", "newlines", "imageParts")
 
 
 def is_cyrillic(code: int) -> bool:
@@ -112,26 +98,10 @@ def census(text: str) -> Dict[str, int]:
     return out
 
 
-def old_estimate(chars: int, cyrillic: int, messages: int) -> int:
-    """The pre-fix estimate, used only to check a reconstruction against the log."""
-    role_chars = sum(len(role) for role in ROLES[:messages])
-    raw = (cyrillic / CHARS_PER_TOKEN_CYRILLIC_OLD
-           + (chars - cyrillic + role_chars) / CHARS_PER_TOKEN_DEFAULT_OLD
-           + MESSAGE_OVERHEAD_TOKENS * messages)
-    return math.ceil(raw)
-
-
-def recover_cyrillic(chars: int, estimate: int, messages: int) -> float:
-    role_chars = sum(len(role) for role in ROLES[:messages])
-    raw = estimate - MESSAGE_OVERHEAD_TOKENS * messages - role_chars / CHARS_PER_TOKEN_DEFAULT_OLD
-    scale = 1 / CHARS_PER_TOKEN_CYRILLIC_OLD - 1 / CHARS_PER_TOKEN_DEFAULT_OLD
-    return max((raw - chars / CHARS_PER_TOKEN_DEFAULT_OLD) / scale, 0.0)
-
-
-def read_records(log_path: str) -> List[dict]:
-    """Join fingerprint -> calibration_sample, carrying breakdown and source file."""
+def read_records(log_path: str) -> tuple[List[dict], int]:
+    """Join fingerprint -> calibration_sample. Also counts fingerprints with no census."""
     records: List[dict] = []
-    breakdowns: Dict[str, dict] = {}
+    censusless = 0
     current_file: Dict[str, str] = {}
     pending = None
     for line in open(log_path, encoding="utf-8"):
@@ -143,9 +113,11 @@ def read_records(log_path: str) -> List[dict]:
         kind = event.get("kind")
         if kind == "file_start":
             current_file[entry["session"]] = event["file"]
-        elif kind == "prompt_breakdown":
-            breakdowns[event["requestId"]] = event
         elif kind == "llm_request_fingerprint":
+            if event.get("census") is None:
+                censusless += 1
+                pending = None
+                continue
             pending = (event, entry, current_file.get(entry["session"]))
         elif kind == "calibration_sample" and pending is not None:
             fingerprint, envelope, source = pending
@@ -155,114 +127,50 @@ def read_records(log_path: str) -> List[dict]:
                 messages=fingerprint["messageCount"],
                 messageChars=fingerprint["messageCharLengths"],
                 estimateAtTheTime=fingerprint["estimatedInputTokens"],
+                census={field: fingerprint["census"].get(field, 0) for field in CENSUS_FIELDS},
                 actual=event["actual"],
                 recordedAt=envelope["ts"],
-                session=envelope["session"],
                 sourceNote=source,
-                breakdown=breakdowns.get(fingerprint["requestId"]),
             ))
             pending = None
-    return records
+    return records, censusless
 
 
-def escape(text: str) -> str:
-    """A payload carries note text inside a JSON string, so escaping is part of it."""
-    return json.dumps(text, ensure_ascii=False)[1:-1]
+def band_of(tokens: int) -> tuple[int, int] | None:
+    for low, high in BANDS:
+        if low <= tokens < high:
+            return (low, high)
+    return None
 
 
-def tile(pool: str, length: int) -> str:
-    if length <= 0:
-        return ""
-    repeats = length // max(len(pool), 1) + 2
-    return (pool * repeats)[:length]
-
-
-def cyrillic_share(text: str) -> float:
-    sample = text[:40_000]
-    return sum(1 for char in sample if is_cyrillic(ord(char))) / max(len(sample), 1)
-
-
-def reconstruct(record: dict, vault: str, repo: str, pools: dict) -> Optional[dict]:
-    """Rebuild one prompt from real material; None when the log lacks a breakdown."""
-    if record["breakdown"] is None or not record["sourceNote"]:
-        return None
-    note_path = os.path.join(vault, record["sourceNote"])
-    if not os.path.exists(note_path):
-        return None
-    note = open(note_path, encoding="utf-8").read()
-    code = escape("\n".join(FENCE.findall(note))) or escape(note)
-    prose = escape(FENCE.sub("", note))
-    sections = record["breakdown"]["breakdown"]
-    fixed_tokens = sum(sections.get(key, 0) for key in (
-        "contractsTokens", "registryTokens", "contextTokens", "pageDescriptionsTokens"))
-
-    total = sum(record["messageChars"])
-    system_chars = record["messageChars"][0]
-    payload = total - system_chars
-    instruction_chars = min(int(fixed_tokens * CHARS_PER_TOKEN_DEFAULT_OLD), payload - 100)
-    source_chars = payload - instruction_chars
-    target_cyrillic = recover_cyrillic(total, record["estimateAtTheTime"], record["messages"])
-
-    code_share, prose_share = cyrillic_share(code), cyrillic_share(prose)
-    if code_share == prose_share:
-        mix = 0.0
-    else:
-        mix = min(max((target_cyrillic / source_chars - prose_share)
-                      / (code_share - prose_share), 0.0), 1.0)
-    from_code = int(round(source_chars * mix))
-    text = (tile(pools["instructions"], system_chars + instruction_chars)
-            + tile(code, from_code)
-            + tile(prose, source_chars - from_code))
-    if len(text) != total:
-        return None
-    counts = census(text)
-    if counts["cjk"]:
-        return None
-    reproduced = old_estimate(total, counts["cyrillic"], record["messages"])
-    return dict(counts=counts, text=text, reproduced=reproduced)
+def kept_reconstructed(out_path: str) -> List[dict]:
+    """The cases no rebuild can produce again. Losing them would lose the ground truth."""
+    if not os.path.exists(out_path):
+        return []
+    document = json.load(open(out_path, encoding="utf-8"))
+    return [case for case in document.get("cases", [])
+            if case.get("provenance") == "reconstructed"]
 
 
 def build(args: argparse.Namespace) -> None:
-    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    instructions = "".join(
-        open(path, encoding="utf-8").read()
-        for path in sorted(glob.glob(os.path.join(repo, "prompts", "*.md"))
-                           + glob.glob(os.path.join(repo, "templates", "*.md"))))
-    pools = {"instructions": instructions}
+    records, censusless = read_records(args.log)
 
-    from tokenizers import Tokenizer
-    tokenizer = Tokenizer.from_file(args.tokenizer)
-
-    candidates = []
-    for record in read_records(args.log):
-        rebuilt = reconstruct(record, args.vault, repo, pools)
-        if rebuilt is None:
+    # One case per (callSite, band), the one whose shipped estimate landed
+    # furthest from the provider's count: a fixture pins the weak spot, not the
+    # comfortable middle.
+    worst: Dict[tuple, dict] = {}
+    for record in records:
+        band = band_of(record["actual"])
+        if band is None:
             continue
-        estimate_error = abs(rebuilt["reproduced"] / record["estimateAtTheTime"] - 1)
-        tokens = len(tokenizer.encode(rebuilt["text"], add_special_tokens=False).ids)
-        fidelity = tokens / record["actual"]
-        if estimate_error > CENSUS_TOLERANCE or abs(fidelity - 1) > CENSUS_TOLERANCE:
-            continue
-        candidates.append(dict(record=record, counts=rebuilt["counts"],
-                               tokenizerTokens=tokens, fidelity=fidelity))
+        record["error"] = abs(record["estimateAtTheTime"] / record["actual"] - 1)
+        key = (record["callSite"], band)
+        if key not in worst or record["error"] > worst[key]["error"]:
+            worst[key] = record
 
-    selected: List[dict] = []
-    for low, high in BANDS:
-        band = sorted((item for item in candidates if low <= item["record"]["actual"] < high),
-                      key=lambda item: abs(item["fidelity"] - 1))
-        if not band:
-            continue
-        selected.append(band[0])
-        other = [item for item in band[1:]
-                 if item["record"]["sourceNote"] != band[0]["record"]["sourceNote"]]
-        if other and high <= 4600:
-            selected.append(other[0])
-    selected.sort(key=lambda item: -item["record"]["actual"])
-
-    cases = []
-    for item in selected:
-        record, counts = item["record"], item["counts"]
-        cases.append({
+    recorded = []
+    for record in sorted(worst.values(), key=lambda item: -item["actual"]):
+        case = {
             "id": record["requestId"],
             "callSite": record["callSite"],
             "recordedAt": record["recordedAt"],
@@ -270,51 +178,25 @@ def build(args: argparse.Namespace) -> None:
             "recordedMessageChars": record["messageChars"],
             "actualInputTokens": record["actual"],
             "recordedEstimateAtTheTime": record["estimateAtTheTime"],
-            "sourceNote": record["sourceNote"],
-            "reconstruction": {
-                "cyrillic": counts["cyrillic"],
-                "cjk": counts["cjk"],
-                "word": counts["word"],
-                "symbols": counts["symbols"],
-                "symbolRuns": counts["symbolRuns"],
-                "newlines": counts["newlines"],
-                "tokenizerTokens": item["tokenizerTokens"],
-            },
-        })
-    document = {
-        "note": (
-            "Cases recorded live by the plugin against ollama-deepseek-v4-pro-cloud over a "
-            "Linux/Unix administration vault. Recorded verbatim from agent.jsonl: id "
-            "(requestId), callSite, recordedAt, messages and recordedMessageChars "
-            "(llm_request_fingerprint.messageCount/messageCharLengths), actualInputTokens "
-            "(calibration_sample.actual, the provider's own input count) and "
-            "recordedEstimateAtTheTime (llm_request_fingerprint.estimatedInputTokens, "
-            "produced by the 1.9/4.2 rules this fixture replaced). The log stores lengths, "
-            "never prompt text, so the character census under `reconstruction` is NOT "
-            "recorded data - see fittedAgainst."),
-        "fittedAgainst": (
-            "scripts/derive-recorded-prompts.py rebuilds each census from the real material "
-            "the call carried: this repository's prompts/*.md and templates/*.md for the "
-            "instruction part, sized by the recorded prompt_breakdown section subtotals, plus "
-            "the JSON-escaped fenced code and prose of sourceNote (the vault note file_start "
-            "names for that call), mixed so the reconstruction reproduces the recorded total "
-            "character count and the Cyrillic count implied by recordedEstimateAtTheTime. A "
-            "case is kept only if it round-trips: the census sums to recordedMessageChars "
-            "exactly, the pre-fix rules reproduce recordedEstimateAtTheTime within 3%, and "
-            "tokenizerTokens - the reconstruction measured with the provider family's "
-            "published tokenizer (DeepSeek-V3 tokenizer.json) - is within 3% of "
-            "actualInputTokens. Prompts below ~3.4k tokens are absent because the log records "
-            "no prompt_breakdown for them, so their composition cannot be reconstructed "
-            "honestly. The character-class rates themselves were fitted separately against "
-            "tokenizer counts over 973 real texts; the script's docstring states that "
-            "procedure."),
-        "cases": cases,
-    }
+        }
+        if record["sourceNote"]:
+            case["sourceNote"] = record["sourceNote"]
+        case["provenance"] = "recorded"
+        case["census"] = record["census"]
+        recorded.append(case)
+
+    document = json.load(open(args.out, encoding="utf-8"))
+    document["cases"] = recorded + kept_reconstructed(args.out)
     with open(args.out, "w", encoding="utf-8") as handle:
         handle.write(json.dumps(document, ensure_ascii=False, indent=2) + "\n")
-    print(f"{len(candidates)} candidates round-tripped, {len(cases)} written to {args.out}")
-    for case in cases:
-        print(f"  {case['id']:22} {case['actualInputTokens']:>6} tokens  {case['sourceNote']}")
+
+    print(f"{len(records)} requests joined, {len(recorded)} recorded cases written to {args.out}")
+    if censusless:
+        print(f"  {censusless} fingerprints carried no census and were skipped "
+              f"(logged by a build older than the census field)")
+    for case in recorded:
+        print(f"  {case['id']:22} {case['callSite']:24} {case['actualInputTokens']:>6} tokens  "
+              f"estimate off by {(case['recordedEstimateAtTheTime'] / case['actualInputTokens'] - 1) * 100:+.1f}%")
 
 
 def fit_corpus(vault: str, log_path: str, repo: str) -> List[str]:
@@ -399,12 +281,14 @@ def fit(args: argparse.Namespace) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--log", required=True, help="agent.jsonl from the recorded run")
-    parser.add_argument("--vault", required=True, help="vault root the run indexed")
-    parser.add_argument("--tokenizer", required=True, help="the provider family's tokenizer.json")
     parser.add_argument("--out", default="tests/fixtures/recorded-prompts.json")
+    parser.add_argument("--vault", help="vault root the run indexed (--fit only)")
+    parser.add_argument("--tokenizer", help="the provider family's tokenizer.json (--fit only)")
     parser.add_argument("--fit", action="store_true",
                         help="re-run the rate fit and print the rates instead of writing a fixture")
     args = parser.parse_args()
+    if args.fit and not (args.vault and args.tokenizer):
+        parser.error("--fit needs --vault and --tokenizer")
     fit(args) if args.fit else build(args)
 
 

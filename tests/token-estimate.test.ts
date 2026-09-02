@@ -2,16 +2,16 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import type OpenAI from "openai";
-import { estimateMessages, estimateText } from "../src/token-estimate";
+import { censusMessages, estimateMessages, estimateText } from "../src/token-estimate";
 
-interface Reconstruction {
+interface FixtureCensus {
   cyrillic: number;
   cjk: number;
   word: number;
   symbols: number;
   symbolRuns: number;
   newlines: number;
-  tokenizerTokens: number;
+  imageParts: number;
 }
 
 interface Case {
@@ -21,12 +21,22 @@ interface Case {
   recordedMessageChars: number[];
   actualInputTokens: number;
   recordedEstimateAtTheTime: number;
-  reconstruction: Reconstruction;
+  /**
+   * `recorded` - the census is what `llm_request_fingerprint.census` carried, so
+   * it is measured. `reconstructed` - the case predates that field and its census
+   * was rebuilt from the material the call had carried, which is why only those
+   * cases have a `tokenizerTokens` to bound the rebuild's own error.
+   */
+  provenance: "recorded" | "reconstructed";
+  tokenizerTokens?: number;
+  census: FixtureCensus;
 }
 
 const fixture = JSON.parse(
   readFileSync(new URL("./fixtures/recorded-prompts.json", import.meta.url), "utf8"),
 ) as { cases: Case[] };
+
+const reconstructed = fixture.cases.filter((item) => item.provenance === "reconstructed");
 
 /**
  * Rebuilds a prompt with the recorded character census. The fixture stores
@@ -37,7 +47,7 @@ const fixture = JSON.parse(
  * provider counted.
  */
 function messagesFor(item: Case): OpenAI.Chat.ChatCompletionMessageParam[] {
-  const census = item.reconstruction;
+  const census = item.census;
   const runs = Math.max(census.symbolRuns, 1);
   const perRun = Math.floor(census.symbols / runs);
   const parts: string[] = [];
@@ -61,9 +71,15 @@ function messagesFor(item: Case): OpenAI.Chat.ChatCompletionMessageParam[] {
   const extra = Array.from({ length: item.messages - 2 }, () => (
     { role: "user" as const, content: "" }
   ));
+  const images: OpenAI.Chat.ChatCompletionContentPart[] = Array.from(
+    { length: census.imageParts },
+    () => ({ type: "image_url", image_url: { url: "data:image/png;base64,a" } }),
+  );
   return [
     { role: "system", content: "" },
-    { role: "user", content: parts.join("") },
+    images.length > 0
+      ? { role: "user", content: [{ type: "text", text: parts.join("") }, ...images] }
+      : { role: "user", content: parts.join("") },
     ...extra,
   ];
 }
@@ -123,12 +139,14 @@ test("digits and timestamps cost more per character than words, and stay under t
   assert.ok(estimateText(numbers) / numbers.length > 2 * (estimateText(prose) / prose.length));
 });
 
-test("the fixture census matches the recorded prompt length", () => {
-  // The census is reconstructed, so it can drift from the prompt it claims to
-  // describe; the recorded per-message character lengths are what it has to add
-  // up to. A case that fails this is not the prompt the provider counted.
-  for (const item of fixture.cases) {
-    const census = item.reconstruction;
+test("a reconstructed census matches the prompt length it claims to describe", () => {
+  // A rebuilt census can drift from the prompt it describes; the recorded
+  // per-message character lengths are what it has to add up to. A case that
+  // fails this is not the prompt the provider counted. A recorded census is
+  // exempt: it is the estimator's own count of content given as an array, which
+  // `messageCharLengths` measures serialized, so the two disagree by design.
+  for (const item of reconstructed) {
+    const census = item.census;
     const characters = census.cyrillic + census.cjk + census.word + census.symbols + census.newlines;
     assert.equal(
       characters,
@@ -142,11 +160,13 @@ test("the estimate never falls below the tokenizer count of the same census", ()
   // `actualInputTokens` is the provider's count of the real prompt; the test
   // feeds a reconstruction of it. `tokenizerTokens` is that same reconstruction
   // measured with a real tokenizer, so it is the one exact comparison here —
-  // it isolates the rules from the reconstruction's own error.
-  for (const item of fixture.cases) {
+  // it isolates the rules from the reconstruction's own error. Only a
+  // reconstructed case has one, and only a reconstructed case needs one.
+  for (const item of reconstructed) {
+    assert.ok(item.tokenizerTokens, `${item.id}: reconstructed without a tokenizer count`);
     const estimated = estimateMessages(messagesFor(item));
-    const ratio = estimated / item.reconstruction.tokenizerTokens;
-    assert.ok(ratio >= 1, `${item.id}: ${estimated} against ${item.reconstruction.tokenizerTokens}`);
+    const ratio = estimated / item.tokenizerTokens;
+    assert.ok(ratio >= 1, `${item.id}: ${estimated} against ${item.tokenizerTokens}`);
     assert.ok(ratio <= 1.15, `${item.id}: ${((ratio - 1) * 100).toFixed(1)}% above the tokenizer`);
   }
 });
@@ -171,22 +191,65 @@ test("the uncalibrated estimate never falls below the provider count", () => {
   // Overestimating wastes budget; underestimating produces real provider
   // context-length errors. The seed is biased upward on purpose.
   //
-  // The tolerance is the fixture's own: a case is kept only when the tokenizer
-  // counts its reconstruction within 3% of the provider's number, so this
-  // comparison cannot be exact - the census is an accepted approximation of the
-  // prompt the provider counted, not that prompt. Asserting a hard floor here
-  // would fit the rules to that approximation's error, which is what the test
-  // above ("never falls below the tokenizer count of the same census") measures
-  // exactly instead: it compares the estimate against the token count of the
-  // very text the estimator was fed.
-  const tolerance = 0.03;
+  // The floor a case is held to depends on where its census came from. A
+  // reconstructed census is an accepted approximation of the prompt the provider
+  // counted - kept only when the tokenizer agreed within 3% - so a hard floor
+  // there would fit the rules to that approximation's error; the test above
+  // ("never falls below the tokenizer count of the same census") is the exact
+  // comparison for those. A recorded census is the estimator's own count of the
+  // prompt the provider billed, so its floor is the provider's number itself,
+  // less only the rounding the estimator does once per message.
   for (const item of fixture.cases) {
     const estimated = estimateMessages(messagesFor(item));
+    const floor = item.provenance === "reconstructed"
+      ? item.actualInputTokens * 0.97
+      : item.actualInputTokens - Math.max(item.messages - 1, 0);
     assert.ok(
-      estimated >= item.actualInputTokens * (1 - tolerance),
-      `${item.id}: ${estimated} against ${item.actualInputTokens}, below the reconstruction's own 3% tolerance`,
+      estimated >= floor,
+      `${item.id}: ${estimated} against ${item.actualInputTokens}, below the ${item.provenance} floor ${floor}`,
     );
   }
+});
+
+test("a census re-measures to the estimate of the messages it was taken from", () => {
+  // The census is what makes a logged request re-measurable offline, so it has to
+  // reproduce the estimate that was logged beside it. Summing across messages
+  // costs at most one token per message boundary - the estimator rounds once per
+  // message - and nothing more.
+  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    { role: "system", content: "Ты редактор вики. Отвечай строго по контракту.\n" },
+    { role: "user", content: "iptables -A INPUT -p tcp --dport=22 -j DROP\n10.0.0.1 2026-08-12\n" },
+    { role: "user", content: [
+      { type: "text", text: "описание: screenshot of `df -h`" },
+      { type: "image_url", image_url: { url: "data:image/png;base64,a" } },
+    ] },
+  ];
+  const census = censusMessages(messages);
+  assert.equal(census.messages, messages.length);
+  assert.equal(census.imageParts, 1);
+  assert.ok(census.cyrillic > 0 && census.symbols > 0 && census.newlines > 0);
+
+  const rebuilt = estimateMessages(messagesFor({
+    id: "synthetic", callSite: "test", messages: census.messages,
+    recordedMessageChars: [], actualInputTokens: 0, recordedEstimateAtTheTime: 0,
+    provenance: "recorded", census,
+  }));
+  const direct = estimateMessages(messages);
+  assert.ok(
+    Math.abs(rebuilt - direct) <= census.messages,
+    `census re-measured to ${rebuilt} against ${direct}`,
+  );
+});
+
+test("a census carries counts and never the text it counted", () => {
+  // This rides in agent.jsonl, which deliberately holds prompt lengths and no
+  // prompt text. A field that serialised any part of a message would put a
+  // private vault's notes on disk.
+  const secret = "пароль hunter2 в заметке";
+  const census = censusMessages([{ role: "user", content: secret }]);
+  const serialized = JSON.stringify(census);
+  assert.ok(!serialized.includes("hunter2"), serialized);
+  for (const value of Object.values(census)) assert.equal(typeof value, "number");
 });
 
 test("the error does not grow with prompt size", () => {

@@ -1066,6 +1066,12 @@ test("structured requests emit metadata-only request fingerprints", async () => 
   assert.equal(fingerprint.messageCharLengths.length, 2);
   assert.ok(fingerprint.messageCharLengths.every((length) => length > 0));
   assert.match(fingerprint.preparedMessagesHash, /^fnv1a:[0-9a-f]{8}$/);
+  // The census rides here rather than at one call site, so a fixture case can be
+  // derived for any of them; `SECRET_SOURCE` below is what keeps it counts-only.
+  assert.ok(fingerprint.census, "the fingerprint carries no census");
+  assert.equal(fingerprint.census.messages, fingerprint.messageCount);
+  assert.ok(fingerprint.census.word > 0);
+  assert.equal(fingerprint.census.imageParts, 0);
   assert.equal(JSON.stringify(fingerprint).includes("SECRET_SOURCE"), false);
 });
 

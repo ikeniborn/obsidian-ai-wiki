@@ -20,6 +20,7 @@ import {
 import { RunEventBridge } from "../run-event-bridge";
 import { structuralErrorCounter } from "../structural-error-counter";
 import { contentHash } from "../content-hash";
+import { censusMessages } from "../token-estimate";
 import {
   createNativeRequestRetryContext,
   isNativeLlmClient,
@@ -70,6 +71,7 @@ export function requestFingerprint(
     stream: params.stream === true,
     messageCount: messages.length,
     messageCharLengths: messages.map(stringContentLength),
+    census: censusMessages(messages),
     estimatedInputTokens: estimatePreparedMessages(messages),
     ...(typeof params.max_completion_tokens === "number"
       ? { outputBudget: params.max_completion_tokens }
