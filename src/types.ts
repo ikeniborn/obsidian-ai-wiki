@@ -496,6 +496,8 @@ export type RunEvent =
         durationMs: number;
         fallbackReason?: import("./reranker").RerankerFallbackReason;
       };
+      /** Provider reason when chunk selection scored fewer sections than it collected. */
+      retrievalDegraded?: string;
     }
   | { kind: "error"; message: string }
   | { kind: "exit"; code: number }

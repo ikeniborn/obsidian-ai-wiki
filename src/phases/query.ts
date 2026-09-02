@@ -433,6 +433,7 @@ export async function* runQuery(
     contextTopN: rerankerRuntime.config.contextTopN,
     chunkDupsDropped,
     reranker: rerankerDiagnostics,
+    retrievalDegraded: chunkSimilarity.lastChunkDegrade ?? undefined,
   };
   if (ans.llmCallStats) yield ans.llmCallStats;
 

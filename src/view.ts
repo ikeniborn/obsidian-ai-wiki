@@ -9,7 +9,7 @@ import { resolveRerunDomain } from "./rerun-domain";
 import { domainWikiFolder, domainLogPath, domainIndexPath, isWikiArticlePath, effectiveSubfolder } from "./wiki-path";
 import { computeSpeedText } from "./phases/llm-utils";
 import { isAbsolute, relative } from "path-browserify";
-import { retrievalTag } from "./retrieval-diag";
+import { queryDegradeLines, retrievalTag } from "./retrieval-diag";
 import { OPERATION_AXES, type Rating } from "./eval-log";
 import {
   emptyLlmLifecycleState,
@@ -1118,6 +1118,7 @@ export class LlmWikiView extends ItemView {
     const tokRow = box.createDiv("ai-wiki-cross-stats-row");
     tokRow.createSpan({ cls: "ai-wiki-cross-stats-label", text: T.statsTokensSent });
     this.queryStatsTokensEl = tokRow.createSpan({ cls: "ai-wiki-cross-stats-value", text: "…" });
+    for (const degrade of queryDegradeLines(ev, T)) line(degrade.label, degrade.value);
     this.queryStatsEl = box;
   }
 
