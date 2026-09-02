@@ -63,13 +63,13 @@ test("HLD eval builds isolated JSONL domain and runs five live retrieval queries
     await writeFile(goldPath, JSON.stringify({
       version: 1,
       source: "fixture",
-      queries: Object.fromEntries([
+      queries: Object.fromEntries(([
         ["data-export-s3-clickhouse", { path: "export.md", grade: 3 }],
         ["airflow-ha-balancing", { path: "airflow.md", grade: 3 }],
         ["integrations-consumers-marts", { path: "integrations.md", grade: 3 }],
         ["migration-gitflame", { path: "gitflame.md", grade: 3 }],
         ["ownership-components", { path: "ownership.md", grade: 3 }],
-      ].map(([id, label]) => [id, { relevant: [{
+      ] as [string, { path: string; grade: number }][]).map(([id, label]) => [id, { relevant: [{
         path: `!Wiki/hld-jsonl-eval/pages/${label.path}`,
         sourceRelPath: label.path,
         grade: label.grade,

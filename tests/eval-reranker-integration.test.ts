@@ -30,7 +30,7 @@ async function withRerankServer(
   const address = server.address();
   assert.equal(typeof address, "object");
   try {
-    await fn(`http://127.0.0.1:${address!.port}/v1`, calls);
+    await fn(`http://127.0.0.1:${(address as import("node:net").AddressInfo).port}/v1`, calls);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }

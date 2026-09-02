@@ -1242,7 +1242,7 @@ test("Excalidraw uses one media unit and output cap without compression prompt",
   );
 
   const messages = seen[0].messages as OpenAI.Chat.ChatCompletionMessageParam[];
-  const mediaParts = messages.flatMap((message) =>
+  const mediaParts = messages.flatMap((message): { type: string }[] =>
     Array.isArray(message.content) ? message.content : [])
     .filter((part) => part.type === "image_url");
   assert.equal(mediaParts.length, 1);
@@ -1811,15 +1811,16 @@ test("Format exposes bounded PDF context exhaustion in its failed Vision tool re
     const failedVision = events.find((event) =>
       event.kind === "tool_result"
       && event.ok === false
-      && /vision\.analysis/.test(event.preview));
+      && /vision\.analysis/.test(event.preview ?? ""));
     assert.ok(failedVision, JSON.stringify(calls));
     if (failedVision?.kind === "tool_result") {
+      const preview = failedVision.preview ?? "";
       assert.match(
-        failedVision.preview,
+        preview,
         /configuredInputBudget=12000.*finalEffectiveInputBudget=9000.*provider context limit/i,
       );
       assert.doesNotMatch(
-        failedVision.preview,
+        preview,
         /AUTH_SECRET|KEY_SECRET|SOURCE_SECRET|RAW_MEDIA_SECRET|JSON_MEDIA_SECRET|Bearer|api_key|data:image|data:image\\\/png/i,
       );
     }

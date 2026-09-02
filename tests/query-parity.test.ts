@@ -958,7 +958,9 @@ async function captureRunnerPolicy(
 ): Promise<{
   req: RunRequest;
   model: string;
-  opts: Parameters<Extract<LlmClient["chat"]["completions"]["create"], (...args: never[]) => unknown>>[0] | Record<string, unknown>;
+  // runOperation's third argument is the call options, not the OpenAI request
+  // params; typing it as such is what lets the assertions below read its fields.
+  opts: LlmCallOptions;
 }> {
   const runner = new AgentRunner(
     capturingLlm([]),
@@ -973,13 +975,13 @@ async function captureRunnerPolicy(
   let captured: {
     req: RunRequest;
     model: string;
-    opts: Record<string, unknown>;
+    opts: LlmCallOptions;
   } | undefined;
   (runner as unknown as {
     runOperation(
       req: RunRequest,
       model: string,
-      opts: Record<string, unknown>,
+      opts: LlmCallOptions,
     ): AsyncGenerator<RunEvent>;
   }).runOperation = async function* (req, model, opts) {
     captured = { req, model, opts };

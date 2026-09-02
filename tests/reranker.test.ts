@@ -28,7 +28,9 @@ function installTimerWindow(
   setTimeoutImpl: typeof setTimeout = globalThis.setTimeout,
   clearTimeoutImpl: typeof clearTimeout = globalThis.clearTimeout,
 ): () => void {
-  const root = globalThis as typeof globalThis & { window?: { setTimeout: typeof setTimeout; clearTimeout: typeof clearTimeout } };
+  const root = globalThis as unknown as {
+    window?: { setTimeout: typeof setTimeout; clearTimeout: typeof clearTimeout };
+  };
   const previous = root.window;
   root.window = { setTimeout: setTimeoutImpl, clearTimeout: clearTimeoutImpl };
   return () => {
@@ -76,13 +78,13 @@ test("normalizeRerankerConfig defaults non-string persisted model values", () =>
 });
 
 test("buildRerankerCandidates bounds candidates before adapter call", () => {
-  const candidates = buildRerankerCandidates("question", [chunk("a", 3), chunk("b", 2), chunk("c", 1)], {
+  const candidates = buildRerankerCandidates("question", [chunk("a", 3), chunk("b", 2), chunk("c", 1)], normalizeRerankerConfig({
     enabled: true,
     model: "custom-reranker",
     rerankerTopN: 2,
     contextTopN: 1,
     timeoutMs: 800,
-  });
+  }));
 
   assert.deepEqual(candidates.map((item) => item.id), ["a::0", "b::0"]);
   assert.match(candidates[0].text, /Title: a/);
@@ -93,13 +95,13 @@ test("buildRerankerCandidates bounds candidates before adapter call", () => {
 test("buildRerankerCandidates truncates long candidate text before adapter call", () => {
   const long = chunk("long", 1);
   long.body = "x".repeat(MAX_RERANKER_CANDIDATE_TEXT_CHARS + 100);
-  const [candidate] = buildRerankerCandidates("question", [long], {
+  const [candidate] = buildRerankerCandidates("question", [long], normalizeRerankerConfig({
     enabled: true,
     model: "custom-reranker",
     rerankerTopN: 1,
     contextTopN: 1,
     timeoutMs: 800,
-  });
+  }));
 
   assert.equal(candidate.text.length, MAX_RERANKER_CANDIDATE_TEXT_CHARS);
 });
@@ -110,13 +112,13 @@ test("buildRerankerCandidates includes query-aware excerpt when token matches bo
   source.heading = "## Export";
   source.body = "Intro text. The export endpoint sends orders to ClickHouse consumers. Tail text.";
 
-  const [candidate] = buildRerankerCandidates("How does export work?", [source], {
+  const [candidate] = buildRerankerCandidates("How does export work?", [source], normalizeRerankerConfig({
     enabled: true,
     model: "custom-reranker",
     rerankerTopN: 1,
     contextTopN: 1,
     timeoutMs: 800,
-  });
+  }));
 
   assert.match(candidate.text, /Title: Orders Flow/);
   assert.match(candidate.text, /Heading: ## Export/);
@@ -129,13 +131,13 @@ test("buildRerankerCandidates reserves article content when canonical metadata e
   source.heading = "## A long generated section heading that would consume the remaining budget";
   source.body = "Generic prefix. semantic-needle identifies the relevant operation. Generic suffix.";
 
-  const [candidate] = buildRerankerCandidates("Find semantic-needle", [source], {
+  const [candidate] = buildRerankerCandidates("Find semantic-needle", [source], normalizeRerankerConfig({
     enabled: true,
     model: "custom-reranker",
     rerankerTopN: 1,
     contextTopN: 1,
     timeoutMs: 800,
-  });
+  }));
 
   assert.ok(candidate.text.length <= MAX_RERANKER_CANDIDATE_TEXT_CHARS);
   assert.match(candidate.text, /semantic-needle identifies the relevant operation/);
@@ -523,13 +525,13 @@ test("rerankChunks falls back on malformed response for invalid score", async ()
 });
 
 test("parseRerankerResponseText rejects malformed raw payloads", () => {
-  const candidates = buildRerankerCandidates("question", [chunk("a", 2), chunk("b", 1)], {
+  const candidates = buildRerankerCandidates("question", [chunk("a", 2), chunk("b", 1)], normalizeRerankerConfig({
     enabled: true,
     model: "custom-reranker",
     rerankerTopN: 2,
     contextTopN: 2,
     timeoutMs: 800,
-  });
+  }));
 
   for (const payload of [
     "not-json",
@@ -592,10 +594,12 @@ test("raceRerankerRequest rejects on in-flight abort before request settles", as
   let removed = 0;
   const add = ctrl.signal.addEventListener.bind(ctrl.signal);
   const remove = ctrl.signal.removeEventListener.bind(ctrl.signal);
-  ctrl.signal.addEventListener = ((type, listener, options) => add(type, listener, options)) as typeof ctrl.signal.addEventListener;
-  ctrl.signal.removeEventListener = ((type, listener, options) => {
+  type AddListener = Parameters<typeof add>;
+  ctrl.signal.addEventListener = ((type: AddListener[0], listener: AddListener[1], options?: AddListener[2]) =>
+    add(type, listener, options)) as typeof ctrl.signal.addEventListener;
+  ctrl.signal.removeEventListener = ((type: AddListener[0], listener: AddListener[1], options?: AddListener[2]) => {
     if (type === "abort") removed += 1;
-    remove(type, listener, options);
+    remove(type, listener, options as Parameters<typeof remove>[2]);
   }) as typeof ctrl.signal.removeEventListener;
 
   try {
@@ -616,9 +620,11 @@ test("raceRerankerRequest clears timeout after fast success", async () => {
   let cleared = false;
 
   const setTimeoutSpy = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
-    timer = originalSetTimeout(handler, timeout, ...args);
+    // DOM and Node both declare setTimeout here; the handle type differs, and
+    // the spy only forwards whatever the host returned.
+    timer = originalSetTimeout(handler as () => void, timeout, ...args) as unknown as typeof timer;
     return timer;
-  }) as typeof globalThis.setTimeout;
+  }) as unknown as typeof globalThis.setTimeout;
   const clearTimeoutSpy = ((id?: ReturnType<typeof globalThis.setTimeout>) => {
     if (id === timer) cleared = true;
     originalClearTimeout(id);

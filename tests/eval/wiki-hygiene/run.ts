@@ -9,7 +9,7 @@
  *   node tests/eval/wiki-hygiene/run.cjs
  */
 import { stripDeadLinks } from "../../../src/wiki-link-validator";
-import { deriveFallbackDescription, reconcileIndex } from "../../../src/wiki-index";
+import { deriveFallbackDescription } from "../../../src/wiki-index";
 
 let pass = 0, fail = 0;
 const failures: string[] = [];
@@ -100,35 +100,6 @@ console.log("\n=== deriveFallbackDescription ===");
   check("code fence skipped in fallback", !a.includes("```") && !a.includes("SELECT"), a);
 }
 
-console.log("\n=== reconcileIndex ===");
-{
-  const wikiFolder = "!Wiki/dom";
-  const index = [
-    "# Wiki Index",
-    "",
-    "## tasks",
-    "- wiki_dom_keep — kept. Type: task.",
-    "- wiki_dom_orphan — orphan, file gone. Type: task.",
-  ].join("\n");
-  const pages = [
-    { path: "!Wiki/dom/tasks/wiki_dom_keep.md", content: "# Keep\n\nbody", annotation: "kept. Type: task." },
-    { path: "!Wiki/dom/entities/wiki_dom_new.md", content: "# New\n\nNew entity body.", annotation: "" },
-    { path: "!Wiki/dom/_index.md", content: "ignore me" },
-  ];
-  const r = reconcileIndex(index, wikiFolder, pages);
-  check("orphan flagged for removal", r.removes.includes("wiki_dom_orphan"), JSON.stringify(r.removes));
-  check("kept page not re-added", !r.adds.some((a) => a.pid === "wiki_dom_keep"), JSON.stringify(r.adds));
-  check("new page added", r.adds.some((a) => a.pid === "wiki_dom_new"), JSON.stringify(r.adds));
-  check("new page got fallback annotation", (r.adds.find((a) => a.pid === "wiki_dom_new")?.annotation.includes("New entity body.")) ?? false, JSON.stringify(r.adds));
-  check("meta file ignored", !r.adds.some((a) => a.pid.includes("index")), JSON.stringify(r.adds));
-}
-{
-  // page already-annotated keeps its annotation, not the fallback.
-  const r = reconcileIndex("# Wiki Index\n", "!Wiki/dom", [
-    { path: "!Wiki/dom/tasks/wiki_dom_a.md", content: "# A\n\nbody.", annotation: "real ann. Type: task." },
-  ]);
-  check("real annotation preserved on add", r.adds[0]?.annotation === "real ann. Type: task.", JSON.stringify(r.adds));
-}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) { console.log("FAILURES:\n" + failures.map((f) => "  - " + f).join("\n")); process.exit(1); }

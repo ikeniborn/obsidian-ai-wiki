@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import test from "node:test";
+import type { SettingDefinitionItem, SettingGroupItem } from "obsidian";
 
 const obsidianModule = `
 export class App {}
@@ -43,6 +44,27 @@ export async function resolve(specifier, context, nextResolve) {
 }
 `;
 register(`data:text/javascript,${encodeURIComponent(obsidianLoader)}`);
+
+/**
+ * `SettingDefinitionItem` is a union and only its group and list members carry
+ * `type` and `items`, so a bare `definition.type === "group"` check does not
+ * narrow it. This predicate does.
+ */
+function isGroupDefinition(
+  definition: SettingDefinitionItem,
+): definition is Extract<SettingDefinitionItem, { type: "group" | "list" }> {
+  return (definition as { type?: string }).type === "group"
+    && Array.isArray((definition as { items?: unknown }).items);
+}
+
+/** A group's items may be a definition or a sub-page; only the former renders. */
+function isRenderableRow(
+  item: SettingGroupItem,
+): item is Extract<SettingGroupItem, { render: unknown }> {
+  return typeof (item as { render?: unknown }).render === "function";
+}
+
+
 
 const settingsSource = readFileSync(new URL("../src/settings.ts", import.meta.url), "utf8");
 const mainSource = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
@@ -180,7 +202,7 @@ test("repeated definitions requests reload changed domains once and never persis
 
   const refreshedDefinitions = tab.getSettingDefinitions();
   const refreshedNames = refreshedDefinitions.flatMap((definition) =>
-    definition.type === "group" ? definition.items.map((item) => item.name) : [],
+    isGroupDefinition(definition) ? (definition.items ?? []).map((item) => item.name) : [],
   );
   assert.ok(refreshedNames.includes("Fresh domain"));
   assert.equal(domainLoads, 3, "a later host request schedules the next reload");
@@ -328,7 +350,8 @@ test("model definition teardown closes its live suggester", async () => {
 
   const definitions = tab.getSettingDefinitions();
   const modelRow = definitions
-    .flatMap((definition) => definition.type === "group" ? definition.items : [])
+    .flatMap((definition) => isGroupDefinition(definition) ? definition.items ?? [] : [])
+    .filter(isRenderableRow)
     .find((item) => item.name === "Model");
   assert.ok(modelRow?.render);
 

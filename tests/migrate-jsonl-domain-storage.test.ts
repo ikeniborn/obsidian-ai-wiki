@@ -107,5 +107,5 @@ test("migrates legacy service files to jsonl, backs up, validates, and deletes l
   assert.equal(index.some((r: any) => r.kind === "page" && r.articleId === "hld_system"), true);
 
   const log = parseJsonl(await adapter.read("!Wiki/hld/log.jsonl"), "log");
-  assert.equal(log[0].kind, "legacy_log_block");
+  assert.equal((log[0] as { kind?: string }).kind, "legacy_log_block");
 });

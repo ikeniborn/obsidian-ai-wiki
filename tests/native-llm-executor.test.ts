@@ -121,7 +121,7 @@ function sequence(
     if (typeof result === "function") return result(options.signal);
     if (result === undefined) throw new Error("Unexpected native request attempt");
     return result;
-  }) as NativeChatCompletionCreate;
+  }) as unknown as NativeChatCompletionCreate;
 }
 
 function lifecycleRecorder(
@@ -484,7 +484,7 @@ test("non-stream retries keep one trace id and create a fresh attempt span", asy
       if (traceparent) traceparents.push(traceparent);
       if (attempts === 1) throw apiError(502);
       return completion("ok");
-    }) as NativeChatCompletionCreate,
+    }) as unknown as NativeChatCompletionCreate,
     params: nonStreamParams,
     retry: retryContext({ maxRetries: 1 }),
   });
@@ -506,7 +506,7 @@ test("non-stream native executor forwards fresh connection policy per attempt", 
     create: (async (_params: object, options: { fetchOptions?: Record<symbol, unknown> }) => {
       values.push(options.fetchOptions?.[NATIVE_TRANSPORT_FRESH_CONNECTION]);
       return completion("ok");
-    }) as NativeChatCompletionCreate,
+    }) as unknown as NativeChatCompletionCreate,
     params: nonStreamParams,
     retry: retryContext({ nativeFreshConnection: true }),
   });
@@ -523,12 +523,12 @@ test("stream transport retry leaves the pooled connection after attempt zero", a
       attempts += 1;
       if (attempts === 1) throw new APIConnectionError({ message: "pooled connection failed" });
       return streamOf(chunk({ content: "recovered" }));
-    }) as NativeChatCompletionCreate,
+    }) as unknown as NativeChatCompletionCreate,
     params: streamParams,
     retry: retryContext({ maxRetries: 1 }),
   });
 
-  await consume(result);
+  await consume(Promise.resolve(result));
 
   assert.deepEqual(freshConnections, [false, true]);
 });
@@ -897,7 +897,7 @@ for (const field of ["reasoning", "reasoning_content", "content"] as const) {
         return attempts === 1
           ? failingStream([chunk({ [field]: "partial" })])
           : streamOf(chunk({ content: "must-not-run" }));
-      }) as NativeChatCompletionCreate,
+      }) as unknown as NativeChatCompletionCreate,
       params: streamParams,
       retry: retryContext({ maxRetries: 1 }),
     });
@@ -1074,7 +1074,7 @@ test("an accepted stream with no first model event reserves time for a fresh ret
         };
       }
       return streamOf(chunk({ content: "recovered" }));
-    }) as NativeChatCompletionCreate;
+    }) as unknown as NativeChatCompletionCreate;
     const operation = consume(executeNativeLlmRequest({
       create,
       params: streamParams,
@@ -1125,7 +1125,7 @@ test("response-start retry can be delegated to the caller without losing the der
           };
         },
       };
-    }) as NativeChatCompletionCreate;
+    }) as unknown as NativeChatCompletionCreate;
     const operation = consume(executeNativeLlmRequest({
       create,
       params: streamParams,

@@ -25,3 +25,7 @@ Module._load = function (...args: unknown[]) {
   }
   return _origLoad.apply(this, args);
 };
+
+// Marks this boot shim as a module so its top-level consts stay file-scoped
+// instead of colliding with the sibling shims in the global scope.
+export {};

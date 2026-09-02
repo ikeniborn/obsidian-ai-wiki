@@ -3,6 +3,7 @@ import { register } from "node:module";
 import test from "node:test";
 import type OpenAI from "openai";
 import { contentHash } from "../src/content-hash";
+import { eventsOfKind } from "./run-event-filters";
 import type { DomainEntry } from "../src/domain";
 import type { EntityContextBundle } from "../src/ingest-context";
 import type {
@@ -602,7 +603,8 @@ function reducerInput(messages: OpenAI.Chat.ChatCompletionMessageParam[]): Array
     && message.content.startsWith("REDUCE_INPUT ")
   )?.content;
   assert.equal(typeof content, "string");
-  return JSON.parse(content.slice("REDUCE_INPUT ".length)) as Array<Record<string, unknown>>;
+  const text = content as string;
+  return JSON.parse(text.slice("REDUCE_INPUT ".length)) as Array<Record<string, unknown>>;
 }
 
 function uniqueJson(values: unknown[]): unknown[] {
@@ -864,8 +866,8 @@ async function exerciseLintAndLintChat(): Promise<void> {
   }
   assert.ok(events.some((event) =>
     event.kind === "prompt_budget" && event.callSite === "lint.batch"));
-  const lintLifecycle = events.filter((event) =>
-    event.kind === "llm_lifecycle" && event.action === "check_wiki_quality");
+  const lintLifecycle = eventsOfKind(events, "llm_lifecycle")
+    .filter((event) => event.action === "check_wiki_quality");
   assert.ok(lintLifecycle.length > 0);
   let successfulBatchCount = 0;
   for (const id of new Set(lintLifecycle.map((event) => event.id))) {
@@ -1064,7 +1066,6 @@ async function exerciseVisionPdf(): Promise<void> {
     {
       inputBudgetTokens: 10_000,
       maxTokens: 2_000,
-      compressionProfile: "minimum",
       onEvent: (event) => events.push(event),
     },
     {

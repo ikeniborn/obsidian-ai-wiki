@@ -32,6 +32,7 @@ import type { LlmClient, RunEvent } from "../src/types";
 import type { SynthesisOutput } from "../src/phases/zod-schemas";
 import type { SynthesisEvidenceLedgerItem } from "../src/phases/synthesis-evidence-ledger";
 import { estimatePreparedMessages } from "../src/prompt-budget";
+import { eventsOfKind } from "./run-event-filters";
 
 const existingPath = "!Wiki/d/concept/wiki_d_a.md";
 const absentPath = "!Wiki/d/concept/wiki_d_b.md";
@@ -385,8 +386,8 @@ test("multi-bundle semantic validation split is shown as retrying", async () => 
 
   assert.deepEqual(result.actions.map((action) => action.entityKey), ["a", "b"]);
   assert.equal(calls, 3);
-  const lifecycle = events.filter((event) =>
-    event.kind === "llm_lifecycle" && event.action === "synthesize_wiki_pages");
+  const lifecycle = eventsOfKind(events, "llm_lifecycle")
+    .filter((event) => event.action === "synthesize_wiki_pages");
   const firstId = lifecycle[0]?.id;
   const firstPhases = lifecycle.filter((event) => event.id === firstId).map((event) => event.phase);
   assert.equal(firstPhases.at(-1), "retrying");
@@ -596,8 +597,8 @@ test("multi-bundle truncated JSON falls back to single-bundle calls", async () =
   }));
   assert.deepEqual(result.actions.map((action) => action.entityKey), ["a", "b"]);
   assert.equal(calls, 3);
-  const lifecycle = events.filter((event) =>
-    event.kind === "llm_lifecycle" && event.action === "synthesize_wiki_pages");
+  const lifecycle = eventsOfKind(events, "llm_lifecycle")
+    .filter((event) => event.action === "synthesize_wiki_pages");
   const firstId = lifecycle[0]?.id;
   const firstPhases = lifecycle.filter((event) => event.id === firstId).map((event) => event.phase);
   assert.equal(firstPhases.at(-1), "retrying");
@@ -1569,8 +1570,8 @@ test("semantic synthesis repair marks intermediate validation exhaustion as retr
     onEvent: (event: RunEvent) => events.push(event),
   }));
 
-  const lifecycle = events.filter((event) =>
-    event.kind === "llm_lifecycle" && event.action === "synthesize_wiki_pages");
+  const lifecycle = eventsOfKind(events, "llm_lifecycle")
+    .filter((event) => event.action === "synthesize_wiki_pages");
   const ids = [...new Set(lifecycle.map((event) => event.id))];
   const firstAttempt = lifecycle.filter((event) => event.id === ids[0]).map((event) => event.phase);
   assert.equal(firstAttempt.at(-1), "retrying");

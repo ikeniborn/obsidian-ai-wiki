@@ -6,10 +6,11 @@ import { parse as yamlParse } from "yaml";
 import { contentHash } from "../src/content-hash";
 import type { DomainEntry } from "../src/domain";
 import { hashSource } from "../src/incremental-sources";
-import type { PageSimilarityService } from "../src/page-similarity";
+import type { PageSimilarityService as PageSimilarityServiceType } from "../src/page-similarity";
 import type { IngestOutcome, LlmCallOptions, LlmClient, RunEvent } from "../src/types";
 import type { VaultAdapter } from "../src/vault-tools";
 import { mockChatResponse } from "./openai-mock-response";
+import { eventsOfKind } from "./run-event-filters";
 
 const pathBrowserifyLoader = `
 export async function resolve(specifier, context, nextResolve) {
@@ -473,7 +474,7 @@ async function runPageWriteRace(kind: "create" | "patch"): Promise<{
       allFailed: false,
     }),
     refreshCache: async () => ({ updated: 0, failed: 0 }),
-  } as unknown as PageSimilarityService;
+  } as unknown as PageSimilarityServiceType;
   const result = await drain(runIngest(
     [SOURCE_PATH],
     new VaultTools(adapter, "/vault"),
@@ -781,7 +782,7 @@ async function runCanonicalKnowledgeCase(
         return { pid: "", score: 0 };
       },
       refreshCache: async () => ({ updated: 0, failed: 0 }),
-    } as unknown as PageSimilarityService;
+    } as unknown as PageSimilarityServiceType;
     const result = await drain(runIngest(
       [SOURCE_PATH],
       new VaultTools(adapter, "/vault"),
@@ -1022,7 +1023,7 @@ test("runIngest appends an add patch when the live page already has that heading
       allFailed: false,
     }),
     refreshCache: async () => ({ updated: 0, failed: 0 }),
-  } as unknown as PageSimilarityService;
+  } as unknown as PageSimilarityServiceType;
 
   const { outcome } = await drain(runIngest(
     [sourcePath], new VaultTools(adapter, "/vault"), llm, "mock", [domain()], "/vault",
@@ -1113,8 +1114,8 @@ test("bounded ingest never exposes raw chunk vectors and emits in-budget telemet
   assert.equal(budgetEvents.length > 0, true);
   assert.equal(budgetEvents.every((event) =>
     event.estimatedInputTokens <= event.effectiveInputBudget), true);
-  const synthesisLifecycle = events.filter((event) =>
-    event.kind === "llm_lifecycle" && event.action === "synthesize_wiki_pages");
+  const synthesisLifecycle = eventsOfKind(events, "llm_lifecycle")
+    .filter((event) => event.action === "synthesize_wiki_pages");
   assert.equal(new Set(synthesisLifecycle.map((event) => event.id)).size, 1);
   assert.deepEqual(synthesisLifecycle.map((event) => event.phase), [
     "preparing", "sent", "waiting", "producing", "validating", "applying", "completed",
@@ -1173,8 +1174,8 @@ test("Ingest abort after synthesis validation cancels once and performs no later
   for await (const event of generator) events.push(event);
 
   assert.equal(adapter.writes.length, writesAtAbort);
-  const lifecycle = events.filter((event) =>
-    event.kind === "llm_lifecycle" && event.action === "synthesize_wiki_pages");
+  const lifecycle = eventsOfKind(events, "llm_lifecycle")
+    .filter((event) => event.action === "synthesize_wiki_pages");
   assert.deepEqual(lifecycle.map((event) => event.phase), [
     "preparing", "sent", "waiting", "producing", "validating", "cancelled",
   ], JSON.stringify(events));
@@ -1204,8 +1205,8 @@ test("runIngest deterministically merges equivalent deltas from multiple top-lev
   assert.equal(budgetEvents.length > 0, true);
   assert.equal(budgetEvents.every((event) =>
     event.estimatedInputTokens <= event.effectiveInputBudget), true);
-  const lifecycle = events.filter((event) =>
-    event.kind === "llm_lifecycle" && event.action === "synthesize_wiki_pages");
+  const lifecycle = eventsOfKind(events, "llm_lifecycle")
+    .filter((event) => event.action === "synthesize_wiki_pages");
   for (const id of new Set(lifecycle.map((event) => event.id))) {
     assert.deepEqual(
       lifecycle.filter((event) => event.id === id).map((event) => event.phase),
@@ -1242,8 +1243,8 @@ test("runIngest rejects conflicting normalized deltas across top-level batches b
   assert.equal(budgetEvents.length > 0, true);
   assert.equal(budgetEvents.every((event) =>
     event.estimatedInputTokens <= event.effectiveInputBudget), true);
-  const lifecycle = events.filter((event) =>
-    event.kind === "llm_lifecycle" && event.action === "synthesize_wiki_pages");
+  const lifecycle = eventsOfKind(events, "llm_lifecycle")
+    .filter((event) => event.action === "synthesize_wiki_pages");
   for (const id of new Set(lifecycle.map((event) => event.id))) {
     const phases = lifecycle.filter((event) => event.id === id).map((event) => event.phase);
     assert.deepEqual(phases, [
@@ -1338,8 +1339,8 @@ test("runIngest canonicalizes LLM create routes before lifecycle completion", as
   assert.equal(adapter.writes.some((path) => path.match(/wiki_demo_wrong_/)), false);
   assert.equal(adapter.files.has("!Wiki/demo/concept/wiki_demo_alpha.md"), true);
   assert.equal(adapter.files.has("!Wiki/demo/concept/wiki_demo_beta.md"), true);
-  const lifecycle = events.filter((event) =>
-    event.kind === "llm_lifecycle" && event.action === "synthesize_wiki_pages");
+  const lifecycle = eventsOfKind(events, "llm_lifecycle")
+    .filter((event) => event.action === "synthesize_wiki_pages");
   assert.ok(lifecycle.length > 0);
   for (const id of new Set(lifecycle.map((event) => event.id))) {
     const phases = lifecycle.filter((event) => event.id === id).map((event) => event.phase);
@@ -1454,7 +1455,7 @@ async function runIdentityContextCase(mode: "alias-update" | "create"): Promise<
       allFailed: false,
     }),
     refreshCache: async () => ({ updated: 0, failed: 0 }),
-  } as unknown as PageSimilarityService;
+  } as unknown as PageSimilarityServiceType;
   const { outcome } = await drain(runIngest(
     [sourcePath],
     new VaultTools(adapter, "/vault"),
@@ -1568,7 +1569,7 @@ test("runIngest consolidates aliases sharing one canonical target into one patch
       allFailed: false,
     }),
     refreshCache: async () => ({ updated: 0, failed: 0 }),
-  } as unknown as PageSimilarityService;
+  } as unknown as PageSimilarityServiceType;
 
   const { outcome } = await drain(runIngest(
     [sourcePath],
@@ -2255,7 +2256,7 @@ test("dedup retargets a new draft to a guarded canonical-page patch", async () =
       return { pid: "", score: 0 };
     },
     refreshCache: async () => ({ updated: 1, failed: 0 }),
-  } as unknown as PageSimilarityService;
+  } as unknown as PageSimilarityServiceType;
 
   const { events, outcome } = await drain(runIngest(
     [SOURCE_PATH],
@@ -2430,7 +2431,7 @@ test("canonical duplicate deletion fails closed when duplicate content changes a
       if (similarityHits === 2) return { pid: "wiki_demo_racing_duplicate", score: 0.98 };
       return { pid: "", score: 0 };
     },
-  } as unknown as PageSimilarityService;
+  } as unknown as PageSimilarityServiceType;
 
   const { events, outcome } = await drain(runIngest(
     [SOURCE_PATH], new VaultTools(adapter, "/vault"), llm, "mock", [domain()], "/vault",
@@ -2706,7 +2707,7 @@ test("retry after a post-write embedding failure completes pending vectors and b
       vectorsComplete = true;
       return { updated: 1, failed: 0 };
     },
-  } as unknown as PageSimilarityService;
+  } as unknown as PageSimilarityServiceType;
   const opts = {
     inputBudgetTokens: 20_000,
     maxTokens: 1_000,
@@ -2990,7 +2991,7 @@ test("post-embedding page provenance controls final source wiki_articles", async
       );
       return { updated: 1, failed: 0 };
     },
-  } as unknown as PageSimilarityService;
+  } as unknown as PageSimilarityServiceType;
 
   const { outcome } = await drain(runIngest(
     [SOURCE_PATH],
@@ -3348,7 +3349,7 @@ test("deferred canonical merge never deletes a duplicate candidate", async () =>
         ? { pid: "wiki_demo_alpha", score: 0.99 }
         : { pid: "wiki_demo_existing_duplicate", score: 0.98 };
     },
-  } as unknown as PageSimilarityService;
+  } as unknown as PageSimilarityServiceType;
 
   const { events, outcome } = await drain(runIngest(
     [SOURCE_PATH], new VaultTools(adapter, "/vault"), llm, "mock", [domain()], "/vault",

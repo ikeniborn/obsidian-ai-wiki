@@ -359,7 +359,7 @@ test("budget telemetry returns fresh metadata-only events", () => {
   const secret = "SECRET_SOURCE_AND_AUTH_MARKER";
   const metadata = {
     requestId: "request-1",
-    callSite: "ingest.synthesize",
+    callSite: "ingest.synthesize" as const,
     configuredInputBudget: 16_384,
     effectiveInputBudget: 12_288,
     estimatedInputTokens: 12_000,

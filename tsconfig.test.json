@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Tests and scripts run on Node 22, which has Array.prototype.findLast;
+    // the shipped bundle targets the Obsidian runtime and stays on ES2022.
+    "lib": ["ES2023", "DOM"]
+  },
+  "include": ["src/**/*", "tests/**/*", "scripts/**/*.ts"]
+}

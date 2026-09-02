@@ -33,7 +33,8 @@ export async function requestUrl(options: RequestUrlOptions): Promise<RequestUrl
   }
   return {
     status: response.status,
-    headers: Object.fromEntries(response.headers.entries()),
+    headers: Object.fromEntries(
+      (response.headers as unknown as { entries(): Iterable<[string, string]> }).entries()),
     arrayBuffer,
     json,
     text,

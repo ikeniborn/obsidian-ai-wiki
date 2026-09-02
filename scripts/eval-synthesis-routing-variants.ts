@@ -120,7 +120,6 @@ function bundle(entityKey: string): EntityContextBundle {
     text: `## Facts\n${entityKey} evidence\n`,
     required: false,
     priority: 1,
-    estimatedTokens: 8,
     pageId: entityKey,
     path: target,
     heading: "## Facts",
@@ -252,7 +251,7 @@ async function runSynthesisVariant(args: {
     unknownEntityKeyAccepted: output.actions.some((action) => action.entityKey === "entity-obsidian") ? 1 : 0,
     pagesCreated: output.actions.length,
     pagesUpdated: 0,
-    articleQualityScore: qualityScore(output.actions.map((action) => action.content)),
+    articleQualityScore: qualityScore(output.actions.map((action) => "content" in action ? action.content : "")),
     notes: [
       args.createPaths ? "create paths are server-owned" : "model owns create paths",
       `batchSize=${args.batchSize}`,

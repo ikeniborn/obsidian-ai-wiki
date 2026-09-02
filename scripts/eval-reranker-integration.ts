@@ -335,7 +335,7 @@ async function buildCandidates(input: {
       articleId: chunk.articleId,
       path: chunk.path,
       heading: chunk.heading ?? "",
-      body: chunk.body ?? chunk.embedText ?? "",
+      body: chunk.body ?? "",
       score: chunk.score,
       source: articleOrder.has(chunk.articleId) ? "seed" : "graph",
       ordinal: chunk.ordinal ?? 0,

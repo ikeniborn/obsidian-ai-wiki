@@ -21,7 +21,7 @@ test("mobile manifest keeps optional Node imports behind the official desktop gu
       files: ["**/*.ts"],
       languageOptions: { parser: tsparser },
       plugins: {
-        obsidianmd: { rules: { "no-nodejs-modules": noNodejsModules } },
+        obsidianmd: { rules: { "no-nodejs-modules": noNodejsModules as never } },
       },
       rules: { "obsidianmd/no-nodejs-modules": "error" },
     }],

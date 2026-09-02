@@ -37,6 +37,11 @@ function patch(sections: PatchPage["sections"]): PatchPage {
   return patchFor(page, sections);
 }
 
+/** Negative cases hand safeParse shapes the type deliberately forbids. */
+function invalidPatch(sections: unknown[]): unknown {
+  return patchFor(page, sections as PatchPage["sections"]);
+}
+
 function applyPagePatch(
   current: string,
   patch: PatchPage,
@@ -1025,12 +1030,12 @@ test("page action schema rejects blank headings and content", () => {
 });
 
 test("page action schema requires replace hashes and rejects add hashes", () => {
-  assert.equal(PageActionSchema.safeParse(patch([{
+  assert.equal(PageActionSchema.safeParse(invalidPatch([{
     heading: "## Facts",
     operation: "replace",
     content: "gamma",
   }])).success, false);
-  assert.equal(PageActionSchema.safeParse(patch([{
+  assert.equal(PageActionSchema.safeParse(invalidPatch([{
     heading: "## Limits",
     expectedSectionHash: "fnv1a:12345678",
     operation: "add",

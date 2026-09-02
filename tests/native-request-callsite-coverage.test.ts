@@ -115,10 +115,11 @@ function typeNodeReferences(
 
 function isNativeCreateSymbol(symbol: ts.Symbol, context: AnalysisContext): boolean {
   return symbol.declarations?.some((declaration) => {
-    if (!("type" in declaration) || !declaration.type) return false;
+    const typeNode = (declaration as { type?: ts.TypeNode }).type;
+    if (!typeNode) return false;
     return typeContainsName(
       context.checker,
-      context.checker.getTypeFromTypeNode(declaration.type),
+      context.checker.getTypeFromTypeNode(typeNode),
       "NativeChatCompletionCreate",
     );
   }) ?? false;
@@ -135,7 +136,10 @@ function isCreateMethod(
     && propertyName(current) === "create"
   ) {
     if (isCompletionObject(current.expression, context)) return true;
-    const symbol = resolvedSymbol(context.checker, current.name ?? current.argumentExpression!);
+    const nameNode = ts.isPropertyAccessExpression(current)
+      ? current.name
+      : current.argumentExpression;
+    const symbol = resolvedSymbol(context.checker, nameNode);
     return symbol ? isNativeCreateSymbol(symbol, context) : false;
   }
   if (

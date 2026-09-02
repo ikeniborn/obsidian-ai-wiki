@@ -28,7 +28,7 @@ function fakeCandidates(domainId: string, ids: string[], scores: number[]): Doma
   const annotations = new Map<string, string>(ids.map((id) => [id, `${id} annotation`]));
   return {
     domainId, pages, seeds: ids, candidateIds: new Set(ids),
-    seedScores, expandedScores: {}, graph, annotations, indexContent: "",
+    seedScores, expandedScores: {}, graph, annotations,
     retrievalMode: "jaccard", denseMax: 0, seedFallback: "none", seedOutputTokens: 0,
     pagesScanned: ids.length,
   };
