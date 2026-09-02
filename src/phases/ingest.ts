@@ -666,7 +666,7 @@ function duplicateEvidenceIsRepresented(canonical: string, duplicate: string): b
   return representedBlocks > 0;
 }
 
-export async function collectSourceStems(
+async function collectSourceStems(
   domain: DomainEntry,
   vaultTools: VaultTools,
   vaultRoot: string,
@@ -2034,7 +2034,7 @@ export function detectDomainStrict(
   return null;
 }
 
-export function detectDomain(
+function detectDomain(
   absoluteFilePath: string,
   domains: DomainEntry[],
   vaultRoot: string,
@@ -2042,7 +2042,7 @@ export function detectDomain(
   return detectDomainStrict(absoluteFilePath, domains, vaultRoot) ?? domains[0] ?? null;
 }
 
-export function extractParentSourcePath(absoluteSource: string, vaultRoot: string): string {
+function extractParentSourcePath(absoluteSource: string, vaultRoot: string): string {
   const parent = dirname(absoluteSource);
   const normalizedRoot = vaultRoot.endsWith("/") ? vaultRoot : `${vaultRoot}/`;
   const clamped = `${parent}/`.startsWith(normalizedRoot) ? parent : vaultRoot;

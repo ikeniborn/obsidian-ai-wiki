@@ -38,7 +38,7 @@ import {
 const AGENT_LOG_LINE_MAX_BYTES = WIPE_LOG_LINE_MAX_BYTES;
 const AGENT_LOG_REASONING_CHUNK_BYTES = 128 * 1024;
 /** Maximum reasoning retained in agent.jsonl per operation. */
-export const AGENT_LOG_REASONING_TOTAL_BYTES = 4 * 1024 * 1024;
+const AGENT_LOG_REASONING_TOTAL_BYTES = 4 * 1024 * 1024;
 
 function utf8ByteLength(value: string): number {
   let bytes = 0;

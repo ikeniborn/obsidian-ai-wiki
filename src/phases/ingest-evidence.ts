@@ -148,8 +148,8 @@ export { estimateBootstrapPayload as estimateBootstrapPayloadForTest };
  * beyond the Init prompt, so bounding them drops nothing that is not already
  * carried, in full, by the candidates.
  */
-export const MAX_DOMAIN_THEMES = 24;
-export const MAX_LANGUAGE_EVIDENCE = 12;
+const MAX_DOMAIN_THEMES = 24;
+const MAX_LANGUAGE_EVIDENCE = 12;
 /**
  * Per-item ceiling in estimator tokens on the JSON-encoded item, not in
  * characters: under the character-class rates one Cyrillic character costs 2.3
@@ -157,7 +157,7 @@ export const MAX_LANGUAGE_EVIDENCE = 12;
  * character cap would understate the worst case by the same factors. Measuring
  * the encoded form also absorbs escaping.
  */
-export const MAX_OVERHEAD_ITEM_TOKENS = 48;
+const MAX_OVERHEAD_ITEM_TOKENS = 48;
 
 /** Longest prefix of `value` whose JSON encoding fits `MAX_OVERHEAD_ITEM_TOKENS`. */
 function boundOverheadItem(value: string): string {

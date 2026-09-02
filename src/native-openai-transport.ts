@@ -27,7 +27,7 @@ type TaggedRequestInit = RequestInit & {
   [NATIVE_TRANSPORT_FRESH_CONNECTION]?: boolean;
 };
 
-export function createProxyDispatcher(
+function createProxyDispatcher(
   cfg: ProxyConfig,
   connectionTimeoutMs = 15_000,
 ): import("undici").Dispatcher | null {

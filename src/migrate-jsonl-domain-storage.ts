@@ -144,7 +144,7 @@ async function copyBackup(
   return entries;
 }
 
-export async function detectLegacyJsonlStorageState(vault: Vault): Promise<boolean> {
+async function detectLegacyJsonlStorageState(vault: Vault): Promise<boolean> {
   const adapter = vault.adapter as unknown as AdapterLike;
   if (await adapter.exists(LEGACY_GLOBAL_DOMAIN_PATH)) return true;
   if (!(await adapter.exists(WIKI_ROOT))) return false;

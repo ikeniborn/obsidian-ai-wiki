@@ -95,7 +95,7 @@ export function emptyLlmLifecycleState(): LlmLifecycleState {
   return { calls: {} };
 }
 
-export function isTerminalLlmLifecyclePhase(phase: LlmLifecyclePhase): boolean {
+function isTerminalLlmLifecyclePhase(phase: LlmLifecyclePhase): boolean {
   return TERMINAL_PHASES.has(phase);
 }
 

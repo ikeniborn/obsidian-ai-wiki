@@ -72,7 +72,7 @@ export async function cleanupInvalidPages(
 
 
 
-export async function buildTitleMap(
+async function buildTitleMap(
   paths: string[],
   vaultTools: VaultTools,
 ): Promise<Map<string, string>> {
@@ -105,7 +105,7 @@ export async function buildTitleMap(
   return result;
 }
 
-export function validateWikiSources(
+function validateWikiSources(
   content: string,
   originalContent: string,
   knownStems: Set<string>,
@@ -906,7 +906,7 @@ export async function* runLint(
 }
 
 
-export function checkStructure(pages: Map<string, string>): string {
+function checkStructure(pages: Map<string, string>): string {
   const issues: string[] = [];
   for (const [path, content] of pages) {
     if (!content.startsWith("---")) {

@@ -49,7 +49,7 @@ function stripPath(text: string): string {
   });
 }
 
-export function validateWikiLinks(
+function validateWikiLinks(
   pages: Map<string, string>,
 ): WikiLinkViolation[] {
   const violations: WikiLinkViolation[] = [];

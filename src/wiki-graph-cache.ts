@@ -9,7 +9,7 @@ function hashPages(pages: Map<string, string>): string {
   return parts.join("|");
 }
 
-export class GraphCache {
+class GraphCache {
   private store = new Map<string, CacheEntry>();
 
   get(domainId: string, pages: Map<string, string>): { graph: WikiGraph; fromCache: boolean } {

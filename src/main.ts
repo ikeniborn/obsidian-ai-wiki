@@ -277,7 +277,7 @@ export default class LlmWikiPlugin extends Plugin {
   }
 }
 
-export async function migrateLegacyData(
+async function migrateLegacyData(
   plugin: LlmWikiPlugin,
   domainStore: DomainStore,
   _localConfigStore: LocalConfigStore,
@@ -301,7 +301,7 @@ export async function migrateLegacyData(
   if (dirty) await plugin.saveData(data);
 }
 
-export async function migrateToLocalV1(
+async function migrateToLocalV1(
   plugin: LlmWikiPlugin,
   localConfigStore: LocalConfigStore,
 ): Promise<void> {

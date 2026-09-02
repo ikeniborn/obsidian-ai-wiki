@@ -10,7 +10,7 @@ import {
 const OLD_GLOBAL_CONFIG = `${WIKI_ROOT}/.config`;
 const OLD_DOMAIN_PATH = `${OLD_GLOBAL_CONFIG}/_domain.json`;
 
-export class StorageMigrationConflictError extends Error {
+class StorageMigrationConflictError extends Error {
   constructor(msg: string) {
     super(msg);
     this.name = "StorageMigrationConflictError";

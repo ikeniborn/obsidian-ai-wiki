@@ -94,7 +94,7 @@ export const OPERATION_AXES: Record<WikiOperation, AxisDef[]> = {
   delete:      [{ id: "rebuild", labelKey: "ratingRebuild" }],
 };
 
-export function evalLogPath(pluginDir: string): string {
+function evalLogPath(pluginDir: string): string {
   return `${pluginDir}/eval.jsonl`;
 }
 
