@@ -45,3 +45,45 @@ export function retrievalTag(
   }
   return "vector";
 }
+
+/** Longest provider-supplied reason shown in the sidebar; the rest is dropped. */
+const DEGRADE_VALUE_MAX_CHARS = 240;
+
+export interface QueryDegradeLine {
+  label: string;
+  value: string;
+}
+
+interface QueryDegradeLabels {
+  statsRerankerFallback: string;
+  statsRetrievalDegraded: string;
+  rerankerFallbackReason: (reason: string) => string;
+}
+
+interface QueryDegradeInput {
+  reranker?: { fallbackReason?: string };
+  retrievalDegraded?: string;
+}
+
+/**
+ * Rows describing why a query answered on a degraded path. Both signals were
+ * produced and then dropped before reaching the user: the reranker fallback
+ * reached `query_stats` and the view never read it, and the retrieval degrade
+ * was swallowed by a bare catch. The reranker reason is a closed enum and is
+ * translated; the retrieval reason is provider text, so it is only bounded.
+ */
+export function queryDegradeLines(
+  stats: QueryDegradeInput,
+  labels: QueryDegradeLabels,
+): QueryDegradeLine[] {
+  const lines: QueryDegradeLine[] = [];
+  const fallbackReason = stats.reranker?.fallbackReason;
+  if (fallbackReason) {
+    lines.push({ label: labels.statsRerankerFallback, value: labels.rerankerFallbackReason(fallbackReason) });
+  }
+  const degraded = stats.retrievalDegraded?.replace(/\s+/g, " ").trim();
+  if (degraded) {
+    lines.push({ label: labels.statsRetrievalDegraded, value: degraded.slice(0, DEGRADE_VALUE_MAX_CHARS) });
+  }
+  return lines;
+}
