@@ -319,6 +319,22 @@ const en = {
     writeFailed: (err: string) => `Format: writing the formatted file failed — ${err}`,
     truncationHintSettings: "raise the limit: Settings → per-operation → format → maxTokens",
     truncationHintSettingsGlobal: "raise the limit: Settings → Default chat model → Max completion tokens",
+    visionWindowField: "Settings → Vision → Model context window",
+    visionSkipped: "Vision skipped",
+    visionUnsupportedOnMobile: "unsupported on mobile",
+    visionUnknownExtension: "unknown extension",
+    visionWindowSourceLabel: {
+      configured: "you set this window",
+      discovered: "reported by the backend",
+      learned: "learned from a provider rejection",
+      default: "fallback",
+    },
+    visionNoAdvertisedWindow: (model: string, field: string) =>
+      `${model}: the backend advertises no context window for this vision model, so the request was sized from the Format operation's own budget. Set ${field} to this model's real window.`,
+    visionWindowTooSmall: (model: string, window: number, source: string, advice: string) =>
+      `${model}: the request does not fit its ${window}-token context window (${source}). ${advice}`,
+    visionAdviceRaiseOrClear: (field: string) => `Raise or clear ${field}.`,
+    visionAdviceSetIfLarger: (field: string) => `Set ${field} if this model's real window is larger.`,
   },
   ingestProgress: {
     synthesizing: (domainId: string) => `Synthesizing wiki pages for domain "${domainId}"...\n`,
@@ -450,6 +466,16 @@ export type FormatProgress = {
   writeFailed: (err: string) => string;
   truncationHintSettings: string;
   truncationHintSettingsGlobal?: string;
+  /** Settings path a user must open to change the vision window, in their own UI language. */
+  visionWindowField: string;
+  visionSkipped: string;
+  visionUnsupportedOnMobile: string;
+  visionUnknownExtension: string;
+  visionWindowSourceLabel: Record<"configured" | "discovered" | "learned" | "default", string>;
+  visionNoAdvertisedWindow: (model: string, field: string) => string;
+  visionWindowTooSmall: (model: string, window: number, source: string, advice: string) => string;
+  visionAdviceRaiseOrClear: (field: string) => string;
+  visionAdviceSetIfLarger: (field: string) => string;
 };
 
 /** Selects the settings path named by format truncation diagnostics. */
@@ -781,6 +807,22 @@ const ru: I18n = {
     writeFailed: (err: string) => `Format: запись формата не удалась — ${err}`,
     truncationHintSettings: "увеличьте лимит: Settings → per-operation → format → maxTokens",
     truncationHintSettingsGlobal: "увеличьте лимит: Settings → Default chat model → Max completion tokens",
+    visionWindowField: "Настройки → Зрение → Контекстное окно модели",
+    visionSkipped: "Зрение пропущено",
+    visionUnsupportedOnMobile: "не поддерживается на мобильном",
+    visionUnknownExtension: "неизвестное расширение",
+    visionWindowSourceLabel: {
+      configured: "окно задали вы",
+      discovered: "сообщено бэкендом",
+      learned: "выучено из отказа провайдера",
+      default: "запасное значение",
+    },
+    visionNoAdvertisedWindow: (model: string, field: string) =>
+      `${model}: бэкенд не сообщает контекстное окно для этой модели зрения, поэтому запрос рассчитан по бюджету самой операции Format. Укажите в «${field}» реальное окно модели.`,
+    visionWindowTooSmall: (model: string, window: number, source: string, advice: string) =>
+      `${model}: запрос не помещается в контекстное окно ${window} токенов (${source}). ${advice}`,
+    visionAdviceRaiseOrClear: (field: string) => `Увеличьте или очистите «${field}».`,
+    visionAdviceSetIfLarger: (field: string) => `Укажите «${field}», если реальное окно модели больше.`,
   },
   ingestProgress: {
     synthesizing: (domainId: string) => `Синтез вики-страниц для домена «${domainId}»...\n`,
@@ -1215,6 +1257,22 @@ const es: I18n = {
     writeFailed: (err: string) => `Format: falló la escritura del archivo formateado — ${err}`,
     truncationHintSettings: "aumenta el límite: Settings → per-operation → format → maxTokens",
     truncationHintSettingsGlobal: "aumenta el límite: Settings → Default chat model → Max completion tokens",
+    visionWindowField: "Ajustes → Visión → Ventana de contexto del modelo",
+    visionSkipped: "Visión omitida",
+    visionUnsupportedOnMobile: "no compatible en móvil",
+    visionUnknownExtension: "extensión desconocida",
+    visionWindowSourceLabel: {
+      configured: "ventana definida por ti",
+      discovered: "informada por el backend",
+      learned: "aprendida de un rechazo del proveedor",
+      default: "valor de reserva",
+    },
+    visionNoAdvertisedWindow: (model: string, field: string) =>
+      `${model}: el backend no informa ninguna ventana de contexto para este modelo de visión, así que la solicitud se dimensionó con el presupuesto de la propia operación Format. Indica en «${field}» la ventana real del modelo.`,
+    visionWindowTooSmall: (model: string, window: number, source: string, advice: string) =>
+      `${model}: la solicitud no cabe en su ventana de contexto de ${window} tokens (${source}). ${advice}`,
+    visionAdviceRaiseOrClear: (field: string) => `Aumenta o borra «${field}».`,
+    visionAdviceSetIfLarger: (field: string) => `Indica «${field}» si la ventana real del modelo es mayor.`,
   },
   ingestProgress: {
     synthesizing: (domainId: string) => `Sintetizando páginas wiki para el dominio "${domainId}"...\n`,
