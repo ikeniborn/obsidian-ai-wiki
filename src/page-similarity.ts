@@ -726,7 +726,9 @@ export class PageSimilarityService {
     for (const section of sections) {
       const vec = vectors.get(section.hash);
       if (!vec) continue;
-      const score = maxCosine(queryVec, [vec]);
+      // One vector per section here, so call cosine directly rather than allocating
+      // a one-element array per section for maxCosine to pool over.
+      const score = Math.max(0, cosine(queryVec, vec));
       if (score <= 0) continue;
       scored.push({
         articleId: section.articleId,
