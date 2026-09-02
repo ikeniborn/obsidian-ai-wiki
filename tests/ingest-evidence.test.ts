@@ -1477,6 +1477,40 @@ test("bootstrap splits the aggregate evidence payload into budget-sized groups w
   assert.equal(requests.length, expectedChunks.length);
 });
 
+test("bootstrap themes are sampled across the source, not taken from its opening", async () => {
+  // A prefix describes the head of the document and nothing else, so a long or
+  // mixed-language note was bootstrapped from its opening: the language notes and
+  // the theme list belong to the whole corpus, not to its first pages.
+  const events: RunEvent[] = [];
+  const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
+  const facts: string[] = [];
+  const runtime = mockRuntime((messages) => {
+    const meta = mapperMeta(messages);
+    const mapped = validMapperPacket(messages, 0, null);
+    mapped.entityKey = `entity-${meta.ordinal}`;
+    facts.push((mapped.facts as string[])[0]);
+    return { packets: [mapped], noEvidence: [] };
+  }, events, requests);
+  const source = Array.from({ length: 2_400 }, (_, index) => `RECONSTRUCT-${index + 1}`).join("\n");
+  const policy = {
+    ...evidencePolicy(1500),
+    outputBudgetTokens: 1_024,
+    bootstrapPayloadBudgetTokens: 1500,
+  };
+  const bundle = await prepareBootstrapEvidenceBundle(source, "bootstrap", "", policy, runtime);
+  const themes = bundle.bootstrap.domainThemes;
+
+  assert.ok(facts.length > themes.length, "the fixture must produce more facts than the bound");
+  assert.equal(themes.length, 24);
+  assert.equal(themes[0], facts[0]);
+  assert.equal(themes.at(-1), facts.at(-1), "the end of the source must reach the theme list");
+  assert.notDeepEqual(themes, facts.slice(0, themes.length), "themes must not be a prefix");
+  // Sampling keeps document order and never repeats an item.
+  assert.deepEqual(themes, [...themes].sort((a, b) =>
+    facts.indexOf(a) - facts.indexOf(b)));
+  assert.equal(new Set(themes).size, themes.length);
+});
+
 test("synthetic fenced wrappers never consume mapper source line numbers", async () => {
   const requests: OpenAI.Chat.ChatCompletionMessageParam[][] = [];
   const source = [

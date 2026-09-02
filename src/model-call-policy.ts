@@ -97,6 +97,24 @@ export function renderNativeBudgetControls(
 }
 
 /**
+ * Repaints every registered automatic control after a committed edit. The control the
+ * edit was typed into keeps its own text — rewriting it mid-entry would clobber a
+ * half-typed number — and every other control re-reads its stored value, because
+ * several controls can address one stored entry: a per-operation context window falls
+ * back to the global model's, so one model key can back several fields and a
+ * placeholder-only repaint would leave the siblings showing the overwritten number.
+ * With no `origin` every control is a sibling. Lives here, not in settings.ts, so it is
+ * testable without pulling in Obsidian.
+ */
+export function repaintAutomaticControls(
+  controls: readonly ((resetValue: boolean) => void)[],
+  resetValue: boolean,
+  origin?: (resetValue: boolean) => void,
+): void {
+  for (const repaint of controls) repaint(resetValue || repaint !== origin);
+}
+
+/**
  * Pure: applies one budget-field edit to a settings holder in place. An empty/whitespace
  * input deletes the key — that is how a stored override returns to automatic, never a
  * written 0 or default. An invalid non-empty entry is ignored, keeping the previous

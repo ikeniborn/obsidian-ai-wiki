@@ -25,6 +25,7 @@ import {
   setConfiguredContextWindow,
   renderModelControlFields,
   renderNativeBudgetControls,
+  repaintAutomaticControls,
   type ModelControlField,
 } from "./model-call-policy";
 import {
@@ -379,12 +380,17 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     // `onChange` fires once per typed character — re-rendering the tab there would
     // destroy the input the user is typing into and steal focus. So a committed
     // change repaints the placeholders of the live controls in place instead.
-    // `resetValue` additionally re-reads the stored value; it is used only after a
-    // model change, which commits discretely (a suggestion is picked, not typed),
-    // because a per-model window belongs to a different model afterwards.
+    // `resetValue` additionally re-reads the stored value on EVERY control; it is used
+    // after a model change, which commits discretely (a suggestion is picked, not typed),
+    // because a per-model window belongs to a different model afterwards. On the keystroke
+    // path only the control being typed into keeps its text: its siblings can be bound to
+    // the same stored entry and have to re-read it. See `repaintAutomaticControls`.
     const automaticControls: Array<(resetValue: boolean) => void> = [];
-    const refreshAutomaticControls = (resetValue = false): void => {
-      for (const repaint of automaticControls) repaint(resetValue);
+    const refreshAutomaticControls = (
+      resetValue = false,
+      origin?: (resetValue: boolean) => void,
+    ): void => {
+      repaintAutomaticControls(automaticControls, resetValue, origin);
     };
     // Native-only: a budget the user has not overridden is derived from the model's
     // context window instead of a fixed constant (Task 7). The control must still
@@ -419,8 +425,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           if (holder.value === previous) return;
           update(holder.value);
           await this.plugin.saveSettings();
-          // Placeholders only: the field being typed into keeps its own text.
-          refreshAutomaticControls();
+          // The field being typed into keeps its own text; its siblings re-read.
+          refreshAutomaticControls(false, repaint);
         });
       });
     };
