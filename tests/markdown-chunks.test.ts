@@ -116,6 +116,51 @@ test("every returned chunk stays within the strict token budget", () => {
   }
 });
 
+test("a range that exactly fills its budget is not split by float drift", () => {
+  // The window measure is a difference of running per-line sums; the estimate it
+  // has to agree with divides once, over the whole range. Word characters cost
+  // 1/8.1 and a newline 1.1, so 81 word characters over 11 lines is exactly
+  // 10 + 11 = 21 tokens — and float arithmetic put the summed form a hair above
+  // that, which `Math.ceil` turned into 22. The source then failed a budget it
+  // exactly fills, and chunked into two. The uneven line lengths matter: equal
+  // ones sum without error.
+  const source = [7, 21, 35, 1, 3, 7, 3, 1, 1, 1, 1].map((n) => "a".repeat(n)).join("\n");
+  assert.equal(estimateText(source), 21);
+  const chunks = chunkMarkdownSource(source, { maxEstimatedTokens: 21, overlapLines: 0 });
+  assert.equal(chunks.length, 1);
+  assert.equal(chunks[0].markdown, source);
+});
+
+test("a window measure agrees with the estimate of the text it renders", () => {
+  // The property behind the case above. Drift only reaches `Math.ceil` when the
+  // exact sum is an integer, so the shapes here are built to be exactly integral
+  // — 81·k word characters over 10·m + 1 lines — and the line lengths are uneven,
+  // because equal ones sum without error. Agreement has to be exact: measuring
+  // high wastes budget, measuring low renders over it.
+  let failures = 0;
+  for (const lineCount of [11, 21, 31]) {
+    for (const totalWords of [81, 162, 243, 405]) {
+      for (let shape = 1; shape <= 40; shape++) {
+        const lines: string[] = [];
+        let left = totalWords;
+        for (let index = 0; index < lineCount; index++) {
+          const room = Math.max(left - (lineCount - index - 1), 0);
+          const take = index === lineCount - 1 ? left : (shape * (index + 7) + index * 13) % (room + 1);
+          lines.push("a".repeat(take));
+          left -= take;
+        }
+        if (left !== 0) continue;
+        const text = lines.join("\n");
+        const budget = estimateText(text);
+        if (chunkMarkdownSource(text, { maxEstimatedTokens: budget, overlapLines: 0 }).length !== 1) {
+          failures++;
+        }
+      }
+    }
+  }
+  assert.equal(failures, 0, `${failures} exactly-fitting ranges were split by their own budget`);
+});
+
 test("a source line larger than the budget fails with its range and required size", () => {
   const source = "x".repeat(64);
   const required = estimateText(source);

@@ -1,7 +1,7 @@
 import { contentHash } from "./content-hash";
 import { inspectPatchablePage } from "./section-patches";
-import { cappedTokens, measureText, SYMBOL_RUN_TOKENS } from "./token-estimate";
-import type { TextMeasure } from "./token-estimate";
+import { cappedTokens, measureCensus, rawFromCensus } from "./token-estimate";
+import type { TextCensus, TextCensusMeasure } from "./token-estimate";
 
 export interface SourceChunk {
   id: string;
@@ -38,9 +38,9 @@ interface FenceState {
   marker: "`" | "~";
   length: number;
   openingLine: string;
-  openingMeasure: TextMeasure;
+  openingMeasure: TextCensusMeasure;
   closingLine: string;
-  closingMeasure: TextMeasure;
+  closingMeasure: TextCensusMeasure;
 }
 
 interface HeadingState {
@@ -50,7 +50,7 @@ interface HeadingState {
 
 interface ScannedLine {
   raw: string;
-  measure: TextMeasure;
+  measure: TextCensusMeasure;
   heading?: string;
   headingPath: string[];
   fenceBefore: FenceState | null;
@@ -71,7 +71,7 @@ function lineForSyntax(raw: string): string {
   return raw.endsWith("\r") ? raw.slice(0, -1) : raw;
 }
 
-function parseOpeningFence(raw: string, openingMeasure: TextMeasure): FenceState | null {
+function parseOpeningFence(raw: string, openingMeasure: TextCensusMeasure): FenceState | null {
   const match = /^( {0,3})(`{3,}|~{3,})(.*)$/.exec(lineForSyntax(raw));
   if (!match) return null;
   const delimiter = match[2];
@@ -83,7 +83,7 @@ function parseOpeningFence(raw: string, openingMeasure: TextMeasure): FenceState
     openingLine: raw,
     openingMeasure,
     closingLine,
-    closingMeasure: measureText(closingLine),
+    closingMeasure: measureCensus(closingLine),
   };
 }
 
@@ -107,7 +107,7 @@ function scanLines(lines: string[]): ScannedLine[] {
   let activeFence: FenceState | null = null;
 
   for (const raw of lines) {
-    const measure = measureText(raw);
+    const measure = measureCensus(raw);
     const fenceBefore = activeFence;
     let heading: string | undefined;
 
@@ -146,37 +146,61 @@ function rawRangeMarkdown(lines: ScannedLine[], startIndex: number, endIndex: nu
   return lines.slice(startIndex, endIndex + 1).map((line) => line.raw).join("\n");
 }
 
-/** Running sums of the unrounded, uncapped per-line parts. */
+const CENSUS_CLASSES = [
+  "cyrillic", "cjk", "word", "symbols", "symbolRuns", "newlines",
+] as const;
+
+/**
+ * Running sums of the per-line character counts, one array per class, plus UTF-8
+ * length. Counts rather than weighted sums, because these are what add exactly:
+ * a range is a difference of two running totals, and a difference of floats can
+ * land a hair off the number the same text measures directly — enough for
+ * `Math.ceil` to charge a window one token it does not owe.
+ */
 interface LinePrefixes {
-  raw: number[];
+  counts: Record<(typeof CENSUS_CLASSES)[number], number[]>;
   bytes: number[];
 }
 
 function buildLinePrefixes(lines: ScannedLine[]): LinePrefixes {
-  const prefixes: LinePrefixes = { raw: [0], bytes: [0] };
+  const prefixes: LinePrefixes = {
+    counts: { cyrillic: [0], cjk: [0], word: [0], symbols: [0], symbolRuns: [0], newlines: [0] },
+    bytes: [0],
+  };
   for (const line of lines) {
-    prefixes.raw.push(prefixes.raw[prefixes.raw.length - 1] + line.measure.raw);
+    for (const key of CENSUS_CLASSES) {
+      const running = prefixes.counts[key];
+      running.push(running[running.length - 1] + line.measure.census[key]);
+    }
     prefixes.bytes.push(prefixes.bytes[prefixes.bytes.length - 1] + line.measure.bytes);
   }
   return prefixes;
 }
 
-function rawRangeMeasure(
+function addCensus(into: TextCensus, other: TextCensus): void {
+  for (const key of CENSUS_CLASSES) into[key] += other[key];
+}
+
+function rangeCensusMeasure(
   prefixes: LinePrefixes,
   startIndex: number,
   endIndex: number,
-): TextMeasure {
-  // Per-line parts plus the line breaks that join them: a newline costs the
-  // estimator's run charge and one UTF-8 byte. Neither part is rounded or
-  // capped here. Capping per line and adding would let the sum fall below
-  // `estimateText` of the joined text, because a line whose own class sum is
-  // capped donates its whole overage to the window — a numeric line next to a
+): TextCensusMeasure {
+  // Per-line counts plus the line breaks that join them: each newline is one
+  // character of its own class and one UTF-8 byte. Nothing is weighted, rounded
+  // or capped here. Weighting per line and adding would also let the sum fall
+  // below `estimateText` of the joined text, because a line whose own class sum
+  // is capped donates its whole overage to the window — a numeric line next to a
   // prose line is enough — and the window would then render above its budget.
   const breaks = endIndex - startIndex;
-  return {
-    raw: prefixes.raw[endIndex + 1] - prefixes.raw[startIndex] + breaks * SYMBOL_RUN_TOKENS,
-    bytes: prefixes.bytes[endIndex + 1] - prefixes.bytes[startIndex] + breaks,
+  const census: TextCensus = {
+    cyrillic: 0, cjk: 0, word: 0, symbols: 0, symbolRuns: 0, newlines: breaks,
   };
+  for (const key of CENSUS_CLASSES) {
+    const running = prefixes.counts[key];
+    census[key] += running[endIndex + 1] - running[startIndex];
+  }
+  return { census, bytes: prefixes.bytes[endIndex + 1] - prefixes.bytes[startIndex] + breaks };
 }
 
 function renderedRangeEstimatedTokens(
@@ -184,20 +208,23 @@ function renderedRangeEstimatedTokens(
   prefixes: LinePrefixes,
   range: SourceRange,
 ): number {
-  const measure = rawRangeMeasure(prefixes, range.startIndex, range.endIndex);
+  const measure = rangeCensusMeasure(prefixes, range.startIndex, range.endIndex);
   const openingFence = lines[range.startIndex].fenceBefore;
   const closingFence = lines[range.endIndex].fenceAfter;
-  // A synthetic wrapper line costs its own parts plus the break that joins it.
+  // A synthetic wrapper line costs its own counts plus the break that joins it.
   if (openingFence) {
-    measure.raw += openingFence.openingMeasure.raw + SYMBOL_RUN_TOKENS;
+    addCensus(measure.census, openingFence.openingMeasure.census);
+    measure.census.newlines += 1;
     measure.bytes += openingFence.openingMeasure.bytes + 1;
   }
   if (closingFence) {
-    measure.raw += closingFence.closingMeasure.raw + SYMBOL_RUN_TOKENS;
+    addCensus(measure.census, closingFence.closingMeasure.census);
+    measure.census.newlines += 1;
     measure.bytes += closingFence.closingMeasure.bytes + 1;
   }
-  // Capped once, over the whole rendered range, exactly as estimateText caps it.
-  return Math.ceil(cappedTokens(measure));
+  // Weighted and capped once, over the whole rendered range, exactly as
+  // `estimateText` does it — so this is that estimate, not an approximation of it.
+  return Math.ceil(cappedTokens({ raw: rawFromCensus(measure.census), bytes: measure.bytes }));
 }
 
 function renderRangeMarkdown(lines: ScannedLine[], range: SourceRange): string {

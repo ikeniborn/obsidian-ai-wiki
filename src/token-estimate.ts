@@ -88,11 +88,24 @@ export interface PromptCensus extends TextCensus {
 }
 
 /**
- * The single character walk both `measureText` and `censusText` are projections
- * of. They share it so a census can never drift from the measure it describes:
- * the rates are applied to the counts this returns, never to a second walk.
+ * A text's counts beside its UTF-8 length: everything an estimate is made of,
+ * still in the form that adds exactly. A caller that sums pieces and renders them
+ * joined wants this rather than `TextMeasure`, because the counts are integers —
+ * summing them and applying the rates once reproduces the estimate of the joined
+ * text bit for bit, where summing per-piece `raw` values accumulates float error.
  */
-function walkText(text: string): { census: TextCensus; bytes: number } {
+export interface TextCensusMeasure {
+  census: TextCensus;
+  bytes: number;
+}
+
+/**
+ * The single character walk `measureText`, `censusText` and `measureCensus` are
+ * projections of. They share it so a census can never drift from the measure it
+ * describes: the rates are applied to the counts this returns, never to a second
+ * walk.
+ */
+function walkText(text: string): TextCensusMeasure {
   let bytes = 0;
   let cyrillic = 0;
   let cjk = 0;
@@ -136,6 +149,10 @@ export function measureText(text: string): TextMeasure {
 
 export function censusText(text: string): TextCensus {
   return walkText(text).census;
+}
+
+export function measureCensus(text: string): TextCensusMeasure {
+  return walkText(text);
 }
 
 /**
