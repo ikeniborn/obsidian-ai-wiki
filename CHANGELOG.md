@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.14 — 2026-09-03
+
+### New
+
+- feat(token-estimate): log a prompt census so every call site can seed the fixture
+
+### Fixes
+
+- fix(markdown-chunks): measure a chunk window from counts, not from float sums
+
+### Other
+
+- refactor(token-estimate): keep the rates and the weighted per-line measure private
+
+---
+
 ## 0.3.13 — 2026-09-02
 
 ### Fixes
