@@ -18,12 +18,14 @@ const MESSAGE_OVERHEAD_TOKENS = 4;
 // share one generous rate. Digits and symbols cost a token per run plus a small
 // per-character rate, because a tokenizer opens a new token at every switch
 // into punctuation and then merges only short spans of it. Every newline opens
-// its own token — `SYMBOL_RUN_TOKENS` is exported because line-window sizing
-// in markdown-chunks has to charge a joined line break the same amount.
+// its own token, which is why a caller that joins pieces has to charge one per
+// join — it does that by adding a newline to a census, never by reaching for the
+// rate itself. Every rate stays module-private for that reason: a caller holding
+// one would be weighing text a second way, beside the walk below.
 const CHARS_PER_TOKEN_CYRILLIC = 3.5;
 const CHARS_PER_TOKEN_WORD = 8.1;
 const CHARS_PER_TOKEN_SYMBOL = 2.1;
-export const SYMBOL_RUN_TOKENS = 1.1;
+const SYMBOL_RUN_TOKENS = 1.1;
 
 type CharClass = "cyrillic" | "cjk" | "word" | "digit" | "symbol" | "newline";
 
@@ -49,10 +51,10 @@ function classify(code: number, char: string): CharClass {
 
 /**
  * The two numbers a token estimate is made of, before rounding: the weighted
- * class sum and the ceiling it is capped at. Callers that sum pieces and render
- * them joined — line-window sizing in markdown-chunks — need the unrounded,
- * uncapped parts, because capping each piece and then adding would let the sum
- * fall below the estimate of the joined text.
+ * class sum and the ceiling it is capped at. A caller that assembles one from
+ * summed pieces has to cap once over the whole result, because capping each
+ * piece and then adding would let the sum fall below the estimate of the joined
+ * text — and it should sum a `TextCensus`, not these, which do not add exactly.
  */
 export interface TextMeasure {
   raw: number;
@@ -142,12 +144,12 @@ export function rawFromCensus(census: TextCensus): number {
     + (census.symbolRuns + census.newlines) * SYMBOL_RUN_TOKENS;
 }
 
-export function measureText(text: string): TextMeasure {
+function measureText(text: string): TextMeasure {
   const walked = walkText(text);
   return { raw: rawFromCensus(walked.census), bytes: walked.bytes };
 }
 
-export function censusText(text: string): TextCensus {
+function censusText(text: string): TextCensus {
   return walkText(text).census;
 }
 
